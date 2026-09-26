@@ -12,7 +12,9 @@ import { EventBus } from '../../../platform/events/event-bus';
 import { newId } from '../../../platform/kernel/id';
 import { AuditService } from '../../audit';
 import { AuthService, EmailTakenError } from '../../auth';
+import { RolesService } from '../../roles';
 import { TenancyService } from '../../tenancy';
+import { UsersService } from '../../users';
 import { TENANT_PROVISIONED, type TenantProvisioned } from '../events/tenant-provisioned';
 
 /**
@@ -30,11 +32,14 @@ export class ProvisioningService {
     private readonly audit: AuditService,
     private readonly auth: AuthService,
     private readonly tenancy: TenancyService,
+    private readonly roles: RolesService,
+    private readonly users: UsersService,
   ) {}
 
   /**
    * 1. the tenant row (the only cross-tenant write, `withoutTenant()`);
-   * 2. inside the new tenant, one transaction: organization mirror, first branch, audit entry and
+   * 2. inside the new tenant, one transaction: organization mirror, system roles (seeded directly:
+   *    the owner needs them, A5), first branch, owner account, audit entry and
    *    `TenantProvisioned` (dispatched after commit);
    * 3. if step 2 fails, the tenant row is removed again — nothing else was committed.
    */
@@ -49,18 +54,30 @@ export class ProvisioningService {
       await this.context.runInTenant(tenant.id, () =>
         this.tenantDb.run(async () => {
           await this.auth.syncOrganization(tenant);
+          await this.roles.seedSystemRoles();
           const branch = await this.tenancy.createBranch({
             ...request.firstBranch,
             code: null,
+          });
+          const owner = await this.users.createStaffUser({
+            displayName: request.owner.displayName,
+            email: request.owner.email,
+            title: null,
+            practitionerType: 'other',
+            phone: null,
+            roleKeys: ['owner'],
+            branchIds: [branch.id],
+            temporaryPassword: request.owner.temporaryPassword,
           });
           await this.audit.record({
             action: 'tenant.provision',
             resourceType: 'tenant',
             resourceId: tenant.id,
-            after: { tenant, firstBranchId: branch.id },
+            after: { tenant, firstBranchId: branch.id, ownerUserId: owner.id },
           });
           const event: TenantProvisioned = this.events.create(TENANT_PROVISIONED, {
             tenantId: tenant.id,
+            ownerUserId: owner.id,
             firstBranchId: branch.id,
           });
           await this.events.publish(event);

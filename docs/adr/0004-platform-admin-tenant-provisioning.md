@@ -1,6 +1,6 @@
 # ADR-0004: Tenants are provisioned by platform admins only
 
-- Status: Accepted
+- Status: Accepted; owner invitation and owner-managed members superseded by ADR-0012
 - Date: 2026-09-26
 
 ## Context

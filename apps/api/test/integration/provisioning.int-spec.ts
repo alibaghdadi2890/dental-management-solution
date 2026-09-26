@@ -1,9 +1,23 @@
-import type { AuditPage, PlatformTenant, Session, Tenant } from '@dcm/contracts';
+import {
+  type AuditPage,
+  PERMISSIONS,
+  type PlatformTenant,
+  type Role,
+  type Session,
+  type StaffUser,
+  type Tenant,
+} from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
-import { browser, createPlatformAdmin, signIn, uniqueEmail } from '../support/session';
+import {
+  browser,
+  createPlatformAdmin,
+  signIn,
+  signInAndSetPassword,
+  uniqueEmail,
+} from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
 
 describe('provisioning (platform admin)', () => {
@@ -40,8 +54,9 @@ describe('provisioning (platform admin)', () => {
     await database.close();
   });
 
-  it('creates the tenant with D8 defaults, its first branch and its organization mirror', async () => {
-    const response = await provision(request());
+  it('creates the tenant with D8 defaults, first branch, roles, owner and organization mirror', async () => {
+    const body = request();
+    const response = await provision(body);
     expect(response.status).toBe(201);
     const tenant = response.body as Tenant;
     expect(tenant).toMatchObject({
@@ -63,8 +78,50 @@ describe('provisioning (platform admin)', () => {
 
     const audit = (await admin.get('/api/v1/audit').set('X-Tenant-Id', tenant.id))
       .body as AuditPage;
-    expect(audit.items.filter((entry) => entry.action === 'TenantProvisioned')).toHaveLength(1);
+    const provisioned = audit.items.filter((entry) => entry.action === 'TenantProvisioned');
+    expect(provisioned).toHaveLength(1);
     expect(audit.items.map((entry) => entry.action)).toContain('tenant.provision');
+
+    const roles = (await admin.get('/api/v1/roles').set('X-Tenant-Id', tenant.id)).body as Role[];
+    expect(roles.map((role) => role.key)).toEqual(['owner', 'dentist', 'assistant', 'frontdesk']);
+
+    const users = (await admin.get('/api/v1/users').set('X-Tenant-Id', tenant.id))
+      .body as StaffUser[];
+    expect(users).toHaveLength(1);
+    expect(users[0]).toMatchObject({
+      email: body.owner.email,
+      displayName: 'Dr. Owner',
+      practitionerType: 'other',
+      active: true,
+      roles: [{ key: 'owner', name: 'Owner' }],
+      branches: [{ name: 'Main St' }],
+    });
+    expect(provisioned[0]?.after).toEqual({
+      tenantId: tenant.id,
+      ownerUserId: users[0]?.id,
+      firstBranchId: session.branches[0]?.id,
+    });
+  });
+
+  it('gives the owner a working account with every clinic permission', async () => {
+    const body = request();
+    const tenant = (await provision(body)).body as Tenant;
+    const owner = await signInAndSetPassword(
+      testApp.app,
+      body.owner.email,
+      body.owner.temporaryPassword,
+    );
+    const session = (await owner.get('/api/v1/session')).body as Session;
+    expect(session).toMatchObject({
+      platformAdmin: false,
+      tenant: { id: tenant.id },
+      branch: { name: 'Main St' },
+      roleNames: ['Owner'],
+    });
+    expect([...session.permissions].sort()).toEqual(
+      PERMISSIONS.filter((permission) => permission !== 'platform:admin').sort(),
+    );
+    expect((await owner.post('/api/v1/branches').send({ name: 'North' })).status).toBe(201);
   });
 
   it('refuses a slug that is already taken and leaves nothing behind', async () => {
@@ -79,11 +136,15 @@ describe('provisioning (platform admin)', () => {
     ).toBe(1);
   });
 
-  it('refuses an owner email that already has an account', async () => {
+  it('refuses an owner email that already has an account and creates nothing', async () => {
     const email = await createPlatformAdmin(testApp.app);
-    const response = await provision(request({ email }));
+    const body = request({ email: email.toUpperCase() });
+    const response = await provision(body);
     expect(response.status).toBe(409);
     expect(response.body).toMatchObject({ code: 'user.email_taken' });
+    expect(
+      await count('select count(*) as n from tenants where slug = $1', [body.clinic.slug]),
+    ).toBe(0);
   });
 
   it('discards the tenant when a later step fails', async () => {
@@ -100,6 +161,9 @@ describe('provisioning (platform admin)', () => {
       await count('select count(*) as n from tenants where slug = $1', [body.clinic.slug]),
     ).toBe(0);
     expect(
+      await count('select count(*) as n from auth_users where email = $1', [body.owner.email]),
+    ).toBe(0);
+    expect(
       await count(
         'select count(*) as n from branches b left join tenants t on t.id = b.tenant_id where t.id is null',
         [],
@@ -112,7 +176,7 @@ describe('provisioning (platform admin)', () => {
     const tenant = (await provision(body)).body as Tenant;
 
     const all = (await admin.get('/api/v1/platform/tenants')).body as PlatformTenant[];
-    expect(all.find((row) => row.id === tenant.id)).toMatchObject({ branchCount: 1, userCount: 0 });
+    expect(all.find((row) => row.id === tenant.id)).toMatchObject({ branchCount: 1, userCount: 1 });
 
     const found = (await admin.get(`/api/v1/platform/tenants?search=${body.clinic.slug}`))
       .body as PlatformTenant[];

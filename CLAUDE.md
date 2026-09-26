@@ -164,8 +164,10 @@ tenant (display name, professional title, practitioner type, contact, active fla
 **`roles` — what roles exist and who holds them.** Permission catalog lives in
 `packages/contracts/permissions.ts` as a typed constant (`patient:read`, `appointment:write`,
 `invoice:void`, `assistant:use`, …). Roles are per tenant: system roles seeded on provisioning
-(`owner`, `dentist`, `hygienist`, `receptionist`, `accountant`, `readonly`) plus custom roles a
-tenant admin can create. A user may hold multiple roles in a tenant.
+(`owner`, `dentist`, `assistant`, `frontdesk`, with the permission matrix in
+`docs/modules/roles.md`) plus, later, custom roles a tenant admin can create. A user may hold
+multiple roles in a tenant. Staff accounts are created with a temporary password that must be
+changed at first sign-in (ADR-0012).
 
 **`authorization` — may you do this.** One evaluation function:
 `can(actor, permission, resource?)`. Exposed three ways: a `@RequirePermission()` route decorator
