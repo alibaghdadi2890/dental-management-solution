@@ -44,10 +44,13 @@ export function SetPasswordForm({
       await submit({ currentPassword: current, newPassword: next });
       await onDone();
     } catch (caught) {
+      const code = caught instanceof ApiError ? caught.code : undefined;
       setError(
-        caught instanceof ApiError && caught.code === 'auth.invalid_current_password'
+        code === 'auth.invalid_current_password'
           ? t('setPassword.errors.currentWrong')
-          : t('setPassword.errors.generic'),
+          : code === 'auth.password_unchanged'
+            ? t('setPassword.errors.unchanged')
+            : t('setPassword.errors.generic'),
       );
     } finally {
       setBusy(false);

@@ -1,4 +1,4 @@
-import type { Tenant } from '@dcm/contracts';
+import type { StaffUser, Tenant } from '@dcm/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -13,10 +13,18 @@ import { cn } from '@/lib/utils';
 import { AddBranchPanel } from './add-branch-panel';
 import { BranchesTab } from './branches-tab';
 import { OverviewTab } from './overview-tab';
+import { ResetPasswordPanel } from './reset-password-panel';
 import { SettingsTab } from './settings-tab';
+import { UserPanel } from './user-panel';
+import { UsersTab } from './users-tab';
 
-export type TenantTab = 'overview' | 'branches' | 'settings';
-const TABS: readonly TenantTab[] = ['overview', 'branches', 'settings'];
+export type TenantTab = 'overview' | 'branches' | 'users' | 'settings';
+const TABS: readonly TenantTab[] = ['overview', 'branches', 'users', 'settings'];
+
+type Panel =
+  | { kind: 'addBranch' }
+  | { kind: 'user'; user?: StaffUser }
+  | { kind: 'resetPassword'; user: StaffUser };
 
 function Header({ tenant }: { tenant: Tenant }) {
   const { t } = useTranslation('admin');
@@ -79,7 +87,10 @@ function Header({ tenant }: { tenant: Tenant }) {
 export function TenantDetailPage({ tenantId, tab }: { tenantId: string; tab: TenantTab }) {
   const { t } = useTranslation('admin');
   const tenant = useQuery(tenantQuery(tenantId));
-  const [addingBranch, setAddingBranch] = useState(false);
+  const [panel, setPanel] = useState<Panel>();
+  const closePanel = () => {
+    setPanel(undefined);
+  };
 
   return (
     <div className="flex h-full">
@@ -131,7 +142,21 @@ export function TenantDetailPage({ tenantId, tab }: { tenantId: string; tab: Ten
                   <BranchesTab
                     tenantId={tenantId}
                     onAddBranch={() => {
-                      setAddingBranch(true);
+                      setPanel({ kind: 'addBranch' });
+                    }}
+                  />
+                )}
+                {tab === 'users' && (
+                  <UsersTab
+                    tenantId={tenantId}
+                    onNew={() => {
+                      setPanel({ kind: 'user' });
+                    }}
+                    onEdit={(user) => {
+                      setPanel({ kind: 'user', user });
+                    }}
+                    onResetPassword={(user) => {
+                      setPanel({ kind: 'resetPassword', user });
                     }}
                   />
                 )}
@@ -141,12 +166,21 @@ export function TenantDetailPage({ tenantId, tab }: { tenantId: string; tab: Ten
           )}
         </div>
       </div>
-      {addingBranch && (
-        <AddBranchPanel
+      {panel?.kind === 'addBranch' && <AddBranchPanel tenantId={tenantId} onClose={closePanel} />}
+      {panel?.kind === 'user' && (
+        <UserPanel
+          key={panel.user?.id ?? 'new'}
           tenantId={tenantId}
-          onClose={() => {
-            setAddingBranch(false);
-          }}
+          user={panel.user}
+          onClose={closePanel}
+        />
+      )}
+      {panel?.kind === 'resetPassword' && (
+        <ResetPasswordPanel
+          key={panel.user.id}
+          tenantId={tenantId}
+          user={panel.user}
+          onClose={closePanel}
         />
       )}
     </div>

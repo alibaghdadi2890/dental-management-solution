@@ -1,8 +1,8 @@
-import type { Tenant } from '@dcm/contracts';
+import type { StaffUser, Tenant } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { branchesQuery, roomsQuery, tenantsQuery } from '@/features/platform/platform-api';
+import { branchesQuery, roomsQuery, usersQuery } from '@/features/platform/platform-api';
 import { formatDate } from '@/lib/format';
 
 function Card({
@@ -31,9 +31,9 @@ export function OverviewTab({ tenant }: { tenant: Tenant }) {
   const { t, i18n } = useTranslation('admin');
   const branches = useQuery(branchesQuery(tenant.id));
   const rooms = useQuery(roomsQuery(tenant.id));
-  const listed = useQuery({
-    ...tenantsQuery(),
-    select: (all) => all.find((row) => row.id === tenant.id),
+  const users = useQuery({
+    ...usersQuery(tenant.id),
+    select: (all) => all.filter((user) => user.active),
   });
 
   const activeOf = (items: { active: boolean }[] | undefined) =>
@@ -43,6 +43,19 @@ export function OverviewTab({ tenant }: { tenant: Tenant }) {
           total: items.length,
         })
       : undefined;
+
+  /** "1 Owner · 2 Dentist", in role order. */
+  const byRole = (active: StaffUser[] | undefined) => {
+    if (!active) return undefined;
+    const counts = new Map<string, number>();
+    for (const role of active.flatMap((user) => user.roles)) {
+      counts.set(role.name, (counts.get(role.name) ?? 0) + 1);
+    }
+    return [...counts].map(([name, count]) => `${count} ${name}`).join(' · ');
+  };
+  const owners = users.data
+    ?.filter((user) => user.roles.some((role) => role.key === 'owner'))
+    .map((user) => user.displayName);
 
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
@@ -56,7 +69,15 @@ export function OverviewTab({ tenant }: { tenant: Tenant }) {
         value={rooms.data?.length ?? pending}
         detail={activeOf(rooms.data)}
       />
-      <Card label={t('detail.overview.users')} value={listed.data?.userCount ?? pending} />
+      <Card
+        label={t('detail.overview.users')}
+        value={users.data?.length ?? pending}
+        detail={byRole(users.data)}
+      />
+      <Card
+        label={t('detail.overview.owner')}
+        value={<span className="font-sans text-base">{owners?.join(', ') || pending}</span>}
+      />
       <Card
         label={t('detail.overview.created')}
         value={

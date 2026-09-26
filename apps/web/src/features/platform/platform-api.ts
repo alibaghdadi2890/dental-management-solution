@@ -6,7 +6,11 @@ import {
   platformTenantSchema,
   type ProvisionTenantRequest,
   type RoomBatch,
+  roleSchema,
   roomSchema,
+  type StaffUserCreate,
+  type StaffUserPatch,
+  staffUserSchema,
   type TenantSettingsPatch,
   type TenantStatus,
   tenantSchema,
@@ -24,6 +28,8 @@ export const platformKeys = {
   tenant: (tenantId: string) => ['platform', 'tenant', tenantId] as const,
   branches: (tenantId: string) => ['platform', 'tenant', tenantId, 'branches'] as const,
   rooms: (tenantId: string) => ['platform', 'tenant', tenantId, 'rooms'] as const,
+  users: (tenantId: string) => ['platform', 'tenant', tenantId, 'users'] as const,
+  roles: (tenantId: string) => ['platform', 'tenant', tenantId, 'roles'] as const,
 };
 
 export const tenantsQuery = (query: PlatformTenantQuery = {}) =>
@@ -56,6 +62,19 @@ export const roomsQuery = (tenantId: string) =>
     queryFn: () => apiFetch('/rooms', z.array(roomSchema), { tenantId }),
   });
 
+export const usersQuery = (tenantId: string) =>
+  queryOptions({
+    queryKey: platformKeys.users(tenantId),
+    queryFn: () => apiFetch('/users', z.array(staffUserSchema), { tenantId }),
+  });
+
+export const rolesQuery = (tenantId: string) =>
+  queryOptions({
+    queryKey: platformKeys.roles(tenantId),
+    queryFn: () => apiFetch('/roles', z.array(roleSchema), { tenantId }),
+    staleTime: Infinity,
+  });
+
 export function provisionTenant(request: ProvisionTenantRequest) {
   return apiFetch('/platform/tenants', tenantSchema, { method: 'POST', json: request });
 }
@@ -86,4 +105,29 @@ export function updateBranch(tenantId: string, branchId: string, patch: BranchPa
 
 export function saveRooms(tenantId: string, batch: RoomBatch) {
   return apiFetch('/rooms/batch', z.array(roomSchema), { method: 'POST', json: batch, tenantId });
+}
+
+export function createUser(tenantId: string, user: StaffUserCreate) {
+  return apiFetch('/users', staffUserSchema, { method: 'POST', json: user, tenantId });
+}
+
+export function updateUser(tenantId: string, userId: string, patch: StaffUserPatch) {
+  return apiFetch(`/users/${userId}`, staffUserSchema, { method: 'PATCH', json: patch, tenantId });
+}
+
+export function setUserActive(tenantId: string, userId: string, active: boolean, reason: string) {
+  const action = active ? 'reactivate' : 'deactivate';
+  return apiFetch(`/users/${userId}/${action}`, staffUserSchema, {
+    method: 'POST',
+    json: { reason },
+    tenantId,
+  });
+}
+
+export function resetUserPassword(tenantId: string, userId: string, temporaryPassword: string) {
+  return apiFetch(`/users/${userId}/reset-password`, z.undefined(), {
+    method: 'POST',
+    json: { temporaryPassword },
+    tenantId,
+  });
 }

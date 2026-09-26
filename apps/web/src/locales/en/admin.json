@@ -112,6 +112,7 @@
       "label": "Tenant sections",
       "overview": "Overview",
       "branches": "Branches & rooms",
+      "users": "Users",
       "settings": "Settings"
     },
     "loading": "Loading tenant",
@@ -123,6 +124,7 @@
       "branches": "Branches",
       "rooms": "Rooms",
       "users": "Users",
+      "owner": "Owner",
       "created": "Created",
       "activeOf": "{{active}} active of {{total}}"
     }
@@ -163,6 +165,91 @@
     "conflict": {
       "nameTaken": "Two rooms in a branch can’t share a name",
       "codeTaken": "Two rooms in a branch can’t share a code"
+    }
+  },
+  "users": {
+    "new": "New user",
+    "count_one": "{{count}} user",
+    "count_other": "{{count}} users",
+    "loading": "Loading users",
+    "error": {
+      "title": "Couldn’t load users",
+      "body": "The server didn’t respond."
+    },
+    "empty": {
+      "title": "No users yet",
+      "body": "Add the people who work in this clinic. They sign in with a temporary password and then choose their own."
+    },
+    "columns": {
+      "name": "Name",
+      "title": "Title",
+      "roles": "Roles",
+      "branches": "Branches",
+      "status": "Status"
+    },
+    "practitionerTypes": {
+      "dentist": "Dentist",
+      "assistant": "Assistant",
+      "frontdesk": "Front desk",
+      "other": "Other"
+    },
+    "menu": {
+      "label": "Actions for {{name}}",
+      "edit": "Edit",
+      "resetPassword": "Reset password",
+      "deactivate": "Deactivate",
+      "reactivate": "Reactivate"
+    },
+    "status": {
+      "active": "Active",
+      "inactive": "Deactivated",
+      "deactivateTitle": "Deactivate {{name}}?",
+      "deactivateBody": "They are signed out now and can’t sign in until reactivated. Their records are kept.",
+      "deactivateOk": "Deactivate",
+      "reactivateTitle": "Reactivate {{name}}?",
+      "reactivateBody": "They can sign in again with their current password.",
+      "reactivateOk": "Reactivate",
+      "deactivated": "{{name}} deactivated",
+      "reactivated": "{{name}} reactivated"
+    },
+    "fields": {
+      "displayName": "Full name",
+      "email": "Email",
+      "title": "Title",
+      "practitionerType": "Practitioner type",
+      "phone": "Phone",
+      "roles": "Roles",
+      "branches": "Branches"
+    },
+    "panel": {
+      "newEyebrow": "New user",
+      "newTitle": "Add a staff member",
+      "editEyebrow": "Edit user",
+      "sections": {
+        "person": "Person",
+        "access": "Access"
+      },
+      "create": "Create user",
+      "save": "Save changes",
+      "created": "User created",
+      "saved": "Changes saved",
+      "failed": "Couldn’t save the user. Check the form and try again."
+    },
+    "reset": {
+      "eyebrow": "Reset password",
+      "body": "They are signed out everywhere and must choose a new password at their next sign-in. Give them this temporary password directly.",
+      "submit": "Reset password",
+      "done": "Password reset for {{name}}"
+    },
+    "errors": {
+      "required": "Required",
+      "email": "Enter a valid email",
+      "password": "At least {{count}} characters",
+      "roles": "Choose at least one role",
+      "branches": "Choose at least one active branch",
+      "invalid": "Check this value",
+      "emailTaken": "This email already has an account",
+      "lastOwner": "The clinic must keep at least one active owner"
     }
   },
   "settings": {

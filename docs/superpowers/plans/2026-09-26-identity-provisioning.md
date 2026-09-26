@@ -201,6 +201,23 @@ CLAUDE.md §4/§6/§10, `docs/modules/*` status lines.
       users, roles, audit; `X-Tenant-Id: B` from A's user is ignored; RLS enabled on every tenant table.
 - [ ] Gate. Commit `feat(provisioning): owner account and system roles on provisioning`.
 
+### Task C5: SPA users tab and staff first sign-in (deferred from E3/E4 until the API existed)
+
+Steps (d) and (e) were implemented before (c); the parts that needed the users API land here.
+
+**Files:** `features/platform/tenant-detail/{users-tab,user-panel,reset-password-panel,user-form}.ts(x)`,
+`components/ui/chip-checkbox.tsx`, `overview-tab.tsx` (users by role, owner),
+`features/auth/set-password-form.tsx` (`auth.password_unchanged`), `locales/*/{admin,auth}.json`,
+`e2e/identity.spec.ts`.
+
+- [ ] Unit: user form — required fields, email and password policy from the contract, chips toggle
+      in order, reordered chips are not a change, the patch carries only changed fields, no user
+      without roles or branches.
+- [ ] E2E: the identity flow also creates a front desk user in the Users tab; after sign-out that
+      user signs in with the temporary password, sets their own and sees the clinic shell with the
+      branch name and front desk navigation.
+- [ ] Gate + e2e. Commit `feat(web): tenant users tab and staff first sign-in`.
+
 ## Step (d) — SPA login and session-aware shell
 
 ### Task D1: UI primitives

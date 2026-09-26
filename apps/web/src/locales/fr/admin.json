@@ -112,6 +112,7 @@
       "label": "Sections du cabinet",
       "overview": "Vue d’ensemble",
       "branches": "Sites et salles",
+      "users": "Utilisateurs",
       "settings": "Paramètres"
     },
     "loading": "Chargement du cabinet",
@@ -123,6 +124,7 @@
       "branches": "Sites",
       "rooms": "Salles",
       "users": "Utilisateurs",
+      "owner": "Propriétaire",
       "created": "Créé le",
       "activeOf": "{{active}} actifs sur {{total}}"
     }
@@ -163,6 +165,91 @@
     "conflict": {
       "nameTaken": "Deux salles d’un même site ne peuvent pas avoir le même nom",
       "codeTaken": "Deux salles d’un même site ne peuvent pas avoir le même code"
+    }
+  },
+  "users": {
+    "new": "Nouvel utilisateur",
+    "count_one": "{{count}} utilisateur",
+    "count_other": "{{count}} utilisateurs",
+    "loading": "Chargement des utilisateurs",
+    "error": {
+      "title": "Impossible de charger les utilisateurs",
+      "body": "Le serveur n’a pas répondu."
+    },
+    "empty": {
+      "title": "Aucun utilisateur",
+      "body": "Ajoutez les personnes qui travaillent dans ce cabinet. Elles se connectent avec un mot de passe temporaire puis choisissent le leur."
+    },
+    "columns": {
+      "name": "Nom",
+      "title": "Fonction",
+      "roles": "Rôles",
+      "branches": "Sites",
+      "status": "Statut"
+    },
+    "practitionerTypes": {
+      "dentist": "Dentiste",
+      "assistant": "Assistant(e)",
+      "frontdesk": "Accueil",
+      "other": "Autre"
+    },
+    "menu": {
+      "label": "Actions pour {{name}}",
+      "edit": "Modifier",
+      "resetPassword": "Réinitialiser le mot de passe",
+      "deactivate": "Désactiver",
+      "reactivate": "Réactiver"
+    },
+    "status": {
+      "active": "Actif",
+      "inactive": "Désactivé",
+      "deactivateTitle": "Désactiver {{name}} ?",
+      "deactivateBody": "La personne est déconnectée immédiatement et ne peut plus se connecter avant réactivation. Ses données sont conservées.",
+      "deactivateOk": "Désactiver",
+      "reactivateTitle": "Réactiver {{name}} ?",
+      "reactivateBody": "La personne peut se reconnecter avec son mot de passe actuel.",
+      "reactivateOk": "Réactiver",
+      "deactivated": "{{name}} désactivé(e)",
+      "reactivated": "{{name}} réactivé(e)"
+    },
+    "fields": {
+      "displayName": "Nom complet",
+      "email": "E-mail",
+      "title": "Fonction",
+      "practitionerType": "Type de praticien",
+      "phone": "Téléphone",
+      "roles": "Rôles",
+      "branches": "Sites"
+    },
+    "panel": {
+      "newEyebrow": "Nouvel utilisateur",
+      "newTitle": "Ajouter un membre du personnel",
+      "editEyebrow": "Modifier l’utilisateur",
+      "sections": {
+        "person": "Personne",
+        "access": "Accès"
+      },
+      "create": "Créer l’utilisateur",
+      "save": "Enregistrer",
+      "created": "Utilisateur créé",
+      "saved": "Modifications enregistrées",
+      "failed": "Impossible d’enregistrer l’utilisateur. Vérifiez le formulaire et réessayez."
+    },
+    "reset": {
+      "eyebrow": "Réinitialiser le mot de passe",
+      "body": "La personne est déconnectée partout et devra choisir un nouveau mot de passe à sa prochaine connexion. Transmettez-lui ce mot de passe temporaire directement.",
+      "submit": "Réinitialiser",
+      "done": "Mot de passe réinitialisé pour {{name}}"
+    },
+    "errors": {
+      "required": "Obligatoire",
+      "email": "Saisissez un e-mail valide",
+      "password": "Au moins {{count}} caractères",
+      "roles": "Choisissez au moins un rôle",
+      "branches": "Choisissez au moins un site actif",
+      "invalid": "Vérifiez cette valeur",
+      "emailTaken": "Cet e-mail a déjà un compte",
+      "lastOwner": "Le cabinet doit garder au moins un propriétaire actif"
     }
   },
   "settings": {

@@ -4,7 +4,9 @@ import { TenantDetailPage } from '@/features/platform/tenant-detail/tenant-detai
 
 export const Route = createFileRoute('/_app/admin/tenants/$tenantId')({
   staticData: { navKey: 'tenants' },
-  validateSearch: z.object({ tab: z.enum(['overview', 'branches', 'settings']).optional() }),
+  validateSearch: z.object({
+    tab: z.enum(['overview', 'branches', 'users', 'settings']).optional(),
+  }),
   component: TenantDetailRoute,
 });
 

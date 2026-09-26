@@ -4,6 +4,11 @@ import { E2E_ADMIN } from './global-setup';
 /** Unique per run so the flow can be repeated against the same database. */
 const run = Date.now().toString(36);
 const clinic = { name: `E2E Clinic ${run}`, slug: `e2e-clinic-${run}` };
+const frontDesk = {
+  name: 'Jamie Ortiz',
+  email: `frontdesk-${run}@e2e.test`,
+  password: 'my-own-password-1',
+};
 
 async function signIn(page: Page, email: string, password: string) {
   await page.goto('/login');
@@ -12,7 +17,9 @@ async function signIn(page: Page, email: string, password: string) {
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
-test('platform admin provisions a clinic, configures rooms and manages it', async ({ page }) => {
+test('platform admin provisions a clinic and a user, who then signs in to the clinic', async ({
+  page,
+}) => {
   await signIn(page, E2E_ADMIN.email, 'not-the-password');
   await expect(page.getByRole('alert')).toContainText('Email or password is incorrect.');
 
@@ -44,6 +51,24 @@ test('platform admin provisions a clinic, configures rooms and manages it', asyn
   await expect(page.getByRole('status').filter({ hasText: 'Changes saved' })).toBeVisible();
   await expect(page.getByRole('region', { name: /unsaved/ })).toBeHidden();
 
+  // Users tab: a front desk user with a generated temporary password.
+  await page.getByRole('link', { name: 'Users' }).click();
+  await expect(page.getByText('Dr. E2E Owner')).toBeVisible();
+  await page.getByRole('button', { name: 'New user' }).first().click();
+  const userPanel = page.getByRole('complementary', { name: 'Add a staff member' });
+  await userPanel.getByLabel('Full name').fill(frontDesk.name);
+  await userPanel.getByLabel('Email').fill(frontDesk.email);
+  await userPanel.getByLabel('Practitioner type').selectOption('frontdesk');
+  await userPanel.getByRole('checkbox', { name: 'Front desk' }).check();
+  await userPanel.getByRole('checkbox', { name: 'Main St' }).check();
+  await userPanel.getByRole('button', { name: 'Generate' }).click();
+  const temporaryPassword = await userPanel.getByLabel('Temporary password').inputValue();
+  await userPanel.getByRole('button', { name: 'Create user' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'User created' })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: frontDesk.email })).toContainText(
+    'Front desk',
+  );
+
   // Manage in clinic: the normal shell with the amber banner, then back.
   await page.getByRole('button', { name: 'Manage in clinic' }).click();
   await expect(page).toHaveURL(/\/patients$/);
@@ -54,4 +79,16 @@ test('platform admin provisions a clinic, configures rooms and manages it', asyn
 
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/login$/);
+
+  // The new user signs in with the temporary password, chooses their own, lands in the clinic.
+  await signIn(page, frontDesk.email, temporaryPassword);
+  await expect(page.getByRole('heading', { name: 'Set a new password' })).toBeVisible();
+  await page.getByLabel(/^New password/).fill(frontDesk.password);
+  await page.getByLabel('Confirm new password').fill(frontDesk.password);
+  await page.getByRole('button', { name: 'Save and continue' }).click();
+  await expect(page.getByText('Clinic · Main St')).toBeVisible();
+  await expect(page.getByText(frontDesk.name)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Patients' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Settings' })).toBeHidden();
+  await expect(page.getByText('Managing')).toBeHidden();
 });
