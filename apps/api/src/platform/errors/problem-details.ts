@@ -9,6 +9,7 @@ const STATUS_BY_KIND: Record<DomainErrorKind, number> = {
   conflict: 409,
   forbidden: 403,
   unauthenticated: 401,
+  rate_limited: 429,
 };
 
 const CODE_BY_STATUS: Readonly<Record<number, string>> = {

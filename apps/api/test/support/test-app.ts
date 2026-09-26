@@ -47,10 +47,7 @@ export async function createTestApp(database: TestDatabase): Promise<TestApp> {
     .useValue(clock)
     .compile();
 
-  const app = moduleRef.createNestApplication<NestExpressApplication>({
-    logger: false,
-    rawBody: true,
-  });
+  const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
   configureApp(app);
   await app.init();
   return { app, clock, close: () => app.close() };

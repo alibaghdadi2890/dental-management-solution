@@ -90,8 +90,7 @@ docs for the touched modules updated, one commit per task on `feat/identity-prov
 `.env.example`, `main.ts` (`rawBody: true`), migration.
 
 - [ ] Unit: throttle — 4 failures leave 1 attempt; 5th locks for 15 min; locked rejects even valid;
-      expired lock resets the count; success clears. Idle — trusted never idles; untrusted expires at
-      > 15 min; touch only when older than 60 s. Schema parity with `getAuthTables(options)`.
+      expired lock resets the count; success clears. Idle — trusted never idles; untrusted expires at > 15 min; touch only when older than 60 s. Schema parity with `getAuthTables(options)`.
       Error mapping table (better-auth code → problem code/status).
 - [ ] Integration: sign-up path 404; sign-in with the bootstrapped admin sets a `dcm.session_token`
       cookie; `rememberMe: true` → cookie `Max-Age` 30 days, false → no `Max-Age`; wrong password →

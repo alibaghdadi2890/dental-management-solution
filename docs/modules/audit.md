@@ -25,8 +25,8 @@ revoked in the migration). Snapshots pass through `redactSecrets()`; credentials
 
 ## HTTP
 
-| Route        | Access       |
-| ------------ | ------------ |
+| Route        | Access                                                     |
+| ------------ | ---------------------------------------------------------- |
 | `GET /audit` | `audit:read` — `?resourceType=&resourceId=&cursor=&limit=` |
 
 ## Events

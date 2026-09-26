@@ -16,17 +16,17 @@ custom-role UI, tenant-side user/RBAC screens, multi-tenant sign-in (design only
 
 The brief's D1–D11 stand. Decisions taken while designing (✓ = confirmed by the product owner):
 
-| #   | Decision                                                                                                                                                                                                                                                                                                  | ADR  |
-| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| #   | Decision                                                                                                                                                                                                                                                                                                    | ADR  |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
 | A1✓ | New top-level **`provisioning`** module (platform back office, no tables) orchestrates tenant provisioning and serves the cross-tenant tenants list. **`roles` no longer depends on `users`**; **`users` depends on `roles`** so `createStaffUser` assigns roles atomically. `users` serves `GET /session`. | 0009 |
-| A2✓ | The actor's **resolved permission set is carried in CLS**. `platform/cls` evaluates it (`requirePermission`), so tenancy/users/roles re-check without importing `authorization`. `authorization` resolves the set at the edge and owns resource-level rules.                                          | 0010 |
-| A3✓ | better-auth tables are the **identity plane**: global, no `tenant_id`, no RLS, touched only by `auth`, on the runtime role. All app data about staff stays in RLS tables.                                                                                                                             | 0011 |
-| A4✓ | Tenant-scoped routes take the tenant **only** from the session (or `X-Tenant-Id` for platform admins). Platform-admin APIs take `tenantId` in the query or body, never in the path.                                                                                                                     | 0008 |
-| A5  | Roles are seeded by a **direct call inside the provisioning transaction** (they must exist before the owner's role is assigned). `TenantProvisioned` is emitted after commit for audit and future reactions.                                                                                         | 0009 |
-| A6  | Staff accounts get a temporary password and `mustChangePassword`; this supersedes ADR-0004's owner invitation and "owners manage their own members" (deferred per D1).                                                                                                                                | 0012 |
-| A7  | Lockout is tracked per normalised email (known or not, so responses never reveal whether an account exists); idle timeout is enforced by the session guard from a `last_active_at` column.                                                                                                              | 0013 |
-| A8  | Rooms live in `tenancy`; the chair concept is removed everywhere; a room is the future scheduling resource.                                                                                                                                                                                            | 0007 |
-| A9  | `audit_log` gains `actor_platform_admin` and `reason` columns (D2 and the POC's reason dialogs).                                                                                                                                                                                                         | 0008 |
+| A2✓ | The actor's **resolved permission set is carried in CLS**. `platform/cls` evaluates it (`requirePermission`), so tenancy/users/roles re-check without importing `authorization`. `authorization` resolves the set at the edge and owns resource-level rules.                                                | 0010 |
+| A3✓ | better-auth tables are the **identity plane**: global, no `tenant_id`, no RLS, touched only by `auth`, on the runtime role. All app data about staff stays in RLS tables.                                                                                                                                   | 0011 |
+| A4✓ | Tenant-scoped routes take the tenant **only** from the session (or `X-Tenant-Id` for platform admins). Platform-admin APIs take `tenantId` in the query or body, never in the path.                                                                                                                         | 0008 |
+| A5  | Roles are seeded by a **direct call inside the provisioning transaction** (they must exist before the owner's role is assigned). `TenantProvisioned` is emitted after commit for audit and future reactions.                                                                                                | 0009 |
+| A6  | Staff accounts get a temporary password and `mustChangePassword`; this supersedes ADR-0004's owner invitation and "owners manage their own members" (deferred per D1).                                                                                                                                      | 0012 |
+| A7  | Lockout is tracked per normalised email (known or not, so responses never reveal whether an account exists); idle timeout is enforced by the session guard from a `last_active_at` column.                                                                                                                  | 0013 |
+| A8  | Rooms live in `tenancy`; the chair concept is removed everywhere; a room is the future scheduling resource.                                                                                                                                                                                                 | 0007 |
+| A9  | `audit_log` gains `actor_platform_admin` and `reason` columns (D2 and the POC's reason dialogs).                                                                                                                                                                                                            | 0008 |
 
 ## Module graph
 
@@ -45,14 +45,14 @@ Everything that mutates records an audit entry, so every module except `audit` a
 
 ### Where each cross-cutting piece lives
 
-| Piece                                       | Location                                           | Why                                                                                    |
-| ------------------------------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `@Public()`, `@Authenticated()` decorators   | `platform/http/route-access.ts`                    | Needed by the health controller (platform) and both guards.                            |
-| `Permission` carrier + `requirePermission`   | `platform/cls` (`RequestContext`)                  | A2.                                                                                    |
-| `runInTenant(tenantId, fn)`                  | `platform/cls` (`RequestContext`)                  | Platform admin / system entering a tenant programmatically (provisioning, suspend).  |
-| `Clock` (`now()`)                            | `platform/kernel/clock.ts` + provider              | Deterministic lockout/idle tests.                                                      |
-| Session guard                                | `auth` (exported), registered as `APP_GUARD` first | Fills CLS identity and tenant.                                                         |
-| Permission guard                             | `authorization`, registered as `APP_GUARD` second  | Resolves permissions into CLS, enforces `@RequirePermission`. Both registered in `AuthorizationModule` so their order is deterministic. |
+| Piece                                      | Location                                           | Why                                                                                                                                     |
+| ------------------------------------------ | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `@Public()`, `@Authenticated()` decorators | `platform/http/route-access.ts`                    | Needed by the health controller (platform) and both guards.                                                                             |
+| `Permission` carrier + `requirePermission` | `platform/cls` (`RequestContext`)                  | A2.                                                                                                                                     |
+| `runInTenant(tenantId, fn)`                | `platform/cls` (`RequestContext`)                  | Platform admin / system entering a tenant programmatically (provisioning, suspend).                                                     |
+| `Clock` (`now()`)                          | `platform/kernel/clock.ts` + provider              | Deterministic lockout/idle tests.                                                                                                       |
+| Session guard                              | `auth` (exported), registered as `APP_GUARD` first | Fills CLS identity and tenant.                                                                                                          |
+| Permission guard                           | `authorization`, registered as `APP_GUARD` second  | Resolves permissions into CLS, enforces `@RequirePermission`. Both registered in `AuthorizationModule` so their order is deterministic. |
 
 ## Data model
 
@@ -61,11 +61,11 @@ Tenant-owned tables use `tenantIdColumn()` + `tenantIsolationPolicy()` + an inde
 
 ### `tenancy`
 
-| Table      | Columns                                                                                                           | Constraints / RLS                                                                                                   |
-| ---------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Table      | Columns                                                                                                                | Constraints / RLS                                                                                                                                                  |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `tenants`  | `id`, `name`, `slug`, `status` (`tenant_status` enum: `active`,`suspended`), `time_zone`, `currency` char(3), `locale` | `slug` unique. **RLS policy `tenant_self`: `id = current tenant`** (members read their own row via `TenantDb`); created and listed only through `withoutTenant()`. |
-| `branches` | `id`, `tenant_id`, `name`, `code?`, `address?`, `phone?`, `active`                                                | Tenant RLS. Unique `(tenant_id, lower(name))`; unique `(tenant_id, lower(code)) where code is not null`.           |
-| `rooms`    | `id`, `tenant_id`, `branch_id` → `branches.id`, `name`, `code?`, `active`                                          | Tenant RLS. Unique `(branch_id, lower(name))`; unique `(branch_id, lower(code)) where code is not null`.           |
+| `branches` | `id`, `tenant_id`, `name`, `code?`, `address?`, `phone?`, `active`                                                     | Tenant RLS. Unique `(tenant_id, lower(name))`; unique `(tenant_id, lower(code)) where code is not null`.                                                           |
+| `rooms`    | `id`, `tenant_id`, `branch_id` → `branches.id`, `name`, `code?`, `active`                                              | Tenant RLS. Unique `(branch_id, lower(name))`; unique `(branch_id, lower(code)) where code is not null`.                                                           |
 
 Defaults (D8): `Asia/Beirut`, `USD`, `en`. Branches and rooms are deactivated, never deleted.
 
@@ -91,11 +91,11 @@ guard use; the app's own source of truth is the RLS tables in `users`, `roles` a
 
 ### `roles`
 
-| Table              | Columns                                                         | Constraints                                       |
-| ------------------ | --------------------------------------------------------------- | ------------------------------------------------- |
-| `roles`            | `id`, `tenant_id`, `key`, `name`, `system`                      | Tenant RLS. Unique `(tenant_id, key)`.            |
-| `role_permissions` | `tenant_id`, `role_id` → roles, `permission` text               | Tenant RLS. PK `(role_id, permission)`. Junction: hard delete. |
-| `user_roles`       | `tenant_id`, `user_id` (auth user id), `role_id` → roles        | Tenant RLS. PK `(user_id, role_id)`. Junction: hard delete. |
+| Table              | Columns                                                  | Constraints                                                    |
+| ------------------ | -------------------------------------------------------- | -------------------------------------------------------------- |
+| `roles`            | `id`, `tenant_id`, `key`, `name`, `system`               | Tenant RLS. Unique `(tenant_id, key)`.                         |
+| `role_permissions` | `tenant_id`, `role_id` → roles, `permission` text        | Tenant RLS. PK `(role_id, permission)`. Junction: hard delete. |
+| `user_roles`       | `tenant_id`, `user_id` (auth user id), `role_id` → roles | Tenant RLS. PK `(user_id, role_id)`. Junction: hard delete.    |
 
 System roles and the D5 matrix are a pure constant in `roles/domain/system-roles.ts`; a unit test
 checks every permission exists in the catalog. Permission text is validated with
@@ -103,10 +103,10 @@ checks every permission exists in the catalog. Permission text is validated with
 
 ### `users`
 
-| Table            | Columns                                                                                                       | Constraints                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `staff_profiles` | `id`, `tenant_id`, `auth_user_id`, `display_name`, `title?`, `practitioner_type` (`dentist`,`assistant`,`frontdesk`,`other`), `phone?`, `active` | Tenant RLS. Unique `(tenant_id, auth_user_id)`.                    |
-| `staff_branches` | `tenant_id`, `auth_user_id`, `branch_id`                                                                      | Tenant RLS. PK `(auth_user_id, branch_id)`. Junction.              |
+| Table            | Columns                                                                                                                                          | Constraints                                           |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `staff_profiles` | `id`, `tenant_id`, `auth_user_id`, `display_name`, `title?`, `practitioner_type` (`dentist`,`assistant`,`frontdesk`,`other`), `phone?`, `active` | Tenant RLS. Unique `(tenant_id, auth_user_id)`.       |
+| `staff_branches` | `tenant_id`, `auth_user_id`, `branch_id`                                                                                                         | Tenant RLS. PK `(auth_user_id, branch_id)`. Junction. |
 
 `practitioner_type` is text + Zod (a tenant may extend it later). The API identifies a staff user
 by their **auth user id** (global, stable across tenants — D7).
@@ -135,12 +135,12 @@ is forwarded: `POST /auth/sign-in/email` and `POST /auth/sign-out`; everything e
 sign-up, no org/admin HTTP endpoints — those plugins are driven server-side only). Non-2xx
 better-auth responses are converted to problem+json with stable codes:
 
-| better-auth                      | problem code                 | status |
-| -------------------------------- | ---------------------------- | ------ |
-| `INVALID_EMAIL_OR_PASSWORD`      | `auth.invalid_credentials` (+ `attemptsLeft`) | 401 |
-| lock active / reached            | `auth.account_locked` (+ `lockedUntil`)       | 401 |
-| `BANNED_USER`                    | `auth.account_deactivated`   | 403    |
-| other                            | `auth.<lower_snake_code>`    | as-is  |
+| better-auth                 | problem code                                  | status |
+| --------------------------- | --------------------------------------------- | ------ |
+| `INVALID_EMAIL_OR_PASSWORD` | `auth.invalid_credentials` (+ `attemptsLeft`) | 401    |
+| lock active / reached       | `auth.account_locked` (+ `lockedUntil`)       | 401    |
+| `BANNED_USER`               | `auth.account_deactivated`                    | 403    |
+| other                       | `auth.<lower_snake_code>`                     | as-is  |
 
 Sign-in throttling wraps the forwarded call (A7, D11): before forwarding, a locked email gets
 `auth.account_locked`; after a 401 the attempt is recorded, and the fifth consecutive failure
@@ -166,7 +166,7 @@ passed through: trusted → 30-day persistent cookie; otherwise a browser-sessio
      404 `tenant.not_found`), otherwise no tenant;
    - everyone else: `X-Tenant-Id` is **ignored**; tenant = `session.activeOrganizationId`, or, when
      unset, the user's memberships (`auth_members`): exactly one → persisted to the session; none →
-     403 `auth.no_tenant`. *Several* is where a tenant picker will plug in; today it cannot happen
+     403 `auth.no_tenant`. _Several_ is where a tenant picker will plug in; today it cannot happen
      (a user belongs to one tenant) and is treated as the first membership.
 6. Tenant status: a suspended tenant → 403 `tenant.suspended` (platform admins are exempt so they
    can reactivate).
@@ -211,13 +211,13 @@ an existing user is promoted, never re-passworded).
 Identity writes join the caller's open `TenantDb` transaction (via a new
 `TenantDb.currentTransaction()`), so a staff user and their profile/roles commit together.
 
-| Route                                  | Access | Purpose                                                    |
-| -------------------------------------- | ------ | ---------------------------------------------------------- |
-| `POST /auth/sign-in/email`             | P      | better-auth, throttled; body `{ email, password, rememberMe }` |
-| `POST /auth/sign-out`                  | P      | better-auth                                                |
-| `POST /session/branch`                 | A      | `{ branchId }` must be an active assigned branch           |
-| `POST /session/password`               | A, pending ok | `{ currentPassword, newPassword }`; clears `mustChangePassword`, revokes other sessions |
-| `POST /session/touch`                  | A, pending ok | 204; idle heartbeat from the SPA                    |
+| Route                      | Access        | Purpose                                                                                 |
+| -------------------------- | ------------- | --------------------------------------------------------------------------------------- |
+| `POST /auth/sign-in/email` | P             | better-auth, throttled; body `{ email, password, rememberMe }`                          |
+| `POST /auth/sign-out`      | P             | better-auth                                                                             |
+| `POST /session/branch`     | A             | `{ branchId }` must be an active assigned branch                                        |
+| `POST /session/password`   | A, pending ok | `{ currentPassword, newPassword }`; clears `mustChangePassword`, revokes other sessions |
+| `POST /session/touch`      | A, pending ok | 204; idle heartbeat from the SPA                                                        |
 
 Emits `MemberJoined`, `MemberRemoved` from `syncMembership` / `removeMembership`.
 
@@ -230,15 +230,15 @@ Emits `MemberJoined`, `MemberRemoved` from `syncMembership` / `removeMembership`
 (exported for later features), `saveRooms(items[])` (batch create/update in one transaction),
 `branchesByIds(ids)`.
 
-| Route                       | Access         |
-| --------------------------- | -------------- |
-| `GET /tenant`               | `tenant:read`  |
-| `PATCH /tenant`             | `tenant:write` |
-| `GET /branches`             | `tenant:read`  |
-| `POST /branches`            | `tenant:write` |
-| `PATCH /branches/:id`       | `tenant:write` (name, code, address, phone, active) |
-| `GET /rooms?branchId=`      | `tenant:read`  |
-| `POST /rooms/batch`         | `tenant:write` (`{ items: [{ id?, branchId, name, code?, active }] }`) |
+| Route                  | Access                                                                 |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `GET /tenant`          | `tenant:read`                                                          |
+| `PATCH /tenant`        | `tenant:write`                                                         |
+| `GET /branches`        | `tenant:read`                                                          |
+| `POST /branches`       | `tenant:write`                                                         |
+| `PATCH /branches/:id`  | `tenant:write` (name, code, address, phone, active)                    |
+| `GET /rooms?branchId=` | `tenant:read`                                                          |
+| `POST /rooms/batch`    | `tenant:write` (`{ items: [{ id?, branchId, name, code?, active }] }`) |
 
 ### roles — `RolesService`
 
@@ -259,15 +259,15 @@ Invariants (pure, `users/domain/`): a tenant keeps at least one active owner (40
 `user.last_owner`); a user cannot deactivate themselves (409 `user.self_deactivation`); a staff
 user has at least one branch and one role. Changing roles also requires `role:write`.
 
-| Route                              | Access       |
-| ---------------------------------- | ------------ |
-| `GET /session`                     | A, pending ok |
-| `GET /users`, `GET /users/:id`     | `user:read`  |
-| `POST /users`                      | `user:write` |
-| `PATCH /users/:id`                 | `user:write` |
-| `POST /users/:id/deactivate`       | `user:write` (`{ reason }`) |
-| `POST /users/:id/reactivate`       | `user:write` (`{ reason }`) |
-| `POST /users/:id/reset-password`   | `user:write` (`{ temporaryPassword }`) |
+| Route                            | Access                                 |
+| -------------------------------- | -------------------------------------- |
+| `GET /session`                   | A, pending ok                          |
+| `GET /users`, `GET /users/:id`   | `user:read`                            |
+| `POST /users`                    | `user:write`                           |
+| `PATCH /users/:id`               | `user:write`                           |
+| `POST /users/:id/deactivate`     | `user:write` (`{ reason }`)            |
+| `POST /users/:id/reactivate`     | `user:write` (`{ reason }`)            |
+| `POST /users/:id/reset-password` | `user:write` (`{ temporaryPassword }`) |
 
 `GET /session` returns the extended `sessionSchema`: `user { id, displayName, email }`,
 `platformAdmin`, `mustChangePassword`, `tenant { id, name, slug, timeZone, currency, locale } |
@@ -277,12 +277,12 @@ platform admin inside a tenant), `roleNames`, `permissions`, `idleTimeoutSeconds
 
 ### provisioning — `ProvisioningService`
 
-| Route                                  | Access           |
-| -------------------------------------- | ---------------- |
+| Route                                   | Access                                                 |
+| --------------------------------------- | ------------------------------------------------------ |
 | `GET /platform/tenants?status=&search=` | `platform:admin` — tenants with branch and user counts |
-| `POST /platform/tenants`               | `platform:admin` — provision |
-| `POST /platform/tenants/suspend`       | `platform:admin` — `{ tenantId, reason }` |
-| `POST /platform/tenants/reactivate`    | `platform:admin` — `{ tenantId, reason }` |
+| `POST /platform/tenants`                | `platform:admin` — provision                           |
+| `POST /platform/tenants/suspend`        | `platform:admin` — `{ tenantId, reason }`              |
+| `POST /platform/tenants/reactivate`     | `platform:admin` — `{ tenantId, reason }`              |
 
 Provisioning (`{ clinic: { name, slug, timeZone, currency, locale }, firstBranch: { name,
 address?, phone? }, owner: { displayName, email, temporaryPassword } }`):
@@ -291,7 +291,7 @@ address?, phone? }, owner: { displayName, email, temporaryPassword } }`):
 2. `tenancy.createTenant` via `withoutTenant()` (commits).
 3. `context.runInTenant(tenantId)` → one `TenantDb` transaction: audit `tenant.provision`, seed
    system roles (A5), create the first branch, `users.createStaffUser(owner, roles: ['owner'],
-   practitionerType: 'other')` (which mirrors organization, team and membership), publish
+practitionerType: 'other')` (which mirrors organization, team and membership), publish
    `TenantProvisioned { tenantId, ownerUserId, firstBranchId }`.
 4. If step 3 fails, compensate by deleting the tenant row (nothing else committed) and rethrow.
 

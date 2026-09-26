@@ -36,11 +36,7 @@ export const auditLog = pgTable(
       table.occurredAt.desc(),
       table.id.desc(),
     ),
-    index('audit_log_tenant_resource_idx').on(
-      table.tenantId,
-      table.resourceType,
-      table.resourceId,
-    ),
+    index('audit_log_tenant_resource_idx').on(table.tenantId, table.resourceType, table.resourceId),
     tenantIsolationPolicy(),
   ],
 );

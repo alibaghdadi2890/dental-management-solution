@@ -26,9 +26,7 @@ describe('audit log', () => {
     ...extra,
   });
   const readAll = (tenantId: string) =>
-    context.run({ ...seed(tenantId), platformAdmin: true }, () =>
-      audit.list({ limit: 100 }),
-    );
+    context.run({ ...seed(tenantId), platformAdmin: true }, () => audit.list({ limit: 100 }));
 
   beforeAll(async () => {
     database = connectTestDatabase();
@@ -137,8 +135,8 @@ describe('audit log', () => {
   });
 
   it('requires audit:read to list', async () => {
-    await expect(context.run(seed(tenantA), () => audit.list({ limit: 5 }))).rejects.toMatchObject(
-      { code: 'forbidden' },
-    );
+    await expect(context.run(seed(tenantA), () => audit.list({ limit: 5 }))).rejects.toMatchObject({
+      code: 'forbidden',
+    });
   });
 });

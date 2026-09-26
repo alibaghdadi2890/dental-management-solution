@@ -10,11 +10,7 @@ import { setupOpenApi } from './platform/http/openapi';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig(process.env);
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    bufferLogs: true,
-    // better-auth needs the untouched request body (modules/auth/http/auth-http.controller.ts).
-    rawBody: true,
-  });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
   configureApp(app);
   if (config.NODE_ENV !== 'production') {

@@ -3,7 +3,7 @@
  * domain code never deals in HTTP (CLAUDE.md §12).
  */
 export type DomainErrorKind =
-  'invalid' | 'not_found' | 'conflict' | 'forbidden' | 'unauthenticated';
+  'invalid' | 'not_found' | 'conflict' | 'forbidden' | 'unauthenticated' | 'rate_limited';
 
 /**
  * Base class for every expected business failure. Pure TypeScript so `domain/` folders can throw it.

@@ -5,7 +5,10 @@ import { TenantDb } from '../../../platform/db/tenant-db';
 import type { AuditCursorPosition } from '../domain/audit-cursor';
 import { auditLog } from './schema';
 
-export type NewAuditRow = Omit<typeof auditLog.$inferInsert, 'id' | 'tenantId' | 'createdAt' | 'updatedAt'>;
+export type NewAuditRow = Omit<
+  typeof auditLog.$inferInsert,
+  'id' | 'tenantId' | 'createdAt' | 'updatedAt'
+>;
 
 export interface AuditFilter {
   resourceType?: string | undefined;
