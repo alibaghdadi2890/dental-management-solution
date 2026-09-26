@@ -1,0 +1,23 @@
+{
+  "name": "dental-clinic-management",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "dev": "docker compose up -d --wait && pnpm --filter @dcm/api db:migrate && turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@dcm/config": "workspace:*",
+    "prettier": "3.9.9",
+    "turbo": "2.11.4",
+    "typescript": "~6.0.3"
+  }
+}

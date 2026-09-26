@@ -1,0 +1,7 @@
+{
+  "extends": "@dcm/config/tsconfig/node-lib.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src"]
+}
