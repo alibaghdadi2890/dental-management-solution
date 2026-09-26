@@ -19,6 +19,21 @@ export const configSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   S3_FORCE_PATH_STYLE: z.stringbool().default(false),
+
+  /** Signs session cookies (better-auth). At least 32 random characters; never commit it. */
+  AUTH_SECRET: z.string().min(32),
+  /** Public origin of the SPA, which proxies /api on the same origin (CLAUDE.md §6). */
+  AUTH_BASE_URL: z.url(),
+  /** Extra origins allowed to call the auth endpoints, comma-separated. */
+  AUTH_TRUSTED_ORIGINS: z
+    .string()
+    .optional()
+    .transform((value) =>
+      (value ?? '')
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter(Boolean),
+    ),
 });
 
 export type AppConfig = z.infer<typeof configSchema>;

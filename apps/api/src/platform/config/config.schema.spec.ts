@@ -9,6 +9,8 @@ const validEnv = {
   S3_BUCKET: 'dcm-local',
   S3_ACCESS_KEY_ID: 'minio',
   S3_SECRET_ACCESS_KEY: 'minio-secret',
+  AUTH_SECRET: 'a-local-secret-of-at-least-32-characters',
+  AUTH_BASE_URL: 'http://localhost:5173',
 };
 
 describe('loadConfig', () => {
@@ -33,5 +35,14 @@ describe('loadConfig', () => {
   it('rejects malformed values', () => {
     expect(() => loadConfig({ ...validEnv, PORT: 'eighty' })).toThrow(/PORT/);
     expect(() => loadConfig({ ...validEnv, LOG_LEVEL: 'loud' })).toThrow(/LOG_LEVEL/);
+  });
+
+  it('requires a strong auth secret and splits trusted origins', () => {
+    expect(() => loadConfig({ ...validEnv, AUTH_SECRET: 'short' })).toThrow(/AUTH_SECRET/);
+    expect(loadConfig(validEnv).AUTH_TRUSTED_ORIGINS).toEqual([]);
+    expect(
+      loadConfig({ ...validEnv, AUTH_TRUSTED_ORIGINS: 'https://a.example, https://b.example' })
+        .AUTH_TRUSTED_ORIGINS,
+    ).toEqual(['https://a.example', 'https://b.example']);
   });
 });

@@ -20,30 +20,34 @@ import { QueueModule } from './platform/queue/queue.module';
 import { RedisModule } from './platform/redis/redis.module';
 import { StorageModule } from './platform/storage/storage.module';
 
+/** Platform modules every request needs (CLAUDE.md §4 rule 6: infrastructure only). */
+export const CORE_PLATFORM_MODULES = [
+  ConfigModule,
+  ClockModule,
+  AppClsModule,
+  LoggingModule,
+  HttpPlatformModule,
+  DbModule,
+  EventsModule,
+];
+
+/** Platform modules that reach external services (Redis, S3); integration tests leave them out. */
+export const EXTERNAL_PLATFORM_MODULES = [RedisModule, QueueModule, StorageModule, HealthModule];
+
+/** Domain modules (phase 1). */
+export const DOMAIN_MODULES = [
+  TenancyModule,
+  AuthModule,
+  UsersModule,
+  RolesModule,
+  AuthorizationModule,
+  AuditModule,
+  PatientsModule,
+  ClinicalModule,
+  ImportsModule,
+];
+
 @Module({
-  imports: [
-    // Platform (infrastructure only — CLAUDE.md §4 rule 6)
-    ConfigModule,
-    ClockModule,
-    AppClsModule,
-    LoggingModule,
-    HttpPlatformModule,
-    DbModule,
-    RedisModule,
-    EventsModule,
-    QueueModule,
-    StorageModule,
-    HealthModule,
-    // Domain modules (phase 1)
-    TenancyModule,
-    AuthModule,
-    UsersModule,
-    RolesModule,
-    AuthorizationModule,
-    AuditModule,
-    PatientsModule,
-    ClinicalModule,
-    ImportsModule,
-  ],
+  imports: [...CORE_PLATFORM_MODULES, ...EXTERNAL_PLATFORM_MODULES, ...DOMAIN_MODULES],
 })
 export class AppModule {}

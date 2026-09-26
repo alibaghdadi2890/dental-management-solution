@@ -9,7 +9,11 @@ import { loadConfig } from './platform/config/config.schema';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig(process.env);
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+    // better-auth needs the untouched request body (modules/auth/http/auth-http.controller.ts).
+    rawBody: true,
+  });
   app.useLogger(app.get(Logger));
   configureApp(app);
   await app.listen(config.PORT);

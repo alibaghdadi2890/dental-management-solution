@@ -13,7 +13,7 @@ import { PlatformAdminDb } from '../../src/platform/db/platform-admin-db';
 import { PlatformAccessDeniedError } from '../../src/platform/kernel/platform-access-denied.error';
 import { TenantDb } from '../../src/platform/db/tenant-db';
 import { newId } from '../../src/platform/kernel/id';
-import { startTestDatabase, type TestDatabase } from '../support/postgres';
+import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 
 const TENANT_A = newId();
 const TENANT_B = newId();
@@ -35,7 +35,7 @@ describe('tenant isolation (RLS)', () => {
     rows.rows.map((row) => row['label']).sort();
 
   beforeAll(async () => {
-    database = await startTestDatabase();
+    database = connectTestDatabase();
     await database.ownerPool.query(`
       CREATE TABLE rls_probe (
         id uuid PRIMARY KEY,
@@ -56,7 +56,8 @@ describe('tenant isolation (RLS)', () => {
   });
 
   afterAll(async () => {
-    await database.stop();
+    await database.ownerPool.query('DROP TABLE rls_probe');
+    await database.close();
   });
 
   it('only returns the current tenant rows', async () => {
@@ -124,6 +125,16 @@ describe('tenant isolation (RLS)', () => {
       "select 1 from rls_probe where label = 'a-rolled-back'",
     );
     expect(rows.rowCount).toBe(0);
+  });
+
+  it('exposes the open transaction to helpers that must join it', async () => {
+    expect(tenantDb.currentTransaction()).toBeUndefined();
+    await context.run(asUser(TENANT_A), () =>
+      tenantDb.run((tx) => {
+        expect(tenantDb.currentTransaction()).toBe(tx);
+        return Promise.resolve();
+      }),
+    );
   });
 
   it('runs after-commit hooks only when the transaction commits', async () => {
