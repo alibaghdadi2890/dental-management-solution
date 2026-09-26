@@ -1,0 +1,174 @@
+{
+  "tenants": {
+    "title": "Cabinets",
+    "subtitle": "Cabinets présents sur la plateforme",
+    "new": "Nouveau cabinet",
+    "tabs": {
+      "label": "Statut du cabinet",
+      "active": "Actifs",
+      "suspended": "Suspendus"
+    },
+    "search": "Rechercher par nom ou identifiant",
+    "searchLabel": "Rechercher un cabinet",
+    "columns": {
+      "tenant": "Cabinet",
+      "branches": "Sites",
+      "users": "Utilisateurs",
+      "timeZone": "Fuseau horaire",
+      "currency": "Devise",
+      "created": "Créé le",
+      "status": "Statut"
+    },
+    "status": {
+      "active": "Actif",
+      "suspended": "Suspendu"
+    },
+    "menu": {
+      "label": "Actions pour {{name}}",
+      "open": "Ouvrir",
+      "suspend": "Suspendre…",
+      "reactivate": "Réactiver…"
+    },
+    "loading": "Chargement des cabinets",
+    "empty": {
+      "title": "Aucun cabinet pour le moment",
+      "body": "Créez le premier cabinet : ses informations, son premier site et le compte du titulaire."
+    },
+    "emptySuspended": {
+      "title": "Aucun cabinet suspendu",
+      "body": "Les cabinets suspendus apparaissent ici ; leurs utilisateurs ne peuvent pas se connecter avant réactivation."
+    },
+    "noResults": {
+      "title": "Aucun cabinet ne correspond",
+      "body": "Rien dans « {{view}} » ne correspond à votre recherche.",
+      "clear": "Effacer la recherche"
+    },
+    "error": {
+      "title": "Impossible de charger les cabinets",
+      "body": "Le serveur n’a pas répondu. Votre recherche est conservée."
+    }
+  },
+  "status": {
+    "suspendTitle": "Suspendre {{name}} ?",
+    "suspendBody": "Ses utilisateurs sont déconnectés et ne peuvent plus se connecter avant réactivation. Les données sont conservées.",
+    "suspendOk": "Suspendre le cabinet",
+    "reactivateTitle": "Réactiver {{name}} ?",
+    "reactivateBody": "Ses utilisateurs peuvent se reconnecter immédiatement.",
+    "reactivateOk": "Réactiver",
+    "reason": "Motif",
+    "suspended": "{{name}} suspendu",
+    "reactivated": "{{name}} réactivé",
+    "failed": "Impossible de modifier le statut du cabinet."
+  },
+  "newTenant": {
+    "eyebrow": "Nouveau cabinet",
+    "title": "Créer un cabinet",
+    "sections": {
+      "clinic": "Cabinet",
+      "branch": "Premier site",
+      "owner": "Compte du titulaire"
+    },
+    "fields": {
+      "name": "Nom du cabinet",
+      "slug": "Identifiant",
+      "slugHint": "Utilisé dans les liens ; minuscules",
+      "timeZone": "Fuseau horaire",
+      "currency": "Devise",
+      "locale": "Langue",
+      "branchName": "Nom du site",
+      "address": "Adresse",
+      "phone": "Téléphone",
+      "ownerName": "Nom complet",
+      "ownerEmail": "E-mail",
+      "password": "Mot de passe temporaire",
+      "passwordHint": "Modifié à la première connexion",
+      "generate": "Générer"
+    },
+    "submit": "Créer le cabinet",
+    "busy": "Création…",
+    "created": "Cabinet créé",
+    "open": "Ouvrir",
+    "errors": {
+      "required": "Obligatoire",
+      "slug": "3 à 48 lettres minuscules, chiffres et tirets simples",
+      "slugTaken": "Un autre cabinet utilise déjà cet identifiant",
+      "email": "Saisissez un e-mail valide",
+      "emailTaken": "Cet e-mail a déjà un compte",
+      "password": "Au moins {{count}} caractères",
+      "generic": "Impossible de créer le cabinet. Vérifiez le formulaire et réessayez."
+    }
+  },
+  "locales": {
+    "en": "Anglais",
+    "ar": "Arabe",
+    "fr": "Français"
+  },
+  "detail": {
+    "back": "Tous les cabinets",
+    "manage": "Gérer dans le cabinet",
+    "suspend": "Suspendre",
+    "reactivate": "Réactiver",
+    "tabs": {
+      "label": "Sections du cabinet",
+      "overview": "Vue d’ensemble",
+      "branches": "Sites et salles",
+      "settings": "Paramètres"
+    },
+    "loading": "Chargement du cabinet",
+    "error": {
+      "title": "Impossible de charger ce cabinet",
+      "body": "Il a peut-être été supprimé, ou le serveur n’a pas répondu."
+    },
+    "overview": {
+      "branches": "Sites",
+      "rooms": "Salles",
+      "users": "Utilisateurs",
+      "created": "Créé le",
+      "activeOf": "{{active}} actifs sur {{total}}"
+    }
+  },
+  "branches": {
+    "empty": {
+      "title": "Aucun site pour le moment",
+      "body": "Ajoutez un site pour commencer à ajouter ses salles."
+    },
+    "add": "Ajouter un site",
+    "addRoom": "Ajouter une salle",
+    "active": "Actif",
+    "code": "Code",
+    "name": "Nom",
+    "noDetails": "Ni adresse ni téléphone",
+    "rooms": {
+      "empty": "Aucune salle pour le moment. Ajoutez la première salle de ce site.",
+      "delete": "Désactiver {{name}}",
+      "remove": "Retirer la nouvelle salle",
+      "newName": "Nouvelle salle"
+    },
+    "unsaved_one": "{{count}} modification non enregistrée",
+    "unsaved_other": "{{count}} modifications non enregistrées",
+    "missingName": "Chaque salle doit avoir un nom",
+    "saved": "Modifications enregistrées",
+    "failed": "Enregistrement impossible : {{reason}}",
+    "discardTitle": "Abandonner toutes les modifications ?",
+    "discardBody_one": "{{count}} modification sera perdue.",
+    "discardBody_other": "{{count}} modifications seront perdues.",
+    "panel": {
+      "eyebrow": "Nouveau site",
+      "title": "Ajouter un site",
+      "submit": "Ajouter le site",
+      "created": "Site ajouté",
+      "nameTaken": "Un site porte déjà ce nom",
+      "codeTaken": "Un site utilise déjà ce code"
+    },
+    "conflict": {
+      "nameTaken": "Deux salles d’un même site ne peuvent pas avoir le même nom",
+      "codeTaken": "Deux salles d’un même site ne peuvent pas avoir le même code"
+    }
+  },
+  "settings": {
+    "title": "Paramètres du cabinet",
+    "body": "Le fuseau horaire, la devise et la langue s’appliquent à tous les utilisateurs de ce cabinet.",
+    "saved": "Paramètres enregistrés",
+    "failed": "Impossible d’enregistrer les paramètres."
+  }
+}

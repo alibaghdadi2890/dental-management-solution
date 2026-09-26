@@ -28,5 +28,9 @@ jobs:
       # Includes the Testcontainers tenant-isolation suite (Docker is available on the runner).
       - run: pnpm test
       - run: pnpm build
+      # The identity e2e flow runs against the real API: local stack, env and migrations first.
+      - run: cp apps/api/.env.example apps/api/.env
+      - run: docker compose up -d --wait
+      - run: pnpm --filter @dcm/api db:migrate
       - run: pnpm --filter @dcm/web exec playwright install --with-deps chromium
       - run: pnpm --filter @dcm/web e2e

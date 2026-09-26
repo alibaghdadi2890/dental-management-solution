@@ -11,5 +11,9 @@
   "saving": "Enregistrement…",
   "saved": "Enregistré",
   "discard": "Abandonner",
-  "unexpected": "Une erreur est survenue. Réessayez dans un instant."
+  "unexpected": "Une erreur est survenue. Réessayez dans un instant.",
+  "discardTitle": "Abandonner les modifications non enregistrées ?",
+  "discardBody": "Vous avez des modifications non enregistrées. Partir maintenant les abandonnera.",
+  "discardLeave": "Abandonner et quitter",
+  "keepEditing": "Continuer à modifier"
 }

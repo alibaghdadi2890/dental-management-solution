@@ -1,4 +1,5 @@
 import 'i18next';
+import type admin from '../locales/en/admin.json';
 import type auth from '../locales/en/auth.json';
 import type catalog from '../locales/en/catalog.json';
 import type common from '../locales/en/common.json';
@@ -15,6 +16,7 @@ declare module 'i18next' {
       common: typeof common;
       shell: typeof shell;
       auth: typeof auth;
+      admin: typeof admin;
       patients: typeof patients;
       visits: typeof visits;
       catalog: typeof catalog;

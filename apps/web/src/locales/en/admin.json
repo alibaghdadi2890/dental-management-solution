@@ -1,0 +1,174 @@
+{
+  "tenants": {
+    "title": "Tenants",
+    "subtitle": "Clinics on the platform",
+    "new": "New tenant",
+    "tabs": {
+      "label": "Tenant status",
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "search": "Search by name or slug",
+    "searchLabel": "Search tenants",
+    "columns": {
+      "tenant": "Tenant",
+      "branches": "Branches",
+      "users": "Users",
+      "timeZone": "Time zone",
+      "currency": "Currency",
+      "created": "Created",
+      "status": "Status"
+    },
+    "status": {
+      "active": "Active",
+      "suspended": "Suspended"
+    },
+    "menu": {
+      "label": "Actions for {{name}}",
+      "open": "Open",
+      "suspend": "Suspend…",
+      "reactivate": "Reactivate…"
+    },
+    "loading": "Loading tenants",
+    "empty": {
+      "title": "No clinics yet",
+      "body": "Create the first tenant: its clinic, first branch and owner account."
+    },
+    "emptySuspended": {
+      "title": "No suspended clinics",
+      "body": "Suspended clinics appear here; their users cannot sign in until reactivated."
+    },
+    "noResults": {
+      "title": "No tenants match",
+      "body": "Nothing in “{{view}}” matches your search.",
+      "clear": "Clear search"
+    },
+    "error": {
+      "title": "Couldn’t load tenants",
+      "body": "The server didn’t respond. Your search is kept."
+    }
+  },
+  "status": {
+    "suspendTitle": "Suspend {{name}}?",
+    "suspendBody": "Its users are signed out of the clinic and can’t sign in until you reactivate it. Data is kept.",
+    "suspendOk": "Suspend clinic",
+    "reactivateTitle": "Reactivate {{name}}?",
+    "reactivateBody": "Its users can sign in again straight away.",
+    "reactivateOk": "Reactivate",
+    "reason": "Reason",
+    "suspended": "{{name}} suspended",
+    "reactivated": "{{name}} reactivated",
+    "failed": "Couldn’t change the clinic’s status."
+  },
+  "newTenant": {
+    "eyebrow": "New tenant",
+    "title": "Create a clinic",
+    "sections": {
+      "clinic": "Clinic",
+      "branch": "First branch",
+      "owner": "Owner account"
+    },
+    "fields": {
+      "name": "Clinic name",
+      "slug": "Slug",
+      "slugHint": "Used in links; lowercase",
+      "timeZone": "Time zone",
+      "currency": "Currency",
+      "locale": "Language",
+      "branchName": "Branch name",
+      "address": "Address",
+      "phone": "Phone",
+      "ownerName": "Full name",
+      "ownerEmail": "Email",
+      "password": "Temporary password",
+      "passwordHint": "Changed at first sign-in",
+      "generate": "Generate"
+    },
+    "submit": "Create tenant",
+    "busy": "Creating…",
+    "created": "Tenant created",
+    "open": "Open",
+    "errors": {
+      "required": "Required",
+      "slug": "Use 3–48 lowercase letters, digits and single hyphens",
+      "slugTaken": "Another clinic already uses this slug",
+      "email": "Enter a valid email",
+      "emailTaken": "This email already has an account",
+      "password": "At least {{count}} characters",
+      "generic": "Couldn’t create the tenant. Check the form and try again."
+    }
+  },
+  "locales": {
+    "en": "English",
+    "ar": "Arabic",
+    "fr": "French"
+  },
+  "detail": {
+    "back": "All tenants",
+    "manage": "Manage in clinic",
+    "suspend": "Suspend",
+    "reactivate": "Reactivate",
+    "tabs": {
+      "label": "Tenant sections",
+      "overview": "Overview",
+      "branches": "Branches & rooms",
+      "settings": "Settings"
+    },
+    "loading": "Loading tenant",
+    "error": {
+      "title": "Couldn’t load this tenant",
+      "body": "It may have been removed, or the server didn’t respond."
+    },
+    "overview": {
+      "branches": "Branches",
+      "rooms": "Rooms",
+      "users": "Users",
+      "created": "Created",
+      "activeOf": "{{active}} active of {{total}}"
+    }
+  },
+  "branches": {
+    "empty": {
+      "title": "No branches yet",
+      "body": "Add a branch to start adding its rooms."
+    },
+    "add": "Add branch",
+    "addRoom": "Add room",
+    "active": "Active",
+    "code": "Code",
+    "name": "Name",
+    "noDetails": "No address or phone",
+    "rooms": {
+      "empty": "No rooms yet. Add the first room of this branch.",
+      "delete": "Deactivate {{name}}",
+      "remove": "Remove new room",
+      "newName": "New room"
+    },
+    "unsaved_one": "{{count}} unsaved change",
+    "unsaved_other": "{{count}} unsaved changes",
+    "missingName": "Every room needs a name",
+    "saved": "Changes saved",
+    "failed": "Couldn’t save: {{reason}}",
+    "discardTitle": "Discard all changes?",
+    "discardBody_one": "{{count}} edit will be lost.",
+    "discardBody_other": "{{count}} edits will be lost.",
+    "panel": {
+      "eyebrow": "New branch",
+      "title": "Add a branch",
+      "submit": "Add branch",
+      "created": "Branch added",
+      "nameTaken": "A branch with this name already exists",
+      "codeTaken": "A branch with this code already exists"
+    },
+    "conflict": {
+      "nameTaken": "Two rooms in a branch can’t share a name",
+      "codeTaken": "Two rooms in a branch can’t share a code"
+    }
+  },
+  "settings": {
+    "title": "Clinic settings",
+    "body": "Time zone, currency and language apply to every user of this clinic.",
+    "saved": "Settings saved",
+    "failed": "Couldn’t save the settings."
+  }
+}

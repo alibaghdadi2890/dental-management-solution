@@ -26,21 +26,30 @@ pnpm dev
 runs the API on <http://localhost:3000> and the SPA on <http://localhost:5173> (which proxies
 `/api`). Check the API with `curl localhost:3000/health/ready`.
 
+There is no sign-up. Create the first platform admin once, then sign in at
+<http://localhost:5173/login> and provision clinics from **Platform › Tenants**:
+
+```sh
+pnpm --filter @dcm/api admin:bootstrap --email you@example.com --password 'at-least-10-chars'
+```
+
+The command is idempotent: an existing account is promoted, never re-passworded.
+
 Infrastructure listens on non-default host ports so it does not clash with locally installed
 services: Postgres `55432`, Redis `56379`, S3 (SeaweedFS) `58333`. Override with
 `DCM_POSTGRES_PORT`, `DCM_REDIS_PORT` and `DCM_S3_PORT`, and update `apps/api/.env` to match.
 
 ## Everyday commands
 
-| Command                              | What it does                                                        |
-| ------------------------------------ | ------------------------------------------------------------------- |
-| `pnpm lint`                          | ESLint, including module-boundary and RTL/i18n rules                |
-| `pnpm typecheck`                     | TypeScript across the workspace                                     |
-| `pnpm test`                          | Unit tests plus the Testcontainers integration suite (needs Docker) |
-| `pnpm build`                         | Production builds                                                   |
-| `pnpm --filter @dcm/web e2e`         | Playwright smoke tests                                              |
-| `pnpm --filter @dcm/api db:generate` | Generate a migration from module schemas                            |
-| `pnpm --filter @dcm/api db:migrate`  | Apply migrations (as the schema owner)                              |
+| Command                              | What it does                                                                   |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
+| `pnpm lint`                          | ESLint, including module-boundary and RTL/i18n rules                           |
+| `pnpm typecheck`                     | TypeScript across the workspace                                                |
+| `pnpm test`                          | Unit tests plus the Testcontainers integration suite (needs Docker)            |
+| `pnpm build`                         | Production builds                                                              |
+| `pnpm --filter @dcm/web e2e`         | Playwright: shell smoke tests and the identity flow (needs `pnpm dev`'s stack) |
+| `pnpm --filter @dcm/api db:generate` | Generate a migration from module schemas                                       |
+| `pnpm --filter @dcm/api db:migrate`  | Apply migrations (as the schema owner)                                         |
 
 ## Layout
 

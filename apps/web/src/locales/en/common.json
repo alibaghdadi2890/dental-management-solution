@@ -11,5 +11,9 @@
   "saving": "Saving…",
   "saved": "Saved",
   "discard": "Discard",
-  "unexpected": "Something went wrong. Try again in a moment."
+  "unexpected": "Something went wrong. Try again in a moment.",
+  "discardTitle": "Discard unsaved changes?",
+  "discardBody": "You have edits here that haven’t been saved. Leaving now will discard them.",
+  "discardLeave": "Discard and leave",
+  "keepEditing": "Keep editing"
 }
