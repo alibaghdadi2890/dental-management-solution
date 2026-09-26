@@ -24,13 +24,16 @@ export function api({ tsconfigRootDir }) {
       settings: {
         'import/resolver': { typescript: { alwaysTryTypes: true, project } },
         'import-x/resolver-next': [createTypeScriptImportResolver({ project })],
+        'import-x/extensions': ['.ts', '.js'],
+        'import-x/parsers': { '@typescript-eslint/parser': ['.ts'] },
         'boundaries/include': ['src/**/*.ts'],
         'boundaries/elements': [
           { type: 'kernel', pattern: 'src/platform/kernel' },
           { type: 'platform', pattern: 'src/platform/*', capture: ['area'] },
           { type: 'domain', pattern: 'src/modules/*/domain', capture: ['module'] },
           { type: 'module', pattern: 'src/modules/*', capture: ['module'] },
-          { type: 'app', pattern: 'src/*.ts', mode: 'file' },
+          // Anything else directly under src/ (main.ts, app.module.ts). Must stay last.
+          { type: 'app', pattern: 'src' },
         ],
       },
       rules: {

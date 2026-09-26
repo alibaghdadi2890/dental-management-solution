@@ -9,7 +9,10 @@ import {
 } from '../../src/platform/cls/request-context';
 import { CURRENT_TENANT_SQL } from '../../src/platform/db/columns';
 import { createDatabase } from '../../src/platform/db/database';
-import { PlatformAccessDeniedError, PlatformAdminDb } from '../../src/platform/db/platform-admin-db';
+import {
+  PlatformAccessDeniedError,
+  PlatformAdminDb,
+} from '../../src/platform/db/platform-admin-db';
 import { TenantDb } from '../../src/platform/db/tenant-db';
 import { newId } from '../../src/platform/kernel/id';
 import { startTestDatabase, type TestDatabase } from '../support/postgres';

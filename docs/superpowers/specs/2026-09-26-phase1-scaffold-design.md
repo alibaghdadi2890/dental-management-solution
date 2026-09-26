@@ -51,8 +51,8 @@ app shell (212px sidebar, 56px header, tokens, IBM Plex). Tooth numbering is Uni
 CommonJS output, `module: nodenext`, SWC for dev/build (decorator metadata), `tsc --noEmit` for
 typecheck. Global prefix `/api/v1` (health excluded).
 
-Module skeletons (folder layout from CLAUDE.md §4, `<name>.module.ts`, `index.ts`,
-`docs/modules/<name>.md`): `tenancy`, `auth`, `users`, `roles`, `authorization`, `audit`,
+Module skeletons (`<name>.module.ts`, `index.ts`, `docs/modules/<name>.md`; the CLAUDE.md §4
+subfolders are created with their first file): `tenancy`, `auth`, `users`, `roles`, `authorization`, `audit`,
 `patients`, `clinical`, `imports`.
 
 `platform/`:

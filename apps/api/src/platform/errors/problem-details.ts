@@ -53,7 +53,12 @@ function isZodErrorLike(value: unknown): value is { issues: ZodIssueLike[] } {
   );
 }
 
-function problem(status: number, code: string, requestId?: string, detail?: string): ProblemDetails {
+function problem(
+  status: number,
+  code: string,
+  requestId?: string,
+  detail?: string,
+): ProblemDetails {
   return {
     type: `urn:dcm:problem:${code}`,
     title: TITLE_BY_STATUS[status] ?? 'Error',

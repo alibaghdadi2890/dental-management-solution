@@ -24,7 +24,9 @@ import { REQUEST_ID_HEADER } from './request-id';
             }),
             res: (res: ServerResponse) => ({ statusCode: res.statusCode }),
           },
-          autoLogging: { ignore: (req: IncomingMessage) => req.url?.startsWith('/health') ?? false },
+          autoLogging: {
+            ignore: (req: IncomingMessage) => req.url?.startsWith('/health') ?? false,
+          },
           transport:
             config.NODE_ENV === 'development'
               ? { target: 'pino-pretty', options: { singleLine: true } }

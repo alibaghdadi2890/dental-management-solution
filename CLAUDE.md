@@ -47,7 +47,9 @@ apps/
     src/
       modules/         one folder per domain module (see §4)
       platform/        cross-cutting infra: db, cls, events, queue, storage, logging, otel
+                       (platform/kernel: pure DomainError + ids, the only platform code domain/ may import)
       main.ts
+    migrations/        drizzle-kit migrations (committed, never edited after merge)
   web/                 React SPA
 packages/
   contracts/           Zod schemas + inferred types + permission catalog, shared by api, web, agent
@@ -55,6 +57,8 @@ packages/
 docs/
   adr/                 Architecture Decision Records (one file per decision, numbered)
   modules/             one page per module: purpose, owned tables, public API, events
+docker/                local-dev infrastructure (Postgres roles init, etc.)
+Dental Clinic POC/     Claude Design POC: the visual source of truth for phase 1 screens
 ```
 
 `packages/contracts` is the only code shared between backend and frontend. It contains no runtime
@@ -106,11 +110,12 @@ modules/<name>/
 | `authorization` | permission catalog (from `contracts`), `can(user, action, resource)` evaluation, HTTP guard + decorator, agent tool guard | roles |
 | `audit`         | append-only audit log (who/what/when/tenant/before/after), query API | — (consumes events from all) |
 | `patients`      | patient records, contacts, medical alerts/allergies, odontogram, notes | tenancy |
-| `scheduling`    | resources (practitioners, chairs, equipment), availability templates + exceptions, procedure catalog, slot search, appointments + state machine, waitlist | users, patients, tenancy |
-| `clinical`      | visits (clinical encounters: patient, practitioner, date, services performed, notes, status), treatment plans, planned procedures, clinical charting linked to visits | patients, users, scheduling |
+| `scheduling`    | resources (practitioners, chairs, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
+| `clinical`      | visits (clinical encounters: patient, practitioner, date, services performed, notes, status), procedure/service catalog, treatment plans, planned procedures, clinical charting linked to visits | patients, users |
 | `billing`       | invoices, payments, price lists                                     | patients, clinical    |
 | `files`         | S3 object metadata, upload/download signed URLs, attachment links   | tenancy               |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
+| `imports`       | import jobs: uploaded file, column mapping, staged rows + validation, preview, commit progress; writes only through `patients` and `clinical` services | patients, clinical, tenancy |
 
 Phase 2 adds `assistant` (agent runtime, conversations, tool registry, confirmation workflow) and
 `voice` (STT/TTS adapters in front of `assistant`).
@@ -118,7 +123,9 @@ Phase 2 adds `assistant` (agent runtime, conversations, tool registry, confirmat
 ## 5. Multi-tenancy
 
 - Single pooled Postgres database. Every tenant-owned table has `tenant_id uuid NOT NULL` with an
-  index, and an RLS policy `USING (tenant_id = current_setting('app.tenant_id')::uuid)`.
+  index, and an RLS policy `USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)`
+  (same `WITH CHECK`). Use the helpers in `platform/db/columns.ts`; `tenant_id` defaults from the
+  transaction setting, so inserts never pass it.
 - Tenant context is set **once per request or job** into `nestjs-cls` (AsyncLocalStorage). The
   DB layer opens every transaction with `SET LOCAL app.tenant_id = <id>` from CLS.
 - Repositories never accept `tenantId` as a parameter and never filter by it manually; RLS is the
@@ -127,6 +134,9 @@ Phase 2 adds `assistant` (agent runtime, conversations, tool registry, confirmat
   any work. A job without a tenant context must fail loudly.
 - Cross-tenant operations (platform admin, migrations) use an explicit `withoutTenant()` helper
   that is grep-able and requires a `platform:admin` permission. Never bypass RLS quietly.
+  It runs on a separate BYPASSRLS role (`dcm_admin`); the runtime role (`dcm_app`) owns no tables.
+- Tenants (clinics) are created only by platform admins (`tenancy` provisioning via
+  `withoutTenant()`). There is no public sign-up; clinic owners are invited.
 - Tenant = clinic (better-auth organization). Branch = better-auth team. Timezone is stored per
   tenant as an IANA name; all "local time" logic uses it.
 - No tenant-specific code paths. Differences between tenants are configuration, never `if (tenant === ...)`.
@@ -165,8 +175,8 @@ Rules:
 
 ## 7. Data and persistence
 
-- Drizzle schema per module in `persistence/schema.ts`; a root `platform/db/schema.ts` aggregates
-  them for migrations only. Migrations are generated with drizzle-kit, reviewed by a human, and
+- Drizzle schema per module in `persistence/schema.ts`; `drizzle.config.ts` collects them with a
+  glob for migrations only (no aggregating import, so `platform/` never imports modules). Migrations are generated with drizzle-kit, reviewed by a human, and
   committed. Never edit a migration that has been merged.
 - Primary keys: `uuid` (v7 preferred), generated in the application.
 - Timestamps: `timestamptz`, UTC, `created_at`/`updated_at` on every table.
@@ -194,7 +204,8 @@ Rules:
   `rescheduled` as terminal branches. Illegal transitions throw. Every transition emits an event.
 - Rescheduling creates a new appointment linked by `lineage_id`; history is never rewritten.
 - Recurring series generate concrete occurrences; a rule is stored for regeneration only.
-- Durations come from the procedure catalog; overrides are stored on the appointment.
+- Durations come from the procedure catalog (owned by `clinical`); overrides are stored on the
+  appointment.
 
 ## 9. Events, jobs, and side effects
 
