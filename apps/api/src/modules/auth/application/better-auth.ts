@@ -16,24 +16,19 @@ export const AUTH_BASE_PATH = '/api/v1/auth';
 export const PLATFORM_ADMIN_ROLE = 'platform_admin';
 export const SESSION_LIFETIME_SECONDS = 30 * 24 * 60 * 60;
 
-const additionalField = <T>(type: 'boolean' | 'date', defaultValue?: T) => ({
-  type,
-  required: false,
-  input: false,
-  ...(defaultValue === undefined ? {} : { defaultValue }),
-});
-
 /** Plugin and schema options, shared with the schema parity test. */
 export const betterAuthSchemaOptions = {
   user: {
     modelName: 'auth_users',
-    additionalFields: { mustChangePassword: additionalField('boolean', false) },
+    additionalFields: {
+      mustChangePassword: { type: 'boolean', required: false, defaultValue: false, input: false },
+    },
   },
   session: {
     modelName: 'auth_sessions',
     additionalFields: {
-      trusted: additionalField('boolean', false),
-      lastActiveAt: additionalField('date'),
+      trusted: { type: 'boolean', required: false, defaultValue: false, input: false },
+      lastActiveAt: { type: 'date', required: false, input: false },
     },
   },
   account: { modelName: 'auth_accounts' },

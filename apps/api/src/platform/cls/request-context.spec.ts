@@ -56,6 +56,7 @@ describe('permissions carried in the context (ADR-0010)', () => {
       context.setPermissions(['patient:read']);
       expect(context.hasPermission('patient:read')).toBe(true);
       expect(context.hasPermission('patient:write')).toBe(false);
+      expect(context.grantedPermissions()).toEqual(['patient:read']);
       expect(() => {
         context.requirePermission('patient:write');
       }).toThrow(PermissionDeniedError);
@@ -72,6 +73,7 @@ describe('permissions carried in the context (ADR-0010)', () => {
     await context.run({ ...user, platformAdmin: true, tenantId: 't1' }, () => {
       expect(context.hasPermission('tenant:write')).toBe(true);
       expect(context.hasPermission('payment:refund')).toBe(true);
+      expect(context.grantedPermissions()).toContain('audit:read');
       return Promise.resolve();
     });
   });

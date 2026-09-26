@@ -1,4 +1,4 @@
-import type { Permission } from '@dcm/contracts';
+import { type Permission, PERMISSIONS } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { CLS_ID, ClsService } from 'nestjs-cls';
 import { PlatformAccessDeniedError } from '../kernel/platform-access-denied.error';
@@ -105,6 +105,11 @@ export class RequestContext {
       return this.tenantId !== undefined || permission === 'platform:admin';
     }
     return this.cls.get('permissions')?.has(permission) ?? false;
+  }
+
+  /** Every catalog permission the caller holds, for the session (UI visibility only). */
+  grantedPermissions(): Permission[] {
+    return PERMISSIONS.filter((permission) => this.hasPermission(permission));
   }
 
   /** Re-check inside application services: the route guard is not the last line of defence. */

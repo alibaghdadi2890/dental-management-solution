@@ -6,15 +6,17 @@ import { APP_DB, type Database } from '../../platform/db/database';
 import type { Clock } from '../../platform/kernel/clock';
 import { AuthService } from './application/auth.service';
 import { BETTER_AUTH, createBetterAuth } from './application/better-auth';
+import { SessionResolver } from './application/session-resolver';
 import { SignInService } from './application/sign-in.service';
 import { AuthHttpController } from './http/auth-http.controller';
+import { SessionController } from './http/session.controller';
 import { IdentityDb } from './persistence/identity-db';
 import { IdentityRepository } from './persistence/identity.repository';
 import { SignInThrottleRepository } from './persistence/sign-in-throttle.repository';
 
 /** See docs/modules/auth.md. */
 @Module({
-  controllers: [AuthHttpController],
+  controllers: [AuthHttpController, SessionController],
   providers: [
     {
       provide: BETTER_AUTH,
@@ -26,8 +28,10 @@ import { SignInThrottleRepository } from './persistence/sign-in-throttle.reposit
     IdentityRepository,
     SignInThrottleRepository,
     SignInService,
+    SessionResolver,
     AuthService,
   ],
-  exports: [AuthService],
+  // SessionGuard is registered as a global guard by AuthorizationModule (fixed guard order).
+  exports: [AuthService, SessionResolver],
 })
 export class AuthModule {}
