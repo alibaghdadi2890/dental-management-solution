@@ -13,6 +13,18 @@ function isKnownTimeZone(value: string): boolean {
   }
 }
 
+/** A person's, clinic's or place's display name. */
+export const nameSchema = z.string().trim().min(1).max(120);
+
+/** Optional free text: blank input means "not set". */
+export const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullish()
+    .transform((value) => (value ? value : null));
+
 /** IANA time zone name, e.g. `Asia/Baghdad`. */
 export const timeZoneSchema = z.string().refine(isKnownTimeZone, 'Unknown IANA time zone');
 

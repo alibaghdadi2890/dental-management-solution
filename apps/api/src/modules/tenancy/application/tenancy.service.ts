@@ -142,6 +142,11 @@ export class TenancyService {
     return this.branches.byIds(ids, { activeOnly: true });
   }
 
+  /** Branches among `ids` whatever their status, in no particular order; for staff records. */
+  branchesByIds(ids: readonly string[]): Promise<Branch[]> {
+    return this.branches.byIds(ids);
+  }
+
   /** Every active branch of the tenant, oldest first. */
   async allActiveBranches(): Promise<Branch[]> {
     return (await this.branches.list()).filter((branch) => branch.active);

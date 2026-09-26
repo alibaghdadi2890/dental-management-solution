@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, inArray, ne } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, ne, sql } from 'drizzle-orm';
+import type { Transaction } from '../../../platform/db/database';
 import { newId } from '../../../platform/kernel/id';
 import { IdentityDb } from './identity-db';
 import {
@@ -28,6 +29,9 @@ export type SessionPatch = Partial<
 
 /** better-auth's credential provider id: the account row that holds the password hash. */
 const CREDENTIAL_PROVIDER = 'credential';
+
+/** Organization-plugin role of every clinic member; app permissions come from `roles`. */
+const MEMBER_ROLE = 'member';
 
 @Injectable()
 export class IdentityRepository {
@@ -82,7 +86,10 @@ export class IdentityRepository {
   async updateUser(
     id: string,
     patch: Partial<
-      Pick<IdentityUser, 'name' | 'role' | 'banned' | 'banReason' | 'mustChangePassword'>
+      Pick<
+        IdentityUser,
+        'name' | 'role' | 'banned' | 'banReason' | 'banExpires' | 'mustChangePassword'
+      >
     >,
   ): Promise<void> {
     await this.db.run((tx) => tx.update(authUsers).set(patch).where(eq(authUsers.id, id)));
@@ -179,6 +186,72 @@ export class IdentityRepository {
     );
   }
 
+  /** Mirror of branches (team id = branch id, ADR-0011). */
+  async upsertTeams(
+    organizationId: string,
+    teams: readonly { id: string; name: string }[],
+  ): Promise<void> {
+    if (teams.length === 0) return;
+    await this.db.run((tx) =>
+      tx
+        .insert(authTeams)
+        .values(teams.map(({ id, name }) => ({ id, name, organizationId })))
+        .onConflictDoUpdate({ target: authTeams.id, set: { name: sql`excluded.name` } }),
+    );
+  }
+
+  /** Adds the membership if missing; true when it was added. */
+  async ensureMember(organizationId: string, userId: string): Promise<boolean> {
+    const added = await this.db.run((tx) =>
+      tx
+        .insert(authMembers)
+        .values({ organizationId, userId, role: MEMBER_ROLE })
+        .onConflictDoNothing({ target: [authMembers.organizationId, authMembers.userId] })
+        .returning({ id: authMembers.id }),
+    );
+    return added.length > 0;
+  }
+
+  /** Removes the membership and the user's teams in that organization; true when it existed. */
+  async removeMember(organizationId: string, userId: string): Promise<boolean> {
+    return this.db.run(async (tx) => {
+      await tx
+        .delete(authTeamMembers)
+        .where(
+          and(
+            eq(authTeamMembers.userId, userId),
+            inArray(authTeamMembers.teamId, this.teamsOf(tx, organizationId)),
+          ),
+        );
+      const removed = await tx
+        .delete(authMembers)
+        .where(and(eq(authMembers.organizationId, organizationId), eq(authMembers.userId, userId)))
+        .returning({ id: authMembers.id });
+      return removed.length > 0;
+    });
+  }
+
+  /** Sets the user's teams inside one organization to exactly `teamIds`. */
+  async replaceTeamMemberships(
+    userId: string,
+    organizationId: string,
+    teamIds: readonly string[],
+  ): Promise<void> {
+    await this.db.run(async (tx) => {
+      await tx
+        .delete(authTeamMembers)
+        .where(
+          and(
+            eq(authTeamMembers.userId, userId),
+            inArray(authTeamMembers.teamId, this.teamsOf(tx, organizationId)),
+          ),
+        );
+      if (teamIds.length > 0) {
+        await tx.insert(authTeamMembers).values(teamIds.map((teamId) => ({ teamId, userId })));
+      }
+    });
+  }
+
   async memberCountsByOrganization(): Promise<Map<string, number>> {
     const rows = await this.db.run((tx) =>
       tx
@@ -187,5 +260,12 @@ export class IdentityRepository {
         .groupBy(authMembers.organizationId),
     );
     return new Map(rows.map((row) => [row.organizationId, row.members]));
+  }
+
+  private teamsOf(tx: Transaction, organizationId: string) {
+    return tx
+      .select({ id: authTeams.id })
+      .from(authTeams)
+      .where(eq(authTeams.organizationId, organizationId));
   }
 }

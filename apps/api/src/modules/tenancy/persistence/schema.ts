@@ -62,7 +62,7 @@ export const branches = pgTable(
   },
   (table) => [
     index('branches_tenant_idx').on(table.tenantId),
-    // Target of the rooms/staff composite foreign keys: children stay in their branch's tenant.
+    // Target of the rooms composite foreign key: rooms stay in their branch's tenant.
     unique('branches_tenant_id_unique').on(table.tenantId, table.id),
     uniqueIndex('branches_name_unique').on(table.tenantId, sql`lower(${table.name})`),
     uniqueIndex('branches_code_unique')

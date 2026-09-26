@@ -5,6 +5,8 @@ import {
   idSchema,
   isoDateTimeSchema,
   localeSchema,
+  nameSchema,
+  optionalText,
   timeZoneSchema,
 } from './common.js';
 import { reasonSchema } from './audit.js';
@@ -31,17 +33,6 @@ export function deriveSlug(name: string): string {
     .slice(0, SLUG_MAX_LENGTH)
     .replace(/^-+|-+$/g, '');
 }
-
-const nameSchema = z.string().trim().min(1).max(120);
-
-/** Optional free text: blank input means "not set". */
-const optionalText = (max: number) =>
-  z
-    .string()
-    .trim()
-    .max(max)
-    .nullish()
-    .transform((value) => (value ? value : null));
 
 export const tenantStatusSchema = z.enum(['active', 'suspended']);
 export type TenantStatus = z.infer<typeof tenantStatusSchema>;

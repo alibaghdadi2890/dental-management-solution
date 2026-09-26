@@ -1,8 +1,8 @@
 # `auth` module
 
 **Status:** implemented — sign-in/out, lockout, session guard, idle timeout, tenant and branch
-resolution, organization mirror, platform-admin bootstrap. Staff identities, branch switch and
-password change arrive with `users` (step C).
+resolution, organization/membership mirror, staff identities, platform-admin bootstrap. Branch
+switch and password change arrive in step C3.
 
 ## Purpose
 
@@ -35,10 +35,21 @@ inside the caller's transaction through `IdentityDb`.
 
 ## Public API (`index.ts`)
 
-`AuthModule`, `AuthService` (`createIdentity`, `syncOrganization`, `memberCountsByTenant`,
-`isEmailTaken`, `bootstrapPlatformAdmin`), `SessionGuard`, `BranchResolver`,
+`AuthModule`, `AuthService`, `SessionGuard`, `BranchResolver`,
 `AuthenticatedSession`, `CurrentSession`, `AllowPendingPasswordChange`, `idleTimeoutSeconds`,
 `EmailTakenError`, `TENANT_HEADER`.
+
+`AuthService`:
+
+- Staff identities (`user:write`, joining the caller's transaction): `createIdentity` (temporary
+  password, `mustChangePassword`; `409 user.email_taken`), `resetPassword` (new temporary
+  password, sessions revoked), `deactivate` (better-auth ban + sessions revoked), `reactivate`.
+- Membership mirror of the tenant in context (`user:write`): `syncMembership({ userId, branchIds })`
+  upserts the organization and the branches' teams, adds the member and sets the user's teams to
+  exactly those branches in that order (the first is the default branch); `removeMembership`.
+- Reads: `identitiesOf(userIds)` (id, email, name — never credentials), `isEmailTaken`,
+  `memberCountsByTenant`.
+- Provisioning: `syncOrganization`; `bootstrapPlatformAdmin` (CLI).
 
 ## HTTP
 
@@ -57,7 +68,8 @@ first platform admin (system actor, `withoutTenant`, idempotent, never changes a
 
 ## Events
 
-- Emits: `MemberJoined`, `MemberRemoved` (step C).
+- Emits: `MemberJoined` (`syncMembership` added the membership), `MemberRemoved`
+  (`removeMembership` ended it). Payload `{ userId }`; the tenant is the event's.
 - Consumes: —
 
 ## Depends on

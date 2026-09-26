@@ -31,6 +31,7 @@ Branches and rooms are deactivated, never deleted. Rooms never move between bran
 - Current tenant: `currentTenant`, `currentTenantStatus` (session guard), `updateSettings`
   (`tenant:write`), `setStatus` (`platform:admin`, with reason).
 - Branches: `listBranches`, `createBranch`, `updateBranch` (`tenant:write`), `activeBranches(ids)`,
+  `branchesByIds(ids)` (any status, for staff records),
   `allActiveBranches()`.
 - Rooms: `listRooms(branchId?)` (for later features: visits pick a room), `saveRooms(batch)`
   (`tenant:write`, atomic, names may be swapped within a batch).
