@@ -1,0 +1,21 @@
+{
+  "brand": {
+    "mark": "D"
+  },
+  "clinic": {
+    "branch": "العيادة · {{branch}}",
+    "loading": "جارٍ تحميل العيادة"
+  },
+  "nav": {
+    "label": "الرئيسية",
+    "patients": "المرضى",
+    "visits": "الزيارات",
+    "admin": "الإدارة",
+    "catalog": "الكتالوج",
+    "settings": "الإعدادات"
+  },
+  "breadcrumb": "مسار التنقل",
+  "user": {
+    "fallbackRole": "موظف"
+  }
+}

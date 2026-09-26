@@ -1,0 +1,21 @@
+{
+  "brand": {
+    "mark": "D"
+  },
+  "clinic": {
+    "branch": "Clinic · {{branch}}",
+    "loading": "Loading clinic"
+  },
+  "nav": {
+    "label": "Main",
+    "patients": "Patients",
+    "visits": "Visits",
+    "admin": "Admin",
+    "catalog": "Catalog",
+    "settings": "Settings"
+  },
+  "breadcrumb": "Breadcrumb",
+  "user": {
+    "fallbackRole": "Staff"
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "@dcm/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "@dcm/contracts": "workspace:*",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "@fontsource/ibm-plex-sans-arabic": "5.3.0",
+    "@tanstack/react-query": "5.104.0",
+    "@tanstack/react-router": "1.170.39",
+    "clsx": "2.1.1",
+    "i18next": "26.4.2",
+    "i18next-browser-languagedetector": "8.2.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-i18next": "17.0.15",
+    "tailwind-merge": "3.7.0",
+    "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "@dcm/config": "workspace:*",
+    "@playwright/test": "1.63.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@tanstack/router-plugin": "1.168.40",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "24.19.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "eslint": "10.11.0",
+    "jsdom": "29.1.1",
+    "tailwindcss": "4.3.3",
+    "typescript": "~6.0.3",
+    "vite": "8.3.1",
+    "vitest": "5.0.2"
+  }
+}

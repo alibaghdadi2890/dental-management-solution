@@ -1,0 +1,125 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens from the Claude Design POC (Dental Clinic POC/README.md → "Design tokens").
+ * shadcn/ui semantic variables map onto them so generated components match the POC.
+ */
+:root {
+  --background: #f6f4f0;
+  --foreground: #1b1a1f;
+  --card: #ffffff;
+  --card-foreground: #1b1a1f;
+  --popover: #ffffff;
+  --popover-foreground: #1b1a1f;
+  --primary: #3b3f8f;
+  --primary-foreground: #ffffff;
+  --secondary: #ffffff;
+  --secondary-foreground: #1b1a1f;
+  --muted: #f2f0ea;
+  --muted-foreground: #6b6862;
+  --accent: #f2f0ea;
+  --accent-foreground: #1b1a1f;
+  --destructive: #9b2c2c;
+  --destructive-foreground: #ffffff;
+  --border: #e3ded4;
+  --input: #d8d2c6;
+  --ring: #3b3f8f;
+  --radius: 7px;
+}
+
+@theme inline {
+  --font-sans: 'IBM Plex Sans', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: 5px;
+  --radius-md: 6px;
+  --radius-lg: var(--radius);
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+}
+
+@theme {
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-faint: #faf8f4;
+  --color-subtle: #f2f0ea;
+  --color-row-divider: #f2efe8;
+  --color-inner-divider: #eee9df;
+  /* Borders */
+  --color-border-control: #d8d2c6;
+  --color-border-strong: #c9c2b4;
+  /* Ink */
+  --color-ink: #1b1a1f;
+  --color-ink-secondary: #5c5952;
+  --color-ink-tertiary: #6b6862;
+  --color-ink-muted: #6f6b64;
+  --color-ink-disabled: #b8b3a8;
+  /* Indigo accent */
+  --color-primary-hover: #2f3378;
+  --color-primary-deep: #2b2e6b;
+  --color-primary-tint: #eceef8;
+  --color-primary-tint-border: #c3c7ea;
+  --color-selected: #f7f8fd;
+  /* Status */
+  --color-success: #2f6b47;
+  --color-success-bg: #e9f1ec;
+  --color-success-border: #c6dccd;
+  --color-warning: #7a5a1c;
+  --color-warning-bg: #faf1dd;
+  --color-warning-border: #ead7ab;
+  --color-warning-dot: #b8893a;
+  --color-dirty: #fffdf8;
+  --color-danger: #9b2c2c;
+  --color-danger-bg: #f8e9e6;
+  --color-danger-border: #ebc9c2;
+  --color-danger-hover: #822424;
+
+  --animate-shimmer: shimmer 1.2s linear infinite;
+  @keyframes shimmer {
+    0% {
+      background-position: -400px 0;
+    }
+    100% {
+      background-position: 400px 0;
+    }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background font-sans text-ink antialiased;
+    text-wrap: pretty;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 1px;
+  }
+  ::placeholder {
+    color: var(--color-ink-muted);
+  }
+}

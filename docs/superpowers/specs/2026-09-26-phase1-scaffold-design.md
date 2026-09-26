@@ -89,7 +89,8 @@ missing tenant yields no rows instead of a cast error.
 ## Frontend `apps/web`
 
 - Vite 8, React 19, TanStack Router (file-based, `@tanstack/router-plugin`), TanStack Query,
-  Tailwind 4 with POC tokens as CSS variables, shadcn/ui (`components.json`, `cn`, Button).
+  Tailwind 4 with POC tokens as CSS variables, shadcn/ui (`components.json`, `cn`;
+  components are added with the first screen that uses them). IBM Plex Sans/Arabic/Mono self-hosted.
 - i18next + react-i18next, `en`/`ar`/`fr`, per-feature namespaces; `<html dir>` follows the
   language. Lint: `i18next/no-literal-string` in JSX; a rule banning physical-direction Tailwind
   classes (`ml-`, `pr-`, `left-`, `text-left`, …).

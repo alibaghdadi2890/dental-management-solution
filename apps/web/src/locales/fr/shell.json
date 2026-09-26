@@ -1,0 +1,21 @@
+{
+  "brand": {
+    "mark": "D"
+  },
+  "clinic": {
+    "branch": "Cabinet · {{branch}}",
+    "loading": "Chargement du cabinet"
+  },
+  "nav": {
+    "label": "Principal",
+    "patients": "Patients",
+    "visits": "Consultations",
+    "admin": "Administration",
+    "catalog": "Catalogue",
+    "settings": "Paramètres"
+  },
+  "breadcrumb": "Fil d’Ariane",
+  "user": {
+    "fallbackRole": "Personnel"
+  }
+}
