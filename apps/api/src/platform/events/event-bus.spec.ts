@@ -36,7 +36,7 @@ describe('EventBus', () => {
     expect(event).toMatchObject({
       name: 'PatientCreated',
       tenantId: 't1',
-      actor: { userId: 'u1', kind: 'user' },
+      actor: { userId: 'u1', kind: 'user', platformAdmin: false },
       requestId: 'req-00000001',
       payload: { patientId: 'p1' },
     });

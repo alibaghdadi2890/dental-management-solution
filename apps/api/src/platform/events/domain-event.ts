@@ -10,7 +10,12 @@ export interface DomainEvent<TName extends string = string, TPayload extends obj
   readonly name: TName;
   readonly occurredAt: string;
   readonly tenantId: string | null;
-  readonly actor: { readonly userId: string | null; readonly kind: ActorKind };
+  readonly actor: {
+    readonly userId: string | null;
+    readonly kind: ActorKind;
+    /** A platform admin acting inside the tenant (ADR-0008). */
+    readonly platformAdmin: boolean;
+  };
   readonly requestId: string | null;
   readonly payload: TPayload;
 }

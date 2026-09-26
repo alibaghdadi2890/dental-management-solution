@@ -6,6 +6,7 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { configureApp } from './app.setup';
 import { loadConfig } from './platform/config/config.schema';
+import { setupOpenApi } from './platform/http/openapi';
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig(process.env);
@@ -16,6 +17,9 @@ async function bootstrap(): Promise<void> {
   });
   app.useLogger(app.get(Logger));
   configureApp(app);
+  if (config.NODE_ENV !== 'production') {
+    setupOpenApi(app);
+  }
   await app.listen(config.PORT);
 }
 

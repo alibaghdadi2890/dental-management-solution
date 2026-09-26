@@ -33,7 +33,11 @@ export class EventBus {
       name,
       occurredAt: new Date().toISOString(),
       tenantId: this.context.tenantId ?? null,
-      actor: { userId: this.context.userId ?? null, kind: this.context.actorKind ?? 'system' },
+      actor: {
+        userId: this.context.userId ?? null,
+        kind: this.context.actorKind ?? 'system',
+        platformAdmin: this.context.isPlatformAdmin,
+      },
       requestId: this.context.requestId ?? null,
       payload,
     };
