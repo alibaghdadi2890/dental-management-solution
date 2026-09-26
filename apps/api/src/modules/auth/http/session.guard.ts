@@ -2,7 +2,6 @@ import { type CanActivate, type ExecutionContext, Injectable } from '@nestjs/com
 import { Reflector } from '@nestjs/core';
 import { fromNodeHeaders } from 'better-auth/node';
 import type { Request } from 'express';
-import { RequestContext } from '../../../platform/cls/request-context';
 import { routeAccess } from '../../../platform/http/route-access';
 import { SessionResolver, TENANT_HEADER } from '../application/session-resolver';
 import { PasswordChangeRequiredError } from '../domain/auth-errors';
@@ -18,7 +17,6 @@ export class SessionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly sessions: SessionResolver,
-    private readonly context: RequestContext,
   ) {}
 
   async canActivate(execution: ExecutionContext): Promise<boolean> {
@@ -31,13 +29,6 @@ export class SessionGuard implements CanActivate {
       fromNodeHeaders(request.headers),
       typeof tenantHeader === 'string' ? tenantHeader : undefined,
     );
-
-    this.context.establish({
-      userId: session.userId,
-      tenantId: session.tenantId,
-      branchId: session.branchId,
-      platformAdmin: session.platformAdmin,
-    });
     attachSession(request, session);
 
     if (session.mustChangePassword && !allowsPendingPasswordChange(this.reflector, execution)) {

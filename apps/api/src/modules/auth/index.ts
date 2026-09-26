@@ -5,6 +5,7 @@ export {
   type BootstrapOutcome,
   type NewStaffIdentity,
 } from './application/auth.service';
+export { BranchResolver } from './application/branch-resolver';
 export { type AuthenticatedSession, TENANT_HEADER } from './application/session-resolver';
 export { idleTimeoutSeconds } from './domain/session-activity';
 export { AllowPendingPasswordChange, CurrentSession } from './http/session-access';

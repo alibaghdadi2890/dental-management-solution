@@ -1,28 +1,65 @@
 # `tenancy` module
 
-**Status:** skeleton — module class and `index.ts` only.
+**Status:** implemented — tenants, settings, branches, rooms.
 
 ## Purpose
 
-Clinics (tenants) and their branches, tenant settings (IANA timezone, currency, locale), and provisioning. Tenants are created only by platform admins through `withoutTenant()`; provisioning seeds system roles (via events) and invites the clinic owner.
+Clinics (tenants), their settings (IANA time zone, currency, locale; defaults `Asia/Beirut`,
+`USD`, `en`), their branches, and each branch's rooms. A room is the physical unit a visit happens
+in and the unit `scheduling` will later book as a resource (ADR-0007); there is no chair concept.
+Tenants are created and listed only by platform admins through `withoutTenant()`; everything else
+runs inside the current tenant under RLS. End-to-end provisioning (first branch, owner, roles)
+is orchestrated by `provisioning`.
 
 ## Owns
 
-`tenants`, `branches`, `tenant_settings` (planned).
+- `tenants` — `id, name, slug (unique), status (active|suspended), time_zone, currency, locale`.
+  No `tenant_id`; RLS policy `tenant_self` (`id` = the transaction's tenant) lets members read
+  their own row.
+- `branches` — tenant RLS; `name` and `code` unique per tenant, case-insensitive; `active`.
+- `rooms` — tenant RLS; composite FK `(tenant_id, branch_id)` → `branches` so a room can never
+  point at another tenant's branch (FK checks bypass RLS); `name` and `code` unique per branch.
+
+Branches and rooms are deactivated, never deleted. Rooms never move between branches.
 
 ## Public API (`index.ts`)
 
-`TenancyModule`. Planned: `TenancyService` (provision tenant, update settings, list/suspend tenants for platform admins).
+`TenancyModule`, `TenancyService`:
+
+- Platform (`platform:admin`, cross-tenant): `createTenant`, `discardTenant` (provisioning
+  compensation), `listTenants` (with branch counts).
+- Current tenant: `currentTenant`, `currentTenantStatus` (session guard), `updateSettings`
+  (`tenant:write`), `setStatus` (`platform:admin`, with reason).
+- Branches: `listBranches`, `createBranch`, `updateBranch` (`tenant:write`), `activeBranches(ids)`,
+  `allActiveBranches()`.
+- Rooms: `listRooms(branchId?)` (for later features: visits pick a room), `saveRooms(batch)`
+  (`tenant:write`, atomic, names may be swapped within a batch).
+
+Errors: `TenantNotFoundError`, `TenantSuspendedError` (exported); `branch.*`, `room.*` codes.
+
+## HTTP
+
+| Route                  | Access         |
+| ---------------------- | -------------- |
+| `GET /tenant`          | `tenant:read`  |
+| `PATCH /tenant`        | `tenant:write` |
+| `GET /branches`        | `tenant:read`  |
+| `POST /branches`       | `tenant:write` |
+| `PATCH /branches/:id`  | `tenant:write` |
+| `GET /rooms?branchId=` | `tenant:read`  |
+| `POST /rooms/batch`    | `tenant:write` |
+
+The tenant always comes from the session, or `X-Tenant-Id` for platform admins (ADR-0008).
 
 ## Events
 
-- Emits: `TenantProvisioned`, `TenantSettingsChanged` (planned).
+- Emits: — (`TenantProvisioned` is emitted by `provisioning`).
 - Consumes: —
 
 ## Depends on
 
-—
+audit
 
 ## Permissions
 
-`platform:admin` (provisioning), `tenant:read`, `tenant:write`.
+`platform:admin` (tenant creation, listing, suspension), `tenant:read`, `tenant:write`.

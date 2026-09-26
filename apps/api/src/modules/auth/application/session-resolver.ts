@@ -1,11 +1,14 @@
 import { idSchema } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
+import { RequestContext } from '../../../platform/cls/request-context';
 import type { Clock } from '../../../platform/kernel/clock';
+import { TenancyService, TenantNotFoundError, TenantSuspendedError } from '../../tenancy';
 import { NoTenantError, SessionExpiredError, UnauthenticatedError } from '../domain/auth-errors';
 import { sessionActivity } from '../domain/session-activity';
 import { IdentityRepository } from '../persistence/identity.repository';
 import { BETTER_AUTH, type BetterAuth, PLATFORM_ADMIN_ROLE } from './better-auth';
+import { BranchResolver } from './branch-resolver';
 
 /** Who is calling, resolved once per request by the session guard. */
 export interface AuthenticatedSession {
@@ -23,12 +26,19 @@ export interface AuthenticatedSession {
 /** Header a platform admin uses to act inside a tenant (D2, ADR-0008). Ignored for everyone else. */
 export const TENANT_HEADER = 'x-tenant-id';
 
+/**
+ * The edge that authenticates (CLAUDE.md §5–6): resolves the cookie session, enforces the idle
+ * timeout, resolves tenant and branch, and fills the request context.
+ */
 @Injectable()
 export class SessionResolver {
   constructor(
     @Inject(BETTER_AUTH) private readonly auth: BetterAuth,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly identities: IdentityRepository,
+    private readonly branches: BranchResolver,
+    private readonly tenancy: TenancyService,
+    private readonly context: RequestContext,
   ) {}
 
   async authenticate(
@@ -59,10 +69,19 @@ export class SessionResolver {
     const tenantId = platformAdmin
       ? this.requestedTenant(requestedTenantId)
       : await this.memberTenant(user.id, session.id, session.activeOrganizationId);
-    const branchId =
-      tenantId === undefined || platformAdmin
-        ? undefined
-        : await this.memberBranch(user.id, session.id, tenantId, session.activeTeamId);
+    this.context.establish({ userId: user.id, tenantId, branchId: undefined, platformAdmin });
+
+    let branchId: string | undefined;
+    if (tenantId !== undefined) {
+      await this.assertTenantUsable(platformAdmin);
+      branchId = await this.branches.resolve(
+        { userId: user.id, platformAdmin },
+        tenantId,
+        session.id,
+        session.activeTeamId,
+      );
+      this.context.establish({ userId: user.id, tenantId, branchId, platformAdmin });
+    }
 
     return {
       sessionId: session.id,
@@ -83,7 +102,10 @@ export class SessionResolver {
       return undefined;
     }
     const parsed = idSchema.safeParse(header);
-    return parsed.success ? parsed.data : undefined;
+    if (!parsed.success) {
+      throw new TenantNotFoundError('Tenant not found');
+    }
+    return parsed.data;
   }
 
   /**
@@ -111,19 +133,16 @@ export class SessionResolver {
     return first;
   }
 
-  /** The active branch if still assigned, else the first assigned branch (D7). */
-  private async memberBranch(
-    userId: string,
-    sessionId: string,
-    tenantId: string,
-    active: string | null | undefined,
-  ): Promise<string | undefined> {
-    const branches = await this.identities.teamIdsOf(userId, tenantId);
-    if (active && branches.includes(active)) {
-      return active;
+  /** Runs with the tenant in context: RLS shows the tenant row only if it exists. */
+  private async assertTenantUsable(platformAdmin: boolean): Promise<void> {
+    const status = await this.tenancy.currentTenantStatus();
+    if (status === null) {
+      throw platformAdmin
+        ? new TenantNotFoundError('Tenant not found')
+        : new NoTenantError('This account is not a member of any clinic');
     }
-    const [first] = branches;
-    await this.identities.updateSession(sessionId, { activeTeamId: first ?? null });
-    return first;
+    if (status === 'suspended' && !platformAdmin) {
+      throw new TenantSuspendedError('This clinic is suspended; contact support');
+    }
   }
 }
