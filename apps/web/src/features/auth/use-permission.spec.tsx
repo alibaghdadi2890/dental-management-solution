@@ -12,15 +12,21 @@ const session: Session = {
     displayName: 'Dr. Reyes',
     email: 'reyes@example.com',
   },
+  platformAdmin: false,
+  mustChangePassword: false,
   tenant: {
     id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f',
     name: 'Northgate Dental',
+    slug: 'northgate',
     timeZone: 'America/New_York',
     currency: 'USD',
+    locale: 'en',
   },
   branch: null,
+  branches: [],
   roleNames: ['Dentist'],
   permissions: ['patient:read', 'visit:write'],
+  idleTimeoutSeconds: 900,
 };
 
 function wrapperWith(client: QueryClient) {

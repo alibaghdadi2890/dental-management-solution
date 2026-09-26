@@ -16,8 +16,13 @@ export const PERMISSIONS = [
   'patient:write',
   'visit:read',
   'visit:write',
+  'visit:void',
+  'visit:amend',
   'procedure:read',
   'procedure:write',
+  'payment:read',
+  'payment:write',
+  'payment:refund',
   'import:run',
   'audit:read',
 ] as const;

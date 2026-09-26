@@ -4,6 +4,7 @@ import {
   cursorPageQuerySchema,
   cursorPageSchema,
   idSchema,
+  localeSchema,
   moneySchema,
   problemDetailsSchema,
   timeZoneSchema,
@@ -74,5 +75,28 @@ describe('problemDetailsSchema', () => {
     };
     expect(problemDetailsSchema.parse(problem)).toEqual(problem);
     expect(problemDetailsSchema.safeParse({ ...problem, code: undefined }).success).toBe(false);
+  });
+});
+
+describe('problem details extensions', () => {
+  it('keeps sign-in extension members', () => {
+    const problem = {
+      type: 'urn:dcm:problem:auth.invalid_credentials',
+      title: 'Authentication required',
+      status: 401,
+      code: 'auth.invalid_credentials',
+      attemptsLeft: 3,
+    };
+    expect(problemDetailsSchema.parse(problem)).toEqual(problem);
+    expect(
+      problemDetailsSchema.parse({ ...problem, lockedUntil: '2026-09-26T10:15:00.000Z' }),
+    ).toMatchObject({ lockedUntil: '2026-09-26T10:15:00.000Z' });
+  });
+});
+
+describe('localeSchema', () => {
+  it('accepts the three app languages', () => {
+    expect(localeSchema.options).toEqual(['en', 'ar', 'fr']);
+    expect(localeSchema.safeParse('de').success).toBe(false);
   });
 });

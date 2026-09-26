@@ -7,15 +7,21 @@ const session: Session = {
     displayName: 'Maria Reyes',
     email: 'reyes@example.com',
   },
+  platformAdmin: false,
+  mustChangePassword: false,
   tenant: {
     id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f',
     name: 'Northgate Dental',
+    slug: 'northgate',
     timeZone: 'America/New_York',
     currency: 'USD',
+    locale: 'en',
   },
   branch: { id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70', name: 'Main St' },
+  branches: [{ id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70', name: 'Main St' }],
   roleNames: ['Dentist'],
   permissions: ['patient:read', 'visit:read'],
+  idleTimeoutSeconds: 900,
 };
 
 // The auth module does not serve sessions yet; stub the contract so the shell renders fully.

@@ -22,3 +22,17 @@ describe('permission catalog', () => {
     expect(permissionSchema.safeParse('visit:explode').success).toBe(false);
   });
 });
+
+describe('phase 1 catalog', () => {
+  it('includes the visit and payment permissions later features enforce', () => {
+    for (const permission of [
+      'visit:void',
+      'visit:amend',
+      'payment:read',
+      'payment:write',
+      'payment:refund',
+    ]) {
+      expect(isPermission(permission)).toBe(true);
+    }
+  });
+});
