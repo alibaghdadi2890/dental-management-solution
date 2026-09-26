@@ -2,12 +2,12 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Page } from '@/components/page';
 
-export const Route = createFileRoute('/patients')({
-  staticData: { navKey: 'patients' },
-  component: PatientsPage,
+export const Route = createFileRoute('/_app/visits')({
+  staticData: { navKey: 'visits' },
+  component: VisitsPage,
 });
 
-function PatientsPage() {
-  const { t } = useTranslation('patients');
+function VisitsPage() {
+  const { t } = useTranslation('visits');
   return <Page title={t('title')} subtitle={t('subtitle')} />;
 }

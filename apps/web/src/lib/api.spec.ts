@@ -85,3 +85,28 @@ describe('apiFetch', () => {
     await expect(apiFetch('/patients/p1', z.object({ id: z.string() }))).rejects.toThrow();
   });
 });
+
+describe('apiFetch tenant header', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    sessionStorage.clear();
+  });
+
+  it('sends the tenant a platform admin is acting in', async () => {
+    const fetchMock = respond({ ok: true });
+    sessionStorage.setItem('dcm.actingTenantId', 'tenant-1');
+
+    await apiFetch('/tenant', z.object({ ok: z.boolean() }));
+
+    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get('X-Tenant-Id')).toBe('tenant-1');
+  });
+
+  it('prefers an explicit tenant and sends none by default', async () => {
+    const fetchMock = respond({ ok: true });
+    await apiFetch('/tenant', z.object({ ok: z.boolean() }), { tenantId: 'tenant-2' });
+    await apiFetch('/session', z.object({ ok: z.boolean() }));
+
+    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get('X-Tenant-Id')).toBe('tenant-2');
+    expect(new Headers(fetchMock.mock.calls[1]![1].headers).get('X-Tenant-Id')).toBeNull();
+  });
+});

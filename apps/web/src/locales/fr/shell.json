@@ -1,10 +1,16 @@
 {
   "brand": {
-    "mark": "D"
+    "mark": "D",
+    "platformMark": "P"
   },
   "clinic": {
     "branch": "Cabinet · {{branch}}",
-    "loading": "Chargement du cabinet"
+    "loading": "Chargement du cabinet",
+    "platformAdmin": "Administrateur plateforme",
+    "platformSubtitle": "Back-office",
+    "switchBranch": "Changer de site",
+    "branchSwitched": "Vous travaillez maintenant à {{branch}}",
+    "branchSwitchFailed": "Impossible de changer de site."
   },
   "nav": {
     "label": "Principal",
@@ -12,10 +18,26 @@
     "visits": "Consultations",
     "admin": "Administration",
     "catalog": "Catalogue",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "platform": "Plateforme",
+    "tenants": "Cabinets"
   },
   "breadcrumb": "Fil d’Ariane",
+  "platformCrumb": "Plateforme",
   "user": {
-    "fallbackRole": "Personnel"
+    "fallbackRole": "Personnel",
+    "platformAdmin": "Administrateur plateforme",
+    "signOut": "Se déconnecter"
+  },
+  "acting": {
+    "banner": "Vous gérez {{tenant}} en tant qu’administrateur plateforme",
+    "exit": "Quitter"
+  },
+  "idle": {
+    "eyebrow": "Fin de session",
+    "title": "Vous serez déconnecté dans",
+    "body": "Aucune activité depuis {{count}} minutes. Les dossiers patients sont masqués à la fin de la session.",
+    "signOut": "Se déconnecter",
+    "stay": "Rester connecté"
   }
 }

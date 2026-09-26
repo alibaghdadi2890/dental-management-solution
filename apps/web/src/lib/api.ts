@@ -1,7 +1,11 @@
 import { type ProblemDetails, problemDetailsSchema } from '@dcm/contracts';
 import type { z } from 'zod';
+import { actingTenantId } from '@/features/platform/acting-tenant';
 
 const API_BASE = '/api/v1';
+
+/** Honoured by the API for platform admins only (ADR-0008). */
+export const TENANT_HEADER = 'X-Tenant-Id';
 
 /** A failed API call, carrying the RFC 7807 problem the server returned (CLAUDE.md §12). */
 export class ApiError extends Error {
@@ -25,6 +29,11 @@ export class ApiError extends Error {
 
 export interface ApiRequestInit extends Omit<RequestInit, 'body'> {
   json?: unknown;
+  /**
+   * Tenant for a platform admin's request. Defaults to the clinic being managed (acting tenant);
+   * the admin portal passes the tenant it shows explicitly.
+   */
+  tenantId?: string;
 }
 
 async function toApiError(response: Response): Promise<ApiError> {
@@ -53,8 +62,11 @@ export async function apiFetch<TSchema extends z.ZodType>(
   schema: TSchema,
   init: ApiRequestInit = {},
 ): Promise<z.infer<TSchema>> {
-  const { json, headers: initHeaders, ...rest } = init;
+  const { json, tenantId = actingTenantId() ?? undefined, headers: initHeaders, ...rest } = init;
   const headers = new Headers(initHeaders);
+  if (tenantId !== undefined) {
+    headers.set(TENANT_HEADER, tenantId);
+  }
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
   }

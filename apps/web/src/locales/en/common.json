@@ -1,3 +1,15 @@
 {
-  "appName": "Dental Clinic"
+  "appName": "Dental Clinic",
+  "cancel": "Cancel",
+  "close": "Close",
+  "dismiss": "Dismiss",
+  "reasonPlaceholder": "Required — saved to the audit trail",
+  "tryAgain": "Try again",
+  "requestId": "Request {{id}}",
+  "unsaved": "Unsaved",
+  "save": "Save changes",
+  "saving": "Saving…",
+  "saved": "Saved",
+  "discard": "Discard",
+  "unexpected": "Something went wrong. Try again in a moment."
 }

@@ -1,10 +1,16 @@
 {
   "brand": {
-    "mark": "D"
+    "mark": "D",
+    "platformMark": "P"
   },
   "clinic": {
     "branch": "Clinic · {{branch}}",
-    "loading": "Loading clinic"
+    "loading": "Loading clinic",
+    "platformAdmin": "Platform admin",
+    "platformSubtitle": "Back office",
+    "switchBranch": "Switch branch",
+    "branchSwitched": "Now working in {{branch}}",
+    "branchSwitchFailed": "Couldn’t switch branch."
   },
   "nav": {
     "label": "Main",
@@ -12,10 +18,26 @@
     "visits": "Visits",
     "admin": "Admin",
     "catalog": "Catalog",
-    "settings": "Settings"
+    "settings": "Settings",
+    "platform": "Platform",
+    "tenants": "Tenants"
   },
   "breadcrumb": "Breadcrumb",
+  "platformCrumb": "Platform",
   "user": {
-    "fallbackRole": "Staff"
+    "fallbackRole": "Staff",
+    "platformAdmin": "Platform admin",
+    "signOut": "Sign out"
+  },
+  "acting": {
+    "banner": "Managing {{tenant}} as platform admin",
+    "exit": "Exit"
+  },
+  "idle": {
+    "eyebrow": "Session timeout",
+    "title": "You’ll be signed out in",
+    "body": "No activity for {{count}} minutes. Patient records are hidden when the session ends.",
+    "signOut": "Sign out now",
+    "stay": "Stay signed in"
   }
 }

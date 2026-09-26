@@ -24,7 +24,7 @@ const session: Session = {
   idleTimeoutSeconds: 900,
 };
 
-// The auth module does not serve sessions yet; stub the contract so the shell renders fully.
+// Stub the session contract so the shell renders without a backend (real flow: identity.spec.ts).
 async function signedIn(page: Page) {
   await page.route('**/api/v1/session', (route) => route.fulfill({ json: session }));
 }

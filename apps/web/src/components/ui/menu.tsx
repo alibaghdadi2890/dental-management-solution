@@ -1,0 +1,54 @@
+import { DropdownMenu } from 'radix-ui';
+import type { ReactNode } from 'react';
+import { cn } from '@/lib/utils';
+
+export const Menu = DropdownMenu.Root;
+export const MenuTrigger = DropdownMenu.Trigger;
+
+/** POC menu: white card, 9px radius, 5px padding, menu shadow. */
+export function MenuContent({
+  children,
+  className,
+  align = 'end',
+}: {
+  children: ReactNode;
+  className?: string;
+  align?: 'start' | 'end';
+}) {
+  return (
+    <DropdownMenu.Portal>
+      <DropdownMenu.Content
+        align={align}
+        sideOffset={4}
+        className={cn(
+          'z-30 w-[196px] animate-fadein rounded-[9px] border border-border bg-surface p-[5px] shadow-[0_10px_28px_rgba(27,26,31,.14)]',
+          className,
+        )}
+      >
+        {children}
+      </DropdownMenu.Content>
+    </DropdownMenu.Portal>
+  );
+}
+
+export function MenuItem({
+  children,
+  onSelect,
+  tone,
+}: {
+  children: ReactNode;
+  onSelect: () => void;
+  tone?: 'danger';
+}) {
+  return (
+    <DropdownMenu.Item
+      onSelect={onSelect}
+      className={cn(
+        'flex h-[34px] w-full cursor-pointer items-center rounded-md px-2.5 text-[13px] leading-none font-medium outline-none data-[highlighted]:bg-background',
+        tone === 'danger' ? 'text-danger' : 'text-ink',
+      )}
+    >
+      {children}
+    </DropdownMenu.Item>
+  );
+}

@@ -42,7 +42,7 @@ describe('usePermission', () => {
 
   it('grants permissions present in the session', () => {
     const client = new QueryClient();
-    client.setQueryData(sessionQueryOptions.queryKey, session);
+    client.setQueryData(sessionQueryOptions().queryKey, session);
 
     const { result } = renderHook(() => usePermission('visit:write'), {
       wrapper: wrapperWith(client),
@@ -53,7 +53,7 @@ describe('usePermission', () => {
 
   it('denies permissions missing from the session', () => {
     const client = new QueryClient();
-    client.setQueryData(sessionQueryOptions.queryKey, session);
+    client.setQueryData(sessionQueryOptions().queryKey, session);
 
     const { result } = renderHook(() => usePermission('patient:write'), {
       wrapper: wrapperWith(client),

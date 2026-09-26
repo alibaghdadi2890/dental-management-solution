@@ -1,3 +1,15 @@
 {
-  "appName": "Cabinet dentaire"
+  "appName": "Cabinet dentaire",
+  "cancel": "Annuler",
+  "close": "Fermer",
+  "dismiss": "Masquer",
+  "reasonPlaceholder": "Obligatoire — enregistré dans le journal d’audit",
+  "tryAgain": "Réessayer",
+  "requestId": "Requête {{id}}",
+  "unsaved": "Non enregistré",
+  "save": "Enregistrer",
+  "saving": "Enregistrement…",
+  "saved": "Enregistré",
+  "discard": "Abandonner",
+  "unexpected": "Une erreur est survenue. Réessayez dans un instant."
 }

@@ -3,7 +3,15 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 
 export const SUPPORTED_LANGUAGES = ['en', 'ar', 'fr'] as const;
-export const NAMESPACES = ['common', 'shell', 'patients', 'visits', 'catalog', 'settings'] as const;
+export const NAMESPACES = [
+  'common',
+  'shell',
+  'auth',
+  'patients',
+  'visits',
+  'catalog',
+  'settings',
+] as const;
 
 type Messages = Record<string, unknown>;
 

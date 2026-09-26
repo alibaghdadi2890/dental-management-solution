@@ -1,10 +1,16 @@
 {
   "brand": {
-    "mark": "D"
+    "mark": "D",
+    "platformMark": "P"
   },
   "clinic": {
     "branch": "العيادة · {{branch}}",
-    "loading": "جارٍ تحميل العيادة"
+    "loading": "جارٍ تحميل العيادة",
+    "platformAdmin": "مسؤول المنصة",
+    "platformSubtitle": "المكتب الخلفي",
+    "switchBranch": "تبديل الفرع",
+    "branchSwitched": "تعمل الآن في {{branch}}",
+    "branchSwitchFailed": "تعذّر تبديل الفرع."
   },
   "nav": {
     "label": "الرئيسية",
@@ -12,10 +18,26 @@
     "visits": "الزيارات",
     "admin": "الإدارة",
     "catalog": "الكتالوج",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "platform": "المنصة",
+    "tenants": "العيادات"
   },
   "breadcrumb": "مسار التنقل",
+  "platformCrumb": "المنصة",
   "user": {
-    "fallbackRole": "موظف"
+    "fallbackRole": "موظف",
+    "platformAdmin": "مسؤول المنصة",
+    "signOut": "تسجيل الخروج"
+  },
+  "acting": {
+    "banner": "تدير {{tenant}} بصفتك مسؤول المنصة",
+    "exit": "خروج"
+  },
+  "idle": {
+    "eyebrow": "انتهاء الجلسة",
+    "title": "سيتم تسجيل خروجك خلال",
+    "body": "لا يوجد نشاط منذ {{count}} دقيقة. تُخفى سجلات المرضى عند انتهاء الجلسة.",
+    "signOut": "تسجيل الخروج الآن",
+    "stay": "البقاء متصلًا"
   }
 }
