@@ -16,13 +16,13 @@ and real, tested `platform/` helpers. No feature code, no better-auth wiring, no
 
 ## Decisions taken during design
 
-| Decision | Recorded in |
-|---|---|
-| `treatments` renamed to `clinical`; `clinical` owns visits, treatment plans, charting | CLAUDE.md §4, ADR-0001 |
-| Procedure/service catalog moves from `scheduling` to `clinical` | CLAUDE.md §4/§8, ADR-0002 |
-| New `imports` module orchestrates imports through `patients` and `clinical` services | CLAUDE.md §4, ADR-0003 |
-| Tenants are provisioned only by platform admins via `withoutTenant()` | CLAUDE.md §5, ADR-0004 |
-| NestJS 11.2 (not 12: `nestjs-zod` supports ≤ 11); TypeScript 6.0 (not 7: `typescript-eslint` supports < 6.1) | ADR-0005 |
+| Decision                                                                                                     | Recorded in               |
+| ------------------------------------------------------------------------------------------------------------ | ------------------------- |
+| `treatments` renamed to `clinical`; `clinical` owns visits, treatment plans, charting                        | CLAUDE.md §4, ADR-0001    |
+| Procedure/service catalog moves from `scheduling` to `clinical`                                              | CLAUDE.md §4/§8, ADR-0002 |
+| New `imports` module orchestrates imports through `patients` and `clinical` services                         | CLAUDE.md §4, ADR-0003    |
+| Tenants are provisioned only by platform admins via `withoutTenant()`                                        | CLAUDE.md §5, ADR-0004    |
+| NestJS 11.2 (not 12: `nestjs-zod` supports ≤ 11); TypeScript 6.0 (not 7: `typescript-eslint` supports < 6.1) | ADR-0005                  |
 
 The design POC (`Dental Clinic POC/`) is the visual source of truth. The web shell follows its
 app shell (212px sidebar, 56px header, tokens, IBM Plex). Tooth numbering is Universal (POC), not FDI.
@@ -40,7 +40,8 @@ app shell (212px sidebar, 56px header, tokens, IBM Plex). Tooth numbering is Uni
     `no-restricted-imports` ban on `@nestjs/*`, `drizzle-orm`, `pg`, `bullmq`, `ioredis`;
   - `platform/` never imports `modules/`;
   - `import-x/no-cycle` for acyclic dependencies.
-- Docker Compose: Postgres 17, Redis 7, MinIO (+ bucket init). Postgres init creates roles:
+- Docker Compose: Postgres 17, Redis 7, SeaweedFS S3 (+ bucket init; MinIO images are no longer
+  published, ADR-0006) on host ports 55432/56379/58333. Postgres init creates roles:
   `dcm_owner` (migrations, table owner), `dcm_app` (runtime, subject to RLS),
   `dcm_admin` (BYPASSRLS, used only by `withoutTenant()`).
 - `pnpm dev` boots Compose, runs migrations, starts api + web.
@@ -57,19 +58,19 @@ subfolders are created with their first file): `tenancy`, `auth`, `users`, `role
 
 `platform/`:
 
-| Area | Contents |
-|---|---|
-| `kernel` | Pure TS usable from `domain/`: `DomainError` (+ `kind`), `newId()` (uuid v7) |
-| `config` | Zod env schema; `loadConfig()` throws on invalid env; global `APP_CONFIG` provider |
-| `cls` | `nestjs-cls` setup; typed store `{ requestId, tenantId?, userId?, branchId?, actorKind, platformAdmin }`; `RequestContext` accessor with `requireTenantId()` |
-| `db` | `pg` pools; `TenantDb.run(fn)` opens (or joins) a transaction, runs `set_config('app.tenant_id', …, true)` from CLS, throws `MissingTenantContextError` without a tenant, supports after-commit hooks; `withoutTenant(reason, fn)` uses the `dcm_admin` pool and requires `platformAdmin` or `actorKind = 'system'`; `tenantColumns()` + `tenantIsolationPolicy()` table helpers; root `schema.ts` aggregating module schemas; drizzle-kit config; migration runner |
-| `events` | `DomainEvent<N, P>` envelope (`name, id, occurredAt, tenantId, actor, requestId, payload`); `EventBus.publish()` defers to after-commit when inside a tenant transaction; `@OnDomainEvent()` |
-| `queue` | BullMQ root config; `TenantJobs.enqueue(queue, name, payload, { jobId })` stamps `tenantId` from CLS (required `jobId`, retries with exponential backoff); `TenantWorker` base re-establishes CLS and fails loudly without `tenantId`; exhausted jobs are copied to `dead-letter` |
-| `errors` | Global filter → RFC 7807 `application/problem+json` with stable `code` and `requestId`; maps `DomainError`, `ZodValidationException` (`validation_failed`), Nest `HttpException`, unknown (`internal_error`) |
-| `logging` | `nestjs-pino`; every line carries `requestId`, `tenantId`, `userId` from CLS; PII paths redacted; `x-request-id` accepted (validated) or generated, echoed on the response |
-| `otel` | `register.ts` preloaded with `node -r`; NodeSDK + auto-instrumentations (http, express, pg, ioredis, nestjs); exporter from standard `OTEL_*` env; disabled via `OTEL_SDK_DISABLED` |
-| `storage` | S3 client; `presignUpload` / `presignDownload`; keys namespaced `tenants/<tenantId>/…` from CLS |
-| `health` | `GET /health/live`, `GET /health/ready` (DB `select 1`, Redis `PING`) |
+| Area      | Contents                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `kernel`  | Pure TS usable from `domain/`: `DomainError` (+ `kind`), `newId()` (uuid v7)                                                                                                                                                                                                                                                                                                                                                                                        |
+| `config`  | Zod env schema; `loadConfig()` throws on invalid env; global `APP_CONFIG` provider                                                                                                                                                                                                                                                                                                                                                                                  |
+| `cls`     | `nestjs-cls` setup; typed store `{ requestId, tenantId?, userId?, branchId?, actorKind, platformAdmin }`; `RequestContext` accessor with `requireTenantId()`                                                                                                                                                                                                                                                                                                        |
+| `db`      | `pg` pools; `TenantDb.run(fn)` opens (or joins) a transaction, runs `set_config('app.tenant_id', …, true)` from CLS, throws `MissingTenantContextError` without a tenant, supports after-commit hooks; `withoutTenant(reason, fn)` uses the `dcm_admin` pool and requires `platformAdmin` or `actorKind = 'system'`; `tenantColumns()` + `tenantIsolationPolicy()` table helpers; root `schema.ts` aggregating module schemas; drizzle-kit config; migration runner |
+| `events`  | `DomainEvent<N, P>` envelope (`name, id, occurredAt, tenantId, actor, requestId, payload`); `EventBus.publish()` defers to after-commit when inside a tenant transaction; `@OnDomainEvent()`                                                                                                                                                                                                                                                                        |
+| `queue`   | BullMQ root config; `TenantJobs.enqueue(queue, name, payload, { jobId })` stamps `tenantId` from CLS (required `jobId`, retries with exponential backoff); `TenantWorker` base re-establishes CLS and fails loudly without `tenantId`; exhausted jobs are copied to `dead-letter`                                                                                                                                                                                   |
+| `errors`  | Global filter → RFC 7807 `application/problem+json` with stable `code` and `requestId`; maps `DomainError`, `ZodValidationException` (`validation_failed`), Nest `HttpException`, unknown (`internal_error`)                                                                                                                                                                                                                                                        |
+| `logging` | `nestjs-pino`; every line carries `requestId`, `tenantId`, `userId` from CLS; PII paths redacted; `x-request-id` accepted (validated) or generated, echoed on the response                                                                                                                                                                                                                                                                                          |
+| `otel`    | `register.ts` preloaded with `node -r`; NodeSDK + auto-instrumentations (http, express, pg, ioredis, nestjs); exporter from standard `OTEL_*` env; disabled via `OTEL_SDK_DISABLED`                                                                                                                                                                                                                                                                                 |
+| `storage` | S3 client; `presignUpload` / `presignDownload`; keys namespaced `tenants/<tenantId>/…` from CLS                                                                                                                                                                                                                                                                                                                                                                     |
+| `health`  | `GET /health/live`, `GET /health/ready` (DB `select 1`, Redis `PING`)                                                                                                                                                                                                                                                                                                                                                                                               |
 
 RLS policy form (stricter than CLAUDE.md's shorthand, same meaning): `tenant_id =
 NULLIF(current_setting('app.tenant_id', true), '')::uuid` for `USING` and `WITH CHECK`, so a

@@ -4,3 +4,4 @@ coverage
 apps/api/migrations/meta
 apps/web/src/routeTree.gen.ts
 Dental Clinic POC
+CLAUDE.md

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      # Lint enforces the CLAUDE.md §4 module boundaries and §13 RTL/i18n rules.
+      - run: pnpm lint
+      - run: pnpm typecheck
+      # Includes the Testcontainers tenant-isolation suite (Docker is available on the runner).
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm --filter @dcm/web exec playwright install --with-deps chromium
+      - run: pnpm --filter @dcm/web e2e

@@ -18,6 +18,22 @@ export class ForeignObjectKeyError extends DomainError {
   readonly kind = 'forbidden';
 }
 
+export function createS3Client(config: AppConfig): S3Client {
+  return new S3Client({
+    region: config.S3_REGION,
+    ...(config.S3_ENDPOINT === undefined ? {} : { endpoint: config.S3_ENDPOINT }),
+    forcePathStyle: config.S3_FORCE_PATH_STYLE,
+    // Default flexible checksums would sign the CRC32 of an empty body into presigned PUT URLs,
+    // making every browser upload fail with BadDigest.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
+    credentials: {
+      accessKeyId: config.S3_ACCESS_KEY_ID,
+      secretAccessKey: config.S3_SECRET_ACCESS_KEY,
+    },
+  });
+}
+
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 const DEFAULT_EXPIRY_SECONDS = 300;
 

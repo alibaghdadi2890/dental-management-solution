@@ -1,19 +1,25 @@
-import { S3Client } from '@aws-sdk/client-s3';
 import { ClsServiceManager } from 'nestjs-cls';
 import { describe, expect, it } from 'vitest';
 import type { AppClsStore } from '../cls/app-cls-store';
 import { MissingTenantContextError, RequestContext } from '../cls/request-context';
 import type { AppConfig } from '../config/config.schema';
-import { ForeignObjectKeyError, InvalidObjectKeyError, ObjectStorage } from './object-storage';
+import {
+  createS3Client,
+  ForeignObjectKeyError,
+  InvalidObjectKeyError,
+  ObjectStorage,
+} from './object-storage';
 
 const context = new RequestContext(ClsServiceManager.getClsService<AppClsStore>());
-const s3 = new S3Client({
-  region: 'us-east-1',
-  endpoint: 'http://localhost:9000',
-  forcePathStyle: true,
-  credentials: { accessKeyId: 'test', secretAccessKey: 'test-secret' },
-});
-const storage = new ObjectStorage(s3, { S3_BUCKET: 'dcm-test' } as AppConfig, context);
+const config = {
+  S3_REGION: 'us-east-1',
+  S3_ENDPOINT: 'http://localhost:9000',
+  S3_FORCE_PATH_STYLE: true,
+  S3_BUCKET: 'dcm-test',
+  S3_ACCESS_KEY_ID: 'test',
+  S3_SECRET_ACCESS_KEY: 'test-secret',
+} as AppConfig;
+const storage = new ObjectStorage(createS3Client(config), config, context);
 
 const inTenant = <T>(tenantId: string, fn: () => Promise<T>) =>
   context.run({ requestId: 'req-00000001', actorKind: 'user', tenantId }, fn);
@@ -45,6 +51,14 @@ describe('ObjectStorage', () => {
       /^http:\/\/localhost:9000\/dcm-test\/tenants\/tenant-a\/imports\/batch-1\.csv\?/,
     );
     expect(url).toContain('X-Amz-Expires=300');
+  });
+
+  it('does not pin an empty-body checksum into presigned uploads', async () => {
+    // Regression: SDK default checksums signed CRC32 of an empty body, so real uploads failed.
+    const url = await inTenant('tenant-a', () =>
+      storage.presignUpload({ key: 'tenants/tenant-a/imports/a.csv', contentType: 'text/csv' }),
+    );
+    expect(url).not.toMatch(/x-amz-checksum|x-amz-sdk-checksum-algorithm/i);
   });
 
   it('refuses to presign another tenant key', async () => {

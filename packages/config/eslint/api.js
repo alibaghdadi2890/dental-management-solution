@@ -105,7 +105,8 @@ export function api({ tsconfigRootDir }) {
                   '@aws-sdk/*',
                   'express',
                 ],
-                message: 'domain/ is pure TypeScript: no Nest, no DB, no I/O (CLAUDE.md §4 rule 5).',
+                message:
+                  'domain/ is pure TypeScript: no Nest, no DB, no I/O (CLAUDE.md §4 rule 5).',
               },
             ],
           },

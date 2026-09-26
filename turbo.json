@@ -17,8 +17,8 @@
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"],
-      "env": ["DOCKER_HOST", "TESTCONTAINERS_*"]
+      "dependsOn": ["^build"]
     }
-  }
+  },
+  "globalPassThroughEnv": ["CI", "DOCKER_*", "TESTCONTAINERS_*"]
 }

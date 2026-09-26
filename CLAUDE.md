@@ -292,7 +292,8 @@ Even in phase 1, write application services so they can be exposed as tools late
 - Health endpoints: `/health/live`, `/health/ready` (DB + Redis).
 - Config via environment variables validated by a Zod schema at boot; the app refuses to start on
   invalid config. No secrets in the repo.
-- Docker Compose for local dev (Postgres, Redis, MinIO). One command to boot everything.
+- Docker Compose for local dev (Postgres, Redis, S3-compatible storage — SeaweedFS, see
+  ADR-0006). One command to boot everything: `pnpm dev`.
 
 ## 16. How to work in this repo (for the AI agent and humans)
 

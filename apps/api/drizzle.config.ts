@@ -1,4 +1,9 @@
+import { existsSync } from 'node:fs';
 import { defineConfig } from 'drizzle-kit';
+
+if (existsSync('.env')) {
+  process.loadEnvFile('.env');
+}
 
 // Each module owns its tables in modules/<name>/persistence/schema.ts (CLAUDE.md §7).
 // Migrations run as the schema owner, never as the runtime role.

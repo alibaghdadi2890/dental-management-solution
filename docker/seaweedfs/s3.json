@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "dcm-local",
+      "credentials": [{ "accessKey": "dcm-local", "secretKey": "dcm-local-secret" }],
+      "actions": ["Admin", "Read", "List", "Tagging", "Write"]
+    }
+  ]
+}
