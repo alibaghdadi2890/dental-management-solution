@@ -23,6 +23,14 @@ export class IdentityDb {
     return open ? work(open) : this.db.transaction(work);
   }
 
+  /** Runs several identity writes atomically: joins the open transaction or opens one. */
+  atomic<T>(work: () => Promise<T>): Promise<T> {
+    if (this.explicit.getStore() ?? this.tenantDb.currentTransaction()) {
+      return work();
+    }
+    return this.db.transaction((tx) => this.within(tx, work));
+  }
+
   within<T>(tx: Transaction, work: () => Promise<T>): Promise<T> {
     return this.explicit.run(tx, work);
   }

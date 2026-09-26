@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthModule, SessionGuard } from '../auth';
+import { RolesModule } from '../roles';
 import { AuthorizationService } from './application/authorization.service';
 import { PermissionGuard } from './http/permission.guard';
 
@@ -9,7 +10,7 @@ import { PermissionGuard } from './http/permission.guard';
  * authentication always runs before authorization.
  */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, RolesModule],
   providers: [
     AuthorizationService,
     { provide: APP_GUARD, useClass: SessionGuard },

@@ -1,6 +1,7 @@
 import type { Permission } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../platform/cls/request-context';
+import { RolesService } from '../../roles';
 
 /**
  * May you do this (CLAUDE.md §6). Resolves the caller's permissions into the request context once
@@ -9,15 +10,20 @@ import { RequestContext } from '../../../platform/cls/request-context';
  */
 @Injectable()
 export class AuthorizationService {
-  constructor(private readonly context: RequestContext) {}
+  constructor(
+    private readonly context: RequestContext,
+    private readonly roles: RolesService,
+  ) {}
 
   /**
    * Platform admins are decided by rule (ADR-0008), so nothing is loaded for them. Clinic users
-   * get the union of their roles' permissions — until roles exist, nothing.
+   * get the union of their roles' permissions in the current tenant.
    */
-  resolveForRequest(): Promise<void> {
-    this.context.setPermissions([]);
-    return Promise.resolve();
+  async resolveForRequest(): Promise<void> {
+    const userId = this.context.userId;
+    const clinicUser =
+      userId !== undefined && this.context.tenantId !== undefined && !this.context.isPlatformAdmin;
+    this.context.setPermissions(clinicUser ? await this.roles.permissionsForUser(userId) : []);
   }
 
   can(permission: Permission): boolean {

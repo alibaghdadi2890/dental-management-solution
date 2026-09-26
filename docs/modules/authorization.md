@@ -1,7 +1,6 @@
 # `authorization` module
 
-**Status:** implemented — guards and platform-admin rules; role-based resolution arrives with
-`roles` (step C).
+**Status:** implemented — guards, platform-admin rules, role-based permission resolution.
 
 ## Purpose
 
@@ -12,7 +11,8 @@ rules will live in `AuthorizationService.can()`.
 
 Evaluation (`RequestContext.hasPermission`): system tasks pass; a platform admin holds every
 permission inside a tenant and only `platform:admin` outside one (ADR-0008); clinic users get the
-union of their roles' permissions.
+union of their roles' permissions (`RolesService.permissionsForUser`, resolved once per request,
+so a role change applies from the caller's next request).
 
 ## Owns
 

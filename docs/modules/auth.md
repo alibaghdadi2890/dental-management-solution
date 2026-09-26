@@ -1,8 +1,8 @@
 # `auth` module
 
 **Status:** implemented — sign-in/out, lockout, session guard, idle timeout, tenant and branch
-resolution, organization/membership mirror, staff identities, platform-admin bootstrap. Branch
-switch and password change arrive in step C3.
+resolution, organization/membership mirror, staff identities, branch switch, password change,
+platform-admin bootstrap.
 
 ## Purpose
 
@@ -58,6 +58,17 @@ inside the caller's transaction through `IdentityDb`.
 | `POST /auth/sign-in/email` | Public — throttled (D11)       |
 | `POST /auth/sign-out`      | Public                         |
 | `POST /session/touch`      | Authenticated — idle heartbeat |
+| `POST /session/branch`     | Authenticated                  |
+| `POST /session/password`   | Authenticated                  |
+
+`POST /session/touch` and `POST /session/password` also work while a temporary password is
+pending. `POST /session/branch` (`{ branchId }`) accepts an active branch the caller is assigned
+to (any active branch for a platform admin inside a tenant), else `403
+session.branch_not_assigned`; the choice is stored on the session. `POST /session/password`
+(`{ currentPassword, newPassword }`) checks the current password (`422
+auth.invalid_current_password`), refuses keeping it (`422 auth.password_unchanged`), clears
+`mustChangePassword`, signs out the user's other sessions and is audited
+`user.password_change` inside a tenant.
 
 No other better-auth endpoint is reachable.
 
@@ -74,7 +85,7 @@ first platform admin (system actor, `withoutTenant`, idempotent, never changes a
 
 ## Depends on
 
-tenancy
+tenancy, audit
 
 ## Permissions
 

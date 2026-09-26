@@ -30,6 +30,22 @@ export async function signIn(
   return agent;
 }
 
+/** A staff user's first sign-in: signs in with the temporary password and sets `PASSWORD`. */
+export async function signInAndSetPassword(
+  app: INestApplication,
+  email: string,
+  temporaryPassword: string,
+): Promise<TestAgent> {
+  const agent = await signIn(app, email, temporaryPassword);
+  const response = await agent
+    .post('/api/v1/session/password')
+    .send({ currentPassword: temporaryPassword, newPassword: PASSWORD });
+  if (response.status !== 204) {
+    throw new Error(`password change failed: ${response.status} ${JSON.stringify(response.body)}`);
+  }
+  return agent;
+}
+
 export function uniqueEmail(prefix = 'user'): string {
   return `${prefix}-${newId()}@example.test`;
 }

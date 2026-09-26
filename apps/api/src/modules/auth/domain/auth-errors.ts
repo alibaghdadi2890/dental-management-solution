@@ -63,6 +63,12 @@ export class InvalidCurrentPasswordError extends DomainError {
   readonly kind = 'invalid';
 }
 
+/** A temporary password must be replaced, not confirmed (D6). */
+export class PasswordUnchangedError extends DomainError {
+  readonly code = 'auth.password_unchanged';
+  readonly kind = 'invalid';
+}
+
 /** Any other better-auth failure, surfaced as problem details with a stable `auth.*` code. */
 export class AuthEndpointError extends DomainError {
   readonly kind: DomainErrorKind;

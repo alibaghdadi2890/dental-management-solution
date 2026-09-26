@@ -4,10 +4,12 @@ import { APP_CONFIG } from '../../platform/config/config.module';
 import type { AppConfig } from '../../platform/config/config.schema';
 import { APP_DB, type Database } from '../../platform/db/database';
 import type { Clock } from '../../platform/kernel/clock';
+import { AuditModule } from '../audit';
 import { TenancyModule } from '../tenancy';
 import { AuthService } from './application/auth.service';
 import { BETTER_AUTH, createBetterAuth } from './application/better-auth';
 import { BranchResolver } from './application/branch-resolver';
+import { SessionActionsService } from './application/session-actions.service';
 import { SessionResolver } from './application/session-resolver';
 import { SignInService } from './application/sign-in.service';
 import { AuthHttpController } from './http/auth-http.controller';
@@ -18,7 +20,7 @@ import { SignInThrottleRepository } from './persistence/sign-in-throttle.reposit
 
 /** See docs/modules/auth.md. */
 @Module({
-  imports: [TenancyModule],
+  imports: [AuditModule, TenancyModule],
   controllers: [AuthHttpController, SessionController],
   providers: [
     {
@@ -33,6 +35,7 @@ import { SignInThrottleRepository } from './persistence/sign-in-throttle.reposit
     SignInService,
     SessionResolver,
     BranchResolver,
+    SessionActionsService,
     AuthService,
   ],
   // SessionGuard is registered as a global guard by AuthorizationModule (fixed guard order).
