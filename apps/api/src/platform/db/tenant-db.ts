@@ -46,6 +46,11 @@ export class TenantDb {
     return result;
   }
 
+  /** The transaction `run()` has open in this async context, for helpers that must join it. */
+  currentTransaction(): Transaction | undefined {
+    return this.open.getStore()?.tx;
+  }
+
   /**
    * Defers `hook` until the open transaction commits; returns false when there is none, so the
    * caller can act immediately. Hooks are dropped if the transaction rolls back.

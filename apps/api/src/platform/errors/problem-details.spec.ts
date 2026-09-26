@@ -50,3 +50,19 @@ describe('toProblemDetails', () => {
     );
   });
 });
+
+class AccountLocked extends DomainError {
+  readonly code = 'auth.account_locked';
+  readonly kind = 'unauthenticated';
+  override readonly extensions = { lockedUntil: '2026-09-26T10:15:00.000Z' };
+}
+
+describe('problem extension members', () => {
+  it('exposes the public extensions of a domain error without overriding core fields', () => {
+    expect(toProblemDetails(new AccountLocked('Locked'), 'req-1')).toMatchObject({
+      status: 401,
+      code: 'auth.account_locked',
+      lockedUntil: '2026-09-26T10:15:00.000Z',
+    });
+  });
+});

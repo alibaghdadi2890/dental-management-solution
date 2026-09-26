@@ -8,6 +8,7 @@ import { PatientsModule } from './modules/patients';
 import { RolesModule } from './modules/roles';
 import { TenancyModule } from './modules/tenancy';
 import { UsersModule } from './modules/users';
+import { ClockModule } from './platform/clock/clock.module';
 import { AppClsModule } from './platform/cls/cls.module';
 import { ConfigModule } from './platform/config/config.module';
 import { DbModule } from './platform/db/db.module';
@@ -23,6 +24,7 @@ import { StorageModule } from './platform/storage/storage.module';
   imports: [
     // Platform (infrastructure only — CLAUDE.md §4 rule 6)
     ConfigModule,
+    ClockModule,
     AppClsModule,
     LoggingModule,
     HttpPlatformModule,

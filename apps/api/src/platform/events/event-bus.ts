@@ -5,6 +5,9 @@ import { TenantDb } from '../db/tenant-db';
 import { newId } from '../kernel/id';
 import type { DomainEvent } from './domain-event';
 
+/** Channel that receives every domain event, for generic subscribers such as the audit log. */
+export const ANY_DOMAIN_EVENT = 'domain-event:any';
+
 /** Subscribes a handler to a domain event by name. */
 export const OnDomainEvent = (name: string): MethodDecorator => OnEvent(name);
 
@@ -45,5 +48,6 @@ export class EventBus {
 
   private async dispatch(event: DomainEvent): Promise<void> {
     await this.emitter.emitAsync(event.name, event);
+    await this.emitter.emitAsync(ANY_DOMAIN_EVENT, event);
   }
 }

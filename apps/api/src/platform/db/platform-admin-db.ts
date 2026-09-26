@@ -1,12 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { RequestContext } from '../cls/request-context';
-import { DomainError } from '../kernel/domain-error';
+import { PlatformAccessDeniedError } from '../kernel/platform-access-denied.error';
 import { ADMIN_DB, type Database, type Transaction } from './database';
-
-export class PlatformAccessDeniedError extends DomainError {
-  readonly code = 'platform.access_denied';
-  readonly kind = 'forbidden';
-}
 
 /**
  * Cross-tenant access for platform administration (tenant provisioning) and system tasks.

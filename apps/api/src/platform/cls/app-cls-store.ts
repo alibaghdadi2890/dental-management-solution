@@ -1,3 +1,4 @@
+import type { Permission } from '@dcm/contracts';
 import type { ClsStore } from 'nestjs-cls';
 
 export type ActorKind = 'user' | 'agent' | 'system' | 'job';
@@ -12,4 +13,6 @@ export interface AppClsStore extends ClsStore {
   branchId?: string;
   actorKind?: ActorKind;
   platformAdmin?: boolean;
+  /** Resolved once per request by `authorization` (ADR-0010); undefined until then. */
+  permissions?: ReadonlySet<Permission>;
 }

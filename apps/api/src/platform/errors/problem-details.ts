@@ -87,7 +87,10 @@ function validationProblem(error: { issues: ZodIssueLike[] }, requestId?: string
  */
 export function toProblemDetails(error: unknown, requestId?: string): ProblemDetails {
   if (error instanceof DomainError) {
-    return problem(STATUS_BY_KIND[error.kind], error.code, requestId, error.message);
+    return {
+      ...error.extensions,
+      ...problem(STATUS_BY_KIND[error.kind], error.code, requestId, error.message),
+    };
   }
   if (error instanceof ZodValidationException) {
     const zodError = error.getZodError();

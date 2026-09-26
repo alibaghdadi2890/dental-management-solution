@@ -5,7 +5,7 @@ import type { AppClsStore } from '../cls/app-cls-store';
 import { RequestContext } from '../cls/request-context';
 import type { TenantDb } from '../db/tenant-db';
 import type { DomainEvent } from './domain-event';
-import { EventBus } from './event-bus';
+import { ANY_DOMAIN_EVENT, EventBus } from './event-bus';
 
 type Hook = () => void | Promise<void>;
 
@@ -57,5 +57,20 @@ describe('EventBus', () => {
 
     for (const hook of pending) await hook();
     expect(received).toHaveLength(1);
+  });
+});
+
+describe('catch-all channel', () => {
+  it('delivers every event to generic subscribers such as the audit log', async () => {
+    const emitter = new EventEmitter2();
+    const context = new RequestContext(ClsServiceManager.getClsService<AppClsStore>());
+    const tenantDb = { afterCommit: () => false } as unknown as TenantDb;
+    const bus = new EventBus(emitter, context, tenantDb);
+    const seen: string[] = [];
+    emitter.on(ANY_DOMAIN_EVENT, (event: DomainEvent) => seen.push(event.name));
+
+    await bus.publish(bus.create('TenantProvisioned', { tenantId: 't1' }));
+
+    expect(seen).toEqual(['TenantProvisioned']);
   });
 });
