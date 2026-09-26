@@ -1,0 +1,10 @@
+{
+  "extends": "@dcm/config/tsconfig/nest.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "customConditions": []
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.spec.ts"]
+}
