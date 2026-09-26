@@ -1,27 +1,69 @@
 # `roles` module
 
-**Status:** skeleton — module class and `index.ts` only.
+**Status:** implemented — system roles, assignments, permission lookup.
 
 ## Purpose
 
-What roles exist and who holds them. System roles seeded per tenant on provisioning (`owner`, `dentist`, `hygienist`, `receptionist`, `accountant`, `readonly`) plus tenant-defined custom roles; role → permission and user → role assignments. Permissions come from the catalog in `@dcm/contracts`.
+What roles exist in a tenant and who holds them. Every tenant gets the four system roles `owner`,
+`dentist`, `assistant`, `frontdesk` (D4) with the D5 permission matrix, seeded by `provisioning`
+inside the provisioning transaction (ADR-0009). Custom roles (`system = false`) fit the data model;
+there is no UI or API to create them yet. Permissions come from the catalog in `@dcm/contracts`.
+
+| Permission                              | owner | dentist | assistant | frontdesk |
+| --------------------------------------- | ----- | ------- | --------- | --------- |
+| `tenant:read`, `user:read`              | ✓     | ✓       | ✓         | ✓         |
+| `tenant:write`                          | ✓     | –       | –         | –         |
+| `user:write`, `role:read`, `role:write` | ✓     | –       | –         | –         |
+| `patient:read`, `patient:write`         | ✓     | ✓       | ✓         | ✓         |
+| `visit:read`                            | ✓     | ✓       | ✓         | ✓         |
+| `visit:write`                           | ✓     | ✓       | ✓         | –         |
+| `visit:void`, `visit:amend`             | ✓     | ✓       | –         | –         |
+| `procedure:read`                        | ✓     | ✓       | ✓         | ✓         |
+| `procedure:write`, `import:run`         | ✓     | –       | –         | –         |
+| `payment:read`                          | ✓     | ✓       | ✓         | ✓         |
+| `payment:write`                         | ✓     | ✓       | –         | ✓         |
+| `payment:refund`, `audit:read`          | ✓     | ✓       | –         | –         |
+
+`platform:admin` is never granted by a role (platform admins are decided by rule, ADR-0008). The
+matrix is the pure constant `domain/system-roles.ts`; a unit test pins it per role.
 
 ## Owns
 
-`roles`, `role_permissions`, `user_roles` (planned).
+- `roles` — tenant RLS; `key` unique per tenant; `name`; `system`.
+- `role_permissions` — tenant RLS; PK `(role_id, permission)`; permission text is filtered through
+  the catalog on read, so a retired permission grants nothing.
+- `user_roles` — tenant RLS; PK `(user_id, role_id)`; `user_id` is the global auth user id.
+
+Both junctions reference `roles` through a composite `(tenant_id, role_id)` foreign key, so an
+assignment can never point at another tenant's role. Junction rows are hard-deleted.
 
 ## Public API (`index.ts`)
 
-`RolesModule`. Planned: `RolesService` (permissions for a user, manage roles).
+`RolesModule`, `RolesService`:
+
+- `seedSystemRoles()` (`role:write`, idempotent: creates only missing roles, audited
+  `role.create`).
+- `listRoles()` (`role:read`).
+- `assignRoles(userId, roleKeys)` (`role:write`): replaces the user's set; any unknown key refuses
+  the whole call with 422 `role.unknown`; audited `user.roles_assign` with before/after keys.
+- Reads for other modules: `rolesFor(userIds)`, `permissionsForUser(userId)` (the union of the
+  user's roles, resolved into the request context by `authorization`), `holdersOf(roleKey)` (the
+  last-owner rule in `users`).
+
+## HTTP
+
+| Route        | Access      |
+| ------------ | ----------- |
+| `GET /roles` | `role:read` |
 
 ## Events
 
-- Emits: `RoleAssigned`, `RoleRevoked` (planned).
-- Consumes: `TenantProvisioned` (seed system roles).
+- Emits: —
+- Consumes: —
 
 ## Depends on
 
-users, tenancy
+audit (tenant scope comes from RLS; `tenancy` is an allowed edge but not needed yet)
 
 ## Permissions
 

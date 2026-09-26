@@ -20,3 +20,17 @@ export function createBareTenant(app: INestApplication, name = 'Test Clinic'): P
       }),
     );
 }
+
+/** Runs `fn` as a platform admin acting inside `tenantId` (ADR-0008), calling services directly. */
+export function asPlatformAdminIn<T>(
+  app: INestApplication,
+  tenantId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return app
+    .get(RequestContext)
+    .run(
+      { requestId: `test-${newId()}`, actorKind: 'user', userId: newId(), platformAdmin: true },
+      () => app.get(RequestContext).runInTenant(tenantId, fn),
+    );
+}
