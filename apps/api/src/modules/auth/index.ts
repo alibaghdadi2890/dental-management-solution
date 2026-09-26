@@ -7,6 +7,7 @@ export {
 } from './application/auth.service';
 export { BranchResolver } from './application/branch-resolver';
 export { type AuthenticatedSession, TENANT_HEADER } from './application/session-resolver';
+export { EmailTakenError } from './domain/auth-errors';
 export { idleTimeoutSeconds } from './domain/session-activity';
 export { AllowPendingPasswordChange, CurrentSession } from './http/session-access';
 export { SessionGuard } from './http/session.guard';

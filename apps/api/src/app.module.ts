@@ -5,6 +5,7 @@ import { AuthorizationModule } from './modules/authorization';
 import { ClinicalModule } from './modules/clinical';
 import { ImportsModule } from './modules/imports';
 import { PatientsModule } from './modules/patients';
+import { ProvisioningModule } from './modules/provisioning';
 import { RolesModule } from './modules/roles';
 import { TenancyModule } from './modules/tenancy';
 import { UsersModule } from './modules/users';
@@ -45,6 +46,7 @@ export const DOMAIN_MODULES = [
   PatientsModule,
   ClinicalModule,
   ImportsModule,
+  ProvisioningModule,
 ];
 
 @Module({

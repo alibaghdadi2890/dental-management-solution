@@ -5,6 +5,7 @@ import { IdentityDb } from './identity-db';
 import {
   authAccounts,
   authMembers,
+  authOrganizations,
   authSessions,
   authTeamMembers,
   authTeams,
@@ -158,6 +159,24 @@ export class IdentityRepository {
         .orderBy(asc(authTeamMembers.createdAt), asc(authTeamMembers.id)),
     );
     return rows.map((row) => row.teamId);
+  }
+
+  /** Mirror of a tenant (organization id = tenant id, ADR-0011). */
+  async upsertOrganization({
+    id,
+    name,
+    slug,
+  }: {
+    id: string;
+    name: string;
+    slug: string;
+  }): Promise<void> {
+    await this.db.run((tx) =>
+      tx
+        .insert(authOrganizations)
+        .values({ id, name, slug })
+        .onConflictDoUpdate({ target: authOrganizations.id, set: { name, slug } }),
+    );
   }
 
   async memberCountsByOrganization(): Promise<Map<string, number>> {

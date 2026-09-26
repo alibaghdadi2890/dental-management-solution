@@ -29,6 +29,16 @@ export class AuthService {
     private readonly adminDb: PlatformAdminDb,
   ) {}
 
+  /** Mirrors a tenant as a better-auth organization inside the caller's transaction. */
+  async syncOrganization(tenant: { id: string; name: string; slug: string }): Promise<void> {
+    await this.identities.upsertOrganization(tenant);
+  }
+
+  /** Clinic members per tenant, for the platform tenants list. */
+  memberCountsByTenant(): Promise<Map<string, number>> {
+    return this.identities.memberCountsByOrganization();
+  }
+
   async isEmailTaken(email: string): Promise<boolean> {
     return (await this.identities.findUserByEmail(emailSchema.parse(email))) !== undefined;
   }

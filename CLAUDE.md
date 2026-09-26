@@ -103,19 +103,22 @@ modules/<name>/
 
 | Module          | Owns                                                                 | Depends on            |
 |-----------------|----------------------------------------------------------------------|-----------------------|
-| `tenancy`       | tenants (clinics), branches, tenant settings, timezone, provisioning | —                     |
-| `auth`          | better-auth integration, sessions, sign-in/up, org membership sync, tenant resolution into request context | tenancy |
-| `users`         | app-level user/staff profile (name, title, dentist/hygienist/receptionist, contact), links to auth identity | auth, tenancy |
-| `roles`         | role definitions per tenant, system roles, role → permission assignments, user → role assignments | users, tenancy |
-| `authorization` | permission catalog (from `contracts`), `can(user, action, resource)` evaluation, HTTP guard + decorator, agent tool guard | roles |
+| `tenancy`       | tenants (clinics), branches, rooms (the physical unit a visit happens in; the future bookable resource), tenant settings, timezone | audit |
+| `auth`          | better-auth integration (identity-plane `auth_*` tables), sessions, sign-in/out, lockout, idle timeout, org/team membership mirror, tenant + branch resolution into request context | tenancy |
+| `users`         | app-level user/staff profile (name, title, practitioner type, contact), branch assignments, staff user creation, `GET /session` | auth, tenancy, roles |
+| `roles`         | role definitions per tenant, system roles, role → permission assignments, user → role assignments (keyed by auth user id) | tenancy |
+| `authorization` | resolves the caller's permissions into CLS, `can(actor, permission, resource)`, global session + permission guards, agent tool guard | auth, roles |
 | `audit`         | append-only audit log (who/what/when/tenant/before/after), query API | — (consumes events from all) |
 | `patients`      | patient records, contacts, medical alerts/allergies, odontogram, notes | tenancy |
-| `scheduling`    | resources (practitioners, chairs, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
+| `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
 | `clinical`      | visits (clinical encounters: patient, practitioner, date, services performed, notes, status), procedure/service catalog, treatment plans, planned procedures, clinical charting linked to visits | patients, users |
 | `billing`       | invoices, payments, price lists                                     | patients, clinical    |
 | `files`         | S3 object metadata, upload/download signed URLs, attachment links   | tenancy               |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
 | `imports`       | import jobs: uploaded file, column mapping, staged rows + validation, preview, commit progress; writes only through `patients` and `clinical` services | patients, clinical, tenancy |
+| `provisioning`  | platform back office: provisions a tenant end to end (tenant, first branch, owner, system roles), cross-tenant tenants list, suspension; owns no tables | tenancy, auth, users, roles |
+
+Every module that mutates also depends on `audit`. Nothing depends on `provisioning` (ADR-0009).
 
 Phase 2 adds `assistant` (agent runtime, conversations, tool registry, confirmation workflow) and
 `voice` (STT/TTS adapters in front of `assistant`).
@@ -135,8 +138,14 @@ Phase 2 adds `assistant` (agent runtime, conversations, tool registry, confirmat
 - Cross-tenant operations (platform admin, migrations) use an explicit `withoutTenant()` helper
   that is grep-able and requires a `platform:admin` permission. Never bypass RLS quietly.
   It runs on a separate BYPASSRLS role (`dcm_admin`); the runtime role (`dcm_app`) owns no tables.
-- Tenants (clinics) are created only by platform admins (`tenancy` provisioning via
-  `withoutTenant()`). There is no public sign-up; clinic owners are invited.
+- Tenants (clinics) are created only by platform admins (`provisioning` → `tenancy` via
+  `withoutTenant()`). There is no public sign-up. The `tenants` table itself has no `tenant_id`;
+  its RLS policy lets a transaction see only the row whose `id` is its tenant.
+- Platform admins act inside a tenant through the `X-Tenant-Id` header, honoured for them only
+  (ADR-0008); code enters a tenant programmatically with `RequestContext.runInTenant()`.
+- Exception: better-auth's `auth_*` tables are a global identity plane (users, sessions, the
+  user → tenant membership index) with no `tenant_id` and no RLS, touched only by `auth`
+  (ADR-0011). Never store other tenant data there.
 - Tenant = clinic (better-auth organization). Branch = better-auth team. Timezone is stored per
   tenant as an IANA name; all "local time" logic uses it.
 - No tenant-specific code paths. Differences between tenants are configuration, never `if (tenant === ...)`.
@@ -145,7 +154,7 @@ Phase 2 adds `assistant` (agent runtime, conversations, tool registry, confirmat
 
 **`auth` — who are you.** Wraps better-auth. Owns identity, credentials, sessions, MFA, org
 membership and invitations (via the organization plugin). Exposes: current session, current user
-id, active tenant id. Populates CLS with `{ userId, tenantId, branchId? }` in a global guard.
+id, active tenant id. Populates CLS with `{ userId, tenantId, branchId?, platformAdmin }` in a global guard.
 Nothing else in the codebase talks to better-auth directly.
 
 **`users` — who are you *here*.** Application-level profile and staff record for a user within a
@@ -160,12 +169,16 @@ tenant admin can create. A user may hold multiple roles in a tenant.
 
 **`authorization` — may you do this.** One evaluation function:
 `can(actor, permission, resource?)`. Exposed three ways: a `@RequirePermission()` route decorator
-+ guard, an injectable `AuthorizationService` for use inside application services, and the guard
-applied to every agent tool. Deny by default. Resource-level rules (e.g. a dentist sees only their
++ guard, an injectable `AuthorizationService`, and the guard applied to every agent tool. Deny by
+default. The resolved permission set is carried in CLS, and `RequestContext.hasPermission()` /
+`requirePermission()` is the one evaluation every module uses — so modules below `authorization`
+can re-check without depending on it (ADR-0010). Resource-level rules (e.g. a dentist sees only their
 own appointments if the tenant enables that setting) live here, not scattered in repositories.
 
 Rules:
-- Every controller route declares a permission. No undecorated routes except health and auth.
+- Every controller route declares its access: `@RequirePermission(p)`, `@Authenticated()` (any
+  signed-in user, e.g. reading your own session) or `@Public()` (health and sign-in/out only).
+  These decorators live in `platform/http/route-access.ts`; undeclared routes are denied.
 - Every mutation in an application service re-checks permission (the controller check is not the
   last line of defense; agent tools and jobs call services too).
 - Permission strings are the shared vocabulary between backend, frontend (to hide UI), and agent
@@ -190,7 +203,8 @@ Rules:
 
 ## 8. Scheduling module — specific invariants
 
-- Resource-based: an appointment reserves one or more resources (practitioner, chair, equipment).
+- Resource-based: an appointment reserves one or more resources (practitioner, room, equipment).
+  Rooms are owned by `tenancy` (ADR-0007); there is no chair concept.
   A slot is free only if every required resource is free.
 - Availability is materialized: weekly templates + exceptions are expanded into concrete
   availability windows per resource per day (rolling horizon, refreshed by a job). Slot search
@@ -200,7 +214,7 @@ Rules:
 - Double booking is prevented by a Postgres exclusion constraint on
   `(resource_id, tstzrange(starts_at, ends_at)) WHERE status NOT IN ('cancelled','no_show')`.
 - Appointment lifecycle is an explicit state machine in `domain/`:
-  `booked → confirmed → checked_in → in_chair → completed`, with `cancelled`, `no_show`,
+  `booked → confirmed → checked_in → in_room → completed`, with `cancelled`, `no_show`,
   `rescheduled` as terminal branches. Illegal transitions throw. Every transition emits an event.
 - Rescheduling creates a new appointment linked by `lineage_id`; history is never rewritten.
 - Recurring series generate concrete occurrences; a rule is stored for regeneration only.
@@ -223,8 +237,10 @@ Rules:
 ## 10. Audit
 
 - Append-only table, no updates, no deletes, RLS-scoped.
-- Fields: `id, tenant_id, actor_user_id, actor_kind (user|agent|system|job), action, resource_type,
-  resource_id, before (jsonb), after (jsonb), request_id, occurred_at`.
+- Fields: `id, tenant_id, actor_user_id, actor_kind (user|agent|system|job), actor_platform_admin,
+  action, resource_type, resource_id, before (jsonb), after (jsonb), reason, request_id,
+  occurred_at`. A platform admin acting in a tenant is `actor_kind = 'user'` with
+  `actor_platform_admin = true` (ADR-0008); `reason` holds the text of reason dialogs.
 - Every mutation through application services produces an audit entry. Agent tool calls produce
   an entry with `actor_kind = 'agent'` plus the originating user id and the tool arguments.
 
