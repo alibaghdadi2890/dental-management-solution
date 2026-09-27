@@ -42,14 +42,23 @@ describe('pageWindow', () => {
 
 describe('pageRange', () => {
   it('computes the shown range and last page', () => {
-    expect(pageRange(2, 10, 54)).toEqual({ from: 11, to: 20, total: 54, last: 6 });
+    expect(pageRange(2, 10, 54)).toEqual({ page: 2, from: 11, to: 20, total: 54, last: 6 });
   });
 
   it('clamps the last page to the total', () => {
-    expect(pageRange(6, 10, 54)).toEqual({ from: 51, to: 54, total: 54, last: 6 });
+    expect(pageRange(6, 10, 54)).toEqual({ page: 6, from: 51, to: 54, total: 54, last: 6 });
   });
 
   it('reports an empty page without dividing by nothing useful', () => {
-    expect(pageRange(1, 25, 0)).toEqual({ from: 0, to: 0, total: 0, last: 1 });
+    expect(pageRange(1, 25, 0)).toEqual({ page: 1, from: 0, to: 0, total: 0, last: 1 });
+  });
+
+  it('clamps a stale page past the last page, so from/to reflect the last page instead', () => {
+    expect(pageRange(999, 10, 54)).toEqual({ page: 6, from: 51, to: 54, total: 54, last: 6 });
+  });
+
+  it('clamps a page below 1', () => {
+    expect(pageRange(0, 10, 54)).toEqual({ page: 1, from: 1, to: 10, total: 54, last: 6 });
+    expect(pageRange(-3, 10, 54)).toEqual({ page: 1, from: 1, to: 10, total: 54, last: 6 });
   });
 });

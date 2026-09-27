@@ -141,7 +141,13 @@ describe('downloadExport', () => {
     return fetchMock;
   }
 
+  function flushMacrotask(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
   it('downloads the export for the current filters and saves it under its server filename', async () => {
+    const appendSpy = vi.spyOn(document.body, 'appendChild');
+    const removeSpy = vi.spyOn(document.body, 'removeChild');
     const fetchMock = respondCsv('id,name\n', 'attachment; filename="patients.csv"');
 
     await downloadExport({ query: { ...LIST_QUERY_DEFAULTS, view: 'archived' } });
@@ -150,8 +156,19 @@ describe('downloadExport', () => {
     expect(url).toBe('/api/v1/billing/patients/export?view=archived');
     expect(new Headers(init.headers).get('Accept')).toBe('text/csv');
     expect(createObjectURL).toHaveBeenCalled();
+    // The anchor is attached to the document for the click (Firefox ignores `download` on a
+    // detached element) and removed again right after.
+    expect(appendSpy).toHaveBeenCalled();
     expect(clickSpy).toHaveBeenCalled();
+    expect(removeSpy).toHaveBeenCalled();
+
+    // The object URL is revoked a macrotask later, not synchronously.
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    await flushMacrotask();
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+
+    appendSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 
   it('sends the acting tenant header for a platform admin', async () => {

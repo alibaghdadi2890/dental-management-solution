@@ -49,12 +49,18 @@ const pageSizeSchema = z.union([
   z.literal(PATIENT_PAGE_SIZES[2]),
 ]);
 
-/** Every field loosened per `lenient`, plus `z.coerce.string()` on the free-text fields: TanStack
- * Router's default search parser infers a JS type per value, so a numeric-looking `q`, `fullName`
- * or `phone` (a phone number *is* numeric-looking) arrives as a `number`, not a `string`. */
+/** A string or a number (TanStack Router's default search parser infers a JS type per value, so a
+ * numeric-looking `q`, `fullName` or `phone` — a phone number *is* numeric-looking — arrives as a
+ * `number`, not a `string`), turned into a string. Deliberately *not* `z.coerce.string()`: that
+ * coerces anything (`true` → `"true"`, an object → `"[object Object]"`, an array → a comma-joined
+ * string), which would silently accept nonsense a person never typed; a boolean/object/array here
+ * should fall through `lenient`'s `.catch(undefined)` like any other wrong-shaped value instead. */
+const stringLike = z.union([z.string(), z.number()]).transform(String);
+
+/** Every field loosened per `lenient`. */
 const rawSearchSchema = z.object({
   view: lenient(patientViewSchema),
-  q: lenient(z.coerce.string().trim().max(100)),
+  q: lenient(stringLike.pipe(z.string().trim().max(100))),
   dentist: lenient(z.union([idSchema, z.literal('none')])),
   age: lenient(z.enum(AGE_BANDS)),
   alerts: lenient(z.enum(['yes', 'no'])),
@@ -63,9 +69,9 @@ const rawSearchSchema = z.object({
   dir: lenient(z.enum(['asc', 'desc'])),
   page: lenient(z.coerce.number().int().min(1)),
   size: lenient(z.coerce.number().pipe(pageSizeSchema)),
-  panel: lenient(z.coerce.string()),
-  fullName: lenient(z.coerce.string()),
-  phone: lenient(z.coerce.string()),
+  panel: lenient(stringLike),
+  fullName: lenient(stringLike),
+  phone: lenient(stringLike),
 });
 
 /** `lastVisit: 'any'` means "no filter" — the same as the field being absent (design Q14's "Any

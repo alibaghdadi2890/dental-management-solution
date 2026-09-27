@@ -213,14 +213,21 @@ function filenameFrom(contentDisposition: string | null, fallback: string): stri
 
 /** Saves a blob the same way a plain `<a download>` click would — the one place this SPA triggers
  * a browser file save, kept tiny so a test can stub `URL.createObjectURL`/`revokeObjectURL` and
- * the anchor's `click()` without touching the request logic above it. */
+ * the anchor's `click()` without touching the request logic above it. The anchor is briefly
+ * attached to the document (Firefox ignores `download` on a detached element) and the object URL
+ * is revoked a macrotask later, not synchronously (Firefox can also drop the download if the URL
+ * is revoked before it's had a turn to actually start reading it). */
 function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(link);
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 0);
 }
 
 /**

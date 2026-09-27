@@ -141,20 +141,21 @@ const DATE_OF_BIRTH_FLOOR = '1900-01-01';
 type PhoneCountry = Parameters<typeof normalizePhone>[1];
 
 const OPENING_BALANCE_NOTE_MAX = 200;
+const GUARDIAN_NAME_MAX = 120;
 
 /** Only the `FormField`s that are also plain string properties of `PatientFormValues` with a
- * simple max-length rule — `alerts`/`openingBalanceAmount`/`openingBalanceAsOf` have their own
- * dedicated checks in `validate` and aren't length-limited this way. Keyed to this narrower type
- * (not `FormField`) so `values[field]` below can't be asked for a field that doesn't exist. */
-type TextLimitField =
-  'address' | 'insurance' | 'emergencyContact' | 'notes' | 'guardianName' | 'openingBalanceNote';
+ * simple, always-applicable max-length rule — `guardianName` has the same 120-char limit but is
+ * checked separately (only while `showGuardian` is true; the hidden field is sent as `null`
+ * regardless of what stale text it holds); `alerts`/`openingBalanceAmount`/`openingBalanceAsOf`
+ * have their own dedicated checks in `validate`. Keyed to this narrower type (not `FormField`) so
+ * `values[field]` below can't be asked for a field that doesn't exist. */
+type TextLimitField = 'address' | 'insurance' | 'emergencyContact' | 'notes' | 'openingBalanceNote';
 
 const TEXT_FIELD_MAX: Record<TextLimitField, number> = {
   address: 240,
   insurance: 120,
   emergencyContact: 160,
   notes: 2000,
-  guardianName: 120,
   openingBalanceNote: OPENING_BALANCE_NOTE_MAX,
 };
 
@@ -231,16 +232,22 @@ export function validate(
     errors.email = 'invalidEmail';
   }
 
-  if (
-    showGuardian(values, today) &&
-    values.guardianPhone.trim() !== '' &&
-    !normalizePhone(values.guardianPhone, country as PhoneCountry)
-  ) {
-    errors.guardianPhone = 'invalidPhone';
+  // A hidden guardian is sent as `null` regardless of what its fields hold (`toCreatePayload`,
+  // `toPatchPayload`'s `effectiveGuardian`), so there is nothing to validate while it's hidden.
+  if (showGuardian(values, today)) {
+    if (values.guardianName.trim().length > GUARDIAN_NAME_MAX) {
+      errors.guardianName = 'tooLong';
+    }
+    if (
+      values.guardianPhone.trim() !== '' &&
+      !normalizePhone(values.guardianPhone, country as PhoneCountry)
+    ) {
+      errors.guardianPhone = 'invalidPhone';
+    }
   }
 
   for (const [field, max] of Object.entries(TEXT_FIELD_MAX) as [TextLimitField, number][]) {
-    if (!errors[field] && values[field].length > max) {
+    if (!errors[field] && values[field].trim().length > max) {
       errors[field] = 'tooLong';
     }
   }
@@ -272,10 +279,10 @@ export function validate(
   return errors;
 }
 
-/** True when any field differs from the form's starting values (the "Unsaved" badge). String
- * fields are compared trimmed, so re-typing trailing/leading whitespace alone never counts as a
- * change — the same tolerance `toPatchPayload`'s normalised diffing applies when deciding what to
- * actually send. */
+/** True when any field differs from the form's starting values, trimmed (the create panel's
+ * "Unsaved" badge — it has no patch to compare against, and cares about the Account fields
+ * (`openingBalance…`) a patch never touches, so it uses this simpler field-by-field check rather
+ * than `isEditDirty`). */
 export function isDirty(initial: PatientFormValues, current: PatientFormValues): boolean {
   return (Object.keys(initial) as (keyof PatientFormValues)[]).some((key) => {
     const a = initial[key];
@@ -421,6 +428,19 @@ export function toPatchPayload(
 
   if (Object.keys(patch).length === 0) return null;
   return patientPatchSchema.parse(patch);
+}
+
+/** Edit-mode "Unsaved changes" check (design Q16): whether saving would actually send a patch,
+ * using `toPatchPayload`'s own normalised comparison (phone by parsed E.164, email case/
+ * whitespace-insensitively, everything else trimmed) — so re-typing the same phone number in a
+ * different format, or a guardian field that's simply hidden again, never shows "Unsaved". */
+export function isEditDirty(
+  initial: PatientFormValues,
+  current: PatientFormValues,
+  today: string,
+  country: string,
+): boolean {
+  return toPatchPayload(initial, current, today, country) !== null;
 }
 
 /** `POST /billing/opening-balances`'s `openingBalance` leg; only call once `wantsOpeningBalance`

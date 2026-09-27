@@ -4,6 +4,7 @@ import {
   emptyForm,
   fromPatient,
   isDirty,
+  isEditDirty,
   parseAlerts,
   sanitizeAmount,
   showGuardian,
@@ -124,6 +125,31 @@ describe('validate', () => {
       CTX,
     );
     expect(errors.notes).toBe('tooLong');
+  });
+
+  it('checks the length on the trimmed value, not the raw one', () => {
+    const errors = validate(
+      { ...base, fullName: 'Jane', phone: '03123456', notes: `  ${'x'.repeat(2000)}  ` },
+      CTX,
+    );
+    expect(errors.notes).toBeUndefined();
+  });
+
+  it('skips guardian field checks entirely while the guardian is hidden', () => {
+    // No date of birth → showGuardian is false → the fields are hidden and sent as null
+    // regardless of what stale, otherwise-invalid text they hold.
+    const errors = validate(
+      {
+        ...base,
+        fullName: 'Jane',
+        phone: '03123456',
+        guardianName: 'x'.repeat(121),
+        guardianPhone: 'not a phone',
+      },
+      CTX,
+    );
+    expect(errors.guardianName).toBeUndefined();
+    expect(errors.guardianPhone).toBeUndefined();
   });
 
   it('flags a single alert over 60 characters', () => {
@@ -255,6 +281,26 @@ describe('isDirty', () => {
   it('ignores leading/trailing whitespace only', () => {
     const initial = emptyForm({ fullName: 'Jane' });
     expect(isDirty(initial, { ...initial, fullName: '  Jane  ' })).toBe(false);
+  });
+});
+
+describe('isEditDirty', () => {
+  const initial = fromPatient(PATIENT, 'LB');
+
+  it('is false for identical values', () => {
+    expect(isEditDirty(initial, { ...initial }, TODAY, 'LB')).toBe(false);
+  });
+
+  it('is false when the phone is re-typed in a different but equivalent format', () => {
+    // initial.phone is '03 123 456' (fromPatient's national display); this must not read as
+    // "Unsaved" just because the field's raw text differs while the number is the same.
+    const current = { ...initial, phone: '03123456' };
+    expect(isEditDirty(initial, current, TODAY, 'LB')).toBe(false);
+  });
+
+  it('is true once a field actually changes', () => {
+    const current = { ...initial, address: '2 Second St' };
+    expect(isEditDirty(initial, current, TODAY, 'LB')).toBe(true);
   });
 });
 

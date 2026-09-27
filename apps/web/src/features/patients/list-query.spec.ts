@@ -136,6 +136,15 @@ describe('parsePatientsSearch', () => {
     expect(parsePatientsSearch({ panel: 12345 }).panel).toBe('12345');
   });
 
+  it('drops q/fullName/phone/panel entirely for a type that is neither string nor number', () => {
+    // Unlike `z.coerce.string()`, a boolean/object/array isn't silently stringified into
+    // "true"/"[object Object]"/a joined list — it's treated as absent, like any other bad value.
+    expect(parsePatientsSearch({ phone: true }).phone).toBeUndefined();
+    expect(parsePatientsSearch({ q: { nested: 'x' } }).q).toBeUndefined();
+    expect(parsePatientsSearch({ fullName: ['a', 'b'] }).fullName).toBeUndefined();
+    expect(parsePatientsSearch({ panel: null }).panel).toBeUndefined();
+  });
+
   it('still parses a fully valid search normally', () => {
     expect(parsePatientsSearch({ view: 'archived', q: 'jane', page: 2, size: 50 })).toMatchObject({
       view: 'archived',

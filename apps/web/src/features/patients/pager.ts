@@ -42,6 +42,10 @@ export function pageWindow(current: number, last: number): PageToken[] {
 }
 
 export interface PageRange {
+  /** `page`, clamped to `[1, last]` — a stale URL page (past the end of a query that just lost a
+   * page's worth of rows, or a hand-edited `page=0`) can't produce `from > to` or a negative
+   * range; the caller should treat this as the page actually being shown, not just its numbers. */
+  page: number;
   /** 1-based index of the first item on this page; 0 when `total` is 0. */
   from: number;
   /** 1-based index of the last item on this page; 0 when `total` is 0. */
@@ -53,11 +57,14 @@ export interface PageRange {
 
 /** The numbers behind "Showing {from}–{to} of {total}". */
 export function pageRange(page: number, size: number, total: number): PageRange {
-  if (total === 0) return { from: 0, to: 0, total: 0, last: 1 };
+  if (total === 0) return { page: 1, from: 0, to: 0, total: 0, last: 1 };
+  const last = Math.ceil(total / size);
+  const clamped = Math.min(Math.max(page, 1), last);
   return {
-    from: (page - 1) * size + 1,
-    to: Math.min(page * size, total),
+    page: clamped,
+    from: (clamped - 1) * size + 1,
+    to: Math.min(clamped * size, total),
     total,
-    last: Math.ceil(total / size),
+    last,
   };
 }
