@@ -179,6 +179,22 @@ describe('patients: repositories', () => {
       expect(rows.map((r) => r.id)).toContain(jose);
     });
 
+    it('matches a patient number against display numbers only, never phone digits', async () => {
+      const phoneTwin = (
+        await create(tenant, {
+          displayNumber: 'P-000070',
+          fullName: 'Number Lookalike',
+          phone: PHONE('+96170000002', '70000002'),
+        })
+      ).id;
+      for (const number of ['P-000002', 'p-000002', 'P000002']) {
+        const { rows } = await q(number);
+        expect(rows.map((r) => r.fullName)).toEqual(['Amira Khalil']);
+      }
+      // Bare digits are still a phone query.
+      expect((await q('000002')).rows.map((r) => r.id)).toContain(phoneTwin);
+    });
+
     it('does not match phone digits when the query is a single digit', async () => {
       const { rows } = await q('7');
       expect(rows.map((r) => r.id)).not.toContain(jose);

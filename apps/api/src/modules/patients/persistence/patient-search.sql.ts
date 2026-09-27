@@ -69,6 +69,12 @@ export function escapeLike(value: string): string {
 const MIN_PHONE_QUERY_DIGITS = 2;
 
 /**
+ * A query typed as a patient number (`P-000123`, `p000123`): it is looked up among display
+ * numbers only. Its digits would otherwise also match any phone containing them.
+ */
+const PATIENT_NUMBER_QUERY = /^p-?(\d+)$/i;
+
+/**
  * The whole id list bound as one `uuid[]` parameter (`sql.param` lets node-postgres serialise it
  * as a native array): one placeholder however many ids, unlike `inArray`'s one per id.
  */
@@ -91,19 +97,24 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
   }
 
   if (filters.q) {
-    const escapedQ = escapeLike(filters.q);
-    const qNameKey = escapeLike(nameKey(filters.q));
-    const ors: SQL[] = [
-      like(patients.nameKey, `%${qNameKey}%`),
-      ilike(patients.displayNumber, `%${escapedQ}%`),
-      ilike(patients.email, `%${escapedQ}%`),
-    ];
-    const qDigits = phoneDigits(filters.q);
-    if (qDigits.length >= MIN_PHONE_QUERY_DIGITS) {
-      ors.push(like(patients.phoneSearch, `%${escapeLike(qDigits)}%`));
+    const patientNumber = PATIENT_NUMBER_QUERY.exec(filters.q);
+    if (patientNumber) {
+      conditions.push(ilike(patients.displayNumber, `%P-${patientNumber[1] ?? ''}%`));
+    } else {
+      const escapedQ = escapeLike(filters.q);
+      const qNameKey = escapeLike(nameKey(filters.q));
+      const ors: SQL[] = [
+        like(patients.nameKey, `%${qNameKey}%`),
+        ilike(patients.displayNumber, `%${escapedQ}%`),
+        ilike(patients.email, `%${escapedQ}%`),
+      ];
+      const qDigits = phoneDigits(filters.q);
+      if (qDigits.length >= MIN_PHONE_QUERY_DIGITS) {
+        ors.push(like(patients.phoneSearch, `%${escapeLike(qDigits)}%`));
+      }
+      const qCondition = or(...ors);
+      if (qCondition) conditions.push(qCondition);
     }
-    const qCondition = or(...ors);
-    if (qCondition) conditions.push(qCondition);
   }
 
   if (filters.dentist === 'none') {

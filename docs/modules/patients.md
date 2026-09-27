@@ -24,7 +24,9 @@ reserved for billing).
 - **Dates:** the date of birth must not be after the tenant's today, computed from the injected
   clock in the tenant time zone (`localDate` in `platform/kernel`). Age bands use the same today.
 - **Search `q`:** a diacritics-insensitive substring of `name_key`, the display number, the
-  e-mail, and, when the query has at least 2 digits, the phone digits.
+  e-mail, and, when the query has at least 2 digits, the phone digits. A query shaped like a
+  patient number (`P-000123`, `p000123`: `/^p-?\d+$/i`) matches display numbers only, as
+  `P-<digits>`; its digits never search phones. Bare digits (`000123`) are still a phone query.
 - **Archive** sets `deleted_at` (design Q11). The optional reason goes to the audit entry only.
   A merged-away record is archived and has `merged_into_id`; it can never be restored.
 - **Merge** (design Q8): each pickable field comes from the kept record unless the choice is

@@ -438,9 +438,10 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(ids(await search(clinic.owner, 'q=P-00000'))).toEqual(
         expect.arrayContaining([jose.id, amira.id, omar.id]),
       );
-      // Substrings: P-000001 would also match P-000010 to P-000017, and the digits of P-000002
-      // are in a phone number. P-000013 is Pagertest 08, and no phone contains 000013.
-      const byNumber = await search(clinic.owner, 'q=P-000013');
+      // A patient number matches display numbers only: Agetest Tomorrow's phone 70000002
+      // contains the digits of P-000002. P-000001 would also match P-000010 to P-000017.
+      expect(ids(await search(clinic.owner, 'q=P-000002'))).toEqual([amira.id]);
+      const byNumber = await search(clinic.owner, 'q=p000013');
       expect(byNumber.items.map((item) => item.fullName)).toEqual(['Pagertest 08']);
     });
 
@@ -671,7 +672,9 @@ describe('patients: records, search, duplicates, archive and merge', () => {
           async () => {
             const waiting = await database.ownerPool.query<{ n: number }>(
               `select count(*)::int as n from pg_stat_activity
-               where wait_event_type = 'Lock' and query ilike '%"patients"%'`,
+               where datname = current_database() and pid <> pg_backend_pid()
+                 and usename = 'dcm_app' and wait_event_type = 'Lock'
+                 and query ilike '%"patients"%'`,
             );
             expect(waiting.rows[0]?.n).toBeGreaterThan(0);
           },

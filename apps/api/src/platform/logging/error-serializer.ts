@@ -12,7 +12,6 @@ interface SafeError {
   stack?: string;
   query?: string;
   cause?: SafeError | Record<string, string>;
-  [field: string]: unknown;
 }
 
 function isQueryError(value: unknown): value is DrizzleQueryError {
@@ -28,12 +27,19 @@ function chainHasQueryError(error: Error): boolean {
   return false;
 }
 
-/** The stack frames only: the first lines of `stack` repeat the message, params included. */
-function framesOnly(stack: string | undefined): string | undefined {
-  return stack
-    ?.split('\n')
-    .filter((line) => line.trimStart().startsWith('at '))
-    .join('\n');
+/**
+ * The stack frames only. V8 starts `stack` with `String(error)` (`Name: message`), and the
+ * message of a failed query holds its params, which may themselves contain newlines and text
+ * shaped like a frame; so the header is cut by its exact length, never by guessing which lines
+ * look like frames. A stack that does not start with the header (a message changed after the
+ * error was created) is dropped rather than risked.
+ */
+function framesOnly(error: Error): string | undefined {
+  const header = String(error);
+  const stack = error.stack;
+  if (stack === undefined || !stack.startsWith(header)) return undefined;
+  const frames = stack.slice(header.length).replace(/^\n/, '');
+  return frames === '' ? undefined : frames;
 }
 
 /**
@@ -51,21 +57,20 @@ function pgCause(cause: unknown): Record<string, string> | undefined {
 }
 
 function safeSerialize(error: Error, depth: number): SafeError {
+  const frames = framesOnly(error);
   if (isQueryError(error)) {
-    const stack = framesOnly(error.stack);
     const cause = pgCause(error.cause);
     return {
       type: 'DrizzleQueryError',
       message: 'Failed query',
       // The SQL text has placeholders ($1, $2…), never values; the params are dropped.
       query: error.query,
-      ...(stack === undefined ? {} : { stack }),
+      ...(frames === undefined ? {} : { stack: frames }),
       ...(cause === undefined ? {} : { cause }),
     };
   }
   const serialized: SafeError = { type: error.name, message: error.message };
-  const stack = framesOnly(error.stack);
-  if (stack !== undefined) serialized.stack = `${error.name}: ${error.message}\n${stack}`;
+  if (frames !== undefined) serialized.stack = `${String(error)}\n${frames}`;
   if (error.cause instanceof Error && depth < MAX_CAUSE_DEPTH) {
     serialized.cause = safeSerialize(error.cause, depth + 1);
   }
@@ -73,13 +78,27 @@ function safeSerialize(error: Error, depth: number): SafeError {
 }
 
 /**
+ * The error behind `value`: the value itself, or — since pino-http wraps custom serializers with
+ * pino's standard one (`wrapSerializers`) — the original kept on the standard result's `.raw`.
+ */
+function originalError(value: unknown): Error | undefined {
+  if (value instanceof Error) return value;
+  if (typeof value === 'object' && value !== null && 'raw' in value) {
+    const raw: unknown = value.raw;
+    if (raw instanceof Error) return raw;
+  }
+  return undefined;
+}
+
+/**
  * pino's `err` serializer. Errors that involve a failed query (`DrizzleQueryError` anywhere in the
  * cause chain) lose their bound params, the "Failed query: … params: …" message and the driver's
- * value-bearing fields: params are patient data (names, phones). Everything else goes through
- * pino's standard serializer. The request id, tenant and user come from the log mixin.
+ * value-bearing fields: params are patient data (names, phones). Everything else keeps pino's
+ * standard serialization. The request id, tenant and user come from the log mixin.
  */
 export function serializeError(value: unknown): unknown {
-  if (!(value instanceof Error)) return value;
-  if (!chainHasQueryError(value)) return stdSerializers.err(value);
-  return safeSerialize(value, 0);
+  const error = originalError(value);
+  if (error === undefined) return value;
+  if (chainHasQueryError(error)) return safeSerialize(error, 0);
+  return value instanceof Error ? stdSerializers.err(value) : value;
 }
