@@ -1,13 +1,14 @@
 import type { PatientSex } from '@dcm/contracts';
 import { phoneDigits } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { and, eq, getTableColumns, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { newId } from '../../../platform/kernel/id';
 import { nameKey } from '../domain/name-key';
 import { PatientNotFoundError } from '../domain/patient-errors';
 import type { DomainPatient } from '../domain/patient';
 import {
+  idAmong,
   orderByFor,
   whereFor,
   type PatientSearchFilters,
@@ -24,6 +25,13 @@ export type {
 } from './patient-search.sql';
 
 type PatientRow = typeof patients.$inferSelect;
+
+/**
+ * `updated_at` on every write comes from the database clock, like the insert's `defaultNow()`,
+ * not from the API host's clock (`timestamps()`'s `$onUpdate`): `sort=recent` compares rows
+ * stamped by both, and the two clocks can drift apart.
+ */
+const DB_NOW = sql`now()`;
 
 function toDomain(row: PatientRow): DomainPatient {
   return {
@@ -176,7 +184,11 @@ export class PatientsRepository {
     if (patch.externalId !== undefined) set.externalId = patch.externalId;
 
     return this.db.run(async (tx) => {
-      const [row] = await tx.update(patients).set(set).where(eq(patients.id, id)).returning();
+      const [row] = await tx
+        .update(patients)
+        .set({ ...set, updatedAt: DB_NOW })
+        .where(eq(patients.id, id))
+        .returning();
       return row ? toDomain(row) : undefined;
     });
   }
@@ -189,12 +201,24 @@ export class PatientsRepository {
   async findByIds(ids: readonly string[]): Promise<DomainPatient[]> {
     if (ids.length === 0) return [];
     const rows = await this.db.run((tx) =>
-      tx
-        .select()
-        .from(patients)
-        .where(inArray(patients.id, [...ids])),
+      tx.select().from(patients).where(idAmong(patients.id, ids)),
     );
     return rows.map(toDomain);
+  }
+
+  /**
+   * Reads one row `FOR UPDATE`, so a concurrent merge or edit of the same patient waits for this
+   * transaction. Like `lockPair`, it must run inside an already-open transaction (throws
+   * otherwise). Undefined when the id doesn't resolve under RLS.
+   */
+  async findForUpdate(id: string): Promise<DomainPatient | undefined> {
+    if (!this.db.currentTransaction()) {
+      throw new Error('findForUpdate must run inside a transaction');
+    }
+    const [row] = await this.db.run((tx) =>
+      tx.select().from(patients).where(eq(patients.id, id)).for('update'),
+    );
+    return row ? toDomain(row) : undefined;
   }
 
   /**
@@ -215,7 +239,7 @@ export class PatientsRepository {
       const rows = await tx
         .select()
         .from(patients)
-        .where(inArray(patients.id, [first, second]))
+        .where(idAmong(patients.id, [first, second]))
         .orderBy(patients.id)
         .for('update');
       const byId = new Map(rows.map((row) => [row.id, toDomain(row)]));
@@ -239,13 +263,17 @@ export class PatientsRepository {
     const condition =
       at === null
         ? and(
-            inArray(patients.id, [...ids]),
+            idAmong(patients.id, ids),
             isNotNull(patients.deletedAt),
             isNull(patients.mergedIntoId),
           )
-        : and(inArray(patients.id, [...ids]), isNull(patients.deletedAt));
+        : and(idAmong(patients.id, ids), isNull(patients.deletedAt));
     const rows = await this.db.run((tx) =>
-      tx.update(patients).set({ deletedAt: at }).where(condition).returning({ id: patients.id }),
+      tx
+        .update(patients)
+        .set({ deletedAt: at, updatedAt: DB_NOW })
+        .where(condition)
+        .returning({ id: patients.id }),
     );
     return rows.map((row) => row.id);
   }
@@ -255,7 +283,7 @@ export class PatientsRepository {
     const [row] = await this.db.run((tx) =>
       tx
         .update(patients)
-        .set({ mergedIntoId: keepId, deletedAt: at })
+        .set({ mergedIntoId: keepId, deletedAt: at, updatedAt: DB_NOW })
         .where(eq(patients.id, dropId))
         .returning(),
     );
@@ -340,6 +368,20 @@ export class PatientsRepository {
         .where(and(isNull(patients.deletedAt), isNotNull(patients.dateOfBirth)));
       return rows.map((row) => toDomain(row));
     });
+  }
+
+  /**
+   * The distinct dentists assigned to any patient, archived ones included — `sort=dentist` ranks
+   * by these, so a patient whose dentist has since been deactivated still sorts under that name.
+   */
+  async assignedDentistIds(): Promise<string[]> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .selectDistinct({ id: patients.primaryDentistUserId })
+        .from(patients)
+        .where(isNotNull(patients.primaryDentistUserId)),
+    );
+    return rows.flatMap((row) => (row.id === null ? [] : [row.id]));
   }
 
   /** Active rows sharing a name (matched via `nameKey`) and date of birth — the duplicate check. */

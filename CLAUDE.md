@@ -109,7 +109,7 @@ modules/<name>/
 | `roles`         | role definitions per tenant, system roles, role → permission assignments, user → role assignments (keyed by auth user id) | tenancy |
 | `authorization` | resolves the caller's permissions into CLS, `can(actor, permission, resource)`, global session + permission guards, agent tool guard | auth, roles |
 | `audit`         | append-only audit log (who/what/when/tenant/before/after), query API | — (consumes events from all) |
-| `patients`      | patient records, contacts, medical alerts/allergies, odontogram, notes | tenancy |
+| `patients`      | `patients` (records: demographics, contacts, insurance text, medical alerts/allergies, primary dentist, guardian, notes; archive = soft delete; merge) and `patient_counters` (the per-tenant display-number sequence); odontogram later | tenancy (country, time zone), users (practitioners, ADR-0016) |
 | `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
 | `clinical`      | visits (clinical encounters: patient, practitioner, date, services performed, notes, status), service catalog (`procedures`) and diagnosis catalog, treatment plans, planned procedures, clinical charting linked to visits | patients, users, tenancy (tenant currency, ADR-0015; reacts to `TenantProvisioned`, ADR-0014) |
 | `billing`       | invoices, payments, price lists                                     | patients, clinical    |
@@ -276,7 +276,8 @@ Even in phase 1, write application services so they can be exposed as tools late
 - Errors: RFC 7807 problem details with a stable `code`. Domain errors extend `DomainError` and are
   mapped to HTTP in one global filter. Never `throw new HttpException` from a service.
 - Pagination: cursor-based for lists that grow (appointments, audit); offset only for small
-  reference lists.
+  reference lists and for the patients list (ADR-0018: its pager needs `total` and page numbers,
+  and patients per tenant are bounded — thousands, not millions).
 - Idempotency: mutations that clients may retry (booking, payment) accept an `Idempotency-Key`.
 
 ## 13. Frontend conventions

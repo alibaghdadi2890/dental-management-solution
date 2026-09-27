@@ -1,10 +1,10 @@
 import { phoneDigits } from '@dcm/contracts';
 import {
   and,
+  type AnyColumn,
   eq,
   gt,
   ilike,
-  inArray,
   isNotNull,
   isNull,
   like,
@@ -68,6 +68,19 @@ export function escapeLike(value: string): string {
 
 const MIN_PHONE_QUERY_DIGITS = 2;
 
+/**
+ * The whole id list bound as one `uuid[]` parameter (`sql.param` lets node-postgres serialise it
+ * as a native array): one placeholder however many ids, unlike `inArray`'s one per id.
+ */
+export function uuidArray(ids: readonly string[]): SQL {
+  return sql`${sql.param([...ids])}::uuid[]`;
+}
+
+/** `column = any(ids)`, with `ids` bound as a single array parameter (`uuidArray`). */
+export function idAmong(column: AnyColumn, ids: readonly string[]): SQL {
+  return sql`${column} = any(${uuidArray(ids)})`;
+}
+
 export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[] | undefined): SQL {
   const conditions: SQL[] = [];
 
@@ -108,7 +121,7 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
     conditions.push(sql`cardinality(${patients.medicalAlerts}) = 0`);
   }
 
-  if (idsIn) conditions.push(inArray(patients.id, [...idsIn]));
+  if (idsIn) conditions.push(idAmong(patients.id, idsIn));
 
   return and(...conditions) ?? sql`true`;
 }
@@ -145,11 +158,8 @@ export function orderByFor(options: PatientSearchOptions): SQL[] {
         options.rank.column === 'primaryDentistUserId'
           ? patients.primaryDentistUserId
           : patients.id;
-      // `sql.param` binds the whole array as a single parameter, letting node-postgres serialise
-      // it as a native Postgres array; a bare `${ids}` interpolation is NOT the same thing — see
-      // the (deleted) `uuidArrayLiteral` this replaced, and the code-review note in the commit.
       return [
-        sql`coalesce(array_position(${sql.param(options.rank.ids)}::uuid[], ${column}), ${options.rank.restAt})`,
+        sql`coalesce(array_position(${uuidArray(options.rank.ids)}, ${column}), ${options.rank.restAt})`,
         ...tieBreak,
       ];
     }

@@ -2,6 +2,8 @@ import type {
   AuditPage,
   Branch,
   DiagnosisItem,
+  Patient,
+  PatientPage,
   Role,
   Room,
   ServiceItem,
@@ -24,11 +26,13 @@ interface Clinic {
   branch: Branch;
   room: Room;
   staff: StaffUser;
+  patient: Patient;
 }
 
 /**
  * CLAUDE.md §14: tenant A's users cannot read or affect tenant B's rows through any public
- * service — branches, rooms, users, roles, audit, catalogs — and cannot pick B with `X-Tenant-Id`.
+ * service — branches, rooms, users, roles, audit, catalogs, patients — and cannot pick B with
+ * `X-Tenant-Id`.
  */
 describe('tenant isolation through the public services', () => {
   let database: TestDatabase;
@@ -71,7 +75,11 @@ describe('tenant isolation through the public services', () => {
         temporaryPassword: TEMPORARY,
       })
     ).body as StaffUser;
-    return { tenant, ownerEmail, branch, room, staff };
+    const patient = (
+      await inTenant.post('/patients', { fullName: `${name} Patient`, phone: '03 123 456' })
+    ).body as Patient;
+    if (patient.displayNumber !== 'P-000001') throw new Error('patient create failed');
+    return { tenant, ownerEmail, branch, room, staff, patient };
   };
 
   beforeAll(async () => {
@@ -128,6 +136,26 @@ describe('tenant isolation through the public services', () => {
       expect(services).toHaveLength(12);
       expect(diagnoses).toHaveLength(14);
       expect([...services, ...diagnoses].filter((item) => foreignIds.has(item.id))).toEqual([]);
+    });
+
+    it('patients: search, counts and duplicates', async () => {
+      const all = (await ownerA.get('/api/v1/patients?size=50')).body as PatientPage;
+      expect(all.items.map((item) => item.id)).toEqual([a.patient.id]);
+      expect(all.total).toBe(1);
+      // B's patient has the same number and phone as A's: neither matches across tenants.
+      for (const q of ['P-000001', '03123456', 'Bravo']) {
+        const found = (await ownerA.get(`/api/v1/patients?q=${q}`)).body as PatientPage;
+        expect(found.items.map((item) => item.id)).not.toContain(b.patient.id);
+      }
+      expect((await ownerA.get('/api/v1/patients/counts')).body).toEqual({
+        active: 1,
+        notSeen: 1,
+        archived: 0,
+      });
+      const twins = await ownerA.get(
+        `/api/v1/patients/duplicates/check?fullName=${encodeURIComponent(b.patient.fullName)}&dateOfBirth=1990-01-01`,
+      );
+      expect(twins.body).toEqual([]);
     });
 
     it('audit entries', async () => {
@@ -225,6 +253,52 @@ describe('tenant isolation through the public services', () => {
       ]);
     });
 
+    it('patients: not found for read and every write, and left unchanged', async () => {
+      const id = b.patient.id;
+      const attempts = [
+        ownerA.get(`/api/v1/patients/${id}`),
+        ownerA.patch(`/api/v1/patients/${id}`).send({ fullName: 'Hijacked' }),
+        ownerA.post('/api/v1/patients/archive').send({ ids: [id] }),
+        ownerA.post('/api/v1/patients/archive').send({ ids: [a.patient.id, id] }),
+        ownerA.post('/api/v1/patients/restore').send({ ids: [id] }),
+        ownerA
+          .post('/api/v1/patients/merge')
+          .send({ keepId: a.patient.id, dropId: id, reason: 'Hijack' }),
+        ownerA
+          .post('/api/v1/patients/merge')
+          .send({ keepId: id, dropId: a.patient.id, reason: 'Hijack' }),
+      ];
+      for (const response of await Promise.all(attempts)) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'patient.not_found' });
+      }
+      const untouched = await database.ownerPool.query(
+        'select id, full_name, deleted_at, merged_into_id from patients where id = any($1) order by full_name',
+        [[a.patient.id, id]],
+      );
+      expect(untouched.rows).toEqual([
+        { id: a.patient.id, full_name: 'Alpha Patient', deleted_at: null, merged_into_id: null },
+        { id, full_name: 'Bravo Patient', deleted_at: null, merged_into_id: null },
+      ]);
+    });
+
+    it("A's patient creates never advance B's counter", async () => {
+      const counter = async (tenantId: string) =>
+        (
+          await database.ownerPool.query<{ last_value: number }>(
+            'select last_value from patient_counters where tenant_id = $1',
+            [tenantId],
+          )
+        ).rows[0]?.last_value;
+      expect(await counter(b.tenant.id)).toBe(1);
+      const created = await ownerA
+        .post('/api/v1/patients')
+        .send({ fullName: 'Alpha Second', phone: '71 000 000' });
+      expect(created.body).toMatchObject({ displayNumber: 'P-000002' });
+      expect(await counter(a.tenant.id)).toBe(2);
+      expect(await counter(b.tenant.id)).toBe(1);
+    });
+
     it("B's branches cannot be assigned or switched to", async () => {
       const assign = await ownerA.post('/api/v1/users').send({
         displayName: 'Cross Tenant',
@@ -282,6 +356,8 @@ describe('tenant isolation through the public services', () => {
       'audit_log',
       'procedures',
       'diagnoses',
+      'patients',
+      'patient_counters',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

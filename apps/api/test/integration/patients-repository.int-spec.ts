@@ -599,6 +599,24 @@ describe('patients: repositories', () => {
       expect(merged?.mergedIntoId).toBe(kept.id);
       expect(merged?.deletedAt).toBeInstanceOf(Date);
     });
+
+    it('refuses to merge a record into itself (check constraint)', async () => {
+      const patient = await create(tenant);
+      await expect(
+        inTenant(tenant, () => repo.markMerged(patient.id, patient.id, new Date())),
+      ).rejects.toMatchObject({ cause: { constraint: 'patients_not_merged_into_self' } });
+      const unchanged = await inTenant(tenant, () => repo.findById(patient.id));
+      expect(unchanged).toMatchObject({ mergedIntoId: null, deletedAt: null });
+    });
+
+    it('findForUpdate needs a transaction and reads the row inside one', async () => {
+      const patient = await create(tenant);
+      await expect(inTenant(tenant, () => repo.findForUpdate(patient.id))).rejects.toThrow(
+        'findForUpdate must run inside a transaction',
+      );
+      expect((await inTenantTx(tenant, () => repo.findForUpdate(patient.id)))?.id).toBe(patient.id);
+      expect(await inTenantTx(tenant, () => repo.findForUpdate(newId()))).toBeUndefined();
+    });
   });
 
   describe('tenant isolation (RLS)', () => {
