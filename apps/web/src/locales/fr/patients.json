@@ -125,5 +125,171 @@
   "error": {
     "title": "Impossible de charger les patients",
     "body": "La liste des patients ne s’est pas chargée. Votre recherche et vos filtres sont conservés."
+  },
+  "panel": {
+    "loading": "Chargement du patient…",
+    "notFoundTitle": "Patient introuvable",
+    "notFoundBody": "Ce patient n’existe pas dans ce cabinet, ou le lien n’est plus à jour.",
+    "failedTitle": "Impossible de charger le patient",
+    "failedBody": "Le patient n’a pas pu être chargé. Réessayez dans un instant."
+  },
+  "quickView": {
+    "eyebrow": "Patient",
+    "age": "{{age}} ans",
+    "ageUnknown": "Âge non renseigné",
+    "sex": {
+      "female": "Femme",
+      "male": "Homme",
+      "other": "Autre"
+    },
+    "archived": "Archivé",
+    "merged": "Ce dossier a été fusionné avec un autre.",
+    "openMerged": "Ouvrir le dossier conservé",
+    "alerts": "Alertes médicales",
+    "fields": {
+      "dateOfBirth": "Date de naissance",
+      "phone": "Téléphone",
+      "email": "E-mail",
+      "insurance": "Assurance",
+      "dentist": "Dentiste référent"
+    },
+    "unknownDentist": "Dentiste inconnu",
+    "edit": "Modifier les informations"
+  },
+  "activity": {
+    "title": "Activité",
+    "loading": "Chargement de l’activité",
+    "failed": "Impossible de charger l’activité.",
+    "empty": "Aucune activité enregistrée pour l’instant.",
+    "actions": {
+      "patient": {
+        "create": "Patient enregistré",
+        "update": "Informations modifiées",
+        "archive": "Patient archivé",
+        "restore": "Patient restauré",
+        "merge": "Dossiers fusionnés"
+      },
+      "ledger_entry": {
+        "create": "Solde d’ouverture enregistré",
+        "repoint": "Solde transféré depuis un dossier fusionné"
+      },
+      "other": "Dossier modifié"
+    },
+    "meta": "{{at}} · {{who}}",
+    "reason": "Motif : {{reason}}",
+    "system": "Système",
+    "platformAdmin": "Administrateur de la plateforme",
+    "assistant": "Assistant",
+    "viaAssistant": "{{name}} via l’assistant",
+    "unknownUser": "Ancien membre du personnel"
+  },
+  "form": {
+    "newEyebrow": "Nouveau patient",
+    "newTitle": "Enregistrer un patient",
+    "editEyebrow": "Modifier le patient",
+    "fields": {
+      "fullName": "Nom complet",
+      "phone": "Téléphone",
+      "dateOfBirth": "Date de naissance",
+      "sex": "Sexe",
+      "email": "E-mail",
+      "address": "Adresse",
+      "insurance": "Assurance",
+      "emergencyContact": "Contact d’urgence",
+      "alerts": "Alertes médicales",
+      "dentist": "Dentiste référent",
+      "notes": "Notes",
+      "guardianName": "Nom du tuteur",
+      "guardianPhone": "Téléphone du tuteur"
+    },
+    "alertsHint": "Séparées par des virgules",
+    "guardianHint": "Moins de 18 ans",
+    "placeholders": {
+      "fullName": "ex. Rana Haddad",
+      "email": "nom@email.com",
+      "insurance": "Assureur — formule",
+      "alerts": "ex. Allergie à la pénicilline",
+      "emergencyContact": "Nom et téléphone"
+    },
+    "sexOptions": {
+      "unknown": "—",
+      "female": "Femme",
+      "male": "Homme",
+      "other": "Autre"
+    },
+    "noDentist": "Aucun dentiste référent",
+    "optional": "Autres informations",
+    "ageLine": "{{age}} ans · {{stage}}",
+    "dentition": {
+      "primary": "denture temporaire",
+      "mixed": "denture mixte",
+      "permanent": "denture permanente"
+    },
+    "duplicate": {
+      "label": "Doublon possible :",
+      "body": "{{name}} · {{number}} · né(e) le {{dob}}. Vérifiez avant d’enregistrer.",
+      "open": "Ouvrir {{number}}"
+    },
+    "requiredHint": "Nom et téléphone obligatoires",
+    "create": "Créer le patient",
+    "creating": "Création…",
+    "save": "Enregistrer les modifications",
+    "created": "Patient créé",
+    "updated": "Patient mis à jour",
+    "openRecord": "Ouvrir le dossier",
+    "failed": "Enregistrement impossible : {{reason}}",
+    "archived": "Un patient archivé ne peut pas être modifié. Restaurez d’abord le dossier depuis la vue Archivés.",
+    "errors": {
+      "required": "Obligatoire",
+      "invalidPhone": "Saisissez un numéro de téléphone valide",
+      "invalidEmail": "Vérifiez l’adresse e-mail",
+      "invalidDate": "Saisissez une date complète",
+      "futureDate": "Ne peut pas être dans le futur",
+      "beforeMinDate": "Vérifiez l’année",
+      "tooLong": "Trop long",
+      "tooMany": "20 alertes au maximum",
+      "invalidAmount": "Saisissez un montant comme 250 ou 12,50",
+      "notPositive": "Doit être supérieur à zéro",
+      "invalid": "Vérifiez cette valeur",
+      "unknownDentist": "Ce dentiste n’est plus disponible"
+    }
+  },
+  "merge": {
+    "eyebrow": "Fusionner les doublons",
+    "title": "Choisir ce qu’il faut garder",
+    "intro": "Choisissez la valeur à garder pour chaque champ. Le solde des deux dossiers passe sur le dossier conservé ; l’autre identifiant est archivé et renvoie vers lui.",
+    "keepGroup": "Identifiant conservé",
+    "keep": "Garder cet identifiant",
+    "mergeInto": "Fusionner dans l’autre",
+    "fields": {
+      "fullName": "Nom",
+      "phone": "Téléphone",
+      "dateOfBirth": "Date de naissance",
+      "sex": "Sexe",
+      "email": "E-mail",
+      "address": "Adresse",
+      "insurance": "Assurance",
+      "emergencyContact": "Urgence",
+      "primaryDentistUserId": "Dentiste",
+      "notes": "Notes",
+      "guardian": "Tuteur",
+      "alerts": "Alertes"
+    },
+    "valueFor": "{{field}} de {{number}}",
+    "alertsKept": "Les alertes des deux dossiers sont conservées.",
+    "matching_one": "{{count, number}} autre champ est identique.",
+    "matching_other": "{{count, number}} autres champs sont identiques.",
+    "summary": "{{drop}} sera archivé. Son solde passe sur {{keep}}.",
+    "overflow": "Ensemble, ces dossiers comptent plus de 20 alertes médicales. Retirez-en de l’un des dossiers avant de fusionner.",
+    "unavailable": "L’un de ces dossiers est archivé ou déjà fusionné : ils ne peuvent pas être fusionnés.",
+    "submit": "Fusionner les dossiers",
+    "confirmTitle": "Fusionner {{drop}} dans {{keep}} ?",
+    "confirmBody": "La fusion est consignée dans le journal d’audit des deux patients. Seul un administrateur peut l’annuler.",
+    "reason": "Motif de la fusion",
+    "done": "Dossiers fusionnés",
+    "failedArchived": "L’un de ces dossiers a été archivé depuis son ouverture.",
+    "failedMerged": "L’un de ces dossiers a déjà été fusionné.",
+    "failedOverflow": "Ensemble, ces dossiers comptent plus de 20 alertes médicales.",
+    "failed": "Fusion impossible : {{reason}}"
   }
 }

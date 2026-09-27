@@ -125,5 +125,171 @@
   "error": {
     "title": "Couldn't load patients",
     "body": "The patient list didn't load. Your search and filters are kept."
+  },
+  "panel": {
+    "loading": "Loading patient…",
+    "notFoundTitle": "Patient not found",
+    "notFoundBody": "This patient doesn't exist in this clinic, or the link is out of date.",
+    "failedTitle": "Couldn't load patient",
+    "failedBody": "The patient didn't load. Try again in a moment."
+  },
+  "quickView": {
+    "eyebrow": "Patient",
+    "age": "{{age}} yrs",
+    "ageUnknown": "Age not recorded",
+    "sex": {
+      "female": "Female",
+      "male": "Male",
+      "other": "Other"
+    },
+    "archived": "Archived",
+    "merged": "This record was merged into another one.",
+    "openMerged": "Open kept record",
+    "alerts": "Medical alerts",
+    "fields": {
+      "dateOfBirth": "Date of birth",
+      "phone": "Phone",
+      "email": "Email",
+      "insurance": "Insurance",
+      "dentist": "Primary dentist"
+    },
+    "unknownDentist": "Unknown dentist",
+    "edit": "Edit details"
+  },
+  "activity": {
+    "title": "Activity",
+    "loading": "Loading activity",
+    "failed": "Couldn't load the activity.",
+    "empty": "No activity recorded yet.",
+    "actions": {
+      "patient": {
+        "create": "Patient registered",
+        "update": "Details updated",
+        "archive": "Patient archived",
+        "restore": "Patient restored",
+        "merge": "Records merged"
+      },
+      "ledger_entry": {
+        "create": "Opening balance recorded",
+        "repoint": "Balance moved from a merged record"
+      },
+      "other": "Record changed"
+    },
+    "meta": "{{at}} · {{who}}",
+    "reason": "Reason: {{reason}}",
+    "system": "System",
+    "platformAdmin": "Platform admin",
+    "assistant": "Assistant",
+    "viaAssistant": "{{name}} via assistant",
+    "unknownUser": "Former staff member"
+  },
+  "form": {
+    "newEyebrow": "New patient",
+    "newTitle": "Register a patient",
+    "editEyebrow": "Edit patient",
+    "fields": {
+      "fullName": "Full name",
+      "phone": "Phone",
+      "dateOfBirth": "Date of birth",
+      "sex": "Sex",
+      "email": "Email",
+      "address": "Address",
+      "insurance": "Insurance",
+      "emergencyContact": "Emergency contact",
+      "alerts": "Medical alerts",
+      "dentist": "Primary dentist",
+      "notes": "Notes",
+      "guardianName": "Guardian name",
+      "guardianPhone": "Guardian phone"
+    },
+    "alertsHint": "Comma-separated",
+    "guardianHint": "Under 18",
+    "placeholders": {
+      "fullName": "e.g. Rana Haddad",
+      "email": "name@email.com",
+      "insurance": "Carrier — plan",
+      "alerts": "e.g. Penicillin allergy",
+      "emergencyContact": "Name and phone"
+    },
+    "sexOptions": {
+      "unknown": "—",
+      "female": "Female",
+      "male": "Male",
+      "other": "Other"
+    },
+    "noDentist": "No primary dentist",
+    "optional": "More details",
+    "ageLine": "{{age}} yrs · {{stage}}",
+    "dentition": {
+      "primary": "primary dentition",
+      "mixed": "mixed dentition",
+      "permanent": "permanent dentition"
+    },
+    "duplicate": {
+      "label": "Possible duplicate:",
+      "body": "{{name}} · {{number}} · DOB {{dob}}. Check before saving.",
+      "open": "Open {{number}}"
+    },
+    "requiredHint": "Name and phone required",
+    "create": "Create patient",
+    "creating": "Creating…",
+    "save": "Save changes",
+    "created": "Patient created",
+    "updated": "Patient updated",
+    "openRecord": "Open record",
+    "failed": "Couldn't save: {{reason}}",
+    "archived": "Archived patients can't be edited. Restore the record from the Archived view first.",
+    "errors": {
+      "required": "Required",
+      "invalidPhone": "Enter a valid phone number",
+      "invalidEmail": "Check the email address",
+      "invalidDate": "Enter a full date",
+      "futureDate": "Can't be in the future",
+      "beforeMinDate": "Check the year",
+      "tooLong": "Too long",
+      "tooMany": "At most 20 alerts",
+      "invalidAmount": "Enter an amount like 250 or 12.50",
+      "notPositive": "Must be more than zero",
+      "invalid": "Check this value",
+      "unknownDentist": "This dentist is no longer available"
+    }
+  },
+  "merge": {
+    "eyebrow": "Merge duplicates",
+    "title": "Choose what to keep",
+    "intro": "Pick which value to keep for each field. The balance from both records moves to the kept record; the other ID is archived and points to it.",
+    "keepGroup": "Keep ID",
+    "keep": "Keep this ID",
+    "mergeInto": "Merge into other",
+    "fields": {
+      "fullName": "Name",
+      "phone": "Phone",
+      "dateOfBirth": "Date of birth",
+      "sex": "Sex",
+      "email": "Email",
+      "address": "Address",
+      "insurance": "Insurance",
+      "emergencyContact": "Emergency",
+      "primaryDentistUserId": "Dentist",
+      "notes": "Notes",
+      "guardian": "Guardian",
+      "alerts": "Alerts"
+    },
+    "valueFor": "{{field}} from {{number}}",
+    "alertsKept": "Alerts from both records are kept.",
+    "matching_one": "{{count, number}} other field matches.",
+    "matching_other": "{{count, number}} other fields match.",
+    "summary": "{{drop}} will be archived. Its balance moves to {{keep}}.",
+    "overflow": "Together these records have more than 20 medical alerts. Remove some from one record before merging.",
+    "unavailable": "One of these records is archived or already merged, so they can't be merged.",
+    "submit": "Merge records",
+    "confirmTitle": "Merge {{drop}} into {{keep}}?",
+    "confirmBody": "This is recorded in both patients’ audit trails. Reversing a merge requires an admin.",
+    "reason": "Reason for merge",
+    "done": "Records merged",
+    "failedArchived": "One of these records has been archived since you opened it.",
+    "failedMerged": "One of these records has already been merged.",
+    "failedOverflow": "Together these records have more than 20 medical alerts.",
+    "failed": "Couldn't merge: {{reason}}"
   }
 }

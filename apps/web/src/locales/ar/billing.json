@@ -1,0 +1,11 @@
+{
+  "account": {
+    "title": "الحساب",
+    "openingBalance": "الرصيد الافتتاحي",
+    "openingBalanceHint": "اختياري",
+    "asOf": "بتاريخ",
+    "note": "ملاحظة",
+    "notePlaceholder": "اختياري — مثال: منقول من النظام السابق"
+  },
+  "openBalance": "الرصيد المستحق"
+}

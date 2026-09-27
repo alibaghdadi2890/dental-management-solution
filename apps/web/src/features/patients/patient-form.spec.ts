@@ -238,6 +238,10 @@ describe('showGuardian', () => {
   it('is false for a date of birth after today', () => {
     expect(showGuardian({ ...emptyForm(), dateOfBirth: '2027-01-01' }, TODAY)).toBe(false);
   });
+
+  it('is false while the date of birth is still partly typed', () => {
+    expect(showGuardian({ ...emptyForm(), dateOfBirth: '07/03/20' }, TODAY)).toBe(false);
+  });
 });
 
 describe('toCreatePayload', () => {
@@ -301,6 +305,11 @@ describe('isEditDirty', () => {
   it('is true once a field actually changes', () => {
     const current = { ...initial, address: '2 Second St' };
     expect(isEditDirty(initial, current, TODAY, 'LB')).toBe(true);
+  });
+
+  it('does not throw while a field holds a value that is still being typed', () => {
+    expect(isEditDirty(initial, { ...initial, email: 'jane@' }, TODAY, 'LB')).toBe(true);
+    expect(isEditDirty(initial, { ...initial, dateOfBirth: '07/03/20' }, TODAY, 'LB')).toBe(true);
   });
 });
 

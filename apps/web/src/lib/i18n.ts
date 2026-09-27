@@ -9,6 +9,7 @@ export const NAMESPACES = [
   'auth',
   'admin',
   'patients',
+  'billing',
   'visits',
   'catalog',
   'settings',

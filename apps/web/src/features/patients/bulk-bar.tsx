@@ -19,7 +19,7 @@ function BulkButton({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'h-7 cursor-pointer rounded-md disabled:cursor-not-allowed disabled:opacity-45 border border-primary-tint-border bg-surface px-2.5 text-[12.5px] leading-none font-medium',
+        'h-7 cursor-pointer rounded-md border border-primary-tint-border bg-surface px-2.5 text-[12.5px] leading-none font-medium disabled:cursor-not-allowed disabled:opacity-45',
         danger ? 'text-danger hover:border-danger' : 'text-primary hover:border-primary',
       )}
     >

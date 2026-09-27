@@ -1,0 +1,11 @@
+{
+  "account": {
+    "title": "Account",
+    "openingBalance": "Opening balance",
+    "openingBalanceHint": "Optional",
+    "asOf": "As of",
+    "note": "Note",
+    "notePlaceholder": "Optional — e.g. carried over from previous system"
+  },
+  "openBalance": "Open balance"
+}

@@ -7,6 +7,7 @@ import {
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SHIMMER } from '@/components/ui/list';
+import { leadingBalance } from '@/features/billing/lead-balance';
 import { formatMoney, formatPhone } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
@@ -177,13 +178,15 @@ const AVATAR_TONES = [
   'bg-avatar-violet text-avatar-violet-ink',
 ] as const;
 
-/** 28px round avatar; the POC picks its tone from the name's length. */
-function PatientAvatar({ name }: { name: string }) {
+/** Round avatar, 28px in rows and 40px in the quick view; the POC picks its tone from the name's
+ * length. */
+export function PatientAvatar({ name, large = false }: { name: string; large?: boolean }) {
   return (
     <span
       aria-hidden
       className={cn(
-        'grid size-7 flex-none place-items-center rounded-full text-[11.5px] leading-none font-semibold',
+        'grid flex-none place-items-center rounded-full leading-none font-semibold',
+        large ? 'size-10 text-[14px]' : 'size-7 text-[11.5px]',
         AVATAR_TONES[name.length % AVATAR_TONES.length],
       )}
     >
@@ -195,24 +198,24 @@ function PatientAvatar({ name }: { name: string }) {
 const badge =
   'h-[18px] flex-none rounded-[4px] border px-1.5 text-[11.5px] leading-4 font-medium whitespace-nowrap';
 
-/** The row's tenant-currency balance first (design Q13); another currency only when the tenant
- * currency has none. */
-function leadingBalance(balances: readonly BalanceMoney[], currency: string) {
-  return (
-    balances.find((balance) => balance.currency === currency) ??
-    balances.find((balance) => Number(balance.amount) !== 0)
-  );
-}
-
 function BalanceCell({
   balances,
+  loading,
   currency,
   locale,
 }: {
   balances: readonly BalanceMoney[] | undefined;
+  loading: boolean;
   currency: string;
   locale: string;
 }) {
+  if (loading) {
+    return (
+      <span role="cell" aria-busy="true" className="flex justify-end">
+        <span className={bar('w-[52px]')} />
+      </span>
+    );
+  }
   const lead = balances && leadingBalance(balances, currency);
   const amount = lead ? Number(lead.amount) : 0;
   const all = balances?.filter((balance) => Number(balance.amount) !== 0) ?? [];
@@ -243,6 +246,7 @@ export function PatientRow({
   patient,
   context,
   balances,
+  balanceLoading,
   selected,
   highlighted,
   stale,
@@ -252,8 +256,10 @@ export function PatientRow({
 }: {
   patient: PatientListItem;
   context: PatientRowContext;
-  /** `undefined` while balances load, without `payment:read`, or with no ledger entries. */
+  /** `undefined` without `payment:read`, with no ledger entries, or while `balanceLoading`. */
   balances: readonly BalanceMoney[] | undefined;
+  /** This page's balances are still loading: the cell shimmers rather than reading "—". */
+  balanceLoading: boolean;
   selected: boolean;
   /** The row whose panel is open. */
   highlighted: boolean;
@@ -365,7 +371,12 @@ export function PatientRow({
       >
         {NONE}
       </span>
-      <BalanceCell balances={balances} currency={context.currency} locale={context.locale} />
+      <BalanceCell
+        balances={balances}
+        loading={balanceLoading}
+        currency={context.currency}
+        locale={context.locale}
+      />
       <span
         role="cell"
         className="justify-self-end"

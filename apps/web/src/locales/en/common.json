@@ -16,5 +16,10 @@
   "discardTitle": "Discard unsaved changes?",
   "discardBody": "You have edits here that haven’t been saved. Leaving now will discard them.",
   "discardLeave": "Discard and leave",
-  "keepEditing": "Keep editing"
+  "keepEditing": "Keep editing",
+  "dateFormat": {
+    "DMY": "DD/MM/YYYY",
+    "MDY": "MM/DD/YYYY",
+    "YMD": "YYYY/MM/DD"
+  }
 }

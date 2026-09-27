@@ -167,12 +167,14 @@ export interface ValidateContext {
 }
 
 /** True once a valid, not-in-the-future date of birth makes the patient under 18 on `today` — the
- * guardian fields' visibility rule (design "Create / Edit" panel). An unset, unparsed, or
+ * guardian fields' visibility rule (design "Create / Edit" panel). An unset, half-typed, or
  * future-dated DOB never shows it: `isMinor`'s age arithmetic goes negative for a future date,
  * which is not "a minor" by any reading. */
 export function showGuardian(values: PatientFormValues, today: string): boolean {
   return (
-    values.dateOfBirth !== '' && values.dateOfBirth <= today && isMinor(values.dateOfBirth, today)
+    isoDateSchema.safeParse(values.dateOfBirth).success &&
+    values.dateOfBirth <= today &&
+    isMinor(values.dateOfBirth, today)
   );
 }
 
@@ -374,18 +376,14 @@ function normalizedFieldValue(
   return value.trim();
 }
 
-/**
- * Only the fields that actually changed since `initial`, normalised as `normalizedFieldValue`
- * describes — `null` (not run through `patientPatchSchema`, which requires at least one key) when
- * nothing did. `sex` has no "unset" state to compare against blank, so it's included whenever it
- * differs like any other field.
- */
-export function toPatchPayload(
+/** The changed fields as raw form text, not yet parsed — `toPatchPayload`'s core, shared with
+ * `isEditDirty`, which must answer while a field still holds a half-typed (invalid) value. */
+function changedFields(
   initial: PatientFormValues,
   current: PatientFormValues,
   today: string,
   country: string,
-): PatientPatch | null {
+): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
 
   for (const field of PATCHABLE_TEXT_FIELDS) {
@@ -426,6 +424,23 @@ export function toPatchPayload(
     patch.guardianPhone = currentGuardian.guardianPhone.trim() || null;
   }
 
+  return patch;
+}
+
+/**
+ * Only the fields that actually changed since `initial`, normalised as `normalizedFieldValue`
+ * describes — `null` (not run through `patientPatchSchema`, which requires at least one key) when
+ * nothing did. `sex` has no "unset" state to compare against blank, so it's included whenever it
+ * differs like any other field. Throws on an invalid value, like the create builders: call it
+ * only once `validate` returns `{}`.
+ */
+export function toPatchPayload(
+  initial: PatientFormValues,
+  current: PatientFormValues,
+  today: string,
+  country: string,
+): PatientPatch | null {
+  const patch = changedFields(initial, current, today, country);
   if (Object.keys(patch).length === 0) return null;
   return patientPatchSchema.parse(patch);
 }
@@ -433,14 +448,15 @@ export function toPatchPayload(
 /** Edit-mode "Unsaved changes" check (design Q16): whether saving would actually send a patch,
  * using `toPatchPayload`'s own normalised comparison (phone by parsed E.164, email case/
  * whitespace-insensitively, everything else trimmed) — so re-typing the same phone number in a
- * different format, or a guardian field that's simply hidden again, never shows "Unsaved". */
+ * different format, or a guardian field that's simply hidden again, never shows "Unsaved". Never
+ * throws: a half-typed value is a change, not an error. */
 export function isEditDirty(
   initial: PatientFormValues,
   current: PatientFormValues,
   today: string,
   country: string,
 ): boolean {
-  return toPatchPayload(initial, current, today, country) !== null;
+  return Object.keys(changedFields(initial, current, today, country)).length > 0;
 }
 
 /** `POST /billing/opening-balances`'s `openingBalance` leg; only call once `wantsOpeningBalance`

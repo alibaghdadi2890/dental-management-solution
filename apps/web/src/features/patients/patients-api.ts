@@ -161,8 +161,8 @@ export function mergePatients(input: PatientMerge) {
  * tenant) — the one call every create/merge/archive/restore/opening-balance mutation should make
  * on success. `patientKeys.all`/`billingKeys.all` are prefixes of every more specific key
  * (including `owingCount`, `balances`, …), so invalidating just the two umbrellas covers all of
- * it; nothing under `userKeys` (`features/users/users-api.ts`) is invalidated, since no patient mutation changes the practitioner
- * list.
+ * it; nothing under `userKeys` (`features/users/users-api.ts`) is invalidated, since no patient
+ * mutation changes the practitioner list.
  */
 export function invalidatePatientData(
   queryClient: QueryClient,

@@ -16,5 +16,10 @@
   "discardTitle": "Abandonner les modifications non enregistrées ?",
   "discardBody": "Vous avez des modifications non enregistrées. Partir maintenant les abandonnera.",
   "discardLeave": "Abandonner et quitter",
-  "keepEditing": "Continuer à modifier"
+  "keepEditing": "Continuer à modifier",
+  "dateFormat": {
+    "DMY": "JJ/MM/AAAA",
+    "MDY": "MM/JJ/AAAA",
+    "YMD": "AAAA/MM/JJ"
+  }
 }

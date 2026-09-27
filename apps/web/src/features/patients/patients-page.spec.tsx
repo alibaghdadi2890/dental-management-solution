@@ -118,6 +118,8 @@ interface Api {
   list?: (params: URLSearchParams) => Promise<Response> | undefined;
   /** Overrides the CSV export answer. */
   exportCsv?: () => Promise<Response>;
+  /** Overrides the balances answer for a page's ids. */
+  balancesFor?: (ids: string[]) => Promise<Response> | undefined;
 }
 
 const json = (body: unknown, status = 200, type = 'application/json') =>
@@ -133,6 +135,7 @@ function mockApi({
   archiveStatus = 200,
   list,
   exportCsv,
+  balancesFor,
 }: Api = {}) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     const path = url.replace('/api/v1', '');
@@ -153,7 +156,10 @@ function mockApi({
         ]),
       );
     }
-    if (path.startsWith('/billing/balances')) return Promise.resolve(json(balances));
+    if (path.startsWith('/billing/balances')) {
+      const ids = new URLSearchParams(path.split('?')[1]).get('patientIds')?.split(',') ?? [];
+      return balancesFor?.(ids) ?? Promise.resolve(json(balances));
+    }
     if (path === '/patients/archive' && archiveStatus !== 200) {
       return Promise.resolve(
         json(
@@ -209,7 +215,8 @@ const calledUrls = (fetchMock: ReturnType<typeof mockApi>) =>
 function renderPage({
   permissions = ALL_PERMISSIONS,
   url = '/',
-}: { permissions?: Permission[]; url?: string } = {}) {
+  withPanel = false,
+}: { permissions?: Permission[]; url?: string; withPanel?: boolean } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
@@ -224,8 +231,17 @@ function renderPage({
       <PatientsPage
         search={search}
         onSearch={(next, options) => {
-          void navigate({ search: next, replace: options?.replace ?? false });
+          void navigate({
+            search: next,
+            replace: options?.replace ?? false,
+            state: { patientsPanelPushed: options?.panelPushed ?? false },
+          });
         }}
+        renderPanel={
+          withPanel
+            ? (_, { close }) => <button type="button" aria-label="Close panel" onClick={close} />
+            : undefined
+        }
       />
     );
   }
@@ -712,6 +728,63 @@ describe('PatientsPage', () => {
       expect(router.state.location.search).toMatchObject({ panel: `quick:${RANA.id}` });
     });
     expect(router.state.location.search).not.toHaveProperty('fullName');
+  });
+
+  it('closing a panel opened from the list goes back instead of adding an entry', async () => {
+    mockApi();
+    const router = renderPage({ withPanel: true });
+    fireEvent.click(await rowOf('Rana Haddad'));
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({ panel: `quick:${RANA.id}` });
+    });
+    // Swapping panels replaces the entry and stays "opened from the list".
+    fireEvent.click(await rowOf('Sami Khoury'));
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({ panel: `quick:${SAMI.id}` });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
+    await waitFor(() => {
+      expect(router.state.location.search).not.toHaveProperty('panel');
+    });
+    expect(router.history.location.state.__TSR_index).toBe(0);
+  });
+
+  it('closing a panel reached by a link replaces its entry', async () => {
+    mockApi();
+    const router = renderPage({ withPanel: true, url: `/?panel=quick:${RANA.id}` });
+    fireEvent.click(await screen.findByRole('button', { name: 'Close panel' }));
+    await waitFor(() => {
+      expect(router.state.location.search).not.toHaveProperty('panel');
+    });
+    expect(router.history.location.state.__TSR_index).toBe(0);
+    expect(router.history.canGoBack()).toBe(false);
+  });
+
+  it('shimmers the balances of a new page until they load', async () => {
+    let release: (response: Response) => void = () => undefined;
+    const OMAR = item(4, 'Omar Nassar');
+    mockApi({
+      total: 54,
+      list: (params) =>
+        params.get('page') === '2'
+          ? Promise.resolve(json({ items: [OMAR], total: 54, page: 2, size: 25 }))
+          : undefined,
+      balancesFor: (ids) =>
+        ids.includes(OMAR.id)
+          ? new Promise<Response>((resolve) => {
+              release = resolve;
+            })
+          : undefined,
+    });
+    renderPage();
+    await rowOf('Rana Haddad');
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
+    const row = await rowOf('Omar Nassar');
+    await waitFor(() => {
+      expect(within(row).getAllByRole('cell')[7]?.getAttribute('aria-busy')).toBe('true');
+    });
+    release(json([{ patientId: OMAR.id, balances: [{ amount: '40.00', currency: 'USD' }] }]));
+    expect(await within(row).findByText('$40')).toBeTruthy();
   });
 
   it('labels the table for assistive tech', async () => {

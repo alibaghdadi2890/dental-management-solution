@@ -4,7 +4,8 @@ import { IconButton } from './button';
 
 /**
  * POC right panel: 440px, pushes the content (it sits in the page's flex row), slides in.
- * Header has an eyebrow, a 16px title, an "Unsaved" badge while dirty and a close button.
+ * Header has an eyebrow, a 16px title, an "Unsaved" badge while dirty and a close button. The
+ * footer bar is left out when there is nothing to put in it (a read-only quick view).
  */
 export function RightPanel({
   eyebrow,
@@ -18,7 +19,7 @@ export function RightPanel({
   title: string;
   dirty: boolean;
   onClose: () => void;
-  footer: ReactNode;
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   const { t } = useTranslation('common');
@@ -46,9 +47,11 @@ export function RightPanel({
         </IconButton>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto p-[18px]">{children}</div>
-      <div className="flex flex-none justify-end gap-2 border-t border-inner-divider px-[18px] py-3">
-        {footer}
-      </div>
+      {footer ? (
+        <div className="flex flex-none items-center justify-end gap-2 border-t border-inner-divider px-[18px] py-3">
+          {footer}
+        </div>
+      ) : null}
     </aside>
   );
 }

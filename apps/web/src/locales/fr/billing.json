@@ -1,0 +1,11 @@
+{
+  "account": {
+    "title": "Compte",
+    "openingBalance": "Solde d’ouverture",
+    "openingBalanceHint": "Facultatif",
+    "asOf": "Au",
+    "note": "Note",
+    "notePlaceholder": "Facultatif — ex. repris de l’ancien logiciel"
+  },
+  "openBalance": "Solde dû"
+}

@@ -2,7 +2,7 @@ import type { BalanceMoney, PatientListItem, PatientListQuery } from '@dcm/contr
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { balancesQuery } from '@/features/billing/billing-api';
-import { practitionersQuery, staffQuery } from '@/features/users/users-api';
+import { useStaffNames } from '@/features/users/use-staff-names';
 import {
   duplicatesQuery,
   owingCountQuery,
@@ -16,29 +16,23 @@ const NO_ROWS: readonly PatientListItem[] = [];
  * Every read the Patients list makes, and the lookups derived from them. The page (`view=owing`,
  * `sort=balance` already normalised away without `payment:read`) only renders.
  *
- * - The list and the page's balances keep the previous answer while the next one loads
- *   (`isPlaceholderData`), so paging or switching views doesn't flash a skeleton or "—" balances.
- * - Dentist names come from all staff (`GET /users`, deactivated dentists included) with
- *   `user:read`, else — and while that loads — from the active practitioners.
+ * - The list keeps the previous answer while the next one loads (`isPlaceholderData`), so paging
+ *   or switching views doesn't flash a skeleton; its rows are dimmed and inert meanwhile.
+ * - Balances are per page of ids, so the previous page's answer is no use for the next one:
+ *   `balancesLoading` holds while the rows on screen have no balances yet, and their cells
+ *   shimmer instead of reading "—" (which means "no balance").
+ * - Dentist names come from `useStaffNames` (all staff with `user:read`, else the practitioners).
  */
-export function usePatientsListData(
-  query: PatientListQuery,
-  { canPay, canReadStaff }: { canPay: boolean; canReadStaff: boolean },
-) {
+export function usePatientsListData(query: PatientListQuery, { canPay }: { canPay: boolean }) {
   const list = useQuery({ ...patientListQuery(query), placeholderData: keepPreviousData });
   const counts = useQuery(patientCountsQuery());
   const owing = useQuery({ ...owingCountQuery(), enabled: canPay });
   const duplicates = useQuery(duplicatesQuery());
-  const practitioners = useQuery(practitionersQuery());
-  const staff = useQuery({ ...staffQuery(), enabled: canReadStaff });
+  const staff = useStaffNames();
 
   const rows = list.data?.items ?? NO_ROWS;
   const ids = rows.map((row) => row.id);
-  const balances = useQuery({
-    ...balancesQuery(ids),
-    enabled: canPay && ids.length > 0,
-    placeholderData: keepPreviousData,
-  });
+  const balances = useQuery({ ...balancesQuery(ids), enabled: canPay && ids.length > 0 });
 
   const balanceById = useMemo(() => {
     const byId = new Map<string, readonly BalanceMoney[]>();
@@ -65,24 +59,15 @@ export function usePatientsListData(
     };
   }, [duplicateGroups]);
 
-  const dentistNames = useMemo(
-    () =>
-      new Map(
-        staff.data?.map((user) => [user.id, user.displayName]) ??
-          practitioners.data?.map((p) => [p.userId, p.displayName]) ??
-          [],
-      ),
-    [staff.data, practitioners.data],
-  );
-
   return {
     list,
     rows,
     counts: counts.data,
     owingCount: owing.data?.count,
-    practitioners: practitioners.data ?? [],
-    dentistNames,
+    practitioners: staff.practitioners ?? [],
+    dentistNames: staff.names,
     balanceById,
+    balancesLoading: balances.isLoading,
     twins,
     duplicateCount,
     firstPair,

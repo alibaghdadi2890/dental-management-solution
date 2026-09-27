@@ -1,4 +1,5 @@
 import { exportLanguageSchema, type PatientListQuery, type Session } from '@dcm/contracts';
+import { useRouter } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Page } from '@/components/page';
@@ -19,6 +20,7 @@ import {
   type PatientsSearch,
   panelParam,
   parsePanel,
+  parsePatientsSearch,
   sortPatch,
   toSearch,
   withFilter,
@@ -42,10 +44,30 @@ const NO_SELECTION: ReadonlySet<string> = new Set();
 
 type Tenant = NonNullable<Session['tenant']>;
 
-type OnSearch = (next: PatientsSearch, options?: { replace?: boolean }) => void;
+declare module '@tanstack/react-router' {
+  interface HistoryState {
+    /** On the history entry that opening a panel from the list pushed: closing that panel goes
+     * back to the entry before it instead of adding a second, identical list entry. */
+    patientsPanelPushed?: boolean;
+  }
+}
+
+export interface SearchOptions {
+  replace?: boolean;
+  /** The new entry shows a panel opened from the list (`HistoryState.patientsPanelPushed`). */
+  panelPushed?: boolean;
+}
+
+type OnSearch = (next: PatientsSearch, options?: SearchOptions) => void;
+
+export interface PanelActions {
+  close: () => void;
+  /** Swaps the open panel for another (quick view → edit, a duplicate's "Open"). */
+  open: (panel: PatientPanel) => void;
+}
 
 /** Renders the open right panel next to the list (README: 440px, pushes the table). */
-export type RenderPanel = (panel: PatientPanel, close: () => void) => ReactNode;
+export type RenderPanel = (panel: PatientPanel, actions: PanelActions) => ReactNode;
 
 interface PatientsPageProps {
   search: PatientsSearch;
@@ -62,6 +84,11 @@ interface PatientsPageProps {
  * A row click opens the quick view: the patient record route (`/patients/$patientId`) does not
  * exist yet, so "Open record" is not offered either. Nothing renders until the session has a
  * tenant (the `_app` guard loads it first).
+ *
+ * History: opening a panel from the list pushes an entry; swapping panels replaces it; closing a
+ * panel the list opened goes back (so Back afterwards leaves the list rather than landing on the
+ * same list again). A panel reached any other way — a shared link, or a filter changed while it
+ * was open — is closed by replacing its entry.
  */
 export function PatientsPage(props: PatientsPageProps) {
   const { data: session } = useSession();
@@ -79,7 +106,7 @@ function PatientsList({
   const toast = useToast();
   const canWrite = usePermission('patient:write');
   const canPay = usePermission('payment:read');
-  const canReadStaff = usePermission('user:read');
+  const router = useRouter();
   const locale = i18n.resolvedLanguage ?? 'en';
   const count = (value: number) => new Intl.NumberFormat(locale).format(value);
 
@@ -88,7 +115,7 @@ function PatientsList({
   const fellBack = query !== requested;
   const panel = parsePanel(search.panel);
 
-  const data = usePatientsListData(query, { canPay, canReadStaff });
+  const data = usePatientsListData(query, { canPay });
   const { list, rows } = data;
   const stale = list.isPlaceholderData;
 
@@ -119,9 +146,22 @@ function PatientsList({
     );
   };
   // Opening a panel from the list drops any create pre-fill (it belongs to a "New patient" the
-  // shell opened), and swaps an already open panel rather than stacking history entries.
+  // shell opened), and swaps an already open panel rather than stacking history entries. It reads
+  // the location as it is when called, not as it was rendered: a toast's "Open record" runs after
+  // its panel has closed, and possibly after the filters changed.
   const openPanel = (next: PatientPanel | null) => {
-    onSearch({ ...query, panel: panelParam(next) }, { replace: panel !== null });
+    const { location } = router.state;
+    const current = parsePatientsSearch(location.search);
+    const open = parsePanel(current.panel) !== null;
+    const pushed = open && location.state.patientsPanelPushed === true;
+    if (next === null && pushed) {
+      router.history.back();
+      return;
+    }
+    onSearch(
+      { ...listQueryOf(current), panel: panelParam(next) },
+      { replace: open, panelPushed: next !== null && (!open || pushed) },
+    );
   };
 
   // A page past the end (after archiving the last rows of the last page, or a stale URL) moves
@@ -347,6 +387,7 @@ function PatientsList({
                     patient={patient}
                     context={context}
                     balances={data.balanceById.get(patient.id)}
+                    balanceLoading={data.balancesLoading}
                     selected={selected.has(patient.id)}
                     highlighted={panel !== null && 'id' in panel && panel.id === patient.id}
                     stale={stale}
@@ -382,8 +423,11 @@ function PatientsList({
         </Page>
       </div>
       {panel &&
-        renderPanel?.(panel, () => {
-          openPanel(null);
+        renderPanel?.(panel, {
+          close: () => {
+            openPanel(null);
+          },
+          open: openPanel,
         })}
     </div>
   );
