@@ -4,8 +4,9 @@ import type {
   LedgerEntryKind,
   OpeningBalanceInput,
   OpeningBalanceResult,
-  PatientBalance,
   Patient,
+  PatientBalance,
+  Tenant,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
@@ -18,19 +19,21 @@ import { ValidationFailedError } from '../../../platform/kernel/validation-faile
 import { AuditService } from '../../audit';
 import { PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
-import { isOwing, sumBalances } from '../domain/balances';
+import { sumBalances } from '../domain/balances';
 import type { LedgerEntry } from '../domain/ledger-entry';
 import { LEDGER_ENTRY_RECORDED, type LedgerEntryRecorded } from '../events/ledger-events';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
 
-const NOT_FOUND = 'Patient not found';
+/** The fields a caller chooses; the kind, currency and creator are set by `append`. */
+type EntryFields = Pick<LedgerEntry, 'amount' | 'effectiveDate' | 'note' | 'reason'>;
 
 /**
  * The patient ledger of the current tenant (docs/modules/billing.md): opening balances,
  * adjustments and balances (design Q1, Q12, Q13). Entries are stamped with the tenant currency;
- * every write re-checks `payment:write`, is audited in the same transaction and emits
- * `LedgerEntryRecorded` after commit. Patient existence always comes from `PatientsService`
- * (`getMany`, which requires `patient:read` — every system role holds it).
+ * every write re-checks `payment:write`, holds the patient row `FOR SHARE`
+ * (`PatientsService.lockForLedger`, so a concurrent merge waits for it), is audited in the same
+ * transaction and emits `LedgerEntryRecorded` after commit. Patient existence always comes from
+ * `PatientsService`, which requires `patient:read` — every system role holds it.
  */
 @Injectable()
 export class BillingService {
@@ -54,44 +57,47 @@ export class BillingService {
   async createWithOpeningBalance(input: CreateWithOpeningBalance): Promise<OpeningBalanceResult> {
     this.context.requirePermission('payment:write');
     this.context.requirePermission('patient:write');
-    await this.assertNotAfterToday(input.openingBalance.asOf, 'openingBalance.asOf');
     return this.tenantDb.run(async () => {
+      const tenant = await this.tenancy.currentTenant();
+      this.assertNotAfterToday(input.openingBalance.asOf, tenant, 'openingBalance.asOf');
       const patient = await this.createPatient(input.patient);
-      const balance = await this.recordOpeningBalance(patient.id, input.openingBalance);
-      return { patient, balance };
+      // Just created in this transaction: nobody else can see, merge or archive it yet.
+      const entry = await this.appendOpeningBalance(patient.id, input.openingBalance, tenant);
+      return { patient, balance: { patientId: patient.id, balances: sumBalances([entry]) } };
     });
   }
 
   /**
-   * An `opening_balance` entry dated `asOf` (a building block for the create above and for the
-   * feature 6 import). "Only on create" is the route's rule, not the schema's (design Q12).
-   * Returns the patient's balance after the entry.
+   * An `opening_balance` entry dated `asOf` (a building block for feature 6 import). "Only on
+   * create" is the route's rule, not the schema's (design Q12). Unknown patient → 404, merged
+   * away → 409 `patient.merged`. Returns the patient's balance after the entry.
    */
   async recordOpeningBalance(
     patientId: string,
     input: OpeningBalanceInput,
   ): Promise<PatientBalance> {
     this.context.requirePermission('payment:write');
-    await this.assertNotAfterToday(input.asOf, 'asOf');
     return this.tenantDb.run(async () => {
-      await this.requirePatient(patientId);
-      await this.record(patientId, 'opening_balance', {
-        amount: input.amount,
-        effectiveDate: input.asOf,
-        note: input.note ?? null,
-        reason: null,
-      });
+      const tenant = await this.tenancy.currentTenant();
+      this.assertNotAfterToday(input.asOf, tenant, 'asOf');
+      await this.patients.lockForLedger(patientId);
+      await this.appendOpeningBalance(patientId, input, tenant);
       return this.balanceIn(patientId);
     });
   }
 
-  /** A signed correction with a reason (no UI in feature 3). Returns the balance after it. */
+  /**
+   * A signed correction with a reason (no UI in feature 3). Archived patients are allowed (a
+   * write-off); merged-away ones are refused like in `recordOpeningBalance`. Returns the balance
+   * after the entry.
+   */
   async adjustBalance(patientId: string, input: AdjustmentInput): Promise<PatientBalance> {
     this.context.requirePermission('payment:write');
-    await this.assertNotAfterToday(input.effectiveDate, 'effectiveDate');
     return this.tenantDb.run(async () => {
-      await this.requirePatient(patientId);
-      await this.record(patientId, 'adjustment', {
+      const tenant = await this.tenancy.currentTenant();
+      this.assertNotAfterToday(input.effectiveDate, tenant, 'effectiveDate');
+      await this.patients.lockForLedger(patientId);
+      await this.append(patientId, 'adjustment', tenant, {
         amount: input.amount,
         effectiveDate: input.effectiveDate,
         note: input.note ?? null,
@@ -105,7 +111,8 @@ export class BillingService {
   async balanceOf(patientId: string): Promise<PatientBalance> {
     this.context.requirePermission('payment:read');
     return this.tenantDb.run(async () => {
-      await this.requirePatient(patientId);
+      const [patient] = await this.patients.getMany([patientId]);
+      if (!patient) throw new PatientNotFoundError('Patient not found');
       return this.balanceIn(patientId);
     });
   }
@@ -128,20 +135,12 @@ export class BillingService {
   }
 
   /**
-   * Ids of the patients owing in any currency (design Q13), archived ones included, in no
-   * particular order. Not permission-gated: a building block for `billing`'s own patient views,
-   * which gate themselves; never expose it directly.
+   * Ids of the patients owing in any currency (design Q13), archived ones included, in id order.
+   * A building block for `billing`'s patient views; one SQL aggregate.
    */
   async patientIdsOwing(): Promise<string[]> {
-    const byPatient = new Map<string, { amount: string; currency: string }[]>();
-    for (const sum of await this.entries.sumsByPatient()) {
-      const sums = byPatient.get(sum.patientId) ?? [];
-      sums.push({ amount: sum.amount, currency: sum.currency });
-      byPatient.set(sum.patientId, sums);
-    }
-    return [...byPatient]
-      .filter(([, sums]) => isOwing(sumBalances(sums)))
-      .map(([patientId]) => patientId);
+    this.context.requirePermission('payment:read');
+    return this.entries.patientIdsOwing();
   }
 
   // --- Shared rules ---
@@ -159,16 +158,31 @@ export class BillingService {
     }
   }
 
-  private async record(
+  /** No checks: callers have validated `asOf` and locked (or just created) the patient. */
+  private appendOpeningBalance(
+    patientId: string,
+    input: OpeningBalanceInput,
+    tenant: Tenant,
+  ): Promise<LedgerEntry> {
+    return this.append(patientId, 'opening_balance', tenant, {
+      amount: input.amount,
+      effectiveDate: input.asOf,
+      note: input.note ?? null,
+      reason: null,
+    });
+  }
+
+  /** Inserts, audits and publishes one entry in the tenant currency. */
+  private async append(
     patientId: string,
     kind: LedgerEntryKind,
-    fields: Pick<LedgerEntry, 'amount' | 'effectiveDate' | 'note' | 'reason'>,
+    tenant: Tenant,
+    fields: EntryFields,
   ): Promise<LedgerEntry> {
-    const { currency } = await this.tenancy.currentTenant();
     const entry = await this.entries.insert({
       patientId,
       kind,
-      currency,
+      currency: tenant.currency,
       createdBy: this.context.requireUserId(),
       ...fields,
     });
@@ -188,11 +202,6 @@ export class BillingService {
     return entry;
   }
 
-  private async requirePatient(patientId: string): Promise<void> {
-    const [patient] = await this.patients.getMany([patientId]);
-    if (!patient) throw new PatientNotFoundError(NOT_FOUND);
-  }
-
   private async balanceIn(patientId: string): Promise<PatientBalance> {
     return { patientId, balances: sumBalances(await this.entries.sumsByPatient([patientId])) };
   }
@@ -201,9 +210,8 @@ export class BillingService {
    * The contract only refuses obviously-future dates (it knows UTC, not the tenant); the tenant's
    * today in its time zone is the source of truth (CLAUDE.md §5).
    */
-  private async assertNotAfterToday(date: string, path: string): Promise<void> {
-    const { timeZone } = await this.tenancy.currentTenant();
-    if (date > localDate(this.clock.now(), timeZone)) {
+  private assertNotAfterToday(date: string, tenant: Tenant, path: string): void {
+    if (date > localDate(this.clock.now(), tenant.timeZone)) {
       const message = 'Date cannot be in the future';
       throw new ValidationFailedError(message, [{ path, code: 'future_date', message }]);
     }

@@ -40,15 +40,12 @@ export class LedgerEntriesRepository {
 
   /**
    * Σ amount per patient and currency, summed by Postgres on `numeric` (exact), as 2-decimal
-   * strings. Restricted to `patientIds` when given (an empty list matches nothing); every patient
-   * with entries otherwise. Patients without entries are absent; zero sums are included.
+   * strings, for the patients among `patientIds`. Patients without entries are absent; zero sums
+   * are included. Ordered by patient, then currency.
    */
-  async sumsByPatient(patientIds?: readonly string[]): Promise<PatientCurrencySum[]> {
-    if (patientIds?.length === 0) return [];
-    const among =
-      patientIds === undefined
-        ? sql`true`
-        : sql`${ledgerEntries.patientId} = any(${sql.param([...patientIds])}::uuid[])`;
+  async sumsByPatient(patientIds: readonly string[]): Promise<PatientCurrencySum[]> {
+    if (patientIds.length === 0) return [];
+    const among = sql`${ledgerEntries.patientId} = any(${sql.param([...patientIds])}::uuid[])`;
     return this.db.run((tx) =>
       tx
         .select({
@@ -58,7 +55,25 @@ export class LedgerEntriesRepository {
         })
         .from(ledgerEntries)
         .where(among)
-        .groupBy(ledgerEntries.patientId, ledgerEntries.currency),
+        .groupBy(ledgerEntries.patientId, ledgerEntries.currency)
+        .orderBy(ledgerEntries.patientId, ledgerEntries.currency),
     );
+  }
+
+  /**
+   * Patients owing in any currency (design Q13: some currency's Σ amount > 0), in id order. The
+   * rule is the SQL twin of summing per currency; kept in the database so the owing view never
+   * transfers every balance.
+   */
+  async patientIdsOwing(): Promise<string[]> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .selectDistinct({ patientId: ledgerEntries.patientId })
+        .from(ledgerEntries)
+        .groupBy(ledgerEntries.patientId, ledgerEntries.currency)
+        .having(sql`sum(${ledgerEntries.amount}) > 0`)
+        .orderBy(ledgerEntries.patientId),
+    );
+    return rows.map((row) => row.patientId);
   }
 }

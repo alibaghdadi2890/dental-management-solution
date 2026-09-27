@@ -3,7 +3,9 @@ import {
   adjustmentInputSchema,
   balancesQuerySchema,
   createWithOpeningBalanceSchema,
+  balanceAmountSchema,
   openingBalanceInputSchema,
+  patientBalanceSchema,
   patientExportQuerySchema,
 } from './billing.js';
 
@@ -52,6 +54,33 @@ describe('adjustmentInputSchema', () => {
     expect(
       adjustmentInputSchema.safeParse({ amount: '-30', effectiveDate: '2026-01-01' }).success,
     ).toBe(false);
+  });
+
+  it('rejects an effectiveDate far in the future', () => {
+    expect(
+      adjustmentInputSchema.safeParse({ ...base, amount: '5', effectiveDate: '2099-01-01' })
+        .success,
+    ).toBe(false);
+  });
+});
+
+describe('balanceAmountSchema', () => {
+  it('takes aggregate sums wider than numeric(12,2), always with two decimals', () => {
+    for (const amount of ['19999999999.98', '-5.00', '0.01', '999999999999999999.99']) {
+      expect(balanceAmountSchema.safeParse(amount).success, amount).toBe(true);
+    }
+    for (const amount of ['5', '5.0', '1.234', '1e3', '', '1000000000000000000.00']) {
+      expect(balanceAmountSchema.safeParse(amount).success, amount).toBe(false);
+    }
+  });
+
+  it('is what a patient balance carries', () => {
+    expect(
+      patientBalanceSchema.safeParse({
+        patientId: ID_A,
+        balances: [{ amount: '19999999999.98', currency: 'USD' }],
+      }).success,
+    ).toBe(true);
   });
 });
 

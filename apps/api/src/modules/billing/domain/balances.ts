@@ -1,10 +1,10 @@
-import type { Money } from '@dcm/contracts';
+import type { BalanceMoney } from '@dcm/contracts';
 
 /**
  * Balance rules (design Q13): a balance is Σ amount per currency — never converted between
- * currencies — and a patient "owes" when any currency's sum is positive. Amounts are decimal
- * strings (`numeric(12,2)`, CLAUDE.md §7); arithmetic runs on integer cents as `bigint`, never on
- * floats.
+ * currencies. ("Owing" — any currency's sum is positive — is evaluated in SQL by the repository.)
+ * Amounts are decimal strings (`numeric(12,2)` per entry, CLAUDE.md §7; sums can be wider);
+ * arithmetic runs on integer cents as `bigint`, never on floats.
  */
 
 const AMOUNT = /^(-)?(\d+)(?:\.(\d{1,2}))?$/;
@@ -28,7 +28,7 @@ function fromCents(cents: bigint): string {
  * Sums `entries` per currency. Currencies that net to zero are dropped (a settled balance is no
  * balance); the result is ordered by currency code so it's stable across calls. `[]` for none.
  */
-export function sumBalances(entries: readonly Money[]): Money[] {
+export function sumBalances(entries: readonly BalanceMoney[]): BalanceMoney[] {
   const totals = new Map<string, bigint>();
   for (const entry of entries) {
     totals.set(entry.currency, (totals.get(entry.currency) ?? 0n) + toCents(entry.amount));
@@ -37,11 +37,6 @@ export function sumBalances(entries: readonly Money[]): Money[] {
     .filter(([, cents]) => cents !== 0n)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([currency, cents]) => ({ amount: fromCents(cents), currency }));
-}
-
-/** "Owing" = any currency's balance is positive (design Q13). */
-export function isOwing(balances: readonly Money[]): boolean {
-  return balances.some((balance) => toCents(balance.amount) > 0n);
 }
 
 export interface BalanceRank {
@@ -64,7 +59,7 @@ export interface BalanceRank {
  * patients in name order breaks ties by name.
  */
 export function rankByBalance(
-  patients: readonly { patientId: string; balances: readonly Money[] }[],
+  patients: readonly { patientId: string; balances: readonly BalanceMoney[] }[],
   dir: 'asc' | 'desc',
   tenantCurrency: string,
 ): BalanceRank {

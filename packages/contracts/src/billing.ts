@@ -1,9 +1,8 @@
 import { z } from 'zod';
 import {
+  currencySchema,
   decimalAmountSchema,
   idSchema,
-  isoDateSchema,
-  moneySchema,
   notFutureDateSchema,
   optionalText,
 } from './common.js';
@@ -41,16 +40,32 @@ export type CreateWithOpeningBalance = z.infer<typeof createWithOpeningBalanceSc
 /** No UI in this feature; a building block for corrections and feature 6 import. */
 export const adjustmentInputSchema = z.object({
   amount: decimalAmountSchema.refine((amount) => Number(amount) !== 0, 'Must not be zero'),
-  effectiveDate: isoDateSchema,
+  effectiveDate: notFutureDateSchema(),
   reason: reasonSchema,
   note: optionalText(LEDGER_NOTE_MAX),
 });
 export type AdjustmentInput = z.infer<typeof adjustmentInputSchema>;
 
+/**
+ * An aggregate amount (a sum of ledger entries). `decimalAmountSchema` is bounded by one
+ * `numeric(12,2)` column and is for inputs; a sum can exceed 10 integer digits. Always exactly
+ * two decimals, as the server formats it.
+ */
+export const balanceAmountSchema = z
+  .string()
+  .regex(/^-?\d{1,18}\.\d{2}$/, 'Expected a decimal amount with exactly 2 decimals');
+
+/** One currency's balance; `moneySchema` is for single amounts (inputs, prices). */
+export const balanceMoneySchema = z.object({
+  amount: balanceAmountSchema,
+  currency: currencySchema,
+});
+export type BalanceMoney = z.infer<typeof balanceMoneySchema>;
+
 /** Balance = Σ amount per currency (design Q13); a patient without entries gets `balances: []`. */
 export const patientBalanceSchema = z.object({
   patientId: idSchema,
-  balances: z.array(moneySchema),
+  balances: z.array(balanceMoneySchema),
 });
 export type PatientBalance = z.infer<typeof patientBalanceSchema>;
 

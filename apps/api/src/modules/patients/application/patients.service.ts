@@ -205,6 +205,26 @@ export class PatientsService {
     return (await this.patients.findByIds(ids)).map(toPatient);
   }
 
+  /**
+   * For `billing`'s ledger writes: reads the patient `FOR SHARE` inside the caller's open
+   * transaction, so a merge (which locks `FOR UPDATE`) waits until the entry is committed and its
+   * re-point job then finds it. Unknown → 404; merged away → 409 `patient.merged` (the entry
+   * belongs on the kept record). Archived-but-not-merged is allowed (e.g. writing off a debt).
+   * Throws when no transaction is open: the lock would be released before the caller's write.
+   */
+  async lockForLedger(id: string): Promise<Patient> {
+    this.context.requirePermission('patient:read');
+    if (!this.tenantDb.currentTransaction()) {
+      throw new Error('lockForLedger must run inside a transaction');
+    }
+    const patient = await this.patients.findForShare(id);
+    if (!patient) throw new PatientNotFoundError(NOT_FOUND);
+    if (patient.mergedIntoId !== null) {
+      throw new PatientMergedError('This record was merged into another one; use the kept record');
+    }
+    return toPatient(patient);
+  }
+
   // --- The Patients list ---
 
   /**

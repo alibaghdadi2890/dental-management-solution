@@ -13,10 +13,12 @@ import type {
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { BillingService } from '../../src/modules/billing';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { asPlatformAdminIn } from '../support/tenants';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -324,6 +326,16 @@ describe('tenant isolation through the public services', () => {
       );
       expect(balances.status).toBe(200);
       expect(balances.body).toEqual([{ patientId: a.patient.id, balances: [] }]);
+
+      // B's patient owes; A's owing list (the building block of A's patient views) never has it.
+      const owingInA = await asPlatformAdminIn(testApp.app, a.tenant.id, () =>
+        testApp.app.get(BillingService).patientIdsOwing(),
+      );
+      expect(owingInA).not.toContain(id);
+      const owingInB = await asPlatformAdminIn(testApp.app, b.tenant.id, () =>
+        testApp.app.get(BillingService).patientIdsOwing(),
+      );
+      expect(owingInB).toEqual([id]);
 
       expect((await bLedger()).rows).toEqual(before);
       const aLedger = await database.ownerPool.query(

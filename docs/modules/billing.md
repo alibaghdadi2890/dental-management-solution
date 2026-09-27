@@ -15,10 +15,14 @@ entries in each currency (design Q13). `billing` depends on `patients`; `patient
 - **Money:** `numeric(12,2)` plus a `currency` (CLAUDE.md §7). Positive means the patient owes;
   negative is a credit. Amounts travel as decimal strings and are summed exactly: by Postgres on
   `numeric`, then by `domain/balances.ts` on integer cents (`bigint`). Floats are never used.
+  Inputs are bounded by one `numeric(12,2)` (`decimalAmountSchema`, 10 integer digits), but a
+  sum can be wider: balances use `balanceMoneySchema` (`balanceAmountSchema`: up to 18 integer
+  digits, always 2 decimals).
 - **Currency:** each entry gets the tenant currency at write time. Changing the tenant currency
   converts nothing (ADR-0015). A patient can therefore have balances in several currencies:
   `balances` lists each non-zero one, ordered by currency code, and `[]` when there are none.
-- **Owing:** any currency's balance is positive (`isOwing`).
+- **Owing:** any currency's balance is positive. It is evaluated in SQL (`group by patient_id,
+currency having sum(amount) > 0`).
 - **Dates:** `asOf` (opening balance) and `effectiveDate` (adjustment) must not be after the
   tenant's today, computed from the injected clock in the tenant time zone. The contract only
   rejects dates that are obviously in the future. The service is the source of truth: a later
@@ -26,6 +30,12 @@ entries in each currency (design Q13). `billing` depends on `patients`; `patient
 - **Opening balance only on create** is enforced by the route (`POST /billing/opening-balances`
   creates the patient). The schema does not enforce it: a merge moves both records' opening
   balances onto the kept patient (design Q12).
+- **Locking against merges:** every ledger write first calls `PatientsService.lockForLedger`,
+  which reads the patient `FOR SHARE` in the same transaction as the insert. A merge locks both
+  records `FOR UPDATE`, so it waits for in-flight ledger writes, and the re-point job then finds
+  their entries. A merged-away patient refuses new entries: 409 `patient.merged` (the entry
+  belongs on the kept record). An archived patient that was not merged accepts them, for
+  example to write off a debt.
 
 ## Owns
 
@@ -34,7 +44,7 @@ entries in each currency (design Q13). `billing` depends on `patients`; `patient
   `currency char(3)`, `effective_date date`, `note?`, `reason?`, `created_by` (the actor's auth
   user id), timestamps.
   - `patient_id` has no foreign key, because `patients` owns that table. Existence is always
-    checked through `PatientsService.getMany`.
+    checked through `PatientsService`: `lockForLedger` for writes, `getMany` for reads.
   - Indexes: `tenant_id`, and `(tenant_id, patient_id)`.
   - Entries are never edited or deleted. The merge job (next task) will be the only writer that
     updates a row, and it will change `patient_id` only.
@@ -46,20 +56,21 @@ entries in each currency (design Q13). `billing` depends on `patients`; `patient
 
 `BillingService`: inputs are the contract's Zod output, and results are plain data.
 
-| Method                                                               | Access                            | Notes                                                                                                                                                                                                                                                                                                                                                                                     |
-| -------------------------------------------------------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createWithOpeningBalance({ patient, openingBalance })`              | `payment:write` + `patient:write` | `asOf` is checked before anything is written (path `openingBalance.asOf`). Then, in one `TenantDb` transaction: `PatientsService.create` and the `opening_balance` entry. The patient, its display number, both audit entries and both events commit or roll back together. The patient's field errors come back under `patient.` (e.g. `patient.phone`). Returns `{ patient, balance }`. |
-| `recordOpeningBalance(patientId, { amount, asOf, note? })`           | `payment:write`                   | A building block for the method above and for the feature 6 import. Unknown patient → 404 `patient.not_found`. Returns the patient's balance.                                                                                                                                                                                                                                             |
-| `adjustBalance(patientId, { amount, effectiveDate, reason, note? })` | `payment:write`                   | The amount is signed and non-zero. A reason is required and is written to the entry and the audit entry. Unknown patient → 404. Returns the balance after the entry. There is no UI for it in feature 3.                                                                                                                                                                                  |
-| `balanceOf(patientId)`                                               | `payment:read`                    | `{ patientId, balances }`. Unknown patient → 404.                                                                                                                                                                                                                                                                                                                                         |
-| `balancesFor(patientIds)`                                            | `payment:read`                    | Returned in input order, de-duplicated. Ids the tenant can't see are omitted. Patients without entries get `balances: []`. One aggregate query for all ids.                                                                                                                                                                                                                               |
-| `patientIdsOwing()`                                                  | not gated                         | Ids of the patients owing in any currency, archived ones included. A building block for `billing`'s own patient views, which check permissions themselves; never expose it directly.                                                                                                                                                                                                      |
+| Method                                                               | Access                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createWithOpeningBalance({ patient, openingBalance })`              | `payment:write` + `patient:write` | One `TenantDb` transaction. `asOf` is checked before anything is written (path `openingBalance.asOf`). Then `PatientsService.create` and the `opening_balance` entry; the new patient is not re-read. The patient, its display number, both audit entries and both events commit or roll back together. The patient's field errors come back under `patient.` (e.g. `patient.phone`). Returns `{ patient, balance }`. |
+| `recordOpeningBalance(patientId, { amount, asOf, note? })`           | `payment:write`                   | A building block for the feature 6 import. Checks `asOf` (path `asOf`) and locks the patient. Unknown patient → 404 `patient.not_found`; merged away → 409 `patient.merged`. Returns the patient's balance.                                                                                                                                                                                                           |
+| `adjustBalance(patientId, { amount, effectiveDate, reason, note? })` | `payment:write`                   | The amount is signed and non-zero. A reason is required and is written to the entry and the audit entry. Locks the patient: unknown → 404, merged away → 409 `patient.merged`, archived allowed. Returns the balance after the entry. There is no UI for it in feature 3.                                                                                                                                             |
+| `balanceOf(patientId)`                                               | `payment:read`                    | `{ patientId, balances }`. Unknown patient → 404.                                                                                                                                                                                                                                                                                                                                                                     |
+| `balancesFor(patientIds)`                                            | `payment:read`                    | Returned in input order, de-duplicated. Ids the tenant can't see are omitted. Patients without entries get `balances: []`. One aggregate query for all ids.                                                                                                                                                                                                                                                           |
+| `patientIdsOwing()`                                                  | `payment:read`                    | Ids of the patients owing in any currency, archived ones included, in id order. One SQL aggregate. A building block for `billing`'s patient views.                                                                                                                                                                                                                                                                    |
 
 Every write records the entry and audits `ledger_entry.create` (resource type `ledger_entry`,
 after = the entry, reason for adjustments) in the same transaction. It emits
 `LedgerEntryRecorded` after commit.
 
-Patient existence comes from `PatientsService.getMany`, which requires `patient:read`. In
+Patient existence comes from `PatientsService` (`getMany`, `lockForLedger`), which requires
+`patient:read`. In
 practice, reads and writes here need `patient:read` as well as the `payment:*` permission. Every
 system role holds it.
 
@@ -67,7 +78,6 @@ system role holds it.
 
 - `sumBalances(entries)`: Σ per currency on integer cents. Zero sums are dropped and the result
   is ordered by currency code.
-- `isOwing(balances)`: any amount > 0.
 - `rankByBalance(patients, dir, tenantCurrency)` → `{ ids, restAt }`: the order of "sort by
   balance", using the tenant-currency amount only (other currencies count as zero).
   - `desc`: debts, largest first; then everyone else; then credits, least negative first.
@@ -96,6 +106,12 @@ routes above, which all have three segments under `patients/` (`:id/balance`,
 `:id/adjustments`). If a two-segment `patients/:id` route is ever added, declare the static paths
 first. Across controllers, that means registering the patient-views controller first.
 
+## Known gaps
+
+- No `Idempotency-Key` on the money mutations yet (CLAUDE.md §12: mutations clients may retry,
+  such as payments, accept one). A retried `POST /billing/opening-balances` or adjustment
+  records twice. This is platform infrastructure, to be added with payments (feature 5).
+
 ## Events
 
 - Emits (after commit; the generic audit subscriber records each one):
@@ -104,7 +120,8 @@ first. Across controllers, that means registering the patient-views controller f
 
 ## Depends on
 
-- `patients`: existence (`getMany`), and `create` for the opening-balance create.
+- `patients`: existence (`getMany`), the ledger-write lock (`lockForLedger`), and `create` for
+  the opening-balance create.
 - `tenancy`: currency and time zone (`currentTenant`).
 - `audit`.
 

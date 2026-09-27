@@ -243,6 +243,21 @@ export class PatientsRepository {
   }
 
   /**
+   * Reads one row `FOR SHARE`: concurrent readers and other share-lockers proceed, but a merge,
+   * archive or edit (`FOR UPDATE`) waits until this transaction ends. Must run inside an
+   * already-open transaction (throws otherwise). Undefined when the id doesn't resolve under RLS.
+   */
+  async findForShare(id: string): Promise<DomainPatient | undefined> {
+    if (!this.db.currentTransaction()) {
+      throw new Error('findForShare must run inside a transaction');
+    }
+    const [row] = await this.db.run((tx) =>
+      tx.select().from(patients).where(eq(patients.id, id)).for('share'),
+    );
+    return row ? toDomain(row) : undefined;
+  }
+
+  /**
    * Locks both rows `FOR UPDATE` in id order (never in `(a, b)` argument order), so two concurrent
    * merges touching an overlapping pair of patients can never deadlock. Must run inside an
    * already-open transaction — `TenantDb.run()` would otherwise open and commit its own, releasing

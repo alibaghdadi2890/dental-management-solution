@@ -13,7 +13,9 @@ import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BillingService } from '../../src/modules/billing';
 import { LedgerEntriesRepository } from '../../src/modules/billing/persistence/ledger-entries.repository';
-import { PatientNotFoundError } from '../../src/modules/patients';
+import { PatientNotFoundError, PatientsService } from '../../src/modules/patients';
+import { PermissionDeniedError } from '../../src/platform/cls/permission-denied.error';
+import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
@@ -284,6 +286,17 @@ describe('billing: ledger, opening balances and balances', () => {
     });
   });
 
+  describe('PatientsService.lockForLedger', () => {
+    it('refuses to run outside the caller transaction (the lock would be released at once)', async () => {
+      const { patient } = await openWithBalance(main.owner, 'Lock Outside', '1.00');
+      await expect(
+        asPlatformAdminIn(testApp.app, main.tenant.id, () =>
+          testApp.app.get(PatientsService).lockForLedger(patient.id),
+        ),
+      ).rejects.toThrow(/inside a transaction/);
+    });
+  });
+
   describe('balances', () => {
     it('reads one patient: the sum, [] without entries, 404 for an unknown id', async () => {
       const { patient } = await openWithBalance(main.owner, 'Owes 250', '250.00');
@@ -410,9 +423,98 @@ describe('billing: ledger, opening balances and balances', () => {
         'EUR',
       ]);
     });
+
+    it('refuses a merged-away patient (409) but allows an archived one (write-off)', async () => {
+      const kept = await createPatient(main.owner, 'Merge Kept');
+      const dropped = (await openWithBalance(main.owner, 'Merge Dropped', '80.00')).patient;
+      const merged = await main.owner
+        .post('/api/v1/patients/merge')
+        .send({ keepId: kept.id, dropId: dropped.id, reason: 'Same person' });
+      expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+      const refused = await adjust(main.owner, dropped.id, {
+        amount: '-80.00',
+        effectiveDate: TODAY,
+        reason: 'late write-off',
+      });
+      expect(refused.status).toBe(409);
+      expect(refused.body).toMatchObject({ code: 'patient.merged' });
+      expect(await balanceOf(main.owner, dropped.id)).toMatchObject({
+        balances: [{ amount: '80.00', currency: 'USD' }],
+      });
+
+      const archived = (await openWithBalance(main.owner, 'Archived Debtor', '35.00')).patient;
+      expect(
+        (await main.owner.post('/api/v1/patients/archive').send({ ids: [archived.id] })).status,
+      ).toBe(200);
+      const writeOff = await adjust(main.owner, archived.id, {
+        amount: '-35.00',
+        effectiveDate: TODAY,
+        reason: 'bad debt write-off',
+      });
+      expect(writeOff.status).toBe(201);
+      expect(writeOff.body).toEqual({ patientId: archived.id, balances: [] });
+    });
+
+    it('returns sums wider than one numeric(12,2) amount', async () => {
+      const { patient } = await openWithBalance(main.owner, 'Very Rich Debt', '9999999999.99');
+      const response = await adjust(main.owner, patient.id, {
+        amount: '9999999999.99',
+        effectiveDate: TODAY,
+        reason: 'second maximum entry',
+      });
+      expect(response.status, JSON.stringify(response.body)).toBe(201);
+      const wide = [{ amount: '19999999999.98', currency: 'USD' }];
+      expect((response.body as PatientBalance).balances).toEqual(wide);
+      expect((await balanceOf(main.owner, patient.id)).balances).toEqual(wide);
+      const many = await main.owner.get(`/api/v1/billing/balances?patientIds=${patient.id}`);
+      expect(many.status).toBe(200);
+      expect(many.body).toEqual([{ patientId: patient.id, balances: wide }]);
+    });
+
+    it('records a platform admin acting in the tenant as the creator, flagged in the audit', async () => {
+      const { patient } = await openWithBalance(main.owner, 'Admin Adjusted', '20.00');
+      const adminId = ((await admin.get('/api/v1/session')).body as Session).user.id;
+      const response = await admin
+        .post(`/api/v1/billing/patients/${patient.id}/adjustments`)
+        .set('X-Tenant-Id', main.tenant.id)
+        .send({ amount: '-20.00', effectiveDate: TODAY, reason: 'support correction' });
+      expect(response.status, JSON.stringify(response.body)).toBe(201);
+
+      const entry = await database.ownerPool.query<{
+        created_by: string;
+        actor_user_id: string;
+        actor_platform_admin: boolean;
+        actor_kind: string;
+      }>(
+        `select e.created_by, a.actor_user_id, a.actor_platform_admin, a.actor_kind
+         from ledger_entries e join audit_log a on a.resource_id = e.id::text
+         where e.patient_id = $1 and e.kind = 'adjustment' and a.action = 'ledger_entry.create'`,
+        [patient.id],
+      );
+      expect(entry.rows).toEqual([
+        {
+          created_by: adminId,
+          actor_user_id: adminId,
+          actor_platform_admin: true,
+          actor_kind: 'user',
+        },
+      ]);
+    });
   });
 
   describe('patientIdsOwing', () => {
+    it('requires payment:read', async () => {
+      const service = testApp.app.get(BillingService);
+      await expect(
+        testApp.app
+          .get(RequestContext)
+          .run(
+            { requestId: newId(), actorKind: 'user', userId: newId(), tenantId: main.tenant.id },
+            () => service.patientIdsOwing(),
+          ),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+    });
+
     it('lists patients owing in any currency; settled and credit balances are not owing', async () => {
       const clinic = await provision('Owing Clinic');
       const owing = (await openWithBalance(clinic.owner, 'Owing', '100.00')).patient;

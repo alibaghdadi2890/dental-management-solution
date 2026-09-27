@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isOwing, rankByBalance, sumBalances } from './balances';
+import { rankByBalance, sumBalances } from './balances';
 
 const usd = (amount: string) => ({ amount, currency: 'USD' });
 const eur = (amount: string) => ({ amount, currency: 'EUR' });
@@ -41,17 +41,6 @@ describe('sumBalances', () => {
     expect(() => sumBalances([usd('1.234')])).toThrow(RangeError);
     expect(() => sumBalances([usd('1e3')])).toThrow(RangeError);
     expect(() => sumBalances([usd('')])).toThrow(RangeError);
-  });
-});
-
-describe('isOwing', () => {
-  it('is true when any currency is owed', () => {
-    expect(isOwing([eur('-20.00'), usd('0.01')])).toBe(true);
-  });
-
-  it('is false for credits only, or no balance', () => {
-    expect(isOwing([usd('-0.01'), eur('-3.00')])).toBe(false);
-    expect(isOwing([])).toBe(false);
   });
 });
 
