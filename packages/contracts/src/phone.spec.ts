@@ -1,0 +1,39 @@
+import { describe, expect, it } from 'vitest';
+import { formatPhone, normalizePhone, phoneDigits } from './phone.js';
+
+describe('normalizePhone', () => {
+  it('parses a Lebanese local number with a trunk prefix', () => {
+    expect(normalizePhone('03 123 456', 'LB')).toEqual({
+      e164: '+9613123456',
+      national: '03123456',
+    });
+  });
+
+  it('parses the same number without the trunk prefix identically', () => {
+    expect(normalizePhone('3123456', 'LB')).toEqual({ e164: '+9613123456', national: '03123456' });
+  });
+
+  it('honours a leading + for a different country than the tenant', () => {
+    expect(normalizePhone('+33 6 12 34 56 78', 'LB')).toEqual({
+      e164: '+33612345678',
+      national: '0612345678',
+    });
+  });
+
+  it('returns null for numbers that are too short or not numbers at all', () => {
+    expect(normalizePhone('12', 'LB')).toBeNull();
+    expect(normalizePhone('abc', 'LB')).toBeNull();
+  });
+});
+
+describe('formatPhone', () => {
+  it('formats a stored E.164 number for display', () => {
+    expect(formatPhone('+9613123456')).toBe('+961 3 123 456');
+  });
+});
+
+describe('phoneDigits', () => {
+  it('strips everything but digits', () => {
+    expect(phoneDigits(' (03) 12-3 ')).toBe('03123');
+  });
+});

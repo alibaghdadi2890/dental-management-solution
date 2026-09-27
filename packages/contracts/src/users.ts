@@ -62,3 +62,14 @@ export type StaffUserStatusChange = z.infer<typeof staffUserStatusChangeSchema>;
 /** Body of `POST /users/:id/reset-password`; the user must change it at next sign-in. */
 export const resetPasswordRequestSchema = z.object({ temporaryPassword: passwordSchema });
 export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
+
+/**
+ * A dentist a patient can be assigned to (`GET /users/practitioners`, feature 3 Q2). `userId` is
+ * the auth user id, the key `patients.primary_dentist_user_id` stores (ADR-0016).
+ */
+export const practitionerSchema = z.object({
+  userId: idSchema,
+  displayName: z.string(),
+  title: z.string().nullable(),
+});
+export type Practitioner = z.infer<typeof practitionerSchema>;

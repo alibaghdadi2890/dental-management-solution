@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
+  countrySchema,
   cursorPageQuerySchema,
   cursorPageSchema,
   idSchema,
   localeSchema,
   moneySchema,
+  offsetPageSchema,
   problemDetailsSchema,
   timeZoneSchema,
 } from './common.js';
@@ -98,5 +100,25 @@ describe('localeSchema', () => {
   it('accepts the three app languages', () => {
     expect(localeSchema.options).toEqual(['en', 'ar', 'fr']);
     expect(localeSchema.safeParse('de').success).toBe(false);
+  });
+});
+
+describe('countrySchema', () => {
+  it.each(['LB', 'FR'])('accepts %j', (country) => {
+    expect(countrySchema.safeParse(country).success).toBe(true);
+  });
+
+  it.each(['lb', 'LBN', ''])('rejects %j', (country) => {
+    expect(countrySchema.safeParse(country).success).toBe(false);
+  });
+});
+
+describe('offsetPageSchema', () => {
+  it('wraps an item schema into a page with total, page and size', () => {
+    const page = offsetPageSchema(z.string());
+    const value = { items: ['a', 'b'], total: 2, page: 1, size: 25 };
+    expect(page.parse(value)).toEqual(value);
+    expect(page.safeParse({ ...value, total: -1 }).success).toBe(false);
+    expect(page.safeParse({ ...value, page: 0 }).success).toBe(false);
   });
 });

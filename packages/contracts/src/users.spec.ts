@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  practitionerSchema,
   resetPasswordRequestSchema,
   staffUserCreateSchema,
   staffUserPatchSchema,
@@ -52,6 +53,16 @@ describe('staffUserPatchSchema', () => {
     expect(staffUserPatchSchema.parse({ email: 'x@y.z', displayName: 'A' })).toEqual({
       displayName: 'A',
     });
+  });
+});
+
+describe('practitionerSchema', () => {
+  it('accepts a nullable title', () => {
+    const practitioner = { userId: BRANCH, displayName: 'Dr. Ana Reyes', title: null };
+    expect(practitionerSchema.parse(practitioner)).toEqual(practitioner);
+    expect(practitionerSchema.parse({ ...practitioner, title: 'Orthodontist' }).title).toBe(
+      'Orthodontist',
+    );
   });
 });
 
