@@ -4,18 +4,19 @@
 
 ## Purpose
 
-Clinics (tenants), their settings (IANA time zone, currency, locale; defaults `Asia/Beirut`,
-`USD`, `en`), their branches, and each branch's rooms. A room is the physical unit a visit happens
-in and the unit `scheduling` will later book as a resource (ADR-0007); there is no chair concept.
-Tenants are created and listed only by platform admins through `withoutTenant()`; everything else
-runs inside the current tenant under RLS. End-to-end provisioning (first branch, owner, roles)
-is orchestrated by `provisioning`.
+Clinics (tenants), their settings (IANA time zone, currency, locale, country; defaults
+`Asia/Beirut`, `USD`, `en`, `LB`), their branches, and each branch's rooms. Country is ISO 3166-1
+alpha-2 and drives phone parsing (`patients`, feature 3 Q3) and date order (feature 3 Q17). A room
+is the physical unit a visit happens in and the unit `scheduling` will later book as a resource
+(ADR-0007); there is no chair concept. Tenants are created and listed only by platform admins
+through `withoutTenant()`; everything else runs inside the current tenant under RLS. End-to-end
+provisioning (first branch, owner, roles) is orchestrated by `provisioning`.
 
 ## Owns
 
-- `tenants` — `id, name, slug (unique), status (active|suspended), time_zone, currency, locale`.
-  No `tenant_id`; RLS policy `tenant_self` (`id` = the transaction's tenant) lets members read
-  their own row.
+- `tenants` — `id, name, slug (unique), status (active|suspended), time_zone, currency, locale,
+country (char(2), default 'LB')`. No `tenant_id`; RLS policy `tenant_self` (`id` = the
+  transaction's tenant) lets members read their own row.
 - `branches` — tenant RLS; `name` and `code` unique per tenant, case-insensitive; `active`.
 - `rooms` — tenant RLS; composite FK `(tenant_id, branch_id)` → `branches` so a room can never
   point at another tenant's branch (FK checks bypass RLS); `name` and `code` unique per branch.

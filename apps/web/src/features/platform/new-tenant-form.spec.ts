@@ -15,6 +15,7 @@ describe('new tenant form', () => {
       timeZone: 'Asia/Beirut',
       currency: 'USD',
       locale: 'en',
+      country: 'LB',
     });
     expect(isDirty(EMPTY_NEW_TENANT)).toBe(false);
     expect(isDirty(editNewTenant(EMPTY_NEW_TENANT, 'phone', '1'))).toBe(true);
@@ -60,6 +61,7 @@ describe('new tenant form', () => {
           timeZone: 'Asia/Beirut',
           currency: 'USD',
           locale: 'en',
+          country: 'LB',
         },
         firstBranch: { name: 'Main St', address: null, phone: null },
         owner: {

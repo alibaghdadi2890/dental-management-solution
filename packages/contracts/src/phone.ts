@@ -1,4 +1,4 @@
-import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
+import { getCountries, parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import type { CountryCode } from 'libphonenumber-js/max';
 
 /**
@@ -41,3 +41,10 @@ export function formatPhone(e164: string): string {
 export function phoneDigits(query: string): string {
   return query.replace(/\D/g, '');
 }
+
+/**
+ * Every ISO 3166-1 alpha-2 country `libphonenumber-js/max` has dialling data for — the same set
+ * `countrySchema` (`common.ts`) accepts. The one place the web app needs this list, so it re-uses
+ * this build instead of adding its own `libphonenumber-js` dependency (feature 3 Q3).
+ */
+export const SUPPORTED_COUNTRIES: readonly CountryCode[] = getCountries();

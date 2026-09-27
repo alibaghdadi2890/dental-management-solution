@@ -75,6 +75,7 @@
       "timeZone": "Time zone",
       "currency": "Currency",
       "locale": "Language",
+      "country": "Country",
       "branchName": "Branch name",
       "address": "Address",
       "phone": "Phone",

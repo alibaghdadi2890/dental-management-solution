@@ -21,6 +21,7 @@ const session: Session = {
     timeZone: 'America/New_York',
     currency: 'USD',
     locale: 'en',
+    country: 'LB',
   },
   branch: null,
   branches: [],

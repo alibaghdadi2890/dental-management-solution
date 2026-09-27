@@ -75,6 +75,7 @@
       "timeZone": "المنطقة الزمنية",
       "currency": "العملة",
       "locale": "اللغة",
+      "country": "الدولة",
       "branchName": "اسم الفرع",
       "address": "العنوان",
       "phone": "الهاتف",

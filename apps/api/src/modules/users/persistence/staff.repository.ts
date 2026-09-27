@@ -1,6 +1,6 @@
 import type { PractitionerType } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { staffBranches, staffProfiles } from './schema';
 
@@ -62,6 +62,33 @@ export class StaffRepository {
         .where(eq(staffProfiles.active, true)),
     );
     return rows.map((row) => row.authUserId);
+  }
+
+  /** Active dentists, ordered by display name (for `UsersService.listPractitioners`). */
+  practitioners(): Promise<StaffProfile[]> {
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(staffProfiles)
+          .where(and(eq(staffProfiles.practitionerType, 'dentist'), eq(staffProfiles.active, true)))
+          .orderBy(asc(staffProfiles.displayName))
+      ).map(toProfile),
+    );
+  }
+
+  /** Profiles among `authUserIds`, whatever their type or status (for `practitionersByIds`). */
+  async byUserIds(authUserIds: readonly string[]): Promise<StaffProfile[]> {
+    if (authUserIds.length === 0) return [];
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(staffProfiles)
+          .where(inArray(staffProfiles.authUserId, [...authUserIds]))
+          .orderBy(asc(staffProfiles.displayName))
+      ).map(toProfile),
+    );
   }
 
   async insert(profile: NewStaffProfile): Promise<void> {

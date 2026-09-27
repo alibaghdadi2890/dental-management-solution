@@ -16,6 +16,7 @@ const session: Session = {
     timeZone: 'America/New_York',
     currency: 'USD',
     locale: 'en',
+    country: 'LB',
   },
   branch: { id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70', name: 'Main St' },
   branches: [{ id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70', name: 'Main St' }],

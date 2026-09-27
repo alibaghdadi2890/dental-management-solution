@@ -16,6 +16,7 @@ const tenant: Tenant = {
   timeZone: 'Asia/Beirut',
   currency: 'USD',
   locale: 'en',
+  country: 'LB',
   createdAt: '2026-09-26T10:00:00.000Z',
 };
 

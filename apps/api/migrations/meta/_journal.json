@@ -57,6 +57,13 @@
       "when": 1790503894315,
       "tag": "0007_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790512914770,
+      "tag": "0008_tenant_country",
+      "breakpoints": true
     }
   ]
 }

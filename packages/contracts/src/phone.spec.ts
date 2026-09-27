@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatPhone, normalizePhone, phoneDigits } from './phone.js';
+import { formatPhone, normalizePhone, phoneDigits, SUPPORTED_COUNTRIES } from './phone.js';
 
 describe('normalizePhone', () => {
   it('parses a Lebanese local number with a trunk prefix', () => {
@@ -47,5 +47,16 @@ describe('formatPhone', () => {
 describe('phoneDigits', () => {
   it('strips everything but digits', () => {
     expect(phoneDigits(' (03) 12-3 ')).toBe('03123');
+  });
+});
+
+describe('SUPPORTED_COUNTRIES', () => {
+  it('lists every dialling country as upper-case ISO alpha-2, LB included, with no duplicates', () => {
+    expect(SUPPORTED_COUNTRIES.length).toBeGreaterThan(100);
+    expect(SUPPORTED_COUNTRIES).toContain('LB');
+    for (const code of SUPPORTED_COUNTRIES) {
+      expect(code).toMatch(/^[A-Z]{2}$/);
+    }
+    expect(new Set(SUPPORTED_COUNTRIES).size).toBe(SUPPORTED_COUNTRIES.length);
   });
 });

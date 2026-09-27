@@ -57,6 +57,7 @@ function sessionWith(permissions: Permission[]): Session {
       timeZone: 'Asia/Beirut',
       currency: 'USD',
       locale: 'en',
+      country: 'LB',
     },
     branch: null,
     branches: [],

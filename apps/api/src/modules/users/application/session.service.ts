@@ -71,6 +71,7 @@ export class SessionService {
         timeZone: tenant.timeZone,
         currency: tenant.currency,
         locale: tenant.locale,
+        country: tenant.country,
       },
       branches,
     };

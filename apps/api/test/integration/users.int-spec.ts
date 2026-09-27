@@ -1,10 +1,17 @@
-import type { AuditPage, Branch, Session, StaffUser, Tenant } from '@dcm/contracts';
+import type { AuditPage, Branch, Practitioner, Session, StaffUser, Tenant } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RolesService } from '../../src/modules/roles';
+import { UsersService } from '../../src/modules/users';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
-import { browser, createPlatformAdmin, signIn, uniqueEmail } from '../support/session';
+import {
+  browser,
+  createPlatformAdmin,
+  signIn,
+  signInAndSetPassword,
+  uniqueEmail,
+} from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
 import { asPlatformAdminIn, createBareTenant } from '../support/tenants';
 
@@ -238,6 +245,52 @@ describe('users: staff profiles with identity, branches and roles', () => {
     expect((await api.post(`/users/${first.id}/deactivate`, { reason: 'Leaving' })).status).toBe(
       200,
     );
+  });
+
+  describe('practitioners', () => {
+    it('lists only active dentists ordered by display name; a deactivated one is absent but still found by id', async () => {
+      const zed = await createUser({ displayName: 'Dr. Zed Nassar' });
+      const amir = await createUser({ displayName: 'Dr. Amir Haddad' });
+      const assistant = await createUser({
+        displayName: 'Nour Aziz',
+        practitionerType: 'assistant',
+        roleKeys: ['assistant'],
+      });
+
+      const relevant = (ids: string[], list: Practitioner[]) =>
+        list.filter((row) => ids.includes(row.userId));
+
+      const before = (await api.get('/users/practitioners')).body as Practitioner[];
+      expect(
+        relevant([zed.id, amir.id, assistant.id], before).map((row) => row.displayName),
+      ).toEqual(['Dr. Amir Haddad', 'Dr. Zed Nassar']);
+
+      expect(
+        (await api.post(`/users/${zed.id}/deactivate`, { reason: 'Left the clinic' })).status,
+      ).toBe(200);
+      const after = (await api.get('/users/practitioners')).body as Practitioner[];
+      expect(after.map((row) => row.userId)).not.toContain(zed.id);
+      expect(after.map((row) => row.userId)).toContain(amir.id);
+
+      const byIds = await asPlatformAdminIn(testApp.app, tenant.id, () =>
+        testApp.app.get(UsersService).practitionersByIds([zed.id, amir.id]),
+      );
+      expect(byIds.map((row) => row.userId).sort()).toEqual([zed.id, amir.id].sort());
+      expect(byIds.find((row) => row.userId === zed.id)).toMatchObject({
+        displayName: 'Dr. Zed Nassar',
+      });
+    });
+
+    it('is reachable by front desk (user:read, not a privileged read)', async () => {
+      const body = staff({
+        displayName: 'Jamie Ortiz',
+        practitionerType: 'frontdesk',
+        roleKeys: ['frontdesk'],
+      });
+      await createUser(body);
+      const agent = await signInAndSetPassword(testApp.app, body.email, TEMPORARY);
+      expect((await agent.get('/api/v1/users/practitioners')).status).toBe(200);
+    });
   });
 
   it('answers 404 for users of no one', async () => {

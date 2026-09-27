@@ -1,5 +1,6 @@
 import {
   idSchema,
+  practitionerSchema,
   resetPasswordRequestSchema,
   staffUserCreateSchema,
   staffUserPatchSchema,
@@ -17,6 +18,7 @@ class StaffUserCreateDto extends createZodDto(staffUserCreateSchema) {}
 class StaffUserPatchDto extends createZodDto(staffUserPatchSchema) {}
 class StaffUserStatusChangeDto extends createZodDto(staffUserStatusChangeSchema) {}
 class ResetPasswordDto extends createZodDto(resetPasswordRequestSchema) {}
+class PractitionerDto extends createZodDto(practitionerSchema) {}
 class UserParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 
 /** Staff users of the current tenant; `:id` is the auth user id (D7). */
@@ -29,6 +31,14 @@ export class UsersController {
   @ZodResponse({ type: [StaffUserDto] })
   list() {
     return this.users.list();
+  }
+
+  // Declared before `:id` so `practitioners` isn't captured as a user id.
+  @Get('practitioners')
+  @RequirePermission('user:read')
+  @ZodResponse({ type: [PractitionerDto] })
+  practitioners() {
+    return this.users.listPractitioners();
   }
 
   @Get(':id')

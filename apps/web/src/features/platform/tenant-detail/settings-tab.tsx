@@ -1,14 +1,14 @@
 import { LOCALES, type Tenant, type TenantSettingsPatch } from '@dcm/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, Select, TextInput } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast-context';
 import { platformKeys, updateTenantSettings } from '@/features/platform/platform-api';
-import { CURRENCIES, TIME_ZONES } from '@/features/platform/tenant-options';
+import { countryOptions, CURRENCIES, TIME_ZONES } from '@/features/platform/tenant-options';
 
-type SettingsForm = Pick<Tenant, 'name' | 'timeZone' | 'currency' | 'locale'>;
+type SettingsForm = Pick<Tenant, 'name' | 'timeZone' | 'currency' | 'locale' | 'country'>;
 
 function changed(tenant: Tenant, form: SettingsForm): TenantSettingsPatch {
   const patch: TenantSettingsPatch = {};
@@ -16,12 +16,13 @@ function changed(tenant: Tenant, form: SettingsForm): TenantSettingsPatch {
   if (form.timeZone !== tenant.timeZone) patch.timeZone = form.timeZone;
   if (form.currency !== tenant.currency) patch.currency = form.currency;
   if (form.locale !== tenant.locale) patch.locale = form.locale;
+  if (form.country !== tenant.country) patch.country = form.country;
   return patch;
 }
 
 /** Name, time zone, currency, locale with the POC save-state indicator. */
 export function SettingsTab({ tenant }: { tenant: Tenant }) {
-  const { t } = useTranslation(['admin', 'common']);
+  const { t, i18n } = useTranslation(['admin', 'common']);
   const toast = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<SettingsForm>(tenant);
@@ -29,6 +30,10 @@ export function SettingsTab({ tenant }: { tenant: Tenant }) {
   const patch = changed(tenant, form);
   const dirty = Object.keys(patch).length > 0;
   const mutation = useMutation({ mutationFn: () => updateTenantSettings(tenant.id, patch) });
+  const countries = useMemo(
+    () => countryOptions(i18n.resolvedLanguage ?? 'en'),
+    [i18n.resolvedLanguage],
+  );
 
   const set = (key: keyof SettingsForm) => (value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -128,6 +133,23 @@ export function SettingsTab({ tenant }: { tenant: Tenant }) {
             )}
           </Field>
         </div>
+        <Field label={t('newTenant.fields.country')}>
+          {(props) => (
+            <Select
+              {...props}
+              value={form.country}
+              onChange={(event) => {
+                set('country')(event.target.value);
+              }}
+            >
+              {countries.map((country) => (
+                <option key={country.code} value={country.code}>
+                  {country.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
       </div>
       <div className="mt-5 flex items-center gap-3">
         {state && (

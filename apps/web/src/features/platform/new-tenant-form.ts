@@ -13,6 +13,7 @@ export interface NewTenantForm {
   timeZone: string;
   currency: string;
   locale: string;
+  country: string;
   branchName: string;
   address: string;
   phone: string;
@@ -66,6 +67,7 @@ const FIELD_BY_PATH: Record<string, NewTenantField> = {
   'clinic.timeZone': 'timeZone',
   'clinic.currency': 'currency',
   'clinic.locale': 'locale',
+  'clinic.country': 'country',
   'firstBranch.name': 'branchName',
   'firstBranch.address': 'address',
   'firstBranch.phone': 'phone',
@@ -95,6 +97,7 @@ export function toProvisionRequest(
       timeZone: form.timeZone,
       currency: form.currency,
       locale: form.locale,
+      country: form.country,
     },
     firstBranch: { name: form.branchName, address: form.address, phone: form.phone },
     owner: {

@@ -23,6 +23,13 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
 `UsersModule`, `UsersService`:
 
 - `list()`, `get(userId)` (`user:read`) — `StaffUser` with email, roles and branches.
+- `listPractitioners()` — active staff whose `practitioner_type = 'dentist'`, ordered by display
+  name. Not permission-gated: a building block like `TenancyService.activeBranches`, used wherever
+  the app offers "assign a dentist" (feature 3 Q2); `GET /users/practitioners` still requires
+  `user:read` (every system role holds it).
+- `practitionersByIds(ids)` — practitioners among `ids` whatever their current type or active
+  status, for showing the display name of a dentist already assigned to a patient even after they
+  leave or change role.
 - `createStaffUser(input)` (`user:write`, roles also need `role:write`): identity with a temporary
   password (D6) → membership mirror → profile → branches → roles, one transaction; a failure in any
   step rolls the identity back. `409 user.email_taken` for a registered email (D7 extension point:
@@ -47,6 +54,7 @@ Every mutation is audited (`user.create`, `user.update` with before/after, `user
 | -------------------------------- | -------------------------------------- |
 | `GET /session`                   | Authenticated, pending password ok     |
 | `GET /users`, `GET /users/:id`   | `user:read`                            |
+| `GET /users/practitioners`       | `user:read`                            |
 | `POST /users`                    | `user:write`                           |
 | `PATCH /users/:id`               | `user:write`                           |
 | `POST /users/:id/deactivate`     | `user:write` (`{ reason }`)            |

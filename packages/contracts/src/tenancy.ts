@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { emailSchema, passwordSchema } from './auth.js';
 import {
+  countrySchema,
   currencySchema,
   idSchema,
   isoDateTimeSchema,
@@ -11,8 +12,13 @@ import {
 } from './common.js';
 import { reasonSchema } from './audit.js';
 
-/** Tenant defaults (D8); all editable per tenant. */
-export const TENANT_DEFAULTS = { timeZone: 'Asia/Beirut', currency: 'USD', locale: 'en' } as const;
+/** Tenant defaults (D8); all editable per tenant. Country default LB (feature 3 Q3). */
+export const TENANT_DEFAULTS = {
+  timeZone: 'Asia/Beirut',
+  currency: 'USD',
+  locale: 'en',
+  country: 'LB',
+} as const;
 
 export const SLUG_MAX_LENGTH = 48;
 
@@ -45,6 +51,8 @@ export const tenantSchema = z.object({
   timeZone: timeZoneSchema,
   currency: currencySchema,
   locale: localeSchema,
+  /** ISO 3166-1 alpha-2; drives phone parsing (`phone.ts`) and date order (feature 3 Q3/Q17). */
+  country: countrySchema,
   createdAt: isoDateTimeSchema,
 });
 export type Tenant = z.infer<typeof tenantSchema>;
@@ -55,6 +63,7 @@ export const tenantSettingsPatchSchema = z
     timeZone: timeZoneSchema.optional(),
     currency: currencySchema.optional(),
     locale: localeSchema.optional(),
+    country: countrySchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, {
     message: 'Change at least one setting',
@@ -121,6 +130,7 @@ export const provisionTenantRequestSchema = z.object({
     timeZone: timeZoneSchema.default(TENANT_DEFAULTS.timeZone),
     currency: currencySchema.default(TENANT_DEFAULTS.currency),
     locale: localeSchema.default(TENANT_DEFAULTS.locale),
+    country: countrySchema.default(TENANT_DEFAULTS.country),
   }),
   firstBranch: branchCreateSchema.omit({ code: true }),
   owner: z.object({

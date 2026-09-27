@@ -75,6 +75,7 @@
       "timeZone": "Fuseau horaire",
       "currency": "Devise",
       "locale": "Langue",
+      "country": "Pays",
       "branchName": "Nom du site",
       "address": "Adresse",
       "phone": "Téléphone",

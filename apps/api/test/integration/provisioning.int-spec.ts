@@ -25,10 +25,14 @@ describe('provisioning (platform admin)', () => {
   let testApp: TestApp;
   let admin: TestAgent;
 
-  const request = (overrides: { slug?: string; email?: string } = {}) => {
+  const request = (overrides: { slug?: string; email?: string; country?: string } = {}) => {
     const slug = overrides.slug ?? `clinic-${newId().slice(-12)}`;
     return {
-      clinic: { name: `Clinic ${slug}`, slug },
+      clinic: {
+        name: `Clinic ${slug}`,
+        slug,
+        ...(overrides.country && { country: overrides.country }),
+      },
       firstBranch: { name: 'Main St', address: '1 Main St', phone: '+961 1 000 000' },
       owner: {
         displayName: 'Dr. Owner',
@@ -64,6 +68,7 @@ describe('provisioning (platform admin)', () => {
       timeZone: 'Asia/Beirut',
       currency: 'USD',
       locale: 'en',
+      country: 'LB',
     });
 
     const session = (await admin.get('/api/v1/session').set('X-Tenant-Id', tenant.id))
@@ -102,6 +107,11 @@ describe('provisioning (platform admin)', () => {
       ownerUserId: users[0]?.id,
       firstBranchId: session.branches[0]?.id,
     });
+  });
+
+  it('stores an explicit clinic country instead of the LB default', async () => {
+    const tenant = (await provision(request({ country: 'FR' }))).body as Tenant;
+    expect(tenant.country).toBe('FR');
   });
 
   it('gives the owner a working account with every clinic permission', async () => {

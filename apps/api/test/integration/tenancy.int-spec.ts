@@ -66,6 +66,25 @@ describe('tenancy: tenant settings, branches and rooms', () => {
         after: { timeZone: 'Europe/Paris' },
       });
     });
+
+    it('defaults country to LB, and round-trips a change through settings and the session', async () => {
+      expect((await api.get('/tenant')).body).toMatchObject({ country: 'LB' });
+      expect((await api.patch('/tenant', { country: 'zz' })).status).toBe(400);
+
+      const response = await api.patch('/tenant', { country: 'FR' });
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ country: 'FR' });
+
+      const [entry] = await auditOf(tenant.id);
+      expect(entry).toMatchObject({
+        action: 'tenant.update',
+        before: { country: 'LB' },
+        after: { country: 'FR' },
+      });
+
+      const session = (await api.get('/session')).body as Session;
+      expect(session.tenant).toMatchObject({ country: 'FR' });
+    });
   });
 
   describe('branches', () => {

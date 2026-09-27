@@ -43,8 +43,20 @@ describe('provisionTenantRequestSchema', () => {
 
   it('applies the D8 defaults and normalises the owner email', () => {
     const parsed = provisionTenantRequestSchema.parse(request);
-    expect(parsed.clinic).toMatchObject({ timeZone: 'Asia/Beirut', currency: 'USD', locale: 'en' });
+    expect(parsed.clinic).toMatchObject({
+      timeZone: 'Asia/Beirut',
+      currency: 'USD',
+      locale: 'en',
+      country: 'LB',
+    });
     expect(parsed.owner.email).toBe('reyes@example.com');
+  });
+
+  it('accepts an explicit country and rejects an unsupported one', () => {
+    const withCountry = { ...request, clinic: { ...request.clinic, country: 'FR' } };
+    expect(provisionTenantRequestSchema.parse(withCountry).clinic.country).toBe('FR');
+    const invalid = { ...request, clinic: { ...request.clinic, country: 'ZZ' } };
+    expect(provisionTenantRequestSchema.safeParse(invalid).success).toBe(false);
   });
 
   it('applies the password policy to the temporary password', () => {
@@ -83,5 +95,10 @@ describe('branches and rooms', () => {
   it('refuses an empty settings patch', () => {
     expect(tenantSettingsPatchSchema.safeParse({}).success).toBe(false);
     expect(tenantSettingsPatchSchema.safeParse({ locale: 'fr' }).success).toBe(true);
+  });
+
+  it('accepts a country change and rejects an unsupported code', () => {
+    expect(tenantSettingsPatchSchema.safeParse({ country: 'FR' }).success).toBe(true);
+    expect(tenantSettingsPatchSchema.safeParse({ country: 'zz' }).success).toBe(false);
   });
 });

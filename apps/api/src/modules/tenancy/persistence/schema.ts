@@ -36,6 +36,8 @@ export const tenants = pgTable(
     timeZone: text().notNull(),
     currency: char({ length: 3 }).notNull(),
     locale: text().notNull(),
+    /** ISO 3166-1 alpha-2; drives phone parsing and date order (feature 3 Q3/Q17). */
+    country: char({ length: 2 }).notNull().default('LB'),
     ...timestamps(),
   },
   () => [

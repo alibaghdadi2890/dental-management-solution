@@ -1,0 +1,1 @@
+ALTER TABLE "tenants" ADD COLUMN "country" char(2) DEFAULT 'LB' NOT NULL;

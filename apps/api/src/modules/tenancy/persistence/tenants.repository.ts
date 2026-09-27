@@ -13,7 +13,7 @@ import { branches, tenants } from './schema';
 type TenantRow = typeof tenants.$inferSelect;
 export type NewTenant = Pick<
   typeof tenants.$inferInsert,
-  'id' | 'name' | 'slug' | 'timeZone' | 'currency' | 'locale'
+  'id' | 'name' | 'slug' | 'timeZone' | 'currency' | 'locale' | 'country'
 >;
 
 export function toTenant(row: TenantRow): Tenant {
@@ -25,6 +25,7 @@ export function toTenant(row: TenantRow): Tenant {
     timeZone: row.timeZone,
     currency: row.currency,
     locale: row.locale as Tenant['locale'],
+    country: row.country as Tenant['country'],
     createdAt: row.createdAt.toISOString(),
   };
 }

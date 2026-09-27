@@ -1,4 +1,10 @@
-import type { SystemRoleKey, StaffUser, StaffUserCreate, StaffUserPatch } from '@dcm/contracts';
+import type {
+  Practitioner,
+  StaffUser,
+  StaffUserCreate,
+  StaffUserPatch,
+  SystemRoleKey,
+} from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -18,6 +24,10 @@ import { type StaffProfile, StaffRepository } from '../persistence/staff.reposit
 const OWNER: SystemRoleKey = 'owner';
 
 const distinct = (ids: readonly string[]) => [...new Set(ids)];
+
+function toPractitioner(profile: StaffProfile): Practitioner {
+  return { userId: profile.authUserId, displayName: profile.displayName, title: profile.title };
+}
 
 /**
  * Staff users of the current tenant (docs/modules/users.md): the identity (`auth`), the membership
@@ -44,6 +54,25 @@ export class UsersService {
   get(userId: string): Promise<StaffUser> {
     this.context.requirePermission('user:read');
     return this.tenantDb.run(() => this.load(userId));
+  }
+
+  /**
+   * Active dentists, ordered by display name. Not permission-gated here: a building block like
+   * `TenancyService.activeBranches`, used wherever the app offers "assign a dentist" (feature 3
+   * Q2); `GET /users/practitioners` still requires `user:read`.
+   */
+  listPractitioners(): Promise<Practitioner[]> {
+    return this.tenantDb.run(async () => (await this.staff.practitioners()).map(toPractitioner));
+  }
+
+  /**
+   * Practitioners among `userIds` whatever their current type or active status — for showing the
+   * display name of a dentist already assigned to a patient even after they leave or change role.
+   */
+  practitionersByIds(userIds: readonly string[]): Promise<Practitioner[]> {
+    return this.tenantDb.run(async () =>
+      (await this.staff.byUserIds(distinct(userIds))).map(toPractitioner),
+    );
   }
 
   /**

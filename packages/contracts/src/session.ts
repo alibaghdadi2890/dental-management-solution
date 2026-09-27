@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { currencySchema, idSchema, localeSchema, timeZoneSchema } from './common.js';
+import { countrySchema, currencySchema, idSchema, localeSchema, timeZoneSchema } from './common.js';
 import { permissionSchema } from './permissions.js';
 
 export const branchRefSchema = z.object({ id: idSchema, name: z.string() });
@@ -25,6 +25,7 @@ export const sessionSchema = z.object({
       timeZone: timeZoneSchema,
       currency: currencySchema,
       locale: localeSchema,
+      country: countrySchema,
     })
     .nullable(),
   /** Active branch; the sidebar shows a switcher when `branches` has more than one entry. */
