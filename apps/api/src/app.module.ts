@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from './modules/audit';
 import { AuthModule } from './modules/auth';
 import { AuthorizationModule } from './modules/authorization';
+import { BillingModule } from './modules/billing';
 import { ClinicalModule } from './modules/clinical';
 import { ImportsModule } from './modules/imports';
 import { PatientsModule } from './modules/patients';
@@ -47,6 +48,7 @@ export const DOMAIN_MODULES = [
   AuthorizationModule,
   AuditModule,
   PatientsModule,
+  BillingModule,
   ClinicalModule,
   ImportsModule,
   ProvisioningModule,

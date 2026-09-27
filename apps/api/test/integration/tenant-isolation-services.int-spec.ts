@@ -31,8 +31,8 @@ interface Clinic {
 
 /**
  * CLAUDE.md §14: tenant A's users cannot read or affect tenant B's rows through any public
- * service — branches, rooms, users, roles, audit, catalogs, patients — and cannot pick B with
- * `X-Tenant-Id`.
+ * service — branches, rooms, users, roles, audit, catalogs, patients, balances — and cannot pick
+ * B with `X-Tenant-Id`.
  */
 describe('tenant isolation through the public services', () => {
   let database: TestDatabase;
@@ -294,6 +294,45 @@ describe('tenant isolation through the public services', () => {
       ]);
     });
 
+    it("billing: B's patients have no balance for A, and B's ledger is left unchanged", async () => {
+      const recorded = await admin
+        .post(`/api/v1/billing/patients/${b.patient.id}/adjustments`)
+        .set('X-Tenant-Id', b.tenant.id)
+        .send({ amount: '75.00', effectiveDate: '2026-01-15', reason: 'Carried over' });
+      expect(recorded.status).toBe(201);
+      const bLedger = () =>
+        database.ownerPool.query(
+          'select patient_id, amount::text, currency from ledger_entries where tenant_id = $1',
+          [b.tenant.id],
+        );
+      const before = (await bLedger()).rows;
+      expect(before).toEqual([{ patient_id: b.patient.id, amount: '75.00', currency: 'USD' }]);
+
+      const id = b.patient.id;
+      const attempts = [
+        ownerA.get(`/api/v1/billing/patients/${id}/balance`),
+        ownerA
+          .post(`/api/v1/billing/patients/${id}/adjustments`)
+          .send({ amount: '-75.00', effectiveDate: '2026-01-15', reason: 'Hijack' }),
+      ];
+      for (const response of await Promise.all(attempts)) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'patient.not_found' });
+      }
+      const balances = await ownerA.get(
+        `/api/v1/billing/balances?patientIds=${a.patient.id},${id}`,
+      );
+      expect(balances.status).toBe(200);
+      expect(balances.body).toEqual([{ patientId: a.patient.id, balances: [] }]);
+
+      expect((await bLedger()).rows).toEqual(before);
+      const aLedger = await database.ownerPool.query(
+        'select count(*)::int as n from ledger_entries where tenant_id = $1',
+        [a.tenant.id],
+      );
+      expect(aLedger.rows).toEqual([{ n: 0 }]);
+    });
+
     it("A's patient creates never advance B's counter", async () => {
       const counter = async (tenantId: string) =>
         (
@@ -372,6 +411,7 @@ describe('tenant isolation through the public services', () => {
       'diagnoses',
       'patients',
       'patient_counters',
+      'ledger_entries',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class
