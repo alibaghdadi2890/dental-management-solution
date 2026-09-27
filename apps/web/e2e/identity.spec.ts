@@ -92,4 +92,10 @@ test('platform admin provisions a clinic and a user, who then signs in to the cl
   await expect(page.getByRole('link', { name: 'Catalog' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Settings' })).toBeHidden();
   await expect(page.getByText('Managing')).toBeHidden();
+
+  // The front desk reads the catalog but cannot change it.
+  await page.getByRole('link', { name: 'Catalog' }).click();
+  await expect(page.getByText(/managed by the clinic owner/)).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Name' }).first()).toHaveValue('Extraction');
+  await expect(page.getByRole('button', { name: 'Add service' })).toBeHidden();
 });

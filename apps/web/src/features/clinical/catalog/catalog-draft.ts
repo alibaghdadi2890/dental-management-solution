@@ -43,6 +43,11 @@ export interface CatalogDraft {
 
 type Item = ServiceItem | DiagnosisItem;
 
+/** "30.00" → "30", "45.50" → "45.5": prices read as the POC shows them. */
+export function plainAmount(amount: string): string {
+  return amount.includes('.') ? amount.replace(/\.?0+$/, '') : amount;
+}
+
 function rowFrom(item: Item): DraftRow {
   const service = 'price' in item ? item : undefined;
   return {
@@ -52,7 +57,7 @@ function rowFrom(item: Item): DraftRow {
     name: item.name,
     category: item.category ?? '',
     chargeUnit: service?.chargeUnit ?? 'per_tooth',
-    price: service?.price.amount ?? '0',
+    price: service ? plainAmount(service.price.amount) : '0',
     currency: service?.price.currency ?? null,
     frequent: item.frequent,
     active: item.active,

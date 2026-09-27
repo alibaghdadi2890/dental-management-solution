@@ -16,6 +16,7 @@ import {
   editRow,
   isRowChanged,
   missingCount,
+  plainAmount,
   sanitizePrice,
   serverRowErrors,
 } from './catalog-draft';
@@ -63,7 +64,7 @@ describe('catalog draft', () => {
       id: id(1),
       code: 'EXT',
       category: 'Surgical',
-      price: '30.00',
+      price: '30',
       currency: 'USD',
     });
     expect(row(draft, 'services', id(3)).category).toBe('');
@@ -218,6 +219,18 @@ describe('catalog draft', () => {
         { path: 'items', code: 'duplicate', message: 'ignored: no row' },
       ]),
     ).toEqual(new Map([['new-1', 'Code ZIR is already used by "Zircon crown"']]));
+  });
+});
+
+describe('plainAmount', () => {
+  it.each([
+    ['30.00', '30'],
+    ['45.50', '45.5'],
+    ['100', '100'],
+    ['100.00', '100'],
+    ['0.00', '0'],
+  ])('%j → %j', (input, output) => {
+    expect(plainAmount(input)).toBe(output);
   });
 });
 

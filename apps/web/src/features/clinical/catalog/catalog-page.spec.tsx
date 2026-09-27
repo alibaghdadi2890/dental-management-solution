@@ -177,7 +177,7 @@ describe('CatalogPage', () => {
           name: 'Composite',
           category: 'Restorative',
           chargeUnit: 'per_tooth',
-          price: '30.00',
+          price: '30',
           frequent: true,
           active: true,
         },

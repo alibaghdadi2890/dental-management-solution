@@ -126,7 +126,14 @@
       "users": "Users",
       "owner": "Owner",
       "created": "Created",
-      "activeOf": "{{active}} active of {{total}}"
+      "activeOf": "{{active}} active of {{total}}",
+      "services": "Services",
+      "diagnoses": "Diagnoses",
+      "catalogEmpty": "This clinic has no services or diagnoses yet.",
+      "catalogEmptyHint": "Start from the default catalog; the owner can edit every row afterwards.",
+      "seed": "Seed default catalog",
+      "seeded": "Default catalog added: {{services}} services, {{diagnoses}} diagnoses",
+      "seedFailed": "Couldn't seed the catalog: {{reason}}"
     }
   },
   "branches": {

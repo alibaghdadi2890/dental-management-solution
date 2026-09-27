@@ -126,7 +126,14 @@
       "users": "Utilisateurs",
       "owner": "Propriétaire",
       "created": "Créé le",
-      "activeOf": "{{active}} actifs sur {{total}}"
+      "activeOf": "{{active}} actifs sur {{total}}",
+      "services": "Actes",
+      "diagnoses": "Diagnostics",
+      "catalogEmpty": "Cette clinique n’a encore ni actes ni diagnostics.",
+      "catalogEmptyHint": "Partez du catalogue par défaut ; le titulaire pourra ensuite modifier chaque ligne.",
+      "seed": "Charger le catalogue par défaut",
+      "seeded": "Catalogue par défaut ajouté : {{services}} actes, {{diagnoses}} diagnostics",
+      "seedFailed": "Impossible de charger le catalogue : {{reason}}"
     }
   },
   "branches": {

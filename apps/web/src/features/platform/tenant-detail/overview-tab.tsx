@@ -1,7 +1,15 @@
 import type { StaffUser, Tenant } from '@dcm/contracts';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/components/ui/toast-context';
+import {
+  catalogKeys,
+  diagnosesQuery,
+  seedDefaultCatalog,
+  servicesQuery,
+} from '@/features/clinical/catalog/catalog-api';
 import { branchesQuery, roomsQuery, usersQuery } from '@/features/platform/platform-api';
 import { formatDate } from '@/lib/format';
 
@@ -27,10 +35,58 @@ function Card({
 
 const pending = '—';
 
+/**
+ * Shown while both catalogs are empty (tenants provisioned before feature 2, or a failed seeding
+ * after provisioning): seeds the default template once, then disappears (C3).
+ */
+function SeedCatalogCard({ tenantId }: { tenantId: string }) {
+  const { t } = useTranslation(['admin', 'common']);
+  const toast = useToast();
+  const queryClient = useQueryClient();
+  const seed = useMutation({
+    mutationFn: () => seedDefaultCatalog(tenantId),
+    onSuccess: async (result) => {
+      await queryClient.invalidateQueries({ queryKey: catalogKeys.all });
+      toast(t('detail.overview.seeded', result));
+    },
+    onError: (error) => {
+      toast(
+        t('detail.overview.seedFailed', {
+          reason: error.message || t('common:unexpected'),
+        }),
+        { tone: 'danger' },
+      );
+    },
+  });
+  return (
+    <div className="col-span-full flex flex-wrap items-center gap-3 rounded-xl border border-warning-border bg-warning-bg px-4 py-3.5">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] leading-snug font-semibold text-warning">
+          {t('detail.overview.catalogEmpty')}
+        </div>
+        <div className="mt-0.5 text-[12.5px] leading-snug text-ink-secondary">
+          {t('detail.overview.catalogEmptyHint')}
+        </div>
+      </div>
+      <Button
+        variant="primary"
+        busy={seed.isPending}
+        onClick={() => {
+          seed.mutate();
+        }}
+      >
+        {t('detail.overview.seed')}
+      </Button>
+    </div>
+  );
+}
+
 export function OverviewTab({ tenant }: { tenant: Tenant }) {
   const { t, i18n } = useTranslation('admin');
   const branches = useQuery(branchesQuery(tenant.id));
   const rooms = useQuery(roomsQuery(tenant.id));
+  const services = useQuery(servicesQuery(tenant.id));
+  const diagnoses = useQuery(diagnosesQuery(tenant.id));
   const users = useQuery({
     ...usersQuery(tenant.id),
     select: (all) => all.filter((user) => user.active),
@@ -57,8 +113,11 @@ export function OverviewTab({ tenant }: { tenant: Tenant }) {
     ?.filter((user) => user.roles.some((role) => role.key === 'owner'))
     .map((user) => user.displayName);
 
+  const catalogEmpty = services.data?.length === 0 && diagnoses.data?.length === 0;
+
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+      {catalogEmpty && <SeedCatalogCard tenantId={tenant.id} />}
       <Card
         label={t('detail.overview.branches')}
         value={branches.data?.length ?? pending}
@@ -68,6 +127,16 @@ export function OverviewTab({ tenant }: { tenant: Tenant }) {
         label={t('detail.overview.rooms')}
         value={rooms.data?.length ?? pending}
         detail={activeOf(rooms.data)}
+      />
+      <Card
+        label={t('detail.overview.services')}
+        value={services.data?.length ?? pending}
+        detail={activeOf(services.data)}
+      />
+      <Card
+        label={t('detail.overview.diagnoses')}
+        value={diagnoses.data?.length ?? pending}
+        detail={activeOf(diagnoses.data)}
       />
       <Card
         label={t('detail.overview.users')}
