@@ -50,6 +50,13 @@
       "when": 1790503333106,
       "tag": "0006_catalog_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790503894315,
+      "tag": "0007_catalog",
+      "breakpoints": true
     }
   ]
 }
