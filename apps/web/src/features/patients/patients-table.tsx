@@ -82,14 +82,15 @@ export function PatientsTableHead({
   query,
   onSort,
   canSortBalance,
-  allSelected,
+  selection,
   onToggleAll,
   selectable,
 }: {
   query: PatientListQuery;
   onSort: (column: SortableColumn) => void;
   canSortBalance: boolean;
-  allSelected: boolean;
+  /** How much of the page is selected; `some` shows the select-all box as indeterminate. */
+  selection: 'none' | 'some' | 'all';
   onToggleAll: () => void;
   selectable: boolean;
 }) {
@@ -104,7 +105,10 @@ export function PatientsTableHead({
         <input
           type="checkbox"
           aria-label={t('columns.selectAll')}
-          checked={allSelected}
+          ref={(input) => {
+            if (input) input.indeterminate = selection === 'some';
+          }}
+          checked={selection === 'all'}
           disabled={!selectable}
           onChange={onToggleAll}
           className={checkboxClass}
@@ -127,7 +131,9 @@ export function PatientsTableHead({
       ) : (
         <PlainHeader label={t('columns.balance')} end />
       )}
-      <span role="columnheader" />
+      <span role="columnheader">
+        <span className="sr-only">{t('columns.actions')}</span>
+      </span>
     </div>
   );
 }
@@ -165,10 +171,10 @@ export function PatientsSkeleton({ label }: { label: string }) {
 
 const AVATAR_TONES = [
   'bg-primary-tint text-primary',
-  'bg-[#f3eee2] text-warning',
+  'bg-avatar-amber text-warning',
   'bg-success-bg text-success',
-  'bg-[#f6ebe9] text-[#8a3a2e]',
-  'bg-[#eeecf3] text-[#4f4870]',
+  'bg-avatar-rose text-avatar-rose-ink',
+  'bg-avatar-violet text-avatar-violet-ink',
 ] as const;
 
 /** 28px round avatar; the POC picks its tone from the name's length. */
@@ -239,6 +245,7 @@ export function PatientRow({
   balances,
   selected,
   highlighted,
+  stale,
   onToggle,
   onOpen,
   menu,
@@ -250,6 +257,8 @@ export function PatientRow({
   selected: boolean;
   /** The row whose panel is open. */
   highlighted: boolean;
+  /** A row of the previous query, shown while the next one loads: dimmed and inert. */
+  stale: boolean;
   onToggle: () => void;
   onOpen: () => void;
   menu: ReactNode;
@@ -275,12 +284,12 @@ export function PatientRow({
   return (
     <div
       role="row"
-      aria-selected={selected}
-      onClick={onOpen}
+      onClick={stale ? undefined : onOpen}
       className={cn(
-        'grid min-h-14 cursor-pointer items-center gap-2.5 border-t border-row-divider px-3 py-1.5 hover:bg-faint',
+        'grid min-h-14 items-center gap-2.5 border-t border-row-divider px-3 py-1.5',
+        !stale && 'cursor-pointer hover:bg-faint',
         selected ? 'bg-selected' : highlighted ? 'bg-faint' : 'bg-surface',
-        archived && 'opacity-75',
+        stale ? 'opacity-60' : archived && 'opacity-75',
       )}
       style={{ gridTemplateColumns: PATIENT_COLUMNS }}
     >
@@ -294,6 +303,7 @@ export function PatientRow({
           type="checkbox"
           aria-label={t('row.select', { name: patient.fullName })}
           checked={selected}
+          disabled={stale}
           onChange={onToggle}
           className={checkboxClass}
         />
@@ -301,11 +311,12 @@ export function PatientRow({
       <span role="cell" className="min-w-0">
         <button
           type="button"
+          disabled={stale}
           onClick={(event) => {
             event.stopPropagation();
             onOpen();
           }}
-          className="flex max-w-full min-w-0 cursor-pointer items-center gap-2.5 text-start"
+          className="flex max-w-full min-w-0 cursor-pointer items-center gap-2.5 text-start disabled:cursor-default"
         >
           <PatientAvatar name={patient.fullName} />
           <span className="min-w-0">

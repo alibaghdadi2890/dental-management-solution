@@ -1,5 +1,5 @@
 import { AlertDialog } from 'radix-ui';
-import { type ReactNode, useCallback, useState } from 'react';
+import { type ReactNode, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
@@ -18,6 +18,8 @@ export function ConfirmDialog({
   const { t } = useTranslation('common');
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const confirmed = useRef(false);
   const danger = options.tone === 'danger';
   const blocked =
     options.reasonLabel !== undefined &&
@@ -27,12 +29,16 @@ export function ConfirmDialog({
   const confirm = async () => {
     if (blocked) return;
     setBusy(true);
+    setError(null);
     try {
       await options.onConfirm(reason.trim());
-      onClose();
-    } finally {
+    } catch (failure) {
+      setError(failure instanceof Error && failure.message ? failure.message : t('unexpected'));
       setBusy(false);
+      return;
     }
+    confirmed.current = true;
+    onClose();
   };
 
   return (
@@ -44,7 +50,15 @@ export function ConfirmDialog({
     >
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-50 animate-fadein bg-[rgba(27,26,31,.28)]" />
-        <AlertDialog.Content className="fixed start-1/2 top-1/2 z-50 w-[calc(100%-48px)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 animate-popin rounded-2xl border border-border bg-surface shadow-[0_18px_48px_rgba(27,26,31,.18)] rtl:translate-x-1/2">
+        <AlertDialog.Content
+          onCloseAutoFocus={(event) => {
+            if (confirmed.current && options.focusAfterConfirm) {
+              event.preventDefault();
+              options.focusAfterConfirm();
+            }
+          }}
+          className="fixed start-1/2 top-1/2 z-50 w-[calc(100%-48px)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 animate-popin rounded-2xl border border-border bg-surface shadow-[0_18px_48px_rgba(27,26,31,.18)] rtl:translate-x-1/2"
+        >
           <div className="flex items-start gap-3 px-5 pt-5 pb-1">
             <span
               aria-hidden
@@ -83,6 +97,14 @@ export function ConfirmDialog({
                 className="w-full resize-y rounded-lg border border-border-control bg-surface px-2.5 py-[9px] text-[13px] leading-[1.45]"
               />
             </label>
+          )}
+          {error !== null && (
+            <p
+              role="alert"
+              className="ps-16 pe-5 pt-3 text-[12.5px] leading-snug font-medium text-danger"
+            >
+              {error}
+            </p>
           )}
           <div className="flex justify-end gap-2 px-5 py-[18px]">
             <AlertDialog.Cancel asChild>

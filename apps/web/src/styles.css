@@ -88,11 +88,19 @@
   --color-warning-bg: #faf1dd;
   --color-warning-border: #ead7ab;
   --color-warning-dot: #b8893a;
+  --color-warning-ink: #5c4a22;
+  --color-warning-control: #d9c089;
   --color-dirty: #fffdf8;
   --color-danger: #9b2c2c;
   --color-danger-bg: #f8e9e6;
   --color-danger-border: #ebc9c2;
   --color-danger-hover: #822424;
+  /* Patient avatar tones (POC clinic-data.js avatarStyle): indigo, amber, green, rose, violet */
+  --color-avatar-amber: #f3eee2;
+  --color-avatar-rose: #f6ebe9;
+  --color-avatar-rose-ink: #8a3a2e;
+  --color-avatar-violet: #eeecf3;
+  --color-avatar-violet-ink: #4f4870;
 
   /* Motion (POC): panel slidein .18s, dialog popin .18s, scrim fadein .14s, toast toastin .2s */
   --animate-slidein: slidein 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);

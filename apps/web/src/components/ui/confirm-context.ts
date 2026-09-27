@@ -10,7 +10,14 @@ export interface ConfirmOptions {
   reasonLabel?: string;
   /** With `reasonLabel`: the reason textarea is shown but may be left empty (e.g. archive). */
   reasonOptional?: boolean;
+  /**
+   * Runs the action. If it throws, the dialog stays open with the reason kept and shows the
+   * error's message inline, so the user can retry or cancel.
+   */
   onConfirm: (reason: string) => void | Promise<void>;
+  /** Where focus goes once a confirmed dialog closes (e.g. the confirmed row is gone); by
+   * default it returns to the control that opened the dialog. */
+  focusAfterConfirm?: () => void;
 }
 
 export const ConfirmContext = createContext<((options: ConfirmOptions) => void) | null>(null);

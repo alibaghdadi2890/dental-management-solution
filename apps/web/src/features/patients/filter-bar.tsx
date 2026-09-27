@@ -7,6 +7,8 @@ import { cn } from '@/lib/utils';
 import { activeFilterCount, clearFilters, withFilter } from './list-query';
 
 const SEARCH_DEBOUNCE_MS = 250;
+/** `patientListQuerySchema.q`'s limit. */
+const SEARCH_MAX_LENGTH = 100;
 
 /** A labelled select chip; tinted `#eceef8`/`#c3c7ea` once it differs from its default (POC). */
 function FilterChip({
@@ -60,23 +62,35 @@ function oneOf<T extends string>(values: readonly T[], value: string): T | undef
 export function FilterBar({
   query,
   practitioners,
+  dentistNames,
   onChange,
 }: {
   query: PatientListQuery;
+  /** Active dentists: the chip's options. */
   practitioners: readonly Practitioner[];
+  /** Every known dentist's name, to label a URL's dentist who is no longer active. */
+  dentistNames: ReadonlyMap<string, string>;
   onChange: (next: PatientListQuery, options?: { replace?: boolean }) => void;
 }) {
   const { t } = useTranslation('patients');
   const committed = query.q ?? '';
   const [text, setText] = useState(committed);
   const [seen, setSeen] = useState(committed);
-  // "Clear filters" or a back navigation changes `q` from outside: show it in the box.
+  // The value this box last committed itself, until it comes back through the URL.
+  const [ownCommit, setOwnCommit] = useState<string | null>(null);
   if (committed !== seen) {
     setSeen(committed);
-    setText(committed);
+    if (committed === ownCommit) {
+      // Our own debounced commit: the box may already hold more (or a trailing space) — keep it.
+      setOwnCommit(null);
+    } else if (committed !== text.trim()) {
+      // Changed from outside (Clear filters, back/forward): show it.
+      setText(committed);
+    }
   }
 
   const commit = useEffectEvent((q: string) => {
+    setOwnCommit(q);
     onChange(withFilter(query, { q: q || undefined }), { replace: true });
   });
   useEffect(() => {
@@ -90,6 +104,13 @@ export function FilterBar({
     };
   }, [text, committed]);
 
+  const unlistedDentist =
+    query.dentist !== undefined &&
+    query.dentist !== 'none' &&
+    !practitioners.some((p) => p.userId === query.dentist)
+      ? query.dentist
+      : undefined;
+
   const set = (patch: Partial<PatientListQuery>) => {
     onChange(withFilter(query, patch));
   };
@@ -101,6 +122,7 @@ export function FilterBar({
         onChange={setText}
         placeholder={t('search.placeholder')}
         label={t('search.label')}
+        maxLength={SEARCH_MAX_LENGTH}
       />
       <FilterChip
         label={t('filters.dentist')}
@@ -108,6 +130,14 @@ export function FilterBar({
         options={[
           { value: '', label: t('filters.anyDentist') },
           ...practitioners.map((p) => ({ value: p.userId, label: p.displayName })),
+          ...(unlistedDentist
+            ? [
+                {
+                  value: unlistedDentist,
+                  label: dentistNames.get(unlistedDentist) ?? t('filters.unknownDentist'),
+                },
+              ]
+            : []),
           { value: 'none', label: t('filters.noDentist') },
         ]}
         onChange={(value) => {

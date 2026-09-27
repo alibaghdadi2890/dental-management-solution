@@ -1,7 +1,10 @@
 {
   "title": "Patients",
-  "subtitle": "{{active}} active · {{owing}} with an open balance",
-  "subtitleActive": "{{active}} active",
+  "subtitle": "{{active}} · {{owing}}",
+  "subtitleActive_one": "{{count, number}} active",
+  "subtitleActive_other": "{{count, number}} active",
+  "subtitleOwing_one": "{{count, number}} with an open balance",
+  "subtitleOwing_other": "{{count, number}} with an open balance",
   "subtitleLoading": "Loading…",
   "exportCsv": "Export CSV",
   "exportFailed": "Couldn't export patients: {{reason}}",
@@ -14,8 +17,8 @@
     "archived": "Archived"
   },
   "duplicates": {
-    "title_one": "{{count}} possible duplicate record",
-    "title_other": "{{count}} possible duplicate records",
+    "title_one": "{{count, number}} possible duplicate record",
+    "title_other": "{{count, number}} possible duplicate records",
     "body": "Same name and date of birth. Review before the next visit is booked.",
     "review": "Review & merge"
   },
@@ -39,7 +42,8 @@
     "anyAlerts": "Any",
     "hasAlerts": "Has alerts",
     "noAlerts": "None",
-    "clear": "Clear filters"
+    "clear": "Clear filters",
+    "unknownDentist": "Unknown dentist"
   },
   "columns": {
     "table": "Patients",
@@ -50,7 +54,8 @@
     "lastVisit": "Last visit",
     "dentist": "Dentist",
     "visits": "Visits",
-    "balance": "Balance"
+    "balance": "Balance",
+    "actions": "Actions"
   },
   "sex": {
     "female": "F",
@@ -72,8 +77,8 @@
     "restore": "Restore"
   },
   "bulk": {
-    "selected_one": "{{count}} selected",
-    "selected_other": "{{count}} selected",
+    "selected_one": "{{count, number}} selected",
+    "selected_other": "{{count, number}} selected",
     "merge": "Merge 2 records",
     "export": "Export",
     "archive": "Archive",
@@ -82,25 +87,25 @@
   },
   "archive": {
     "titleNamed": "Archive {{name}}?",
-    "title_one": "Archive {{count}} patient?",
-    "title_other": "Archive {{count}} patients?",
+    "title_one": "Archive {{count, number}} patient?",
+    "title_other": "Archive {{count, number}} patients?",
     "body": "Archived patients are hidden from lists and search but keep their full clinical and financial history. You can restore them at any time.",
     "ok": "Archive",
     "reason": "Reason (optional)",
     "doneNamed": "{{name}} archived",
-    "done_one": "{{count}} patient archived",
-    "done_other": "{{count}} patients archived",
+    "done_one": "{{count, number}} patient archived",
+    "done_other": "{{count, number}} patients archived",
     "failed": "Couldn't archive: {{reason}}"
   },
   "restore": {
     "doneNamed": "{{name}} restored",
-    "done_one": "{{count}} patient restored",
-    "done_other": "{{count}} patients restored",
+    "done_one": "{{count, number}} patient restored",
+    "done_other": "{{count, number}} patients restored",
     "failed": "Couldn't restore: {{reason}}"
   },
   "undo": "Undo",
   "pager": {
-    "showing": "Showing <range>{{from}}–{{to}}</range> of <total>{{total}}</total>",
+    "showing": "Showing <range>{{from, number}}–{{to, number}}</range> of <total>{{total, number}}</total>",
     "rows": "Rows",
     "label": "Pagination",
     "previous": "Previous page",

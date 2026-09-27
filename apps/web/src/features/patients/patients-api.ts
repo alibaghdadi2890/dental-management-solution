@@ -6,8 +6,6 @@ import {
   patientListItemSchema,
   patientPageSchema,
   patientSchema,
-  practitionerSchema,
-  staffUserSchema,
   type DuplicateCheckQuery,
   type ExportLanguage,
   type PatientArchive,
@@ -48,13 +46,6 @@ export const patientKeys = {
     [...patientKeys.all(tenantId), 'detail', id] as const,
   audit: (tenantId: string | null, id: string) =>
     [...patientKeys.all(tenantId), 'audit', id] as const,
-};
-
-/** `GET /users/practitioners` belongs to `users`, not `patients` — its own key namespace, even
- * though the query factory lives beside the patients form that's the only consumer so far. */
-export const userKeys = {
-  practitioners: (tenantId: string | null) => ['users', tenantId, 'practitioners'] as const,
-  staff: (tenantId: string | null) => ['users', tenantId, 'staff'] as const,
 };
 
 /** Omitted entirely (rather than sent as `{}`) when `tenantId` is left to the caller's ambient
@@ -129,24 +120,6 @@ export function patientQuery(id: string, tenantId?: string) {
   });
 }
 
-/** `GET /users/practitioners`: the "Primary dentist" select and the merge/quick-view dentist name. */
-export function practitionersQuery(tenantId?: string) {
-  return queryOptions({
-    queryKey: userKeys.practitioners(tenantId ?? actingTenantId()),
-    queryFn: () => apiFetch('/users/practitioners', z.array(practitionerSchema), scope(tenantId)),
-  });
-}
-
-/** `GET /users`: every staff member, deactivated ones included (`user:read`) — the list's
- * Dentist column names a patient's dentist even after they leave the clinic, which
- * `/users/practitioners` (active dentists only, for pickers) cannot. */
-export function staffQuery(tenantId?: string) {
-  return queryOptions({
-    queryKey: userKeys.staff(tenantId ?? actingTenantId()),
-    queryFn: () => apiFetch('/users', z.array(staffUserSchema), scope(tenantId)),
-  });
-}
-
 /** The quick view's activity timeline (`audit:read` only, design Q10); the first page only — an
  * infinite/"load more" query is a concern for the component that renders it, not this client. */
 export function patientAuditQuery(id: string, tenantId?: string) {
@@ -188,7 +161,7 @@ export function mergePatients(input: PatientMerge) {
  * tenant) — the one call every create/merge/archive/restore/opening-balance mutation should make
  * on success. `patientKeys.all`/`billingKeys.all` are prefixes of every more specific key
  * (including `owingCount`, `balances`, …), so invalidating just the two umbrellas covers all of
- * it; nothing under `userKeys` is invalidated, since no patient mutation changes the practitioner
+ * it; nothing under `userKeys` (`features/users/users-api.ts`) is invalidated, since no patient mutation changes the practitioner
  * list.
  */
 export function invalidatePatientData(

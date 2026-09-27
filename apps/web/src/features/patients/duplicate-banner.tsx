@@ -22,14 +22,14 @@ export function DuplicateBanner({
       <span className="flex-none text-[13px] leading-none font-semibold whitespace-nowrap text-warning">
         {t('duplicates.title', { count })}
       </span>
-      <span className="min-w-0 flex-1 text-[12.5px] leading-[1.4] text-[#5c4a22]">
+      <span className="min-w-0 flex-1 text-[12.5px] leading-[1.4] text-warning-ink">
         {t('duplicates.body')}
       </span>
       {onReview && (
         <button
           type="button"
           onClick={onReview}
-          className="h-[30px] flex-none cursor-pointer rounded-md border border-[#d9c089] bg-surface px-3 text-[12.5px] leading-none font-medium text-[#5c4a22] hover:border-warning"
+          className="h-[30px] flex-none cursor-pointer rounded-md border border-warning-control bg-surface px-3 text-[12.5px] leading-none font-medium text-warning-ink hover:border-warning"
         >
           {t('duplicates.review')}
         </button>

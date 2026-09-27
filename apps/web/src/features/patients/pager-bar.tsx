@@ -95,9 +95,13 @@ export function PagerBar({
         </PageButton>
         {pageWindow(range.page, range.last).map((token, index) =>
           token === 'gap' ? (
-            <PageButton key={`gap-${String(index)}`} disabled>
+            <span
+              key={`gap-${String(index)}`}
+              aria-hidden
+              className="grid h-[30px] min-w-[30px] place-items-center font-mono text-[12.5px] leading-none text-ink-disabled"
+            >
               {'…'}
-            </PageButton>
+            </span>
           ) : (
             <PageButton
               key={token}

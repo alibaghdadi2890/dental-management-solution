@@ -6,17 +6,20 @@ function BulkButton({
   children,
   onClick,
   danger = false,
+  disabled = false,
 }: {
   children: ReactNode;
   onClick: () => void;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={cn(
-        'h-7 cursor-pointer rounded-md border border-primary-tint-border bg-surface px-2.5 text-[12.5px] leading-none font-medium',
+        'h-7 cursor-pointer rounded-md disabled:cursor-not-allowed disabled:opacity-45 border border-primary-tint-border bg-surface px-2.5 text-[12.5px] leading-none font-medium',
         danger ? 'text-danger hover:border-danger' : 'text-primary hover:border-primary',
       )}
     >
@@ -37,8 +40,14 @@ export function BulkBar({
   onArchive,
   onRestore,
   onClear,
+  archiving,
+  exporting,
 }: {
   count: number;
+  /** An archive or restore is running. */
+  archiving: boolean;
+  /** An export is downloading. */
+  exporting: boolean;
   onMerge: (() => void) | undefined;
   onExport: (() => void) | undefined;
   onArchive: (() => void) | undefined;
@@ -56,14 +65,18 @@ export function BulkBar({
         {t('bulk.selected', { count })}
       </span>
       {onMerge && <BulkButton onClick={onMerge}>{t('bulk.merge')}</BulkButton>}
-      {onExport && <BulkButton onClick={onExport}>{t('bulk.export')}</BulkButton>}
+      {onExport && (
+        <BulkButton disabled={exporting} onClick={onExport}>
+          {t('bulk.export')}
+        </BulkButton>
+      )}
       {onArchive && (
-        <BulkButton danger onClick={onArchive}>
+        <BulkButton danger disabled={archiving} onClick={onArchive}>
           {t('bulk.archive')}
         </BulkButton>
       )}
       {onRestore && (
-        <BulkButton danger onClick={onRestore}>
+        <BulkButton danger disabled={archiving} onClick={onRestore}>
           {t('bulk.restore')}
         </BulkButton>
       )}

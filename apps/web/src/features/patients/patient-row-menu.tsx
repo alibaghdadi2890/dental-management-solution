@@ -13,6 +13,8 @@ export function PatientRowMenu({
   patient,
   twin,
   canWrite,
+  disabled,
+  busy,
   onPanel,
   onArchive,
   onRestore,
@@ -21,6 +23,10 @@ export function PatientRowMenu({
   /** Another record in the same duplicate group, if any. */
   twin: PatientListItem | undefined;
   canWrite: boolean;
+  /** The row is a stale placeholder while the next query loads. */
+  disabled: boolean;
+  /** An archive or restore is running: those actions wait for it. */
+  busy: boolean;
   onPanel: (panel: PatientPanel) => void;
   onArchive: () => void;
   onRestore: () => void;
@@ -30,7 +36,11 @@ export function PatientRowMenu({
   return (
     <Menu>
       <MenuTrigger asChild>
-        <IconButton aria-label={t('row.menu', { name: patient.fullName })}>
+        <IconButton
+          aria-label={t('row.menu', { name: patient.fullName })}
+          disabled={disabled}
+          className="disabled:cursor-default disabled:opacity-45"
+        >
           <svg aria-hidden width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
             <circle cx="3.5" cy="8" r="1.3" />
             <circle cx="8" cy="8" r="1.3" />
@@ -66,9 +76,11 @@ export function PatientRowMenu({
         )}
         {canWrite &&
           (archived ? (
-            <MenuItem onSelect={onRestore}>{t('menu.restore')}</MenuItem>
+            <MenuItem disabled={busy} onSelect={onRestore}>
+              {t('menu.restore')}
+            </MenuItem>
           ) : (
-            <MenuItem tone="danger" onSelect={onArchive}>
+            <MenuItem tone="danger" disabled={busy} onSelect={onArchive}>
               {t('menu.archive')}
             </MenuItem>
           ))}

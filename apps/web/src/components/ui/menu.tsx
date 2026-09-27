@@ -35,16 +35,19 @@ export function MenuItem({
   children,
   onSelect,
   tone,
+  disabled = false,
 }: {
   children: ReactNode;
   onSelect: () => void;
   tone?: 'danger';
+  disabled?: boolean;
 }) {
   return (
     <DropdownMenu.Item
       onSelect={onSelect}
+      disabled={disabled}
       className={cn(
-        'flex h-[34px] w-full cursor-pointer items-center rounded-md px-2.5 text-[13px] leading-none font-medium outline-none data-[highlighted]:bg-background',
+        'flex h-[34px] w-full cursor-pointer items-center rounded-md px-2.5 text-[13px] leading-none font-medium outline-none data-[disabled]:cursor-default data-[disabled]:opacity-45 data-[highlighted]:bg-background',
         tone === 'danger' ? 'text-danger' : 'text-ink',
       )}
     >

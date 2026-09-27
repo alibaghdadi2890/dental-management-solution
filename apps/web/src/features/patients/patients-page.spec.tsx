@@ -113,6 +113,11 @@ interface Api {
   balances?: PatientBalance[];
   duplicates?: DuplicateGroup[];
   listStatus?: number;
+  archiveStatus?: number;
+  /** Overrides the list answer (a pending promise keeps the previous page on screen). */
+  list?: (params: URLSearchParams) => Promise<Response> | undefined;
+  /** Overrides the CSV export answer. */
+  exportCsv?: () => Promise<Response>;
 }
 
 const json = (body: unknown, status = 200, type = 'application/json') =>
@@ -125,6 +130,9 @@ function mockApi({
   balances = [],
   duplicates = [],
   listStatus = 200,
+  archiveStatus = 200,
+  list,
+  exportCsv,
 }: Api = {}) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     const path = url.replace('/api/v1', '');
@@ -146,6 +154,15 @@ function mockApi({
       );
     }
     if (path.startsWith('/billing/balances')) return Promise.resolve(json(balances));
+    if (path === '/patients/archive' && archiveStatus !== 200) {
+      return Promise.resolve(
+        json(
+          { type: 'about:blank', title: 'Conflict', status: archiveStatus, code: 'patient.merged' },
+          archiveStatus,
+          'application/problem+json',
+        ),
+      );
+    }
     if (path === '/patients/archive' || path === '/patients/restore') {
       const body = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as {
         ids: string[];
@@ -155,7 +172,12 @@ function mockApi({
         json(items.filter((p) => body.ids.includes(p.id)).map((p) => full(p, archivedAt))),
       );
     }
+    if (path.startsWith('/billing/patients/export')) {
+      return exportCsv?.() ?? Promise.resolve(new Response('id\n', { status: 200 }));
+    }
     if (/^\/(billing\/)?patients(\?|$)/.test(path)) {
+      const custom = list?.(new URLSearchParams(path.split('?')[1]));
+      if (custom) return custom;
       if (listStatus !== 200) {
         return Promise.resolve(
           json(
@@ -222,6 +244,10 @@ function renderPage({
   );
   return router;
 }
+
+const searchBox = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Search patients' });
+const listCalls = (fetchMock: ReturnType<typeof mockApi>) =>
+  calledUrls(fetchMock).filter((url) => /\/api\/v1\/(billing\/)?patients(\?|$)/.test(url));
 
 const rowOf = async (name: string) => {
   const cell = await screen.findByText(name);
@@ -480,5 +506,223 @@ describe('PatientsPage', () => {
     await waitFor(() => {
       expect(calledUrls(fetchMock)).toContain('/api/v1/patients?size=50');
     });
+  });
+  describe('search box', () => {
+    it('keeps typing across a debounced commit', async () => {
+      const fetchMock = mockApi();
+      renderPage();
+      await rowOf('Rana Haddad');
+      fireEvent.change(searchBox(), { target: { value: 'Rana ' } });
+      await waitFor(() => {
+        expect(calledUrls(fetchMock)).toContain('/api/v1/patients?q=Rana');
+      });
+      expect(searchBox().value).toBe('Rana ');
+      fireEvent.change(searchBox(), { target: { value: 'Rana H' } });
+      await waitFor(() => {
+        expect(calledUrls(fetchMock)).toContain('/api/v1/patients?q=Rana+H');
+      });
+      expect(searchBox().value).toBe('Rana H');
+    });
+
+    it('commits once per pause in typing', async () => {
+      const fetchMock = mockApi();
+      renderPage();
+      await rowOf('Rana Haddad');
+      for (const value of ['R', 'Ra', 'Ran', 'Rana']) {
+        fireEvent.change(searchBox(), { target: { value } });
+      }
+      await waitFor(() => {
+        expect(calledUrls(fetchMock)).toContain('/api/v1/patients?q=Rana');
+      });
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(listCalls(fetchMock).filter((url) => url.includes('q='))).toEqual([
+        '/api/v1/patients?q=Rana',
+      ]);
+    });
+
+    it('is emptied by Clear filters', async () => {
+      mockApi();
+      renderPage({ url: '/?q=rana' });
+      await rowOf('Rana Haddad');
+      expect(searchBox().value).toBe('rana');
+      expect(searchBox().maxLength).toBe(100);
+      fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+      await waitFor(() => {
+        expect(searchBox().value).toBe('');
+      });
+    });
+  });
+
+  it('keeps the previous rows inert while the next view loads', async () => {
+    mockApi({
+      list: (params) =>
+        params.get('view') === 'archived' ? new Promise<Response>(() => undefined) : undefined,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Rana Haddad' }));
+    fireEvent.click(screen.getByRole('tab', { name: /Archived/ }));
+
+    const table = await screen.findByRole('table', { busy: true });
+    expect(within(table).getByText('Rana Haddad')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Actions for Rana Haddad' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.getByRole('checkbox', { name: 'Select Rana Haddad' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Restore' })).toBeNull();
+  });
+
+  it('steps back from a page past the end to the last page', async () => {
+    const fetchMock = mockApi({
+      total: 30,
+      list: (params) =>
+        params.get('page') === '5'
+          ? Promise.resolve(json({ items: [], total: 30, page: 5, size: 25 }))
+          : undefined,
+    });
+    renderPage({ url: '/?page=5' });
+    await waitFor(() => {
+      expect(calledUrls(fetchMock)).toContain('/api/v1/patients?page=2');
+    });
+    expect(await screen.findByText('Rana Haddad')).toBeTruthy();
+    expect(screen.queryByText('No patients match')).toBeNull();
+  });
+
+  it('restores from the row menu in the Archived view, with Undo', async () => {
+    const archived = [RANA, SAMI].map((p) => ({ ...p, archivedAt: '2026-09-01T10:00:00.000Z' }));
+    const fetchMock = mockApi({ items: archived });
+    renderPage({ url: '/?view=archived' });
+    const menu = await openMenu('Rana Haddad');
+    expect(within(menu).queryByRole('menuitem', { name: 'Archive' })).toBeNull();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Restore' }));
+
+    const toast = await screen.findByText('Rana Haddad restored');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    const restore = fetchMock.mock.calls.find(([url]) => url === '/api/v1/patients/restore');
+    expect(JSON.parse(typeof restore?.[1]?.body === 'string' ? restore[1].body : '')).toEqual({
+      ids: [RANA.id],
+    });
+    const status = toast.closest<HTMLElement>('[role="status"]');
+    fireEvent.click(within(status ?? document.body).getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('Rana Haddad archived')).toBeTruthy();
+  });
+
+  it('archives the selection from the bulk bar, focuses the table, and Undo restores', async () => {
+    const fetchMock = mockApi();
+    renderPage();
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Select Rana Haddad' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Sami Khoury' }));
+    fireEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Archive' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText('Archive 2 patients?')).toBeTruthy();
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Moved away' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
+
+    const toast = await screen.findByText('2 patients archived');
+    const archive = fetchMock.mock.calls.find(([url]) => url === '/api/v1/patients/archive');
+    expect(JSON.parse(typeof archive?.[1]?.body === 'string' ? archive[1].body : '')).toEqual({
+      ids: [RANA.id, SAMI.id],
+      reason: 'Moved away',
+    });
+    expect(screen.queryByRole('toolbar')).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('table'));
+    });
+
+    // A selection made after the archive survives its Undo.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Lina Aoun' }));
+    const status = toast.closest<HTMLElement>('[role="status"]');
+    fireEvent.click(within(status ?? document.body).getByRole('button', { name: 'Undo' }));
+    expect(await screen.findByText('2 patients restored')).toBeTruthy();
+    const restore = fetchMock.mock.calls.find(([url]) => url === '/api/v1/patients/restore');
+    expect(JSON.parse(typeof restore?.[1]?.body === 'string' ? restore[1].body : '')).toEqual({
+      ids: [RANA.id, SAMI.id],
+    });
+    expect(screen.getByText('1 selected')).toBeTruthy();
+  });
+
+  it('keeps the archive dialog open with the reason when archiving fails', async () => {
+    mockApi({
+      archiveStatus: 409,
+    });
+    renderPage();
+    const menu = await openMenu('Rana Haddad');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Archive' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Duplicate' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
+
+    expect((await within(dialog).findByRole('alert')).textContent).toBe(
+      "Couldn't archive: Conflict",
+    );
+    expect(within(dialog).getByRole<HTMLTextAreaElement>('textbox').value).toBe('Duplicate');
+  });
+
+  it('exports the current query, or the selected ids, and is busy meanwhile', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:mock');
+    URL.revokeObjectURL = vi.fn();
+    let finish: (response: Response) => void = () => undefined;
+    const fetchMock = mockApi({
+      exportCsv: () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        }),
+    });
+    renderPage({ url: '/?view=archived' });
+    await rowOf('Rana Haddad');
+    const exportCsv = screen.getByRole('button', { name: 'Export CSV' });
+    fireEvent.click(exportCsv);
+    expect(calledUrls(fetchMock)).toContain(
+      '/api/v1/billing/patients/export?view=archived&lang=en',
+    );
+    await waitFor(() => {
+      expect(exportCsv).toHaveProperty('disabled', true);
+    });
+    finish(new Response('id\n', { status: 200 }));
+    await waitFor(() => {
+      expect(exportCsv).toHaveProperty('disabled', false);
+    });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Sami Khoury' }));
+    fireEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Export' }));
+    expect(calledUrls(fetchMock)).toContain(
+      `/api/v1/billing/patients/export?ids=${SAMI.id}&lang=en`,
+    );
+  });
+
+  it('names an unlisted dentist in the Dentist chip', async () => {
+    mockApi();
+    renderPage({ url: `/?dentist=${INACTIVE_DENTIST_ID}` });
+    const dentist = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'Dentist' });
+    await waitFor(() => {
+      expect(dentist.selectedOptions[0]?.textContent).toBe('Dr. Marcus Lee');
+    });
+  });
+
+  it('opening a panel from a row drops the create pre-fill', async () => {
+    mockApi();
+    const router = renderPage({ url: '/?panel=new&fullName=Rana' });
+    fireEvent.click(await rowOf('Rana Haddad'));
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({ panel: `quick:${RANA.id}` });
+    });
+    expect(router.state.location.search).not.toHaveProperty('fullName');
+  });
+
+  it('labels the table for assistive tech', async () => {
+    mockApi();
+    renderPage();
+    const row = await rowOf('Rana Haddad');
+    expect(row.hasAttribute('aria-selected')).toBe(false);
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Rana Haddad' }));
+    expect(
+      screen.getByRole<HTMLInputElement>('checkbox', { name: 'Select all on page' }).indeterminate,
+    ).toBe(true);
   });
 });

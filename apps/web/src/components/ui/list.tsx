@@ -10,7 +10,8 @@ export function ViewTabs<TKey extends string>({
   onChange,
   label,
 }: {
-  tabs: { key: TKey; label: string; count?: number | undefined }[];
+  /** `count` is shown as given: format it for the locale first. */
+  tabs: { key: TKey; label: string; count?: number | string | undefined }[];
   active: TKey;
   onChange: (key: TKey) => void;
   label: string;
@@ -63,11 +64,13 @@ export function SearchInput({
   onChange,
   placeholder,
   label,
+  maxLength,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   label: string;
+  maxLength?: number;
 }) {
   return (
     <label className="flex h-9 max-w-[360px] flex-[1_1_260px] items-center gap-2 rounded-lg border border-border-control bg-surface px-[11px]">
@@ -91,6 +94,7 @@ export function SearchInput({
         }}
         placeholder={placeholder}
         aria-label={label}
+        maxLength={maxLength}
         className="min-w-0 flex-1 border-none bg-transparent text-[13px] leading-none outline-none"
       />
     </label>
