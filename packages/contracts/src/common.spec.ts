@@ -131,6 +131,13 @@ describe('notFutureDateSchema', () => {
     expect(schema.safeParse('2026-06-16').success).toBe(true);
     expect(schema.safeParse('2026-06-17').success).toBe(false);
   });
+
+  it('reports exactly one issue for a malformed date, not both format and future errors', () => {
+    const result = notFutureDateSchema().safeParse('abc');
+    expect(result.success).toBe(false);
+    expect(result.error?.issues).toHaveLength(1);
+    expect(result.error?.issues[0]?.message).not.toMatch(/future/i);
+  });
 });
 
 describe('optionalDate', () => {

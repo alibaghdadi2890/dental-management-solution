@@ -47,6 +47,16 @@ describe('medicalAlertsSchema', () => {
       medicalAlertsSchema.safeParse(Array.from({ length: 20 }, (_, i) => `Alert ${i}`)).success,
     ).toBe(true);
   });
+
+  it('normalizes to NFC before enforcing the 60-character max, not after', () => {
+    // 60 composed characters, typed in decomposed form: "e" + combining acute (U+0301) each,
+    // so the raw string is 120 UTF-16 code units before normalization collapses it to 60.
+    const decomposed = 'é'.repeat(60);
+    const composed = 'é'.repeat(60);
+    expect(decomposed).toHaveLength(120);
+    expect(composed).toHaveLength(60);
+    expect(medicalAlertsSchema.parse([decomposed])).toEqual([composed]);
+  });
 });
 
 describe('patientInputSchema', () => {

@@ -30,25 +30,34 @@ const MEDICAL_ALERTS_MAX = 20;
  * De-dupes case- and normalization-insensitively (NFKC folds compatibility forms — full-width,
  * ligatures — as well as composed/decomposed accents; e.g. "Café" typed as `e` + combining acute
  * (NFD) collapses with "Café" typed as the single precomposed `é` (NFC)), keeping the first
- * occurrence. The stored value itself is only normalized to NFC (canonical composition) — the
- * text isn't rewritten more than necessary to make it comparable.
+ * occurrence. Values have already been normalized to NFC (canonical composition) by
+ * `medicalAlertItemSchema` — the text isn't rewritten more than necessary to make it comparable.
  */
 function dedupeAlerts(values: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of values) {
-    const stored = value.normalize('NFC');
-    const key = stored.normalize('NFKC').toLowerCase();
+    const key = value.normalize('NFKC').toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    result.push(stored);
+    result.push(value);
   }
   return result;
 }
 
-/** Trimmed, 1–60 chars each, de-duplicated (see `dedupeAlerts`, first occurrence wins), max 20. */
+/**
+ * Normalizes to NFC *before* trimming/length-checking: a decomposed string (each accent typed as
+ * a separate combining mark) is longer in UTF-16 code units than its composed form, so checking
+ * the length first could reject an alert the user would see as exactly 60 characters.
+ */
+const medicalAlertItemSchema = z
+  .string()
+  .transform((value) => value.normalize('NFC').trim())
+  .pipe(z.string().min(1).max(60));
+
+/** Normalized, trimmed, 1–60 chars each, de-duplicated (see `dedupeAlerts`), max 20. */
 export const medicalAlertsSchema = z
-  .array(z.string().trim().min(1).max(60))
+  .array(medicalAlertItemSchema)
   .transform(dedupeAlerts)
   .pipe(z.array(z.string()).max(MEDICAL_ALERTS_MAX));
 

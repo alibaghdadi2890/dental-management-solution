@@ -16,13 +16,21 @@ export const isoDateSchema = z.iso.date();
  * the server re-checks against the tenant's own today, in the tenant's time zone, at write time.
  */
 export function notFutureDateSchema(message = 'Date cannot be in the future') {
-  return isoDateSchema.refine((date) => {
-    const now = new Date();
-    const tolerant = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
-    );
-    return date <= tolerant.toISOString().slice(0, 10);
-  }, message);
+  return isoDateSchema.refine(
+    (date) => {
+      const now = new Date();
+      const tolerant = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
+      );
+      return date <= tolerant.toISOString().slice(0, 10);
+    },
+    {
+      message,
+      // Skip this check once the format check has already failed, so a malformed date (e.g.
+      // 'abc') reports one issue, not "Invalid ISO date" plus a confusing "in the future" too.
+      when: (payload) => payload.issues.length === 0,
+    },
+  );
 }
 
 /**
