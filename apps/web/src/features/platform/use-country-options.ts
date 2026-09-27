@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { countryOptions, type CountryOption } from './tenant-options';
 
@@ -21,6 +20,5 @@ function cachedCountryOptions(locale: string): CountryOption[] {
 /** The country list labelled for the current UI language, computed once per locale. */
 export function useCountryOptions(): CountryOption[] {
   const { i18n } = useTranslation();
-  const locale = i18n.resolvedLanguage ?? 'en';
-  return useMemo(() => cachedCountryOptions(locale), [locale]);
+  return cachedCountryOptions(i18n.resolvedLanguage ?? 'en');
 }

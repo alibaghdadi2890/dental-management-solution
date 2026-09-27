@@ -40,17 +40,15 @@ export interface CountryOption {
  * Every country `libphonenumber-js` has dialling data for (re-exported from `@dcm/contracts` so
  * only that package depends on the library), labelled in `locale` and sorted by that label with a
  * single collator instance. Pure and side-effect free so it's cheap to unit test directly; the UI
- * caches its result per locale (`useCountryOptions` in `country-select.tsx`).
+ * caches its result per locale (`useCountryOptions` in `use-country-options.ts`).
  */
 export function countryOptions(locale: string): CountryOption[] {
   const displayNames = new Intl.DisplayNames([locale], { type: 'region' });
   const collator = new Intl.Collator(locale);
   return SUPPORTED_COUNTRIES.map((code) => ({
     code,
-    // `.of()` is typed `string | undefined`, but every code in `SUPPORTED_COUNTRIES` is one
-    // `Intl.DisplayNames` recognises, and its default `fallback: 'code'` guarantees a string back
-    // (the code itself) rather than `undefined`. The `?? code` branch is therefore unreachable in
-    // practice; it's kept only to satisfy the declared return type.
+    // Unreachable in practice: `fallback: 'code'` (the default) means `.of()` only returns
+    // `undefined` for a code it doesn't recognise, and every code here is one it recognises.
     label: displayNames.of(code) ?? code,
   })).sort((a, b) => collator.compare(a.label, b.label));
 }
