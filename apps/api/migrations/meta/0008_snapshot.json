@@ -1,5 +1,5 @@
 {
-  "id": "bedaf591-6fe1-4211-a38f-cb193f1c47dd",
+  "id": "8f140cb0-7f77-478a-afdb-cb3b00e95702",
   "prevId": "52a5f00e-f307-4092-a214-8353defb5b64",
   "version": "7",
   "dialect": "postgresql",
@@ -2087,7 +2087,12 @@
           "withCheck": "id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
       },
-      "checkConstraints": {},
+      "checkConstraints": {
+        "tenants_country_format": {
+          "name": "tenants_country_format",
+          "value": "\"tenants\".\"country\" ~ '^[A-Z]{2}$'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.staff_branches": {

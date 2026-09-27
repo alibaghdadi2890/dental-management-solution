@@ -12,6 +12,7 @@ import { AuditService } from '../../audit';
 import { AuthService } from '../../auth';
 import { RolesService } from '../../roles';
 import { TenancyService } from '../../tenancy';
+import { sortByDisplayName } from '../domain/practitioner-order';
 import {
   assertAssignments,
   assertKeepsAnOwner,
@@ -57,22 +58,31 @@ export class UsersService {
   }
 
   /**
-   * Active dentists, ordered by display name. Not permission-gated here: a building block like
-   * `TenancyService.activeBranches`, used wherever the app offers "assign a dentist" (feature 3
-   * Q2); `GET /users/practitioners` still requires `user:read`.
+   * Active dentists, ordered by display name (tenant-locale collation), then user id. Not
+   * permission-gated here: a building block like `TenancyService.activeBranches`, used wherever
+   * the app offers "assign a dentist" (feature 3 Q2); `GET /users/practitioners` still requires
+   * `user:read`.
    */
   listPractitioners(): Promise<Practitioner[]> {
-    return this.tenantDb.run(async () => (await this.staff.practitioners()).map(toPractitioner));
+    return this.tenantDb.run(async () => {
+      // Sequential: both reads join the same transaction, i.e. one connection.
+      const profiles = await this.staff.practitioners();
+      const { locale } = await this.tenancy.currentTenant();
+      return sortByDisplayName(profiles, locale).map(toPractitioner);
+    });
   }
 
   /**
-   * Practitioners among `userIds` whatever their current type or active status — for showing the
-   * display name of a dentist already assigned to a patient even after they leave or change role.
+   * Practitioners among `userIds` whatever their current type or active status, ordered the same
+   * way as `listPractitioners` — for showing the display name of a dentist already assigned to a
+   * patient even after they leave or change role.
    */
   practitionersByIds(userIds: readonly string[]): Promise<Practitioner[]> {
-    return this.tenantDb.run(async () =>
-      (await this.staff.byUserIds(distinct(userIds))).map(toPractitioner),
-    );
+    return this.tenantDb.run(async () => {
+      const profiles = await this.staff.byUserIds(distinct(userIds));
+      const { locale } = await this.tenancy.currentTenant();
+      return sortByDisplayName(profiles, locale).map(toPractitioner);
+    });
   }
 
   /**

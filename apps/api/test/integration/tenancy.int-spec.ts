@@ -85,6 +85,15 @@ describe('tenancy: tenant settings, branches and rooms', () => {
       const session = (await api.get('/session')).body as Session;
       expect(session.tenant).toMatchObject({ country: 'FR' });
     });
+
+    it('rejects a malformed country at the database level, below the Zod boundary', async () => {
+      await expect(
+        database.ownerPool.query('update tenants set country = $1 where id = $2', [
+          'lb',
+          tenant.id,
+        ]),
+      ).rejects.toThrow(/tenants_country_format/);
+    });
   });
 
   describe('branches', () => {

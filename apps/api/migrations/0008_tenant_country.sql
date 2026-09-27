@@ -1,1 +1,2 @@
-ALTER TABLE "tenants" ADD COLUMN "country" char(2) DEFAULT 'LB' NOT NULL;
+ALTER TABLE "tenants" ADD COLUMN "country" char(2) DEFAULT 'LB' NOT NULL;--> statement-breakpoint
+ALTER TABLE "tenants" ADD CONSTRAINT "tenants_country_format" CHECK ("tenants"."country" ~ '^[A-Z]{2}$');

@@ -64,7 +64,11 @@ export class StaffRepository {
     return rows.map((row) => row.authUserId);
   }
 
-  /** Active dentists, ordered by display name (for `UsersService.listPractitioners`). */
+  /**
+   * Active dentists, ordered by id for a deterministic DB-level order (for
+   * `UsersService.listPractitioners`, which re-sorts by display name in the tenant's locale — DB
+   * byte-order is not locale-aware).
+   */
   practitioners(): Promise<StaffProfile[]> {
     return this.db.run(async (tx) =>
       (
@@ -72,12 +76,15 @@ export class StaffRepository {
           .select()
           .from(staffProfiles)
           .where(and(eq(staffProfiles.practitionerType, 'dentist'), eq(staffProfiles.active, true)))
-          .orderBy(asc(staffProfiles.displayName))
+          .orderBy(asc(staffProfiles.authUserId))
       ).map(toProfile),
     );
   }
 
-  /** Profiles among `authUserIds`, whatever their type or status (for `practitionersByIds`). */
+  /**
+   * Profiles among `authUserIds`, whatever their type or status, ordered by id (for
+   * `practitionersByIds`, which re-sorts by display name the same way as `practitioners`).
+   */
   async byUserIds(authUserIds: readonly string[]): Promise<StaffProfile[]> {
     if (authUserIds.length === 0) return [];
     return this.db.run(async (tx) =>
@@ -86,7 +93,7 @@ export class StaffRepository {
           .select()
           .from(staffProfiles)
           .where(inArray(staffProfiles.authUserId, [...authUserIds]))
-          .orderBy(asc(staffProfiles.displayName))
+          .orderBy(asc(staffProfiles.authUserId))
       ).map(toProfile),
     );
   }

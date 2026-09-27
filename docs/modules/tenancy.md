@@ -14,8 +14,9 @@ provisioning (first branch, owner, roles) is orchestrated by `provisioning`.
 
 ## Owns
 
-- `tenants` — `id, name, slug (unique), status (active|suspended), time_zone, currency, locale,
-country (char(2), default 'LB')`. No `tenant_id`; RLS policy `tenant_self` (`id` = the
+- `tenants` — `id, name, slug (unique), status (active|suspended), time_zone, currency, locale`,
+  plus `country` (`char(2)`, default `'LB'`, `CHECK (country ~ '^[A-Z]{2}$')` as a second line of
+  defence under `countrySchema`). No `tenant_id`; RLS policy `tenant_self` (`id` = the
   transaction's tenant) lets members read their own row.
 - `branches` — tenant RLS; `name` and `code` unique per tenant, case-insensitive; `active`.
 - `rooms` — tenant RLS; composite FK `(tenant_id, branch_id)` → `branches` so a room can never

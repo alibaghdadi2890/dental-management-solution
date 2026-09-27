@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   char,
+  check,
   foreignKey,
   index,
   pgEnum,
@@ -40,13 +41,16 @@ export const tenants = pgTable(
     country: char({ length: 2 }).notNull().default('LB'),
     ...timestamps(),
   },
-  () => [
+  (table) => [
     pgPolicy('tenant_self', {
       as: 'permissive',
       for: 'all',
       using: sql.raw(`id = ${CURRENT_TENANT_SQL}`),
       withCheck: sql.raw(`id = ${CURRENT_TENANT_SQL}`),
     }),
+    // Belt-and-suspenders under `countrySchema` (ISO 3166-1 alpha-2, upper-case): catches any row
+    // written outside the Zod boundary (a script, a future migration) rather than trusting it.
+    check('tenants_country_format', sql`${table.country} ~ '^[A-Z]{2}$'`),
   ],
 );
 

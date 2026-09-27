@@ -248,7 +248,32 @@ describe('users: staff profiles with identity, branches and roles', () => {
   });
 
   describe('practitioners', () => {
-    it('lists only active dentists ordered by display name; a deactivated one is absent but still found by id', async () => {
+    const relevant = (ids: string[], list: Practitioner[]) =>
+      list.filter((row) => ids.includes(row.userId)).map((row) => row.userId);
+
+    it('orders by display name using the tenant locale collation, then by user id for a tie', async () => {
+      const zed = await createUser({ displayName: 'Dr. Zed' });
+      const amir = await createUser({ displayName: 'dr. amir' });
+      const emile = await createUser({ displayName: 'Dr. Émile' });
+
+      const list = (await api.get('/users/practitioners')).body as Practitioner[];
+      expect(relevant([amir.id, emile.id, zed.id], list)).toEqual([amir.id, emile.id, zed.id]);
+
+      // Two dentists with the exact same display name tie-break on user id, ascending.
+      const [first, second] = await Promise.all([
+        createUser({ displayName: 'Dr. Ana Reyes' }),
+        createUser({ displayName: 'Dr. Ana Reyes' }),
+      ]);
+      const [expectedFirst, expectedSecond]: [StaffUser, StaffUser] =
+        first.id < second.id ? [first, second] : [second, first];
+      const withTwins = (await api.get('/users/practitioners')).body as Practitioner[];
+      expect(relevant([expectedFirst.id, expectedSecond.id], withTwins)).toEqual([
+        expectedFirst.id,
+        expectedSecond.id,
+      ]);
+    });
+
+    it('lists only active dentists; a deactivated one is absent but still found by id', async () => {
       const zed = await createUser({ displayName: 'Dr. Zed Nassar' });
       const amir = await createUser({ displayName: 'Dr. Amir Haddad' });
       const assistant = await createUser({
@@ -257,13 +282,9 @@ describe('users: staff profiles with identity, branches and roles', () => {
         roleKeys: ['assistant'],
       });
 
-      const relevant = (ids: string[], list: Practitioner[]) =>
-        list.filter((row) => ids.includes(row.userId));
-
       const before = (await api.get('/users/practitioners')).body as Practitioner[];
-      expect(
-        relevant([zed.id, amir.id, assistant.id], before).map((row) => row.displayName),
-      ).toEqual(['Dr. Amir Haddad', 'Dr. Zed Nassar']);
+      expect(before.map((row) => row.userId)).toEqual(expect.arrayContaining([zed.id, amir.id]));
+      expect(before.map((row) => row.userId)).not.toContain(assistant.id);
 
       expect(
         (await api.post(`/users/${zed.id}/deactivate`, { reason: 'Left the clinic' })).status,

@@ -1,7 +1,7 @@
 import { LOCALES, PASSWORD_MIN_LENGTH } from '@dcm/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-context';
@@ -9,6 +9,7 @@ import { Eyebrow, Field, Select, TextInput } from '@/components/ui/field';
 import { RightPanel } from '@/components/ui/right-panel';
 import { useToast } from '@/components/ui/toast-context';
 import { ApiError } from '@/lib/api';
+import { CountrySelect } from './country-select';
 import {
   EMPTY_NEW_TENANT,
   editNewTenant,
@@ -18,7 +19,7 @@ import {
   toProvisionRequest,
 } from './new-tenant-form';
 import { platformKeys, provisionTenant } from './platform-api';
-import { countryOptions, CURRENCIES, TIME_ZONES } from './tenant-options';
+import { CURRENCIES, TIME_ZONES } from './tenant-options';
 import { generateTemporaryPassword } from './temporary-password';
 
 type Errors = Partial<Record<NewTenantField, FieldError | 'slugTaken' | 'emailTaken'>>;
@@ -31,7 +32,7 @@ export function NewTenantPanel({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const { t, i18n } = useTranslation(['admin', 'common']);
+  const { t } = useTranslation(['admin', 'common']);
   const toast = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -39,10 +40,6 @@ export function NewTenantPanel({
   const [form, setForm] = useState(EMPTY_NEW_TENANT);
   const [errors, setErrors] = useState<Errors>({});
   const [failure, setFailure] = useState<string>();
-  const countries = useMemo(
-    () => countryOptions(i18n.resolvedLanguage ?? 'en'),
-    [i18n.resolvedLanguage],
-  );
 
   const mutation = useMutation({ mutationFn: provisionTenant });
 
@@ -203,23 +200,11 @@ export function NewTenantPanel({
           )}
         </Field>
       </div>
-      <Field label={t('newTenant.fields.country')}>
-        {(props) => (
-          <Select
-            {...props}
-            value={form.country}
-            onChange={(event) => {
-              set('country')(event.target.value);
-            }}
-          >
-            {countries.map((country) => (
-              <option key={country.code} value={country.code}>
-                {country.label}
-              </option>
-            ))}
-          </Select>
-        )}
-      </Field>
+      <CountrySelect
+        label={t('newTenant.fields.country')}
+        value={form.country}
+        onChange={set('country')}
+      />
 
       <Eyebrow className="mt-2">{t('newTenant.sections.branch')}</Eyebrow>
       {text('branchName', t('newTenant.fields.branchName'))}
