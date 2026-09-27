@@ -5,13 +5,14 @@ import { todayIn } from '@/lib/format';
 import {
   DENTIST_ID,
   INACTIVE_DENTIST_ID,
+  json,
   listItem,
   mockApi,
   patient,
   problem,
   renderPanels,
   sent,
-} from './panel-harness';
+} from '../patients.test-utils';
 
 const RANA = patient(1, 'Rana Haddad', {
   address: '1 Main St',
@@ -26,10 +27,14 @@ const field = (name: string) =>
 const type = (name: string, value: string) => {
   fireEvent.change(field(name), { target: { value } });
 };
-/** A DOB `years` years before today (minus a day), typed in the tenant's DD/MM/YYYY order. */
+/** A DOB that makes the patient exactly `years` old today, typed in the tenant's DD/MM/YYYY
+ * order; a Feb 29 today becomes Feb 28 in a year that has no Feb 29 (already had the birthday). */
 const dobYearsAgo = (years: number) => {
   const [y = '', m = '', d = ''] = TODAY.split('-');
-  return `${d}/${m}/${String(Number(y) - years)}`;
+  const year = Number(y) - years;
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const day = m === '02' && d === '29' && !leap ? '28' : d;
+  return `${day}/${m}/${String(year)}`;
 };
 
 describe('PatientFormPanel — create', () => {
@@ -198,6 +203,136 @@ describe('PatientFormPanel — create', () => {
     });
   });
 
+  it('focuses Full name on open, and the first invalid field on a failed submit', async () => {
+    const fetchMock = mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(field('Full name'));
+    });
+    type('Full name', 'Rana Haddad');
+    type('Phone', '03 123 456');
+    type('Email', 'rana@');
+    type('Date of birth', '31/02/2019');
+    fireEvent.click(screen.getByRole('button', { name: 'Create patient' }));
+    expect(await screen.findByText('Enter a full date')).toBeTruthy();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(field('Date of birth'));
+    });
+    expect(sent(fetchMock, 'POST', '/patients')).toBeUndefined();
+  });
+
+  it('keeps a field’s error while it is edited to another invalid value', async () => {
+    mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Rana Haddad');
+    type('Phone', '03 123 456');
+    type('Email', 'rana@');
+    fireEvent.click(screen.getByRole('button', { name: 'Create patient' }));
+    expect(await screen.findByText('Check the email address')).toBeTruthy();
+    type('Email', 'rana@x');
+    expect(screen.getByText('Check the email address')).toBeTruthy();
+    expect(field('Email').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('flags an amount that is not a clean number, keeping what was typed', async () => {
+    const fetchMock = mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Rana Haddad');
+    type('Phone', '03 123 456');
+    for (const typed of ['12.505', '12abc']) {
+      type('Opening balance', typed);
+      fireEvent.click(screen.getByRole('button', { name: 'Create patient' }));
+      expect(await screen.findByText('Enter an amount like 250 or 12.50')).toBeTruthy();
+      expect(field('Opening balance').value).toBe(typed);
+    }
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+
+  it('shows an opening-balance path error on its field', async () => {
+    mockApi({
+      mutation: (_, path) =>
+        path === '/billing/opening-balances'
+          ? problem(422, 'validation_failed', [
+              { path: 'openingBalance.asOf', code: 'custom', message: 'In the future' },
+            ])
+          : undefined,
+    });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Rana Haddad');
+    type('Phone', '03 123 456');
+    type('Opening balance', '250');
+    fireEvent.click(screen.getByRole('button', { name: 'Create patient' }));
+    expect(await screen.findByText('Check this value')).toBeTruthy();
+    expect(field('As of').getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('sends one save at a time and cannot be closed while it runs', async () => {
+    let finish: (response: Response) => void = () => undefined;
+    const fetchMock = mockApi({
+      mutation: (_, path) =>
+        path === '/patients'
+          ? new Promise<Response>((resolve) => {
+              finish = resolve;
+            })
+          : undefined,
+    });
+    renderPanels({ url: '/?panel=new' });
+    const aside = await panel('Register a patient');
+    type('Full name', 'Rana Haddad');
+    type('Phone', '03 123 456');
+    const create = within(aside).getByRole('button', { name: 'Create patient' });
+    fireEvent.click(create);
+    fireEvent.click(create);
+    await waitFor(() => {
+      expect(within(aside).getByRole('button', { name: 'Cancel' })).toHaveProperty(
+        'disabled',
+        true,
+      );
+    });
+    expect(within(aside).getByRole('button', { name: 'Close' })).toHaveProperty('disabled', true);
+    fireEvent.keyDown(field('Full name'), { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(sent(fetchMock, 'POST', '/patients')).toBeDefined();
+    expect(
+      fetchMock.mock.calls.filter(([url, init]) => url === '/api/v1/patients' && init?.method),
+    ).toHaveLength(1);
+
+    finish(json(patient(50, 'Rana Haddad'), 201));
+    expect(await screen.findByText('Patient created')).toBeTruthy();
+  });
+
+  it('asks before discarding on Escape', async () => {
+    mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Rana');
+    fireEvent.keyDown(field('Full name'), { key: 'Escape' });
+    expect(await screen.findByText('Discard unsaved changes?')).toBeTruthy();
+  });
+
+  it('starts afresh for a new pre-fill, asking first when the form is dirty', async () => {
+    mockApi();
+    const router = renderPanels({ url: '/?panel=new&fullName=Rana' });
+    await panel('Register a patient');
+    await router.navigate({ to: '/', search: { panel: 'new', fullName: 'Sami' } });
+    await waitFor(() => {
+      expect(field('Full name').value).toBe('Sami');
+    });
+
+    type('Phone', '03 123 456');
+    void router.navigate({ to: '/', search: { panel: 'new', fullName: 'Lina' } });
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Discard and leave' }));
+    await waitFor(() => {
+      expect(field('Full name').value).toBe('Lina');
+    });
+    expect(field('Phone').value).toBe('');
+  });
+
   it('pre-fills the name from the URL without counting it as a change', async () => {
     mockApi();
     renderPanels({ url: '/?panel=new&fullName=Rana' });
@@ -259,6 +394,43 @@ describe('PatientFormPanel — edit', () => {
     expect(field('Phone').getAttribute('aria-invalid')).toBe('true');
   });
 
+  it('shows an unknown dentist on the dentist field', async () => {
+    mockApi({
+      patients: [RANA],
+      mutation: (method) =>
+        method === 'PATCH' ? problem(422, 'patient.unknown_dentist') : undefined,
+    });
+    renderPanels({ url: `/?panel=edit:${RANA.id}` });
+    const aside = await panel('Rana Haddad');
+    const dentist = screen.getByRole('combobox', { name: 'Primary dentist' });
+    await within(dentist).findByRole('option', { name: 'Dr. Ana Reyes' });
+    fireEvent.change(dentist, { target: { value: DENTIST_ID } });
+    fireEvent.click(within(aside).getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText('This dentist is no longer available')).toBeTruthy();
+    expect(dentist.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('keeps the edits and warns when the patient is archived meanwhile', async () => {
+    const patients = [RANA];
+    mockApi({
+      patients,
+      mutation: (method) => {
+        if (method !== 'PATCH') return undefined;
+        patients[0] = { ...RANA, archivedAt: '2026-09-28T10:00:00.000Z' };
+        return problem(409, 'patient.archived');
+      },
+    });
+    renderPanels({ url: `/?panel=edit:${RANA.id}` });
+    const aside = await panel('Rana Haddad');
+    type('Address', '2 Second St');
+    fireEvent.click(within(aside).getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText("Couldn't save: the record is archived")).toBeTruthy();
+    expect(
+      await within(aside).findByText(/This patient was archived while you were editing/),
+    ).toBeTruthy();
+    expect(field('Address').value).toBe('2 Second St');
+  });
+
   it('keeps an inactive dentist selectable, named from the staff list', async () => {
     mockApi({ patients: [RANA] });
     renderPanels({ url: `/?panel=edit:${RANA.id}` });
@@ -268,7 +440,6 @@ describe('PatientFormPanel — edit', () => {
       expect(dentist.selectedOptions[0]?.textContent).toBe('Dr. Marcus Lee');
     });
     expect(within(dentist).getByRole('option', { name: 'Dr. Ana Reyes' })).toBeTruthy();
-    expect(DENTIST_ID).not.toBe(INACTIVE_DENTIST_ID);
   });
 
   it('shows not found for an unknown patient', async () => {

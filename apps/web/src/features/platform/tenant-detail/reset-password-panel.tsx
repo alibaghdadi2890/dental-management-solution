@@ -50,6 +50,7 @@ export function ResetPasswordPanel({
       title={user.displayName}
       dirty={false}
       onClose={onClose}
+      initialFocus="field"
       footer={
         <>
           <Button onClick={onClose}>{t('common:cancel')}</Button>

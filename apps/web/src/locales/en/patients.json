@@ -63,6 +63,8 @@
     "other": "X"
   },
   "ageSex": "{{age}} · {{sex}}",
+  "ageYears_one": "{{count, number}} yr",
+  "ageYears_other": "{{count, number}} yrs",
   "alertBadge": "{{alert}} +{{more}}",
   "archivedBadge": "Archived",
   "row": {
@@ -135,7 +137,6 @@
   },
   "quickView": {
     "eyebrow": "Patient",
-    "age": "{{age}} yrs",
     "ageUnknown": "Age not recorded",
     "sex": {
       "female": "Female",
@@ -170,7 +171,6 @@
         "merge": "Records merged"
       },
       "ledger_entry": {
-        "create": "Opening balance recorded",
         "repoint": "Balance moved from a merged record"
       },
       "other": "Record changed"
@@ -181,7 +181,8 @@
     "platformAdmin": "Platform admin",
     "assistant": "Assistant",
     "viaAssistant": "{{name}} via assistant",
-    "unknownUser": "Former staff member"
+    "unknownUser": "Former staff member",
+    "more": "Show more"
   },
   "form": {
     "newEyebrow": "New patient",
@@ -219,7 +220,7 @@
     },
     "noDentist": "No primary dentist",
     "optional": "More details",
-    "ageLine": "{{age}} yrs · {{stage}}",
+    "ageLine": "{{age}} · {{stage}}",
     "dentition": {
       "primary": "primary dentition",
       "mixed": "mixed dentition",
@@ -252,7 +253,8 @@
       "notPositive": "Must be more than zero",
       "invalid": "Check this value",
       "unknownDentist": "This dentist is no longer available"
-    }
+    },
+    "archivedWhileEditing": "This patient was archived while you were editing. Your changes are kept here, but they can’t be saved until the record is restored."
   },
   "merge": {
     "eyebrow": "Merge duplicates",
@@ -275,7 +277,7 @@
       "guardian": "Guardian",
       "alerts": "Alerts"
     },
-    "valueFor": "{{field}} from {{number}}",
+    "valueFor": "{{field}} from {{number}}: {{value}}",
     "alertsKept": "Alerts from both records are kept.",
     "matching_one": "{{count, number}} other field matches.",
     "matching_other": "{{count, number}} other fields match.",
@@ -287,9 +289,16 @@
     "confirmBody": "This is recorded in both patients’ audit trails. Reversing a merge requires an admin.",
     "reason": "Reason for merge",
     "done": "Records merged",
-    "failedArchived": "One of these records has been archived since you opened it.",
-    "failedMerged": "One of these records has already been merged.",
-    "failedOverflow": "Together these records have more than 20 medical alerts.",
     "failed": "Couldn't merge: {{reason}}"
+  },
+  "failures": {
+    "archived": "the record is archived",
+    "merged": "the record has already been merged into another",
+    "alertsOverflow": "together these records have more than 20 medical alerts",
+    "unknownDentist": "the chosen dentist is no longer available",
+    "notFound": "the patient no longer exists",
+    "conflict": "someone else changed this record — reload and try again",
+    "forbidden": "you don’t have permission to do this",
+    "unexpected": "something went wrong, try again in a moment"
   }
 }

@@ -7,7 +7,7 @@ import { SHIMMER } from '@/components/ui/list';
 import { RightPanel } from '@/components/ui/right-panel';
 import { usePermission } from '@/features/auth/use-permission';
 import { balanceQuery } from '@/features/billing/billing-api';
-import { leadingBalance } from '@/features/billing/lead-balance';
+import { owedBalances } from '@/features/billing/owed-balances';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { formatAgeLine, formatCalendarDate, formatMoney, formatPhone, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -64,21 +64,33 @@ function Detail({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** Every non-zero balance, the tenant currency first (design Q13); "—" when there is none. */
 function OpenBalance({ id, tenant, locale }: { id: string; tenant: Tenant; locale: string }) {
+  const { t } = useTranslation('billing');
   const balance = useQuery(balanceQuery(id));
   if (balance.isPending) {
     return <span aria-busy="true" className={cn('inline-block h-2.5 w-14', SHIMMER)} />;
   }
-  const lead = balance.data && leadingBalance(balance.data.balances, tenant.currency);
-  const amount = lead ? Number(lead.amount) : 0;
+  if (balance.isError) {
+    return <span className="font-normal text-ink-muted">{t('balanceFailed')}</span>;
+  }
+  const owed = owedBalances(balance.data.balances, tenant.currency);
+  if (owed.length === 0) {
+    return <span className="font-mono font-normal text-ink-muted">{NONE}</span>;
+  }
   return (
-    <span
-      className={cn(
-        'font-mono tabular-nums',
-        amount > 0 ? 'font-semibold text-danger' : 'font-normal text-ink-muted',
-      )}
-    >
-      {lead && amount !== 0 ? formatMoney(lead, locale) : NONE}
+    <span className="flex flex-wrap gap-x-2.5">
+      {owed.map((money) => (
+        <span
+          key={money.currency}
+          className={cn(
+            'font-mono tabular-nums',
+            Number(money.amount) > 0 ? 'font-semibold text-danger' : 'font-normal text-ink-muted',
+          )}
+        >
+          {formatMoney(money, locale)}
+        </span>
+      ))}
     </span>
   );
 }
@@ -105,7 +117,7 @@ function QuickView({
   const ageLine = formatAgeLine(patient.dateOfBirth, todayIn(tenant.timeZone), { locale });
   const summary = [
     ageLine.kind === 'full'
-      ? t('quickView.age', { age: ageLine.age })
+      ? t('ageYears', { count: ageLine.age })
       : ageLine.kind === 'unknown'
         ? t('quickView.ageUnknown')
         : null,

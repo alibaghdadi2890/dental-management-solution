@@ -20,11 +20,11 @@ import '@/lib/i18n';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import { ToastProvider } from '@/components/ui/toast';
 import { sessionQueryOptions } from '@/features/auth/session';
-import { panelParam, parsePatientsSearch } from '../list-query';
-import { PatientsPage } from '../patients-page';
-import { PatientPanel } from './patient-panel';
+import { parsePatientsSearch } from './list-query';
+import { PatientsScreen } from './patients-screen';
 
-/** Shared by the panel specs: fixtures, an API mock, and the route's own panel wiring. */
+/** Test-only: shared by the panel specs — fixtures, an API mock, and the route's own wiring
+ * (`PatientsScreen`) on a memory router. */
 
 export const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
 export const DENTIST_ID = id(80);
@@ -143,8 +143,15 @@ export interface MockApi {
   audit?: Record<string, AuditEntry[]>;
   /** `GET /patients/duplicates/check` answer. */
   twins?: PatientListItem[];
-  /** Overrides a mutation's answer (`POST /patients`, `PATCH /patients/:id`, …). */
-  mutation?: (method: string, path: string, body: unknown) => Response | undefined;
+  /** Overrides a mutation's answer (`POST /patients`, `PATCH /patients/:id`, …); a pending
+   * promise keeps the save in flight. */
+  mutation?: (
+    method: string,
+    path: string,
+    body: unknown,
+  ) => Response | Promise<Response> | undefined;
+  /** Overrides a `GET` answer (full path, query string included). */
+  get?: (path: string) => Response | undefined;
 }
 
 type FetchMock = ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Promise<Response>>>;
@@ -156,6 +163,7 @@ export function mockApi({
   audit = {},
   twins = [],
   mutation,
+  get,
 }: MockApi = {}): FetchMock {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     const path = url.replace('/api/v1', '');
@@ -185,6 +193,8 @@ export function mockApi({
       return Promise.resolve(problem(404, 'not_found'));
     }
 
+    const custom = get?.(path);
+    if (custom) return Promise.resolve(custom);
     if (bare === '/patients/counts') {
       return Promise.resolve(json({ active: 0, notSeen: 0, archived: 0 }));
     }
@@ -235,7 +245,7 @@ export function sent(fetchMock: FetchMock, method: string, path: string): unknow
   return typeof body === 'string' ? JSON.parse(body) : undefined;
 }
 
-/** Renders the Patients page with the route's panel wiring (`routes/_app/patients/index.tsx`). */
+/** Renders `/patients` exactly as the route does (`PatientsScreen`), at `url`. */
 export function renderPanels({
   url,
   permissions = ALL_PERMISSIONS,
@@ -252,24 +262,11 @@ export function renderPanels({
     const search = parsePatientsSearch(useSearch({ strict: false }));
     const navigate = rootRoute.useNavigate();
     return (
-      <PatientsPage
+      <PatientsScreen
         search={search}
-        onSearch={(next, options) => {
-          void navigate({
-            search: next,
-            replace: options?.replace ?? false,
-            state: { patientsPanelPushed: options?.panelPushed ?? false },
-          });
+        navigate={(navigation) => {
+          void navigate(navigation);
         }}
-        renderPanel={(panel, { close, open }) => (
-          <PatientPanel
-            key={panelParam(panel)}
-            panel={panel}
-            prefill={{ fullName: search.fullName, phone: search.phone }}
-            onClose={close}
-            onOpen={open}
-          />
-        )}
       />
     );
   }

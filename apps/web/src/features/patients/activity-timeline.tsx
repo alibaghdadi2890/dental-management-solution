@@ -1,20 +1,22 @@
 import type { AuditEntry } from '@dcm/contracts';
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { SHIMMER } from '@/components/ui/list';
 import { formatDateTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { patientAuditQuery } from './patients-api';
 
+/** The actions audited on a `patient` resource. (An opening balance is audited on the
+ * `ledger_entry` it creates, so it isn't in a patient's timeline; the merge re-point is.) */
 const KNOWN_ACTIONS = [
   'patient.create',
   'patient.update',
   'patient.archive',
   'patient.restore',
   'patient.merge',
-  'ledger_entry.create',
   'ledger_entry.repoint',
 ] as const;
 
@@ -39,8 +41,9 @@ function actorOf(
 
 /**
  * The quick view's activity (design Q10: shown only with `audit:read`): the patient's audit
- * entries, newest first as `GET /audit` returns them — first page only. Actors are named from the
- * staff list; jobs and the system read "System", a platform admin "Platform admin".
+ * entries, newest first as `GET /audit` returns them, a page at a time behind "Show more". Actors
+ * are named from the staff list; jobs and the system read "System", a platform admin "Platform
+ * admin".
  */
 export function ActivityTimeline({
   patientId,
@@ -55,7 +58,8 @@ export function ActivityTimeline({
 }) {
   const { t } = useTranslation('patients');
   const headingId = useId();
-  const audit = useQuery(patientAuditQuery(patientId));
+  const audit = useInfiniteQuery(patientAuditQuery(patientId));
+  const entries = audit.data?.pages.flatMap((page) => page.items) ?? [];
 
   let body;
   if (audit.isPending) {
@@ -67,41 +71,54 @@ export function ActivityTimeline({
     );
   } else if (audit.isError) {
     body = <p className="text-[12.5px] leading-snug text-ink-muted">{t('activity.failed')}</p>;
-  } else if (audit.data.items.length === 0) {
+  } else if (entries.length === 0) {
     body = <p className="text-[12.5px] leading-snug text-ink-muted">{t('activity.empty')}</p>;
   } else {
     body = (
-      <ol className="m-0 list-none border-s border-border p-0">
-        {audit.data.items.map((entry) => (
-          <li key={entry.id} className="relative ps-3.5 pb-3">
-            <span
-              aria-hidden
-              className="absolute -start-1 top-1 size-[7px] rounded-full border-[1.5px] border-border-strong bg-surface"
-            />
-            <div className="text-[12.5px] leading-[1.4] font-medium">
-              {isKnown(entry.action)
-                ? t(`activity.actions.${entry.action}`)
-                : t('activity.actions.other')}
-            </div>
-            <div className="font-mono text-[11.5px] leading-[1.4] text-ink-muted">
-              {t('activity.meta', {
-                at: formatDateTime(entry.occurredAt, { timeZone, locale }),
-                who: actorOf(entry, names, t),
-              })}
-            </div>
-            {entry.reason && (
-              <div className="mt-0.5 text-xs leading-[1.4] text-ink-secondary">
-                {t('activity.reason', { reason: entry.reason })}
+      <>
+        <ol className="m-0 list-none border-s border-border p-0">
+          {entries.map((entry) => (
+            <li key={entry.id} className="relative ps-3.5 pb-3">
+              <span
+                aria-hidden
+                className="absolute -start-1 top-1 size-[7px] rounded-full border-[1.5px] border-border-strong bg-surface"
+              />
+              <div className="text-[12.5px] leading-[1.4] font-medium">
+                {isKnown(entry.action)
+                  ? t(`activity.actions.${entry.action}`)
+                  : t('activity.actions.other')}
               </div>
-            )}
-          </li>
-        ))}
-      </ol>
+              <div className="font-mono text-[11.5px] leading-[1.4] text-ink-muted">
+                {t('activity.meta', {
+                  at: formatDateTime(entry.occurredAt, { timeZone, locale }),
+                  who: actorOf(entry, names, t),
+                })}
+              </div>
+              {entry.reason && (
+                <div className="mt-0.5 text-xs leading-[1.4] text-ink-secondary">
+                  {t('activity.reason', { reason: entry.reason })}
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+        {audit.hasNextPage && (
+          <Button
+            variant="ghost"
+            size="sm"
+            busy={audit.isFetchingNextPage}
+            onClick={() => void audit.fetchNextPage()}
+            className="self-start px-0"
+          >
+            {t('activity.more')}
+          </Button>
+        )}
+      </>
     );
   }
 
   return (
-    <section aria-labelledby={headingId}>
+    <section aria-labelledby={headingId} className="flex flex-col">
       <h3 id={headingId} className="mb-2.5 text-[13px] leading-none font-semibold">
         {t('activity.title')}
       </h3>

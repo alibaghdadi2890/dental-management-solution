@@ -7,5 +7,6 @@
     "note": "Note",
     "notePlaceholder": "Optional — e.g. carried over from previous system"
   },
-  "openBalance": "Open balance"
+  "openBalance": "Open balance",
+  "balanceFailed": "Couldn’t load the balance"
 }

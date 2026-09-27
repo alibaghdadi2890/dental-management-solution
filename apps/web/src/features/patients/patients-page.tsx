@@ -77,9 +77,9 @@ interface PatientsPageProps {
 
 /**
  * The Patients list (`Patients.dc.html`, README §Patients, design §Patients list). All list state
- * lives in the URL search (`search`/`onSearch`, wired by the route); the row selection is local
- * and resets whenever the query changes. The page is a flex row: the list, then whatever
- * `renderPanel` draws for the open `panel`.
+ * lives in the URL search (`search`/`onSearch`, wired by `PatientsScreen` for the route and the
+ * tests); the row selection is local and resets whenever the query changes. The page is a flex
+ * row: the list, then whatever `renderPanel` draws for the open `panel`.
  *
  * A row click opens the quick view: the patient record route (`/patients/$patientId`) does not
  * exist yet, so "Open record" is not offered either. Nothing renders until the session has a

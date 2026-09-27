@@ -65,6 +65,7 @@ export function AddBranchPanel({ tenantId, onClose }: { tenantId: string; onClos
       title={t('branches.panel.title')}
       dirty={dirty}
       onClose={onClose}
+      initialFocus="field"
       footer={
         <>
           <Button onClick={onClose}>{t('common:cancel')}</Button>

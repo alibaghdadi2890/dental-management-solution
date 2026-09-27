@@ -1,7 +1,17 @@
 import type { AuditEntry } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DENTIST_ID, FRONT_DESK_ID, id, mockApi, patient, renderPanels } from './panel-harness';
+import { todayIn } from '@/lib/format';
+import {
+  DENTIST_ID,
+  FRONT_DESK_ID,
+  id,
+  json,
+  mockApi,
+  patient,
+  problem,
+  renderPanels,
+} from '../patients.test-utils';
 
 const RANA = patient(1, 'Rana Haddad', {
   dateOfBirth: '1990-05-01',
@@ -85,6 +95,62 @@ describe('QuickViewPanel', () => {
     const other = await quickView();
     expect(within(other).queryByText('Open balance')).toBeNull();
     expect(within(other).queryByRole('button', { name: 'Edit details' })).toBeNull();
+  });
+
+  it('lists every non-zero balance, tenant currency first, even when that one is zero', async () => {
+    mockApi({
+      patients: [RANA],
+      balances: {
+        [RANA.id]: [
+          { amount: '40.00', currency: 'EUR' },
+          { amount: '0.00', currency: 'USD' },
+        ],
+      },
+    });
+    renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    expect((await within(aside).findByText('€40')).className).toContain('text-danger');
+  });
+
+  it('says so when the balance fails to load', async () => {
+    mockApi({
+      patients: [RANA],
+      get: (path) => (path.endsWith('/balance') ? problem(500, 'internal') : undefined),
+    });
+    renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    expect(await within(aside).findByText('Couldn’t load the balance')).toBeTruthy();
+  });
+
+  it('reads a one-year-old as "1 yr"', async () => {
+    const [y = '', m = '', d = ''] = todayIn('Asia/Beirut').split('-');
+    const dob = `${String(Number(y) - 1)}-${m}-${m === '02' && d === '29' ? '28' : d}`;
+    mockApi({ patients: [{ ...RANA, dateOfBirth: dob }] });
+    renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    expect(within(aside).getByText(/· 1 yr$/)).toBeTruthy();
+  });
+
+  it('pages the activity with Show more', async () => {
+    const [first, second, third] = AUDIT[RANA.id] ?? [];
+    mockApi({
+      patients: [RANA],
+      get: (path) => {
+        if (!path.startsWith('/audit')) return undefined;
+        return path.includes('cursor=c2')
+          ? json({ items: [third], nextCursor: null })
+          : json({ items: [first, second], nextCursor: 'c2' });
+      },
+    });
+    renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    const activity = within(aside).getByRole('region', { name: 'Activity' });
+    expect(await within(activity).findAllByRole('listitem')).toHaveLength(2);
+    fireEvent.click(within(activity).getByRole('button', { name: 'Show more' }));
+    await waitFor(() => {
+      expect(within(activity).getAllByRole('listitem')).toHaveLength(3);
+    });
+    expect(within(activity).queryByRole('button', { name: 'Show more' })).toBeNull();
   });
 
   it('shows the activity with audit:read, naming the actor, the system and the reason', async () => {

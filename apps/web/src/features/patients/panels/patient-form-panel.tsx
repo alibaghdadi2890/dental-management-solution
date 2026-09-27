@@ -2,7 +2,6 @@ import {
   ageOn,
   dentitionStage,
   isoDateSchema,
-  nameSchema,
   PATIENT_SEXES,
   type Patient,
   type Session,
@@ -18,24 +17,19 @@ import { useToast } from '@/components/ui/toast-context';
 import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 import { usePermission } from '@/features/auth/use-permission';
 import { createWithOpeningBalance } from '@/features/billing/billing-api';
-import { MoneyInput } from '@/features/billing/money-input';
 import { useStaffNames } from '@/features/users/use-staff-names';
-import { ApiError } from '@/lib/api';
 import { dateInputOrder, formatCalendarDate, todayIn } from '@/lib/format';
-import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { cn } from '@/lib/utils';
-import type { PatientPanel } from '../list-query';
+import { type PatientPanel, parsePatientsSearch } from '../list-query';
 import {
+  amountValue,
   emptyForm,
-  type FormErrorKey,
-  type FormField,
   fromPatient,
   isDirty,
   isEditDirty,
   parseAlerts,
   type PatientFormPrefill,
   type PatientFormValues,
-  sanitizeAmount,
   showGuardian,
   toCreatePayload,
   toOpeningBalance,
@@ -43,14 +37,11 @@ import {
   validate,
   wantsOpeningBalance,
 } from '../patient-form';
-import {
-  createPatient,
-  duplicateCheckQuery,
-  invalidatePatientData,
-  patientQuery,
-  updatePatient,
-} from '../patients-api';
+import { createPatient, invalidatePatientData, patientQuery, updatePatient } from '../patients-api';
+import { AccountFields } from './account-fields';
+import { type ErrorField, failureOf, fieldErrorsOf, type FormErrors } from './form-server-errors';
 import { PanelFallback } from './panel-fallback';
+import { useDuplicateTwin } from './use-duplicate-twin';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -58,71 +49,23 @@ export type FormMode =
   | { kind: 'new'; prefill: { fullName?: string | undefined; phone?: string | undefined } }
   | { kind: 'edit'; id: string };
 
-/** Every field an error can sit on: the form's own plus the dentist select (a server-only
- * `patient.unknown_dentist`). */
-type ErrorField = FormField | 'primaryDentistUserId';
-type ErrorKey = FormErrorKey | 'invalid' | 'unknownDentist';
-type Errors = Partial<Record<ErrorField, ErrorKey>>;
-
-const DUPLICATE_CHECK_DELAY = 300;
-const DATE_OF_BIRTH_FLOOR = '1900-01-01';
-
-/** Problem `errors[].path` (`patient.` prefixed on the opening-balance route) → form field. */
-const SERVER_FIELDS: Record<string, ErrorField> = {
-  fullName: 'fullName',
-  phone: 'phone',
-  dateOfBirth: 'dateOfBirth',
-  email: 'email',
-  address: 'address',
-  insurance: 'insurance',
-  emergencyContact: 'emergencyContact',
-  notes: 'notes',
-  guardianName: 'guardianName',
-  guardianPhone: 'guardianPhone',
-  medicalAlerts: 'alerts',
-  primaryDentistUserId: 'primaryDentistUserId',
-  'openingBalance.amount': 'openingBalanceAmount',
-  'openingBalance.asOf': 'openingBalanceAsOf',
-  'openingBalance.note': 'openingBalanceNote',
+/** What identifies the open form in the URL: the panel, plus the create pre-fill. */
+const formKeyOf = (search: unknown) => {
+  const { panel, fullName, phone } = parsePatientsSearch(search);
+  return JSON.stringify([panel ?? '', fullName ?? '', phone ?? '']);
 };
 
-const SERVER_ERROR_KEYS: Partial<Record<ErrorField, ErrorKey>> = {
-  phone: 'invalidPhone',
-  guardianPhone: 'invalidPhone',
-  email: 'invalidEmail',
-  openingBalanceAmount: 'invalidAmount',
-};
-
-function fieldOfPath(path: string): ErrorField | undefined {
-  const bare = path.replace(/^patient\./, '');
-  return SERVER_FIELDS[bare] ?? (bare.startsWith('medicalAlerts') ? 'alerts' : undefined);
-}
-
-/** The field errors a failed save maps onto the form, or `null` when it isn't about a field. */
-function serverErrorsOf(error: unknown): Errors | null {
-  if (!(error instanceof ApiError)) return null;
-  if (error.code === 'patient.unknown_dentist') return { primaryDentistUserId: 'unknownDentist' };
-  const errors: Errors = {};
-  for (const { path } of error.problem.errors ?? []) {
-    const field = fieldOfPath(path);
-    if (field) errors[field] = SERVER_ERROR_KEYS[field] ?? 'invalid';
-  }
-  return Object.keys(errors).length > 0 ? errors : null;
-}
-
-const panelOf = (search: unknown) =>
-  typeof search === 'object' && search !== null && 'panel' in search ? String(search.panel) : '';
-
-/** A panel held in the URL search is left when its `panel` param changes, not just the path. */
-const leavesPanel = (current: GuardLocation, next: GuardLocation) =>
-  current.pathname !== next.pathname || panelOf(current.search) !== panelOf(next.search);
+/** A form held in the URL search is left when that search changes (another panel, or a new
+ * pre-fill), not only when the path does. */
+const leavesForm = (current: GuardLocation, next: GuardLocation) =>
+  current.pathname !== next.pathname || formKeyOf(current.search) !== formKeyOf(next.search);
 
 /** Every form value but `sex` is plain text. */
 type TextField = Exclude<keyof PatientFormValues, 'sex'>;
 
 /** Required fields are 40px and prominent, optional ones demoted: 38px on the sunken fill with
- * muted labels (workspace spec §Screen 2); the Account group is plain 36px. */
-type FieldTone = 'required' | 'demoted' | 'plain';
+ * muted labels (workspace spec §Screen 2). */
+type FieldTone = 'required' | 'demoted';
 
 const demoted = 'h-[38px] rounded-[7px] border-border bg-faint';
 
@@ -149,6 +92,11 @@ export function PatientFormPanel({
   return <EditPatient id={mode.id} tenant={tenant} onClose={onClose} onOpen={onOpen} />;
 }
 
+/**
+ * Loads the patient to edit. A patient already archived when the panel opens can't be edited; one
+ * archived by someone else while the form is open keeps the form (and its edits) with a warning —
+ * saving then fails with a clear message instead of the edits vanishing.
+ */
 function EditPatient({
   id,
   tenant,
@@ -162,6 +110,11 @@ function EditPatient({
 }) {
   const { t } = useTranslation('patients');
   const patient = useQuery(patientQuery(id));
+  const [archivedAtOpen, setArchivedAtOpen] = useState<boolean | null>(null);
+  if (patient.data && archivedAtOpen === null) {
+    setArchivedAtOpen(patient.data.archivedAt !== null);
+  }
+
   if (!patient.data) {
     return (
       <PanelFallback
@@ -172,7 +125,7 @@ function EditPatient({
       />
     );
   }
-  if (patient.data.archivedAt !== null) {
+  if (archivedAtOpen === true) {
     return (
       <RightPanel
         eyebrow={t('form.editEyebrow')}
@@ -211,7 +164,7 @@ function PatientForm({
   onClose: () => void;
   onOpen: (panel: PatientPanel) => void;
 }) {
-  const { t, i18n } = useTranslation(['patients', 'billing', 'common']);
+  const { t, i18n } = useTranslation(['patients', 'common']);
   const locale = i18n.resolvedLanguage ?? 'en';
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -224,6 +177,7 @@ function PatientForm({
   const today = todayIn(tenant.timeZone);
   const order = dateInputOrder(country);
   const editing = patient !== undefined;
+  const archived = patient !== undefined && patient.archivedAt !== null;
   const showAccount = !editing && canRecordBalance;
 
   const [initial] = useState<PatientFormValues>(() =>
@@ -234,49 +188,42 @@ function PatientForm({
   const [values, setValues] = useState(initial);
   const [amountText, setAmountText] = useState('');
   const [attempts, setAttempts] = useState(0);
-  const [serverErrors, setServerErrors] = useState<Errors>({});
+  const [serverErrors, setServerErrors] = useState<FormErrors>({});
   // Set once a save has succeeded, so closing the panel afterwards isn't guarded.
   const saved = useRef(false);
+  // One save at a time, even for two submits in the same tick (before `isPending` renders).
+  const saving = useRef(false);
+  const mounted = useRef(false);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const dirty = editing ? isEditDirty(initial, values, today, country) : isDirty(initial, values);
   const guardian = showGuardian(values, today);
   const ready = values.fullName.trim() !== '' && values.phone.trim() !== '';
+  const twin = useDuplicateTwin({
+    fullName: values.fullName,
+    dateOfBirth: values.dateOfBirth,
+    excludeId: patient?.id,
+    today,
+  });
 
-  const clientErrors = (): Errors => {
-    const found: Errors = validate(values, { country, today });
-    if (showAccount && amountText.trim() !== '' && values.openingBalanceAmount === '') {
-      found.openingBalanceAmount = 'invalidAmount';
-    }
-    return found;
-  };
-  const errors: Errors = { ...(attempts > 0 ? clientErrors() : {}), ...serverErrors };
+  const clientErrors = (): FormErrors => validate(values, { country, today });
+  const errors: FormErrors = { ...(attempts > 0 ? clientErrors() : {}), ...serverErrors };
 
   useEffect(() => {
     if (attempts === 0) return;
     formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
   }, [attempts]);
 
-  const duplicateName = useDebouncedValue(values.fullName.trim(), DUPLICATE_CHECK_DELAY);
-  const duplicateDob = useDebouncedValue(values.dateOfBirth, DUPLICATE_CHECK_DELAY);
-  const checkable =
-    nameSchema.safeParse(duplicateName).success &&
-    isoDateSchema.safeParse(duplicateDob).success &&
-    duplicateDob <= today &&
-    duplicateDob >= DATE_OF_BIRTH_FLOOR;
-  const duplicates = useQuery({
-    ...duplicateCheckQuery({
-      fullName: duplicateName,
-      dateOfBirth: duplicateDob,
-      excludeId: patient?.id,
-    }),
-    enabled: checkable,
-  });
-  const twin = checkable ? duplicates.data?.[0] : undefined;
-
   const set = (field: TextField) => (value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
     const errorField: ErrorField = field === 'alertsText' ? 'alerts' : field;
-    setServerErrors((current) => ({ ...current, [errorField]: undefined }));
+    // Remove the server's error rather than masking the field's own validation with `undefined`.
+    setServerErrors(({ [errorField]: _, ...rest }) => rest);
   };
 
   const mutation = useMutation({
@@ -299,12 +246,15 @@ function PatientForm({
   });
 
   const submit = async () => {
+    if (saving.current) return;
     setAttempts((count) => count + 1);
     setServerErrors({});
     if (Object.keys(clientErrors()).length > 0) return;
+    saving.current = true;
     try {
       const id = await mutation.mutateAsync();
       void invalidatePatientData(queryClient);
+      if (!mounted.current) return;
       saved.current = true;
       onClose();
       if (editing) {
@@ -318,14 +268,19 @@ function PatientForm({
         });
       }
     } catch (error) {
-      const fields = serverErrorsOf(error);
+      const failure = failureOf(error);
+      // Someone archived the patient meanwhile: reload it, so the form shows why.
+      if (failure === 'archived') void invalidatePatientData(queryClient);
+      if (!mounted.current) return;
+      const fields = fieldErrorsOf(error);
       if (fields) {
         setServerErrors(fields);
         setAttempts((count) => count + 1);
         return;
       }
-      const reason = error instanceof ApiError ? error.problem.title : t('common:unexpected');
-      toast(t('form.failed', { reason }), { tone: 'danger' });
+      toast(t('form.failed', { reason: t(`failures.${failure}`) }), { tone: 'danger' });
+    } finally {
+      saving.current = false;
     }
   };
 
@@ -390,6 +345,7 @@ function PatientForm({
     initial.primaryDentistUserId !== '' && !dentistIds.has(initial.primaryDentistUserId)
       ? initial.primaryDentistUserId
       : null;
+  const pending = mutation.isPending;
 
   return (
     <RightPanel
@@ -397,6 +353,8 @@ function PatientForm({
       title={patient ? patient.fullName : t('form.newTitle')}
       dirty={dirty}
       onClose={onClose}
+      closeDisabled={pending}
+      initialFocus="field"
       footer={
         <>
           {!ready && (
@@ -404,22 +362,24 @@ function PatientForm({
               {t('form.requiredHint')}
             </span>
           )}
-          <Button onClick={onClose}>{t('common:cancel')}</Button>
+          <Button disabled={pending} onClick={onClose}>
+            {t('common:cancel')}
+          </Button>
           <Button
             type="submit"
             form={formId}
             variant="primary"
-            busy={mutation.isPending}
+            busy={pending}
             disabled={!ready || (editing && !dirty)}
           >
-            {editing ? t('form.save') : mutation.isPending ? t('form.creating') : t('form.create')}
+            {editing ? t('form.save') : pending ? t('form.creating') : t('form.create')}
           </Button>
         </>
       }
     >
       <UnsavedChangesGuard
         when={dirty}
-        isLeaving={(current, next) => !saved.current && leavesPanel(current, next)}
+        isLeaving={(current, next) => !saved.current && leavesForm(current, next)}
       />
       <form
         id={formId}
@@ -427,10 +387,18 @@ function PatientForm({
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
-          if (ready && !mutation.isPending) void submit();
+          if (ready) void submit();
         }}
         className="flex flex-col gap-3.5"
       >
+        {archived && (
+          <p
+            role="alert"
+            className="rounded-lg border border-danger-border bg-danger-bg px-3 py-2.5 text-[12.5px] leading-[1.45] font-medium text-danger"
+          >
+            {t('form.archivedWhileEditing')}
+          </p>
+        )}
         {twin && (
           <div
             role="status"
@@ -488,7 +456,7 @@ function PatientForm({
                 {age !== null && (
                   <span className="mt-[5px] block text-xs leading-tight text-ink-muted">
                     {t('form.ageLine', {
-                      age,
+                      age: t('ageYears', { count: age }),
                       stage: t(`form.dentition.${dentitionStage(age)}`),
                     })}
                   </span>
@@ -623,45 +591,25 @@ function PatientForm({
         </div>
 
         {showAccount && (
-          <>
-            <Eyebrow className="mt-1">{t('billing:account.title')}</Eyebrow>
-            <div className="grid grid-cols-2 gap-x-2.5 gap-y-3">
-              <Field
-                label={t('billing:account.openingBalance')}
-                hint={t('billing:account.openingBalanceHint')}
-                error={message('openingBalanceAmount')}
-              >
-                {(props) => (
-                  <MoneyInput
-                    {...props}
-                    value={amountText}
-                    currency={tenant.currency}
-                    locale={locale}
-                    onChange={(typed) => {
-                      setAmountText(typed);
-                      set('openingBalanceAmount')(sanitizeAmount(typed, locale));
-                    }}
-                  />
-                )}
-              </Field>
-              <Field label={t('billing:account.asOf')} error={message('openingBalanceAsOf')}>
-                {(props) => (
-                  <DateInput
-                    {...props}
-                    order={order}
-                    value={values.openingBalanceAsOf}
-                    onChange={set('openingBalanceAsOf')}
-                  />
-                )}
-              </Field>
-              {text('openingBalanceNote', {
-                label: t('billing:account.note'),
-                placeholder: t('billing:account.notePlaceholder'),
-                className: 'col-span-2',
-                tone: 'plain',
-              })}
-            </div>
-          </>
+          <AccountFields
+            amountText={amountText}
+            asOf={values.openingBalanceAsOf}
+            note={values.openingBalanceNote}
+            errors={{
+              amount: message('openingBalanceAmount'),
+              asOf: message('openingBalanceAsOf'),
+              note: message('openingBalanceNote'),
+            }}
+            currency={tenant.currency}
+            locale={locale}
+            order={order}
+            onAmount={(typed) => {
+              setAmountText(typed);
+              set('openingBalanceAmount')(amountValue(typed, locale));
+            }}
+            onAsOf={set('openingBalanceAsOf')}
+            onNote={set('openingBalanceNote')}
+          />
         )}
       </form>
     </RightPanel>

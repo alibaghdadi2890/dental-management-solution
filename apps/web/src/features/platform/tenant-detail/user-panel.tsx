@@ -143,6 +143,7 @@ export function UserPanel({
       title={user ? user.displayName : t('users.panel.newTitle')}
       dirty={dirty}
       onClose={close}
+      initialFocus="field"
       footer={
         <>
           <Button onClick={close}>{t('common:cancel')}</Button>

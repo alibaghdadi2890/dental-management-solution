@@ -23,7 +23,7 @@ import { ToastProvider } from '@/components/ui/toast';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { todayIn } from '@/lib/format';
 import { parsePatientsSearch } from './list-query';
-import { PatientsPage } from './patients-page';
+import { PatientsScreen } from './patients-screen';
 
 const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
 const DENTIST_ID = id(80);
@@ -215,33 +215,23 @@ const calledUrls = (fetchMock: ReturnType<typeof mockApi>) =>
 function renderPage({
   permissions = ALL_PERMISSIONS,
   url = '/',
-  withPanel = false,
-}: { permissions?: Permission[]; url?: string; withPanel?: boolean } = {}) {
+}: { permissions?: Permission[]; url?: string } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
   client.setQueryData(sessionQueryOptions().queryKey, sessionWith(permissions));
-  // The route's own wiring (`routes/_app/patients/index.tsx`), on a bare root route: the test
-  // router isn't the registered one, so the search is parsed here rather than typed through it.
+  // The route's own wiring (`PatientsScreen`), on a bare root route: the test router isn't the
+  // registered one, so the search is parsed here rather than typed through it.
   const rootRoute = createRootRoute({ component: Harness });
   function Harness() {
     const search = parsePatientsSearch(useSearch({ strict: false }));
     const navigate = rootRoute.useNavigate();
     return (
-      <PatientsPage
+      <PatientsScreen
         search={search}
-        onSearch={(next, options) => {
-          void navigate({
-            search: next,
-            replace: options?.replace ?? false,
-            state: { patientsPanelPushed: options?.panelPushed ?? false },
-          });
+        navigate={(navigation) => {
+          void navigate(navigation);
         }}
-        renderPanel={
-          withPanel
-            ? (_, { close }) => <button type="button" aria-label="Close panel" onClick={close} />
-            : undefined
-        }
       />
     );
   }
@@ -732,7 +722,7 @@ describe('PatientsPage', () => {
 
   it('closing a panel opened from the list goes back instead of adding an entry', async () => {
     mockApi();
-    const router = renderPage({ withPanel: true });
+    const router = renderPage();
     fireEvent.click(await rowOf('Rana Haddad'));
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ panel: `quick:${RANA.id}` });
@@ -742,7 +732,8 @@ describe('PatientsPage', () => {
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ panel: `quick:${SAMI.id}` });
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Close panel' }));
+    const panel = await screen.findByRole('complementary', { name: 'Patient not found' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Close' }));
     await waitFor(() => {
       expect(router.state.location.search).not.toHaveProperty('panel');
     });
@@ -751,8 +742,9 @@ describe('PatientsPage', () => {
 
   it('closing a panel reached by a link replaces its entry', async () => {
     mockApi();
-    const router = renderPage({ withPanel: true, url: `/?panel=quick:${RANA.id}` });
-    fireEvent.click(await screen.findByRole('button', { name: 'Close panel' }));
+    const router = renderPage({ url: `/?panel=quick:${RANA.id}` });
+    const panel = await screen.findByRole('complementary', { name: 'Patient not found' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Close' }));
     await waitFor(() => {
       expect(router.state.location.search).not.toHaveProperty('panel');
     });

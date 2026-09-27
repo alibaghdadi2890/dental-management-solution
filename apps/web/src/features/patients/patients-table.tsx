@@ -7,7 +7,7 @@ import {
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SHIMMER } from '@/components/ui/list';
-import { leadingBalance } from '@/features/billing/lead-balance';
+import { owedBalances } from '@/features/billing/owed-balances';
 import { formatMoney, formatPhone } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
@@ -216,9 +216,9 @@ function BalanceCell({
       </span>
     );
   }
-  const lead = balances && leadingBalance(balances, currency);
+  const all = balances ? owedBalances(balances, currency) : [];
+  const [lead] = all;
   const amount = lead ? Number(lead.amount) : 0;
-  const all = balances?.filter((balance) => Number(balance.amount) !== 0) ?? [];
   return (
     <span
       role="cell"
@@ -228,7 +228,7 @@ function BalanceCell({
         amount > 0 ? 'font-semibold text-danger' : 'text-ink-muted',
       )}
     >
-      {lead && amount !== 0 ? formatMoney(lead, locale) : NONE}
+      {lead ? formatMoney(lead, locale) : NONE}
     </span>
   );
 }

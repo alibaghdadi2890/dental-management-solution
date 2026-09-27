@@ -7,7 +7,6 @@ import { useConfirm } from '@/components/ui/confirm-context';
 import { RightPanel } from '@/components/ui/right-panel';
 import { useToast } from '@/components/ui/toast-context';
 import { useStaffNames } from '@/features/users/use-staff-names';
-import { ApiError } from '@/lib/api';
 import { formatCalendarDate, formatPhone } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { PatientPanel } from '../list-query';
@@ -21,6 +20,7 @@ import {
   toMergePayload,
 } from '../merge-draft';
 import { invalidatePatientData, mergePatients, patientQuery } from '../patients-api';
+import { failureOf } from './form-server-errors';
 import { PanelFallback } from './panel-fallback';
 
 type Tenant = NonNullable<Session['tenant']>;
@@ -159,16 +159,6 @@ function MergeEditor({
     }));
   };
 
-  const failure = (error: unknown) => {
-    if (error instanceof ApiError) {
-      if (error.code === 'patient.archived') return t('merge.failedArchived');
-      if (error.code === 'patient.merged') return t('merge.failedMerged');
-      if (error.code === 'patient.merge_alerts_overflow') return t('merge.failedOverflow');
-      return t('merge.failed', { reason: error.problem.title });
-    }
-    return t('merge.failed', { reason: t('common:unexpected') });
-  };
-
   const submit = () => {
     const keptId = draft.keepId;
     confirm({
@@ -181,7 +171,9 @@ function MergeEditor({
         try {
           await mergePatients(toMergePayload(draft, reason));
         } catch (error) {
-          throw new Error(failure(error), { cause: error });
+          throw new Error(t('merge.failed', { reason: t(`failures.${failureOf(error)}`) }), {
+            cause: error,
+          });
         }
         void invalidatePatientData(queryClient);
         toast(t('merge.done'));
@@ -264,6 +256,7 @@ function MergeEditor({
               {(['a', 'b'] as const).map((side) => {
                 const patient = side === 'a' ? a : b;
                 const on = picked(field) === side;
+                const value = valueOf(patient, field);
                 return (
                   <label key={side} className={cell(on)}>
                     <input
@@ -272,6 +265,7 @@ function MergeEditor({
                       aria-label={t('merge.valueFor', {
                         field: label,
                         number: patient.displayNumber,
+                        value,
                       })}
                       checked={on}
                       onChange={() => {
@@ -279,8 +273,8 @@ function MergeEditor({
                       }}
                       className="sr-only"
                     />
-                    <span dir={field === 'phone' ? 'ltr' : undefined}>
-                      {valueOf(patient, field)}
+                    <span dir={field === 'phone' || field === 'email' ? 'ltr' : undefined}>
+                      {value}
                     </span>
                   </label>
                 );

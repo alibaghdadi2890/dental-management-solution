@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mockApi, patient, problem, renderPanels, sent } from './panel-harness';
+import { mockApi, patient, problem, renderPanels, sent } from '../patients.test-utils';
 
 const OLDER = patient(1, 'Rana Haddad', {
   phone: '+9613123456',
@@ -38,8 +38,8 @@ describe('MergePanel', () => {
         .map((g) => g.getAttribute('aria-label')),
     ).toEqual(['Keep ID', 'Phone', 'Email']);
     expect(radio('Keep this ID P-000001').checked).toBe(true);
-    expect(radio('Phone from P-000001').checked).toBe(true);
-    expect(radio('Email from P-000001').checked).toBe(true);
+    expect(radio('Phone from P-000001: 03 123 456').checked).toBe(true);
+    expect(radio('Email from P-000001: rana@example.com').checked).toBe(true);
     expect(within(aside).getByText(/9 other fields match\./)).toBeTruthy();
     expect(
       within(aside).getByText(/P-000002 will be archived\. Its balance moves to P-000001\./),
@@ -63,9 +63,9 @@ describe('MergePanel', () => {
     const fetchMock = mockApi({ patients: [OLDER, NEWER] });
     const router = renderPanels({ url: URL });
     await mergePanel();
-    fireEvent.click(radio('Phone from P-000002'));
-    expect(radio('Phone from P-000002').checked).toBe(true);
-    expect(radio('Phone from P-000001').checked).toBe(false);
+    fireEvent.click(radio('Phone from P-000002: 03 654 321'));
+    expect(radio('Phone from P-000002: 03 654 321').checked).toBe(true);
+    expect(radio('Phone from P-000001: 03 123 456').checked).toBe(false);
 
     const dialog = await openConfirm();
     expect(within(dialog).getByText('Merge P-000002 into P-000001?')).toBeTruthy();
@@ -93,11 +93,11 @@ describe('MergePanel', () => {
     const fetchMock = mockApi({ patients: [OLDER, NEWER] });
     renderPanels({ url: URL });
     await mergePanel();
-    fireEvent.click(radio('Phone from P-000002'));
+    fireEvent.click(radio('Phone from P-000002: 03 654 321'));
     fireEvent.click(radio('Merge into other P-000002'));
     expect(radio('Keep this ID P-000002').checked).toBe(true);
-    expect(radio('Phone from P-000002').checked).toBe(true);
-    expect(radio('Email from P-000002').checked).toBe(true);
+    expect(radio('Phone from P-000002: 03 654 321').checked).toBe(true);
+    expect(radio('Email from P-000002: —').checked).toBe(true);
 
     const dialog = await openConfirm();
     fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Duplicate' } });
@@ -139,7 +139,7 @@ describe('MergePanel', () => {
     fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Duplicate' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Merge records' }));
     expect((await within(dialog).findByRole('alert')).textContent).toBe(
-      'One of these records has been archived since you opened it.',
+      "Couldn't merge: the record is archived",
     );
   });
 

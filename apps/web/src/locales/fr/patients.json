@@ -63,6 +63,8 @@
     "other": "X"
   },
   "ageSex": "{{age}} · {{sex}}",
+  "ageYears_one": "{{count, number}} an",
+  "ageYears_other": "{{count, number}} ans",
   "alertBadge": "{{alert}} +{{more}}",
   "archivedBadge": "Archivé",
   "row": {
@@ -135,7 +137,6 @@
   },
   "quickView": {
     "eyebrow": "Patient",
-    "age": "{{age}} ans",
     "ageUnknown": "Âge non renseigné",
     "sex": {
       "female": "Femme",
@@ -170,7 +171,6 @@
         "merge": "Dossiers fusionnés"
       },
       "ledger_entry": {
-        "create": "Solde d’ouverture enregistré",
         "repoint": "Solde transféré depuis un dossier fusionné"
       },
       "other": "Dossier modifié"
@@ -181,7 +181,8 @@
     "platformAdmin": "Administrateur de la plateforme",
     "assistant": "Assistant",
     "viaAssistant": "{{name}} via l’assistant",
-    "unknownUser": "Ancien membre du personnel"
+    "unknownUser": "Ancien membre du personnel",
+    "more": "Afficher plus"
   },
   "form": {
     "newEyebrow": "Nouveau patient",
@@ -219,7 +220,7 @@
     },
     "noDentist": "Aucun dentiste référent",
     "optional": "Autres informations",
-    "ageLine": "{{age}} ans · {{stage}}",
+    "ageLine": "{{age}} · {{stage}}",
     "dentition": {
       "primary": "denture temporaire",
       "mixed": "denture mixte",
@@ -252,7 +253,8 @@
       "notPositive": "Doit être supérieur à zéro",
       "invalid": "Vérifiez cette valeur",
       "unknownDentist": "Ce dentiste n’est plus disponible"
-    }
+    },
+    "archivedWhileEditing": "Ce patient a été archivé pendant votre modification. Vos changements restent ici, mais ne pourront être enregistrés qu’une fois le dossier restauré."
   },
   "merge": {
     "eyebrow": "Fusionner les doublons",
@@ -275,7 +277,7 @@
       "guardian": "Tuteur",
       "alerts": "Alertes"
     },
-    "valueFor": "{{field}} de {{number}}",
+    "valueFor": "{{field}} de {{number}} : {{value}}",
     "alertsKept": "Les alertes des deux dossiers sont conservées.",
     "matching_one": "{{count, number}} autre champ est identique.",
     "matching_other": "{{count, number}} autres champs sont identiques.",
@@ -287,9 +289,16 @@
     "confirmBody": "La fusion est consignée dans le journal d’audit des deux patients. Seul un administrateur peut l’annuler.",
     "reason": "Motif de la fusion",
     "done": "Dossiers fusionnés",
-    "failedArchived": "L’un de ces dossiers a été archivé depuis son ouverture.",
-    "failedMerged": "L’un de ces dossiers a déjà été fusionné.",
-    "failedOverflow": "Ensemble, ces dossiers comptent plus de 20 alertes médicales.",
     "failed": "Fusion impossible : {{reason}}"
+  },
+  "failures": {
+    "archived": "le dossier est archivé",
+    "merged": "le dossier a déjà été fusionné avec un autre",
+    "alertsOverflow": "ensemble, ces dossiers comptent plus de 20 alertes médicales",
+    "unknownDentist": "le dentiste choisi n’est plus disponible",
+    "notFound": "le patient n’existe plus",
+    "conflict": "quelqu’un d’autre a modifié ce dossier — rechargez et réessayez",
+    "forbidden": "vous n’avez pas l’autorisation de le faire",
+    "unexpected": "une erreur s’est produite, réessayez dans un instant"
   }
 }

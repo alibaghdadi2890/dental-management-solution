@@ -1,12 +1,12 @@
 import type { Patient, PatientSex } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
 import {
+  amountValue,
   emptyForm,
   fromPatient,
   isDirty,
   isEditDirty,
   parseAlerts,
-  sanitizeAmount,
   showGuardian,
   toCreatePayload,
   toOpeningBalance,
@@ -368,25 +368,22 @@ describe('toPatchPayload', () => {
   });
 });
 
-describe('sanitizeAmount', () => {
-  it('strips thousands separators and caps at two decimals', () => {
-    expect(sanitizeAmount('1,234.567', 'en')).toBe('1234.56');
+describe('amountValue', () => {
+  it('reads a clean amount for the locale', () => {
+    expect(amountValue('1,234.56', 'en')).toBe('1234.56');
+    expect(amountValue('12,50', 'fr')).toBe('12.50');
+    expect(amountValue('.5', 'en')).toBe('0.5');
+    expect(amountValue('5.', 'en')).toBe('5');
   });
 
-  it('drops non-numeric input entirely', () => {
-    expect(sanitizeAmount('abc', 'en')).toBe('');
-  });
-
-  it('prepends a zero to a leading-dot amount', () => {
-    expect(sanitizeAmount('.5', 'en')).toBe('0.5');
-  });
-
-  it('drops a bare trailing dot', () => {
-    expect(sanitizeAmount('5.', 'en')).toBe('5');
-  });
-
-  it('reads a French comma as the decimal separator', () => {
-    expect(sanitizeAmount('12,50', 'fr')).toBe('12.50');
+  it('keeps anything else as typed, so validation flags it', () => {
+    for (const typed of ['12.505', '12abc']) {
+      const value = amountValue(typed, 'en');
+      expect(value).toBe(typed);
+      expect(
+        validate({ ...emptyForm(), openingBalanceAmount: value }, CTX).openingBalanceAmount,
+      ).toBe('invalidAmount');
+    }
   });
 });
 

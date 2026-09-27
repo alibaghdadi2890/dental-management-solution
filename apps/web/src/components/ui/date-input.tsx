@@ -11,7 +11,8 @@ type NativeProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChan
  * A typed date in the tenant's day/month order (design Q17) rather than `<input type="date">`,
  * whose order follows the browser's locale data. `value` is ISO `YYYY-MM-DD` or `''`; while the
  * text isn't a whole valid date yet, `onChange` gets the text as typed, which the form's own
- * validation reports as an invalid date — so a half-typed date is never silently dropped.
+ * validation reports as an invalid date — so a half-typed date is never silently dropped. It asks
+ * for a text keyboard: a phone's numeric pad has no `/` to type the separators with.
  */
 export function DateInput({
   value,
@@ -37,7 +38,7 @@ export function DateInput({
     <TextInput
       {...props}
       dir="ltr"
-      inputMode="numeric"
+      inputMode="text"
       autoComplete="off"
       placeholder={t(`dateFormat.${order}`)}
       value={text}

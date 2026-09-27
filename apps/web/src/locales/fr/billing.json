@@ -7,5 +7,6 @@
     "note": "Note",
     "notePlaceholder": "Facultatif — ex. repris de l’ancien logiciel"
   },
-  "openBalance": "Solde dû"
+  "openBalance": "Solde dû",
+  "balanceFailed": "Impossible de charger le solde"
 }

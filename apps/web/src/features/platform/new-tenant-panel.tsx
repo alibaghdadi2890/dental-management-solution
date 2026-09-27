@@ -124,6 +124,7 @@ export function NewTenantPanel({
       title={t('newTenant.title')}
       dirty={isDirty(form)}
       onClose={close}
+      initialFocus="field"
       footer={
         <>
           <Button onClick={close}>{t('common:cancel')}</Button>

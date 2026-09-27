@@ -75,6 +75,12 @@
     "other": "آخر"
   },
   "ageSex": "{{age}} · {{sex}}",
+  "ageYears_zero": "{{count, number}} سنة",
+  "ageYears_one": "سنة واحدة",
+  "ageYears_two": "سنتان",
+  "ageYears_few": "{{count, number}} سنوات",
+  "ageYears_many": "{{count, number}} سنة",
+  "ageYears_other": "{{count, number}} سنة",
   "alertBadge": "{{alert}} +{{more}}",
   "archivedBadge": "مؤرشف",
   "row": {
@@ -163,7 +169,6 @@
   },
   "quickView": {
     "eyebrow": "مريض",
-    "age": "{{age}} سنة",
     "ageUnknown": "العمر غير مسجّل",
     "sex": {
       "female": "أنثى",
@@ -198,7 +203,6 @@
         "merge": "تم دمج الملفات"
       },
       "ledger_entry": {
-        "create": "تم تسجيل الرصيد الافتتاحي",
         "repoint": "نُقل الرصيد من ملف مدموج"
       },
       "other": "تم تعديل الملف"
@@ -209,7 +213,8 @@
     "platformAdmin": "مسؤول المنصة",
     "assistant": "المساعد",
     "viaAssistant": "{{name}} عبر المساعد",
-    "unknownUser": "موظف سابق"
+    "unknownUser": "موظف سابق",
+    "more": "عرض المزيد"
   },
   "form": {
     "newEyebrow": "مريض جديد",
@@ -247,7 +252,7 @@
     },
     "noDentist": "بلا طبيب معالج",
     "optional": "تفاصيل إضافية",
-    "ageLine": "{{age}} سنة · {{stage}}",
+    "ageLine": "{{age}} · {{stage}}",
     "dentition": {
       "primary": "أسنان لبنية",
       "mixed": "أسنان مختلطة",
@@ -280,7 +285,8 @@
       "notPositive": "يجب أن يكون أكبر من صفر",
       "invalid": "تحقّق من هذه القيمة",
       "unknownDentist": "هذا الطبيب لم يعد متاحًا"
-    }
+    },
+    "archivedWhileEditing": "تمت أرشفة هذا المريض أثناء التعديل. تبقى تغييراتك هنا، لكن لا يمكن حفظها قبل استعادة الملف."
   },
   "merge": {
     "eyebrow": "دمج الملفات المكررة",
@@ -303,7 +309,7 @@
       "guardian": "ولي الأمر",
       "alerts": "التنبيهات"
     },
-    "valueFor": "{{field}} من {{number}}",
+    "valueFor": "{{field}} من {{number}}: {{value}}",
     "alertsKept": "يُحتفظ بتنبيهات الملفين معًا.",
     "matching_zero": "لا توجد حقول أخرى متطابقة.",
     "matching_one": "حقل آخر متطابق.",
@@ -319,9 +325,16 @@
     "confirmBody": "يُسجَّل هذا في سجل التدقيق لكلا المريضين. لا يمكن التراجع عن الدمج إلا بواسطة مسؤول.",
     "reason": "سبب الدمج",
     "done": "تم دمج الملفات",
-    "failedArchived": "تمت أرشفة أحد هذين الملفين منذ فتحه.",
-    "failedMerged": "تم دمج أحد هذين الملفين مسبقًا.",
-    "failedOverflow": "يتجاوز مجموع التنبيهات الطبية في الملفين 20 تنبيهًا.",
     "failed": "تعذّر الدمج: {{reason}}"
+  },
+  "failures": {
+    "archived": "الملف مؤرشف",
+    "merged": "تم دمج الملف في ملف آخر مسبقًا",
+    "alertsOverflow": "يتجاوز مجموع التنبيهات الطبية في الملفين 20 تنبيهًا",
+    "unknownDentist": "الطبيب المختار لم يعد متاحًا",
+    "notFound": "المريض لم يعد موجودًا",
+    "conflict": "عدّل شخص آخر هذا الملف — أعد التحميل وحاول مجددًا",
+    "forbidden": "ليست لديك صلاحية للقيام بذلك",
+    "unexpected": "حدث خطأ ما، حاول مرة أخرى بعد قليل"
   }
 }

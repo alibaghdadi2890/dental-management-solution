@@ -16,7 +16,7 @@ import {
   type PatientPatch,
   type PatientSex,
 } from '@dcm/contracts';
-import { sanitizeAmountInput } from '@/lib/amount';
+import { parseAmount } from '@/lib/amount';
 import { formatPhone } from '@/lib/format';
 
 /**
@@ -191,7 +191,7 @@ const ALERT_ITEM_MAX = 60;
 
 /** `.5` → `0.5`, `5.` → `5`: the two shapes `Number()` parses fine but `decimalAmountSchema`'s
  * strict regex (and the amount input's own visual alignment) doesn't want. Locale/digit
- * normalisation itself lives in `sanitizeAmount`/`lib/amount.ts`; this only tidies the dot. */
+ * normalisation itself lives in `amountValue`/`lib/amount.ts`; this only tidies the dot. */
 function normalizeAmountText(text: string): string {
   let result = text;
   if (result.startsWith('.')) result = `0${result}`;
@@ -298,14 +298,12 @@ export function parseAlerts(text: string): string[] {
   return dedupeAlerts(rawAlertItems(text)).slice(0, MEDICAL_ALERTS_MAX);
 }
 
-/** Keeps digits and a single dot, at most two decimal places, locale-aware (a French `,` decimal,
- * Arabic-Indic digits — see `lib/amount.ts`'s `sanitizeAmountInput`) — the opening-balance amount
- * input (design "Account" group). Unlike `catalog-draft.ts`'s `sanitizePrice`, a leading/trailing
- * dot is tidied immediately (`'.5'` → `'0.5'`, `'5.'` → `'5'`) rather than left for later: this
- * field's value is parsed by `decimalAmountSchema`, whose regex requires a leading digit and has
- * no meaning for a bare trailing dot. */
-export function sanitizeAmount(value: string, locale: string): string {
-  return normalizeAmountText(sanitizeAmountInput(value, locale));
+/** The opening-balance amount's form value for what was typed (design "Account" group): a plain
+ * decimal when the text is a clean number for `locale` (`'12,50'` in French → `'12.50'`), else
+ * the text as typed, which `validate` then reports as `invalidAmount` — `12.505` or `12abc` is
+ * never quietly trimmed into another amount. */
+export function amountValue(text: string, locale: string): string {
+  return parseAmount(text, locale) ?? text.trim();
 }
 
 /** Whether to call `POST /billing/opening-balances` instead of `POST /patients` (design Q1: "the
@@ -462,7 +460,7 @@ export function isEditDirty(
 /** `POST /billing/opening-balances`'s `openingBalance` leg; only call once `wantsOpeningBalance`
  * is true — an amount of `0` fails `openingBalanceInputSchema`'s "must be greater than zero". The
  * amount is run through `normalizeAmountText` first so a `.5`/`5.` that reached form state some
- * way other than `sanitizeAmount` (e.g. a pre-filled draft) still parses. */
+ * way other than `amountValue` (e.g. a pre-filled draft) still parses. */
 export function toOpeningBalance(values: PatientFormValues, today: string): OpeningBalanceInput {
   return openingBalanceInputSchema.parse({
     amount: normalizeAmountText(values.openingBalanceAmount) || '0',

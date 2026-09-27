@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes } from 'react';
+import { type InputHTMLAttributes, useId } from 'react';
 import { currencySymbol } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -6,8 +6,9 @@ type NativeProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChan
 
 /**
  * A money amount as typed (design "Account" group: 36px, Mono, right-aligned, the tenant currency
- * after it). It shows exactly what the person typed — `12,50` in French — and leaves turning that
- * into a plain decimal (`sanitizeAmount`/`sanitizeAmountInput`) to the form that owns the value.
+ * after it). It shows exactly what the person typed — `12,50` in French — and leaves reading that
+ * as a decimal (`parseAmount`) to the form that owns the value. The narrow symbol is decorative;
+ * the ISO code is what a screen reader hears, as the input's description.
  */
 export function MoneyInput({
   value,
@@ -15,6 +16,7 @@ export function MoneyInput({
   currency,
   locale,
   className,
+  'aria-describedby': describedBy,
   ...props
 }: NativeProps & {
   value: string;
@@ -23,6 +25,7 @@ export function MoneyInput({
   currency: string;
   locale: string;
 }) {
+  const codeId = useId();
   return (
     <div
       className={cn(
@@ -32,6 +35,7 @@ export function MoneyInput({
     >
       <input
         {...props}
+        aria-describedby={describedBy ? `${describedBy} ${codeId}` : codeId}
         dir="ltr"
         inputMode="decimal"
         autoComplete="off"
@@ -43,6 +47,9 @@ export function MoneyInput({
       />
       <span aria-hidden className="flex-none text-ink-muted">
         {currencySymbol(currency, locale)}
+      </span>
+      <span id={codeId} className="sr-only">
+        {currency}
       </span>
     </div>
   );

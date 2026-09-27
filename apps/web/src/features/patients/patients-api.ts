@@ -6,6 +6,7 @@ import {
   patientListItemSchema,
   patientPageSchema,
   patientSchema,
+  type AuditPage,
   type DuplicateCheckQuery,
   type ExportLanguage,
   type PatientArchive,
@@ -15,7 +16,7 @@ import {
   type PatientPatch,
   type PatientRestore,
 } from '@dcm/contracts';
-import { type QueryClient, queryOptions } from '@tanstack/react-query';
+import { infiniteQueryOptions, type QueryClient, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import { billingKeys } from '@/features/billing/billing-api';
 import { actingTenantId } from '@/features/platform/acting-tenant';
@@ -120,17 +121,19 @@ export function patientQuery(id: string, tenantId?: string) {
   });
 }
 
-/** The quick view's activity timeline (`audit:read` only, design Q10); the first page only — an
- * infinite/"load more" query is a concern for the component that renders it, not this client. */
+/** The quick view's activity timeline (`audit:read` only, design Q10), newest first, one cursor
+ * page at a time ("Show more"). */
 export function patientAuditQuery(id: string, tenantId?: string) {
-  return queryOptions({
+  return infiniteQueryOptions({
     queryKey: patientKeys.audit(tenantId ?? actingTenantId(), id),
-    queryFn: () =>
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
       apiFetch(
-        `/audit${toQueryString({ resourceType: 'patient', resourceId: id })}`,
+        `/audit${toQueryString({ resourceType: 'patient', resourceId: id, cursor: pageParam })}`,
         auditPageSchema,
         scope(tenantId),
       ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page: AuditPage) => page.nextCursor ?? undefined,
   });
 }
 

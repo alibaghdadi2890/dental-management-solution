@@ -11,7 +11,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 const { LIST_QUERY_DEFAULTS } = await import('./list-query');
-const { downloadExport, invalidatePatientData, patientKeys, patientListQuery } =
+const { downloadExport, invalidatePatientData, patientAuditQuery, patientKeys, patientListQuery } =
   await import('./patients-api');
 
 /** `queryOptions()`'s `queryFn` is typed to take a `QueryFunctionContext`; every `queryFn` here
@@ -35,6 +35,29 @@ describe('patientKeys', () => {
 
   it('is null-tenant for no acting tenant, not the literal string "null"', () => {
     expect(patientKeys.all(null)).toEqual(['patients', null]);
+  });
+});
+
+describe('patientAuditQuery', () => {
+  it('pages the patient’s audit entries with the returned cursor', async () => {
+    const options = patientAuditQuery('p1');
+    const run = options.queryFn as (context: { pageParam: string | undefined }) => Promise<unknown>;
+    await run({ pageParam: undefined });
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      '/audit?resourceType=patient&resourceId=p1',
+      expect.anything(),
+      {},
+    );
+    await run({ pageParam: 'c2' });
+    expect(apiFetchMock).toHaveBeenLastCalledWith(
+      '/audit?resourceType=patient&resourceId=p1&cursor=c2',
+      expect.anything(),
+      {},
+    );
+    expect(options.getNextPageParam({ items: [], nextCursor: 'c3' }, [], undefined, [])).toBe('c3');
+    expect(
+      options.getNextPageParam({ items: [], nextCursor: null }, [], undefined, []),
+    ).toBeUndefined();
   });
 });
 
