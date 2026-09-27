@@ -1,0 +1,361 @@
+import type {
+  AuditPage,
+  Branch,
+  CatalogSeedResult,
+  DiagnosisItem,
+  ProblemDetails,
+  ServiceItem,
+  Tenant,
+} from '@dcm/contracts';
+import type TestAgent from 'supertest/lib/agent';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { CatalogService } from '../../src/modules/clinical';
+import { newId } from '../../src/platform/kernel/id';
+import { connectTestDatabase, type TestDatabase } from '../support/postgres';
+import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
+import { createTestApp, type TestApp } from '../support/test-app';
+
+const TEMPORARY = 'temporary-pw-1';
+
+const input = (item: ServiceItem) => ({
+  id: item.id,
+  code: item.code,
+  name: item.name,
+  category: item.category,
+  chargeUnit: item.chargeUnit,
+  price: item.price.amount,
+  frequent: item.frequent,
+  active: item.active,
+});
+
+describe('clinical: service and diagnosis catalogs', () => {
+  let database: TestDatabase;
+  let testApp: TestApp;
+  let admin: TestAgent;
+  let tenant: Tenant;
+  let frontdesk: TestAgent;
+
+  const api = {
+    get: (path: string) => admin.get(`/api/v1${path}`).set('X-Tenant-Id', tenant.id),
+    put: (path: string, body: object) =>
+      admin.put(`/api/v1${path}`).set('X-Tenant-Id', tenant.id).send(body),
+    post: (path: string, body: object = {}) =>
+      admin.post(`/api/v1${path}`).set('X-Tenant-Id', tenant.id).send(body),
+    patch: (path: string, body: object) =>
+      admin.patch(`/api/v1${path}`).set('X-Tenant-Id', tenant.id).send(body),
+    delete: (path: string) => admin.delete(`/api/v1${path}`).set('X-Tenant-Id', tenant.id),
+  };
+  const services = async () => (await api.get('/catalog/services')).body as ServiceItem[];
+  const diagnoses = async () => (await api.get('/catalog/diagnoses')).body as DiagnosisItem[];
+  const service = async (code: string) => {
+    const found = (await services()).find((item) => item.code === code);
+    if (!found) throw new Error(`no service ${code}`);
+    return found;
+  };
+  const auditOf = async (query: string) =>
+    ((await api.get(`/audit?${query}&limit=100`)).body as AuditPage).items;
+
+  const provision = async (name: string) => {
+    const ownerEmail = uniqueEmail('owner');
+    const response = await admin.post('/api/v1/platform/tenants').send({
+      clinic: { name, slug: `cat-${newId().slice(-12)}` },
+      firstBranch: { name: 'Main St' },
+      owner: { displayName: `${name} Owner`, email: ownerEmail, temporaryPassword: TEMPORARY },
+    });
+    expect(response.status).toBe(201);
+    return { tenant: response.body as Tenant, ownerEmail };
+  };
+
+  beforeAll(async () => {
+    database = connectTestDatabase();
+    testApp = await createTestApp(database);
+    admin = await signIn(testApp.app, await createPlatformAdmin(testApp.app), undefined, {
+      rememberMe: true,
+    });
+    ({ tenant } = await provision('Catalog Clinic'));
+
+    const [branch] = (await api.get('/branches')).body as Branch[];
+    const email = uniqueEmail('frontdesk');
+    const created = await api.post('/users', {
+      displayName: 'Jamie Ortiz',
+      email,
+      practitionerType: 'frontdesk',
+      roleKeys: ['frontdesk'],
+      branchIds: [branch?.id],
+      temporaryPassword: TEMPORARY,
+    });
+    expect(created.status).toBe(201);
+    frontdesk = await signInAndSetPassword(testApp.app, email, TEMPORARY);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  afterAll(async () => {
+    await testApp.close();
+    await database.close();
+  });
+
+  describe('default template', () => {
+    it('is seeded on provisioning, in POC order, in the tenant currency, by the system', async () => {
+      const seeded = await services();
+      expect(seeded).toHaveLength(12);
+      expect(seeded.map((item) => item.code).slice(0, 4)).toEqual(['EXT', 'CLT', 'PARO', 'PARX']);
+      expect(seeded[0]).toMatchObject({
+        name: 'Extraction',
+        category: 'Surgical',
+        chargeUnit: 'per_tooth',
+        price: { amount: '30.00', currency: 'USD' },
+        frequent: true,
+        active: true,
+      });
+      expect(seeded.find((item) => item.code === 'XRY')?.active).toBe(false);
+
+      const dx = await diagnoses();
+      expect(dx).toHaveLength(14);
+      expect(dx[0]).toMatchObject({ code: 'DX-CAR', name: 'Dental caries', frequent: true });
+
+      const created = await auditOf('resourceType=procedure');
+      expect(created.filter((entry) => entry.action === 'catalog.service.create')).toHaveLength(12);
+      expect(created[0]).toMatchObject({ actorKind: 'system', actorPlatformAdmin: false });
+    });
+
+    it('is a no-op to seed again while the catalog has rows', async () => {
+      const response = await api.post('/catalog/seed-default');
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ services: 0, diagnoses: 0 } satisfies CatalogSeedResult);
+      expect(await services()).toHaveLength(12);
+    });
+
+    it('seeds a tenant whose catalogs are empty', async () => {
+      const other = await provision('Emptied Clinic');
+      const inOther = {
+        get: (path: string) => admin.get(`/api/v1${path}`).set('X-Tenant-Id', other.tenant.id),
+        post: (path: string) => admin.post(`/api/v1${path}`).set('X-Tenant-Id', other.tenant.id),
+        delete: (path: string) =>
+          admin.delete(`/api/v1${path}`).set('X-Tenant-Id', other.tenant.id),
+      };
+      for (const kind of ['services', 'diagnoses']) {
+        for (const item of (await inOther.get(`/catalog/${kind}`)).body as { id: string }[]) {
+          expect((await inOther.delete(`/catalog/${kind}/${item.id}`)).status).toBe(204);
+        }
+      }
+
+      const seeded = await inOther.post('/catalog/seed-default');
+      expect(seeded.body).toEqual({ services: 12, diagnoses: 14 });
+      expect((await inOther.get('/catalog/services')).body).toHaveLength(12);
+    });
+  });
+
+  describe('batch save', () => {
+    it('creates and updates rows in one call and returns the whole catalog', async () => {
+      const ext = await service('EXT');
+      const response = await api.put('/catalog/services', {
+        items: [
+          {
+            code: 'impl',
+            name: 'Implant consult',
+            category: 'Implants',
+            chargeUnit: 'per_jaw',
+            price: '45.5',
+          },
+          { ...input(ext), name: 'Simple extraction', frequent: false },
+        ],
+      });
+      expect(response.status).toBe(200);
+      const saved = response.body as ServiceItem[];
+      expect(saved).toHaveLength(13);
+      expect(saved.at(-1)).toMatchObject({
+        code: 'IMPL',
+        name: 'Implant consult',
+        category: 'Implants',
+        price: { amount: '45.50', currency: 'USD' },
+        frequent: false,
+        active: true,
+      });
+      expect(saved.find((item) => item.id === ext.id)).toMatchObject({
+        name: 'Simple extraction',
+        frequent: false,
+      });
+
+      const [entry] = await auditOf(`resourceId=${ext.id}`);
+      expect(entry).toMatchObject({
+        action: 'catalog.service.update',
+        resourceType: 'procedure',
+        actorKind: 'user',
+        actorPlatformAdmin: true,
+        before: { name: 'Extraction', frequent: true },
+        after: { name: 'Simple extraction', frequent: false },
+      });
+      const changed = (await auditOf('resourceType=event')).find(
+        (item) => item.action === 'CatalogChanged',
+      );
+      expect(changed?.after).toEqual({
+        kind: 'service',
+        ids: expect.arrayContaining([ext.id]) as unknown,
+      });
+    });
+
+    it('lets two rows swap codes', async () => {
+      const [cmp, cgic] = [await service('CMP'), await service('CGIC')];
+      const response = await api.put('/catalog/services', {
+        items: [
+          { ...input(cmp), code: 'CGIC' },
+          { ...input(cgic), code: 'CMP' },
+        ],
+      });
+      expect(response.status).toBe(200);
+      expect((await service('CMP')).id).toBe(cgic.id);
+      expect((await service('CGIC')).id).toBe(cmp.id);
+    });
+
+    it('rejects a duplicate code with 422 and the row path, saving nothing', async () => {
+      const response = await api.put('/catalog/services', {
+        items: [
+          { code: 'NEW1', name: 'New one', category: null, chargeUnit: 'per_tooth', price: '1' },
+          {
+            code: 'zir',
+            name: 'Another zircon',
+            category: null,
+            chargeUnit: 'per_tooth',
+            price: '1',
+          },
+        ],
+      });
+      expect(response.status).toBe(422);
+      const problem = response.body as ProblemDetails;
+      expect(problem.code).toBe('validation_failed');
+      expect(problem.errors).toEqual([
+        {
+          path: 'items.1.code',
+          code: 'duplicate',
+          message: 'Code ZIR is already used by "Zircon crown"',
+        },
+      ]);
+      expect((await services()).some((item) => item.code === 'NEW1')).toBe(false);
+    });
+
+    it('rejects a blank name at request validation with the row path', async () => {
+      const response = await api.put('/catalog/services', {
+        items: [{ code: 'X1', name: ' ', category: null, chargeUnit: 'per_tooth', price: '1' }],
+      });
+      expect(response.status).toBe(400);
+      expect((response.body as ProblemDetails).errors?.[0]?.path).toBe('items.0.name');
+    });
+
+    it('answers 404 for an unknown row', async () => {
+      const response = await api.put('/catalog/diagnoses', {
+        items: [{ id: newId(), code: 'DX-X', name: 'Unknown', category: null }],
+      });
+      expect(response.status).toBe(404);
+      expect(response.body).toMatchObject({ code: 'catalog.not_found' });
+    });
+
+    it('stamps the tenant currency when the price changes, and only then', async () => {
+      expect((await api.patch('/tenant', { currency: 'EUR' })).status).toBe(200);
+      try {
+        const [scl, onl] = [await service('SCL'), await service('ONL')];
+        await api.put('/catalog/services', {
+          items: [
+            { ...input(scl), name: 'Scaling and polishing' },
+            { ...input(onl), price: '260' },
+          ],
+        });
+        expect((await service('SCL')).price).toEqual({ amount: '60.00', currency: 'USD' });
+        expect((await service('ONL')).price).toEqual({ amount: '260.00', currency: 'EUR' });
+      } finally {
+        await api.patch('/tenant', { currency: 'USD' });
+      }
+    });
+
+    it('saves diagnoses and rejects their duplicate codes too', async () => {
+      const response = await api.put('/catalog/diagnoses', {
+        items: [{ code: 'dx-abs', name: 'Periapical abscess', category: 'Pulpal', frequent: true }],
+      });
+      expect(response.status).toBe(200);
+      expect((response.body as DiagnosisItem[]).at(-1)).toMatchObject({
+        code: 'DX-ABS',
+        frequent: true,
+        active: true,
+      });
+
+      const duplicate = await api.put('/catalog/diagnoses', {
+        items: [{ code: 'DX-GIN', name: 'Gingivitis again', category: null }],
+      });
+      expect(duplicate.status).toBe(422);
+      expect((duplicate.body as ProblemDetails).errors?.[0]?.path).toBe('items.0.code');
+    });
+  });
+
+  describe('delete and deactivate', () => {
+    it('soft-deletes an unused row, audits it and frees its code', async () => {
+      const clt = await service('CLT');
+      expect((await api.delete(`/catalog/services/${clt.id}`)).status).toBe(204);
+      expect((await services()).some((item) => item.id === clt.id)).toBe(false);
+
+      const [entry] = await auditOf(`resourceId=${clt.id}`);
+      expect(entry).toMatchObject({ action: 'catalog.service.delete', before: { code: 'CLT' } });
+
+      const reused = await api.put('/catalog/services', {
+        items: [
+          {
+            code: 'CLT',
+            name: 'Crown lengthening',
+            category: 'Surgical',
+            chargeUnit: 'per_tooth',
+            price: '15',
+          },
+        ],
+      });
+      expect(reused.status).toBe(200);
+      expect((await api.delete(`/catalog/services/${clt.id}`)).status).toBe(404);
+    });
+
+    it('refuses to delete a row visits use (409 catalog.in_use) and keeps it', async () => {
+      const isInUse = vi.spyOn(testApp.app.get(CatalogService), 'isInUse').mockResolvedValue(true);
+      const paro = await service('PARO');
+
+      const response = await api.delete(`/catalog/services/${paro.id}`);
+      expect(response.status).toBe(409);
+      expect(response.body).toMatchObject({ code: 'catalog.in_use' });
+      expect(isInUse).toHaveBeenCalledWith(paro.id);
+      expect((await service('PARO')).id).toBe(paro.id);
+    });
+
+    it('marks a row inactive', async () => {
+      const dx = (await diagnoses()).find((item) => item.code === 'DX-ATTR');
+      const response = await api.post(`/catalog/diagnoses/${dx?.id ?? ''}/deactivate`);
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ code: 'DX-ATTR', active: false });
+      const [entry] = await auditOf(`resourceId=${dx?.id ?? ''}`);
+      expect(entry).toMatchObject({
+        action: 'catalog.diagnosis.deactivate',
+        before: { active: true },
+        after: { active: false },
+      });
+    });
+  });
+
+  describe('permissions', () => {
+    it('lets the front desk read but not change the catalog', async () => {
+      const listed = await frontdesk.get('/api/v1/catalog/services');
+      expect(listed.status).toBe(200);
+      expect((listed.body as ServiceItem[]).length).toBeGreaterThan(0);
+      expect((await frontdesk.get('/api/v1/catalog/diagnoses')).status).toBe(200);
+
+      const ext = await service('EXT');
+      const attempts = [
+        frontdesk.put('/api/v1/catalog/services').send({ items: [input(ext)] }),
+        frontdesk.delete(`/api/v1/catalog/services/${ext.id}`),
+        frontdesk.post(`/api/v1/catalog/services/${ext.id}/deactivate`),
+        frontdesk.post('/api/v1/catalog/seed-default'),
+      ];
+      for (const response of await Promise.all(attempts)) {
+        expect(response.status).toBe(403);
+        expect(response.body).toMatchObject({ code: 'forbidden' });
+      }
+      expect((await service('EXT')).active).toBe(true);
+    });
+  });
+});

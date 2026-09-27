@@ -111,14 +111,15 @@ modules/<name>/
 | `audit`         | append-only audit log (who/what/when/tenant/before/after), query API | — (consumes events from all) |
 | `patients`      | patient records, contacts, medical alerts/allergies, odontogram, notes | tenancy |
 | `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
-| `clinical`      | visits (clinical encounters: patient, practitioner, date, services performed, notes, status), procedure/service catalog, treatment plans, planned procedures, clinical charting linked to visits | patients, users |
+| `clinical`      | visits (clinical encounters: patient, practitioner, date, services performed, notes, status), service catalog (`procedures`) and diagnosis catalog, treatment plans, planned procedures, clinical charting linked to visits | patients, users, tenancy (tenant currency, ADR-0015; reacts to `TenantProvisioned`, ADR-0014) |
 | `billing`       | invoices, payments, price lists                                     | patients, clinical    |
 | `files`         | S3 object metadata, upload/download signed URLs, attachment links   | tenancy               |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
 | `imports`       | import jobs: uploaded file, column mapping, staged rows + validation, preview, commit progress; writes only through `patients` and `clinical` services | patients, clinical, tenancy |
 | `provisioning`  | platform back office: provisions a tenant end to end (tenant, first branch, owner, system roles), cross-tenant tenants list, suspension; owns no tables | tenancy, auth, users, roles |
 
-Every module that mutates also depends on `audit`. Nothing depends on `provisioning` (ADR-0009).
+Every module that mutates also depends on `audit`. Nothing calls `provisioning` (ADR-0009); its
+events may be consumed (ADR-0014).
 
 Phase 2 adds `assistant` (agent runtime, conversations, tool registry, confirmation workflow) and
 `voice` (STT/TTS adapters in front of `assistant`).

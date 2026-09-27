@@ -1,4 +1,14 @@
-import type { AuditPage, Branch, Role, Room, Session, StaffUser, Tenant } from '@dcm/contracts';
+import type {
+  AuditPage,
+  Branch,
+  DiagnosisItem,
+  Role,
+  Room,
+  ServiceItem,
+  Session,
+  StaffUser,
+  Tenant,
+} from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { newId } from '../../src/platform/kernel/id';
@@ -18,7 +28,7 @@ interface Clinic {
 
 /**
  * CLAUDE.md §14: tenant A's users cannot read or affect tenant B's rows through any public
- * service — branches, rooms, users, roles, audit — and cannot pick B with `X-Tenant-Id`.
+ * service — branches, rooms, users, roles, audit, catalogs — and cannot pick B with `X-Tenant-Id`.
  */
 describe('tenant isolation through the public services', () => {
   let database: TestDatabase;
@@ -106,6 +116,20 @@ describe('tenant isolation through the public services', () => {
       expect(roles.filter((role) => foreign.has(role.id))).toEqual([]);
     });
 
+    it('service and diagnosis catalogs', async () => {
+      const foreign = await database.ownerPool.query<{ id: string }>(
+        'select id from procedures where tenant_id = $1 union all select id from diagnoses where tenant_id = $1',
+        [b.tenant.id],
+      );
+      const foreignIds = new Set(foreign.rows.map((row) => row.id));
+      expect(foreignIds.size).toBe(26);
+      const services = (await ownerA.get('/api/v1/catalog/services')).body as ServiceItem[];
+      const diagnoses = (await ownerA.get('/api/v1/catalog/diagnoses')).body as DiagnosisItem[];
+      expect(services).toHaveLength(12);
+      expect(diagnoses).toHaveLength(14);
+      expect([...services, ...diagnoses].filter((item) => foreignIds.has(item.id))).toEqual([]);
+    });
+
     it('audit entries', async () => {
       const audit = (await ownerA.get('/api/v1/audit?limit=100')).body as AuditPage;
       expect(audit.items.length).toBeGreaterThan(0);
@@ -148,6 +172,57 @@ describe('tenant isolation through the public services', () => {
         items: [{ branchId: b.branch.id, name: 'Sneaky', code: null, active: true }],
       });
       expect(newRoom.body).toMatchObject({ code: 'branch.not_found' });
+    });
+
+    it('catalog rows: not found for every write, and left unchanged', async () => {
+      const bService = (
+        await database.ownerPool.query<{ id: string }>(
+          "select id from procedures where tenant_id = $1 and code = 'EXT'",
+          [b.tenant.id],
+        )
+      ).rows[0]?.id;
+      const bDiagnosis = (
+        await database.ownerPool.query<{ id: string }>(
+          "select id from diagnoses where tenant_id = $1 and code = 'DX-CAR'",
+          [b.tenant.id],
+        )
+      ).rows[0]?.id;
+      if (!bService || !bDiagnosis) throw new Error("B's catalog was not seeded");
+
+      const attempts = [
+        ownerA.put('/api/v1/catalog/services').send({
+          items: [
+            {
+              id: bService,
+              code: 'EXT',
+              name: 'Hijacked',
+              category: null,
+              chargeUnit: 'per_tooth',
+              price: '0',
+            },
+          ],
+        }),
+        ownerA.delete(`/api/v1/catalog/services/${bService}`),
+        ownerA.post(`/api/v1/catalog/services/${bService}/deactivate`),
+        ownerA
+          .put('/api/v1/catalog/diagnoses')
+          .send({ items: [{ id: bDiagnosis, code: 'DX-CAR', name: 'Hijacked', category: null }] }),
+        ownerA.delete(`/api/v1/catalog/diagnoses/${bDiagnosis}`),
+        ownerA.post(`/api/v1/catalog/diagnoses/${bDiagnosis}/deactivate`),
+      ];
+      for (const response of await Promise.all(attempts)) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'catalog.not_found' });
+      }
+      const untouched = await database.ownerPool.query(
+        `select name, active, deleted_at from procedures where id = $1
+         union all select name, active, deleted_at from diagnoses where id = $2`,
+        [bService, bDiagnosis],
+      );
+      expect(untouched.rows).toEqual([
+        { name: 'Extraction', active: true, deleted_at: null },
+        { name: 'Dental caries', active: true, deleted_at: null },
+      ]);
     });
 
     it("B's branches cannot be assigned or switched to", async () => {
@@ -194,7 +269,7 @@ describe('tenant isolation through the public services', () => {
     });
   });
 
-  it('has RLS enabled on every identity-feature tenant table', async () => {
+  it('has RLS enabled on every tenant table', async () => {
     const tables = [
       'tenants',
       'branches',
@@ -205,6 +280,8 @@ describe('tenant isolation through the public services', () => {
       'staff_profiles',
       'staff_branches',
       'audit_log',
+      'procedures',
+      'diagnoses',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

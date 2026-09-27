@@ -76,7 +76,8 @@ describe('provisioning (platform admin)', () => {
       ]),
     ).toBe(1);
 
-    const audit = (await admin.get('/api/v1/audit').set('X-Tenant-Id', tenant.id))
+    // The default catalog seeded on TenantProvisioned adds its own entries (ADR-0014).
+    const audit = (await admin.get('/api/v1/audit?limit=100').set('X-Tenant-Id', tenant.id))
       .body as AuditPage;
     const provisioned = audit.items.filter((entry) => entry.action === 'TenantProvisioned');
     expect(provisioned).toHaveLength(1);

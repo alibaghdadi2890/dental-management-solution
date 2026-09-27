@@ -26,7 +26,8 @@ No tables.
 
 ## Public API (`index.ts`)
 
-`ProvisioningModule`; event type `TenantProvisioned`. Nothing may depend on this module.
+`ProvisioningModule`; event type `TenantProvisioned`. Nothing calls this module; its events may be
+consumed (ADR-0014) — `clinical` seeds the default catalog on `TenantProvisioned`.
 
 ## HTTP
 
