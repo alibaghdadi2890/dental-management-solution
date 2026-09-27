@@ -1,13 +1,22 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
-import { Page } from '@/components/page';
+import { z } from 'zod';
+import { CatalogPage } from '@/features/clinical/catalog/catalog-page';
 
 export const Route = createFileRoute('/_app/catalog')({
   staticData: { navKey: 'catalog' },
-  component: CatalogPage,
+  validateSearch: z.object({ tab: z.enum(['services', 'diagnoses']).optional() }),
+  component: CatalogRoute,
 });
 
-function CatalogPage() {
-  const { t } = useTranslation('catalog');
-  return <Page title={t('title')} subtitle={t('subtitle')} />;
+function CatalogRoute() {
+  const { tab = 'services' } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  return (
+    <CatalogPage
+      tab={tab}
+      onTabChange={(next) => {
+        void navigate({ search: { tab: next === 'services' ? undefined : next }, replace: true });
+      }}
+    />
+  );
 }

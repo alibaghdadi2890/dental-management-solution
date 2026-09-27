@@ -1,4 +1,81 @@
 {
   "title": "Catalogue",
-  "subtitle": "Actes et diagnostics proposés dans l’espace de consultation. Les changements de prix s’appliquent aux nouvelles consultations uniquement."
+  "subtitle": "Actes et diagnostics proposés dans l’espace de consultation. Les changements de prix s’appliquent aux nouvelles consultations uniquement.",
+  "tabs": {
+    "label": "Catalogue",
+    "services": "Actes",
+    "diagnoses": "Diagnostics"
+  },
+  "add": {
+    "services": "Ajouter un acte",
+    "diagnoses": "Ajouter un diagnostic"
+  },
+  "readOnly": "Le catalogue est géré par le titulaire de la clinique. Vous pouvez le consulter ici.",
+  "search": {
+    "placeholder": "Nom ou code",
+    "label": "Rechercher dans le catalogue"
+  },
+  "all": "Tous",
+  "categories": "Catégories",
+  "showInactive": "Afficher les inactifs",
+  "columns": {
+    "code": "Code",
+    "name": "Nom",
+    "frequent": "Fréquemment utilisé",
+    "category": "Catégorie",
+    "charged": "Facturé",
+    "price": "Prix",
+    "active": "Actif"
+  },
+  "chargeUnit": {
+    "per_tooth": "Par dent",
+    "per_jaw": "Par arcade"
+  },
+  "frequent": {
+    "on": "Fréquemment utilisé",
+    "off": "Pas fréquemment utilisé"
+  },
+  "loading": "Chargement du catalogue",
+  "error": {
+    "title": "Impossible de charger le catalogue",
+    "body": "L’espace de consultation continue d’utiliser le dernier catalogue enregistré."
+  },
+  "empty": {
+    "title": "Le catalogue est vide",
+    "services": "Ajoutez les actes que vous facturez pour que les dentistes puissent les choisir pendant une consultation.",
+    "diagnoses": "Ajoutez les diagnostics que les dentistes posent lors d’un examen."
+  },
+  "noResults": {
+    "title": "Aucun résultat",
+    "body": "Essayez une autre catégorie ou effacez la recherche.",
+    "clear": "Effacer la recherche et les filtres"
+  },
+  "unsaved_one": "{{count}} modification non enregistrée",
+  "unsaved_other": "{{count}} modifications non enregistrées",
+  "missing_one": "{{count}} ligne sans code ou sans nom",
+  "missing_other": "{{count}} lignes sans code ou sans nom",
+  "duplicate_one": "{{count}} ligne avec un code en double",
+  "duplicate_other": "{{count}} lignes avec un code en double",
+  "discardTitle": "Abandonner toutes les modifications ?",
+  "discardBody_one": "{{count}} modification sera perdue.",
+  "discardBody_other": "{{count}} modifications seront perdues.",
+  "saved_one": "{{count}} modification du catalogue enregistrée",
+  "saved_other": "{{count}} modifications du catalogue enregistrées",
+  "saveFailed": "Enregistrement impossible : {{reason}}",
+  "unsavedRow": "Modification non enregistrée",
+  "delete": {
+    "label": "Supprimer {{name}}",
+    "unnamed": "la ligne",
+    "title": "Supprimer {{name}} ?",
+    "body": "Il est retiré du catalogue immédiatement.",
+    "ok": "Supprimer",
+    "done": "{{name}} supprimé",
+    "failed": "Impossible de supprimer {{name}}"
+  },
+  "inUse": {
+    "title": "{{name}} est utilisé dans des consultations",
+    "body": "Le supprimer casserait ces dossiers de consultation. Marquez-le plutôt comme inactif : il reste sur les consultations passées mais ne peut plus être ajouté aux nouvelles.",
+    "ok": "Marquer inactif",
+    "done": "{{name}} marqué inactif"
+  }
 }

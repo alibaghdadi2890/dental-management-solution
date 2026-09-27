@@ -110,9 +110,11 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {children}
       {options && (
         <ConfirmDialog
+          key={options.title}
           options={options}
           onClose={() => {
-            setOptions(null);
+            // A confirmation may open a follow-up dialog (delete → "used on visits"); keep it.
+            setOptions((current) => (current === options ? null : current));
           }}
         />
       )}

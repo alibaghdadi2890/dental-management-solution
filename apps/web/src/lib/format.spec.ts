@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, formatDateTime, formatMoney } from './format';
+import { currencySymbol, formatDate, formatDateTime, formatMoney } from './format';
 
 describe('formatDate', () => {
   it('uses the POC display format in English', () => {
@@ -41,5 +41,12 @@ describe('formatMoney', () => {
 
   it('shows refunds with a true minus sign', () => {
     expect(formatMoney({ amount: '-30', currency: 'USD' }, 'en')).toBe('−$30');
+  });
+});
+
+describe('currencySymbol', () => {
+  it('gives the narrow symbol for price inputs', () => {
+    expect(currencySymbol('USD', 'en')).toBe('$');
+    expect(currencySymbol('EUR', 'fr')).toBe('€');
   });
 });

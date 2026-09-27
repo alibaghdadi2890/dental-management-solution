@@ -10,6 +10,7 @@ import {
   changeCount,
   changedRows,
   draftFrom,
+  discarded,
   dropRow,
   duplicateCodes,
   editRow,
@@ -96,6 +97,13 @@ describe('catalog draft', () => {
       active: true,
     });
     expect(addRow(fresh(), 'diagnoses', 'new-2', '').rows.diagnoses[0]?.code).toBe('DX-');
+  });
+
+  it('discards every edit in both tabs', () => {
+    let draft = editRow(fresh(), 'services', id(1), { name: 'x' });
+    draft = addRow(draft, 'diagnoses', 'new-1', '');
+    expect(changeCount(discarded(draft))).toBe(0);
+    expect(discarded(draft).rows.diagnoses).toHaveLength(1);
   });
 
   it('drops a new row entirely', () => {

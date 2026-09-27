@@ -1,4 +1,81 @@
 {
   "title": "Catalog",
-  "subtitle": "Services and diagnoses offered in the visit workspace. Price changes apply to new visits only."
+  "subtitle": "Services and diagnoses offered in the visit workspace. Price changes apply to new visits only.",
+  "tabs": {
+    "label": "Catalog",
+    "services": "Services",
+    "diagnoses": "Diagnoses"
+  },
+  "add": {
+    "services": "Add service",
+    "diagnoses": "Add diagnosis"
+  },
+  "readOnly": "The catalog is managed by the clinic owner. You can view it here.",
+  "search": {
+    "placeholder": "Name or code",
+    "label": "Search catalog"
+  },
+  "all": "All",
+  "categories": "Categories",
+  "showInactive": "Show inactive",
+  "columns": {
+    "code": "Code",
+    "name": "Name",
+    "frequent": "Frequently used",
+    "category": "Category",
+    "charged": "Charged",
+    "price": "Price",
+    "active": "Active"
+  },
+  "chargeUnit": {
+    "per_tooth": "Per tooth",
+    "per_jaw": "Per jaw"
+  },
+  "frequent": {
+    "on": "Frequently used",
+    "off": "Not frequently used"
+  },
+  "loading": "Loading the catalog",
+  "error": {
+    "title": "Couldn't load the catalog",
+    "body": "The visit workspace keeps using the last saved catalog."
+  },
+  "empty": {
+    "title": "The catalog is empty",
+    "services": "Add the services you charge for so dentists can pick them during a visit.",
+    "diagnoses": "Add the diagnoses dentists record during an examination."
+  },
+  "noResults": {
+    "title": "Nothing matches",
+    "body": "Try another category or clear the search.",
+    "clear": "Clear search and filters"
+  },
+  "unsaved_one": "{{count}} unsaved change",
+  "unsaved_other": "{{count}} unsaved changes",
+  "missing_one": "{{count}} row missing a code or name",
+  "missing_other": "{{count}} rows missing a code or name",
+  "duplicate_one": "{{count}} row with a duplicate code",
+  "duplicate_other": "{{count}} rows with a duplicate code",
+  "discardTitle": "Discard all changes?",
+  "discardBody_one": "{{count}} edit will be lost.",
+  "discardBody_other": "{{count}} edits will be lost.",
+  "saved_one": "Saved {{count}} catalog change",
+  "saved_other": "Saved {{count}} catalog changes",
+  "saveFailed": "Couldn't save: {{reason}}",
+  "unsavedRow": "Unsaved change",
+  "delete": {
+    "label": "Delete {{name}}",
+    "unnamed": "row",
+    "title": "Delete {{name}}?",
+    "body": "It is removed from the catalog right away.",
+    "ok": "Delete",
+    "done": "{{name}} deleted",
+    "failed": "Couldn't delete {{name}}"
+  },
+  "inUse": {
+    "title": "{{name}} is used on visits",
+    "body": "Deleting it would break those visit records. Mark it inactive instead — it stays on past visits but can't be added to new ones.",
+    "ok": "Mark inactive",
+    "done": "{{name}} marked inactive"
+  }
 }

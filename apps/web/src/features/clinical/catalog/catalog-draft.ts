@@ -109,6 +109,14 @@ export function addRow(
   return updateTab(draft, tab, (rows) => [row, ...rows]);
 }
 
+/** Discard: back to the server snapshot in both tabs. */
+export function discarded(draft: CatalogDraft): CatalogDraft {
+  return {
+    base: draft.base,
+    rows: { services: [...draft.base.services], diagnoses: [...draft.base.diagnoses] },
+  };
+}
+
 /** Removes a row that exists only in the draft. */
 export function dropRow(draft: CatalogDraft, tab: CatalogTab, key: string): CatalogDraft {
   return updateTab(draft, tab, (rows) => rows.filter((row) => row.key !== key));

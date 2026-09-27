@@ -56,3 +56,16 @@ export function formatMoney({ amount, currency }: Money, locale: string): string
   }).format(Math.abs(value));
   return value < 0 ? `−${formatted}` : formatted;
 }
+
+/** "$", "€", "IQD"… — the prefix of a price input. */
+export function currencySymbol(currency: string, locale: string): string {
+  return (
+    new Intl.NumberFormat(locale === 'en' ? 'en-US' : locale, {
+      style: 'currency',
+      currency,
+      currencyDisplay: 'narrowSymbol',
+    })
+      .formatToParts(0)
+      .find((part) => part.type === 'currency')?.value ?? currency
+  );
+}
