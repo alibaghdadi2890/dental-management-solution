@@ -228,6 +228,21 @@ export function toSearch(query: PatientListQuery): Partial<PatientListQuery> {
   return result;
 }
 
+/**
+ * Without `payment:read` the billing route that serves the Owes balance view and sort by balance
+ * answers 403, so those fall back to the Active view and the default name sort (page 1) instead
+ * of an error. Returns `query` itself when nothing needs to change.
+ */
+export function withoutBalanceViews(query: PatientListQuery): PatientListQuery {
+  const owing = query.view === 'owing';
+  const byBalance = query.sort === 'balance';
+  if (!owing && !byBalance) return query;
+  return withFilter(query, {
+    ...(owing ? { view: LIST_QUERY_DEFAULTS.view } : {}),
+    ...(byBalance ? { sort: LIST_QUERY_DEFAULTS.sort, dir: LIST_QUERY_DEFAULTS.dir } : {}),
+  });
+}
+
 /** The columns a header click can sort by (`recent` is the palette's order, not a column). */
 export type SortableColumn = Exclude<PatientListQuery['sort'], 'recent'>;
 

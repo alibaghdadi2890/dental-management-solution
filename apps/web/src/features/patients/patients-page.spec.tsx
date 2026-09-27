@@ -27,6 +27,20 @@ import { PatientsPage } from './patients-page';
 
 const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
 const DENTIST_ID = id(80);
+const INACTIVE_DENTIST_ID = id(81);
+
+const staff = (userId: string, displayName: string, active: boolean) => ({
+  id: userId,
+  email: `${userId}@example.com`,
+  displayName,
+  title: null,
+  practitionerType: 'dentist',
+  phone: null,
+  active,
+  roles: [],
+  branches: [],
+  createdAt: '2026-01-01T10:00:00.000Z',
+});
 
 const item = (n: number, fullName: string, extra: Partial<PatientListItem> = {}) =>
   ({
@@ -64,7 +78,12 @@ const RANA = item(1, 'Rana Haddad', {
 });
 const SAMI = item(2, 'Sami Khoury', { sex: 'male', dateOfBirth: null });
 const LINA = item(3, 'Lina Aoun');
-const ALL_PERMISSIONS: Permission[] = ['patient:read', 'patient:write', 'payment:read'];
+const ALL_PERMISSIONS: Permission[] = [
+  'patient:read',
+  'patient:write',
+  'payment:read',
+  'user:read',
+];
 
 function sessionWith(permissions: Permission[]): Session {
   return {
@@ -116,6 +135,14 @@ function mockApi({
     if (path === '/users/practitioners') {
       return Promise.resolve(
         json([{ userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null }]),
+      );
+    }
+    if (path === '/users') {
+      return Promise.resolve(
+        json([
+          staff(DENTIST_ID, 'Dr. Ana Reyes', true),
+          staff(INACTIVE_DENTIST_ID, 'Dr. Marcus Lee', false),
+        ]),
       );
     }
     if (path.startsWith('/billing/balances')) return Promise.resolve(json(balances));
@@ -174,8 +201,8 @@ function renderPage({
     return (
       <PatientsPage
         search={search}
-        onSearch={(next) => {
-          void navigate({ search: next });
+        onSearch={(next, options) => {
+          void navigate({ search: next, replace: options?.replace ?? false });
         }}
       />
     );
@@ -229,6 +256,47 @@ describe('PatientsPage', () => {
     expect(cells[6]?.textContent).toBe('—');
     const sami = within(await rowOf('Sami Khoury')).getAllByRole('cell');
     expect(sami[2]?.textContent).toBe('— · M');
+  });
+
+  it('names a deactivated dentist from the staff list', async () => {
+    mockApi({ items: [item(5, 'Omar Nassar', { primaryDentistUserId: INACTIVE_DENTIST_ID })] });
+    renderPage();
+    const cells = within(await rowOf('Omar Nassar')).getAllByRole('cell');
+    await waitFor(() => {
+      expect(cells[5]?.textContent).toBe('Dr. Marcus Lee');
+    });
+    const dentist = screen.getByRole('combobox', { name: 'Dentist' });
+    expect(within(dentist).queryByRole('option', { name: 'Dr. Marcus Lee' })).toBeNull();
+  });
+
+  it('falls back to the practitioners for dentist names without user:read', async () => {
+    const fetchMock = mockApi();
+    renderPage({ permissions: ['patient:read', 'payment:read'] });
+    const cells = within(await rowOf('Rana Haddad')).getAllByRole('cell');
+    await waitFor(() => {
+      expect(cells[5]?.textContent).toBe('Dr. Ana Reyes');
+    });
+    expect(calledUrls(fetchMock)).not.toContain('/api/v1/users');
+  });
+
+  it('without payment:read, turns an Owes balance / balance-sort URL into Active by name', async () => {
+    const fetchMock = mockApi();
+    const router = renderPage({
+      permissions: ['patient:read', 'user:read'],
+      url: '/?view=owing&sort=balance&dir=desc',
+    });
+    await rowOf('Rana Haddad');
+    expect(calledUrls(fetchMock).some((url) => url.includes('/billing/'))).toBe(false);
+    expect(calledUrls(fetchMock)).toContain('/api/v1/patients');
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({
+        view: 'active',
+        sort: 'name',
+        dir: 'asc',
+      });
+    });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('tab', { name: /Active/ }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('shows the balance from the balances query, danger-styled when owing', async () => {
@@ -318,6 +386,7 @@ describe('PatientsPage', () => {
     expect(within(dialog).getByPlaceholderText('Optional — saved to the audit trail')).toBeTruthy();
     const ok = within(dialog).getByRole('button', { name: 'Archive' });
     expect(ok).toHaveProperty('disabled', false);
+    expect(ok.className).toContain('bg-danger');
     fireEvent.click(ok);
 
     const toast = await screen.findByText('Rana Haddad archived');

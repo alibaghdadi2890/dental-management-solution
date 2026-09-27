@@ -70,7 +70,7 @@ export function useArchivePatients({ onDone }: { onDone: () => void }) {
           : t('archive.title', { count: targets.length }),
       body: t('archive.body'),
       okLabel: t('archive.ok'),
-      tone: 'warn',
+      tone: 'danger',
       reasonLabel: t('archive.reason'),
       reasonOptional: true,
       onConfirm: (reason) => run('archive', targets, { reason, undoable: true }),

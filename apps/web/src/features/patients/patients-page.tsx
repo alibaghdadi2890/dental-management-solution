@@ -30,6 +30,7 @@ import {
   sortPatch,
   toSearch,
   withFilter,
+  withoutBalanceViews,
 } from './list-query';
 import { PagerBar } from './pager-bar';
 import { PatientRowMenu } from './patient-row-menu';
@@ -40,6 +41,7 @@ import {
   patientCountsQuery,
   patientListQuery,
   practitionersQuery,
+  staffQuery,
 } from './patients-api';
 import {
   PATIENT_TABLE_MIN_WIDTH,
@@ -70,8 +72,12 @@ export function PatientsPage({ search, onSearch }: { search: PatientsSearch; onS
   const { data: session } = useSession();
   const canWrite = usePermission('patient:write');
   const canPay = usePermission('payment:read');
+  const canReadStaff = usePermission('user:read');
 
-  const query = listQueryOf(search);
+  const requested = listQueryOf(search);
+  // Permissions are known once the session is loaded (the `_app` guard loads it first).
+  const query = session && !canPay ? withoutBalanceViews(requested) : requested;
+  const fellBack = query !== requested;
   const panel = parsePanel(search.panel);
   const locale = i18n.resolvedLanguage ?? 'en';
   const tenant = session?.tenant;
@@ -81,6 +87,7 @@ export function PatientsPage({ search, onSearch }: { search: PatientsSearch; onS
   const owing = useQuery({ ...owingCountQuery(), enabled: canPay });
   const duplicates = useQuery(duplicatesQuery());
   const practitioners = useQuery(practitionersQuery());
+  const staff = useQuery({ ...staffQuery(), enabled: canReadStaff });
   const rows = useMemo(() => list.data?.items ?? [], [list.data]);
   const ids = rows.map((row) => row.id);
   const balances = useQuery({ ...balancesQuery(ids), enabled: canPay && ids.length > 0 });
@@ -119,6 +126,14 @@ export function PatientsPage({ search, onSearch }: { search: PatientsSearch; onS
   useEffect(() => {
     if (pastEnd) stepBack(lastPage);
   }, [pastEnd, lastPage]);
+  // A balance view the user can't read has already been swapped for its fallback above; make the
+  // URL say so too.
+  const showFallback = useEffectEvent(() => {
+    setQuery(query, { replace: true });
+  });
+  useEffect(() => {
+    if (fellBack) showFallback();
+  }, [fellBack]);
 
   const exportLanguage = exportLanguageSchema.safeParse(locale).data;
   const runExport = (request: Parameters<typeof downloadExport>[0]) => {
@@ -153,7 +168,13 @@ export function PatientsPage({ search, onSearch }: { search: PatientsSearch; onS
     country: tenant?.country ?? 'LB',
     currency: tenant?.currency ?? 'USD',
     locale,
-    dentistNames: new Map(practitioners.data?.map((p) => [p.userId, p.displayName]) ?? []),
+    // Every staff member, so a deactivated dentist is still named; the active practitioners
+    // while that loads or without `user:read`.
+    dentistNames: new Map(
+      staff.data?.map((user) => [user.id, user.displayName]) ??
+        practitioners.data?.map((p) => [p.userId, p.displayName]) ??
+        [],
+    ),
   };
 
   const viewCount = {

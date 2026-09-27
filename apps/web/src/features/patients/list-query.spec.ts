@@ -8,6 +8,7 @@ import {
   parsePanel,
   parsePatientsSearch,
   sortPatch,
+  withoutBalanceViews,
   patientsSearchSchema,
   toSearch,
   withFilter,
@@ -226,5 +227,24 @@ describe('sortPatch', () => {
       page: 1,
     });
     expect(sortPatch(query, 'dentist')).toEqual({ sort: 'dentist', dir: 'asc' });
+  });
+});
+
+describe('withoutBalanceViews', () => {
+  it('leaves a query without balance views untouched', () => {
+    const query = { ...LIST_QUERY_DEFAULTS, view: 'archived' as const, page: 2 };
+    expect(withoutBalanceViews(query)).toBe(query);
+  });
+
+  it('turns Owes balance into Active and sort by balance into the name sort, on page 1', () => {
+    const query = {
+      ...LIST_QUERY_DEFAULTS,
+      view: 'owing' as const,
+      sort: 'balance' as const,
+      dir: 'desc' as const,
+      q: 'rana',
+      page: 3,
+    };
+    expect(withoutBalanceViews(query)).toEqual({ ...LIST_QUERY_DEFAULTS, q: 'rana' });
   });
 });

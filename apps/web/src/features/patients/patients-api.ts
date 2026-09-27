@@ -7,6 +7,7 @@ import {
   patientPageSchema,
   patientSchema,
   practitionerSchema,
+  staffUserSchema,
   type DuplicateCheckQuery,
   type ExportLanguage,
   type PatientArchive,
@@ -53,6 +54,7 @@ export const patientKeys = {
  * though the query factory lives beside the patients form that's the only consumer so far. */
 export const userKeys = {
   practitioners: (tenantId: string | null) => ['users', tenantId, 'practitioners'] as const,
+  staff: (tenantId: string | null) => ['users', tenantId, 'staff'] as const,
 };
 
 /** Omitted entirely (rather than sent as `{}`) when `tenantId` is left to the caller's ambient
@@ -132,6 +134,16 @@ export function practitionersQuery(tenantId?: string) {
   return queryOptions({
     queryKey: userKeys.practitioners(tenantId ?? actingTenantId()),
     queryFn: () => apiFetch('/users/practitioners', z.array(practitionerSchema), scope(tenantId)),
+  });
+}
+
+/** `GET /users`: every staff member, deactivated ones included (`user:read`) — the list's
+ * Dentist column names a patient's dentist even after they leave the clinic, which
+ * `/users/practitioners` (active dentists only, for pickers) cannot. */
+export function staffQuery(tenantId?: string) {
+  return queryOptions({
+    queryKey: userKeys.staff(tenantId ?? actingTenantId()),
+    queryFn: () => apiFetch('/users', z.array(staffUserSchema), scope(tenantId)),
   });
 }
 
