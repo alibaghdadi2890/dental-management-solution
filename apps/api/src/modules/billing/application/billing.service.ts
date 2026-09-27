@@ -8,7 +8,7 @@ import type {
   PatientBalance,
   Tenant,
 } from '@dcm/contracts';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
 import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -37,6 +37,8 @@ type EntryFields = Pick<LedgerEntry, 'amount' | 'effectiveDate' | 'note' | 'reas
  */
 @Injectable()
 export class BillingService {
+  private readonly logger = new Logger(BillingService.name);
+
   constructor(
     private readonly context: RequestContext,
     private readonly tenantDb: TenantDb,
@@ -151,8 +153,12 @@ export class BillingService {
    * away before this commits. Jobs of a merge chain may therefore run in any order and still end
    * on the survivor. When anything moved it audits `ledger_entry.repoint` on the survivor (after =
    * `{ droppedId, keptId, count }`) so it shows in that patient's history. Idempotent: a re-run
-   * finds nothing to move and records nothing. An unknown kept patient (or another tenant's)
-   * moves nothing. Returns the number of entries moved.
+   * finds nothing to move and records nothing. Returns the number of entries moved.
+   *
+   * It moves nothing (and logs the ids) unless the dropped patient really was merged into the
+   * kept patient's chain — `survivorOf(droppedId)` is the same survivor — so a malformed or
+   * forged job cannot move a live patient's entries, and an unknown kept patient (or another
+   * tenant's) moves nothing.
    *
    * Not permission-gated: it is the system's follow-up to a merge the user was allowed to make,
    * and a job actor holds no permissions. It refuses to run outside a job or system task instead.
@@ -164,7 +170,10 @@ export class BillingService {
     }
     return this.tenantDb.run(async () => {
       const survivorId = await this.patients.survivorOf(keptId);
-      if (survivorId === null) return 0;
+      if (survivorId === null || (await this.patients.survivorOf(droppedId)) !== survivorId) {
+        this.logger.warn({ keptId, droppedId }, 'ledger re-point skipped: not a merged pair');
+        return 0;
+      }
       const count = await this.entries.repointPatient(droppedId, survivorId);
       if (count > 0) {
         await this.audit.record({

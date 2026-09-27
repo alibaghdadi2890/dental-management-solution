@@ -78,6 +78,30 @@ describe('permissions carried in the context (ADR-0010)', () => {
     });
   });
 
+  it('keeps a platform-admin flag outside a user request as a fact for the audit, never authority', async () => {
+    for (const actorKind of ['job', 'agent'] as const) {
+      await context.run(
+        { requestId: 'job:1', actorKind, tenantId: 't1', userId: 'admin', platformAdmin: true },
+        async () => {
+          expect(context.isPlatformAdmin).toBe(true);
+          expect(context.actsAsPlatformAdmin).toBe(false);
+          expect(context.hasPermission('patient:read')).toBe(false);
+          expect(context.hasPermission('platform:admin')).toBe(false);
+          await expect(context.runInTenant('t2', () => Promise.resolve())).rejects.toBeInstanceOf(
+            PlatformAccessDeniedError,
+          );
+        },
+      );
+    }
+    await context.run(
+      { requestId: 'req-1', actorKind: 'user', tenantId: 't1', platformAdmin: true },
+      () => {
+        expect(context.actsAsPlatformAdmin).toBe(true);
+        return Promise.resolve();
+      },
+    );
+  });
+
   it('lets system tasks through', async () => {
     await context.run({ requestId: 'cli:1', actorKind: 'system' }, () => {
       expect(context.hasPermission('user:write')).toBe(true);

@@ -137,11 +137,15 @@ today, takes the **snapshot** — the ids to export, in order — and returns `{
   request and the audit subscriber (both after-commit hooks) would wait for it. A failed enqueue
   is logged with ids only.
 - `MergeLedgerWorker` (a `TenantWorker`: the job's tenant, actor kind `job`, the merging user as
-  the actor user, the platform-admin flag carried in the job envelope) calls
-  `repointMergedEntries(keptId, droppedId)`. One transaction:
+  the actor user, the platform-admin flag carried in the job envelope for the audit only — it
+  grants the job nothing, ADR-0017) calls `repointMergedEntries(keptId, droppedId)`. One
+  transaction:
   - resolves the **survivor** of the kept patient (`PatientsService.survivorOf`: the kept patient
     itself, or the end of its `mergedIntoId` chain if it has been merged away since), holding it
     `FOR SHARE` so it can't be merged away before the transaction commits;
+  - checks that the dropped patient resolves to the same survivor (`survivorOf(droppedId)`), i.e.
+    it really was merged into the kept patient's chain; otherwise it moves nothing and logs the
+    ids (a malformed or forged job cannot move a live patient's entries);
   - moves every entry of the dropped patient to the survivor;
   - when anything moved, audits `ledger_entry.repoint` (resource type `patient`, resource id =
     the survivor, so it shows in that patient's history; after `{ droppedId, keptId, count }`).

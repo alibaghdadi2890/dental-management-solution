@@ -11,8 +11,9 @@ export const tenantJobEnvelopeSchema = z.object({
   actorUserId: z.string().optional(),
   /**
    * The enqueuing actor was a platform admin acting in the tenant (ADR-0008): the worker keeps
-   * the flag, so the job's audit entries say so (and, as in the request that enqueued it, the job
-   * holds the admin's in-tenant permissions). Absent means false.
+   * the flag so the job's audit entries say so. It is a fact for the audit only and grants the
+   * job nothing (`RequestContext.actsAsPlatformAdmin` is false outside a user request), so a
+   * forged payload cannot escalate. Absent means false.
    */
   platformAdmin: z.boolean().optional(),
   payload: z.unknown(),

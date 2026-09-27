@@ -17,7 +17,7 @@ export class PlatformAdminDb {
   ) {}
 
   async withoutTenant<T>(reason: string, work: (tx: Transaction) => Promise<T>): Promise<T> {
-    if (!this.context.isPlatformAdmin && this.context.actorKind !== 'system') {
+    if (!this.context.actsAsPlatformAdmin && this.context.actorKind !== 'system') {
       throw new PlatformAccessDeniedError('Cross-tenant access requires platform:admin');
     }
     this.logger.warn({ reason, actorKind: this.context.actorKind }, 'cross-tenant access');

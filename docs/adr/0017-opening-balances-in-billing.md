@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-09-27
+- Amends: ADR-0008, ADR-0010 (platform-admin authority applies only in the admin's own request)
 
 ## Context
 
@@ -58,7 +59,10 @@ We considered:
    `merge-ledger`, job id `merge_<droppedId>` — BullMQ refuses `:` in custom ids) without
    awaiting it, so an unreachable Redis never holds up the merge request or the audit
    subscriber. The worker runs as a `job` actor (carrying the merging user and, for a platform
-   admin, the admin flag) and, in one transaction, moves the dropped patient's entries to the
+   admin, the admin flag — for the audit only, see below) and, in one transaction, checks that
+   the dropped patient really was merged into the kept patient's chain (both resolve to the same
+   survivor; otherwise it moves nothing and logs the ids), then moves the dropped patient's
+   entries to the
    **survivor** of the kept patient — the kept patient itself, or the end of its merge chain if
    it has been merged away since (`PatientsService.survivorOf`, which holds the survivor
    `FOR SHARE`). The jobs of a chain (A into B, B into C) therefore end on C in any order. It
@@ -90,6 +94,14 @@ We considered:
 - `repointMergedEntries` and `survivorOf` are not permission-gated: the re-point is the system's
   follow-up to a merge the user was allowed to make, and a job actor holds no permissions. Both
   refuse to run outside a job or system task.
+- **Platform-admin flag in jobs: an audit fact, not authority** (amends ADR-0008 and ADR-0010).
+  The job envelope carries `platformAdmin` so the job's audit entries record that an admin
+  triggered it (`actor_platform_admin`). `RequestContext` keeps the fact
+  (`isPlatformAdmin`) apart from the authority (`actsAsPlatformAdmin`: the flag in an
+  `actorKind: 'user'` context, i.e. the admin's own authenticated request). Only the authority
+  lets `hasPermission` grant everything in a tenant, `runInTenant` enter a tenant and
+  `withoutTenant` bypass RLS. A job (or, later, an agent) carrying the flag gets none of it, so
+  a job actor still holds no permissions and a forged Redis payload cannot escalate.
 - The balance sort sends every non-zero tenant-currency balance to `search` as two arrays. That
   is fine for thousands of patients per tenant (ADR-0018's bound). Balances in another currency
   (after a tenant currency change) count as zero for the sort and are not in the CSV.

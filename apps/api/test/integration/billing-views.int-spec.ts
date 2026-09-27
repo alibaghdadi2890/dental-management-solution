@@ -727,6 +727,22 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         { amount: '105.00', currency: 'USD' },
       ]);
     });
+    it('moves nothing between two patients that were never merged', async () => {
+      const clinic = await provision('Merge Mismatch Clinic');
+      const kept = await openWithBalance(clinic.owner, { fullName: 'Live Kept' }, '10.00');
+      const other = await openWithBalance(clinic.owner, { fullName: 'Live Other' }, '20.00');
+      const moved = await testApp.app
+        .get(RequestContext)
+        .run({ requestId: newId(), actorKind: 'job', tenantId: clinic.tenant.id }, () =>
+          testApp.app.get(BillingService).repointMergedEntries(kept.id, other.id),
+        );
+      expect(moved).toBe(0);
+      expect(await ledgerOwners(clinic.tenant.id)).toEqual([
+        { patient_id: kept.id, amount: '10.00' },
+        { patient_id: other.id, amount: '20.00' },
+      ]);
+      expect(await repointAudit(clinic.tenant.id)).toEqual([]);
+    });
   });
 
   describe('routes', () => {

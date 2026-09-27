@@ -55,8 +55,22 @@ export class RequestContext {
     return this.cls.isActive() ? this.cls.get('actorKind') : undefined;
   }
 
+  /**
+   * The actor is a platform admin (ADR-0008) — a fact recorded on audit entries and events, and
+   * carried into the jobs they enqueue. Not authority: see `actsAsPlatformAdmin`.
+   */
   get isPlatformAdmin(): boolean {
     return this.cls.isActive() && this.cls.get('platformAdmin') === true;
+  }
+
+  /**
+   * A platform admin's authority (every permission inside a tenant, entering tenants,
+   * `withoutTenant`) applies only in the admin's own authenticated request (`actorKind: 'user'`).
+   * A job or agent carrying the flag records it but gains nothing from it: its payload comes from
+   * Redis, not from a session.
+   */
+  get actsAsPlatformAdmin(): boolean {
+    return this.isPlatformAdmin && this.actorKind === 'user';
   }
 
   requireTenantId(): string {
@@ -91,8 +105,9 @@ export class RequestContext {
 
   /**
    * The single permission evaluation every layer uses (ADR-0010). System tasks pass; a platform
-   * admin holds every permission inside a tenant and only `platform:admin` outside one (ADR-0008);
-   * everyone else is decided by the set `authorization` resolved. Deny by default.
+   * admin in their own request (`actsAsPlatformAdmin`) holds every permission inside a tenant and
+   * only `platform:admin` outside one (ADR-0008); everyone else — jobs included, whatever flag
+   * they carry — is decided by the set `authorization` resolved. Deny by default.
    */
   hasPermission(permission: Permission): boolean {
     if (!this.cls.isActive()) {
@@ -101,7 +116,7 @@ export class RequestContext {
     if (this.actorKind === 'system') {
       return true;
     }
-    if (this.isPlatformAdmin) {
+    if (this.actsAsPlatformAdmin) {
       return this.tenantId !== undefined || permission === 'platform:admin';
     }
     return this.cls.get('permissions')?.has(permission) ?? false;
@@ -133,11 +148,11 @@ export class RequestContext {
   }
 
   /**
-   * Platform admins and system tasks enter a tenant programmatically (provisioning, suspension)
-   * as the same actor and request (ADR-0008). Tenant data is then reached under RLS as usual.
+   * Platform admins (in their own request) and system tasks enter a tenant programmatically
+   * (provisioning, suspension) as the same actor and request (ADR-0008). Tenant data is then reached under RLS as usual.
    */
   runInTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
-    if (!this.isPlatformAdmin && this.actorKind !== 'system') {
+    if (!this.actsAsPlatformAdmin && this.actorKind !== 'system') {
       return Promise.reject(
         new PlatformAccessDeniedError('Entering another tenant requires platform:admin'),
       );

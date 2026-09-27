@@ -81,6 +81,7 @@ class ReminderWorker extends TenantWorker<{ appointmentId: string }> {
     tenantId: string | undefined;
     actorKind: string | undefined;
     platformAdmin: boolean;
+    mayReadPatients: boolean;
   }[] = [];
   failWith: Error | undefined;
 
@@ -90,6 +91,7 @@ class ReminderWorker extends TenantWorker<{ appointmentId: string }> {
       tenantId: this.context.tenantId,
       actorKind: this.context.actorKind,
       platformAdmin: this.context.isPlatformAdmin,
+      mayReadPatients: this.context.hasPermission('patient:read'),
     });
     return Promise.resolve();
   }
@@ -120,13 +122,17 @@ describe('TenantWorker', () => {
   it('runs the handler inside the job tenant context', async () => {
     const { worker: w } = worker();
     await w.process(job(envelope));
-    expect(w.handled).toEqual([{ tenantId: TENANT, actorKind: 'job', platformAdmin: false }]);
+    expect(w.handled).toEqual([
+      { tenantId: TENANT, actorKind: 'job', platformAdmin: false, mayReadPatients: false },
+    ]);
   });
 
-  it('re-seeds the platform admin flag from the envelope', async () => {
+  it('re-seeds the platform admin flag from the envelope for the audit only, granting nothing', async () => {
     const { worker: w } = worker();
     await w.process(job({ ...envelope, platformAdmin: true }));
-    expect(w.handled).toEqual([{ tenantId: TENANT, actorKind: 'job', platformAdmin: true }]);
+    expect(w.handled).toEqual([
+      { tenantId: TENANT, actorKind: 'job', platformAdmin: true, mayReadPatients: false },
+    ]);
   });
 
   it('fails loudly and dead-letters jobs without a tenant', async () => {

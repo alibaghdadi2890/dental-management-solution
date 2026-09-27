@@ -166,6 +166,20 @@ describe('tenant isolation (RLS)', () => {
     await expect(attempt).rejects.toBeInstanceOf(PlatformAccessDeniedError);
   });
 
+  it('refuses withoutTenant() for a job whose envelope says platform admin (audit fact only)', async () => {
+    const job = {
+      requestId: newId(),
+      actorKind: 'job' as const,
+      tenantId: TENANT_A,
+      userId: newId(),
+      platformAdmin: true,
+    };
+    const attempt = context.run(job, () =>
+      adminDb.withoutTenant('test', (tx) => tx.execute(sql`select 1`)),
+    );
+    await expect(attempt).rejects.toBeInstanceOf(PlatformAccessDeniedError);
+  });
+
   it('allows withoutTenant() for platform admins and system tasks, across tenants', async () => {
     const seed = { requestId: newId(), actorKind: 'system' as const };
     const rows = await context.run(seed, () =>
