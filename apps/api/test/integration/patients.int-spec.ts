@@ -11,10 +11,18 @@ import type {
   StaffUser,
   Tenant,
 } from '@dcm/contracts';
-import { patientListQuerySchema } from '@dcm/contracts';
+import {
+  patientArchiveSchema,
+  patientInputSchema,
+  patientListQuerySchema,
+  patientMergeSchema,
+} from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PatientsService } from '../../src/modules/patients';
+import { PermissionDeniedError } from '../../src/platform/cls/permission-denied.error';
+import { RequestContext } from '../../src/platform/cls/request-context';
+import { TenantDb } from '../../src/platform/db/tenant-db';
 import { newId } from '../../src/platform/kernel/id';
 import { ValidationFailedError } from '../../src/platform/kernel/validation-failed.error';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
@@ -122,7 +130,11 @@ describe('patients: records, search, duplicates, archive and merge', () => {
 
   describe('create', () => {
     it('mints P-000001, P-000002 per tenant and stores the phone in E.164', async () => {
-      const first = await createPatient(main.owner, { fullName: 'Lina Aoun', phone: '03 123 456' });
+      const numbering = await provision('Numbering Clinic');
+      const first = await createPatient(numbering.owner, {
+        fullName: 'Lina Aoun',
+        phone: '03 123 456',
+      });
       expect(first).toMatchObject({
         displayNumber: 'P-000001',
         fullName: 'Lina Aoun',
@@ -132,47 +144,100 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         archivedAt: null,
         mergedIntoId: null,
       });
-      const second = await createPatient(main.owner, { fullName: 'Rami Aoun', phone: '71123456' });
+      const second = await createPatient(numbering.owner, {
+        fullName: 'Rami Aoun',
+        phone: '71123456',
+      });
       expect(second.displayNumber).toBe('P-000002');
 
       const other = await provision('Other Numbering Clinic');
       const theirs = await createPatient(other.owner, { fullName: 'Nour', phone: '03 123 456' });
       expect(theirs.displayNumber).toBe('P-000001');
 
-      const [created] = await auditOf(main.owner, `resourceId=${first.id}`);
+      const [created] = await auditOf(numbering.owner, `resourceId=${first.id}`);
       expect(created).toMatchObject({
         action: 'patient.create',
         resourceType: 'patient',
         after: { displayNumber: 'P-000001', phone: '+9613123456' },
       });
-      const [event] = await events(main.owner, 'PatientCreated');
+      const [event] = await events(numbering.owner, 'PatientCreated');
       expect(event?.after).toEqual({ patientId: second.id });
     });
 
     it('gives 10 parallel creates 10 distinct, consecutive numbers', async () => {
+      const clinic = await provision('Parallel Clinic');
       const created = await Promise.all(
         Array.from({ length: 10 }, (_, index) =>
-          createPatient(main.owner, { fullName: `Parallel ${index}`, phone: '71 000 000' }),
+          createPatient(clinic.owner, { fullName: `Parallel ${index}`, phone: '71 000 000' }),
         ),
       );
       const numbers = created.map((patient) => patient.displayNumber).sort();
       expect(numbers).toEqual(
-        Array.from({ length: 10 }, (_, index) => `P-${String(index + 3).padStart(6, '0')}`),
+        Array.from({ length: 10 }, (_, index) => `P-${String(index + 1).padStart(6, '0')}`),
       );
     });
 
-    it('does not burn a number on a failed create', async () => {
+    it('refuses a dentist who is not an active practitioner', async () => {
       const refused = await main.owner
         .post('/api/v1/patients')
         .send({ fullName: 'No Dentist', phone: '71 000 000', primaryDentistUserId: newId() });
       expect(refused.status).toBe(422);
       expect(refused.body).toMatchObject({ code: 'patient.unknown_dentist' });
+    });
 
-      const next = await createPatient(main.owner, {
-        fullName: 'After Failure',
-        phone: '71000000',
+    it('frees the number of a create rolled back after minting (caller transaction)', async () => {
+      const clinic = await provision('Rollback Clinic');
+      const first = await createPatient(clinic.owner, {
+        fullName: 'Rollback One',
+        phone: '71000050',
       });
-      expect(next.displayNumber).toBe('P-000013');
+      expect(first.displayNumber).toBe('P-000001');
+
+      // As billing's create-with-opening-balance does: create inside the caller's transaction,
+      // which then fails after the number was minted, the row inserted and the audit written.
+      const service = testApp.app.get(PatientsService);
+      const tenantDb = testApp.app.get(TenantDb);
+      let lost: Patient | undefined;
+      await expect(
+        asPlatformAdminIn(testApp.app, clinic.tenant.id, () =>
+          tenantDb.run(async () => {
+            lost = await service.create(
+              patientInputSchema.parse({ fullName: 'Rollback Lost', phone: '71000051' }),
+            );
+            throw new Error('opening balance failed');
+          }),
+        ),
+      ).rejects.toThrow('opening balance failed');
+      if (!lost) throw new Error('create did not run');
+      expect(lost.displayNumber).toBe('P-000002');
+
+      const next = await createPatient(clinic.owner, {
+        fullName: 'Rollback Two',
+        phone: '71000052',
+      });
+      expect(next.displayNumber).toBe('P-000002');
+
+      const leftovers = await database.ownerPool.query<{ n: number }>(
+        `select (select count(*) from patients where id = $1)::int
+              + (select count(*) from audit_log
+                 where resource_id = $1::text or after->>'patientId' = $1::text)::int as n`,
+        [lost.id],
+      );
+      expect(leftovers.rows[0]?.n).toBe(0);
+    });
+
+    it('never takes externalId from a request: only the import sets it', async () => {
+      const created = await createPatient(main.owner, {
+        fullName: 'Import Key',
+        phone: '71000053',
+        externalId: 'EXT-1',
+      });
+      expect(created.externalId).toBeNull();
+      const patched = await main.owner
+        .patch(`/api/v1/patients/${created.id}`)
+        .send({ externalId: 'EXT-1' });
+      expect(patched.status).toBe(400);
+      expect((await getPatient(main.owner, created.id)).externalId).toBeNull();
     });
 
     it('rejects an invalid phone or guardian phone at the field', async () => {
@@ -236,6 +301,25 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       });
       const [event] = await events(main.owner, 'PatientUpdated');
       expect(event?.after).toEqual({ patientId: patient.id, fields: ['address'] });
+    });
+
+    it('writes, audits and emits nothing for a patch that changes nothing', async () => {
+      const patient = await createPatient(main.owner, {
+        fullName: 'Noop Patch',
+        phone: '71000006',
+        address: 'Same St',
+      });
+      const response = await main.owner
+        .patch(`/api/v1/patients/${patient.id}`)
+        .send({ phone: '71-000-006', fullName: 'Noop Patch', address: 'Same St' });
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(patient);
+      const entries = await auditOf(main.owner, `resourceId=${patient.id}`);
+      expect(entries.map((entry) => entry.action)).toEqual(['patient.create']);
+      const updated = (await events(main.owner, 'PatientUpdated')).filter(
+        (entry) => (entry.after as { patientId: string }).patientId === patient.id,
+      );
+      expect(updated).toEqual([]);
     });
 
     it('re-normalises a changed phone and keeps it searchable', async () => {
@@ -304,6 +388,8 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     let jose: Patient;
     let amira: Patient;
     let omar: Patient;
+    let turning18: Patient;
+    let stillChild: Patient;
 
     beforeAll(async () => {
       clinic = await provision('Search Clinic');
@@ -322,7 +408,27 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         primaryDentistUserId: amir.id,
       });
       omar = await createPatient(clinic.owner, { fullName: 'Omar Said', phone: '70 111 222' });
+      turning18 = await createPatient(clinic.owner, {
+        fullName: 'Agetest Birthday',
+        phone: '70000001',
+        dateOfBirth: '2008-06-15',
+      });
+      stillChild = await createPatient(clinic.owner, {
+        fullName: 'Agetest Tomorrow',
+        phone: '70000002',
+        dateOfBirth: '2008-06-16',
+      });
+      for (let index = 1; index <= 12; index += 1) {
+        await createPatient(clinic.owner, {
+          fullName: `Pagertest ${String(index).padStart(2, '0')}`,
+          phone: '70000003',
+        });
+      }
     });
+
+    /** The page's ids restricted to `among`, keeping the page's order. */
+    const orderOf = (page: PatientPage, among: readonly string[]) =>
+      ids(page).filter((id) => among.includes(id));
 
     it('matches names without diacritics', async () => {
       expect(ids(await search(clinic.owner, 'q=jose'))).toEqual([jose.id]);
@@ -332,14 +438,19 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(ids(await search(clinic.owner, 'q=P-00000'))).toEqual(
         expect.arrayContaining([jose.id, amira.id, omar.id]),
       );
-      expect(ids(await search(clinic.owner, 'q=P-000001'))).toEqual([jose.id]);
+      // Substrings: P-000001 would also match P-000010 to P-000017, and the digits of P-000002
+      // are in a phone number. P-000013 is Pagertest 08, and no phone contains 000013.
+      const byNumber = await search(clinic.owner, 'q=P-000013');
+      expect(byNumber.items.map((item) => item.fullName)).toEqual(['Pagertest 08']);
     });
 
     it('matches local and E.164 phone digits, but not a single digit', async () => {
       expect(ids(await search(clinic.owner, 'q=03123'))).toEqual([jose.id]);
       expect(ids(await search(clinic.owner, 'q=96131'))).toEqual([jose.id]);
-      // "3" is in José's phone; one digit never searches phones (P-000003 is Omar's number).
-      expect(ids(await search(clinic.owner, 'q=3'))).toEqual([omar.id]);
+      // "3" is in José's phone; one digit never searches phones. P-000003 is Omar's number.
+      const oneDigit = ids(await search(clinic.owner, 'q=3&size=50'));
+      expect(oneDigit).toContain(omar.id);
+      expect(oneDigit).not.toContain(jose.id);
     });
 
     it('matches e-mail', async () => {
@@ -349,16 +460,20 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     it('filters by alerts and dentist', async () => {
       expect(ids(await search(clinic.owner, 'alerts=yes'))).toEqual([jose.id]);
       expect(ids(await search(clinic.owner, `dentist=${zed.id}`))).toEqual([jose.id]);
-      expect(ids(await search(clinic.owner, 'dentist=none'))).toEqual([omar.id]);
+      const none = ids(await search(clinic.owner, 'dentist=none&size=50'));
+      expect(none).toContain(omar.id);
+      expect(none).not.toContain(jose.id);
+      expect(none).not.toContain(amira.id);
     });
 
     it('sorts by dentist display name, reversed for desc, patients without one last', async () => {
-      expect(ids(await search(clinic.owner, 'sort=dentist'))).toEqual([amira.id, jose.id, omar.id]);
-      expect(ids(await search(clinic.owner, 'sort=dentist&dir=desc'))).toEqual([
-        jose.id,
-        amira.id,
-        omar.id,
-      ]);
+      const three = [jose.id, amira.id, omar.id];
+      const asc = await search(clinic.owner, 'sort=dentist&size=50');
+      expect(orderOf(asc, three)).toEqual([amira.id, jose.id, omar.id]);
+      expect(ids(asc).slice(0, 2)).toEqual([amira.id, jose.id]);
+      const desc = await search(clinic.owner, 'sort=dentist&dir=desc&size=50');
+      expect(orderOf(desc, three)).toEqual([jose.id, amira.id, omar.id]);
+      expect(ids(desc).slice(0, 2)).toEqual([jose.id, amira.id]);
     });
 
     it('sorts by most recently updated', async () => {
@@ -367,39 +482,20 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     });
 
     it('bands ages by the tenant time zone', async () => {
-      const turning18 = await createPatient(clinic.owner, {
-        fullName: 'Age Birthday',
-        phone: '70000001',
-        dateOfBirth: '2008-06-15',
-      });
-      const stillChild = await createPatient(clinic.owner, {
-        fullName: 'Age Tomorrow',
-        phone: '70000002',
-        dateOfBirth: '2008-06-16',
-      });
       // 23:30 UTC on 14 June is already 15 June in Beirut (UTC+3 in summer): 18 today.
       await withClockAt('2026-06-14T23:30:00Z', async () => {
-        expect(ids(await search(clinic.owner, 'q=age&age=child'))).toEqual([stillChild.id]);
-        expect(ids(await search(clinic.owner, 'q=age&age=adult'))).toEqual([turning18.id]);
-      });
-      await clinic.owner.post('/api/v1/patients/archive').send({
-        ids: [turning18.id, stillChild.id],
+        expect(ids(await search(clinic.owner, 'q=agetest&age=child'))).toEqual([stillChild.id]);
+        expect(ids(await search(clinic.owner, 'q=agetest&age=adult'))).toEqual([turning18.id]);
       });
     });
 
     it('pages by offset with the total', async () => {
-      for (let index = 1; index <= 12; index += 1) {
-        await createPatient(clinic.owner, {
-          fullName: `Pager ${String(index).padStart(2, '0')}`,
-          phone: '70000003',
-        });
-      }
-      const first = await search(clinic.owner, 'q=pager&size=10');
+      const first = await search(clinic.owner, 'q=pagertest&size=10');
       expect(first).toMatchObject({ total: 12, page: 1, size: 10 });
       expect(first.items).toHaveLength(10);
-      const second = await search(clinic.owner, 'q=pager&page=2&size=10');
+      const second = await search(clinic.owner, 'q=pagertest&page=2&size=10');
       expect(second).toMatchObject({ total: 12, page: 2, size: 10 });
-      expect(second.items.map((item) => item.fullName)).toEqual(['Pager 11', 'Pager 12']);
+      expect(second.items.map((item) => item.fullName)).toEqual(['Pagertest 11', 'Pagertest 12']);
     });
 
     it('takes idsIn, rank and size only from other modules (billing)', async () => {
@@ -506,15 +602,16 @@ describe('patients: records, search, duplicates, archive and merge', () => {
 
   describe('archive and restore', () => {
     it('archives in bulk with one audit entry and one event per patient', async () => {
-      const a = await createPatient(main.owner, { fullName: 'Bulk Archive A', phone: '71000020' });
-      const b = await createPatient(main.owner, { fullName: 'Bulk Archive B', phone: '71000021' });
+      const a = await createPatient(main.owner, { fullName: 'Bulkarch A', phone: '71000020' });
+      const b = await createPatient(main.owner, { fullName: 'Bulkarch B', phone: '71000021' });
 
+      // Sent in reverse id order: the result follows the input, not the row order.
       const response = await main.owner
         .post('/api/v1/patients/archive')
-        .send({ ids: [a.id, b.id], reason: 'moved' });
+        .send({ ids: [b.id, a.id], reason: 'moved' });
       expect(response.status).toBe(200);
       const archived = response.body as Patient[];
-      expect(archived.map((patient) => patient.id)).toEqual([a.id, b.id]);
+      expect(archived.map((patient) => patient.id)).toEqual([b.id, a.id]);
       expect(archived.every((patient) => patient.archivedAt !== null)).toBe(true);
 
       for (const id of [a.id, b.id]) {
@@ -530,8 +627,8 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       );
       expect(archivedEvents).toEqual(expect.arrayContaining([a.id, b.id]));
 
-      expect(ids(await search(main.owner, 'q=bulk%20archive'))).toEqual([]);
-      expect(ids(await search(main.owner, 'q=bulk%20archive&view=archived'))).toEqual([a.id, b.id]);
+      expect(ids(await search(main.owner, 'q=bulkarch'))).toEqual([]);
+      expect(ids(await search(main.owner, 'q=bulkarch&view=archived'))).toEqual([a.id, b.id]);
 
       const again = await main.owner.post('/api/v1/patients/archive').send({ ids: [a.id] });
       expect(again.status).toBe(200);
@@ -547,13 +644,53 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         null,
         null,
       ]);
-      expect(ids(await search(main.owner, 'q=bulk%20archive'))).toEqual([a.id, b.id]);
+      expect(ids(await search(main.owner, 'q=bulkarch'))).toEqual([a.id, b.id]);
       const [restoreEntry] = await auditOf(main.owner, `resourceId=${a.id}`);
       expect(restoreEntry).toMatchObject({ action: 'patient.restore' });
       const restoredEvents = (await events(main.owner, 'PatientRestored')).map(
         (entry) => (entry.after as { patientId: string }).patientId,
       );
       expect(restoredEvents).toEqual(expect.arrayContaining([a.id, b.id]));
+    });
+
+    it('takes the before-snapshot under the row lock, after a concurrent edit commits', async () => {
+      const patient = await createPatient(main.owner, { fullName: 'Locktest', phone: '71000023' });
+      const editor = await database.ownerPool.connect();
+      let archiving: Promise<{ status: number }> | undefined;
+      try {
+        await editor.query('begin');
+        await editor.query("update patients set address = 'Committed St' where id = $1", [
+          patient.id,
+        ]);
+        archiving = main.owner
+          .post('/api/v1/patients/archive')
+          .send({ ids: [patient.id] })
+          .then((response) => response);
+        // The archive is now blocked on the row lock the open edit holds.
+        await vi.waitFor(
+          async () => {
+            const waiting = await database.ownerPool.query<{ n: number }>(
+              `select count(*)::int as n from pg_stat_activity
+               where wait_event_type = 'Lock' and query ilike '%"patients"%'`,
+            );
+            expect(waiting.rows[0]?.n).toBeGreaterThan(0);
+          },
+          { timeout: 10_000, interval: 50 },
+        );
+        await editor.query('commit');
+      } catch (error) {
+        await editor.query('rollback');
+        throw error;
+      } finally {
+        editor.release();
+      }
+      expect((await archiving).status).toBe(200);
+      const [entry] = await auditOf(main.owner, `resourceId=${patient.id}`);
+      expect(entry).toMatchObject({
+        action: 'patient.archive',
+        before: { address: 'Committed St', archivedAt: null },
+        after: { address: 'Committed St' },
+      });
     });
 
     it('is all-or-nothing: an unknown id fails the call and changes nothing', async () => {
@@ -573,13 +710,13 @@ describe('patients: records, search, duplicates, archive and merge', () => {
 
     it('takes the chosen fields, unions the alerts and archives the dropped record', async () => {
       const kept = await createPatient(main.owner, {
-        fullName: 'Karim Merge',
+        fullName: 'Mergetest Karim',
         phone: '71 000 030',
         address: 'Keep St',
         medicalAlerts: ['Penicillin'],
       });
       const dropped = await createPatient(main.owner, {
-        fullName: 'Karim Merge',
+        fullName: 'Mergetest Karim',
         phone: '76 000 031',
         email: 'karim@example.com',
         medicalAlerts: ['Latex', 'penicillin'],
@@ -738,6 +875,39 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         .post('/api/v1/patients/merge')
         .send({ keepId: a.id, dropId: b.id, reason: 'Duplicate' });
       expect(merged.status).toBe(200);
+    });
+
+    it('re-checks the permission in the service, not only at the route', async () => {
+      const a = await createPatient(main.owner, { fullName: 'Recheck A', phone: '71000044' });
+      const b = await createPatient(main.owner, { fullName: 'Recheck B', phone: '71000045' });
+      const service = testApp.app.get(PatientsService);
+      const context = testApp.app.get(RequestContext);
+      const withOnly = <T>(permissions: ('patient:read' | 'user:read')[], fn: () => Promise<T>) =>
+        context.run(
+          { requestId: newId(), actorKind: 'user', tenantId: main.tenant.id, userId: newId() },
+          () => {
+            context.setPermissions(permissions);
+            return fn();
+          },
+        );
+
+      await expect(
+        withOnly(['patient:read'], () =>
+          service.archive(patientArchiveSchema.parse({ ids: [a.id] })),
+        ),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+      await expect(
+        withOnly(['patient:read'], () =>
+          service.merge(
+            patientMergeSchema.parse({ keepId: a.id, dropId: b.id, reason: 'Same person' }),
+          ),
+        ),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+      await expect(withOnly(['user:read'], () => service.getMany([a.id]))).rejects.toBeInstanceOf(
+        PermissionDeniedError,
+      );
+      expect((await getPatient(main.owner, a.id)).archivedAt).toBeNull();
+      expect((await getPatient(main.owner, b.id)).mergedIntoId).toBeNull();
     });
 
     it('refuses a role without patient:read or patient:write', async () => {

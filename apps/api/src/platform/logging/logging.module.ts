@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { LoggerModule } from 'nestjs-pino';
 import { APP_CONFIG } from '../config/config.module';
 import type { AppConfig } from '../config/config.schema';
+import { serializeError } from './error-serializer';
 import { clsLogFields, pathOnly, REDACTED_LOG_PATHS } from './log-fields';
 import { REQUEST_ID_HEADER } from './request-id';
 
@@ -23,6 +24,7 @@ import { REQUEST_ID_HEADER } from './request-id';
               url: pathOnly(req.url),
             }),
             res: (res: ServerResponse) => ({ statusCode: res.statusCode }),
+            err: serializeError,
           },
           autoLogging: {
             ignore: (req: IncomingMessage) => req.url?.startsWith('/health') ?? false,

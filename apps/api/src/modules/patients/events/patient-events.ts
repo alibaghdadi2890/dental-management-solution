@@ -1,3 +1,4 @@
+import type { PatientPatch } from '@dcm/contracts';
 import type { DomainEvent } from '../../../platform/events/domain-event';
 
 /**
@@ -12,7 +13,7 @@ export const PATIENT_UPDATED = 'PatientUpdated';
 /** `fields`: the names of the `PatientPatch` fields whose stored value changed. */
 export type PatientUpdated = DomainEvent<
   typeof PATIENT_UPDATED,
-  { patientId: string; fields: string[] }
+  { patientId: string; fields: (keyof PatientPatch)[] }
 >;
 
 export const PATIENT_ARCHIVED = 'PatientArchived';

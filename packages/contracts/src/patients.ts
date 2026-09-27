@@ -107,7 +107,7 @@ const patientFields = {
   notes: optionalText(2000),
   guardianName: optionalText(120),
   guardianPhone: optionalText(40),
-  externalId: optionalText(64),
+  // No `externalId`: it is the import key, set only by the import (feature 6), never by an edit.
 };
 
 export const patientInputSchema = z.object({
@@ -141,6 +141,7 @@ export const patientSchema = z.object({
   notes: z.string().nullable(),
   guardianName: z.string().nullable(),
   guardianPhone: z.string().nullable(),
+  /** The import key (feature 6); read-only here, null for records not imported. */
   externalId: z.string().nullable(),
   archivedAt: isoDateTimeSchema.nullable(),
   mergedIntoId: idSchema.nullable(),

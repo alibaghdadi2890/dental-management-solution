@@ -98,8 +98,9 @@ Entries are never edited or deleted; the merge worker is the only writer that up
 - `patients.ts`:
   - `patientSexSchema`; `medicalAlertsSchema`; `displayNumberSchema` (`^P-\d{6,}$`).
   - `patientInputSchema` `{ fullName, phone, dateOfBirth?, sex?, email?, address?, insurance?,
-emergencyContact?, medicalAlerts?, primaryDentistUserId?, notes?, guardianName?, guardianPhone?,
-externalId? }` (phone is the raw text; the server normalises it with the tenant country).
+emergencyContact?, medicalAlerts?, primaryDentistUserId?, notes?, guardianName?, guardianPhone?
+}` (phone is the raw text; the server normalises it with the tenant country). `externalId` is not
+    an input: it is set only by the import (feature 6), and `patientSchema` exposes it read-only.
     `patientPatchSchema` = partial, at least one key.
   - `patientSchema` (full record incl. `displayNumber`, `archivedAt`, `mergedIntoId`, `createdAt`,
     `updatedAt`) and `patientListItemSchema` (list/palette columns).

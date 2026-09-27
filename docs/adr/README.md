@@ -21,4 +21,5 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0014](0014-consuming-provisioning-events.md)           | Modules may consume `provisioning`'s events      | Accepted                           |
 | [0015](0015-catalog-prices-in-tenant-currency.md)       | Catalog prices in the tenant currency            | Accepted                           |
 | [0016](0016-patients-depend-on-users.md)                | `patients` depends on `users` (primary dentist)  | Accepted                           |
+| 0017                                                    | Reserved: billing (feature 3 step c)             | Reserved                           |
 | [0018](0018-offset-paging-for-patients.md)              | Offset paging for the patients list              | Accepted (amends CLAUDE.md §12)    |

@@ -565,7 +565,8 @@ describe('patients: repositories', () => {
       const affected = await inTenant(tenant, () =>
         repo.setArchived([active.id, alreadyArchived.id], at),
       );
-      expect(affected).toEqual([active.id]);
+      expect(affected.map((row) => row.id)).toEqual([active.id]);
+      expect(affected[0]?.deletedAt).toBeInstanceOf(Date);
     });
 
     it('restores an archived id and returns it as affected', async () => {
@@ -574,7 +575,8 @@ describe('patients: repositories', () => {
       await inTenant(tenant, () => repo.setArchived([patient.id], at));
 
       const restored = await inTenant(tenant, () => repo.setArchived([patient.id], null));
-      expect(restored).toEqual([patient.id]);
+      expect(restored.map((row) => row.id)).toEqual([patient.id]);
+      expect(restored[0]?.deletedAt).toBeNull();
       expect((await inTenant(tenant, () => repo.findById(patient.id)))?.deletedAt).toBeNull();
     });
 
@@ -616,6 +618,17 @@ describe('patients: repositories', () => {
       );
       expect((await inTenantTx(tenant, () => repo.findForUpdate(patient.id)))?.id).toBe(patient.id);
       expect(await inTenantTx(tenant, () => repo.findForUpdate(newId()))).toBeUndefined();
+    });
+
+    it('findByIdsForUpdate needs a transaction and returns the visible rows among the ids', async () => {
+      const a = await create(tenant);
+      const b = await create(tenant);
+      await expect(inTenant(tenant, () => repo.findByIdsForUpdate([a.id]))).rejects.toThrow(
+        'findByIdsForUpdate must run inside a transaction',
+      );
+      const locked = await inTenantTx(tenant, () => repo.findByIdsForUpdate([b.id, newId(), a.id]));
+      expect(locked.map((row) => row.id).sort()).toEqual([a.id, b.id].sort());
+      expect(await inTenantTx(newId(), () => repo.findByIdsForUpdate([a.id]))).toEqual([]);
     });
   });
 

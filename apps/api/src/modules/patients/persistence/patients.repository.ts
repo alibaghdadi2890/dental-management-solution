@@ -111,7 +111,6 @@ export interface PatientPatch {
   primaryDentistUserId?: string | null;
   guardianName?: string | null;
   guardianPhone?: string | null;
-  externalId?: string | null;
 }
 
 export interface PatientSearchResult {
@@ -181,7 +180,6 @@ export class PatientsRepository {
     }
     if (patch.guardianName !== undefined) set.guardianName = patch.guardianName;
     if (patch.guardianPhone !== undefined) set.guardianPhone = patch.guardianPhone;
-    if (patch.externalId !== undefined) set.externalId = patch.externalId;
 
     return this.db.run(async (tx) => {
       const [row] = await tx
@@ -202,6 +200,29 @@ export class PatientsRepository {
     if (ids.length === 0) return [];
     const rows = await this.db.run((tx) =>
       tx.select().from(patients).where(idAmong(patients.id, ids)),
+    );
+    return rows.map(toDomain);
+  }
+
+  /**
+   * Reads the rows among `ids` `FOR UPDATE`, locked in id order (the order `lockPair` uses, so
+   * bulk archive/restore and merges never deadlock each other). A concurrent edit, merge or
+   * archive of any of them waits for this transaction, so a before-snapshot taken here is the one
+   * the caller's writes apply to. Must run inside an already-open transaction (throws otherwise).
+   * Ids invisible under RLS are simply absent.
+   */
+  async findByIdsForUpdate(ids: readonly string[]): Promise<DomainPatient[]> {
+    if (!this.db.currentTransaction()) {
+      throw new Error('findByIdsForUpdate must run inside a transaction');
+    }
+    if (ids.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx
+        .select()
+        .from(patients)
+        .where(idAmong(patients.id, ids))
+        .orderBy(patients.id)
+        .for('update'),
     );
     return rows.map(toDomain);
   }
@@ -245,8 +266,7 @@ export class PatientsRepository {
       const byId = new Map(rows.map((row) => [row.id, toDomain(row)]));
       const patientA = byId.get(a);
       const patientB = byId.get(b);
-      if (!patientA) throw new PatientNotFoundError(`Patient ${a} not found`);
-      if (!patientB) throw new PatientNotFoundError(`Patient ${b} not found`);
+      if (!patientA || !patientB) throw new PatientNotFoundError('Patient not found');
       return { a: patientA, b: patientB };
     });
   }
@@ -256,9 +276,9 @@ export class PatientsRepository {
    * archived and not merged away (`deleted_at is not null and merged_into_id is null` — a merged
    * record is never restored directly, design Q11: `patient.merged`). An id already in the target
    * state, already merged (on restore), or invisible under RLS is silently skipped rather than
-   * erroring; returns only the ids that were truly changed.
+   * erroring; returns only the rows that were truly changed, as they are after the change.
    */
-  async setArchived(ids: readonly string[], at: Date | null): Promise<string[]> {
+  async setArchived(ids: readonly string[], at: Date | null): Promise<DomainPatient[]> {
     if (ids.length === 0) return [];
     const condition =
       at === null
@@ -269,13 +289,9 @@ export class PatientsRepository {
           )
         : and(idAmong(patients.id, ids), isNull(patients.deletedAt));
     const rows = await this.db.run((tx) =>
-      tx
-        .update(patients)
-        .set({ deletedAt: at, updatedAt: DB_NOW })
-        .where(condition)
-        .returning({ id: patients.id }),
+      tx.update(patients).set({ deletedAt: at, updatedAt: DB_NOW }).where(condition).returning(),
     );
-    return rows.map((row) => row.id);
+    return rows.map(toDomain);
   }
 
   /** Archives the dropped record of a merge with `mergedIntoId` pointing at the kept one. */

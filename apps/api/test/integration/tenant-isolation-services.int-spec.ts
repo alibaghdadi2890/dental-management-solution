@@ -76,7 +76,11 @@ describe('tenant isolation through the public services', () => {
       })
     ).body as StaffUser;
     const patient = (
-      await inTenant.post('/patients', { fullName: `${name} Patient`, phone: '03 123 456' })
+      await inTenant.post('/patients', {
+        fullName: `${name} Patient`,
+        phone: '03 123 456',
+        dateOfBirth: '1990-01-01',
+      })
     ).body as Patient;
     if (patient.displayNumber !== 'P-000001') throw new Error('patient create failed');
     return { tenant, ownerEmail, branch, room, staff, patient };
@@ -139,18 +143,26 @@ describe('tenant isolation through the public services', () => {
     });
 
     it('patients: search, counts and duplicates', async () => {
+      const own = await database.ownerPool.query<{ active: number; archived: number }>(
+        `select count(*) filter (where deleted_at is null)::int as active,
+                count(*) filter (where deleted_at is not null)::int as archived
+         from patients where tenant_id = $1`,
+        [a.tenant.id],
+      );
+      const { active, archived } = own.rows[0] ?? { active: -1, archived: -1 };
       const all = (await ownerA.get('/api/v1/patients?size=50')).body as PatientPage;
-      expect(all.items.map((item) => item.id)).toEqual([a.patient.id]);
-      expect(all.total).toBe(1);
+      expect(all.items.map((item) => item.id)).toContain(a.patient.id);
+      expect(all.items.map((item) => item.id)).not.toContain(b.patient.id);
+      expect(all.total).toBe(active);
       // B's patient has the same number and phone as A's: neither matches across tenants.
       for (const q of ['P-000001', '03123456', 'Bravo']) {
         const found = (await ownerA.get(`/api/v1/patients?q=${q}`)).body as PatientPage;
         expect(found.items.map((item) => item.id)).not.toContain(b.patient.id);
       }
       expect((await ownerA.get('/api/v1/patients/counts')).body).toEqual({
-        active: 1,
-        notSeen: 1,
-        archived: 0,
+        active,
+        notSeen: active,
+        archived,
       });
       const twins = await ownerA.get(
         `/api/v1/patients/duplicates/check?fullName=${encodeURIComponent(b.patient.fullName)}&dateOfBirth=1990-01-01`,
@@ -290,13 +302,15 @@ describe('tenant isolation through the public services', () => {
             [tenantId],
           )
         ).rows[0]?.last_value;
-      expect(await counter(b.tenant.id)).toBe(1);
+      const aBefore = await counter(a.tenant.id);
+      const bBefore = await counter(b.tenant.id);
+      if (aBefore === undefined || bBefore === undefined) throw new Error('no counters yet');
       const created = await ownerA
         .post('/api/v1/patients')
         .send({ fullName: 'Alpha Second', phone: '71 000 000' });
-      expect(created.body).toMatchObject({ displayNumber: 'P-000002' });
-      expect(await counter(a.tenant.id)).toBe(2);
-      expect(await counter(b.tenant.id)).toBe(1);
+      expect(created.status).toBe(201);
+      expect(await counter(a.tenant.id)).toBe(aBefore + 1);
+      expect(await counter(b.tenant.id)).toBe(bBefore);
     });
 
     it("B's branches cannot be assigned or switched to", async () => {

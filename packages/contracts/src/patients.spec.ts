@@ -103,6 +103,12 @@ describe('patientInputSchema', () => {
       'jane@example.com',
     );
   });
+
+  it('drops externalId: only the import (feature 6) sets it', () => {
+    expect(patientInputSchema.parse({ ...input, externalId: 'EXT-1' })).not.toHaveProperty(
+      'externalId',
+    );
+  });
 });
 
 describe('patientPatchSchema', () => {
@@ -120,6 +126,10 @@ describe('patientPatchSchema', () => {
   it('clears the date of birth when explicitly patched to null, without touching other fields', () => {
     const parsed = patientPatchSchema.parse({ dateOfBirth: null });
     expect(parsed).toEqual({ dateOfBirth: null });
+  });
+
+  it('rejects a patch of externalId alone: it is not an editable field', () => {
+    expect(patientPatchSchema.safeParse({ externalId: 'EXT-1' }).success).toBe(false);
   });
 
   it('leaves the date of birth untouched when the key is absent', () => {

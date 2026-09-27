@@ -1,6 +1,5 @@
 import {
   ageBandBounds,
-  normalizePhone,
   type DuplicateCheckQuery,
   type DuplicateGroup,
   type Patient,
@@ -22,16 +21,13 @@ import { TenantDb } from '../../../platform/db/tenant-db';
 import { EventBus } from '../../../platform/events/event-bus';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
-import {
-  type ValidationIssue,
-  ValidationFailedError,
-} from '../../../platform/kernel/validation-failed.error';
+import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { AuditService } from '../../audit';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
 import { formatDisplayNumber } from '../domain/display-number';
 import { groupDuplicates } from '../domain/duplicates';
-import { type MergePatch, resolveMerge } from '../domain/merge';
+import { resolveMerge } from '../domain/merge';
 import type { DomainPatient } from '../domain/patient';
 import {
   MergeSameError,
@@ -54,12 +50,12 @@ import {
 } from '../events/patient-events';
 import { PatientCountersRepository } from '../persistence/patient-counters.repository';
 import {
-  type NormalizedPhoneInput,
-  type PatientPatch as PatientRecordPatch,
   type PatientRank,
   type PatientSearchFilters,
   PatientsRepository,
 } from '../persistence/patients.repository';
+import { changesOf, mergeSet, normalizeFields } from './patient-changes';
+import { toListItem, toPatient } from './patient-mapping';
 
 /**
  * Options only other modules' services pass — never reachable over HTTP (design Q5, Q7). `billing`
@@ -83,76 +79,7 @@ export interface PatientSearchInternal {
 
 const MAX_INTERNAL_PAGE_SIZE = 500;
 
-/** The editable fields every write re-checks against the tenant (country, time zone). */
-interface TenantCheckedFields {
-  phone?: string | undefined;
-  guardianPhone?: string | null | undefined;
-  dateOfBirth?: string | null | undefined;
-}
-
-interface NormalizedFields {
-  phone?: NormalizedPhoneInput;
-  guardianPhone?: string | null;
-}
-
-/** Patch fields stored as given (no normalisation, plain equality). */
-const PLAIN_FIELDS = [
-  'fullName',
-  'dateOfBirth',
-  'sex',
-  'email',
-  'address',
-  'insurance',
-  'emergencyContact',
-  'primaryDentistUserId',
-  'notes',
-  'guardianName',
-  'externalId',
-] as const satisfies readonly (keyof PatientPatch & keyof PatientRecordPatch)[];
-
-const sameList = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && a.every((value, index) => value === b[index]);
-
-function toPatient(patient: DomainPatient): Patient {
-  return {
-    id: patient.id,
-    displayNumber: patient.displayNumber,
-    fullName: patient.fullName,
-    phone: patient.phone,
-    dateOfBirth: patient.dateOfBirth,
-    sex: patient.sex,
-    email: patient.email,
-    address: patient.address,
-    insurance: patient.insurance,
-    emergencyContact: patient.emergencyContact,
-    medicalAlerts: patient.medicalAlerts,
-    primaryDentistUserId: patient.primaryDentistUserId,
-    notes: patient.notes,
-    guardianName: patient.guardianName,
-    guardianPhone: patient.guardianPhone,
-    externalId: patient.externalId,
-    archivedAt: patient.deletedAt?.toISOString() ?? null,
-    mergedIntoId: patient.mergedIntoId,
-    createdAt: patient.createdAt.toISOString(),
-    updatedAt: patient.updatedAt.toISOString(),
-  };
-}
-
-function toListItem(patient: DomainPatient): PatientListItem {
-  return {
-    id: patient.id,
-    displayNumber: patient.displayNumber,
-    fullName: patient.fullName,
-    phone: patient.phone,
-    dateOfBirth: patient.dateOfBirth,
-    sex: patient.sex,
-    medicalAlerts: patient.medicalAlerts,
-    primaryDentistUserId: patient.primaryDentistUserId,
-    email: patient.email,
-    archivedAt: patient.deletedAt?.toISOString() ?? null,
-    updatedAt: patient.updatedAt.toISOString(),
-  };
-}
+const NOT_FOUND = 'Patient not found';
 
 /**
  * Patient records of the current tenant (docs/modules/patients.md). Phones are normalised against
@@ -175,12 +102,15 @@ export class PatientsService {
 
   // --- Records ---
 
-  /** Mints the next display number in the same transaction, so a failed create frees it. */
+  /**
+   * Mints the next display number in the same transaction — the caller's, when it runs inside
+   * one (`billing`'s create with an opening balance) — so a create that rolls back frees it.
+   */
   async create(input: PatientInput): Promise<Patient> {
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
       const tenant = await this.tenancy.currentTenant();
-      const normalized = this.checkFields(input, tenant);
+      const normalized = normalizeFields(input, tenant.country, this.today(tenant));
       if (!normalized.phone) throw new Error('create: phone was not normalised');
       if (input.primaryDentistUserId !== null) {
         await this.assertActiveDentist(input.primaryDentistUserId);
@@ -202,7 +132,8 @@ export class PatientsService {
           primaryDentistUserId: input.primaryDentistUserId,
           guardianName: input.guardianName,
           guardianPhone: normalized.guardianPhone ?? null,
-          externalId: input.externalId,
+          // The import key is set only by the import (feature 6).
+          externalId: null,
         }),
       );
       await this.audit.record({
@@ -226,12 +157,12 @@ export class PatientsService {
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
       const before = await this.patients.findForUpdate(id);
-      if (!before) throw new PatientNotFoundError('Patient not found');
+      if (!before) throw new PatientNotFoundError(NOT_FOUND);
       if (before.deletedAt !== null) {
         throw new PatientArchivedError('Archived patients cannot be edited; restore them first');
       }
       const tenant = await this.tenancy.currentTenant();
-      const normalized = this.checkFields(patch, tenant);
+      const normalized = normalizeFields(patch, tenant.country, this.today(tenant));
       const dentist = patch.primaryDentistUserId;
       if (dentist !== undefined && dentist !== null && dentist !== before.primaryDentistUserId) {
         await this.assertActiveDentist(dentist);
@@ -241,7 +172,7 @@ export class PatientsService {
       if (fields.length === 0) return toPatient(before);
 
       const updated = await this.patients.update(id, set);
-      if (!updated) throw new PatientNotFoundError('Patient not found');
+      if (!updated) throw new PatientNotFoundError(NOT_FOUND);
       const after = toPatient(updated);
       await this.audit.record({
         action: 'patient.update',
@@ -260,16 +191,17 @@ export class PatientsService {
   async get(id: string): Promise<Patient> {
     this.context.requirePermission('patient:read');
     const patient = await this.patients.findById(id);
-    if (!patient) throw new PatientNotFoundError('Patient not found');
+    if (!patient) throw new PatientNotFoundError(NOT_FOUND);
     return toPatient(patient);
   }
 
   /**
-   * Building block for other modules' services, which guard their own use (e.g. `billing`'s
-   * existence checks and export rows): the patients among `ids` visible to the tenant, archived
-   * ones included, in no particular order. Unknown ids are simply absent.
+   * For other modules' services (e.g. `billing`'s existence checks and export rows): the patients
+   * among `ids` visible to the tenant, archived ones included, in no particular order. Unknown
+   * ids are simply absent.
    */
   async getMany(ids: readonly string[]): Promise<Patient[]> {
+    this.context.requirePermission('patient:read');
     return (await this.patients.findByIds(ids)).map(toPatient);
   }
 
@@ -334,37 +266,36 @@ export class PatientsService {
 
   /**
    * All-or-nothing: an id the tenant can't see fails the whole call with 404. Already archived ids
-   * are no-ops. Returns the patients this call archived (the ones an undo should restore).
+   * are no-ops. Returns the patients this call archived (the ones an undo should restore), in
+   * input order.
    */
   async archive(input: PatientArchive): Promise<Patient[]> {
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
-      const before = await this.requireAll(input.ids);
+      const before = await this.requireAllLocked(input.ids);
       const archived = await this.patients.setArchived(input.ids, this.clock.now());
-      return this.recordEach(before, archived, 'patient.archive', input.reason, (patientId) => {
-        const event: PatientArchived = this.events.create(PATIENT_ARCHIVED, { patientId });
+      return this.recordEach(input.ids, before, archived, 'patient.archive', input.reason, (id) => {
+        const event: PatientArchived = this.events.create(PATIENT_ARCHIVED, { patientId: id });
         return event;
       });
     });
   }
 
   /**
-   * All-or-nothing like `archive`; a merged-away id refuses the call (409 `patient.merged`).
-   * Already active ids are no-ops. Returns the patients this call restored.
+   * All-or-nothing like `archive`; a merged-away id refuses the call (409 `patient.merged`),
+   * checked under the same row locks. Already active ids are no-ops. Returns the patients this
+   * call restored, in input order.
    */
   async restore(input: PatientRestore): Promise<Patient[]> {
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
-      const before = await this.requireAll(input.ids);
-      const merged = before.find((patient) => patient.mergedIntoId !== null);
-      if (merged) {
-        throw new PatientMergedError(
-          `${merged.displayNumber} was merged into another record and cannot be restored`,
-        );
+      const before = await this.requireAllLocked(input.ids);
+      if (before.some((patient) => patient.mergedIntoId !== null)) {
+        throw new PatientMergedError('A record merged into another one cannot be restored');
       }
       const restored = await this.patients.setArchived(input.ids, null);
-      return this.recordEach(before, restored, 'patient.restore', null, (patientId) => {
-        const event: PatientRestored = this.events.create(PATIENT_RESTORED, { patientId });
+      return this.recordEach(input.ids, before, restored, 'patient.restore', null, (id) => {
+        const event: PatientRestored = this.events.create(PATIENT_RESTORED, { patientId: id });
         return event;
       });
     });
@@ -385,12 +316,11 @@ export class PatientsService {
       if (kept.deletedAt !== null || dropped.deletedAt !== null) {
         throw new PatientArchivedError('Archived patients cannot be merged; restore them first');
       }
-      const { patch } = resolveMerge(kept, dropped, input.fieldChoices);
       const { country } = await this.tenancy.currentTenant();
-      const set = mergeSet(patch, country);
+      const set = mergeSet(resolveMerge(kept, dropped, input.fieldChoices), country);
       const keptAfter =
         Object.keys(set).length === 0 ? kept : await this.patients.update(kept.id, set);
-      if (!keptAfter) throw new PatientNotFoundError('Patient not found');
+      if (!keptAfter) throw new PatientNotFoundError(NOT_FOUND);
       await this.patients.markMerged(dropped.id, kept.id, this.clock.now());
 
       const after = toPatient(keptAfter);
@@ -412,42 +342,6 @@ export class PatientsService {
   }
 
   // --- Shared rules ---
-
-  /**
-   * Normalises `phone`/`guardianPhone` against the tenant country and checks that the date of
-   * birth is not after the tenant's today (the contract only knows UTC, with a day of tolerance).
-   * Every failure is reported at once as 422 `validation_failed`, addressed by field.
-   */
-  private checkFields(fields: TenantCheckedFields, tenant: Tenant): NormalizedFields {
-    const issues: ValidationIssue[] = [];
-    const normalized: NormalizedFields = {};
-    if (fields.phone !== undefined) {
-      const phone = normalizePhone(fields.phone, tenant.country);
-      if (phone) normalized.phone = phone;
-      else issues.push(invalidPhone('phone'));
-    }
-    if (fields.guardianPhone === null) {
-      normalized.guardianPhone = null;
-    } else if (fields.guardianPhone !== undefined) {
-      const guardianPhone = normalizePhone(fields.guardianPhone, tenant.country);
-      if (guardianPhone) normalized.guardianPhone = guardianPhone.e164;
-      else issues.push(invalidPhone('guardianPhone'));
-    }
-    if (fields.dateOfBirth && fields.dateOfBirth > this.today(tenant)) {
-      issues.push({
-        path: 'dateOfBirth',
-        code: 'future_date',
-        message: 'Date of birth cannot be in the future',
-      });
-    }
-    if (issues.length > 0) {
-      throw new ValidationFailedError(
-        issues.length === 1 ? '1 field is invalid' : `${issues.length} fields are invalid`,
-        issues,
-      );
-    }
-    return normalized;
-  }
 
   private async assertActiveDentist(userId: string): Promise<void> {
     const practitioners = await this.users.listPractitioners();
@@ -496,30 +390,36 @@ export class PatientsService {
     return { column: 'primaryDentistUserId', ids, restAt: ids.length + 1 };
   }
 
-  /** Every id must be visible to the tenant (404 otherwise, nothing changed). */
-  private async requireAll(ids: readonly string[]): Promise<DomainPatient[]> {
-    const found = await this.patients.findByIds(ids);
-    if (found.length !== new Set(ids).size) throw new PatientNotFoundError('Patient not found');
+  /**
+   * Every id must be visible to the tenant (404 otherwise, nothing changed). The rows are locked,
+   * so the before-snapshot is the state the caller's writes apply to.
+   */
+  private async requireAllLocked(ids: readonly string[]): Promise<DomainPatient[]> {
+    const found = await this.patients.findByIdsForUpdate(ids);
+    if (found.length !== new Set(ids).size) throw new PatientNotFoundError(NOT_FOUND);
     return found;
   }
 
-  /** One audit entry and one event per patient `changedIds` names, in `changedIds` order. */
+  /**
+   * One audit entry and one event per changed patient, walking `ids` so both the entries and the
+   * result follow the caller's order.
+   */
   private async recordEach(
+    ids: readonly string[],
     before: readonly DomainPatient[],
-    changedIds: readonly string[],
+    changed: readonly DomainPatient[],
     action: string,
     reason: string | null,
     eventFor: (patientId: string) => PatientArchived | PatientRestored,
   ): Promise<Patient[]> {
     const beforeById = new Map(before.map((patient) => [patient.id, patient]));
-    const afterById = new Map(
-      (await this.patients.findByIds(changedIds)).map((patient) => [patient.id, patient]),
-    );
-    const changed: Patient[] = [];
-    for (const id of changedIds) {
+    const changedById = new Map(changed.map((patient) => [patient.id, patient]));
+    const result: Patient[] = [];
+    for (const id of ids) {
+      const current = changedById.get(id);
       const previous = beforeById.get(id);
-      const current = afterById.get(id);
-      if (!previous || !current) throw new PatientNotFoundError('Patient not found');
+      if (!current) continue;
+      if (!previous) throw new PatientNotFoundError(NOT_FOUND);
       const after = toPatient(current);
       await this.audit.record({
         action,
@@ -530,57 +430,12 @@ export class PatientsService {
         reason: reason ?? undefined,
       });
       await this.events.publish(eventFor(id));
-      changed.push(after);
+      result.push(after);
     }
-    return changed;
+    return result;
   }
-}
-
-function invalidPhone(path: 'phone' | 'guardianPhone'): ValidationIssue {
-  return { path, code: 'invalid_phone', message: 'Not a valid phone number' };
 }
 
 function unsupported(path: 'view' | 'sort', message: string): ValidationFailedError {
   return new ValidationFailedError(message, [{ path, code: 'unsupported', message }]);
-}
-
-/** The repository patch for the fields of `patch` whose stored value changes, and their names. */
-function changesOf(
-  before: DomainPatient,
-  patch: PatientPatch,
-  normalized: NormalizedFields,
-): { set: PatientRecordPatch; fields: string[] } {
-  const set: PatientRecordPatch = {};
-  const fields: string[] = [];
-  if (normalized.phone && normalized.phone.e164 !== before.phone) {
-    set.phone = normalized.phone;
-    fields.push('phone');
-  }
-  for (const field of PLAIN_FIELDS) {
-    const value = patch[field];
-    if (value === undefined || value === before[field]) continue;
-    Object.assign(set, { [field]: value });
-    fields.push(field);
-  }
-  if (patch.medicalAlerts && !sameList(patch.medicalAlerts, before.medicalAlerts)) {
-    set.medicalAlerts = patch.medicalAlerts;
-    fields.push('medicalAlerts');
-  }
-  if (normalized.guardianPhone !== undefined && normalized.guardianPhone !== before.guardianPhone) {
-    set.guardianPhone = normalized.guardianPhone;
-    fields.push('guardianPhone');
-  }
-  return { set, fields };
-}
-
-/**
- * The merge patch as a repository patch. A stored phone is E.164 (leading `+`), so re-parsing it
- * yields the same number whatever the country; it is only needed for the national search digits.
- */
-function mergeSet(patch: MergePatch, country: Tenant['country']): PatientRecordPatch {
-  const { phone, ...rest } = patch;
-  if (phone === undefined) return rest;
-  const normalized = normalizePhone(phone, country);
-  if (!normalized) throw new Error('merge: a stored phone is not a valid E.164 number');
-  return { ...rest, phone: normalized };
 }

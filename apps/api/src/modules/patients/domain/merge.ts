@@ -44,12 +44,6 @@ function assign<K extends keyof MergePatch>(patch: MergePatch, key: K, value: Do
   patch[key] = value;
 }
 
-export interface MergeResolution {
-  patch: MergePatch;
-  /** The pickable fields (design Q8: `medicalAlerts` is unioned, never a choice) that changed. */
-  changedFields: MergeField[];
-}
-
 function sameAlerts(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
@@ -62,15 +56,14 @@ function sameAlerts(a: readonly string[], b: readonly string[]): boolean {
  * choice, and never truncated: a dropped allergy is a clinical risk, so a union bigger than
  * `MEDICAL_ALERTS_MAX` throws `MergeAlertsOverflowError` rather than silently losing alerts;
  * the caller must remove some first. Returns only the fields whose resolved value differs from
- * `kept`'s own, so an all-kept merge with an unchanged alert union produces an empty patch.
+ * `kept`'s own (the audit's before/after shows what changed), so an all-kept merge with an unchanged alert union produces an empty patch.
  */
 export function resolveMerge(
   kept: DomainPatient,
   dropped: DomainPatient,
   choices: Partial<Record<MergeField, 'keep' | 'drop'>>,
-): MergeResolution {
+): MergePatch {
   const patch: MergePatch = {};
-  const changedFields: MergeField[] = [];
 
   for (const field of MERGE_FIELDS) {
     if (field === 'guardian') continue;
@@ -79,7 +72,6 @@ export function resolveMerge(
     const value = source[key];
     if (value !== kept[key]) {
       assign(patch, key, value);
-      changedFields.push(field);
     }
   }
 
@@ -90,7 +82,6 @@ export function resolveMerge(
   ) {
     patch.guardianName = guardianSource.guardianName;
     patch.guardianPhone = guardianSource.guardianPhone;
-    changedFields.push('guardian');
   }
 
   const unionAlerts = dedupeAlerts([...kept.medicalAlerts, ...dropped.medicalAlerts]);
@@ -103,5 +94,5 @@ export function resolveMerge(
     patch.medicalAlerts = unionAlerts;
   }
 
-  return { patch, changedFields };
+  return patch;
 }
