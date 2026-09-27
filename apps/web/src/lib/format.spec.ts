@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { currencySymbol, formatDate, formatDateTime, formatMoney } from './format';
+import {
+  currencySymbol,
+  dateInputOrder,
+  formatAgeLine,
+  formatDate,
+  formatDateTime,
+  formatMoney,
+  todayIn,
+} from './format';
 
 describe('formatDate', () => {
   it('uses the POC display format in English', () => {
@@ -48,5 +56,49 @@ describe('currencySymbol', () => {
   it('gives the narrow symbol for price inputs', () => {
     expect(currencySymbol('USD', 'en')).toBe('$');
     expect(currencySymbol('EUR', 'fr')).toBe('€');
+  });
+});
+
+describe('todayIn', () => {
+  it('uses the tenant timezone, not UTC', () => {
+    // 22:30 UTC on the 27th is already 01:30 on the 28th in Beirut (UTC+3 in September).
+    expect(todayIn('Asia/Beirut', new Date('2026-09-27T22:30:00Z'))).toBe('2026-09-28');
+  });
+
+  it('matches UTC when the timezone is UTC', () => {
+    expect(todayIn('UTC', new Date('2026-09-27T22:30:00Z'))).toBe('2026-09-27');
+  });
+});
+
+describe('formatAgeLine', () => {
+  const options = { timeZone: 'UTC', locale: 'en' };
+
+  it('is unknown with no date of birth', () => {
+    expect(formatAgeLine(null, '2026-09-27', options)).toEqual({ kind: 'unknown' });
+  });
+
+  it('gives the whole-years age and the formatted date of birth', () => {
+    expect(formatAgeLine('2019-01-15', '2026-09-27', options)).toEqual({
+      kind: 'full',
+      age: 7,
+      dob: '15 Jan 2019',
+    });
+  });
+
+  it('shows only the date when it is somehow after today', () => {
+    expect(formatAgeLine('2027-01-01', '2026-09-27', options)).toEqual({
+      kind: 'dobOnly',
+      dob: '1 Jan 2027',
+    });
+  });
+});
+
+describe('dateInputOrder', () => {
+  it('is DMY for en-LB', () => {
+    expect(dateInputOrder('en', 'LB')).toBe('DMY');
+  });
+
+  it('is MDY for en-US', () => {
+    expect(dateInputOrder('en', 'US')).toBe('MDY');
   });
 });

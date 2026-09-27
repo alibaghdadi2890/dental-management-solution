@@ -2,7 +2,9 @@ import { type ProblemDetails, problemDetailsSchema } from '@dcm/contracts';
 import type { z } from 'zod';
 import { actingTenantId } from '@/features/platform/acting-tenant';
 
-const API_BASE = '/api/v1';
+/** Exported so callers that build a URL the browser navigates to directly (a CSV download link,
+ * not a `fetch`) still address the same versioned API `apiFetch` does. */
+export const API_BASE = '/api/v1';
 
 /** Honoured by the API for platform admins only (ADR-0008). */
 export const TENANT_HEADER = 'X-Tenant-Id';
