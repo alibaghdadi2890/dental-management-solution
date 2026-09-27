@@ -5,7 +5,7 @@ import TestAgent from 'supertest/lib/agent';
 import { AuthService } from '../../src/modules/auth';
 import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
-import { TEST_ORIGIN } from './test-app';
+import { TEST_ORIGIN } from './test-config';
 
 export const PASSWORD = 'correct-horse-battery';
 

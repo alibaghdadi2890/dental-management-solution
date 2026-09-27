@@ -32,8 +32,11 @@ export const CORE_PLATFORM_MODULES = [
   EventsModule,
 ];
 
-/** Platform modules that reach external services (Redis, S3); integration tests leave them out. */
-export const EXTERNAL_PLATFORM_MODULES = [RedisModule, QueueModule, StorageModule, HealthModule];
+/** Redis and the BullMQ queues built on it; integration tests import this alone (own key prefix). */
+export const QUEUE_PLATFORM_MODULES = [RedisModule, QueueModule];
+
+/** Platform modules that reach other external services (S3); integration tests leave them out. */
+export const EXTERNAL_PLATFORM_MODULES = [StorageModule, HealthModule];
 
 /** Domain modules (phase 1). */
 export const DOMAIN_MODULES = [
@@ -50,6 +53,11 @@ export const DOMAIN_MODULES = [
 ];
 
 @Module({
-  imports: [...CORE_PLATFORM_MODULES, ...EXTERNAL_PLATFORM_MODULES, ...DOMAIN_MODULES],
+  imports: [
+    ...CORE_PLATFORM_MODULES,
+    ...QUEUE_PLATFORM_MODULES,
+    ...EXTERNAL_PLATFORM_MODULES,
+    ...DOMAIN_MODULES,
+  ],
 })
 export class AppModule {}

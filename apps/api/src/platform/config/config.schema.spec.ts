@@ -23,6 +23,14 @@ describe('loadConfig', () => {
     expect(config.DATABASE_POOL_MAX).toBe(10);
     expect(config.S3_FORCE_PATH_STYLE).toBe(true);
     expect(config.S3_ENDPOINT).toBeUndefined();
+    expect(config.QUEUE_PREFIX).toBe('bull');
+  });
+
+  it('accepts an overridden queue prefix, for isolating queues sharing one Redis', () => {
+    expect(loadConfig({ ...validEnv, QUEUE_PREFIX: 'test-abc123' }).QUEUE_PREFIX).toBe(
+      'test-abc123',
+    );
+    expect(() => loadConfig({ ...validEnv, QUEUE_PREFIX: '' })).toThrow(/QUEUE_PREFIX/);
   });
 
   it('refuses to start without required settings and names every problem', () => {

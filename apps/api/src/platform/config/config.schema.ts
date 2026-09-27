@@ -12,6 +12,8 @@ export const configSchema = z.object({
   DATABASE_POOL_MAX: z.coerce.number().int().positive().default(10),
 
   REDIS_URL: z.url(),
+  /** BullMQ key prefix; isolates queues sharing one Redis (e.g. one per parallel test run). */
+  QUEUE_PREFIX: z.string().min(1).default('bull'),
 
   S3_ENDPOINT: z.url().optional(),
   S3_REGION: z.string().min(1),

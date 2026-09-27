@@ -26,7 +26,7 @@ declare module 'vitest' {
  * queue/tenant ids.
  */
 export default async function setup(project: TestProject): Promise<() => Promise<void>> {
-  const [pgContainer, redisContainer] = await Promise.all([
+  const [pgResult, redisResult] = await Promise.allSettled([
     new PostgreSqlContainer('postgres:17-alpine')
       .withDatabase('dcm')
       .withUsername('dcm_owner')
@@ -37,6 +37,22 @@ export default async function setup(project: TestProject): Promise<() => Promise
       .withWaitStrategy(Wait.forLogMessage(/Ready to accept connections/))
       .start(),
   ]);
+
+  if (pgResult.status === 'rejected' || redisResult.status === 'rejected') {
+    // Stop whichever container did start before failing the run, so a partial failure never
+    // leaks a container.
+    const started = [pgResult, redisResult].flatMap((result) =>
+      result.status === 'fulfilled' ? [result.value] : [],
+    );
+    await Promise.all(started.map((container) => container.stop()));
+    const failures = [pgResult, redisResult].filter(
+      (result): result is PromiseRejectedResult => result.status === 'rejected',
+    );
+    throw failures[0]?.reason ?? new Error('Failed to start integration test containers');
+  }
+
+  const pgContainer = pgResult.value;
+  const redisContainer = redisResult.value;
   const ownerUrl = pgContainer.getConnectionUri();
   const redisUrl = `redis://${redisContainer.getHost()}:${redisContainer.getMappedPort(REDIS_PORT)}`;
 
