@@ -22,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { PatientsService } from '../../src/modules/patients';
 import { PermissionDeniedError } from '../../src/platform/cls/permission-denied.error';
 import { RequestContext } from '../../src/platform/cls/request-context';
+import { PatientsRepository } from '../../src/modules/patients/persistence/patients.repository';
 import { TenantDb } from '../../src/platform/db/tenant-db';
 import { newId } from '../../src/platform/kernel/id';
 import { ValidationFailedError } from '../../src/platform/kernel/validation-failed.error';
@@ -798,6 +799,31 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       const restore = await main.owner.post('/api/v1/patients/restore').send({ ids: [dropped.id] });
       expect(restore.status).toBe(409);
       expect(restore.body).toMatchObject({ code: 'patient.merged' });
+    });
+
+    it('fails fast on an archived or merged-away record, before taking any row lock', async () => {
+      const kept = await createPatient(main.owner, { fullName: 'Fast Kept', phone: '71000060' });
+      const dropped = await createPatient(main.owner, { fullName: 'Fast Drop', phone: '71000061' });
+      const third = await createPatient(main.owner, { fullName: 'Fast Third', phone: '71000062' });
+      expect(
+        (await merge(main.owner, { keepId: kept.id, dropId: dropped.id, reason: 'Same person' }))
+          .status,
+      ).toBe(200);
+
+      const lockPair = vi.spyOn(testApp.app.get(PatientsRepository), 'lockPair');
+      try {
+        for (const [keepId, dropId] of [
+          [third.id, dropped.id],
+          [dropped.id, third.id],
+        ] as const) {
+          const response = await merge(main.owner, { keepId, dropId, reason: 'Same person' });
+          expect(response.status).toBe(409);
+          expect(response.body).toMatchObject({ code: 'patient.archived' });
+        }
+        expect(lockPair).not.toHaveBeenCalled();
+      } finally {
+        lockPair.mockRestore();
+      }
     });
 
     it('refuses archived records, the same id, a short reason and an alert overflow', async () => {

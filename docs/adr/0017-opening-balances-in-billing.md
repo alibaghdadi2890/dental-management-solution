@@ -89,6 +89,10 @@ We considered:
   An outbox (the event written in the merge transaction, relayed to the queue) would close the
   window; it is platform work to do once a second consumer needs the same guarantee.
 
+- **Locking:** the re-point walks both merge chains `FOR SHARE` while a merge takes `FOR UPDATE`
+  on its pair; a merge first refuses archived or merged-away records with an unlocked read (409
+  `patient.archived`, re-checked after `lockPair`), so it never locks the archived links the job
+  walks, and a rare deadlock left over is resolved by Postgres and a BullMQ retry.
 - Until the job has run, the survivor shows the balance without the dropped record's entries.
   In practice this is milliseconds.
 - `repointMergedEntries` and `survivorOf` are not permission-gated: the re-point is the system's

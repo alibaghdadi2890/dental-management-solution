@@ -90,6 +90,8 @@ const MAX_MERGE_CHAIN = 100;
 
 const NOT_FOUND = 'Patient not found';
 
+const ARCHIVED_MERGE = 'Archived patients cannot be merged; restore them first';
+
 /**
  * Patient records of the current tenant (docs/modules/patients.md). Phones are normalised against
  * the tenant country and dates of birth checked against the tenant's today; every mutation
@@ -389,9 +391,16 @@ export class PatientsService {
       throw new MergeSameError('A patient cannot be merged into itself');
     }
     return this.tenantDb.run(async () => {
+      // Fail fast, unlocked: an archived or merged-away record is refused before any row lock,
+      // so a doomed merge never queues behind (or deadlocks with) the merge re-point job's
+      // `FOR SHARE` walk of that record's chain. The check after the lock stays authoritative.
+      const current = await this.patients.findByIds([input.keepId, input.dropId]);
+      if (current.some((patient) => patient.deletedAt !== null)) {
+        throw new PatientArchivedError(ARCHIVED_MERGE);
+      }
       const { a: kept, b: dropped } = await this.patients.lockPair(input.keepId, input.dropId);
       if (kept.deletedAt !== null || dropped.deletedAt !== null) {
-        throw new PatientArchivedError('Archived patients cannot be merged; restore them first');
+        throw new PatientArchivedError(ARCHIVED_MERGE);
       }
       const { country } = await this.tenancy.currentTenant();
       const set = mergeSet(resolveMerge(kept, dropped, input.fieldChoices), country);
