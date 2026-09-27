@@ -1,4 +1,124 @@
 {
   "title": "Patients",
-  "subtitle": "Add your first patient, or import an existing list from your previous practice software."
+  "subtitle": "{{active}} active · {{owing}} with an open balance",
+  "subtitleActive": "{{active}} active",
+  "subtitleLoading": "Loading…",
+  "exportCsv": "Export CSV",
+  "exportFailed": "Couldn't export patients: {{reason}}",
+  "new": "New patient",
+  "views": {
+    "label": "Patient views",
+    "active": "Active",
+    "owing": "Owes balance",
+    "notSeen": "Not seen 6+ months",
+    "archived": "Archived"
+  },
+  "duplicates": {
+    "title_one": "{{count}} possible duplicate record",
+    "title_other": "{{count}} possible duplicate records",
+    "body": "Same name and date of birth. Review before the next visit is booked.",
+    "review": "Review & merge"
+  },
+  "search": {
+    "placeholder": "Name, phone, email or patient ID",
+    "label": "Search patients"
+  },
+  "filters": {
+    "dentist": "Dentist",
+    "anyDentist": "Any",
+    "noDentist": "No dentist",
+    "lastVisit": "Last visit",
+    "anyTime": "Any time",
+    "never": "Never",
+    "age": "Age",
+    "allAges": "All",
+    "child": "Under 18",
+    "adult": "18–64",
+    "senior": "65+",
+    "alerts": "Alerts",
+    "anyAlerts": "Any",
+    "hasAlerts": "Has alerts",
+    "noAlerts": "None",
+    "clear": "Clear filters"
+  },
+  "columns": {
+    "table": "Patients",
+    "selectAll": "Select all on page",
+    "patient": "Patient",
+    "age": "Age",
+    "phone": "Phone",
+    "lastVisit": "Last visit",
+    "dentist": "Dentist",
+    "visits": "Visits",
+    "balance": "Balance"
+  },
+  "sex": {
+    "female": "F",
+    "male": "M",
+    "other": "X"
+  },
+  "ageSex": "{{age}} · {{sex}}",
+  "alertBadge": "{{alert}} +{{more}}",
+  "archivedBadge": "Archived",
+  "row": {
+    "select": "Select {{name}}",
+    "menu": "Actions for {{name}}"
+  },
+  "menu": {
+    "quickView": "Quick view",
+    "edit": "Edit details",
+    "merge": "Merge with {{number}}",
+    "archive": "Archive",
+    "restore": "Restore"
+  },
+  "bulk": {
+    "selected_one": "{{count}} selected",
+    "selected_other": "{{count}} selected",
+    "merge": "Merge 2 records",
+    "export": "Export",
+    "archive": "Archive",
+    "restore": "Restore",
+    "clear": "Clear selection"
+  },
+  "archive": {
+    "titleNamed": "Archive {{name}}?",
+    "title_one": "Archive {{count}} patient?",
+    "title_other": "Archive {{count}} patients?",
+    "body": "Archived patients are hidden from lists and search but keep their full clinical and financial history. You can restore them at any time.",
+    "ok": "Archive",
+    "reason": "Reason (optional)",
+    "doneNamed": "{{name}} archived",
+    "done_one": "{{count}} patient archived",
+    "done_other": "{{count}} patients archived",
+    "failed": "Couldn't archive: {{reason}}"
+  },
+  "restore": {
+    "doneNamed": "{{name}} restored",
+    "done_one": "{{count}} patient restored",
+    "done_other": "{{count}} patients restored",
+    "failed": "Couldn't restore: {{reason}}"
+  },
+  "undo": "Undo",
+  "pager": {
+    "showing": "Showing <range>{{from}}–{{to}}</range> of <total>{{total}}</total>",
+    "rows": "Rows",
+    "label": "Pagination",
+    "previous": "Previous page",
+    "next": "Next page"
+  },
+  "loading": "Loading patients",
+  "empty": {
+    "title": "No patients yet",
+    "body": "Patients you register appear here, with their contact details, dentist and balance."
+  },
+  "noResults": {
+    "title": "No patients match",
+    "body": "Nothing in “{{view}}” matches your search and filters.",
+    "bodyView": "There are no patients in “{{view}}”.",
+    "clear": "Clear search and filters"
+  },
+  "error": {
+    "title": "Couldn't load patients",
+    "body": "The patient list didn't load. Your search and filters are kept."
+  }
 }

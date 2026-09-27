@@ -98,6 +98,13 @@ export function parsePatientsSearch(raw: unknown): PatientsSearch {
   }
 }
 
+/** The list query inside the route search — without `panel` and the create pre-fill fields, which
+ * must never reach `GET /patients`, its query key, or the "selection resets on query change" key. */
+export function listQueryOf(search: PatientsSearch): PatientListQuery {
+  const { view, q, dentist, age, alerts, lastVisit, sort, dir, page, size } = search;
+  return { view, q, dentist, age, alerts, lastVisit, sort, dir, page, size };
+}
+
 export type PatientPanel =
   | { kind: 'new' }
   | { kind: 'edit'; id: string }
@@ -219,4 +226,25 @@ export function toSearch(query: PatientListQuery): Partial<PatientListQuery> {
     copyIfChanged(result, normalized, key);
   }
   return result;
+}
+
+/** The columns a header click can sort by (`recent` is the palette's order, not a column). */
+export type SortableColumn = Exclude<PatientListQuery['sort'], 'recent'>;
+
+/** First click on a column sorts names A→Z, ages oldest first and balances largest first (POC). */
+const FIRST_DIR: Record<SortableColumn, PatientListQuery['dir']> = {
+  name: 'asc',
+  age: 'desc',
+  dentist: 'asc',
+  balance: 'desc',
+};
+
+/** The patch a header click applies (through `withFilter`): the sorted column flips direction —
+ * staying on the same page — and a new column starts at its natural direction on page 1. */
+export function sortPatch(
+  query: PatientListQuery,
+  column: SortableColumn,
+): Partial<PatientListQuery> {
+  if (query.sort === column) return { dir: query.dir === 'asc' ? 'desc' : 'asc' };
+  return { sort: column, dir: FIRST_DIR[column] };
 }

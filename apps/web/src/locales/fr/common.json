@@ -4,6 +4,7 @@
   "close": "Fermer",
   "dismiss": "Masquer",
   "reasonPlaceholder": "Obligatoire — enregistré dans le journal d’audit",
+  "reasonOptionalPlaceholder": "Facultatif — enregistré dans le journal d’audit",
   "tryAgain": "Réessayer",
   "requestId": "Requête {{id}}",
   "unsaved": "Non enregistré",

@@ -1,0 +1,78 @@
+import type { PatientListItem } from '@dcm/contracts';
+import { useTranslation } from 'react-i18next';
+import { IconButton } from '@/components/ui/button';
+import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
+import type { PatientPanel } from './list-query';
+
+/**
+ * The row's ⋯ menu (README §Patients): Quick view, Edit details, Merge with {twin}, Archive or
+ * Restore. There is no Start visit (design §Patients list). Everything but Quick view needs
+ * `patient:write`; an archived record can only be restored.
+ */
+export function PatientRowMenu({
+  patient,
+  twin,
+  canWrite,
+  onPanel,
+  onArchive,
+  onRestore,
+}: {
+  patient: PatientListItem;
+  /** Another record in the same duplicate group, if any. */
+  twin: PatientListItem | undefined;
+  canWrite: boolean;
+  onPanel: (panel: PatientPanel) => void;
+  onArchive: () => void;
+  onRestore: () => void;
+}) {
+  const { t } = useTranslation('patients');
+  const archived = patient.archivedAt !== null;
+  return (
+    <Menu>
+      <MenuTrigger asChild>
+        <IconButton aria-label={t('row.menu', { name: patient.fullName })}>
+          <svg aria-hidden width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+            <circle cx="3.5" cy="8" r="1.3" />
+            <circle cx="8" cy="8" r="1.3" />
+            <circle cx="12.5" cy="8" r="1.3" />
+          </svg>
+        </IconButton>
+      </MenuTrigger>
+      <MenuContent>
+        <MenuItem
+          onSelect={() => {
+            onPanel({ kind: 'quick', id: patient.id });
+          }}
+        >
+          {t('menu.quickView')}
+        </MenuItem>
+        {canWrite && !archived && (
+          <MenuItem
+            onSelect={() => {
+              onPanel({ kind: 'edit', id: patient.id });
+            }}
+          >
+            {t('menu.edit')}
+          </MenuItem>
+        )}
+        {canWrite && !archived && twin && (
+          <MenuItem
+            onSelect={() => {
+              onPanel({ kind: 'merge', ids: [patient.id, twin.id] });
+            }}
+          >
+            {t('menu.merge', { number: twin.displayNumber })}
+          </MenuItem>
+        )}
+        {canWrite &&
+          (archived ? (
+            <MenuItem onSelect={onRestore}>{t('menu.restore')}</MenuItem>
+          ) : (
+            <MenuItem tone="danger" onSelect={onArchive}>
+              {t('menu.archive')}
+            </MenuItem>
+          ))}
+      </MenuContent>
+    </Menu>
+  );
+}

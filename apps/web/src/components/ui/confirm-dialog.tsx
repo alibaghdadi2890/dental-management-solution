@@ -19,7 +19,10 @@ export function ConfirmDialog({
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const danger = options.tone === 'danger';
-  const blocked = options.reasonLabel !== undefined && reason.trim().length < MIN_REASON;
+  const blocked =
+    options.reasonLabel !== undefined &&
+    options.reasonOptional !== true &&
+    reason.trim().length < MIN_REASON;
 
   const confirm = async () => {
     if (blocked) return;
@@ -74,7 +77,9 @@ export function ConfirmDialog({
                   setReason(event.target.value);
                 }}
                 rows={3}
-                placeholder={t('reasonPlaceholder')}
+                placeholder={
+                  options.reasonOptional ? t('reasonOptionalPlaceholder') : t('reasonPlaceholder')
+                }
                 className="w-full resize-y rounded-lg border border-border-control bg-surface px-2.5 py-[9px] text-[13px] leading-[1.45]"
               />
             </label>

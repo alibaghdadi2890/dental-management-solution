@@ -4,6 +4,7 @@
   "close": "إغلاق",
   "dismiss": "إخفاء",
   "reasonPlaceholder": "مطلوب — يُحفظ في سجل التدقيق",
+  "reasonOptionalPlaceholder": "اختياري — يُحفظ في سجل التدقيق",
   "tryAgain": "حاول مرة أخرى",
   "requestId": "الطلب {{id}}",
   "unsaved": "غير محفوظ",

@@ -1,0 +1,369 @@
+import {
+  ageOn,
+  type BalanceMoney,
+  type PatientListItem,
+  type PatientListQuery,
+} from '@dcm/contracts';
+import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { SHIMMER } from '@/components/ui/list';
+import { formatMoney, formatPhone } from '@/lib/format';
+import { initials } from '@/lib/initials';
+import { cn } from '@/lib/utils';
+import type { SortableColumn } from './list-query';
+
+/** POC column widths: checkbox · Patient · Age·sex · Phone · Last visit · Dentist · Visits ·
+ * Balance · ⋯ (README §Patients, list anatomy 5). */
+const PATIENT_COLUMNS = '40px minmax(200px,1.6fr) 80px 128px 112px 118px 58px 92px 44px';
+export const PATIENT_TABLE_MIN_WIDTH = 940;
+
+const NONE = '—';
+
+function SortHeader({
+  column,
+  label,
+  query,
+  onSort,
+  end = false,
+}: {
+  column: SortableColumn;
+  label: string;
+  query: PatientListQuery;
+  onSort: (column: SortableColumn) => void;
+  end?: boolean;
+}) {
+  const active = query.sort === column;
+  return (
+    <span
+      role="columnheader"
+      aria-sort={active ? (query.dir === 'asc' ? 'ascending' : 'descending') : undefined}
+      className={cn('flex', end && 'justify-end')}
+    >
+      <button
+        type="button"
+        onClick={() => {
+          onSort(column);
+        }}
+        className={cn(
+          'flex cursor-pointer items-center gap-1 text-[11.5px] leading-none font-medium tracking-[0.05em] uppercase',
+          active ? 'text-primary' : 'text-ink-muted',
+        )}
+      >
+        <span>{label}</span>
+        {active && (
+          <span aria-hidden className="font-mono text-primary">
+            {query.dir === 'asc' ? '↑' : '↓'}
+          </span>
+        )}
+      </button>
+    </span>
+  );
+}
+
+function PlainHeader({ label, end = false }: { label: string; end?: boolean }) {
+  return (
+    <span
+      role="columnheader"
+      className={cn(
+        'text-[11.5px] leading-none font-medium tracking-[0.05em] text-ink-muted uppercase',
+        end && 'text-end',
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
+const checkboxClass = 'ms-0.5 size-[15px] cursor-pointer accent-primary';
+
+/** 40px header row with the page's select-all checkbox and the sortable column labels. Visits and
+ * Last visit are not sortable until visits exist (design Q14); Balance only with `payment:read`. */
+export function PatientsTableHead({
+  query,
+  onSort,
+  canSortBalance,
+  allSelected,
+  onToggleAll,
+  selectable,
+}: {
+  query: PatientListQuery;
+  onSort: (column: SortableColumn) => void;
+  canSortBalance: boolean;
+  allSelected: boolean;
+  onToggleAll: () => void;
+  selectable: boolean;
+}) {
+  const { t } = useTranslation('patients');
+  return (
+    <div
+      role="row"
+      className="grid h-10 items-center gap-2.5 border-b border-border bg-faint px-3"
+      style={{ gridTemplateColumns: PATIENT_COLUMNS }}
+    >
+      <span role="columnheader">
+        <input
+          type="checkbox"
+          aria-label={t('columns.selectAll')}
+          checked={allSelected}
+          disabled={!selectable}
+          onChange={onToggleAll}
+          className={checkboxClass}
+        />
+      </span>
+      <SortHeader column="name" label={t('columns.patient')} query={query} onSort={onSort} />
+      <SortHeader column="age" label={t('columns.age')} query={query} onSort={onSort} />
+      <PlainHeader label={t('columns.phone')} />
+      <PlainHeader label={t('columns.lastVisit')} />
+      <SortHeader column="dentist" label={t('columns.dentist')} query={query} onSort={onSort} />
+      <PlainHeader label={t('columns.visits')} end />
+      {canSortBalance ? (
+        <SortHeader
+          column="balance"
+          label={t('columns.balance')}
+          query={query}
+          onSort={onSort}
+          end
+        />
+      ) : (
+        <PlainHeader label={t('columns.balance')} end />
+      )}
+      <span role="columnheader" />
+    </div>
+  );
+}
+
+const SKELETON_NAME_WIDTHS = [180, 140, 200, 120, 160, 150, 190, 130];
+const bar = (width: string) => cn('h-2.5', SHIMMER, width);
+
+/** Loading rows shaped like the POC's: checkbox, avatar + name, then each column's typical width. */
+export function PatientsSkeleton({ label }: { label: string }) {
+  return (
+    <div aria-busy="true" aria-label={label}>
+      {SKELETON_NAME_WIDTHS.map((width) => (
+        <div
+          key={width}
+          className="grid h-14 items-center gap-2.5 border-t border-row-divider px-3"
+          style={{ gridTemplateColumns: PATIENT_COLUMNS }}
+        >
+          <span className="size-[15px] rounded-[3px] bg-subtle" />
+          <span className="flex items-center gap-2.5">
+            <span className={cn('size-7 rounded-full', SHIMMER)} />
+            <span className={cn('h-2.5', SHIMMER)} style={{ width }} />
+          </span>
+          <span className={bar('w-11')} />
+          <span className={bar('w-24')} />
+          <span className={bar('w-[78px]')} />
+          <span className={bar('w-[86px]')} />
+          <span className="h-2.5 w-5 rounded-sm bg-subtle" />
+          <span className="h-2.5 w-[52px] justify-self-end rounded-sm bg-subtle" />
+          <span />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const AVATAR_TONES = [
+  'bg-primary-tint text-primary',
+  'bg-[#f3eee2] text-warning',
+  'bg-success-bg text-success',
+  'bg-[#f6ebe9] text-[#8a3a2e]',
+  'bg-[#eeecf3] text-[#4f4870]',
+] as const;
+
+/** 28px round avatar; the POC picks its tone from the name's length. */
+function PatientAvatar({ name }: { name: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'grid size-7 flex-none place-items-center rounded-full text-[11.5px] leading-none font-semibold',
+        AVATAR_TONES[name.length % AVATAR_TONES.length],
+      )}
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
+const badge =
+  'h-[18px] flex-none rounded-[4px] border px-1.5 text-[11.5px] leading-4 font-medium whitespace-nowrap';
+
+/** The row's tenant-currency balance first (design Q13); another currency only when the tenant
+ * currency has none. */
+function leadingBalance(balances: readonly BalanceMoney[], currency: string) {
+  return (
+    balances.find((balance) => balance.currency === currency) ??
+    balances.find((balance) => Number(balance.amount) !== 0)
+  );
+}
+
+function BalanceCell({
+  balances,
+  currency,
+  locale,
+}: {
+  balances: readonly BalanceMoney[] | undefined;
+  currency: string;
+  locale: string;
+}) {
+  const lead = balances && leadingBalance(balances, currency);
+  const amount = lead ? Number(lead.amount) : 0;
+  const all = balances?.filter((balance) => Number(balance.amount) !== 0) ?? [];
+  return (
+    <span
+      role="cell"
+      title={all.length > 1 ? all.map((b) => formatMoney(b, locale)).join(' · ') : undefined}
+      className={cn(
+        'text-end font-mono text-[12.5px] leading-none tabular-nums',
+        amount > 0 ? 'font-semibold text-danger' : 'text-ink-muted',
+      )}
+    >
+      {lead && amount !== 0 ? formatMoney(lead, locale) : NONE}
+    </span>
+  );
+}
+
+export interface PatientRowContext {
+  /** Today in the tenant's time zone (`YYYY-MM-DD`). */
+  today: string;
+  country: string;
+  currency: string;
+  locale: string;
+  dentistNames: ReadonlyMap<string, string>;
+}
+
+export function PatientRow({
+  patient,
+  context,
+  balances,
+  selected,
+  highlighted,
+  onToggle,
+  onOpen,
+  menu,
+}: {
+  patient: PatientListItem;
+  context: PatientRowContext;
+  /** `undefined` while balances load, without `payment:read`, or with no ledger entries. */
+  balances: readonly BalanceMoney[] | undefined;
+  selected: boolean;
+  /** The row whose panel is open. */
+  highlighted: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+  menu: ReactNode;
+}) {
+  const { t } = useTranslation('patients');
+  const archived = patient.archivedAt !== null;
+  const age =
+    patient.dateOfBirth !== null && patient.dateOfBirth <= context.today
+      ? String(ageOn(patient.dateOfBirth, context.today))
+      : NONE;
+  const ageSex =
+    patient.sex === 'unknown' ? age : t('ageSex', { age, sex: t(`sex.${patient.sex}`) });
+  const [firstAlert] = patient.medicalAlerts;
+  const alertWord = firstAlert?.split(/[\s—(]/)[0] ?? '';
+  const alertBadge =
+    patient.medicalAlerts.length > 1
+      ? t('alertBadge', { alert: alertWord, more: patient.medicalAlerts.length - 1 })
+      : alertWord;
+  const dentist = patient.primaryDentistUserId
+    ? (context.dentistNames.get(patient.primaryDentistUserId) ?? NONE)
+    : NONE;
+
+  return (
+    <div
+      role="row"
+      aria-selected={selected}
+      onClick={onOpen}
+      className={cn(
+        'grid min-h-14 cursor-pointer items-center gap-2.5 border-t border-row-divider px-3 py-1.5 hover:bg-faint',
+        selected ? 'bg-selected' : highlighted ? 'bg-faint' : 'bg-surface',
+        archived && 'opacity-75',
+      )}
+      style={{ gridTemplateColumns: PATIENT_COLUMNS }}
+    >
+      <span
+        role="cell"
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        <input
+          type="checkbox"
+          aria-label={t('row.select', { name: patient.fullName })}
+          checked={selected}
+          onChange={onToggle}
+          className={checkboxClass}
+        />
+      </span>
+      <span role="cell" className="min-w-0">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onOpen();
+          }}
+          className="flex max-w-full min-w-0 cursor-pointer items-center gap-2.5 text-start"
+        >
+          <PatientAvatar name={patient.fullName} />
+          <span className="min-w-0">
+            <span className="flex items-center gap-1.5">
+              <span className="truncate text-[13px] leading-[1.3] font-medium">
+                {patient.fullName}
+              </span>
+              {firstAlert !== undefined && (
+                <span
+                  title={patient.medicalAlerts.join(', ')}
+                  className={cn(badge, 'border-danger-border bg-danger-bg text-danger')}
+                >
+                  {alertBadge}
+                </span>
+              )}
+              {archived && (
+                <span className={cn(badge, 'border-border bg-subtle text-ink-secondary')}>
+                  {t('archivedBadge')}
+                </span>
+              )}
+            </span>
+            <span className="block font-mono text-[11.5px] leading-[1.4] text-ink-muted">
+              <span dir="ltr">{patient.displayNumber}</span>
+            </span>
+          </span>
+        </button>
+      </span>
+      <span role="cell" className="text-[12.5px] leading-none text-ink-secondary">
+        {ageSex}
+      </span>
+      <span
+        role="cell"
+        className="font-mono text-[12.5px] leading-none whitespace-nowrap text-ink-secondary tabular-nums"
+      >
+        <span dir="ltr">{formatPhone(patient.phone, context.country)}</span>
+      </span>
+      <span role="cell" className="text-[12.5px] leading-[1.3] text-ink-secondary">
+        {NONE}
+      </span>
+      <span role="cell" className="truncate text-[12.5px] leading-[1.3] text-ink-secondary">
+        {dentist}
+      </span>
+      <span
+        role="cell"
+        className="text-end font-mono text-[12.5px] leading-none text-ink-secondary"
+      >
+        {NONE}
+      </span>
+      <BalanceCell balances={balances} currency={context.currency} locale={context.locale} />
+      <span
+        role="cell"
+        className="justify-self-end"
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        {menu}
+      </span>
+    </div>
+  );
+}

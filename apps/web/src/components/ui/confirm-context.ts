@@ -8,6 +8,8 @@ export interface ConfirmOptions {
   tone?: 'danger' | 'warn';
   /** When set, a reason (≥ 3 characters, saved to the audit trail) is required. */
   reasonLabel?: string;
+  /** With `reasonLabel`: the reason textarea is shown but may be left empty (e.g. archive). */
+  reasonOptional?: boolean;
   onConfirm: (reason: string) => void | Promise<void>;
 }
 

@@ -97,13 +97,28 @@ export function SearchInput({
   );
 }
 
-/** Table card: white, 10px radius, horizontally scrollable above `minWidth`. */
-export function TableCard({ children, minWidth }: { children: ReactNode; minWidth: number }) {
+/**
+ * Table card: white, 10px radius, horizontally scrollable above `minWidth`. `toolbar` (the bulk
+ * bar) and `footer` (the pager) sit inside the card but outside the scrolling area.
+ */
+export function TableCard({
+  children,
+  minWidth,
+  toolbar,
+  footer,
+}: {
+  children: ReactNode;
+  minWidth: number;
+  toolbar?: ReactNode;
+  footer?: ReactNode;
+}) {
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-surface">
+      {toolbar}
       <div className="overflow-x-auto">
         <div style={{ minWidth }}>{children}</div>
       </div>
+      {footer}
     </section>
   );
 }
@@ -129,7 +144,8 @@ export function TableHead({ columns, labels }: { columns: string; labels: ReactN
   );
 }
 
-const shimmer =
+/** The POC loading shimmer (README §System states), for skeletons shaped like their screen. */
+export const SHIMMER =
   'animate-shimmer rounded-sm bg-[linear-gradient(90deg,#f2f0ea_0,#faf8f4_50%,#f2f0ea_100%)] bg-[length:800px_100%]';
 
 /** Loading state: shimmer rows at the real column widths. */
@@ -151,7 +167,7 @@ export function SkeletonRows({
           style={{ gridTemplateColumns: columns }}
         >
           {columns.split(' ').map((_, cell) => (
-            <span key={cell} className={cn('h-2.5', shimmer, cell === 0 ? 'w-40' : 'w-14')} />
+            <span key={cell} className={cn('h-2.5', SHIMMER, cell === 0 ? 'w-40' : 'w-14')} />
           ))}
         </div>
       ))}

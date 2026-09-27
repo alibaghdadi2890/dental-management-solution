@@ -4,6 +4,7 @@
   "close": "Close",
   "dismiss": "Dismiss",
   "reasonPlaceholder": "Required — saved to the audit trail",
+  "reasonOptionalPlaceholder": "Optional — saved to the audit trail",
   "tryAgain": "Try again",
   "requestId": "Request {{id}}",
   "unsaved": "Unsaved",

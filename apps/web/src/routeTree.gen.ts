@@ -13,10 +13,10 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
-import { Route as AppPatientsRouteImport } from './routes/_app/patients'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppVisitsRouteImport } from './routes/_app/visits'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
+import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
 import { Route as AppAdminTenantsIndexRouteImport } from './routes/_app/admin/tenants/index'
 import { Route as AppAdminTenantsTenantIdRouteImport } from './routes/_app/admin/tenants/$tenantId'
 
@@ -39,11 +39,6 @@ const AppCatalogRoute = AppCatalogRouteImport.update({
   path: '/catalog',
   getParentRoute: () => AppRoute,
 } as any)
-const AppPatientsRoute = AppPatientsRouteImport.update({
-  id: '/patients',
-  path: '/patients',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -57,6 +52,11 @@ const AppVisitsRoute = AppVisitsRouteImport.update({
 const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPatientsIndexRoute = AppPatientsIndexRouteImport.update({
+  id: '/patients/',
+  path: '/patients/',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminTenantsIndexRoute = AppAdminTenantsIndexRouteImport.update({
@@ -74,21 +74,21 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/catalog': typeof AppCatalogRoute
-  '/patients': typeof AppPatientsRoute
   '/settings': typeof AppSettingsRoute
   '/visits': typeof AppVisitsRoute
   '/admin/': typeof AppAdminIndexRoute
+  '/patients/': typeof AppPatientsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/admin/tenants/': typeof AppAdminTenantsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/catalog': typeof AppCatalogRoute
-  '/patients': typeof AppPatientsRoute
   '/settings': typeof AppSettingsRoute
   '/visits': typeof AppVisitsRoute
   '/': typeof AppIndexRoute
   '/admin': typeof AppAdminIndexRoute
+  '/patients': typeof AppPatientsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/admin/tenants': typeof AppAdminTenantsIndexRoute
 }
@@ -97,11 +97,11 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/catalog': typeof AppCatalogRoute
-  '/_app/patients': typeof AppPatientsRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/visits': typeof AppVisitsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/admin/': typeof AppAdminIndexRoute
+  '/_app/patients/': typeof AppPatientsIndexRoute
   '/_app/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/_app/admin/tenants/': typeof AppAdminTenantsIndexRoute
 }
@@ -111,21 +111,21 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/catalog'
-    | '/patients'
     | '/settings'
     | '/visits'
     | '/admin/'
+    | '/patients/'
     | '/admin/tenants/$tenantId'
     | '/admin/tenants/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/catalog'
-    | '/patients'
     | '/settings'
     | '/visits'
     | '/'
     | '/admin'
+    | '/patients'
     | '/admin/tenants/$tenantId'
     | '/admin/tenants'
   id:
@@ -133,11 +133,11 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/catalog'
-    | '/_app/patients'
     | '/_app/settings'
     | '/_app/visits'
     | '/_app/'
     | '/_app/admin/'
+    | '/_app/patients/'
     | '/_app/admin/tenants/$tenantId'
     | '/_app/admin/tenants/'
   fileRoutesById: FileRoutesById
@@ -177,13 +177,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCatalogRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/patients': {
-      id: '/_app/patients'
-      path: '/patients'
-      fullPath: '/patients'
-      preLoaderRoute: typeof AppPatientsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
@@ -205,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/patients/': {
+      id: '/_app/patients/'
+      path: '/patients'
+      fullPath: '/patients/'
+      preLoaderRoute: typeof AppPatientsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/tenants/': {
       id: '/_app/admin/tenants/'
       path: '/admin/tenants'
@@ -224,22 +224,22 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppCatalogRoute: typeof AppCatalogRoute
-  AppPatientsRoute: typeof AppPatientsRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppVisitsRoute: typeof AppVisitsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
+  AppPatientsIndexRoute: typeof AppPatientsIndexRoute
   AppAdminTenantsTenantIdRoute: typeof AppAdminTenantsTenantIdRoute
   AppAdminTenantsIndexRoute: typeof AppAdminTenantsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppCatalogRoute: AppCatalogRoute,
-  AppPatientsRoute: AppPatientsRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppVisitsRoute: AppVisitsRoute,
   AppIndexRoute: AppIndexRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
+  AppPatientsIndexRoute: AppPatientsIndexRoute,
   AppAdminTenantsTenantIdRoute: AppAdminTenantsTenantIdRoute,
   AppAdminTenantsIndexRoute: AppAdminTenantsIndexRoute,
 }

@@ -3,9 +3,11 @@ import {
   activeFilterCount,
   clearFilters,
   LIST_QUERY_DEFAULTS,
+  listQueryOf,
   panelParam,
   parsePanel,
   parsePatientsSearch,
+  sortPatch,
   patientsSearchSchema,
   toSearch,
   withFilter,
@@ -199,5 +201,30 @@ describe('toSearch', () => {
 
   it('drops lastVisit "any" ("no filter") rather than putting it in the URL', () => {
     expect(toSearch({ ...LIST_QUERY_DEFAULTS, lastVisit: 'any' })).toEqual({});
+  });
+});
+
+describe('listQueryOf', () => {
+  it('drops the panel and create pre-fill fields, keeping the list query', () => {
+    const search = parsePatientsSearch({ view: 'archived', q: 'rana', panel: 'new', phone: '03' });
+    expect(listQueryOf(search)).toEqual({ ...LIST_QUERY_DEFAULTS, view: 'archived', q: 'rana' });
+    expect(toSearch(listQueryOf(search))).toEqual({ view: 'archived', q: 'rana' });
+  });
+});
+
+describe('sortPatch', () => {
+  it('flips the direction of the sorted column without leaving the page', () => {
+    const query = { ...LIST_QUERY_DEFAULTS, page: 3 };
+    expect(withFilter(query, sortPatch(query, 'name'))).toMatchObject({ dir: 'desc', page: 3 });
+  });
+
+  it('starts a new column at its natural direction on page 1', () => {
+    const query = { ...LIST_QUERY_DEFAULTS, page: 3 };
+    expect(withFilter(query, sortPatch(query, 'balance'))).toMatchObject({
+      sort: 'balance',
+      dir: 'desc',
+      page: 1,
+    });
+    expect(sortPatch(query, 'dentist')).toEqual({ sort: 'dentist', dir: 'asc' });
   });
 });
