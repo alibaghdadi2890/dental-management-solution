@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ageBand,
-  ageBandBounds,
-  ageOn,
-  dentitionStage,
-  isMinor,
   medicalAlertsSchema,
   patientArchiveSchema,
   patientInputSchema,
@@ -17,67 +12,6 @@ import {
 
 const ID_A = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
 const ID_B = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
-
-describe('ageOn', () => {
-  it('turns a year older the day before and on the birthday', () => {
-    expect(ageOn('2020-09-27', '2026-09-26')).toBe(5);
-    expect(ageOn('2020-09-27', '2026-09-27')).toBe(6);
-    expect(ageOn('2013-09-27', '2026-09-26')).toBe(12);
-    expect(ageOn('2013-09-27', '2026-09-27')).toBe(13);
-  });
-
-  it('turns a Feb-29 birthday a year older on Mar 1 in a non-leap year', () => {
-    expect(ageOn('2012-02-29', '2027-02-28')).toBe(14);
-    expect(ageOn('2012-02-29', '2027-03-01')).toBe(15);
-    expect(ageOn('2012-02-29', '2028-02-29')).toBe(16);
-  });
-});
-
-describe('dentitionStage', () => {
-  it('maps age to primary/mixed/permanent at the 5/6 and 12/13 boundaries', () => {
-    expect(dentitionStage(5)).toBe('primary');
-    expect(dentitionStage(6)).toBe('mixed');
-    expect(dentitionStage(12)).toBe('mixed');
-    expect(dentitionStage(13)).toBe('permanent');
-  });
-});
-
-describe('isMinor', () => {
-  it('is true the day before 18 and false exactly at 18', () => {
-    expect(isMinor('2008-09-28', '2026-09-27')).toBe(true);
-    expect(isMinor('2008-09-27', '2026-09-27')).toBe(false);
-  });
-});
-
-describe('ageBandBounds', () => {
-  const today = '2026-09-27';
-
-  it('is consistent with ageOn/ageBand around the 18 and 65 boundaries, incl. Feb 29', () => {
-    const dobs = [
-      '2008-09-26',
-      '2008-09-27',
-      '2008-09-28',
-      '1961-09-26',
-      '1961-09-27',
-      '1961-09-28',
-      '2004-02-29', // dob on a leap day; today is not Feb 29
-      '1961-02-28',
-      '1961-03-01',
-    ];
-    for (const dob of dobs) {
-      const age = ageOn(dob, today);
-      const band = ageBand(age);
-      const bounds = ageBandBounds(band, today);
-      if (bounds.after !== undefined) expect(dob > bounds.after).toBe(true);
-      if (bounds.onOrBefore !== undefined) expect(dob <= bounds.onOrBefore).toBe(true);
-    }
-  });
-
-  it('places a Feb-29 "today" boundary on Feb 28 of the non-leap threshold year', () => {
-    const bounds = ageBandBounds('child', '2028-02-29');
-    expect(bounds.after).toBe('2010-02-28');
-  });
-});
 
 describe('profileCompleteness', () => {
   it('is complete only when both email and address are present', () => {
@@ -94,6 +28,14 @@ describe('medicalAlertsSchema', () => {
       'Penicillin',
       'Latex',
     ]);
+  });
+
+  it('collapses NFC/NFD variants of the same alert (e.g. "Café")', () => {
+    const nfd = 'Café'; // "e" + combining acute accent (U+0301)
+    const nfc = 'Café'; // precomposed "é" (U+00E9)
+    expect(medicalAlertsSchema.parse([nfd, nfc])).toEqual(['Café']);
+    // The stored value is normalized to NFC even when it's the only occurrence.
+    expect(medicalAlertsSchema.parse([nfd])[0]).toBe('Café');
   });
 
   it('caps at 20 items and rejects an item over 60 characters', () => {
@@ -124,9 +66,24 @@ describe('patientInputSchema', () => {
     expect(parsed.medicalAlerts).toEqual([]);
   });
 
+  it('treats a blank, null or absent date of birth as null', () => {
+    expect(patientInputSchema.parse({ ...input, dateOfBirth: '' }).dateOfBirth).toBeNull();
+    expect(patientInputSchema.parse({ ...input, dateOfBirth: null }).dateOfBirth).toBeNull();
+    expect(patientInputSchema.parse(input).dateOfBirth).toBeNull();
+  });
+
   it('rejects a date of birth in the future', () => {
     expect(patientInputSchema.safeParse({ ...input, dateOfBirth: '2099-01-01' }).success).toBe(
       false,
+    );
+  });
+
+  it('rejects an implausible date of birth before 1900', () => {
+    expect(patientInputSchema.safeParse({ ...input, dateOfBirth: '1899-12-31' }).success).toBe(
+      false,
+    );
+    expect(patientInputSchema.safeParse({ ...input, dateOfBirth: '1900-01-01' }).success).toBe(
+      true,
     );
   });
 
@@ -149,6 +106,16 @@ describe('patientPatchSchema', () => {
     expect(parsed).not.toHaveProperty('sex');
     expect(parsed).not.toHaveProperty('medicalAlerts');
   });
+
+  it('clears the date of birth when explicitly patched to null, without touching other fields', () => {
+    const parsed = patientPatchSchema.parse({ dateOfBirth: null });
+    expect(parsed).toEqual({ dateOfBirth: null });
+  });
+
+  it('leaves the date of birth untouched when the key is absent', () => {
+    const parsed = patientPatchSchema.parse({ notes: 'Follow up' });
+    expect(parsed).not.toHaveProperty('dateOfBirth');
+  });
 });
 
 describe('patientListQuerySchema', () => {
@@ -166,6 +133,36 @@ describe('patientListQuerySchema', () => {
     expect(patientListQuerySchema.safeParse({ size: '30' }).success).toBe(false);
     expect(patientListQuerySchema.parse({ page: '2' }).page).toBe(2);
     expect(patientListQuerySchema.parse({ size: '50' }).size).toBe(50);
+  });
+
+  it('treats blank query params as absent rather than 400ing', () => {
+    const parsed = patientListQuerySchema.parse({
+      dentist: '',
+      age: '',
+      alerts: '',
+      lastVisit: '',
+      view: '',
+      sort: '',
+      dir: '',
+      page: '',
+      size: '',
+    });
+    expect(parsed).toMatchObject({
+      view: 'active',
+      sort: 'name',
+      dir: 'asc',
+      page: 1,
+      size: 25,
+    });
+    expect(parsed.dentist).toBeUndefined();
+    expect(parsed.age).toBeUndefined();
+    expect(parsed.alerts).toBeUndefined();
+    expect(parsed.lastVisit).toBeUndefined();
+  });
+
+  it('still rejects a non-blank, unsupported value', () => {
+    expect(patientListQuerySchema.safeParse({ view: 'bogus' }).success).toBe(false);
+    expect(patientListQuerySchema.safeParse({ age: 'toddler' }).success).toBe(false);
   });
 });
 

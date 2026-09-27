@@ -24,11 +24,23 @@ describe('normalizePhone', () => {
     expect(normalizePhone('12', 'LB')).toBeNull();
     expect(normalizePhone('abc', 'LB')).toBeNull();
   });
+
+  it('returns null for a number typed with an extension', () => {
+    expect(normalizePhone('03 123 456 ext. 12', 'LB')).toBeNull();
+  });
+
+  it('rejects a number that is not valid under the full metadata build (LB)', () => {
+    expect(normalizePhone('07682462', 'LB')).toBeNull();
+  });
 });
 
 describe('formatPhone', () => {
   it('formats a stored E.164 number for display', () => {
     expect(formatPhone('+9613123456')).toBe('+961 3 123 456');
+  });
+
+  it('returns the input unchanged when it cannot be parsed as a phone number at all', () => {
+    expect(formatPhone('not-a-phone')).toBe('not-a-phone');
   });
 });
 

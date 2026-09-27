@@ -1,13 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
+  blankToUndefined,
   countrySchema,
   cursorPageQuerySchema,
   cursorPageSchema,
   idSchema,
   localeSchema,
   moneySchema,
+  notFutureDateSchema,
   offsetPageSchema,
+  optionalDate,
   problemDetailsSchema,
   timeZoneSchema,
 } from './common.js';
@@ -104,12 +107,59 @@ describe('localeSchema', () => {
 });
 
 describe('countrySchema', () => {
-  it.each(['LB', 'FR'])('accepts %j', (country) => {
+  it.each(['LB', 'FR', 'GB'])('accepts %j', (country) => {
     expect(countrySchema.safeParse(country).success).toBe(true);
   });
 
-  it.each(['lb', 'LBN', ''])('rejects %j', (country) => {
+  it.each(['lb', 'LBN', '', 'UK', 'ZZ'])('rejects %j', (country) => {
     expect(countrySchema.safeParse(country).success).toBe(false);
+  });
+});
+
+describe('notFutureDateSchema', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('accepts one day of tolerance and rejects the day after that', () => {
+    const schema = notFutureDateSchema();
+    expect(schema.safeParse('2026-06-16').success).toBe(true);
+    expect(schema.safeParse('2026-06-17').success).toBe(false);
+  });
+});
+
+describe('optionalDate', () => {
+  it('treats blank, null and absent as null', () => {
+    const schema = z.object({ date: optionalDate() });
+    expect(schema.parse({ date: '' }).date).toBeNull();
+    expect(schema.parse({ date: null }).date).toBeNull();
+    expect(schema.parse({}).date).toBeNull();
+  });
+
+  it('validates a present date the same way notFutureDateSchema does', () => {
+    expect(optionalDate().safeParse('2099-01-01').success).toBe(false);
+    expect(optionalDate().safeParse('2020-01-01').success).toBe(true);
+    expect(optionalDate().safeParse('not-a-date').success).toBe(false);
+  });
+});
+
+describe('blankToUndefined', () => {
+  it('treats a blank string as absent, applying the wrapped default', () => {
+    const schema = blankToUndefined(z.coerce.number().int().min(1).default(1));
+    expect(schema.parse('')).toBe(1);
+    expect(schema.parse('5')).toBe(5);
+    expect(schema.parse(undefined)).toBe(1);
+  });
+
+  it('leaves a non-blank invalid value to fail the wrapped schema', () => {
+    const schema = blankToUndefined(z.enum(['a', 'b']).optional());
+    expect(schema.parse('')).toBeUndefined();
+    expect(schema.safeParse('c').success).toBe(false);
   });
 });
 

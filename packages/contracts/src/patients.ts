@@ -1,21 +1,23 @@
 import { z } from 'zod';
 import { emailSchema } from './auth.js';
 import {
+  blankToUndefined,
   idSchema,
   isoDateSchema,
   isoDateTimeSchema,
   nameSchema,
-  notFutureDateSchema,
   offsetPageSchema,
+  optionalDate,
   optionalText,
 } from './common.js';
 import { reasonSchema } from './audit.js';
+import { AGE_BANDS } from './patient-age.js';
 
 /**
- * `patients` (feature 3): patient records, the palette, the list and its filters, and the pure
- * age/dentition/merge helpers the list and record screens both need. No I/O, no time-zone math —
- * every date here is an ISO `YYYY-MM-DD` string and every "today" is passed in by the caller,
- * already resolved to the tenant's time zone (CLAUDE.md §5).
+ * `patients` (feature 3): patient records, the palette, the list and its filters, and merge.
+ * Calendar/age arithmetic lives in `patient-age.ts`. No I/O, no time-zone math here either — every
+ * date is an ISO `YYYY-MM-DD` string and every "today" is passed in by the caller, already
+ * resolved to the tenant's time zone (CLAUDE.md §5).
  */
 
 export const PATIENT_SEXES = ['female', 'male', 'other', 'unknown'] as const;
@@ -24,22 +26,30 @@ export type PatientSex = z.infer<typeof patientSexSchema>;
 
 const MEDICAL_ALERTS_MAX = 20;
 
-function dedupeCaseInsensitive(values: string[]): string[] {
+/**
+ * De-dupes case- and normalization-insensitively (NFKC folds compatibility forms — full-width,
+ * ligatures — as well as composed/decomposed accents; e.g. "Café" typed as `e` + combining acute
+ * (NFD) collapses with "Café" typed as the single precomposed `é` (NFC)), keeping the first
+ * occurrence. The stored value itself is only normalized to NFC (canonical composition) — the
+ * text isn't rewritten more than necessary to make it comparable.
+ */
+function dedupeAlerts(values: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of values) {
-    const key = value.toLowerCase();
+    const stored = value.normalize('NFC');
+    const key = stored.normalize('NFKC').toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    result.push(value);
+    result.push(stored);
   }
   return result;
 }
 
-/** Trimmed, 1–60 chars each, de-duplicated case-insensitively (first occurrence wins), max 20. */
+/** Trimmed, 1–60 chars each, de-duplicated (see `dedupeAlerts`, first occurrence wins), max 20. */
 export const medicalAlertsSchema = z
   .array(z.string().trim().min(1).max(60))
-  .transform(dedupeCaseInsensitive)
+  .transform(dedupeAlerts)
   .pipe(z.array(z.string()).max(MEDICAL_ALERTS_MAX));
 
 /** `P-` + at least 6 digits, zero-padded (`P-000001`), minted by the create transaction. */
@@ -55,6 +65,15 @@ const optionalEmailSchema = z
 
 const primaryDentistIdSchema = idSchema.nullish().transform((value) => value ?? null);
 
+/** No patient can plausibly have been born before this; also keeps display formatting sane. */
+const DATE_OF_BIRTH_FLOOR = '1900-01-01';
+
+/** Blank/`null`/absent → `null` (so `PATCH { dateOfBirth: null }` clears it); 1900–tomorrow. */
+const dateOfBirthSchema = optionalDate('Date of birth cannot be in the future').refine(
+  (date) => date === null || date >= DATE_OF_BIRTH_FLOOR,
+  'Date of birth is not plausible',
+);
+
 /**
  * The editable fields, without defaults — shared verbatim by `patientInputSchema` (create) and
  * `patientPatchSchema` (edit) so a `.partial()` on a defaulted field can never leak a default
@@ -65,7 +84,7 @@ const patientFields = {
   fullName: nameSchema,
   /** Raw text as typed; the server normalises it against the tenant's country (`phone.ts`). */
   phone: z.string().trim().min(1).max(40),
-  dateOfBirth: notFutureDateSchema().optional(),
+  dateOfBirth: dateOfBirthSchema,
   sex: patientSexSchema,
   email: optionalEmailSchema,
   address: optionalText(240),
@@ -150,25 +169,28 @@ const patientPageSizeSchema = z.union([
 ]);
 
 /**
- * Parsed from a URL query string. `view=owing` and `sort=balance` are only answered by the
- * `billing` route (`GET /billing/patients`); `GET /patients` rejects them with 400 (design Q5/Q7).
+ * Parsed from a URL query string, so a cleared filter (`?dentist=`) must behave like an absent
+ * one rather than a 400 — every field but `q` (already blank-tolerant) goes through
+ * `blankToUndefined`, wrapping the field's own default/optional (design Q6/Q7). `view=owing` and
+ * `sort=balance` are only answered by the `billing` route (`GET /billing/patients`); `GET
+ * /patients` rejects them with 400 (design Q5).
  */
 export const patientListQuerySchema = z.object({
-  view: patientViewSchema.default('active'),
+  view: blankToUndefined(patientViewSchema.default('active')),
   q: z
     .string()
     .trim()
     .max(100)
     .nullish()
     .transform((value) => (value ? value : undefined)),
-  dentist: z.union([idSchema, z.literal('none')]).optional(),
-  age: z.enum(['child', 'adult', 'senior']).optional(),
-  alerts: z.enum(['yes', 'no']).optional(),
-  lastVisit: z.enum(['any', 'never']).optional(),
-  sort: patientSortSchema.default('name'),
-  dir: z.enum(['asc', 'desc']).default('asc'),
-  page: z.coerce.number().int().min(1).default(1),
-  size: z.coerce.number().pipe(patientPageSizeSchema).default(25),
+  dentist: blankToUndefined(z.union([idSchema, z.literal('none')]).optional()),
+  age: blankToUndefined(z.enum(AGE_BANDS).optional()),
+  alerts: blankToUndefined(z.enum(['yes', 'no']).optional()),
+  lastVisit: blankToUndefined(z.enum(['any', 'never']).optional()),
+  sort: blankToUndefined(patientSortSchema.default('name')),
+  dir: blankToUndefined(z.enum(['asc', 'desc']).default('asc')),
+  page: blankToUndefined(z.coerce.number().int().min(1).default(1)),
+  size: blankToUndefined(z.coerce.number().pipe(patientPageSizeSchema).default(25)),
 });
 export type PatientListQuery = z.infer<typeof patientListQuerySchema>;
 
@@ -193,7 +215,7 @@ export const duplicateGroupsSchema = z.array(duplicateGroupSchema);
 export const duplicateCheckQuerySchema = z.object({
   fullName: nameSchema,
   dateOfBirth: isoDateSchema,
-  excludeId: idSchema.optional(),
+  excludeId: blankToUndefined(idSchema.optional()),
 });
 export type DuplicateCheckQuery = z.infer<typeof duplicateCheckQuerySchema>;
 
@@ -246,111 +268,6 @@ export const patientMergeSchema = z
     path: ['dropId'],
   });
 export type PatientMerge = z.infer<typeof patientMergeSchema>;
-
-// ---------------------------------------------------------------------------------------------
-// Pure helpers — no Date objects, no time zone: callers pass "today" already resolved to the
-// tenant's time zone as an ISO `YYYY-MM-DD` string (CLAUDE.md §5, §8).
-// ---------------------------------------------------------------------------------------------
-
-interface DateParts {
-  year: number;
-  month: number;
-  day: number;
-}
-
-function parseIsoDate(date: string): DateParts {
-  const [year, month, day] = date.split('-').map(Number);
-  return { year: year ?? 0, month: month ?? 0, day: day ?? 0 };
-}
-
-function pad(value: number, length: number): string {
-  return String(value).padStart(length, '0');
-}
-
-function formatIsoDate(parts: DateParts): string {
-  return `${pad(parts.year, 4)}-${pad(parts.month, 2)}-${pad(parts.day, 2)}`;
-}
-
-function isLeapYear(year: number): boolean {
-  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-}
-
-const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-
-function daysInMonth(year: number, month: number): number {
-  if (month === 2 && isLeapYear(year)) return 29;
-  return DAYS_IN_MONTH[month - 1] ?? 31;
-}
-
-/** Whole years from `dob` to `today`. A Feb-29 birthday turns a year older on Mar 1 (non-leap). */
-export function ageOn(dob: string, today: string): number {
-  const birth = parseIsoDate(dob);
-  const current = parseIsoDate(today);
-  let age = current.year - birth.year;
-  const hasHadBirthdayThisYear =
-    current.month > birth.month || (current.month === birth.month && current.day >= birth.day);
-  if (!hasHadBirthdayThisYear) age -= 1;
-  return age;
-}
-
-export const DENTITION_STAGES = ['primary', 'mixed', 'permanent'] as const;
-export type DentitionStage = (typeof DENTITION_STAGES)[number];
-
-/** `primary` 0–5, `mixed` 6–12, `permanent` 13+ (README §Patients age·sex column). */
-export function dentitionStage(age: number): DentitionStage {
-  if (age <= 5) return 'primary';
-  if (age <= 12) return 'mixed';
-  return 'permanent';
-}
-
-export function isMinor(dob: string, today: string): boolean {
-  return ageOn(dob, today) < 18;
-}
-
-const ADULT_AGE = 18;
-const SENIOR_AGE = 65;
-
-export const AGE_BANDS = ['child', 'adult', 'senior'] as const;
-export type AgeBand = (typeof AGE_BANDS)[number];
-
-export function ageBand(age: number): AgeBand {
-  if (age < ADULT_AGE) return 'child';
-  if (age < SENIOR_AGE) return 'adult';
-  return 'senior';
-}
-
-/** Subtracts whole years, clamping Feb 29 to Feb 28 when the target year is not a leap year. */
-function subtractYears(parts: DateParts, years: number): DateParts {
-  const year = parts.year - years;
-  const day = Math.min(parts.day, daysInMonth(year, parts.month));
-  return { year, month: parts.month, day };
-}
-
-export interface AgeBandBounds {
-  /** Dob must be strictly after this date (exclusive lower age bound). */
-  after?: string;
-  /** Dob must be on or before this date (inclusive upper age bound). */
-  onOrBefore?: string;
-}
-
-/**
- * The date-of-birth range such that `dob` falls in it iff `ageOn(dob, today)` falls in `band`
- * (design: "child: after = today−18y; adult: onOrBefore = today−18y, after = today−65y; senior:
- * onOrBefore = today−65y"). Consistent with `ageOn` at the Feb-29 boundary by construction.
- */
-export function ageBandBounds(band: AgeBand, today: string): AgeBandBounds {
-  const parts = parseIsoDate(today);
-  const adultThreshold = formatIsoDate(subtractYears(parts, ADULT_AGE));
-  const seniorThreshold = formatIsoDate(subtractYears(parts, SENIOR_AGE));
-  switch (band) {
-    case 'child':
-      return { after: adultThreshold };
-    case 'adult':
-      return { onOrBefore: adultThreshold, after: seniorThreshold };
-    case 'senior':
-      return { onOrBefore: seniorThreshold };
-  }
-}
 
 /** `complete` only when both email and address are recorded (README §Patient information). */
 export function profileCompleteness(patient: {

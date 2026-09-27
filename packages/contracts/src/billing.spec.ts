@@ -73,8 +73,17 @@ describe('balancesQuerySchema', () => {
     ]);
   });
 
+  it('de-duplicates repeated ids in the list', () => {
+    expect(balancesQuerySchema.parse({ patientIds: `${ID_A},${ID_B},${ID_A}` }).patientIds).toEqual(
+      [ID_A, ID_B],
+    );
+  });
+
   it('rejects more than 100 ids and non-uuid entries', () => {
-    const many = Array.from({ length: 101 }, () => ID_A).join(',');
+    const many = Array.from(
+      { length: 101 },
+      (_, i) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5${String(i).padStart(3, '0')}`,
+    ).join(',');
     expect(balancesQuerySchema.safeParse({ patientIds: many }).success).toBe(false);
     expect(balancesQuerySchema.safeParse({ patientIds: 'not-a-uuid' }).success).toBe(false);
   });
@@ -86,6 +95,15 @@ describe('patientExportQuerySchema', () => {
     expect(parsed.ids).toEqual([ID_A, ID_B]);
     expect(parsed).not.toHaveProperty('page');
     expect(parsed).not.toHaveProperty('size');
+  });
+
+  it('de-duplicates repeated ids and caps the filter at 100 (not 1000)', () => {
+    expect(patientExportQuerySchema.parse({ ids: `${ID_A},${ID_A}` }).ids).toEqual([ID_A]);
+    const many = Array.from(
+      { length: 101 },
+      (_, i) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5${String(i).padStart(3, '0')}`,
+    ).join(',');
+    expect(patientExportQuerySchema.safeParse({ ids: many }).success).toBe(false);
   });
 
   it('works without ids, keeping the list query filters', () => {

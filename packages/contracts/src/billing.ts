@@ -56,33 +56,34 @@ export type PatientBalance = z.infer<typeof patientBalanceSchema>;
 
 export const patientBalancesSchema = z.array(patientBalanceSchema);
 
-const MAX_BALANCE_QUERY_IDS = 100;
+/** Shared by `balancesQuerySchema.patientIds` and `patientExportQuerySchema.ids`. */
+const MAX_COMMA_SEPARATED_IDS = 100;
 
+/** Splits a comma-separated id list, trims each, drops empties and de-dupes (order preserved). */
 function commaSeparatedIds(max: number) {
   return z
     .string()
     .min(1)
-    .transform((value) =>
-      value
+    .transform((value) => {
+      const ids = value
         .split(',')
         .map((id) => id.trim())
-        .filter((id) => id.length > 0),
-    )
+        .filter((id) => id.length > 0);
+      return Array.from(new Set(ids));
+    })
     .pipe(z.array(idSchema).min(1).max(max));
 }
 
 export const balancesQuerySchema = z.object({
-  patientIds: commaSeparatedIds(MAX_BALANCE_QUERY_IDS),
+  patientIds: commaSeparatedIds(MAX_COMMA_SEPARATED_IDS),
 });
 export type BalancesQuery = z.infer<typeof balancesQuerySchema>;
-
-const MAX_EXPORT_IDS = 1000;
 
 /** `GET /billing/patients/export`: the list query (paging dropped) plus an optional id filter. */
 export const patientExportQuerySchema = patientListQuerySchema
   .omit({ page: true, size: true })
   .extend({
-    ids: commaSeparatedIds(MAX_EXPORT_IDS).optional(),
+    ids: commaSeparatedIds(MAX_COMMA_SEPARATED_IDS).optional(),
   });
 export type PatientExportQuery = z.infer<typeof patientExportQuerySchema>;
 

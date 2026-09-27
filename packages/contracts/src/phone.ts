@@ -1,9 +1,12 @@
-import { parsePhoneNumberFromString } from 'libphonenumber-js/min';
-import type { CountryCode } from 'libphonenumber-js/min';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
+import type { CountryCode } from 'libphonenumber-js/max';
 
 /**
- * Phone parsing for `patients` (feature 3 Q3). Built on `libphonenumber-js/min`, the trimmed
- * metadata build — country dialling plans and validity, no carrier/geocoding data. Pure; no I/O.
+ * Phone parsing for `patients` (feature 3 Q3) — used for both the patient's own `phone` and
+ * `guardianPhone`, which share this exact function so a fix here (e.g. rejecting extensions)
+ * applies to both without a separate code path. Built on `libphonenumber-js/max`, the full
+ * metadata build: validity (not just "looks like a number") matters here because balances,
+ * reminders and SMS/WhatsApp delivery (feature 6+) depend on a dialable number. Pure; no I/O.
  */
 
 export interface NormalizedPhone {
@@ -16,11 +19,12 @@ export interface NormalizedPhone {
 /**
  * Parses a phone number as typed against the tenant's country. A leading `+` is honoured as
  * typed (an international number for a different country). Returns `null` when the number is
- * not a valid number for the country it resolves to.
+ * not a valid number for the country it resolves to, or when it carries an extension (an
+ * extension isn't part of a dialable E.164 number and the create/edit form has no field for it).
  */
 export function normalizePhone(input: string, country: CountryCode): NormalizedPhone | null {
   const phoneNumber = parsePhoneNumberFromString(input, country);
-  if (!phoneNumber || !phoneNumber.isValid()) return null;
+  if (!phoneNumber || !phoneNumber.isValid() || phoneNumber.ext) return null;
   return {
     e164: phoneNumber.number,
     national: phoneDigits(phoneNumber.formatNational()),

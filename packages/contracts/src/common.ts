@@ -1,3 +1,5 @@
+import { isSupportedCountry } from 'libphonenumber-js/max';
+import type { CountryCode } from 'libphonenumber-js/max';
 import { z } from 'zod';
 
 export const idSchema = z.uuid();
@@ -23,10 +25,41 @@ export function notFutureDateSchema(message = 'Date cannot be in the future') {
   }, message);
 }
 
-/** ISO 3166-1 alpha-2 country code, upper-case (tenant country, ADR pending — feature 3 Q3). */
+/**
+ * An optional ISO date: blank, `null` or absent → `null` (mirrors `optionalText`); a present
+ * value is validated by `notFutureDateSchema`. Callers that need a different floor/ceiling (e.g.
+ * a date of birth's 1900 floor) `.refine()` the result further.
+ */
+export function optionalDate(message?: string) {
+  return z
+    .string()
+    .trim()
+    .nullish()
+    .transform((value) => (value ? value : null))
+    .pipe(z.union([z.null(), notFutureDateSchema(message)]));
+}
+
+/**
+ * ISO 3166-1 alpha-2 country code, upper-case, and one `libphonenumber-js` actually has dialling
+ * data for — its output type is the library's own `CountryCode`, so `normalizePhone` can take it
+ * directly with no cast (tenant country, ADR pending — feature 3 Q3).
+ */
 export const countrySchema = z
   .string()
-  .regex(/^[A-Z]{2}$/, 'Expected an ISO 3166-1 alpha-2 country code');
+  .regex(/^[A-Z]{2}$/, 'Expected an ISO 3166-1 alpha-2 country code')
+  .refine((value): value is CountryCode => isSupportedCountry(value), 'Unsupported country code');
+
+/**
+ * Treats a blank query-string value (`?dentist=`) the same as an absent one, so URL search params
+ * that a client cleared don't fail validation. Wrap the field's whole schema, `.default()`/
+ * `.optional()` included, so the wrapped schema still sees a clean "absent" input (design Q6).
+ */
+export function blankToUndefined<TSchema extends z.ZodType>(schema: TSchema) {
+  return z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    schema,
+  );
+}
 
 function isKnownTimeZone(value: string): boolean {
   try {

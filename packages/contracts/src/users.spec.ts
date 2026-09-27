@@ -7,7 +7,8 @@ import {
   staffUserStatusChangeSchema,
 } from './users.js';
 
-const BRANCH = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
+const BRANCH_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
+const USER_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
 
 describe('staffUserCreateSchema', () => {
   const input = {
@@ -15,7 +16,7 @@ describe('staffUserCreateSchema', () => {
     email: 'Ana@Northgate.Dental',
     practitionerType: 'dentist',
     roleKeys: ['dentist'],
-    branchIds: [BRANCH],
+    branchIds: [BRANCH_ID],
     temporaryPassword: 'temporary-pw-1',
   };
 
@@ -58,7 +59,7 @@ describe('staffUserPatchSchema', () => {
 
 describe('practitionerSchema', () => {
   it('accepts a nullable title', () => {
-    const practitioner = { userId: BRANCH, displayName: 'Dr. Ana Reyes', title: null };
+    const practitioner = { userId: USER_ID, displayName: 'Dr. Ana Reyes', title: null };
     expect(practitionerSchema.parse(practitioner)).toEqual(practitioner);
     expect(practitionerSchema.parse({ ...practitioner, title: 'Orthodontist' }).title).toBe(
       'Orthodontist',

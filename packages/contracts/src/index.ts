@@ -3,6 +3,7 @@ export * from './auth.js';
 export * from './billing.js';
 export * from './catalog.js';
 export * from './common.js';
+export * from './patient-age.js';
 export * from './patients.js';
 export * from './permissions.js';
 export * from './phone.js';
