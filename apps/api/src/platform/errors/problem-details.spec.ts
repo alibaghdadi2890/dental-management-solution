@@ -2,6 +2,7 @@ import { ForbiddenException, NotFoundException, ServiceUnavailableException } fr
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { DomainError } from '../kernel/domain-error';
+import { ValidationFailedError } from '../kernel/validation-failed.error';
 import { toProblemDetails } from './problem-details';
 
 class VisitAlreadyCompleted extends DomainError {
@@ -63,6 +64,23 @@ describe('problem extension members', () => {
       status: 401,
       code: 'auth.account_locked',
       lockedUntil: '2026-09-26T10:15:00.000Z',
+    });
+  });
+});
+
+describe('row-level validation failures from the domain', () => {
+  it('are 422 validation_failed with their issues as errors', () => {
+    const issue = { path: 'items.1.code', code: 'duplicate', message: 'Code EXT is already used' };
+    expect(
+      toProblemDetails(new ValidationFailedError('1 row is invalid', [issue]), 'req-1'),
+    ).toEqual({
+      type: 'urn:dcm:problem:validation_failed',
+      title: 'Validation failed',
+      status: 422,
+      code: 'validation_failed',
+      detail: '1 row is invalid',
+      requestId: 'req-1',
+      errors: [issue],
     });
   });
 });

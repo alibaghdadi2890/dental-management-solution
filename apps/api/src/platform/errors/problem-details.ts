@@ -2,6 +2,7 @@ import type { ProblemDetails } from '@dcm/contracts';
 import { HttpException } from '@nestjs/common';
 import { ZodValidationException } from 'nestjs-zod';
 import { DomainError, type DomainErrorKind } from '../kernel/domain-error';
+import { ValidationFailedError } from '../kernel/validation-failed.error';
 
 const STATUS_BY_KIND: Record<DomainErrorKind, number> = {
   invalid: 422,
@@ -87,6 +88,13 @@ function validationProblem(error: { issues: ZodIssueLike[] }, requestId?: string
  * their message: it may contain SQL, stack details or PII.
  */
 export function toProblemDetails(error: unknown, requestId?: string): ProblemDetails {
+  if (error instanceof ValidationFailedError) {
+    return {
+      ...problem(STATUS_BY_KIND[error.kind], error.code, requestId, error.message),
+      title: 'Validation failed',
+      errors: [...error.issues],
+    };
+  }
   if (error instanceof DomainError) {
     return {
       ...error.extensions,
