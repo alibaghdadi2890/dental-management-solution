@@ -24,6 +24,12 @@ describe('permission catalog', () => {
 });
 
 describe('phase 1 catalog', () => {
+  it('names the service and diagnosis catalog permissions catalog:*, not procedure:*', () => {
+    expect(isPermission('catalog:read')).toBe(true);
+    expect(isPermission('catalog:write')).toBe(true);
+    expect(PERMISSIONS.filter((permission) => permission.startsWith('procedure:'))).toEqual([]);
+  });
+
   it('includes the visit and payment permissions later features enforce', () => {
     for (const permission of [
       'visit:void',

@@ -18,14 +18,16 @@ there is no UI or API to create them yet. Permissions come from the catalog in `
 | `visit:read`                            | ✓     | ✓       | ✓         | ✓         |
 | `visit:write`                           | ✓     | ✓       | ✓         | –         |
 | `visit:void`, `visit:amend`             | ✓     | ✓       | –         | –         |
-| `procedure:read`                        | ✓     | ✓       | ✓         | ✓         |
-| `procedure:write`, `import:run`         | ✓     | –       | –         | –         |
+| `catalog:read`                          | ✓     | ✓       | ✓         | ✓         |
+| `catalog:write`, `import:run`           | ✓     | –       | –         | –         |
 | `payment:read`                          | ✓     | ✓       | ✓         | ✓         |
 | `payment:write`                         | ✓     | ✓       | –         | ✓         |
 | `payment:refund`, `audit:read`          | ✓     | ✓       | –         | –         |
 
 `platform:admin` is never granted by a role (platform admins are decided by rule, ADR-0008). The
-matrix is the pure constant `domain/system-roles.ts`; a unit test pins it per role.
+matrix is the pure constant `domain/system-roles.ts`; a unit test pins it per role. Renaming a
+permission ships a migration that rewrites stored grants (`0006_catalog_permissions`:
+`procedure:*` → `catalog:*`).
 
 ## Owns
 

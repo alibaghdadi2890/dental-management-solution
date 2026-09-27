@@ -13,9 +13,9 @@ export const MAIN_NAV = [
   { key: 'visits', to: '/visits', permission: 'visit:read' },
 ] as const satisfies readonly NavEntry<string, string>[];
 
-/** Front desk reads the catalog in the visit workspace but does not manage it. */
+/** Every clinic role reads the catalog; only `catalog:write` edits it (read-only screen otherwise). */
 export const ADMIN_NAV = [
-  { key: 'catalog', to: '/catalog', permission: 'procedure:write' },
+  { key: 'catalog', to: '/catalog', permission: 'catalog:read' },
   { key: 'settings', to: '/settings', permission: 'tenant:write' },
 ] as const satisfies readonly NavEntry<string, string>[];
 

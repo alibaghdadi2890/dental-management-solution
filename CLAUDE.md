@@ -184,7 +184,9 @@ Rules:
 - Every mutation in an application service re-checks permission (the controller check is not the
   last line of defense; agent tools and jobs call services too).
 - Permission strings are the shared vocabulary between backend, frontend (to hide UI), and agent
-  tools. Never invent one inline; add it to the catalog.
+  tools. Never invent one inline; add it to the catalog. Renaming one ships a migration that
+  rewrites stored grants (unknown text grants nothing) — e.g. `procedure:read`/`procedure:write`
+  became `catalog:read`/`catalog:write`, covering the service and diagnosis catalogs (feature 2).
 - SPA and API sit under one domain (cookie sessions). If that changes, use the better-auth bearer
   plugin — never a hand-rolled JWT.
 

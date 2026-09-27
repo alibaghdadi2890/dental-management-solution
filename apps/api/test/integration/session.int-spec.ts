@@ -23,7 +23,7 @@ const FRONTDESK = [
   'patient:read',
   'patient:write',
   'visit:read',
-  'procedure:read',
+  'catalog:read',
   'payment:read',
   'payment:write',
 ];

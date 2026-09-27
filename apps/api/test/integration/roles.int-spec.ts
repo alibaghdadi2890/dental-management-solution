@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { AuditPage, Role, Tenant } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -112,5 +114,36 @@ describe('roles: system roles, assignments and permission lookup', () => {
     const other = await createBareTenant(testApp.app, 'Other Clinic');
     const listed = (await admin.get('/api/v1/roles').set('X-Tenant-Id', other.id)).body as Role[];
     expect(listed).toEqual([]);
+  });
+
+  it('renames stored procedure:* grants to catalog:* (migration 0006)', async () => {
+    const owner = (await inTenant((service) => service.listRoles())).find(
+      (role) => role.key === 'owner',
+    );
+    if (!owner) throw new Error('owner role missing');
+    // A tenant provisioned before the rename holds the old permission text.
+    await database.ownerPool.query(
+      "delete from role_permissions where role_id = $1 and permission like 'catalog:%'",
+      [owner.id],
+    );
+    await database.ownerPool.query(
+      `insert into role_permissions (tenant_id, role_id, permission)
+       values ($1, $2, 'procedure:read'), ($1, $2, 'procedure:write')`,
+      [tenant.id, owner.id],
+    );
+
+    await database.ownerPool.query(
+      readFileSync(resolve(__dirname, '../../migrations/0006_catalog_permissions.sql'), 'utf8'),
+    );
+
+    const permissions = (await inTenant((service) => service.listRoles())).find(
+      (role) => role.key === 'owner',
+    )?.permissions;
+    expect(permissions).toEqual(expect.arrayContaining(['catalog:read', 'catalog:write']));
+    expect(
+      await rowCount(
+        "select count(*) as n from role_permissions where tenant_id = $1 and permission like 'procedure:%'",
+      ),
+    ).toBe(0);
   });
 });

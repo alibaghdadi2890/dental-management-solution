@@ -23,20 +23,20 @@ const base: Session = {
 const keys = (items: { key: string }[]) => items.map((item) => item.key);
 
 describe('visibleNav', () => {
-  it('shows front desk Patients and Visits only (D5)', () => {
+  it('shows front desk Patients, Visits and the read-only Catalog (D5)', () => {
     const nav = visibleNav({
       ...base,
-      permissions: ['patient:read', 'visit:read', 'procedure:read', 'tenant:read'],
+      permissions: ['patient:read', 'visit:read', 'catalog:read', 'tenant:read'],
     });
     expect(keys(nav.main)).toEqual(['patients', 'visits']);
-    expect(nav.admin).toEqual([]);
+    expect(keys(nav.admin)).toEqual(['catalog']);
     expect(nav.platform).toEqual([]);
   });
 
   it('shows Catalog and Settings to the owner', () => {
     const nav = visibleNav({
       ...base,
-      permissions: ['patient:read', 'visit:read', 'procedure:write', 'tenant:write'],
+      permissions: ['patient:read', 'visit:read', 'catalog:read', 'catalog:write', 'tenant:write'],
     });
     expect(keys(nav.admin)).toEqual(['catalog', 'settings']);
   });

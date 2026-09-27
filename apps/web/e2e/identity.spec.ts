@@ -89,6 +89,7 @@ test('platform admin provisions a clinic and a user, who then signs in to the cl
   await expect(page.getByText('Clinic · Main St')).toBeVisible();
   await expect(page.getByText(frontDesk.name)).toBeVisible();
   await expect(page.getByRole('link', { name: 'Patients' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Catalog' })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Settings' })).toBeHidden();
   await expect(page.getByText('Managing')).toBeHidden();
 });

@@ -25,4 +25,5 @@ patients, users
 
 ## Permissions
 
-`visit:read`, `visit:write`, `procedure:read`, `procedure:write`.
+`visit:read`, `visit:write`, `catalog:read` (every clinic role), `catalog:write` (owner). The
+catalog permissions cover both the service and the diagnosis catalog.
