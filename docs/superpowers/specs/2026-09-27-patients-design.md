@@ -94,7 +94,7 @@ Entries are never edited or deleted; the merge worker is the only writer that up
 
 - `common.ts`: `countrySchema` (ISO alpha-2); `offsetPageSchema(item)` `{ items, total, page, size }`.
 - `phone.ts`: `normalizePhone(input, country) → { e164, national } | null`, `formatPhone(e164)`,
-  `phoneDigits(query)`; built on `libphonenumber-js/min`.
+  `phoneDigits(query)`; built on `libphonenumber-js/max` (full metadata, about 40 KB gzipped in the SPA: `/min` accepted about 6% of invalid numbers, and reminders need valid ones). Numbers with an extension are rejected.
 - `patients.ts`:
   - `patientSexSchema`; `medicalAlertsSchema`; `displayNumberSchema` (`^P-\d{6,}$`).
   - `patientInputSchema` `{ fullName, phone, dateOfBirth?, sex?, email?, address?, insurance?,
