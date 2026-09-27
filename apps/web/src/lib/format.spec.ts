@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   currencySymbol,
   dateInputOrder,
+  type DateFormatOptions,
   formatAgeLine,
+  formatCalendarDate,
   formatDate,
   formatDateTime,
   formatMoney,
+  formatPhone,
   todayIn,
 } from './format';
 
@@ -70,15 +73,22 @@ describe('todayIn', () => {
   });
 });
 
-describe('formatAgeLine', () => {
-  const options = { timeZone: 'UTC', locale: 'en' };
+describe('formatCalendarDate', () => {
+  it('never shifts a date-only value across a timezone boundary', () => {
+    // A naive `formatDate(iso, { timeZone: 'America/New_York', locale: 'en' })` would read this
+    // UTC-midnight instant back as 31 Dec 1999 in New York (UTC-5) — a calendar date has no
+    // instant to convert, so this must always read the literal calendar date back.
+    expect(formatCalendarDate('2000-01-01', 'en')).toBe('1 Jan 2000');
+  });
+});
 
+describe('formatAgeLine', () => {
   it('is unknown with no date of birth', () => {
-    expect(formatAgeLine(null, '2026-09-27', options)).toEqual({ kind: 'unknown' });
+    expect(formatAgeLine(null, '2026-09-27', { locale: 'en' })).toEqual({ kind: 'unknown' });
   });
 
   it('gives the whole-years age and the formatted date of birth', () => {
-    expect(formatAgeLine('2019-01-15', '2026-09-27', options)).toEqual({
+    expect(formatAgeLine('2019-01-15', '2026-09-27', { locale: 'en' })).toEqual({
       kind: 'full',
       age: 7,
       dob: '15 Jan 2019',
@@ -86,19 +96,46 @@ describe('formatAgeLine', () => {
   });
 
   it('shows only the date when it is somehow after today', () => {
-    expect(formatAgeLine('2027-01-01', '2026-09-27', options)).toEqual({
+    expect(formatAgeLine('2027-01-01', '2026-09-27', { locale: 'en' })).toEqual({
       kind: 'dobOnly',
       dob: '1 Jan 2027',
     });
   });
+
+  it('does not shift the date of birth when the tenant timezone is passed alongside locale', () => {
+    // formatAgeLine only needs `locale`, but callers may still pass a full DateFormatOptions
+    // (with a `timeZone`) — that timezone must never leak into the (timezone-less) dob format.
+    const tenantOptions: DateFormatOptions = { timeZone: 'America/New_York', locale: 'en' };
+    expect(formatAgeLine('2000-01-01', '2026-09-27', tenantOptions)).toEqual({
+      kind: 'full',
+      age: 26,
+      dob: '1 Jan 2000',
+    });
+  });
+});
+
+describe('formatPhone', () => {
+  it('formats a stored E.164 number for the tenant', () => {
+    expect(formatPhone('+9613123456', 'LB')).toBe('03 123 456');
+  });
 });
 
 describe('dateInputOrder', () => {
-  it('is DMY for en-LB', () => {
-    expect(dateInputOrder('en', 'LB')).toBe('DMY');
+  it('is DMY for Lebanon (the platform default)', () => {
+    expect(dateInputOrder('LB')).toBe('DMY');
   });
 
-  it('is MDY for en-US', () => {
-    expect(dateInputOrder('en', 'US')).toBe('MDY');
+  it('is MDY for the tabled MDY countries', () => {
+    expect(dateInputOrder('US')).toBe('MDY');
+    expect(dateInputOrder('PH')).toBe('MDY');
+  });
+
+  it('is YMD for the tabled YMD countries', () => {
+    expect(dateInputOrder('JP')).toBe('YMD');
+    expect(dateInputOrder('CN')).toBe('YMD');
+  });
+
+  it('is case-insensitive', () => {
+    expect(dateInputOrder('us')).toBe('MDY');
   });
 });

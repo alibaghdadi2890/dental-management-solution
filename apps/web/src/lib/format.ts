@@ -1,4 +1,4 @@
-import { ageOn, type Money } from '@dcm/contracts';
+import { ageOn, formatPhoneFor, type Money } from '@dcm/contracts';
 
 /**
  * The one shared formatter for dates and money (CLAUDE.md §13). Dates always render in the
@@ -83,11 +83,22 @@ export function todayIn(timeZone: string, now: Date = new Date()): string {
   return `${part(parts, 'year')}-${part(parts, 'month')}-${part(parts, 'day')}`;
 }
 
+/** Formats a date-*only* value (`YYYY-MM-DD`, no time component: a date of birth, an opening
+ * balance's "as of" date) by always reading it back with `timeZone: 'UTC'`. A calendar date has
+ * no instant to convert — formatting it through the tenant's own timezone (as `formatDate` does
+ * for a real timestamp) can shift it a day either way once that timezone's offset crosses
+ * midnight relative to UTC (e.g. `America/New_York` would show `1999-12-31` for the timestamp
+ * `2000-01-01T00:00:00Z`). */
+export function formatCalendarDate(iso: string, locale: string): string {
+  return formatDate(iso, { timeZone: 'UTC', locale });
+}
+
 /**
  * The record header / quick-view age line (design "`<age> yrs · <dob>`, the DOB alone, or 'Age
  * not recorded'"), as structured data — the surrounding text ("yrs", the "·" separator, "Age not
- * recorded") is an i18n concern, not this module's. `dob` is formatted with `formatDate`, the one
- * shared formatter (CLAUDE.md §13), so it always reads in the tenant's own timezone and locale.
+ * recorded") is an i18n concern, not this module's. `dob` is formatted with `formatCalendarDate`
+ * (not `formatDate`): it's a calendar date, not an instant, so it must never shift with the
+ * tenant's timezone the way `options.timeZone` would otherwise apply to a real timestamp.
  *
  * - No `dob` at all → `unknown` ("Age not recorded").
  * - A `dob` that is on or before `today` → `full`, with the whole-years age from `ageOn`.
@@ -102,50 +113,42 @@ export type AgeLine =
 export function formatAgeLine(
   dob: string | null,
   today: string,
-  options: DateFormatOptions,
+  options: Pick<DateFormatOptions, 'locale'>,
 ): AgeLine {
   if (!dob) return { kind: 'unknown' };
-  const formattedDob = formatDate(dob, options);
+  const formattedDob = formatCalendarDate(dob, options.locale);
   const age = ageOn(dob, today);
   return age < 0
     ? { kind: 'dobOnly', dob: formattedDob }
     : { kind: 'full', age, dob: formattedDob };
 }
 
+/** The stored E.164 number, formatted for display: national format for the tenant's own country,
+ * international format otherwise (wraps the contracts' pure `formatPhoneFor` so call sites reach
+ * for the one shared formatter, CLAUDE.md §13, instead of hand-rolling phone display). */
+export function formatPhone(e164: string, country: string): string {
+  return formatPhoneFor(e164, country as Parameters<typeof formatPhoneFor>[1]);
+}
+
 export type DateInputOrder = 'DMY' | 'MDY' | 'YMD';
 
-const DATE_PART_LETTERS: Partial<Record<Intl.DateTimeFormatPartTypes, 'D' | 'M' | 'Y'>> = {
-  day: 'D',
-  month: 'M',
-  year: 'Y',
-};
+/** Countries whose everyday convention is month/day/year. */
+const MDY_COUNTRIES = new Set(['US', 'PH', 'FM', 'MH', 'PW', 'AS', 'GU', 'MP', 'PR', 'UM', 'VI']);
+/** Countries whose everyday convention is year/month/day. */
+const YMD_COUNTRIES = new Set(['CN', 'JP', 'KR', 'KP', 'TW', 'HU', 'MN', 'LT', 'IR']);
 
 /**
- * The day/month/year input order a tenant expects (design Q17: `en-LB` → DMY, `en-US` → MDY),
- * read from `Intl` for `${locale}-${country}` rather than hard-coded per country.
- *
- * Some language/region pairings have no distinct CLDR locale at all — this runtime's ICU data
- * resolves `en-LB` (and `fr-LB`) to the bare language's own default (`en`'s is US order) rather
- * than anything Lebanon-specific, silently dropping the region we asked for. `resolvedOptions()`
- * exposes exactly this: its `locale` keeps the region only when ICU actually had data for it. When
- * the region was dropped, the bare-language default can't be trusted to represent the tenant's
- * country, so this falls back to `DMY` — the convention most countries (and the platform's own
- * default country, `LB`) use — rather than an English-specific default that happens to be MDY.
+ * The day/month/year input order a tenant expects (design Q17), from an explicit table keyed by
+ * the tenant's own country rather than `Intl`: `Intl.DateTimeFormat` resolves the order from the
+ * *language*'s own default when a language/region pairing has no distinct CLDR locale (this
+ * runtime's ICU data collapses `en-LB` to plain `en`'s US/MDY order, not Lebanon's own DMY), so it
+ * can't be trusted to reflect the tenant's country regardless of UI language. Every country not
+ * listed defaults to DMY, the convention most of the world (and the platform's own default
+ * country, `LB`) uses.
  */
-export function dateInputOrder(locale: string, country: string): DateInputOrder {
-  const formatter = new Intl.DateTimeFormat(`${locale}-${country}`, {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-  });
-  const resolvedRegion = formatter.resolvedOptions().locale.split('-')[1];
-  if ((resolvedRegion ?? '').toUpperCase() !== country.toUpperCase()) {
-    return 'DMY';
-  }
-  const order = formatter
-    .formatToParts(new Date(Date.UTC(2000, 0, 2)))
-    .map((p) => DATE_PART_LETTERS[p.type])
-    .filter((letter): letter is 'D' | 'M' | 'Y' => letter !== undefined)
-    .join('');
-  return order === 'DMY' || order === 'MDY' || order === 'YMD' ? order : 'DMY';
+export function dateInputOrder(country: string): DateInputOrder {
+  const code = country.toUpperCase();
+  if (MDY_COUNTRIES.has(code)) return 'MDY';
+  if (YMD_COUNTRIES.has(code)) return 'YMD';
+  return 'DMY';
 }

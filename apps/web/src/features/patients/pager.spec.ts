@@ -29,6 +29,15 @@ describe('pageWindow', () => {
     expect(pageWindow(2, 3)).toEqual([1, 2, 3]);
     expect(pageWindow(1, 2)).toEqual([1, 2]);
   });
+
+  it('clamps a current page below the first page', () => {
+    expect(pageWindow(0, 10)).toEqual(pageWindow(1, 10));
+    expect(pageWindow(-5, 10)).toEqual(pageWindow(1, 10));
+  });
+
+  it('clamps a current page past the last page', () => {
+    expect(pageWindow(999, 10)).toEqual(pageWindow(10, 10));
+  });
 });
 
 describe('pageRange', () => {

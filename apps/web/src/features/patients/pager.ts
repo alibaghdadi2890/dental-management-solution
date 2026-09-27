@@ -16,9 +16,13 @@ export type PageToken = number | 'gap';
 export function pageWindow(current: number, last: number): PageToken[] {
   if (last <= 1) return [1];
 
-  const pages = new Set<number>([1, last, current]);
-  if (current - 1 >= 1) pages.add(current - 1);
-  if (current + 1 <= last) pages.add(current + 1);
+  // A stale `page` in the URL (or a query that just lost a page's worth of rows) can land outside
+  // [1, last]; clamp rather than render an out-of-range or negative-length window.
+  const clamped = Math.min(Math.max(current, 1), last);
+
+  const pages = new Set<number>([1, last, clamped]);
+  if (clamped - 1 >= 1) pages.add(clamped - 1);
+  if (clamped + 1 <= last) pages.add(clamped + 1);
 
   const sorted = [...pages].sort((a, b) => a - b);
   const result: PageToken[] = [];

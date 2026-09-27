@@ -6,6 +6,7 @@ import type {
   ServiceBatch,
   ServiceItem,
 } from '@dcm/contracts';
+import { sanitizeAmountInput } from '@/lib/amount';
 
 export type CatalogTab = 'services' | 'diagnoses';
 export const CATALOG_TABS: readonly CatalogTab[] = ['services', 'diagnoses'];
@@ -190,16 +191,11 @@ export function categoriesOf(rows: readonly DraftRow[]): string[] {
   return [...new Set(rows.map((row) => row.category.trim()).filter((category) => category))];
 }
 
-/** Keeps digits and one dot, at most two decimals. */
-export function sanitizePrice(value: string): string {
-  const cleaned = value.replace(/[^0-9.]/g, '');
-  const dot = cleaned.indexOf('.');
-  if (dot === -1) return cleaned;
-  const decimals = cleaned
-    .slice(dot + 1)
-    .replace(/\./g, '')
-    .slice(0, 2);
-  return `${cleaned.slice(0, dot)}.${decimals}`;
+/** Keeps digits and one dot, at most two decimals — locale-aware (a French `,` decimal, Arabic-
+ * Indic digits) via the shared `sanitizeAmountInput` (`lib/amount.ts`); a bare trailing/leading
+ * dot is left exactly as typed here (the price is still being typed). */
+export function sanitizePrice(value: string, locale: string): string {
+  return sanitizeAmountInput(value, locale);
 }
 
 export function batchOf(tab: 'services', rows: readonly DraftRow[]): ServiceBatch;

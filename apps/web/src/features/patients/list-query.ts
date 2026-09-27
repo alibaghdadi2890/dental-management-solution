@@ -1,13 +1,22 @@
-import { patientListQuerySchema, type PatientListQuery } from '@dcm/contracts';
+import {
+  AGE_BANDS,
+  idSchema,
+  PATIENT_PAGE_SIZES,
+  patientListQuerySchema,
+  patientSortSchema,
+  patientViewSchema,
+  type PatientListQuery,
+} from '@dcm/contracts';
 import { z } from 'zod';
 
 /**
  * The `/patients` route's URL search: the shared list query (already carrying its own defaults
  * and blank-tolerance, `patientListQuerySchema`) plus the right-panel `panel` token and the two
  * fields the shell's "New patient" / palette "Create …" pre-fill (design "Create pre-filled with
- * digits → phone, otherwise name"). `validateSearch` on `routes/_app/patients/index.tsx` parses
- * with this schema directly, so an unknown query param is silently dropped and a blank one behaves
- * like an absent one, exactly as the list query itself does.
+ * digits → phone, otherwise name"). This is the *strict* schema — it throws on an invalid field,
+ * exactly like `patientListQuerySchema` does. `routes/_app/patients/index.tsx`'s `validateSearch`
+ * calls `parsePatientsSearch` instead, which never throws; this schema is what that function
+ * parses into once every field is already known-valid-or-absent.
  */
 export const patientsSearchSchema = patientListQuerySchema.extend({
   panel: z.string().optional(),
@@ -16,8 +25,72 @@ export const patientsSearchSchema = patientListQuerySchema.extend({
 });
 export type PatientsSearch = z.infer<typeof patientsSearchSchema>;
 
-/** `patientListQuerySchema`'s own defaults, kept here once so `toSearch`/`clearFilters` agree. */
+/** The shape a `<Link search>` may pass in — every field optional, since `parsePatientsSearch`
+ * fills in whatever's missing. Exported separately from `PatientsSearch` (the fully-defaulted
+ * *output*) because TanStack Router's `Link` needs the pre-default *input* type. */
+export type PatientsSearchInput = z.input<typeof patientsSearchSchema>;
+
+/** `patientListQuerySchema`'s own defaults, kept here once so `toSearch`/`clearFilters` agree and
+ * so `stripSearchParams` (the route's search middleware) can drop them from the URL. */
 export const LIST_QUERY_DEFAULTS: PatientListQuery = patientListQuerySchema.parse({});
+
+/** Parses a field but turns any invalid raw value into `undefined` instead of throwing, so one
+ * bad query param — a stale bookmark, a hand-edited URL, or TanStack Router's own search parser
+ * turning a numeric-looking value (e.g. `?phone=71123456`) into a JS `number` — can't blank the
+ * whole route with a thrown error. `patientsSearchSchema`'s own default then takes over exactly as
+ * it would for an absent field. */
+function lenient<T extends z.ZodType>(schema: T) {
+  return schema.optional().catch(undefined);
+}
+
+const pageSizeSchema = z.union([
+  z.literal(PATIENT_PAGE_SIZES[0]),
+  z.literal(PATIENT_PAGE_SIZES[1]),
+  z.literal(PATIENT_PAGE_SIZES[2]),
+]);
+
+/** Every field loosened per `lenient`, plus `z.coerce.string()` on the free-text fields: TanStack
+ * Router's default search parser infers a JS type per value, so a numeric-looking `q`, `fullName`
+ * or `phone` (a phone number *is* numeric-looking) arrives as a `number`, not a `string`. */
+const rawSearchSchema = z.object({
+  view: lenient(patientViewSchema),
+  q: lenient(z.coerce.string().trim().max(100)),
+  dentist: lenient(z.union([idSchema, z.literal('none')])),
+  age: lenient(z.enum(AGE_BANDS)),
+  alerts: lenient(z.enum(['yes', 'no'])),
+  lastVisit: lenient(z.enum(['any', 'never'])),
+  sort: lenient(patientSortSchema),
+  dir: lenient(z.enum(['asc', 'desc'])),
+  page: lenient(z.coerce.number().int().min(1)),
+  size: lenient(z.coerce.number().pipe(pageSizeSchema)),
+  panel: lenient(z.coerce.string()),
+  fullName: lenient(z.coerce.string()),
+  phone: lenient(z.coerce.string()),
+});
+
+/** `lastVisit: 'any'` means "no filter" — the same as the field being absent (design Q14's "Any
+ * time" option) — so every reader of a `PatientListQuery` (`activeFilterCount`, `toSearch`, the
+ * API client's query string) only ever has to treat one of the two as "not filtering". */
+function normalizeLastVisit<T extends Pick<PatientListQuery, 'lastVisit'>>(query: T): T {
+  return query.lastVisit === 'any' ? { ...query, lastVisit: undefined } : query;
+}
+
+/**
+ * Safe to call with anything TanStack Router hands `validateSearch` — untyped, and possibly with
+ * the wrong JS type per field or an invalid enum/id from a stale bookmark. Never throws: an
+ * invalid field is dropped and the list query's own default takes over, exactly as an absent
+ * field would (the outer `try`/`catch` is a last-resort net; `rawSearchSchema`'s per-field
+ * `.catch()` already keeps the common bad-URL cases — a bad `view`, `page=0`, `size=13`, a
+ * non-uuid `dentist` — from ever reaching it).
+ */
+export function parsePatientsSearch(raw: unknown): PatientsSearch {
+  try {
+    const loose = rawSearchSchema.parse(raw && typeof raw === 'object' ? raw : {});
+    return normalizeLastVisit(patientsSearchSchema.parse(loose));
+  } catch {
+    return { ...LIST_QUERY_DEFAULTS };
+  }
+}
 
 export type PatientPanel =
   | { kind: 'new' }
@@ -74,29 +147,48 @@ const CHIP_FIELDS = ['q', 'dentist', 'age', 'alerts', 'lastVisit'] as const;
  * should reset.
  */
 export function activeFilterCount(query: PatientListQuery): number {
-  return CHIP_FIELDS.reduce((count, field) => count + (query[field] ? 1 : 0), 0);
+  const normalized = normalizeLastVisit(query);
+  return CHIP_FIELDS.reduce((count, field) => count + (normalized[field] ? 1 : 0), 0);
 }
 
-const RESETTING_KEYS = ['q', 'dentist', 'age', 'alerts', 'lastVisit', 'view', 'sort'] as const;
+const RESETTING_KEYS = [
+  'q',
+  'dentist',
+  'age',
+  'alerts',
+  'lastVisit',
+  'view',
+  'sort',
+  'size',
+] as const;
 
 /**
- * Applies a filter/search/view/sort/paging edit. Changing what's shown (a filter, the search box,
- * the saved-view tab, or the sort column) always jumps back to page 1 — the current page number
- * from a different result set is meaningless. Flipping `dir` on the same sort column, or changing
- * `page`/`size` directly, does not reset paging itself.
+ * Applies a filter/search/view/sort/size edit. Changing what's shown or how many rows fit on a
+ * page always jumps back to page 1 — the current page number from a different result set (or a
+ * different page size) is meaningless. Flipping `dir` on the same sort column, or setting `page`
+ * directly (the pager's own buttons), does not reset paging itself.
  */
 export function withFilter(
   query: PatientListQuery,
   patch: Partial<PatientListQuery>,
 ): PatientListQuery {
-  const merged = { ...query, ...patch };
+  const normalizedPatch = normalizeLastVisit(patch);
+  const merged = { ...query, ...normalizedPatch };
   const resets = RESETTING_KEYS.some((key) => key in patch);
   return resets ? { ...merged, page: 1 } : merged;
 }
 
-/** "Clear filters": back to every default except the saved-view tab and the chosen page size. */
+/** "Clear filters": keeps the saved-view tab, the chosen page size, and the current sort/direction
+ * — only the search box and the filter chips are cleared (which also resets the page to 1, since
+ * clearing filters changes the result set). */
 export function clearFilters(query: PatientListQuery): PatientListQuery {
-  return { ...LIST_QUERY_DEFAULTS, view: query.view, size: query.size };
+  return {
+    ...LIST_QUERY_DEFAULTS,
+    view: query.view,
+    size: query.size,
+    sort: query.sort,
+    dir: query.dir,
+  };
 }
 
 /** A generic per-key copy so TypeScript ties `query[key]` and `result[key]` to the same `K`
@@ -115,9 +207,10 @@ function copyIfChanged<K extends keyof PatientListQuery>(
 /** Strips values equal to the schema's own default, so the URL stays clean when nothing but the
  * saved view (say) has been touched. */
 export function toSearch(query: PatientListQuery): Partial<PatientListQuery> {
+  const normalized = normalizeLastVisit(query);
   const result: Partial<PatientListQuery> = {};
-  for (const key of Object.keys(query) as (keyof PatientListQuery)[]) {
-    copyIfChanged(result, query, key);
+  for (const key of Object.keys(normalized) as (keyof PatientListQuery)[]) {
+    copyIfChanged(result, normalized, key);
   }
   return result;
 }

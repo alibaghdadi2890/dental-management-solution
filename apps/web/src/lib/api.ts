@@ -38,7 +38,9 @@ export interface ApiRequestInit extends Omit<RequestInit, 'body'> {
   tenantId?: string;
 }
 
-async function toApiError(response: Response): Promise<ApiError> {
+/** Exported for callers that fetch something `apiFetch` can't handle itself (a CSV download,
+ * whose body isn't JSON), but still want the same RFC 7807 → `ApiError` mapping on failure. */
+export async function toApiError(response: Response): Promise<ApiError> {
   const requestId = response.headers.get('x-request-id') ?? undefined;
   if (response.headers.get('content-type')?.includes('application/problem+json')) {
     const parsed = problemDetailsSchema.safeParse(await response.json());

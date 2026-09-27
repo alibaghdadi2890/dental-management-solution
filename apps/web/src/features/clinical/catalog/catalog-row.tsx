@@ -37,7 +37,7 @@ export function CatalogRow({
   onChange: (patch: RowPatch) => void;
   onDelete: () => void;
 }) {
-  const { t } = useTranslation('catalog');
+  const { t, i18n } = useTranslation('catalog');
   const nameMissing = !readOnly && row.name.trim() === '';
   const codeInvalid = !readOnly && (row.code.trim() === '' || error !== undefined);
   const errorId = `catalog-row-error-${row.key}`;
@@ -135,7 +135,9 @@ export function CatalogRow({
               inputMode="decimal"
               value={row.price}
               onChange={(event) => {
-                onChange({ price: sanitizePrice(event.target.value) });
+                onChange({
+                  price: sanitizePrice(event.target.value, i18n.resolvedLanguage ?? 'en'),
+                });
               }}
               className="w-full min-w-0 border-none bg-transparent text-end tabular-nums outline-none"
             />

@@ -38,7 +38,7 @@ designing.
 | Q14 | **Visits and Last visit are not sortable** until feature 4; the _Not seen 6+ months_ view returns every non-archived patient ("never seen"), and the Last-visit chip offers only "Any time" and "Never". The Visits column and the Last-visit column render "—".                                                                                                                                                                                                             | —    |
 | Q15 | **Palette "recent" = the 5 most recently updated active patients** (`sort=recent`), not a client-side history.                                                                                                                                                                                                                                                                                                                                                               | —    |
 | Q16 | **Patient information save-state** (design gap): the workspace indicator's idle label "Autosaves as you type" does not fit an explicit Save button. States: clean → nothing; dirty → "Unsaved changes" (muted); saving → "Saving…"; saved → "✓ Saved just now"; failed → "Failed to save — retry" (retry re-submits, input kept).                                                                                                                                            | —    |
-| Q17 | **Date-of-birth input order follows the tenant**: day/month order comes from `Intl` for `${locale}-${country}` (`en-LB` → DD/MM/YYYY, `en-US` → MM/DD/YYYY). Stored as ISO `date`; displayed "4 Sep 2026" by the shared formatter.                                                                                                                                                                                                                                           | —    |
+| Q17 | **Date-of-birth input order follows the tenant**: day/month order comes from an explicit table keyed by the tenant country (MDY for the US and its territories, YMD for CN, JP, KR, KP, TW, HU, MN, LT, IR, DMY otherwise: `LB` → DD/MM/YYYY). Browser locale data is not used: it lacks `en-LB` and differs between engines. Stored as ISO `date`; displayed "4 Sep 2026" by the shared formatter.                                                                          | —    |
 
 ## Module graph changes
 
@@ -305,7 +305,7 @@ locales/{en,ar,fr}/patients.json, billing.json
 - Header right side: **Find patient ⌘K** (260px search button) and **New patient** (`patient:write`)
   → `/patients?panel=new`.
 - **⌘K / Ctrl+K** opens the command palette (workspace spec §Global Patient Search): no query → 5
-  most recently updated patients (Q15); otherwise `GET /patients?q=&size=8` (the same matching);
+  most recently updated patients (Q15); otherwise `GET /patients?q=&size=10`, first 8 shown (the same matching);
   rows show avatar, name, ID, phone, "Age n", "Never seen"; Enter/arrows navigate; no results →
   **Create "{query}"** → the create panel pre-filled (digits → phone, otherwise name). Archived
   patients never appear.

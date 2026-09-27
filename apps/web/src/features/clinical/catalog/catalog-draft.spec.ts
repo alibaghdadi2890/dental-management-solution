@@ -241,7 +241,15 @@ describe('sanitizePrice', () => {
     ['3.', '3.'],
     ['1.2.3', '1.23'],
     ['abc', ''],
-  ])('%j → %j', (input, output) => {
-    expect(sanitizePrice(input)).toBe(output);
+  ])('%j → %j (en)', (input, output) => {
+    expect(sanitizePrice(input, 'en')).toBe(output);
+  });
+
+  it('reads a French comma as the decimal separator', () => {
+    expect(sanitizePrice('12,50', 'fr')).toBe('12.50');
+  });
+
+  it('maps Arabic-Indic digits to ASCII', () => {
+    expect(sanitizePrice('١٢٥', 'ar')).toBe('125');
   });
 });

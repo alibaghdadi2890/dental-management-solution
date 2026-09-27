@@ -16,9 +16,11 @@ import {
   type PatientPatch,
   type PatientRestore,
 } from '@dcm/contracts';
-import { queryOptions } from '@tanstack/react-query';
+import { type QueryClient, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
-import { API_BASE, apiFetch } from '@/lib/api';
+import { billingKeys } from '@/features/billing/billing-api';
+import { actingTenantId } from '@/features/platform/acting-tenant';
+import { API_BASE, apiFetch, TENANT_HEADER, toApiError } from '@/lib/api';
 import { toSearch } from './list-query';
 
 /**
@@ -26,18 +28,37 @@ import { toSearch } from './list-query';
  * `view=owing` and `sort=balance` with 400 (design Q5); those two cases are served by
  * `GET /billing/patients` instead, which otherwise returns the exact same page shape, so the list
  * page can treat the two routes as one data source.
+ *
+ * Every query key is scoped under the *acting* tenant (`catalogKeys`'s pattern,
+ * `features/clinical/catalog/catalog-api.ts`) — a platform admin switching which clinic they're
+ * managing must not see a stale cache from the clinic they just left, and `invalidatePatientData`
+ * must be able to invalidate exactly one tenant's data, not every tenant's at once.
  */
 export const patientKeys = {
-  all: ['patients'] as const,
-  list: (query: PatientListQuery) => ['patients', 'list', query] as const,
-  counts: ['patients', 'counts'] as const,
-  owingCount: ['patients', 'owingCount'] as const,
-  duplicates: ['patients', 'duplicates'] as const,
-  duplicateCheck: (query: DuplicateCheckQuery) => ['patients', 'duplicateCheck', query] as const,
-  detail: (id: string) => ['patients', 'detail', id] as const,
-  practitioners: ['patients', 'practitioners'] as const,
-  audit: (id: string) => ['patients', 'audit', id] as const,
+  all: (tenantId: string | null) => ['patients', tenantId] as const,
+  list: (tenantId: string | null, query: PatientListQuery) =>
+    [...patientKeys.all(tenantId), 'list', query] as const,
+  counts: (tenantId: string | null) => [...patientKeys.all(tenantId), 'counts'] as const,
+  owingCount: (tenantId: string | null) => [...patientKeys.all(tenantId), 'owingCount'] as const,
+  duplicates: (tenantId: string | null) => [...patientKeys.all(tenantId), 'duplicates'] as const,
+  duplicateCheck: (tenantId: string | null, query: DuplicateCheckQuery) =>
+    [...patientKeys.all(tenantId), 'duplicateCheck', query] as const,
+  detail: (tenantId: string | null, id: string) =>
+    [...patientKeys.all(tenantId), 'detail', id] as const,
+  audit: (tenantId: string | null, id: string) =>
+    [...patientKeys.all(tenantId), 'audit', id] as const,
 };
+
+/** `GET /users/practitioners` belongs to `users`, not `patients` — its own key namespace, even
+ * though the query factory lives beside the patients form that's the only consumer so far. */
+export const userKeys = {
+  practitioners: (tenantId: string | null) => ['users', tenantId, 'practitioners'] as const,
+};
+
+/** Omitted entirely (rather than sent as `{}`) when `tenantId` is left to the caller's ambient
+ * acting tenant — `apiFetch` already defaults to `actingTenantId()` itself; this only forwards an
+ * *explicit* tenant, matching `catalog-api.ts`'s `scope`. */
+const scope = (tenantId?: string) => (tenantId === undefined ? {} : { tenantId });
 
 function usesBillingRoute(query: PatientListQuery): boolean {
   return query.view === 'owing' || query.sort === 'balance';
@@ -55,69 +76,75 @@ function toQueryString(params: Record<string, string | number | undefined>): str
   return query ? `?${query}` : '';
 }
 
-export function patientListQuery(query: PatientListQuery) {
+export function patientListQuery(query: PatientListQuery, tenantId?: string) {
   const path = usesBillingRoute(query) ? '/billing/patients' : '/patients';
   return queryOptions({
-    queryKey: patientKeys.list(query),
-    queryFn: () => apiFetch(`${path}${toQueryString(toSearch(query))}`, patientPageSchema),
+    queryKey: patientKeys.list(tenantId ?? actingTenantId(), query),
+    queryFn: () =>
+      apiFetch(`${path}${toQueryString(toSearch(query))}`, patientPageSchema, scope(tenantId)),
   });
 }
 
-export function patientCountsQuery() {
+export function patientCountsQuery(tenantId?: string) {
   return queryOptions({
-    queryKey: patientKeys.counts,
-    queryFn: () => apiFetch('/patients/counts', patientCountsSchema),
+    queryKey: patientKeys.counts(tenantId ?? actingTenantId()),
+    queryFn: () => apiFetch('/patients/counts', patientCountsSchema, scope(tenantId)),
   });
 }
 
 /** `GET /billing/patients/owing-count`: the "Owes balance" tab's count chip. */
-export function owingCountQuery() {
+export function owingCountQuery(tenantId?: string) {
   return queryOptions({
-    queryKey: patientKeys.owingCount,
-    queryFn: () => apiFetch('/billing/patients/owing-count', owingCountSchema),
+    queryKey: patientKeys.owingCount(tenantId ?? actingTenantId()),
+    queryFn: () => apiFetch('/billing/patients/owing-count', owingCountSchema, scope(tenantId)),
   });
 }
 
-export function duplicatesQuery() {
+export function duplicatesQuery(tenantId?: string) {
   return queryOptions({
-    queryKey: patientKeys.duplicates,
-    queryFn: () => apiFetch('/patients/duplicates', duplicateGroupsSchema),
+    queryKey: patientKeys.duplicates(tenantId ?? actingTenantId()),
+    queryFn: () => apiFetch('/patients/duplicates', duplicateGroupsSchema, scope(tenantId)),
   });
 }
 
 /** The create/edit panel's debounced "possible duplicate" warning. */
-export function duplicateCheckQuery(query: DuplicateCheckQuery) {
+export function duplicateCheckQuery(query: DuplicateCheckQuery, tenantId?: string) {
   return queryOptions({
-    queryKey: patientKeys.duplicateCheck(query),
+    queryKey: patientKeys.duplicateCheck(tenantId ?? actingTenantId(), query),
     queryFn: () =>
-      apiFetch(`/patients/duplicates/check${toQueryString(query)}`, z.array(patientListItemSchema)),
+      apiFetch(
+        `/patients/duplicates/check${toQueryString(query)}`,
+        z.array(patientListItemSchema),
+        scope(tenantId),
+      ),
   });
 }
 
-export function patientQuery(id: string) {
+export function patientQuery(id: string, tenantId?: string) {
   return queryOptions({
-    queryKey: patientKeys.detail(id),
-    queryFn: () => apiFetch(`/patients/${id}`, patientSchema),
+    queryKey: patientKeys.detail(tenantId ?? actingTenantId(), id),
+    queryFn: () => apiFetch(`/patients/${id}`, patientSchema, scope(tenantId)),
   });
 }
 
 /** `GET /users/practitioners`: the "Primary dentist" select and the merge/quick-view dentist name. */
-export function practitionersQuery() {
+export function practitionersQuery(tenantId?: string) {
   return queryOptions({
-    queryKey: patientKeys.practitioners,
-    queryFn: () => apiFetch('/users/practitioners', z.array(practitionerSchema)),
+    queryKey: userKeys.practitioners(tenantId ?? actingTenantId()),
+    queryFn: () => apiFetch('/users/practitioners', z.array(practitionerSchema), scope(tenantId)),
   });
 }
 
 /** The quick view's activity timeline (`audit:read` only, design Q10); the first page only — an
  * infinite/"load more" query is a concern for the component that renders it, not this client. */
-export function patientAuditQuery(id: string) {
+export function patientAuditQuery(id: string, tenantId?: string) {
   return queryOptions({
-    queryKey: patientKeys.audit(id),
+    queryKey: patientKeys.audit(tenantId ?? actingTenantId(), id),
     queryFn: () =>
       apiFetch(
         `/audit${toQueryString({ resourceType: 'patient', resourceId: id })}`,
         auditPageSchema,
+        scope(tenantId),
       ),
   });
 }
@@ -145,22 +172,81 @@ export function mergePatients(input: PatientMerge) {
 }
 
 /**
- * `GET /billing/patients/export`'s URL — a plain string for an `<a href>`/`window.open`, not an
- * `apiFetch` call: the response is a CSV file, not JSON. `queryOrIds` is either the list's current
- * filters (the header's "Export CSV") or an explicit id list (the bulk bar's "Export" on the
- * current selection); paging never applies to an export.
+ * Invalidates every cached patients + billing query for one tenant (defaulting to the acting
+ * tenant) — the one call every create/merge/archive/restore/opening-balance mutation should make
+ * on success. `patientKeys.all`/`billingKeys.all` are prefixes of every more specific key
+ * (including `owingCount`, `balances`, …), so invalidating just the two umbrellas covers all of
+ * it; nothing under `userKeys` is invalidated, since no patient mutation changes the practitioner
+ * list.
  */
-export function exportUrl(
-  // A mutable `string[]`, not `readonly string[]`: `Array.isArray` doesn't narrow a union away
-  // from a `readonly` array type (it asserts the mutable `any[]`, which a `readonly` array isn't
-  // assignable to), so a `readonly` element here would leave `queryOrIds` a union in both branches.
-  queryOrIds: PatientListQuery | string[],
+export function invalidatePatientData(
+  queryClient: QueryClient,
+  tenantId: string | null = actingTenantId(),
+): Promise<void> {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: patientKeys.all(tenantId) }),
+    queryClient.invalidateQueries({ queryKey: billingKeys.all(tenantId) }),
+  ]).then(() => undefined);
+}
+
+export type PatientExportRequest = { query: PatientListQuery } | { ids: readonly string[] };
+
+function exportQueryString(request: PatientExportRequest, lang: ExportLanguage | undefined) {
+  if ('ids' in request) {
+    if (request.ids.length === 0) {
+      throw new Error('Cannot export an empty patient selection');
+    }
+    return toQueryString({ ids: request.ids.join(','), lang });
+  }
+  const filtered = Object.fromEntries(
+    Object.entries(toSearch(request.query)).filter(([key]) => key !== 'page' && key !== 'size'),
+  );
+  return toQueryString({ ...filtered, lang });
+}
+
+const CONTENT_DISPOSITION_FILENAME = /filename="?([^";]+)"?/i;
+
+function filenameFrom(contentDisposition: string | null, fallback: string): string {
+  const match = contentDisposition ? CONTENT_DISPOSITION_FILENAME.exec(contentDisposition) : null;
+  return match?.[1] ?? fallback;
+}
+
+/** Saves a blob the same way a plain `<a download>` click would — the one place this SPA triggers
+ * a browser file save, kept tiny so a test can stub `URL.createObjectURL`/`revokeObjectURL` and
+ * the anchor's `click()` without touching the request logic above it. */
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * `GET /billing/patients/export` (design "Export CSV" / the bulk bar's "Export"): a manual
+ * `fetch`, not `apiFetch` — the response is a CSV file, not JSON, so `apiFetch`'s schema
+ * validation doesn't apply — but every other convention it enforces (the versioned API base, the
+ * session cookie, the acting tenant header, a typed `ApiError` on failure) still does. `{ ids: [] }`
+ * throws rather than silently falling back to exporting the whole (unfiltered) view: the bulk
+ * bar's "Export" only ever means "the current selection", never "everything".
+ */
+export async function downloadExport(
+  request: PatientExportRequest,
   lang?: ExportLanguage,
-): string {
-  const params: Record<string, string | number | undefined> = Array.isArray(queryOrIds)
-    ? { ids: queryOrIds.length > 0 ? queryOrIds.join(',') : undefined }
-    : Object.fromEntries(
-        Object.entries(toSearch(queryOrIds)).filter(([key]) => key !== 'page' && key !== 'size'),
-      );
-  return `${API_BASE}/billing/patients/export${toQueryString({ ...params, lang })}`;
+): Promise<void> {
+  const search = exportQueryString(request, lang);
+  const headers = new Headers({ Accept: 'text/csv' });
+  const tenantId = actingTenantId();
+  if (tenantId) headers.set(TENANT_HEADER, tenantId);
+
+  const response = await fetch(`${API_BASE}/billing/patients/export${search}`, {
+    credentials: 'same-origin',
+    headers,
+  });
+  if (!response.ok) {
+    throw await toApiError(response);
+  }
+  const blob = await response.blob();
+  saveBlob(blob, filenameFrom(response.headers.get('content-disposition'), 'patients.csv'));
 }

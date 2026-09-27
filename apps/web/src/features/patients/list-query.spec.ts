@@ -5,6 +5,7 @@ import {
   LIST_QUERY_DEFAULTS,
   panelParam,
   parsePanel,
+  parsePatientsSearch,
   patientsSearchSchema,
   toSearch,
   withFilter,
@@ -62,27 +63,36 @@ describe('activeFilterCount', () => {
       }),
     ).toBe(0);
   });
+
+  it('does not count lastVisit "any" ("no filter") as active', () => {
+    expect(activeFilterCount({ ...LIST_QUERY_DEFAULTS, lastVisit: 'any' })).toBe(0);
+    expect(activeFilterCount({ ...LIST_QUERY_DEFAULTS, lastVisit: 'never' })).toBe(1);
+  });
 });
 
 describe('withFilter', () => {
-  it('resets the page to 1 when a filter, the search box, the view or the sort changes', () => {
+  it('resets the page to 1 when a filter, the search box, the view, the sort or the size changes', () => {
     const onPageThree = { ...LIST_QUERY_DEFAULTS, page: 3 };
     expect(withFilter(onPageThree, { q: 'jane' }).page).toBe(1);
     expect(withFilter(onPageThree, { dentist: 'none' }).page).toBe(1);
     expect(withFilter(onPageThree, { view: 'archived' }).page).toBe(1);
     expect(withFilter(onPageThree, { sort: 'age' }).page).toBe(1);
+    expect(withFilter(onPageThree, { size: 50 }).page).toBe(1);
   });
 
-  it('does not reset the page for a direction flip or an explicit page/size change', () => {
+  it('does not reset the page for a direction flip or an explicit page change', () => {
     const onPageThree = { ...LIST_QUERY_DEFAULTS, page: 3 };
     expect(withFilter(onPageThree, { dir: 'desc' }).page).toBe(3);
-    expect(withFilter(onPageThree, { size: 50 }).page).toBe(3);
     expect(withFilter(onPageThree, { page: 5 }).page).toBe(5);
+  });
+
+  it('normalises lastVisit "any" to undefined ("no filter")', () => {
+    expect(withFilter(LIST_QUERY_DEFAULTS, { lastVisit: 'any' }).lastVisit).toBeUndefined();
   });
 });
 
 describe('clearFilters', () => {
-  it('keeps the saved view and the page size, resets everything else', () => {
+  it('keeps the saved view, the page size, and the sort/direction, resets the rest', () => {
     const query = {
       ...LIST_QUERY_DEFAULTS,
       view: 'owing' as const,
@@ -93,7 +103,50 @@ describe('clearFilters', () => {
       dir: 'desc' as const,
       page: 4,
     };
-    expect(clearFilters(query)).toEqual({ ...LIST_QUERY_DEFAULTS, view: 'owing', size: 50 });
+    expect(clearFilters(query)).toEqual({
+      ...LIST_QUERY_DEFAULTS,
+      view: 'owing',
+      size: 50,
+      sort: 'age',
+      dir: 'desc',
+    });
+  });
+});
+
+describe('parsePatientsSearch', () => {
+  it('never throws and applies defaults for a bad view, page, size or dentist', () => {
+    expect(parsePatientsSearch({ view: 'bogus' })).toMatchObject({ view: 'active' });
+    expect(parsePatientsSearch({ page: 'abc' })).toMatchObject({ page: 1 });
+    expect(parsePatientsSearch({ page: 0 })).toMatchObject({ page: 1 });
+    expect(parsePatientsSearch({ size: 13 })).toMatchObject({ size: 25 });
+    expect(parsePatientsSearch({ dentist: 'not-a-uuid' })).toMatchObject({ dentist: undefined });
+  });
+
+  it('never throws for garbage input at all', () => {
+    expect(parsePatientsSearch(null)).toEqual(LIST_QUERY_DEFAULTS);
+    expect(parsePatientsSearch('nonsense')).toEqual(LIST_QUERY_DEFAULTS);
+    expect(parsePatientsSearch(42)).toEqual(LIST_QUERY_DEFAULTS);
+  });
+
+  it('coerces q/fullName/phone/panel back to strings when the router parsed them as numbers', () => {
+    // TanStack Router's default search parser turns a numeric-looking value into a JS number.
+    expect(parsePatientsSearch({ phone: 71123456 }).phone).toBe('71123456');
+    expect(parsePatientsSearch({ q: 12345 }).q).toBe('12345');
+    expect(parsePatientsSearch({ fullName: 2000 }).fullName).toBe('2000');
+    expect(parsePatientsSearch({ panel: 12345 }).panel).toBe('12345');
+  });
+
+  it('still parses a fully valid search normally', () => {
+    expect(parsePatientsSearch({ view: 'archived', q: 'jane', page: 2, size: 50 })).toMatchObject({
+      view: 'archived',
+      q: 'jane',
+      page: 2,
+      size: 50,
+    });
+  });
+
+  it('normalises lastVisit "any" to undefined', () => {
+    expect(parsePatientsSearch({ lastVisit: 'any' }).lastVisit).toBeUndefined();
   });
 });
 
@@ -133,5 +186,9 @@ describe('toSearch', () => {
       view: 'owing',
       page: 2,
     });
+  });
+
+  it('drops lastVisit "any" ("no filter") rather than putting it in the URL', () => {
+    expect(toSearch({ ...LIST_QUERY_DEFAULTS, lastVisit: 'any' })).toEqual({});
   });
 });
