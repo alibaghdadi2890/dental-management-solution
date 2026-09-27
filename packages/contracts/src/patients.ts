@@ -6,6 +6,7 @@ import {
   isoDateTimeSchema,
   nameSchema,
   notFutureDateSchema,
+  offsetPageSchema,
   optionalText,
 } from './common.js';
 import { reasonSchema } from './audit.js';
@@ -170,6 +171,10 @@ export const patientListQuerySchema = z.object({
   size: z.coerce.number().pipe(patientPageSizeSchema).default(25),
 });
 export type PatientListQuery = z.infer<typeof patientListQuerySchema>;
+
+/** `GET /patients` (and `GET /billing/patients`, design Q6/Q7): offset paging, not a cursor. */
+export const patientPageSchema = offsetPageSchema(patientListItemSchema);
+export type PatientPage = z.infer<typeof patientPageSchema>;
 
 export const patientCountsSchema = z.object({
   active: z.number().int().nonnegative(),

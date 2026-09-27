@@ -10,6 +10,7 @@ import {
   patientInputSchema,
   patientListQuerySchema,
   patientMergeSchema,
+  patientPageSchema,
   patientPatchSchema,
   profileCompleteness,
 } from './patients.js';
@@ -165,6 +166,27 @@ describe('patientListQuerySchema', () => {
     expect(patientListQuerySchema.safeParse({ size: '30' }).success).toBe(false);
     expect(patientListQuerySchema.parse({ page: '2' }).page).toBe(2);
     expect(patientListQuerySchema.parse({ size: '50' }).size).toBe(50);
+  });
+});
+
+describe('patientPageSchema', () => {
+  it('wraps a page of list items with total, page and size (offset paging, design Q6)', () => {
+    const item = {
+      id: ID_A,
+      displayNumber: 'P-000001',
+      fullName: 'Jane Doe',
+      phone: '+9613123456',
+      dateOfBirth: null,
+      sex: 'unknown',
+      medicalAlerts: [],
+      primaryDentistUserId: null,
+      email: null,
+      archivedAt: null,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const page = { items: [item], total: 1, page: 1, size: 25 };
+    expect(patientPageSchema.parse(page)).toEqual(page);
+    expect(patientPageSchema.safeParse({ ...page, total: -1 }).success).toBe(false);
   });
 });
 
