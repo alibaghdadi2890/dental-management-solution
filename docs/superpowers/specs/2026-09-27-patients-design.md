@@ -191,7 +191,7 @@ Routes (`patient:read` unless noted):
 
 ```
 billing/
-  domain/        balances.ts (sum per currency, owing), balance-rank.ts (rank + restAt), billing-errors.ts
+  domain/        balances.ts (sum per currency, owing), rank + restAt, ledger-entry.ts
   persistence/   schema.ts, ledger-entries.repository.ts
   application/   billing.service.ts, patient-views.service.ts, patient-export.service.ts,
                  merge-ledger.subscriber.ts, merge-ledger.worker.ts
