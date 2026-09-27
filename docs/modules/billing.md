@@ -65,7 +65,7 @@ currency having sum(amount) > 0`).
 | `balanceOf(patientId)`                                               | `payment:read`                    | `{ patientId, balances }`. Unknown patient → 404.                                                                                                                                                                                                                                                                                                                                                                     |
 | `balancesFor(patientIds)`                                            | `payment:read`                    | Returned in input order, de-duplicated. Ids the tenant can't see are omitted. Patients without entries get `balances: []`. One aggregate query for all ids.                                                                                                                                                                                                                                                           |
 | `patientIdsOwing()`                                                  | `payment:read`                    | Ids of the patients owing in any currency, archived ones included, in id order. One SQL aggregate. A building block for `billing`'s patient views.                                                                                                                                                                                                                                                                    |
-| `repointMergedEntries(keptId, droppedId)`                            | none (job only)                   | The merge re-point, run by `MergeLedgerWorker` (see below). Refuses to run outside a job or system task. Returns the number of entries moved.                                                                                                                                                                                                                                                                         |
+| `repointMergedEntries(keptId, droppedId)`                            | none (job only)                   | The merge re-point, run by `MergeLedgerWorker` (see below): moves the dropped patient's entries to the kept patient's survivor. Refuses to run outside a job or system task. Returns the number of entries moved.                                                                                                                                                                                                     |
 
 Every write records the entry and audits `ledger_entry.create` (resource type `ledger_entry`,
 after = the entry, reason for adjustments) in the same transaction. It emits
@@ -79,66 +79,96 @@ system role holds it.
 ### Patient views (`application/patient-views.service.ts`)
 
 Internal to the module (not exported); `http/billing-patients.controller.ts` and the export use
-it. Every method requires `payment:read`, and `PatientsService.search` re-checks
+it. Every method requires `payment:read`, and `PatientsService.search`/`searchIds` re-check
 `patient:read`. The query is `PatientListQuery`, the same as `GET /patients`, and the result the
 same offset page (ADR-0018).
 
-| Method               | Notes                                                                                                                                                                                                                                                                                                                                      |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `list(query)`        | `view=owing` → the active view restricted to `patientIdsOwing()` (`search`'s internal `idsIn`). `sort=balance` → `search`'s internal `rank` from `rankByBalance` over every non-zero tenant-currency balance (`sumsInCurrency`); works with every view, `owing` included, and with `q` and the filters. Any other query is passed through. |
-| `owingCount()`       | The active patients owing in any currency (the tab chip): `search`'s total over the owing ids.                                                                                                                                                                                                                                             |
-| `pages(query, size)` | Every patient of a view, `size` (≤ 500) at a time, in the view's order. The owing ids and the balance rank are computed once for the whole walk; each page is its own read, so rows written meanwhile may shift across pages (ADR-0018).                                                                                                   |
+| Method          | Notes                                                                                                                                                                                                                                                                                                                                      |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list(query)`   | `view=owing` → the active view restricted to `patientIdsOwing()` (`search`'s internal `idsIn`). `sort=balance` → `search`'s internal `rank` from `rankByBalance` over every non-zero tenant-currency balance (`sumsInCurrency`); works with every view, `owing` included, and with `q` and the filters. Any other query is passed through. |
+| `owingCount()`  | The active patients owing in any currency (the tab chip): `search`'s total over the owing ids.                                                                                                                                                                                                                                             |
+| `idsFor(query)` | Every patient id of a view (the list query without paging), in the view's order, unpaged (`PatientsService.searchIds`, same owing/balance handling). The export's snapshot. Bounded by the tenant's patient count (ADR-0018).                                                                                                              |
 
 ### CSV export (`application/patient-export.service.ts`)
 
-`stream(query, labels)` requires `payment:read` and `patient:read`. It yields the file in chunks:
-the UTF-8 byte order mark (for Excel and Arabic), the header row and the first page, then one
-chunk per page of 500. Nothing runs before the first chunk is pulled, which is where the
-permission checks and the first read fail.
+`open(query, labels)` requires `payment:read` and `patient:read`. It resolves the tenant and its
+today, takes the **snapshot** — the ids to export, in order — and returns `{ fileName, chunks }`:
 
 - **Rows:** `ids` (1–100) → exactly those patients, in that order, archived ones included; ids the
   tenant can't see are skipped. Otherwise every patient of the filtered and sorted view
-  (`pages`, `owing` and `balance` included).
-- **Columns** (the table's order): Patient ID (display number), Name, Age (whole years on the
-  tenant's today; empty without a date of birth), Sex (localised; `unknown` is empty), Phone
-  (international format, `formatPhone`), Last visit and Visits (empty until visits exist,
-  feature 4), Dentist (display name from `UsersService.practitionersByIds`, inactive dentists
-  included), Balance (`<label> (<tenant currency>)`: the tenant-currency amount as a plain
-  decimal, `0.00` when none). Balances in another currency (after a tenant currency change) are
-  not in the file.
+  (`idsFor`, `owing` and `balance` included).
+- **Chunks:** the rows are read with `PatientsService.getMany` 500 ids at a time as the chunks
+  are pulled, in snapshot order, with their balances (one aggregate per chunk) and dentist names.
+  The first chunk holds the UTF-8 byte order mark (for Excel and Arabic), the header row and the
+  first rows. Because the order is fixed up front, rows written while the file streams never
+  shift or repeat; a patient created meanwhile is simply not in the file.
+- **Columns** (the table's order, one `COLUMNS` spec that also marks the numeric ones): Patient ID
+  (display number), Name, Age (whole years on the tenant's today; empty without a date of
+  birth), Sex (localised; `unknown` is empty), Phone, Last visit and Visits (empty until visits
+  exist, feature 4), Dentist, Balance (`<label> (<tenant currency>)`: the tenant-currency amount
+  as a plain decimal, `0.00` when none). Balances in another currency (after a tenant currency
+  change) are not in the file.
+- **Phone:** numbers of the tenant's country in national format (`formatPhoneFor`, e.g.
+  `03 123 456`), other numbers in international format — which starts with `+`, so the
+  injection guard writes them as `'+33 6 12 34 56 78` (unguarded, a spreadsheet would evaluate
+  them). The feature 6 import must strip that leading `'` from phone cells
+  (docs/modules/imports.md).
+- **Dentist:** the display name from `UsersService.practitionersByIds` (inactive dentists
+  included). That is a `users` building block with no permission check of its own; every system
+  role holds `user:read`, which the Patients screen's dentist names need anyway, so the export
+  shows nothing a `payment:read` + `patient:read` holder can't already see.
 - **Format** (`domain/csv.ts`): RFC 4180 quoting (a cell with a comma, quote, CR or LF is quoted,
-  quotes doubled) and CRLF line ends. CSV injection guard: a cell starting with `=`, `+`, `-`,
-  `@`, tab or CR is prefixed with `'`, except a decimal string in a numeric column (Age, Visits,
-  Balance — so a credit is `-50.00`). Phones start with `+`, so they are written as
-  `'+961 71 123 456`: unguarded, a spreadsheet would evaluate them as a formula.
-- **Language** (`http/export-headers.ts`): the header and the sex values in `en`, `ar` or `fr`,
-  from `Accept-Language` (the supported primary tag with the highest quality; `en` otherwise).
+  quotes doubled) and CRLF line ends. CSV injection guard: a cell that starts with tab, CR or LF,
+  or whose first non-whitespace character is `=`, `+`, `-`, `@` or a full-width form of them
+  (U+FF1D, U+FF0B, U+FF0D, U+FF20), is prefixed with `'` — except a decimal string in a numeric
+  column (Age, Visits, Balance), so a credit is `-50.00`.
+- **Language** (`http/export-headers.ts`): the header and the sex values in `en`, `ar` or `fr`:
+  the query's `lang` if given, else `Accept-Language` (the supported primary tag with the highest
+  quality), else `en`.
 
 ### Merge re-point (design Q9, ADR-0017)
 
 - `MergeLedgerSubscriber` handles `PatientsMerged` (dispatched after the merge commits). In the
-  event's context (tenant, actor, request id) it enqueues `merge-ledger` on the `billing` queue
-  with `{ keptId, droppedId }` and job id `merge_<droppedId>` (tenant-prefixed by `TenantJobs`),
-  so a repeated event enqueues nothing new. A failed enqueue is logged with ids only and not
-  rethrown, so the audit subscriber still records the event.
+  event's context (tenant, actor, platform-admin flag, request id) it enqueues `merge-ledger` on
+  the `billing` queue with `{ keptId, droppedId }` and job id `merge_<droppedId>`
+  (tenant-prefixed by `TenantJobs`), so a repeated event enqueues nothing new while the job is
+  kept (24 hours or the last 1,000 completed jobs). The enqueue is **not awaited**: with Redis
+  unreachable, ioredis queues commands offline and the add would not settle, and the merge
+  request and the audit subscriber (both after-commit hooks) would wait for it. A failed enqueue
+  is logged with ids only.
 - `MergeLedgerWorker` (a `TenantWorker`: the job's tenant, actor kind `job`, the merging user as
-  the actor user) calls `repointMergedEntries`. One transaction moves every entry of the dropped
-  patient to the kept one and, when anything moved, audits `ledger_entry.repoint` with resource
-  type `patient`, resource id = the kept patient (so it shows in that patient's history), after
-  `{ droppedId, count }`. Idempotent; retried with backoff, then dead-lettered (CLAUDE.md §9).
+  the actor user, the platform-admin flag carried in the job envelope) calls
+  `repointMergedEntries(keptId, droppedId)`. One transaction:
+  - resolves the **survivor** of the kept patient (`PatientsService.survivorOf`: the kept patient
+    itself, or the end of its `mergedIntoId` chain if it has been merged away since), holding it
+    `FOR SHARE` so it can't be merged away before the transaction commits;
+  - moves every entry of the dropped patient to the survivor;
+  - when anything moved, audits `ledger_entry.repoint` (resource type `patient`, resource id =
+    the survivor, so it shows in that patient's history; after `{ droppedId, keptId, count }`).
+
+  So the jobs of a merge chain (A into B, then B into C) end on C whatever order they run in. An
+  unknown kept patient (or another tenant's) moves nothing. Idempotent; retried with backoff,
+  then dead-lettered (CLAUDE.md §9).
+
 - Ledger writes hold the patient row `FOR SHARE` and a merge locks it `FOR UPDATE`, so an entry
   written during a merge commits first and the job moves it too.
-- A crash between the merge commit and the enqueue skips the re-point: the after-commit window
-  documented in ADR-0017. Recovery is enqueueing the job again.
+- **When a re-point does not happen**, the dropped (archived) record keeps its entries and the
+  survivor's balance is short by them. There is no automatic reconciliation. Recovery:
+  - **The job was never enqueued** (a crash between the merge commit and the enqueue, or Redis
+    refused it; the log has the ids): enqueue `merge-ledger` again with the same payload and job
+    id. This works because no job with that id exists.
+  - **The job failed** (retries exhausted, it is in the queue's failed set and in the
+    dead-letter queue): retry that job (`job.retry()`), or replay the dead letter. Enqueueing
+    again with the same id does nothing while the failed job is kept.
 
 ### Pure rules (`domain/`)
 
 - `sumBalances(entries)`: Σ per currency on integer cents. Zero sums are dropped and the result
   is ordered by currency code.
-- `rankByBalance(patients, dir, tenantCurrency)` → `{ ids, keys, restKey }`: the keys for
-  `PatientsService.search`'s rank ordering (ascending key, then name, then id), using the
-  tenant-currency amount only (other currencies count as zero). A dense rank over the distinct
-  amounts, zero included:
+- `rankByBalance(patients, dir, tenantCurrency)` → `{ ids, keys, restKey }` (the shape of
+  `patients`' `PatientRankKeys`): the keys for `PatientsService.search`'s rank ordering
+  (ascending key, then name, then id), using the tenant-currency amount only (other currencies
+  count as zero). A dense rank over the distinct amounts, zero included:
   - `desc`: debts, largest first (keys `1..p`); everyone else (zero or no balance) at
     `restKey = p + 1`; then credits, least negative first.
   - `asc`: the mirror image: credits, most negative first; the rest; debts, smallest first.
@@ -149,15 +179,15 @@ permission checks and the first read fail.
 
 ## HTTP
 
-| Route                                    | Access          | Notes                                                                                                                                                                                                                                       |
-| ---------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /billing/opening-balances`         | `payment:write` | Body `{ patient, openingBalance }`; the service also requires `patient:write`. 201 `{ patient, balance }`.                                                                                                                                  |
-| `GET /billing/balances?patientIds=`      | `payment:read`  | 1–100 comma-separated ids, de-duplicated. 200 `PatientBalance[]`.                                                                                                                                                                           |
-| `GET /billing/patients/:id/balance`      | `payment:read`  | 200 `{ patientId, balances }`.                                                                                                                                                                                                              |
-| `POST /billing/patients/:id/adjustments` | `payment:write` | Body `{ amount, effectiveDate, reason, note? }`. 201 with the balance.                                                                                                                                                                      |
-| `GET /billing/patients`                  | `payment:read`  | The `GET /patients` query (`view=owing` and `sort=balance` included). 200 `PatientPage`. The service also requires `patient:read`.                                                                                                          |
-| `GET /billing/patients/owing-count`      | `payment:read`  | 200 `{ count }` (`owingCountSchema`). The service also requires `patient:read`.                                                                                                                                                             |
-| `GET /billing/patients/export`           | `payment:read`  | The list query without `page`/`size`, plus `ids?` (1–100). 200 `text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="patients-<tenant's today>.csv"`, `Cache-Control: no-store`. The service also requires `patient:read`. |
+| Route                                    | Access          | Notes                                                                                                                                                                                                                                                                                                                                    |
+| ---------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /billing/opening-balances`         | `payment:write` | Body `{ patient, openingBalance }`; the service also requires `patient:write`. 201 `{ patient, balance }`.                                                                                                                                                                                                                               |
+| `GET /billing/balances?patientIds=`      | `payment:read`  | 1–100 comma-separated ids, de-duplicated. 200 `PatientBalance[]`.                                                                                                                                                                                                                                                                        |
+| `GET /billing/patients/:id/balance`      | `payment:read`  | 200 `{ patientId, balances }`.                                                                                                                                                                                                                                                                                                           |
+| `POST /billing/patients/:id/adjustments` | `payment:write` | Body `{ amount, effectiveDate, reason, note? }`. 201 with the balance.                                                                                                                                                                                                                                                                   |
+| `GET /billing/patients`                  | `payment:read`  | The `GET /patients` query (`view=owing` and `sort=balance` included). 200 `PatientPage`. The service also requires `patient:read`.                                                                                                                                                                                                       |
+| `GET /billing/patients/owing-count`      | `payment:read`  | 200 `{ count }` (`owingCountSchema`). The service also requires `patient:read`.                                                                                                                                                                                                                                                          |
+| `GET /billing/patients/export`           | `payment:read`  | The list query without `page`/`size`, plus `ids?` (1–100) and `lang?` (`en`/`ar`/`fr`, overrides `Accept-Language`). 200 `text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="patients-<tenant's today>.csv"`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. The service also requires `patient:read`. |
 
 The patient-views routes live in `http/billing-patients.controller.ts`, registered before
 `billing.controller.ts`. They are static two-segment paths, and the routes above that take an id
@@ -165,12 +195,14 @@ all have three segments under `patients/` (`:id/balance`, `:id/adjustments`), so
 captures the other. If a two-segment `patients/:id` route is ever added, it must come after the
 static paths.
 
-The export is written by the handler itself (`@Res()`, Express types stay in `http/`): it pulls
-the first chunk before setting any header, so a refused permission or a failed first read is
-still an RFC 7807 problem; after that a failure can only abort the download (logged). The handler
-pulls the chunks in its own loop and waits for `drain` when the socket buffer is full
-(backpressure). It does not pipe a `Readable`: stream callbacks run outside the request's async
-context, where the tenant (CLS) is unknown.
+The export is written by the handler itself (`@Res()`, Express types stay in `http/`). It calls
+`open` (permissions, snapshot) and pulls the first chunk before setting any header, so a refused
+permission or a failed first read is still an RFC 7807 problem; after that a failure can only
+abort the download (logged). `http/stream-chunks.ts` then writes the chunks from the handler's
+own loop: it waits for `drain` when the socket buffer is full (backpressure), and checks after
+every write whether the client went away, stopping without reading another chunk. It does not
+pipe a `Readable`: stream callbacks run outside the request's async context, where the tenant
+(CLS) is unknown. A download idle for 60 seconds is dropped.
 
 ## Known gaps
 
@@ -193,10 +225,11 @@ context, where the tenant (CLS) is unknown.
 
 ## Depends on
 
-- `patients`: existence (`getMany`), the ledger-write lock (`lockForLedger`), `create` for the
-  opening-balance create, and `search` with its internal options for the patient views and the
-  export; the `PatientsMerged` event.
-- `tenancy`: currency and time zone (`currentTenant`).
+- `patients`: existence and export rows (`getMany`), the ledger-write lock (`lockForLedger`),
+  `create` for the opening-balance create, `search` and `searchIds` with their internal options
+  for the patient views and the export, `survivorOf` for the merge re-point; the
+  `PatientsMerged` event.
+- `tenancy`: currency, time zone and country (`currentTenant`).
 - `users`: dentist display names in the export (`practitionersByIds`).
 - `audit`.
 

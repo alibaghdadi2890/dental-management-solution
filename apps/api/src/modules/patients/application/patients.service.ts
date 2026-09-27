@@ -27,6 +27,7 @@ import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
 import { dentistRank } from '../domain/dentist-rank';
 import { formatDisplayNumber } from '../domain/display-number';
+import type { PatientRankKeys } from '../domain/rank-keys';
 import { groupDuplicates } from '../domain/duplicates';
 import { resolveMerge } from '../domain/merge';
 import type { DomainPatient } from '../domain/patient';
@@ -74,12 +75,18 @@ export interface PatientSearchInternal {
    * back to name order. The caller encodes the direction; `dir` is ignored. Required for
    * `sort=balance`, and used for nothing else.
    */
-  rank?: { ids: readonly string[]; keys: readonly number[]; restKey: number };
-  /** Overrides `query.size` (1–500), for paging through a whole view (billing's CSV export). */
+  rank?: PatientRankKeys;
+  /** Overrides `query.size` (1–500) for `search` (e.g. a one-row page when only the total counts). */
   size?: number;
 }
 
 const MAX_INTERNAL_PAGE_SIZE = 500;
+
+/** A list query without paging: what `searchIds` (and the filters and order) depend on. */
+type UnpagedQuery = Omit<PatientListQuery, 'page' | 'size'>;
+
+/** How many merges `survivorOf` follows before assuming a cycle (a chain is never this long). */
+const MAX_MERGE_CHAIN = 100;
 
 const NOT_FOUND = 'Patient not found';
 
@@ -227,6 +234,38 @@ export class PatientsService {
     return toPatient(patient);
   }
 
+  /**
+   * For system work that follows a merge (`billing`'s ledger re-point): the patient that `id`
+   * finally lives on — `id` itself unless it was merged away, else the end of its
+   * `mergedIntoId` chain (A merged into B, B into C → C). Each record on the way is read
+   * `FOR SHARE` in the caller's open transaction (throws when none is open), so the survivor
+   * cannot be merged away until the caller commits; a merge that committed meanwhile is seen and
+   * followed. `null` when `id` (or a link) is not a patient of this tenant.
+   *
+   * Not permission-gated — a job actor holds no permissions — but only a job or system task may
+   * call it (throws otherwise). A chain longer than 100 links, or a cycle, throws.
+   */
+  async survivorOf(id: string): Promise<string | null> {
+    const actorKind = this.context.actorKind;
+    if (actorKind !== 'job' && actorKind !== 'system') {
+      throw new Error('survivorOf runs only in a job or system task');
+    }
+    if (!this.tenantDb.currentTransaction()) {
+      throw new Error('survivorOf must run inside a transaction');
+    }
+    const seen = new Set<string>();
+    let current = id;
+    while (seen.size < MAX_MERGE_CHAIN) {
+      if (seen.has(current)) throw new Error('survivorOf: merge chain has a cycle');
+      seen.add(current);
+      const patient = await this.patients.findForShare(current);
+      if (!patient) return null;
+      if (patient.mergedIntoId === null) return patient.id;
+      current = patient.mergedIntoId;
+    }
+    throw new Error(`survivorOf: merge chain longer than ${String(MAX_MERGE_CHAIN)}`);
+  }
+
   // --- The Patients list ---
 
   /**
@@ -238,12 +277,7 @@ export class PatientsService {
     internal: PatientSearchInternal = {},
   ): Promise<PatientPage> {
     this.context.requirePermission('patient:read');
-    if (query.view === 'owing' && internal.idsIn === undefined) {
-      throw unsupported('view', 'The owing view is served by billing');
-    }
-    if (query.sort === 'balance' && internal.rank === undefined) {
-      throw unsupported('sort', 'Sorting by balance is served by billing');
-    }
+    assertInternalFor(query, internal);
     const size = internal.size ?? query.size;
     if (!Number.isInteger(size) || size < 1 || size > MAX_INTERNAL_PAGE_SIZE) {
       throw new RangeError(`search: page size must be 1–${MAX_INTERNAL_PAGE_SIZE}`);
@@ -260,6 +294,27 @@ export class PatientsService {
         ...(rank === undefined ? {} : { rank }),
       });
       return { items: rows.map(toListItem), total, page: query.page, size };
+    });
+  }
+
+  /**
+   * Every matching id in the order `search` would page them, unpaged — one snapshot of a whole
+   * view for `billing`'s CSV export, so rows written while it streams never shift or repeat.
+   * Same query, internal options and validation as `search`; `page`, `size` and
+   * `internal.size` are ignored. Bounded by the tenant's patient count (ADR-0018).
+   */
+  async searchIds(query: UnpagedQuery, internal: PatientSearchInternal = {}): Promise<string[]> {
+    this.context.requirePermission('patient:read');
+    assertInternalFor(query, internal);
+    return this.tenantDb.run(async () => {
+      const filters = await this.filtersFor(query);
+      const rank = await this.rankFor(query, internal);
+      return this.patients.searchIds(filters, {
+        sort: query.sort,
+        dir: query.dir,
+        ...(internal.idsIn === undefined ? {} : { idsIn: internal.idsIn }),
+        ...(rank === undefined ? {} : { rank }),
+      });
     });
   }
 
@@ -377,7 +432,7 @@ export class PatientsService {
     return localDate(this.clock.now(), tenant.timeZone);
   }
 
-  private async filtersFor(query: PatientListQuery): Promise<PatientSearchFilters> {
+  private async filtersFor(query: UnpagedQuery): Promise<PatientSearchFilters> {
     const filters: PatientSearchFilters = {
       view: query.view === 'owing' ? 'active' : query.view,
     };
@@ -400,7 +455,7 @@ export class PatientsService {
    * the caller's keys over patient ids.
    */
   private async rankFor(
-    query: PatientListQuery,
+    query: UnpagedQuery,
     internal: PatientSearchInternal,
   ): Promise<PatientRank | undefined> {
     if (query.sort === 'balance' && internal.rank) {
@@ -455,6 +510,19 @@ export class PatientsService {
       result.push(after);
     }
     return result;
+  }
+}
+
+/** `view=owing` and `sort=balance` need the internal options only `billing` supplies. */
+function assertInternalFor(
+  query: Pick<PatientListQuery, 'view' | 'sort'>,
+  internal: PatientSearchInternal,
+): void {
+  if (query.view === 'owing' && internal.idsIn === undefined) {
+    throw unsupported('view', 'The owing view is served by billing');
+  }
+  if (query.sort === 'balance' && internal.rank === undefined) {
+    throw unsupported('sort', 'Sorting by balance is served by billing');
   }
 }
 

@@ -39,7 +39,11 @@ export function sumBalances(entries: readonly BalanceMoney[]): BalanceMoney[] {
     .map(([currency, cents]) => ({ amount: fromCents(cents), currency }));
 }
 
-/** `PatientsService.search`'s rank: `keys[i]` is the sort key of `ids[i]` (ascending). */
+/**
+ * `PatientsService.search`'s rank: `keys[i]` is the sort key of `ids[i]` (ascending). The same
+ * shape as `patients`' exported `PatientRankKeys`, which the application layer passes it as;
+ * restated here because `domain/` imports no other module (CLAUDE.md §4 rule 5).
+ */
 export interface BalanceRank {
   /** Patients with a non-zero balance in the tenant currency, in key order. */
   ids: string[];

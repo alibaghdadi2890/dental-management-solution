@@ -8,19 +8,22 @@ import type {
   StaffUser,
   Tenant,
 } from '@dcm/contracts';
-import { formatPhone } from '@dcm/contracts';
+import { patientExportQuerySchema } from '@dcm/contracts';
 import { getQueueToken } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BillingService } from '../../src/modules/billing';
-import { MergeLedgerSubscriber } from '../../src/modules/billing/application/merge-ledger.subscriber';
 import { BILLING_QUEUE } from '../../src/modules/billing/application/merge-ledger.worker';
-import { PATIENTS_MERGED, type PatientsMerged } from '../../src/modules/patients';
+import { PatientExportService } from '../../src/modules/billing/application/patient-export.service';
+import { exportLabels } from '../../src/modules/billing/http/export-headers';
+import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
+import { TenantJobs } from '../../src/platform/queue/tenant-jobs';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { asPlatformAdminIn } from '../support/tenants';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -326,15 +329,14 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         '250.00',
       );
       ranad = await createPatient(clinic.owner, { fullName: 'Ranad Plain', phone: '03 123 456' });
-      omar = await openWithBalance(clinic.owner, { fullName: 'Omar Other', sex: 'male' }, '5.00');
+      // A foreign number: international format, which starts with `+`.
+      omar = await openWithBalance(
+        clinic.owner,
+        { fullName: 'Omar Other', sex: 'male', phone: '+33 6 12 34 56 78' },
+        '5.00',
+      );
       await adjust(clinic.owner, omar.id, '-55.00');
     });
-
-    /**
-     * International format (`+961 71 123 456`) behind the injection guard's `'`: a spreadsheet
-     * would evaluate a leading `+` (the spaces as its intersection operator).
-     */
-    const phoneCell = (patient: Patient) => `'${formatPhone(patient.phone)}`;
 
     const ranaRow = () =>
       [
@@ -343,7 +345,8 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         // Born 11 June 1990; the tenant's today is 10 June 2026.
         '35',
         'Female',
-        phoneCell(rana),
+        // The tenant country's (LB) numbers in national format, unguarded.
+        '71 123 456',
         '',
         'Dr. Export Dentist',
         '',
@@ -357,22 +360,29 @@ describe('billing: patient views, CSV export and merge re-point', () => {
       expect(response.headers['content-disposition']).toBe(
         `attachment; filename="patients-${TODAY}.csv"`,
       );
+      expect(response.headers['x-content-type-options']).toBe('nosniff');
+      expect(response.headers['cache-control']).toBe('no-store');
       expect(csvLines(response.text)).toEqual([
         'Patient ID,Name,Age,Sex,Phone,Last visit,Dentist,Visits,Balance (USD)',
         ranaRow(),
-        [ranad.displayNumber, 'Ranad Plain', '', '', phoneCell(ranad), '', '', '', '0.00'].join(
-          ',',
-        ),
+        [ranad.displayNumber, 'Ranad Plain', '', '', '03 123 456', '', '', '', '0.00'].join(','),
       ]);
-      expect(formatPhone(rana.phone)).toBe('+961 71 123 456');
     });
 
-    it('writes a credit as a negative number, unguarded', async () => {
+    it('writes a credit unguarded and a foreign phone internationally, guarded', async () => {
       const lines = csvLines((await exportCsv(clinic.owner, 'q=omar')).text);
       expect(lines[1]).toBe(
-        [omar.displayNumber, 'Omar Other', '', 'Male', phoneCell(omar), '', '', '', '-50.00'].join(
-          ',',
-        ),
+        [
+          omar.displayNumber,
+          'Omar Other',
+          '',
+          'Male',
+          "'+33 6 12 34 56 78",
+          '',
+          '',
+          '',
+          '-50.00',
+        ].join(','),
       );
     });
 
@@ -386,6 +396,17 @@ describe('billing: patient views, CSV export and merge re-point', () => {
       expect(french[0]?.startsWith('N° patient,Nom,Âge,Sexe,')).toBe(true);
       const german = csvLines((await exportCsv(clinic.owner, 'q=rana', 'de')).text);
       expect(german[0]?.startsWith('Patient ID,')).toBe(true);
+    });
+
+    it('takes the language from lang over Accept-Language', async () => {
+      const french = csvLines((await exportCsv(clinic.owner, 'q=rana&lang=fr', 'ar')).text);
+      expect(french[0]?.startsWith('N° patient,Nom,')).toBe(true);
+      expect(french[1]?.split(',')[3]).toBe('Femme');
+      const arabic = csvLines((await exportCsv(clinic.owner, 'q=rana&lang=ar')).text);
+      expect(arabic[0]?.startsWith('رقم المريض,')).toBe(true);
+      const blank = csvLines((await exportCsv(clinic.owner, 'q=rana&lang=', 'fr')).text);
+      expect(blank[0]?.startsWith('N° patient,')).toBe(true);
+      expect((await exportCsv(clinic.owner, 'q=rana&lang=de')).status).toBe(400);
     });
 
     it('exports exactly the selected ids, in the given order', async () => {
@@ -424,31 +445,79 @@ describe('billing: patient views, CSV export and merge re-point', () => {
       ).toBe(true);
     });
 
-    it('streams 1,200 patients in full (pages of 500)', async () => {
-      const bulk = await provision('Bulk Export Clinic');
-      await database.ownerPool.query(
-        `insert into patients
-           (id, tenant_id, display_number, full_name, name_key, phone, phone_search)
-         select gen_random_uuid(), $1, 'P-' || lpad(g::text, 6, '0'),
-                'Bulk ' || lpad(g::text, 4, '0'), 'bulk ' || lpad(g::text, 4, '0'),
-                '+96171000000', '96171000000 71000000'
-         from generate_series(1, 1200) as g`,
-        [bulk.tenant.id],
-      );
-      const response = await exportCsv(bulk.owner, 'view=active');
-      expect(response.status).toBe(200);
-      const rows = csvLines(response.text).slice(1);
-      expect(rows).toHaveLength(1200);
-      const names = rows.map((row) => row.split(',')[1]);
-      expect(new Set(names).size).toBe(1200);
-      expect(names[0]).toBe('Bulk 0001');
-      expect(names[499]).toBe('Bulk 0500');
-      expect(names[500]).toBe('Bulk 0501');
-      expect(names[1199]).toBe('Bulk 1200');
+    describe('1,200 patients', () => {
+      let bulk: Clinic;
+
+      /** Adds patients `Bulk <from>` to `Bulk <to>` straight into the table (fast fixtures). */
+      const seed = (from: number, to: number) =>
+        database.ownerPool.query(
+          `insert into patients
+             (id, tenant_id, display_number, full_name, name_key, phone, phone_search)
+           select gen_random_uuid(), $1, 'P-' || lpad((g + 1)::text, 6, '0'),
+                  'Bulk ' || lpad(g::text, 4, '0'), 'bulk ' || lpad(g::text, 4, '0'),
+                  '+96171000000', '96171000000 71000000'
+           from generate_series($2::int, $3::int) as g`,
+          [bulk.tenant.id, from, to],
+        );
+
+      beforeAll(async () => {
+        bulk = await provision('Bulk Export Clinic');
+        await seed(1, 1200);
+      });
+
+      const namesOf = (csv: string) =>
+        csvLines(csv)
+          .slice(1)
+          .map((row) => row.split(',')[1]);
+
+      it('streams them in full, in chunks of 500', async () => {
+        const response = await exportCsv(bulk.owner, 'view=active');
+        expect(response.status).toBe(200);
+        const names = namesOf(response.text);
+        expect(names).toHaveLength(1200);
+        expect(new Set(names).size).toBe(1200);
+        expect(names[0]).toBe('Bulk 0001');
+        expect(names[499]).toBe('Bulk 0500');
+        expect(names[500]).toBe('Bulk 0501');
+        expect(names[1199]).toBe('Bulk 1200');
+      });
+
+      it('exports the snapshot taken at the start: a row added mid-stream shifts nothing', async () => {
+        const service = testApp.app.get(PatientExportService);
+        const csv = await asPlatformAdminIn(testApp.app, bulk.tenant.id, async () => {
+          const { chunks } = await service.open(
+            patientExportQuerySchema.parse({ view: 'active' }),
+            exportLabels('en'),
+          );
+          const parts: string[] = [];
+          const first = await chunks.next();
+          if (!first.done) parts.push(first.value);
+          // Sorts first by name: with offset paging, the first chunk's last row would repeat.
+          await seed(0, 0);
+          for await (const chunk of chunks) parts.push(chunk);
+          return parts.join('');
+        });
+        const names = namesOf(csv);
+        expect(names).toHaveLength(1200);
+        expect(new Set(names).size).toBe(1200);
+        expect(names).not.toContain('Bulk 0000');
+        expect(names[500]).toBe('Bulk 0501');
+      });
     });
   });
 
   describe('merge re-point', () => {
+    const repointAudit = async (tenantId: string) =>
+      (
+        await database.ownerPool.query<{ resource_id: string; after: unknown }>(
+          `select actor_kind, actor_user_id, actor_platform_admin, resource_type, resource_id,
+                  after
+           from audit_log where tenant_id = $1 and action = 'ledger_entry.repoint'
+           order by occurred_at, id`,
+          [tenantId],
+        )
+      ).rows;
+
     it('moves the dropped patient’s entries to the kept one, as an audited job, once', async () => {
       const clinic = await provision('Merge Ledger Clinic');
       const keep = await openWithBalance(clinic.owner, { fullName: 'Keep Kareem' }, '50.00');
@@ -472,35 +541,38 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         expect(await balanceOf(clinic.owner, drop.id)).toEqual([]);
 
         const session = (await clinic.owner.get('/api/v1/session')).body as Session;
-        const audit = await database.ownerPool.query(
-          `select actor_kind, actor_user_id, resource_type, resource_id, after
-           from audit_log where tenant_id = $1 and action = 'ledger_entry.repoint'`,
-          [clinic.tenant.id],
-        );
-        expect(audit.rows).toEqual([
+        expect(await repointAudit(clinic.tenant.id)).toEqual([
           {
             actor_kind: 'job',
             actor_user_id: session.user.id,
+            actor_platform_admin: false,
             resource_type: 'patient',
             resource_id: keep.id,
-            after: { droppedId: drop.id, count: 1 },
+            after: { droppedId: drop.id, keptId: keep.id, count: 1 },
           },
         ]);
 
-        // The same event again (a replay): the job id is taken, so nothing runs a second time.
+        // The same job again (a replayed event): the job id is taken, so nothing runs twice.
         const queue = testApp.app.get<Queue>(getQueueToken(BILLING_QUEUE));
         const job = await queue.getJob(`${clinic.tenant.id}_merge_${drop.id}`);
         expect(job?.returnvalue).toEqual({ moved: 1 });
-        const replay: PatientsMerged = {
-          id: newId(),
-          name: PATIENTS_MERGED,
-          occurredAt: new Date().toISOString(),
-          tenantId: clinic.tenant.id,
-          actor: { userId: session.user.id, kind: 'user', platformAdmin: false },
-          requestId: null,
-          payload: { keptId: keep.id, droppedId: drop.id },
-        };
-        await testApp.app.get(MergeLedgerSubscriber).onPatientsMerged(replay);
+        await testApp.app.get(RequestContext).run(
+          {
+            requestId: newId(),
+            actorKind: 'user',
+            tenantId: clinic.tenant.id,
+            userId: session.user.id,
+          },
+          () =>
+            testApp.app
+              .get(TenantJobs)
+              .enqueue(
+                queue,
+                'merge-ledger',
+                { keptId: keep.id, droppedId: drop.id },
+                { jobId: `merge_${drop.id}` },
+              ),
+        );
         await vi.waitFor(
           async () => {
             const counts = await queue.getJobCounts('waiting', 'delayed', 'active');
@@ -513,6 +585,94 @@ describe('billing: patient views, CSV export and merge re-point', () => {
       } finally {
         repoint.mockRestore();
       }
+    });
+
+    it("records a platform admin's merge as such on the job's audit entry", async () => {
+      const clinic = await provision('Admin Merge Clinic');
+      const keep = await openWithBalance(clinic.owner, { fullName: 'Admin Keep' }, '5.00');
+      const drop = await openWithBalance(clinic.owner, { fullName: 'Admin Drop' }, '6.00');
+      const merged = await admin
+        .post('/api/v1/patients/merge')
+        .set('X-Tenant-Id', clinic.tenant.id)
+        .send({ keepId: keep.id, dropId: drop.id, reason: 'Support merge' });
+      expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+      const adminId = ((await admin.get('/api/v1/session')).body as Session).user.id;
+      await vi.waitFor(
+        async () => {
+          expect(await repointAudit(clinic.tenant.id)).toEqual([
+            expect.objectContaining({
+              actor_kind: 'job',
+              actor_user_id: adminId,
+              actor_platform_admin: true,
+              resource_id: keep.id,
+            }),
+          ]);
+        },
+        { timeout: 15_000, interval: 100 },
+      );
+    });
+
+    it('ends a merge chain on the survivor, whatever order its jobs run in', async () => {
+      const clinic = await provision('Merge Chain Clinic');
+      const a = await openWithBalance(clinic.owner, { fullName: 'Chain A' }, '10.00');
+      const b = await openWithBalance(clinic.owner, { fullName: 'Chain B' }, '20.00');
+      const c = await openWithBalance(clinic.owner, { fullName: 'Chain C' }, '30.00');
+      const queue = testApp.app.get<Queue>(getQueueToken(BILLING_QUEUE));
+      const billing = testApp.app.get(BillingService);
+      const asJob = <T>(fn: () => Promise<T>) =>
+        testApp.app
+          .get(RequestContext)
+          .run({ requestId: newId(), actorKind: 'job', tenantId: clinic.tenant.id }, fn);
+
+      await queue.pause();
+      try {
+        // J1: A merged into B. J2: B merged into C. Both wait in the paused queue.
+        expect((await merge(clinic.owner, b.id, a.id)).status).toBe(200);
+        expect((await merge(clinic.owner, c.id, b.id)).status).toBe(200);
+        // J2 first, then J1: J1's kept patient (B) is merged away by then; its survivor is C.
+        expect(await asJob(() => billing.repointMergedEntries(c.id, b.id))).toBe(1);
+        expect(await asJob(() => billing.repointMergedEntries(b.id, a.id))).toBe(1);
+      } finally {
+        await queue.resume();
+      }
+      expect(await ledgerOwners(clinic.tenant.id)).toEqual([
+        { patient_id: c.id, amount: '10.00' },
+        { patient_id: c.id, amount: '20.00' },
+        { patient_id: c.id, amount: '30.00' },
+      ]);
+      expect(await balanceOf(clinic.owner, c.id)).toEqual([{ amount: '60.00', currency: 'USD' }]);
+      const audit = await repointAudit(clinic.tenant.id);
+      expect(audit.map((entry) => entry.resource_id)).toEqual([c.id, c.id]);
+      expect(audit.map((entry) => entry.after)).toEqual([
+        { droppedId: b.id, keptId: c.id, count: 1 },
+        { droppedId: a.id, keptId: b.id, count: 1 },
+      ]);
+
+      // The queued jobs then run and find nothing left to move.
+      for (const dropped of [a.id, b.id]) {
+        await vi.waitFor(
+          async () => {
+            const job = await queue.getJob(`${clinic.tenant.id}_merge_${dropped}`);
+            expect(job?.returnvalue).toEqual({ moved: 0 });
+          },
+          { timeout: 15_000, interval: 100 },
+        );
+      }
+      expect(await balanceOf(clinic.owner, c.id)).toEqual([{ amount: '60.00', currency: 'USD' }]);
+    });
+
+    it('moves nothing when the kept patient is not in this tenant', async () => {
+      const clinic = await provision('Merge Unknown Clinic');
+      const drop = await openWithBalance(clinic.owner, { fullName: 'Lonely Drop' }, '10.00');
+      const moved = await testApp.app
+        .get(RequestContext)
+        .run({ requestId: newId(), actorKind: 'job', tenantId: clinic.tenant.id }, () =>
+          testApp.app.get(BillingService).repointMergedEntries(newId(), drop.id),
+        );
+      expect(moved).toBe(0);
+      expect(await ledgerOwners(clinic.tenant.id)).toEqual([
+        { patient_id: drop.id, amount: '10.00' },
+      ]);
     });
 
     it('lets a merge wait for an in-flight ledger write, then moves that entry too', async () => {

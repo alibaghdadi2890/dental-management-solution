@@ -11,12 +11,14 @@ import {
   idAmong,
   orderByFor,
   whereFor,
+  type PatientOrderOptions,
   type PatientSearchFilters,
   type PatientSearchOptions,
 } from './patient-search.sql';
 import { patients } from './schema';
 
 export type {
+  PatientOrderOptions,
   PatientRank,
   PatientSearchFilters,
   PatientSearchOptions,
@@ -361,6 +363,26 @@ export class PatientsRepository {
 
     const total = Number(rows.at(0)?.total ?? 0);
     return { rows: rows.map((row) => toDomain(row)), total };
+  }
+
+  /**
+   * Every matching id in the search order, unpaged: one snapshot of a whole view (billing's
+   * export streams rows from it, so rows written meanwhile never shift or repeat). Bounded by the
+   * tenant's patient count (thousands, ADR-0018). `idsIn: []` matches nothing.
+   */
+  async searchIds(
+    filters: PatientSearchFilters,
+    options: PatientOrderOptions & { idsIn?: readonly string[] },
+  ): Promise<string[]> {
+    if (options.idsIn && options.idsIn.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({ id: patients.id })
+        .from(patients)
+        .where(whereFor(filters, options.idsIn))
+        .orderBy(...orderByFor(options)),
+    );
+    return rows.map((row) => row.id);
   }
 
   async counts(): Promise<{ active: number; archived: number }> {

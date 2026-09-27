@@ -14,6 +14,7 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import { nameKey } from '../domain/name-key';
+import type { PatientRankKeys } from '../domain/rank-keys';
 import { patients } from './schema';
 
 /** `active`/`notSeen` (currently identical — design Q14) map to `deleted_at is null`. */
@@ -44,12 +45,8 @@ export type PatientSortKey = 'name' | 'age' | 'recent' | 'dentist' | 'balance';
  * two dentists with the same name) the same key. The caller encodes the direction in the keys;
  * `PatientSearchOptions.dir` is ignored for these two sorts. Never exposed over HTTP.
  */
-export interface PatientRank {
+export interface PatientRank extends PatientRankKeys {
   column: 'id' | 'primaryDentistUserId';
-  ids: readonly string[];
-  /** One per id, same length as `ids`; 32-bit integers (bound as Postgres `int[]`). */
-  keys: readonly number[];
-  restKey: number;
 }
 
 export interface PatientSearchOptions {
@@ -63,6 +60,9 @@ export interface PatientSearchOptions {
   /** Required when `sort` is `'dentist'` or `'balance'` (see `PatientRank`). */
   rank?: PatientRank;
 }
+
+/** What the order depends on: the sort, its direction and the rank for ranked sorts. */
+export type PatientOrderOptions = Pick<PatientSearchOptions, 'sort' | 'dir' | 'rank'>;
 
 /** Escapes LIKE/ILIKE metacharacters so user input is matched literally. */
 export function escapeLike(value: string): string {
@@ -148,7 +148,7 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
  * updated first" (documented design choice: there is no meaningful "least recently updated" saved
  * view). `sort=dentist`/`'balance'` require `options.rank` and ignore `dir` (design Q7).
  */
-export function orderByFor(options: PatientSearchOptions): SQL[] {
+export function orderByFor(options: PatientOrderOptions): SQL[] {
   const idTieBreak = sql`${patients.id} asc`;
   const tieBreak = [sql`${patients.nameKey} asc`, idTieBreak];
   switch (options.sort) {

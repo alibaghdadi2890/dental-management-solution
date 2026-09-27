@@ -45,7 +45,7 @@ with an opening balance) are composed by `billing` on top of this module (design
 
 ## Public API (`index.ts`)
 
-`PatientsModule`, `PatientsService`, `PatientSearchInternal`, the domain errors
+`PatientsModule`, `PatientsService`, `PatientSearchInternal`, `PatientRankKeys`, the domain errors
 (`PatientNotFoundError`, `PatientArchivedError`, `PatientMergedError`, `MergeSameError`,
 `UnknownDentistError`, `MergeAlertsOverflowError`), and the event names and types.
 
@@ -58,7 +58,9 @@ with an opening balance) are composed by `billing` on top of this module (design
 | `get(id)`                                                | `patient:read`  | Archived and merged records included; 404 otherwise.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `getMany(ids)`                                           | `patient:read`  | For `billing` (existence checks, export rows): the visible patients among `ids`, archived included, in no particular order.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `lockForLedger(id)`                                      | `patient:read`  | For `billing`'s ledger writes, inside the caller's open transaction (throws if there is none). Reads the row `FOR SHARE`, so a merge, archive or edit (`FOR UPDATE`) waits until the ledger entry commits. Unknown → 404 `patient.not_found`; merged away → 409 `patient.merged`. Archived but not merged is allowed (a debt write-off). Returns the record.                                                                                                                                                                                                                                                                                                         |
+| `survivorOf(id)`                                         | none (job only) | For `billing`'s merge re-point, inside the caller's open transaction (throws if there is none). Follows `mergedIntoId` from `id` to the patient it finally lives on (`id` itself unless merged away; A into B, B into C → C), reading each record `FOR SHARE` so the survivor cannot be merged away before the caller commits. `null` when `id` (or a link) is not a patient of this tenant. A cycle or a chain over 100 links throws. Not permission-gated (a job actor holds no permissions) but refuses any actor other than a job or system task.                                                                                                                |
 | `search(query, internal?)`                               | `patient:read`  | Offset page `{ items, total, page, size }` (ADR-0018). See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `searchIds(query, internal?)`                            | `patient:read`  | Every matching id, in the order `search` would page them, unpaged: the snapshot `billing`'s CSV export streams from. Same query (paging ignored), internal options and validation as `search`. Bounded by the tenant's patient count (ADR-0018).                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `counts()`                                               | `patient:read`  | `{ active, notSeen, archived }`, ignoring filters. `notSeen` equals `active` until visits exist (design Q14).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `duplicates()`                                           | `patient:read`  | Groups of active patients sharing `name_key` and a non-null date of birth, each ordered by number.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `checkDuplicates({ fullName, dateOfBirth, excludeId? })` | `patient:read`  | Active twins, for the create/edit warning.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -86,12 +88,14 @@ column)], restKey)` ascending, then `name_key`, then `id`; `dir` is ignored, the
   encodes the direction in the keys. `ids` and `keys` must have the same length and the keys
   must be 32-bit integers (`RangeError` otherwise).
 - `internal` (`PatientSearchInternal`) is for other modules' services only. HTTP never reaches it.
+  The rank shape is exported as `PatientRankKeys`.
   - `idsIn`: restricts the page to these ids. It is required for `view=owing`, which is read as
     active ∩ `idsIn`.
   - `rank { ids, keys, restKey }`: `keys[i]` is the sort key of patient `ids[i]`; unlisted
     patients get `restKey`. Equal keys tie and fall back to the name order. It is required for
     `sort=balance` (`billing`'s `rankByBalance`).
-  - `size`: overrides the page size (1–500), for export.
+  - `size`: overrides the page size (1–500) for `search` (e.g. a one-row page when only the total
+    counts).
   - Without them, `view=owing` or `sort=balance` → 422 `validation_failed` (path `view`/`sort`).
 
 ## HTTP
@@ -127,7 +131,8 @@ column)], restKey)` ascending, then `name_key`, then `id`; `dir` is ignored, the
 - `audit`.
 
 Nothing here imports `billing`. `billing` depends on `patients` (`create`, `getMany`,
-`lockForLedger`, `search` with its internal options, and `PatientsMerged`).
+`lockForLedger`, `search`/`searchIds` with their internal options, `survivorOf`, and
+`PatientsMerged`).
 
 ## Permissions
 

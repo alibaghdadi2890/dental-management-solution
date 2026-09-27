@@ -36,6 +36,29 @@ describe('csvRow', () => {
     expect(csvRow(['=HYPERLINK("http://x","y")'])).toBe(`"'=HYPERLINK(""http://x"",""y"")"\r\n`);
   });
 
+  it('guards a leading line feed', () => {
+    expect(csvRow(['\n=1'])).toBe(`"'\n=1"\r\n`);
+  });
+
+  it('guards the full-width trigger characters', () => {
+    // U+FF1D, U+FF0B, U+FF0D, U+FF20: some spreadsheets normalise them to = + - @.
+    for (const code of [0xff1d, 0xff0b, 0xff0d, 0xff20]) {
+      const cell = `${String.fromCharCode(code)}SUM(1)`;
+      expect(csvRow([cell])).toBe(`'${cell}\r\n`);
+    }
+  });
+
+  it('guards a trigger behind leading whitespace', () => {
+    expect(csvRow([' =SUM(1)'])).toBe("' =SUM(1)\r\n");
+    expect(csvRow(['   +1'])).toBe("'   +1\r\n");
+    expect(csvRow([`${String.fromCharCode(0x3000)}@x`])).toBe(
+      `'${String.fromCharCode(0x3000)}@x\r\n`,
+    );
+    expect(csvRow([' -5.00'], { numericColumns: [0] })).toBe("' -5.00\r\n");
+    // Whitespace alone, or before ordinary text, is left alone.
+    expect(csvRow(['  Rana', ' '])).toBe('  Rana, \r\n');
+  });
+
   it('only guards the first character', () => {
     expect(csvRow(['Rana=Haddad', 'a-b', 'x@y.com'])).toBe('Rana=Haddad,a-b,x@y.com\r\n');
   });

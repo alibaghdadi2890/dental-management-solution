@@ -1,26 +1,24 @@
-import type { OwingCount, PatientListItem, PatientListQuery, PatientPage } from '@dcm/contracts';
+import type { OwingCount, PatientListQuery, PatientPage } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import { type PatientSearchInternal, PatientsService } from '../../patients';
+import { type PatientRankKeys, type PatientSearchInternal, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
-import { type BalanceRank, rankByBalance } from '../domain/balances';
+import { rankByBalance } from '../domain/balances';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
 import { BillingService } from './billing.service';
 
-/** The list query without paging: what a walk over a whole view (the CSV export) takes. */
+/** The list query without paging: what a snapshot of a whole view (the CSV export) takes. */
 export type PatientViewQuery = Omit<PatientListQuery, 'page' | 'size'>;
 
-/** `search` ignores `query.size` when `internal.size` is set; any valid size will do. */
-const IGNORED_PAGE_SIZE: PatientListQuery['size'] = 50;
-
+/** The owing count's query; `internal.size: 1` makes it a one-row page (only the total counts). */
 const ACTIVE_BY_NAME: PatientListQuery = {
   view: 'active',
   q: undefined,
   sort: 'name',
   dir: 'asc',
   page: 1,
-  size: IGNORED_PAGE_SIZE,
+  size: 10,
 };
 
 /**
@@ -29,7 +27,7 @@ const ACTIVE_BY_NAME: PatientListQuery = {
  * - `view=owing`: the active patients owing in any currency (`idsIn`).
  * - `sort=balance`: ranked by the tenant-currency balance (`rank`, `rankByBalance`), in any view.
  *
- * Every method requires `payment:read`; `search` re-checks `patient:read`.
+ * Every method requires `payment:read`; `search`/`searchIds` re-check `patient:read`.
  */
 @Injectable()
 export class PatientViewsService {
@@ -61,21 +59,14 @@ export class PatientViewsService {
   }
 
   /**
-   * Every patient of a view, in pages of `size` (≤ 500), in the view's order — for the export.
-   * The owing ids and the balance rank are computed once, so every page is cut from the same
-   * order. Each page is its own read (ADR-0018: rows written meanwhile may shift across pages).
+   * Every patient id of a view, in the view's order, unpaged (`PatientsService.searchIds`): the
+   * export's snapshot, so rows written while it streams never shift or repeat.
    */
-  async *pages(query: PatientViewQuery, size: number): AsyncGenerator<PatientListItem[]> {
+  async idsFor(query: PatientViewQuery): Promise<string[]> {
     this.context.requirePermission('payment:read');
-    const internal: PatientSearchInternal = { ...(await this.internalFor(query)), size };
-    for (let page = 1; ; page += 1) {
-      const result = await this.patients.search(
-        searchable({ ...query, page, size: IGNORED_PAGE_SIZE }),
-        internal,
-      );
-      if (result.items.length > 0) yield result.items;
-      if (result.items.length < size || page * size >= result.total) return;
-    }
+    return this.tenantDb.run(async () =>
+      this.patients.searchIds(searchable(query), await this.internalFor(query)),
+    );
   }
 
   private async internalFor(query: PatientViewQuery): Promise<PatientSearchInternal> {
@@ -86,7 +77,7 @@ export class PatientViewsService {
   }
 
   /** Every non-zero tenant-currency balance, ranked (other currencies count as zero). */
-  private async balanceRank(dir: 'asc' | 'desc'): Promise<BalanceRank> {
+  private async balanceRank(dir: 'asc' | 'desc'): Promise<PatientRankKeys> {
     const { currency } = await this.tenancy.currentTenant();
     const sums = await this.entries.sumsInCurrency(currency);
     const balances = sums.map(({ patientId, amount }) => ({
@@ -98,6 +89,6 @@ export class PatientViewsService {
 }
 
 /** The owing view is the active view restricted to the owing ids (`internalFor`). */
-function searchable(query: PatientListQuery): PatientListQuery {
+function searchable<TQuery extends PatientViewQuery>(query: TQuery): TQuery {
   return query.view === 'owing' ? { ...query, view: 'active' } : query;
 }

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  blankToUndefined,
   currencySchema,
   decimalAmountSchema,
   idSchema,
@@ -94,11 +95,20 @@ export const balancesQuerySchema = z.object({
 });
 export type BalancesQuery = z.infer<typeof balancesQuerySchema>;
 
-/** `GET /billing/patients/export`: the list query (paging dropped) plus an optional id filter. */
+/** The languages the CSV export's header row and values come in. */
+export const EXPORT_LANGUAGES = ['en', 'ar', 'fr'] as const;
+export const exportLanguageSchema = z.enum(EXPORT_LANGUAGES);
+export type ExportLanguage = z.infer<typeof exportLanguageSchema>;
+
+/**
+ * `GET /billing/patients/export`: the list query (paging dropped) plus an optional id filter and
+ * an optional `lang` (the SPA's UI language), which overrides `Accept-Language`.
+ */
 export const patientExportQuerySchema = patientListQuerySchema
   .omit({ page: true, size: true })
   .extend({
     ids: commaSeparatedIds(MAX_COMMA_SEPARATED_IDS).optional(),
+    lang: blankToUndefined(exportLanguageSchema.optional()),
   });
 export type PatientExportQuery = z.infer<typeof patientExportQuerySchema>;
 

@@ -1,6 +1,7 @@
 // Public API of the patients module. Other modules import from this file only (CLAUDE.md §4).
 export { PatientsModule } from './patients.module';
 export { type PatientSearchInternal, PatientsService } from './application/patients.service';
+export type { PatientRankKeys } from './domain/rank-keys';
 export {
   MergeAlertsOverflowError,
   MergeSameError,

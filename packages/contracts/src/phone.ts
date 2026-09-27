@@ -37,6 +37,19 @@ export function formatPhone(e164: string): string {
   return phoneNumber ? phoneNumber.formatInternational() : e164;
 }
 
+/**
+ * Formats a stored E.164 number for a tenant: numbers of the tenant's own country in national
+ * format (`+9613123456` → `03 123 456`, how staff type and read them), others in international
+ * format (`+33612345678` → `+33 6 12 34 56 78`). Unparseable input is returned unchanged.
+ */
+export function formatPhoneFor(e164: string, country: CountryCode): string {
+  const phoneNumber = parsePhoneNumberFromString(e164);
+  if (!phoneNumber) return e164;
+  return phoneNumber.country === country
+    ? phoneNumber.formatNational()
+    : phoneNumber.formatInternational();
+}
+
 /** Strips everything but digits, for matching a typed search query against `phone_search`. */
 export function phoneDigits(query: string): string {
   return query.replace(/\D/g, '');

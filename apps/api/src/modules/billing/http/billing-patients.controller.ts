@@ -12,11 +12,15 @@ import { RequirePermission } from '../../../platform/http/route-access';
 import { PatientExportService } from '../application/patient-export.service';
 import { PatientViewsService } from '../application/patient-views.service';
 import { exportLabels, exportLocale } from './export-headers';
+import { streamChunks } from './stream-chunks';
 
 class PatientListQueryDto extends createZodDto(patientListQuerySchema) {}
 class PatientPageDto extends createZodDto(patientPageSchema) {}
 class OwingCountDto extends createZodDto(owingCountSchema) {}
 class PatientExportQueryDto extends createZodDto(patientExportQuerySchema) {}
+
+/** A download idle this long (no socket activity) is dropped. */
+const EXPORT_IDLE_TIMEOUT_MS = 60_000;
 
 /**
  * The Patients list views that need balances (design Q5, Q4; docs/modules/billing.md). Static
@@ -48,12 +52,10 @@ export class BillingPatientsController {
   }
 
   /**
-   * `text/csv` download, streamed page by page with backpressure. The permission checks and the
-   * first page run before any header is set, so they still fail as problem details; a failure
+   * `text/csv` download, streamed chunk by chunk with backpressure (`streamChunks`). The
+   * language is `lang`, else `Accept-Language`. The permission checks, the id snapshot and the
+   * first chunk run before any header is set, so they still fail as problem details; a failure
    * after that can only abort the download.
-   *
-   * The chunks are pulled by this handler's own loop rather than by a piped `Readable`: stream
-   * callbacks run outside the request's async context, where the tenant (CLS) is unknown.
    */
   @Get('export')
   @RequirePermission('payment:read')
@@ -63,40 +65,21 @@ export class BillingPatientsController {
     @Headers('accept-language') acceptLanguage: string | undefined,
     @Res() response: Response,
   ): Promise<void> {
-    const chunks = this.exports.stream(query, exportLabels(exportLocale(acceptLanguage)));
+    const labels = exportLabels(query.lang ?? exportLocale(acceptLanguage));
+    const { fileName, chunks } = await this.exports.open(query, labels);
     const first = await chunks.next();
-    const fileName = await this.exports.fileName();
 
     response.status(200);
     response.setHeader('Content-Type', 'text/csv; charset=utf-8');
     response.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     response.setHeader('Cache-Control', 'no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setTimeout(EXPORT_IDLE_TIMEOUT_MS, () => response.destroy());
     try {
-      for (let next = first; next.done !== true; next = await chunks.next()) {
-        if (response.destroyed) {
-          await chunks.return(undefined);
-          return;
-        }
-        await write(response, next.value);
-      }
-      response.end();
+      await streamChunks(response, first, chunks);
     } catch (error) {
       this.logger.error({ err: error }, 'the patient export failed after the download started');
       response.destroy();
     }
   }
-}
-
-/** Writes one chunk, waiting for the socket to drain (or close) when its buffer is full. */
-function write(response: Response, chunk: string): Promise<void> {
-  if (response.write(chunk)) return Promise.resolve();
-  return new Promise((resolve) => {
-    const done = () => {
-      response.off('drain', done);
-      response.off('close', done);
-      resolve();
-    };
-    response.on('drain', done);
-    response.on('close', done);
-  });
 }

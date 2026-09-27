@@ -49,37 +49,52 @@ We considered:
      order, so equal balances are ordered by name. The same mechanism orders `sort=dentist` in
      `patients`;
    - `GET /billing/patients/owing-count` and the CSV export (`GET /billing/patients/export`),
-     which walks the same view in pages of 500 and adds the Balance column.
+     which snapshots the same view (every id, in order) and adds the Balance column.
 4. **New edges:** `billing → patients` (existence, create, the list), `billing → tenancy`
    (currency, time zone) and `billing → users` (dentist names in the export). None of them
    imports `billing`, so the graph stays acyclic. `clinical` joins in feature 5.
 5. **Ledger entries follow a merge through a BullMQ job.** `patients` emits `PatientsMerged`
    after the merge commits. `billing`'s subscriber enqueues a tenant job (`billing` queue,
-   `merge-ledger`, job id `merge_<droppedId>` — BullMQ refuses `:` in custom ids); the worker
-   moves the dropped patient's entries to the kept one in one transaction, as a `job` actor, and
-   audits `ledger_entry.repoint`. The job is idempotent (a re-run finds nothing to move), retried
-   with backoff and dead-lettered (CLAUDE.md §9). Ledger writes hold the patient row `FOR SHARE`,
-   and the merge locks it `FOR UPDATE`, so an entry written concurrently with a merge commits
-   first and is moved by the job; after the merge, the dropped record refuses new entries
-   (409 `patient.merged`).
+   `merge-ledger`, job id `merge_<droppedId>` — BullMQ refuses `:` in custom ids) without
+   awaiting it, so an unreachable Redis never holds up the merge request or the audit
+   subscriber. The worker runs as a `job` actor (carrying the merging user and, for a platform
+   admin, the admin flag) and, in one transaction, moves the dropped patient's entries to the
+   **survivor** of the kept patient — the kept patient itself, or the end of its merge chain if
+   it has been merged away since (`PatientsService.survivorOf`, which holds the survivor
+   `FOR SHARE`). The jobs of a chain (A into B, B into C) therefore end on C in any order. It
+   audits `ledger_entry.repoint`. The job is idempotent (a re-run finds nothing to move),
+   retried with backoff and dead-lettered (CLAUDE.md §9). Ledger writes hold the patient row
+   `FOR SHARE`, and the merge locks it `FOR UPDATE`, so an entry written concurrently with a
+   merge commits first and is moved by the job; after the merge, the dropped record refuses new
+   entries (409 `patient.merged`).
 
 ## Consequences
 
 - **The after-commit enqueue window.** Events are dispatched after the merge transaction
   commits, and the enqueue is a separate write to Redis. If the process crashes between the
-  commit and the enqueue, or Redis refuses the job (the subscriber logs it and moves on), the
-  re-point never runs: the dropped (archived) record keeps its entries, and the kept record's
-  balance is short by that amount. The `PatientsMerged` audit entry still exists. Recovery is to
-  enqueue the job again (the job id makes a repeat harmless). An outbox (the event written in the
-  merge transaction, relayed to the queue) would close the window; it is platform work to do
-  once a second consumer needs the same guarantee.
-- Until the job has run, the kept record shows the balance without the dropped record's
-  entries. In practice this is milliseconds.
-- `repointMergedEntries` is not permission-gated: it is the system's follow-up to a merge the
-  user was allowed to make, and a job actor holds no permissions. It refuses to run outside a
-  job or system task.
+  commit and the enqueue, or Redis refuses the job (the subscriber logs the ids and moves on),
+  the re-point never runs: the dropped (archived) record keeps its entries, and the survivor's
+  balance is short by that amount. The `PatientsMerged` audit entry still exists. **There is no
+  automatic reconciliation.** Recovery is manual:
+  - the job was never enqueued: enqueue `merge-ledger` again with the same payload and job id.
+    This works only because no job with that id exists;
+  - the job exists but failed (retries exhausted; it is in the queue's failed set and the
+    dead-letter queue): retry it (`job.retry()`) or replay the dead letter. Enqueueing again
+    with the same id does nothing while the failed job is kept.
+
+  An outbox (the event written in the merge transaction, relayed to the queue) would close the
+  window; it is platform work to do once a second consumer needs the same guarantee.
+
+- Until the job has run, the survivor shows the balance without the dropped record's entries.
+  In practice this is milliseconds.
+- `repointMergedEntries` and `survivorOf` are not permission-gated: the re-point is the system's
+  follow-up to a merge the user was allowed to make, and a job actor holds no permissions. Both
+  refuse to run outside a job or system task.
 - The balance sort sends every non-zero tenant-currency balance to `search` as two arrays. That
   is fine for thousands of patients per tenant (ADR-0018's bound). Balances in another currency
   (after a tenant currency change) count as zero for the sort and are not in the CSV.
+- The export takes its snapshot (every id of the view, in order: `PatientsService.searchIds`)
+  before streaming, and reads the rows 500 ids at a time, so rows written meanwhile never shift
+  or repeat. The id list is bounded by the tenant's patient count (ADR-0018).
 - `GET /patients` refuses `view=owing` and `sort=balance` with 400; the SPA sends those queries
   to `GET /billing/patients`, which returns the same page shape.

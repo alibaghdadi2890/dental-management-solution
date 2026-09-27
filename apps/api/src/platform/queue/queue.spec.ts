@@ -51,16 +51,46 @@ describe('TenantJobs.enqueue', () => {
       expect.objectContaining({ jobId: `${TENANT}_reminder_a1`, attempts: 5 }),
     );
   });
+
+  it('carries a platform admin flag so the worker can re-seed it', async () => {
+    const jobs = new TenantJobs(context);
+    const fake = queue();
+
+    await context.run(
+      {
+        requestId: 'req-00000002',
+        actorKind: 'user',
+        tenantId: TENANT,
+        userId: 'admin-1',
+        platformAdmin: true,
+      },
+      () => jobs.enqueue(fake as unknown as Queue, 'send', {}, { jobId: 'x' }),
+    );
+
+    expect(fake.add).toHaveBeenCalledWith(
+      'send',
+      expect.objectContaining({ actorUserId: 'admin-1', platformAdmin: true }),
+      expect.anything(),
+    );
+  });
 });
 
 class ReminderWorker extends TenantWorker<{ appointmentId: string }> {
   protected readonly payloadSchema = z.object({ appointmentId: z.string() });
-  readonly handled: { tenantId: string | undefined; actorKind: string | undefined }[] = [];
+  readonly handled: {
+    tenantId: string | undefined;
+    actorKind: string | undefined;
+    platformAdmin: boolean;
+  }[] = [];
   failWith: Error | undefined;
 
   protected handle(): Promise<void> {
     if (this.failWith) return Promise.reject(this.failWith);
-    this.handled.push({ tenantId: this.context.tenantId, actorKind: this.context.actorKind });
+    this.handled.push({
+      tenantId: this.context.tenantId,
+      actorKind: this.context.actorKind,
+      platformAdmin: this.context.isPlatformAdmin,
+    });
     return Promise.resolve();
   }
 }
@@ -90,7 +120,13 @@ describe('TenantWorker', () => {
   it('runs the handler inside the job tenant context', async () => {
     const { worker: w } = worker();
     await w.process(job(envelope));
-    expect(w.handled).toEqual([{ tenantId: TENANT, actorKind: 'job' }]);
+    expect(w.handled).toEqual([{ tenantId: TENANT, actorKind: 'job', platformAdmin: false }]);
+  });
+
+  it('re-seeds the platform admin flag from the envelope', async () => {
+    const { worker: w } = worker();
+    await w.process(job({ ...envelope, platformAdmin: true }));
+    expect(w.handled).toEqual([{ tenantId: TENANT, actorKind: 'job', platformAdmin: true }]);
   });
 
   it('fails loudly and dead-letters jobs without a tenant', async () => {

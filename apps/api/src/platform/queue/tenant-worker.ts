@@ -34,13 +34,14 @@ export abstract class TenantWorker<TPayload> extends WorkerHost {
       if (!payload.success) {
         throw new UnrecoverableError(`${describe(job)} has an invalid payload`);
       }
-      const { tenantId, requestId, actorUserId } = envelope.data;
+      const { tenantId, requestId, actorUserId, platformAdmin } = envelope.data;
       return await this.context.run(
         {
           requestId,
           actorKind: 'job',
           tenantId,
           ...(actorUserId === undefined ? {} : { userId: actorUserId }),
+          platformAdmin: platformAdmin ?? false,
         },
         () => this.handle(payload.data, job),
       );

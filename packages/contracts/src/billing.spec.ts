@@ -148,3 +148,13 @@ describe('owingCountSchema', () => {
     expect(owingCountSchema.safeParse({ count: 1.5 }).success).toBe(false);
   });
 });
+
+describe('patientExportQuerySchema.lang', () => {
+  it('accepts en, ar and fr, treats blank as absent, refuses others', () => {
+    expect(patientExportQuerySchema.parse({ lang: 'ar' }).lang).toBe('ar');
+    expect(patientExportQuerySchema.parse({ lang: 'fr' }).lang).toBe('fr');
+    expect(patientExportQuerySchema.parse({ lang: '' }).lang).toBeUndefined();
+    expect(patientExportQuerySchema.parse({}).lang).toBeUndefined();
+    expect(patientExportQuerySchema.safeParse({ lang: 'de' }).success).toBe(false);
+  });
+});

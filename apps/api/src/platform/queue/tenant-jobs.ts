@@ -9,6 +9,12 @@ export const tenantJobEnvelopeSchema = z.object({
   tenantId: z.uuid(),
   requestId: z.string().min(1),
   actorUserId: z.string().optional(),
+  /**
+   * The enqueuing actor was a platform admin acting in the tenant (ADR-0008): the worker keeps
+   * the flag, so the job's audit entries say so (and, as in the request that enqueued it, the job
+   * holds the admin's in-tenant permissions). Absent means false.
+   */
+  platformAdmin: z.boolean().optional(),
   payload: z.unknown(),
 });
 
@@ -43,6 +49,7 @@ export class TenantJobs {
       tenantId,
       requestId: this.context.requestId ?? newId(),
       ...(userId === undefined ? {} : { actorUserId: userId }),
+      ...(this.context.isPlatformAdmin ? { platformAdmin: true } : {}),
       payload,
     };
     await queue.add(name, envelope, {

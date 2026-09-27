@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { formatPhone, normalizePhone, phoneDigits, SUPPORTED_COUNTRIES } from './phone.js';
+import {
+  formatPhone,
+  formatPhoneFor,
+  normalizePhone,
+  phoneDigits,
+  SUPPORTED_COUNTRIES,
+} from './phone.js';
 
 describe('normalizePhone', () => {
   it('parses a Lebanese local number with a trunk prefix', () => {
@@ -58,5 +64,21 @@ describe('SUPPORTED_COUNTRIES', () => {
       expect(code).toMatch(/^[A-Z]{2}$/);
     }
     expect(new Set(SUPPORTED_COUNTRIES).size).toBe(SUPPORTED_COUNTRIES.length);
+  });
+});
+
+describe('formatPhoneFor', () => {
+  it("formats the tenant country's numbers nationally", () => {
+    expect(formatPhoneFor('+9613123456', 'LB')).toBe('03 123 456');
+    expect(formatPhoneFor('+96171123456', 'LB')).toBe('71 123 456');
+  });
+
+  it('formats foreign numbers internationally', () => {
+    expect(formatPhoneFor('+33612345678', 'LB')).toBe('+33 6 12 34 56 78');
+    expect(formatPhoneFor('+9613123456', 'FR')).toBe('+961 3 123 456');
+  });
+
+  it('returns the input unchanged when it cannot be parsed', () => {
+    expect(formatPhoneFor('not-a-phone', 'LB')).toBe('not-a-phone');
   });
 });

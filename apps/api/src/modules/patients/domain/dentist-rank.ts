@@ -1,10 +1,4 @@
-/** Integer rank keys for `search`'s rank ordering (design Q7): `keys[i]` belongs to `ids[i]`. */
-export interface RankKeys {
-  ids: string[];
-  keys: number[];
-  /** The key of everyone not among `ids`. */
-  restKey: number;
-}
+import type { PatientRankKeys } from './rank-keys';
 
 interface NamedDentist {
   userId: string;
@@ -23,7 +17,7 @@ export function dentistRank(
   dentists: readonly NamedDentist[],
   dir: 'asc' | 'desc',
   locale: string,
-): RankKeys {
+): PatientRankKeys {
   const collator = new Intl.Collator(locale, { sensitivity: 'base' });
   const ascending: number[] = [];
   dentists.forEach((dentist, index) => {

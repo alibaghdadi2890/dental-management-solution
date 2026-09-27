@@ -1,12 +1,10 @@
+import { EXPORT_LANGUAGES, type ExportLanguage } from '@dcm/contracts';
 import type { ExportLabels } from '../application/patient-export.service';
 
-export const EXPORT_LOCALES = ['en', 'ar', 'fr'] as const;
-export type ExportLocale = (typeof EXPORT_LOCALES)[number];
-
-const FALLBACK: ExportLocale = 'en';
+const FALLBACK: ExportLanguage = 'en';
 
 /** The CSV header row and sex values per language (the SPA's `patients` column names). */
-const LABELS: Record<ExportLocale, ExportLabels> = {
+const LABELS: Record<ExportLanguage, ExportLabels> = {
   en: {
     patientId: 'Patient ID',
     name: 'Name',
@@ -45,29 +43,29 @@ const LABELS: Record<ExportLocale, ExportLabels> = {
   },
 };
 
-function isExportLocale(value: string): value is ExportLocale {
-  return (EXPORT_LOCALES as readonly string[]).includes(value);
+function isExportLanguage(value: string): value is ExportLanguage {
+  return (EXPORT_LANGUAGES as readonly string[]).includes(value);
 }
 
 /**
- * The export language from `Accept-Language`: the supported primary tag (`ar-LB` → `ar`) with
+ * The export language from `Accept-Language` (the query's `lang` overrides it, in the controller): the supported primary tag (`ar-LB` → `ar`) with
  * the highest quality, earlier entries first on a tie; `q=0` means "not this one". `en` when
  * nothing matches or the header is absent.
  */
-export function exportLocale(acceptLanguage: string | undefined): ExportLocale {
+export function exportLocale(acceptLanguage: string | undefined): ExportLanguage {
   if (!acceptLanguage) return FALLBACK;
   const ranges = acceptLanguage.split(',').flatMap((part, index) => {
     const [tag = '', ...params] = part.trim().split(';');
     const qParam = params.map((param) => param.trim()).find((param) => param.startsWith('q='));
     const quality = qParam === undefined ? 1 : Number(qParam.slice(2));
     const primary = tag.trim().split('-')[0]?.toLowerCase() ?? '';
-    if (!Number.isFinite(quality) || quality <= 0 || !isExportLocale(primary)) return [];
+    if (!Number.isFinite(quality) || quality <= 0 || !isExportLanguage(primary)) return [];
     return [{ locale: primary, quality, index }];
   });
   ranges.sort((a, b) => b.quality - a.quality || a.index - b.index);
   return ranges[0]?.locale ?? FALLBACK;
 }
 
-export function exportLabels(locale: ExportLocale): ExportLabels {
+export function exportLabels(locale: ExportLanguage): ExportLabels {
   return LABELS[locale];
 }

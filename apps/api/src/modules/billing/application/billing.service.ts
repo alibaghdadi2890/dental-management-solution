@@ -144,11 +144,15 @@ export class BillingService {
   }
 
   /**
-   * The merge re-point (design Q9), run by `MergeLedgerWorker`: moves every entry of the dropped
-   * patient to the kept one in one transaction and, when anything moved, audits
-   * `ledger_entry.repoint` on the kept patient (after = `{ droppedId, count }`) so it shows in
-   * that patient's history. Idempotent — a re-run finds nothing to move and records nothing.
-   * Returns the number of entries moved.
+   * The merge re-point (design Q9), run by `MergeLedgerWorker`. In one transaction it moves
+   * every entry of the dropped patient to the patient the kept one finally lives on
+   * (`PatientsService.survivorOf`: the kept patient itself, or — when it has since been merged
+   * away too — the end of the chain), holding that survivor `FOR SHARE` so it cannot be merged
+   * away before this commits. Jobs of a merge chain may therefore run in any order and still end
+   * on the survivor. When anything moved it audits `ledger_entry.repoint` on the survivor (after =
+   * `{ droppedId, keptId, count }`) so it shows in that patient's history. Idempotent: a re-run
+   * finds nothing to move and records nothing. An unknown kept patient (or another tenant's)
+   * moves nothing. Returns the number of entries moved.
    *
    * Not permission-gated: it is the system's follow-up to a merge the user was allowed to make,
    * and a job actor holds no permissions. It refuses to run outside a job or system task instead.
@@ -159,13 +163,15 @@ export class BillingService {
       throw new Error('repointMergedEntries runs only in the merge job');
     }
     return this.tenantDb.run(async () => {
-      const count = await this.entries.repointPatient(droppedId, keptId);
+      const survivorId = await this.patients.survivorOf(keptId);
+      if (survivorId === null) return 0;
+      const count = await this.entries.repointPatient(droppedId, survivorId);
       if (count > 0) {
         await this.audit.record({
           action: 'ledger_entry.repoint',
           resourceType: 'patient',
-          resourceId: keptId,
-          after: { droppedId, count },
+          resourceId: survivorId,
+          after: { droppedId, keptId, count },
         });
       }
       return count;
