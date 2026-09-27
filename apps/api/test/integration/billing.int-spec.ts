@@ -438,9 +438,16 @@ describe('billing: ledger, opening balances and balances', () => {
       });
       expect(refused.status).toBe(409);
       expect(refused.body).toMatchObject({ code: 'patient.merged' });
-      expect(await balanceOf(main.owner, dropped.id)).toMatchObject({
-        balances: [{ amount: '80.00', currency: 'USD' }],
-      });
+      // The merge job moves the dropped record's entry to the kept one; the refused one never exists.
+      await vi.waitFor(
+        async () => {
+          expect(await balanceOf(main.owner, kept.id)).toMatchObject({
+            balances: [{ amount: '80.00', currency: 'USD' }],
+          });
+        },
+        { timeout: 15_000, interval: 100 },
+      );
+      expect(await balanceOf(main.owner, dropped.id)).toMatchObject({ balances: [] });
 
       const archived = (await openWithBalance(main.owner, 'Archived Debtor', '35.00')).patient;
       expect(

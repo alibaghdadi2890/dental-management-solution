@@ -477,6 +477,42 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(ids(desc).slice(0, 2)).toEqual([jose.id, amira.id]);
     });
 
+    it('ties dentists with the same display name, so their patients sort by name', async () => {
+      const twins = await provision('Twin Dentists Clinic');
+      const first = await createStaff(twins, { displayName: 'Dr. Sami Aoun' });
+      const second = await createStaff(twins, { displayName: 'dr. sami aoun' });
+      const other = await createStaff(twins, { displayName: 'Dr. Basma Rahal' });
+      const zara = await createPatient(twins.owner, {
+        fullName: 'Zara Twin',
+        phone: '70000010',
+        primaryDentistUserId: first.id,
+      });
+      const adam = await createPatient(twins.owner, {
+        fullName: 'Adam Twin',
+        phone: '70000011',
+        primaryDentistUserId: second.id,
+      });
+      const mona = await createPatient(twins.owner, {
+        fullName: 'Mona Twin',
+        phone: '70000012',
+        primaryDentistUserId: first.id,
+      });
+      const basma = await createPatient(twins.owner, {
+        fullName: 'Yara Other',
+        phone: '70000013',
+        primaryDentistUserId: other.id,
+      });
+      const nobody = await createPatient(twins.owner, {
+        fullName: 'Aaron None',
+        phone: '70000014',
+      });
+
+      const asc = await search(twins.owner, 'sort=dentist&size=50');
+      expect(ids(asc)).toEqual([basma.id, adam.id, mona.id, zara.id, nobody.id]);
+      const desc = await search(twins.owner, 'sort=dentist&dir=desc&size=50');
+      expect(ids(desc)).toEqual([adam.id, mona.id, zara.id, basma.id, nobody.id]);
+    });
+
     it('sorts by most recently updated', async () => {
       await clinic.owner.patch(`/api/v1/patients/${amira.id}`).send({ notes: 'touched' });
       expect(ids(await search(clinic.owner, 'sort=recent'))[0]).toBe(amira.id);
@@ -512,7 +548,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
 
       const byBalance = await inClinic(() =>
         service.search(query({ sort: 'balance' }), {
-          rank: { ids: [omar.id, jose.id], restAt: 3 },
+          rank: { ids: [omar.id, jose.id], keys: [1, 2], restKey: 3 },
           size: 2,
         }),
       );

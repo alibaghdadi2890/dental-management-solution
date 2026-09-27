@@ -399,22 +399,37 @@ describe('patients: repositories', () => {
       expect(rows.map((r) => r.id)).toEqual([carol, bob, alice]);
     });
 
-    it('orders by rank (column: id) with unlisted rows at restAt', async () => {
-      const { rows } = await inTenant(tenant, () =>
+    const byRank = (rank: { ids: string[]; keys: number[]; restKey: number }) =>
+      inTenant(tenant, () =>
         repo.search(
           { view: 'active' },
-          {
-            page: 1,
-            size: 50,
-            sort: 'balance',
-            dir: 'asc',
-            rank: { column: 'id', ids: [bob, alice], restAt: 999 },
-          },
+          { page: 1, size: 50, sort: 'balance', dir: 'desc', rank: { column: 'id', ...rank } },
         ),
       );
-      const ids = rows.map((r) => r.id);
-      expect(ids.indexOf(bob)).toBeLessThan(ids.indexOf(alice));
-      expect(ids.indexOf(alice)).toBeLessThan(ids.indexOf(carol));
+
+    it('orders by rank key (column: id), unlisted rows at restKey', async () => {
+      const { rows } = await byRank({ ids: [bob, alice], keys: [1, 2], restKey: 3 });
+      expect(rows.map((r) => r.id)).toEqual([bob, alice, carol]);
+
+      const restFirst = await byRank({ ids: [bob, alice], keys: [2, 3], restKey: 1 });
+      expect(restFirst.rows.map((r) => r.id)).toEqual([carol, bob, alice]);
+    });
+
+    it('breaks equal keys (including the rest) by name, whatever dir says', async () => {
+      const tied = await byRank({ ids: [carol, bob], keys: [1, 1], restKey: 2 });
+      expect(tied.rows.map((r) => r.id)).toEqual([bob, carol, alice]);
+
+      const withRest = await byRank({ ids: [carol], keys: [2], restKey: 2 });
+      expect(withRest.rows.map((r) => r.id)).toEqual([alice, bob, carol]);
+    });
+
+    it('refuses a rank whose keys do not match its ids', async () => {
+      await expect(byRank({ ids: [bob, alice], keys: [1], restKey: 2 })).rejects.toBeInstanceOf(
+        RangeError,
+      );
+      await expect(byRank({ ids: [bob], keys: [1.5], restKey: 2 })).rejects.toBeInstanceOf(
+        RangeError,
+      );
     });
 
     it('returns total alongside a page', async () => {
@@ -451,7 +466,7 @@ describe('patients: repositories', () => {
   });
 
   describe('search: rank by dentist', () => {
-    it('ranks by primaryDentistUserId, with a NULL dentist landing at restAt', async () => {
+    it('ranks by primaryDentistUserId, with a NULL dentist landing at restKey', async () => {
       const tenant = newId();
       const dentistX = newId();
       const dentistY = newId();
@@ -467,7 +482,12 @@ describe('patients: repositories', () => {
             size: 50,
             sort: 'dentist',
             dir: 'asc',
-            rank: { column: 'primaryDentistUserId', ids: [dentistX, dentistY], restAt: 999 },
+            rank: {
+              column: 'primaryDentistUserId',
+              ids: [dentistX, dentistY],
+              keys: [1, 2],
+              restKey: 3,
+            },
           },
         ),
       );

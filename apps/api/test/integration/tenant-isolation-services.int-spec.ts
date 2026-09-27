@@ -2,6 +2,7 @@ import type {
   AuditPage,
   Branch,
   DiagnosisItem,
+  OpeningBalanceResult,
   Patient,
   PatientPage,
   Role,
@@ -12,8 +13,9 @@ import type {
   Tenant,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BillingService } from '../../src/modules/billing';
+import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
@@ -343,6 +345,86 @@ describe('tenant isolation through the public services', () => {
         [a.tenant.id],
       );
       expect(aLedger.rows).toEqual([{ n: 0 }]);
+    });
+
+    it("billing views, export and the merge job never reach B's patients or ledger", async () => {
+      const inTenant = (tenant: Tenant, fullName: string, amount: string) =>
+        admin
+          .post('/api/v1/billing/opening-balances')
+          .set('X-Tenant-Id', tenant.id)
+          .send({
+            patient: { fullName, phone: '03 123 456' },
+            openingBalance: { amount, asOf: '2026-01-15' },
+          })
+          .then((response) => {
+            expect(response.status, JSON.stringify(response.body)).toBe(201);
+            return (response.body as OpeningBalanceResult).patient;
+          });
+      const aKeep = await inTenant(a.tenant, 'Alpha Keeper', '10.00');
+      const aDrop = await inTenant(a.tenant, 'Alpha Dropper', '20.00');
+      const bDebtor = await inTenant(b.tenant, 'Bravo Debtor', '999.00');
+      const bIds = new Set([b.patient.id, bDebtor.id]);
+      const bLedger = async () =>
+        (
+          await database.ownerPool.query<{ id: string; patient_id: string; amount: string }>(
+            'select id, patient_id, amount::text from ledger_entries where tenant_id = $1 order by id',
+            [b.tenant.id],
+          )
+        ).rows;
+      const bBefore = await bLedger();
+
+      for (const query of ['view=owing&size=50', 'sort=balance&dir=desc&size=50', 'q=Bravo']) {
+        const page = (await ownerA.get(`/api/v1/billing/patients?${query}`)).body as PatientPage;
+        expect(
+          page.items.filter((item) => bIds.has(item.id)),
+          query,
+        ).toEqual([]);
+      }
+      const owing = (await ownerA.get('/api/v1/billing/patients?view=owing&size=50'))
+        .body as PatientPage;
+      expect(owing.items.map((item) => item.id).sort()).toEqual([aKeep.id, aDrop.id].sort());
+      expect((await ownerA.get('/api/v1/billing/patients/owing-count')).body).toEqual({
+        count: 2,
+      });
+
+      const all = await ownerA.get('/api/v1/billing/patients/export?view=active');
+      expect(all.status).toBe(200);
+      expect(all.text).toContain('Alpha Keeper');
+      expect(all.text).not.toContain('Bravo');
+      const foreign = await ownerA.get(
+        `/api/v1/billing/patients/export?ids=${b.patient.id},${bDebtor.id}`,
+      );
+      expect(foreign.status).toBe(200);
+      expect(
+        foreign.text
+          .replace(/^\uFEFF/, '')
+          .split('\r\n')
+          .filter(Boolean),
+      ).toHaveLength(1);
+
+      // A's merge moves A's entries only.
+      const merged = await ownerA
+        .post('/api/v1/patients/merge')
+        .send({ keepId: aKeep.id, dropId: aDrop.id, reason: 'Same person' });
+      expect(merged.status).toBe(200);
+      await vi.waitFor(
+        async () => {
+          const aEntries = await database.ownerPool.query<{ patient_id: string }>(
+            'select patient_id from ledger_entries where tenant_id = $1',
+            [a.tenant.id],
+          );
+          expect(aEntries.rows.map((row) => row.patient_id)).toEqual([aKeep.id, aKeep.id]);
+        },
+        { timeout: 15_000, interval: 100 },
+      );
+      // Even a job in A naming B's patient moves nothing: RLS scopes the update to A.
+      const moved = await testApp.app
+        .get(RequestContext)
+        .run({ requestId: newId(), actorKind: 'job', tenantId: a.tenant.id }, () =>
+          testApp.app.get(BillingService).repointMergedEntries(aKeep.id, bDebtor.id),
+        );
+      expect(moved).toBe(0);
+      expect(await bLedger()).toEqual(bBefore);
     });
 
     it("A's patient creates never advance B's counter", async () => {

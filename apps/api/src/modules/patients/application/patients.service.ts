@@ -25,6 +25,7 @@ import { ValidationFailedError } from '../../../platform/kernel/validation-faile
 import { AuditService } from '../../audit';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
+import { dentistRank } from '../domain/dentist-rank';
 import { formatDisplayNumber } from '../domain/display-number';
 import { groupDuplicates } from '../domain/duplicates';
 import { resolveMerge } from '../domain/merge';
@@ -68,11 +69,12 @@ export interface PatientSearchInternal {
    */
   idsIn?: readonly string[];
   /**
-   * Patient ids in the caller's order; unlisted patients sort at `restAt` (1-based positions, so
-   * `ids.length + 1` puts them last and `0` first). The caller encodes the direction; `dir` is
-   * ignored. Required for `sort=balance`, and used for nothing else.
+   * An integer key per patient id (`keys[i]` for `ids[i]`, same length — `RangeError` otherwise);
+   * unlisted patients get `restKey`. Ascending keys, then name, then id: equal keys tie and fall
+   * back to name order. The caller encodes the direction; `dir` is ignored. Required for
+   * `sort=balance`, and used for nothing else.
    */
-  rank?: { ids: readonly string[]; restAt: number };
+  rank?: { ids: readonly string[]; keys: readonly number[]; restKey: number };
   /** Overrides `query.size` (1–500), for paging through a whole view (billing's CSV export). */
   size?: number;
 }
@@ -393,21 +395,21 @@ export class PatientsService {
 
   /**
    * `sort=dentist`: every dentist assigned to a patient (inactive ones too), in the practitioner
-   * display-name order of `users`; reversed for `desc`. Patients without a dentist come last in
-   * both directions. `sort=balance`: the caller's rank over patient ids.
+   * display-name order of `users`, dense-ranked so same-named dentists tie (`dentistRank`);
+   * reversed for `desc`. Patients without a dentist come last in both directions. `sort=balance`:
+   * the caller's keys over patient ids.
    */
   private async rankFor(
     query: PatientListQuery,
     internal: PatientSearchInternal,
   ): Promise<PatientRank | undefined> {
     if (query.sort === 'balance' && internal.rank) {
-      return { column: 'id', ids: internal.rank.ids, restAt: internal.rank.restAt };
+      return { column: 'id', ...internal.rank };
     }
     if (query.sort !== 'dentist') return undefined;
     const dentists = await this.users.practitionersByIds(await this.patients.assignedDentistIds());
-    const ids = dentists.map((dentist) => dentist.userId);
-    if (query.dir === 'desc') ids.reverse();
-    return { column: 'primaryDentistUserId', ids, restAt: ids.length + 1 };
+    const { locale } = await this.tenancy.currentTenant();
+    return { column: 'primaryDentistUserId', ...dentistRank(dentists, query.dir, locale) };
   }
 
   /**

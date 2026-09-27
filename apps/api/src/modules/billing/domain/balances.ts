@@ -39,44 +39,47 @@ export function sumBalances(entries: readonly BalanceMoney[]): BalanceMoney[] {
     .map(([currency, cents]) => ({ amount: fromCents(cents), currency }));
 }
 
+/** `PatientsService.search`'s rank: `keys[i]` is the sort key of `ids[i]` (ascending). */
 export interface BalanceRank {
-  /** Patients with a non-zero balance in the tenant currency, in rank order. */
+  /** Patients with a non-zero balance in the tenant currency, in key order. */
   ids: string[];
-  /**
-   * Where everyone else (a zero or no balance in the tenant currency) goes: the number of `ids`
-   * ranked before them — `0` = before all of `ids`, `ids.length` = after all of them. A 0-based
-   * insertion index, *not* a 1-based array position: the rest sort strictly between
-   * `ids[restAt - 1]` and `ids[restAt]`, never tied with either.
-   */
-  restAt: number;
+  /** Dense rank of each patient's amount: equal amounts share a key. */
+  keys: number[];
+  /** The key of everyone else (a zero or no balance in the tenant currency). */
+  restKey: number;
 }
 
 /**
  * The order of "sort by balance" (design Q7), by the tenant-currency amount only (other
- * currencies are never converted, so they count as zero here). `desc`: largest debts first, then
- * the rest, then credits, least negative first — descending overall. `asc` mirrors it: largest
- * credits first, then the rest, then debts, smallest first. Ties keep input order, so passing
- * patients in name order breaks ties by name.
+ * currencies are never converted, so they count as zero here). A dense rank over the distinct
+ * amounts, zero included — zero's key is `restKey`:
+ * - `desc`: debts, largest first (keys `1..p`); then everyone else (`p + 1`); then credits, least
+ *   negative first — descending overall.
+ * - `asc`: the mirror image — credits, most negative first; then everyone else; then debts,
+ *   smallest first.
+ *
+ * Equal amounts share a key, so `search` orders them (and the rest) by name.
  */
 export function rankByBalance(
   patients: readonly { patientId: string; balances: readonly BalanceMoney[] }[],
   dir: 'asc' | 'desc',
   tenantCurrency: string,
 ): BalanceRank {
-  const ranked = patients
-    .map((patient, index) => {
-      const own = patient.balances.find((balance) => balance.currency === tenantCurrency);
-      return { id: patient.patientId, cents: own ? toCents(own.amount) : 0n, index };
-    })
-    .filter((patient) => patient.cents !== 0n);
-  const sign = dir === 'desc' ? -1 : 1;
-  // Array.prototype.sort is stable, but compare the input index too so ties never depend on it.
-  ranked.sort((a, b) => {
-    if (a.cents !== b.cents) return (a.cents < b.cents ? -1 : 1) * sign;
-    return a.index - b.index;
+  const owned = patients.map((patient) => {
+    const own = patient.balances.find((balance) => balance.currency === tenantCurrency);
+    return { id: patient.patientId, cents: own ? toCents(own.amount) : 0n };
   });
-  const before = ranked.filter((patient) =>
-    dir === 'desc' ? patient.cents > 0n : patient.cents < 0n,
-  );
-  return { ids: ranked.map((patient) => patient.id), restAt: before.length };
+  const sign = dir === 'desc' ? -1 : 1;
+  const compare = (a: bigint, b: bigint) => (a === b ? 0 : (a < b ? -1 : 1) * sign);
+  const distinct = [...new Set([0n, ...owned.map((patient) => patient.cents)])].sort(compare);
+  const keyOf = new Map(distinct.map((cents, index) => [cents, index + 1]));
+  const key = (cents: bigint) => keyOf.get(cents) ?? 0;
+  const ranked = owned
+    .filter((patient) => patient.cents !== 0n)
+    .sort((a, b) => compare(a.cents, b.cents));
+  return {
+    ids: ranked.map((patient) => patient.id),
+    keys: ranked.map((patient) => key(patient.cents)),
+    restKey: key(0n),
+  };
 }

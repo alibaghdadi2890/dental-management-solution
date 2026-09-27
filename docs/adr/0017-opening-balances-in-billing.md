@@ -1,0 +1,85 @@
+# ADR-0017: Opening balances and balance-aware patient views live in `billing`
+
+- Status: Accepted
+- Date: 2026-09-27
+
+## Context
+
+Feature 3 (Patients) needs money before invoices and payments exist:
+
+- a patient carried over from a previous system starts with an opening balance, entered in the
+  create panel;
+- the Patients list has an _Owes balance_ tab, a sort by balance, and a Balance column in the
+  CSV export.
+
+CLAUDE.md §4 gives money to `billing` (`billing → patients`). `patients` owns the list, its
+filters, its sorts and its paging (ADR-0018), but it may not read `billing`'s tables (rule 1),
+and importing `billing` would create a cycle (rule 4). A merge of two patients must also carry
+the dropped record's balance over to the kept one.
+
+We considered:
+
+- **`patients` imports `billing`** to read balances inside `search`. That is a cycle
+  (`billing` already imports `patients` for existence checks), and it puts money into the module
+  that should not know about it.
+- **The SPA makes two calls**: the patient page from `patients`, the balances from `billing`,
+  merged in the browser. That works for the Balance column of one page, but not for "only the
+  patients who owe" or "sort by balance": the filter and the order have to be applied before the
+  page is cut, over every patient, and the total has to be right.
+- **An event-driven opening balance**: `PatientCreated` carries the amount and `billing` records
+  it in a handler. The patient and its balance would then commit separately (a failure leaves a
+  patient without the balance the user typed), and an event would carry a business input, not a
+  fact.
+
+## Decision
+
+1. **The ledger is in `billing`.** `ledger_entries` holds signed amounts (positive = the patient
+   owes) in the tenant currency of the moment; a balance is Σ amount per currency (design Q13).
+   `patient_id` has no foreign key: `patients` owns that table.
+2. **`billing` orchestrates create-with-opening-balance.** `POST /billing/opening-balances` calls
+   `PatientsService.create` and records the `opening_balance` entry in one `TenantDb`
+   transaction (the `users.createStaffUser` pattern). The SPA uses it only when an amount is
+   entered.
+3. **`billing` composes the patient views that need a balance**, on top of
+   `PatientsService.search` and its internal options, which HTTP never reaches:
+   - `GET /billing/patients?view=owing`: `search` restricted to the owing ids (`idsIn`, from one
+     SQL aggregate);
+   - `sort=balance`: `search` ordered by integer rank keys (`rank: { ids, keys, restKey }`) that
+     `billing` computes from the tenant-currency balances. Equal keys fall back to the name
+     order, so equal balances are ordered by name. The same mechanism orders `sort=dentist` in
+     `patients`;
+   - `GET /billing/patients/owing-count` and the CSV export (`GET /billing/patients/export`),
+     which walks the same view in pages of 500 and adds the Balance column.
+4. **New edges:** `billing → patients` (existence, create, the list), `billing → tenancy`
+   (currency, time zone) and `billing → users` (dentist names in the export). None of them
+   imports `billing`, so the graph stays acyclic. `clinical` joins in feature 5.
+5. **Ledger entries follow a merge through a BullMQ job.** `patients` emits `PatientsMerged`
+   after the merge commits. `billing`'s subscriber enqueues a tenant job (`billing` queue,
+   `merge-ledger`, job id `merge_<droppedId>` — BullMQ refuses `:` in custom ids); the worker
+   moves the dropped patient's entries to the kept one in one transaction, as a `job` actor, and
+   audits `ledger_entry.repoint`. The job is idempotent (a re-run finds nothing to move), retried
+   with backoff and dead-lettered (CLAUDE.md §9). Ledger writes hold the patient row `FOR SHARE`,
+   and the merge locks it `FOR UPDATE`, so an entry written concurrently with a merge commits
+   first and is moved by the job; after the merge, the dropped record refuses new entries
+   (409 `patient.merged`).
+
+## Consequences
+
+- **The after-commit enqueue window.** Events are dispatched after the merge transaction
+  commits, and the enqueue is a separate write to Redis. If the process crashes between the
+  commit and the enqueue, or Redis refuses the job (the subscriber logs it and moves on), the
+  re-point never runs: the dropped (archived) record keeps its entries, and the kept record's
+  balance is short by that amount. The `PatientsMerged` audit entry still exists. Recovery is to
+  enqueue the job again (the job id makes a repeat harmless). An outbox (the event written in the
+  merge transaction, relayed to the queue) would close the window; it is platform work to do
+  once a second consumer needs the same guarantee.
+- Until the job has run, the kept record shows the balance without the dropped record's
+  entries. In practice this is milliseconds.
+- `repointMergedEntries` is not permission-gated: it is the system's follow-up to a merge the
+  user was allowed to make, and a job actor holds no permissions. It refuses to run outside a
+  job or system task.
+- The balance sort sends every non-zero tenant-currency balance to `search` as two arrays. That
+  is fine for thousands of patients per tenant (ADR-0018's bound). Balances in another currency
+  (after a tenant currency change) count as zero for the sort and are not in the CSV.
+- `GET /patients` refuses `view=owing` and `sort=balance` with 400; the SPA sends those queries
+  to `GET /billing/patients`, which returns the same page shape.

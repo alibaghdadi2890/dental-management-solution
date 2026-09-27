@@ -9,8 +9,7 @@ Patient records: demographics, contacts, insurance (as text), medical alerts/all
 dentist, guardian, notes, archive (soft delete) and merge. The POC's Patients screen (list, quick
 view, create/edit, merge), the ⌘K palette and the patient record header are the UI reference.
 Balances are not here: views that need them (Owes balance, sort by balance, CSV export, create
-with an opening balance) are composed by `billing` on top of this module (design Q5; ADR-0017,
-reserved for billing).
+with an opening balance) are composed by `billing` on top of this module (design Q5; ADR-0017).
 
 - **Import key:** `externalId` is read-only over HTTP. It is not part of the create or edit
   contract; only the import (feature 6) will set it. Records created here have it null.
@@ -76,15 +75,22 @@ reserved for billing).
 - `sort`:
   - `name`, `age` (youngest first for `asc`; no date of birth last), `recent` (most recently
     updated first, whatever `dir` says).
-  - `dentist`: ranks patients by their dentist's position in `UsersService.practitionersByIds`
-    over every assigned dentist, inactive ones included, in display-name order (tenant-locale
-    collation). `desc` reverses it. Patients without a dentist come last in both directions.
+  - `dentist`: ranks patients by their dentist in `UsersService.practitionersByIds` over every
+    assigned dentist, inactive ones included, in display-name order (tenant-locale collation).
+    `domain/dentist-rank.ts` gives each dentist an integer key, dense-ranked: dentists whose
+    names are equal under that collation share a key, so their patients sort by patient name.
+    `desc` reverses the keys. Patients without a dentist come last in both directions.
 - Ties always break on `name_key`, then `id`.
+- Rank ordering (`sort=dentist`, `sort=balance`; design Q7): `coalesce(keys[array_position(ids,
+column)], restKey)` ascending, then `name_key`, then `id`; `dir` is ignored, the caller
+  encodes the direction in the keys. `ids` and `keys` must have the same length and the keys
+  must be 32-bit integers (`RangeError` otherwise).
 - `internal` (`PatientSearchInternal`) is for other modules' services only. HTTP never reaches it.
   - `idsIn`: restricts the page to these ids. It is required for `view=owing`, which is read as
     active ∩ `idsIn`.
-  - `rank { ids, restAt }`: orders by position in `ids`, with unlisted patients at `restAt`. It is
-    required for `sort=balance`. The caller encodes the direction.
+  - `rank { ids, keys, restKey }`: `keys[i]` is the sort key of patient `ids[i]`; unlisted
+    patients get `restKey`. Equal keys tie and fall back to the name order. It is required for
+    `sort=balance` (`billing`'s `rankByBalance`).
   - `size`: overrides the page size (1–500), for export.
   - Without them, `view=owing` or `sort=balance` → 422 `validation_failed` (path `view`/`sort`).
 
@@ -110,7 +116,8 @@ reserved for billing).
   - `PatientUpdated { patientId, fields }`: the names of the changed patch fields.
   - `PatientArchived { patientId }`
   - `PatientRestored { patientId }`
-  - `PatientsMerged { keptId, droppedId }`: `billing` re-points ledger entries (design Q9).
+  - `PatientsMerged { keptId, droppedId }`: consumed by `billing`, which re-points the dropped
+    patient's ledger entries to the kept one through a BullMQ job (design Q9, ADR-0017).
 - Consumes: —
 
 ## Depends on
@@ -120,7 +127,7 @@ reserved for billing).
 - `audit`.
 
 Nothing here imports `billing`. `billing` depends on `patients` (`create`, `getMany`,
-`lockForLedger`).
+`lockForLedger`, `search` with its internal options, and `PatientsMerged`).
 
 ## Permissions
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import type { LedgerEntry, PatientCurrencySum } from '../domain/ledger-entry';
 import { ledgerEntries } from './schema';
@@ -26,7 +26,8 @@ function toDomain(row: LedgerEntryRow): LedgerEntry {
 
 /**
  * The tenant's `ledger_entries` (RLS-scoped through `TenantDb`; `tenant_id` is never passed —
- * CLAUDE.md §5). Append-only here: nothing in this repository updates or deletes an entry.
+ * CLAUDE.md §5). Entries are never edited or deleted; the one update is `repointPatient`, which
+ * only the merge job calls (design Q9).
  */
 @Injectable()
 export class LedgerEntriesRepository {
@@ -58,6 +59,41 @@ export class LedgerEntriesRepository {
         .groupBy(ledgerEntries.patientId, ledgerEntries.currency)
         .orderBy(ledgerEntries.patientId, ledgerEntries.currency),
     );
+  }
+
+  /**
+   * Σ amount per patient in one currency, for every patient whose sum in it is non-zero (the
+   * balance sort ranks all of them), ordered by patient id. Summed by Postgres on `numeric`.
+   */
+  async sumsInCurrency(currency: string): Promise<{ patientId: string; amount: string }[]> {
+    return this.db.run((tx) =>
+      tx
+        .select({
+          patientId: ledgerEntries.patientId,
+          amount: sql<string>`sum(${ledgerEntries.amount})::text`,
+        })
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.currency, currency))
+        .groupBy(ledgerEntries.patientId)
+        .having(sql`sum(${ledgerEntries.amount}) <> 0`)
+        .orderBy(ledgerEntries.patientId),
+    );
+  }
+
+  /**
+   * Moves every entry of `fromPatientId` to `toPatientId` (the merge re-point, design Q9) and
+   * returns how many moved. Idempotent: a second run finds nothing left to move. Only
+   * `patient_id` and `updated_at` (database clock) change; `created_by` and the amounts stay.
+   */
+  async repointPatient(fromPatientId: string, toPatientId: string): Promise<number> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .update(ledgerEntries)
+        .set({ patientId: toPatientId, updatedAt: sql`now()` })
+        .where(eq(ledgerEntries.patientId, fromPatientId))
+        .returning({ id: ledgerEntries.id }),
+    );
+    return rows.length;
   }
 
   /**

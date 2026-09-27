@@ -102,6 +102,10 @@ export const patientExportQuerySchema = patientListQuerySchema
   });
 export type PatientExportQuery = z.infer<typeof patientExportQuerySchema>;
 
+/** `GET /billing/patients/owing-count`: active patients owing in any currency (the tab chip). */
+export const owingCountSchema = z.object({ count: z.number().int().nonnegative() });
+export type OwingCount = z.infer<typeof owingCountSchema>;
+
 /** Result of `POST /billing/opening-balances`. */
 export const openingBalanceResultSchema = z.object({
   patient: patientSchema,

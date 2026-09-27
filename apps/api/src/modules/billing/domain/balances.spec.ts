@@ -58,49 +58,81 @@ describe('rankByBalance', () => {
     { patientId: 'hal', balances: [usd('-20.00')] },
   ];
 
-  it('desc: largest debts first, everyone else at restAt, then credits least negative first', () => {
+  it('desc: largest debts first, then the rest, then credits least negative first', () => {
     expect(rankByBalance(patients, 'desc', 'USD')).toEqual({
       ids: ['dia', 'ada', 'gus', 'ben', 'hal', 'eli'],
-      restAt: 3,
+      keys: [1, 2, 2, 4, 4, 5],
+      restKey: 3,
     });
   });
 
-  it('asc: largest credits first, everyone else at restAt, then debts smallest first', () => {
+  it('asc: largest credits first, then the rest, then debts smallest first', () => {
     expect(rankByBalance(patients, 'asc', 'USD')).toEqual({
       ids: ['eli', 'ben', 'hal', 'ada', 'gus', 'dia'],
-      restAt: 3,
+      keys: [1, 2, 2, 4, 4, 5],
+      restKey: 3,
     });
   });
 
   it('ranks by the tenant currency only', () => {
-    expect(rankByBalance(patients, 'desc', 'EUR')).toEqual({ ids: ['fay', 'gus'], restAt: 1 });
+    expect(rankByBalance(patients, 'desc', 'EUR')).toEqual({
+      ids: ['fay', 'gus'],
+      keys: [1, 3],
+      restKey: 2,
+    });
   });
 
-  it('keeps input order for ties in both directions', () => {
+  it('gives equal amounts the same key, so the search breaks the tie by name', () => {
     const tied = [
       { patientId: 'b', balances: [usd('5.00')] },
-      { patientId: 'a', balances: [usd('5.00')] },
+      { patientId: 'a', balances: [usd('5')] },
       { patientId: 'd', balances: [usd('-5.00')] },
       { patientId: 'c', balances: [usd('-5.00')] },
     ];
-    expect(rankByBalance(tied, 'desc', 'USD').ids).toEqual(['b', 'a', 'd', 'c']);
-    expect(rankByBalance(tied, 'asc', 'USD').ids).toEqual(['d', 'c', 'b', 'a']);
+    expect(rankByBalance(tied, 'desc', 'USD')).toEqual({
+      ids: ['b', 'a', 'd', 'c'],
+      keys: [1, 1, 3, 3],
+      restKey: 2,
+    });
+    expect(rankByBalance(tied, 'asc', 'USD')).toEqual({
+      ids: ['d', 'c', 'b', 'a'],
+      keys: [1, 1, 3, 3],
+      restKey: 2,
+    });
   });
 
   it('puts the rest first or last when one side is empty', () => {
     const debts = [
       { patientId: 'a', balances: [usd('1.00')] },
       { patientId: 'b', balances: [] },
+      { patientId: 'z', balances: [usd('3.00')] },
     ];
-    expect(rankByBalance(debts, 'desc', 'USD')).toEqual({ ids: ['a'], restAt: 1 });
-    expect(rankByBalance(debts, 'asc', 'USD')).toEqual({ ids: ['a'], restAt: 0 });
+    expect(rankByBalance(debts, 'desc', 'USD')).toEqual({
+      ids: ['z', 'a'],
+      keys: [1, 2],
+      restKey: 3,
+    });
+    expect(rankByBalance(debts, 'asc', 'USD')).toEqual({
+      ids: ['a', 'z'],
+      keys: [2, 3],
+      restKey: 1,
+    });
+    const credits = [{ patientId: 'c', balances: [usd('-1.00')] }];
+    expect(rankByBalance(credits, 'desc', 'USD')).toEqual({ ids: ['c'], keys: [2], restKey: 1 });
+    expect(rankByBalance(credits, 'asc', 'USD')).toEqual({ ids: ['c'], keys: [1], restKey: 2 });
   });
 
   it('ranks nobody when every balance is zero', () => {
     expect(rankByBalance([{ patientId: 'a', balances: [] }], 'desc', 'USD')).toEqual({
       ids: [],
-      restAt: 0,
+      keys: [],
+      restKey: 1,
     });
-    expect(rankByBalance([], 'asc', 'USD')).toEqual({ ids: [], restAt: 0 });
+    expect(rankByBalance([{ patientId: 'a', balances: [usd('0.00')] }], 'asc', 'USD')).toEqual({
+      ids: [],
+      keys: [],
+      restKey: 1,
+    });
+    expect(rankByBalance([], 'asc', 'USD')).toEqual({ ids: [], keys: [], restKey: 1 });
   });
 });

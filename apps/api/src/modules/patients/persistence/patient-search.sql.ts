@@ -35,18 +35,21 @@ export interface PatientSearchFilters {
 export type PatientSortKey = 'name' | 'age' | 'recent' | 'dentist' | 'balance';
 
 /**
- * `sort=dentist`/`sort=balance` order by `coalesce(array_position(ids, <column>), restAt)` (design
- * Q7): `column: 'id'` ranks patients directly (billing's balance order), `'primaryDentistUserId'`
- * ranks by the practitioner id each patient is assigned to (dentists ordered by display name,
- * resolved by the caller via `users`). Direction is entirely encoded by the caller through the
- * order of `ids` and the value of `restAt` (e.g. `restAt: -1` puts unranked rows first, `restAt:
- * Number.MAX_SAFE_INTEGER` puts them last) — `PatientSearchOptions.dir` is ignored for these two
- * sorts. Never exposed over HTTP; internal to `search`.
+ * `sort=dentist`/`sort=balance` order by an integer key per row (design Q7):
+ * `coalesce(keys[array_position(ids, <column>)], restKey)`, then `name_key`, then `id`.
+ * `column: 'id'` ranks patients directly (billing's balance order); `'primaryDentistUserId'` ranks
+ * by the practitioner each patient is assigned to (resolved by the caller via `users`). `keys[i]`
+ * is the key of `ids[i]`; rows whose column is not among `ids` (or is null) get `restKey`. Equal
+ * keys tie, so the name order decides between them: callers give equal values (the same balance,
+ * two dentists with the same name) the same key. The caller encodes the direction in the keys;
+ * `PatientSearchOptions.dir` is ignored for these two sorts. Never exposed over HTTP.
  */
 export interface PatientRank {
   column: 'id' | 'primaryDentistUserId';
   ids: readonly string[];
-  restAt: number;
+  /** One per id, same length as `ids`; 32-bit integers (bound as Postgres `int[]`). */
+  keys: readonly number[];
+  restKey: number;
 }
 
 export interface PatientSearchOptions {
@@ -165,14 +168,33 @@ export function orderByFor(options: PatientSearchOptions): SQL[] {
       if (!options.rank) {
         throw new Error(`search: sort=${options.sort} requires a rank option`);
       }
-      const column =
-        options.rank.column === 'primaryDentistUserId'
-          ? patients.primaryDentistUserId
-          : patients.id;
+      const { column, ids, keys, restKey } = assertRank(options.rank);
+      const ranked =
+        column === 'primaryDentistUserId' ? patients.primaryDentistUserId : patients.id;
+      const position = sql`array_position(${uuidArray(ids)}, ${ranked})`;
       return [
-        sql`coalesce(array_position(${uuidArray(options.rank.ids)}, ${column}), ${options.rank.restAt})`,
+        sql`coalesce((${sql.param([...keys])}::int[])[${position}], ${restKey}::int)`,
         ...tieBreak,
       ];
     }
   }
+}
+
+const INT4_MAX = 2_147_483_647;
+
+function isInt4(value: number): boolean {
+  return Number.isInteger(value) && Math.abs(value) <= INT4_MAX;
+}
+
+/** A malformed rank is the calling service's programming error: refused before any SQL runs. */
+function assertRank(rank: PatientRank): PatientRank {
+  if (rank.ids.length !== rank.keys.length) {
+    throw new RangeError(
+      `search: rank has ${String(rank.ids.length)} ids but ${String(rank.keys.length)} keys`,
+    );
+  }
+  if (!rank.keys.every(isInt4) || !isInt4(rank.restKey)) {
+    throw new RangeError('search: rank keys must be 32-bit integers');
+  }
+  return rank;
 }

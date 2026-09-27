@@ -6,6 +6,7 @@ import {
   balanceAmountSchema,
   openingBalanceInputSchema,
   patientBalanceSchema,
+  owingCountSchema,
   patientExportQuerySchema,
 } from './billing.js';
 
@@ -137,5 +138,13 @@ describe('patientExportQuerySchema', () => {
 
   it('works without ids, keeping the list query filters', () => {
     expect(patientExportQuerySchema.parse({ view: 'archived' }).view).toBe('archived');
+  });
+});
+
+describe('owingCountSchema', () => {
+  it('is a non-negative integer count', () => {
+    expect(owingCountSchema.parse({ count: 3 })).toEqual({ count: 3 });
+    expect(owingCountSchema.safeParse({ count: -1 }).success).toBe(false);
+    expect(owingCountSchema.safeParse({ count: 1.5 }).success).toBe(false);
   });
 });

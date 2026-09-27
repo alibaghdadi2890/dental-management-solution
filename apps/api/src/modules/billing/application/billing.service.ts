@@ -143,6 +143,35 @@ export class BillingService {
     return this.entries.patientIdsOwing();
   }
 
+  /**
+   * The merge re-point (design Q9), run by `MergeLedgerWorker`: moves every entry of the dropped
+   * patient to the kept one in one transaction and, when anything moved, audits
+   * `ledger_entry.repoint` on the kept patient (after = `{ droppedId, count }`) so it shows in
+   * that patient's history. Idempotent — a re-run finds nothing to move and records nothing.
+   * Returns the number of entries moved.
+   *
+   * Not permission-gated: it is the system's follow-up to a merge the user was allowed to make,
+   * and a job actor holds no permissions. It refuses to run outside a job or system task instead.
+   */
+  async repointMergedEntries(keptId: string, droppedId: string): Promise<number> {
+    const actorKind = this.context.actorKind;
+    if (actorKind !== 'job' && actorKind !== 'system') {
+      throw new Error('repointMergedEntries runs only in the merge job');
+    }
+    return this.tenantDb.run(async () => {
+      const count = await this.entries.repointPatient(droppedId, keptId);
+      if (count > 0) {
+        await this.audit.record({
+          action: 'ledger_entry.repoint',
+          resourceType: 'patient',
+          resourceId: keptId,
+          after: { droppedId, count },
+        });
+      }
+      return count;
+    });
+  }
+
   // --- Shared rules ---
 
   /** `PatientsService.create`, with its field errors re-pathed under `patient.`. */
