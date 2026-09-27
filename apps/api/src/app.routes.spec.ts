@@ -2,7 +2,7 @@ import type { Type } from '@nestjs/common';
 import { MODULE_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { describe, expect, it } from 'vitest';
-import { CORE_PLATFORM_MODULES, DOMAIN_MODULES, EXTERNAL_PLATFORM_MODULES } from './app.module';
+import { APP_IMPORTS } from './app.module';
 import { routeAccess } from './platform/http/route-access';
 
 type Handler = (...args: unknown[]) => unknown;
@@ -25,11 +25,7 @@ function routesOf(controller: Type): [string, Handler][] {
 
 describe('route declarations (CLAUDE.md §6)', () => {
   const reflector = new Reflector();
-  const controllers = controllersOf([
-    ...CORE_PLATFORM_MODULES,
-    ...EXTERNAL_PLATFORM_MODULES,
-    ...DOMAIN_MODULES,
-  ]);
+  const controllers = controllersOf(APP_IMPORTS);
 
   it('finds the application controllers', () => {
     expect(controllers.length).toBeGreaterThan(3);

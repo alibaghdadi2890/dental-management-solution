@@ -44,7 +44,8 @@ export default async function setup(project: TestProject): Promise<() => Promise
     const started = [pgResult, redisResult].flatMap((result) =>
       result.status === 'fulfilled' ? [result.value] : [],
     );
-    await Promise.all(started.map((container) => container.stop()));
+    // allSettled, not all: a stop error must never mask the startup failure we're about to throw.
+    await Promise.allSettled(started.map((container) => container.stop()));
     const failures = [pgResult, redisResult].filter(
       (result): result is PromiseRejectedResult => result.status === 'rejected',
     );

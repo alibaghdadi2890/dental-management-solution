@@ -32,7 +32,7 @@ export const CORE_PLATFORM_MODULES = [
   EventsModule,
 ];
 
-/** Redis and the BullMQ queues built on it; integration tests import this alone (own key prefix). */
+/** Redis and the BullMQ queues built on it; integration tests import this (with their own key prefix). */
 export const QUEUE_PLATFORM_MODULES = [RedisModule, QueueModule];
 
 /** Platform modules that reach other external services (S3); integration tests leave them out. */
@@ -52,12 +52,15 @@ export const DOMAIN_MODULES = [
   ProvisioningModule,
 ];
 
+/** Every module the app wires up, in one list so nothing (e.g. a route-access audit) can drift. */
+export const APP_IMPORTS = [
+  ...CORE_PLATFORM_MODULES,
+  ...QUEUE_PLATFORM_MODULES,
+  ...EXTERNAL_PLATFORM_MODULES,
+  ...DOMAIN_MODULES,
+];
+
 @Module({
-  imports: [
-    ...CORE_PLATFORM_MODULES,
-    ...QUEUE_PLATFORM_MODULES,
-    ...EXTERNAL_PLATFORM_MODULES,
-    ...DOMAIN_MODULES,
-  ],
+  imports: APP_IMPORTS,
 })
 export class AppModule {}
