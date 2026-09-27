@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   date,
   index,
   integer,
@@ -51,7 +52,11 @@ export const patients = pgTable(
     primaryDentistUserId: uuid(),
     guardianName: text(),
     guardianPhone: text(),
-    /** Feature 6 import; unique among live rows only, so a re-import can reuse a deleted id. */
+    /**
+     * Feature 6 import. Unique across every row for the tenant, including archived and merged-away
+     * ones (`patients_external_id_unique` carries no `deleted_at` filter) — a re-import must clear
+     * or change an archived record's `externalId` before reusing it, never reassign it silently.
+     */
     externalId: text(),
     mergedIntoId: uuid(),
     deletedAt: deletedAtColumn(),
@@ -69,6 +74,13 @@ export const patients = pgTable(
       .where(sql`${table.deletedAt} is null`),
     // `sort=recent` (the palette's 5 most-recently-updated active patients, design Q15).
     index('patients_tenant_updated_idx').on(table.tenantId, table.updatedAt),
+    // A merged-away record is always archived too (design Q11: `restore` on it is refused via
+    // `mergedIntoId`, not by it being somehow still active); never merged into itself.
+    check(
+      'patients_merged_requires_archived',
+      sql`${table.mergedIntoId} is null or ${table.deletedAt} is not null`,
+    ),
+    check('patients_not_merged_into_self', sql`${table.mergedIntoId} <> ${table.id}`),
     tenantIsolationPolicy(),
   ],
 );

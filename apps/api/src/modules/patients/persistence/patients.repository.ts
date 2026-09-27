@@ -1,27 +1,27 @@
 import type { PatientSex } from '@dcm/contracts';
+import { phoneDigits } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import {
-  and,
-  eq,
-  getTableColumns,
-  gt,
-  ilike,
-  inArray,
-  isNotNull,
-  isNull,
-  like,
-  lte,
-  ne,
-  or,
-  sql,
-  type SQL,
-} from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { newId } from '../../../platform/kernel/id';
 import { nameKey } from '../domain/name-key';
 import { PatientNotFoundError } from '../domain/patient-errors';
 import type { DomainPatient } from '../domain/patient';
+import {
+  orderByFor,
+  whereFor,
+  type PatientSearchFilters,
+  type PatientSearchOptions,
+} from './patient-search.sql';
 import { patients } from './schema';
+
+export type {
+  PatientRank,
+  PatientSearchFilters,
+  PatientSearchOptions,
+  PatientSortKey,
+  PatientView,
+} from './patient-search.sql';
 
 type PatientRow = typeof patients.$inferSelect;
 
@@ -63,8 +63,7 @@ export interface NormalizedPhoneInput {
 }
 
 function phoneSearchOf(phone: NormalizedPhoneInput): string {
-  const e164Digits = phone.e164.replace(/\D/g, '');
-  return `${e164Digits} ${phone.national}`;
+  return `${phoneDigits(phone.e164)} ${phone.national}`;
 }
 
 export interface NewPatient {
@@ -107,76 +106,10 @@ export interface PatientPatch {
   externalId?: string | null;
 }
 
-/** `active`/`notSeen` (currently identical — design Q14) map to `deleted_at is null`. */
-export type PatientView = 'active' | 'notSeen' | 'archived';
-
-export interface PatientSearchFilters {
-  view: PatientView;
-  /** Diacritics-insensitive name substring, or number/e-mail/phone-digits substring. */
-  q?: string;
-  /** A practitioner's auth user id, or the literal `'none'` for "no dentist assigned". */
-  dentist?: string;
-  /** Exclusive lower bound: `date_of_birth > dobAfter`. */
-  dobAfter?: string;
-  /** Inclusive upper bound: `date_of_birth <= dobOnOrBefore`. */
-  dobOnOrBefore?: string;
-  alerts?: 'yes' | 'no';
-}
-
-export type PatientSortKey = 'name' | 'age' | 'recent' | 'dentist' | 'balance';
-
-/**
- * `sort=dentist`/`sort=balance` order by `coalesce(array_position(ids, <column>), restAt)` (design
- * Q7): `column: 'id'` ranks patients directly (billing's balance order), `'primaryDentistUserId'`
- * ranks by the practitioner id each patient is assigned to (dentists ordered by display name,
- * resolved by the caller via `users`). Never exposed over HTTP; internal to `search`.
- */
-export interface PatientRank {
-  column: 'id' | 'primaryDentistUserId';
-  ids: readonly string[];
-  restAt: number;
-}
-
-export interface PatientSearchOptions {
-  page: number;
-  size: number;
-  sort: PatientSortKey;
-  dir: 'asc' | 'desc';
-  /** Restricts the result to these ids; an empty array matches nothing (never "all"). */
-  idsIn?: readonly string[];
-  /** Required when `sort` is `'dentist'` or `'balance'` (see `PatientRank`). */
-  rank?: PatientRank;
-}
-
 export interface PatientSearchResult {
   rows: DomainPatient[];
   total: number;
 }
-
-/** Escapes LIKE/ILIKE metacharacters so user input is matched literally. */
-function escapeLike(value: string): string {
-  return value.replace(/[%_\\]/g, (char) => `\\${char}`);
-}
-
-function digitsOf(value: string): string {
-  return value.replace(/\D/g, '');
-}
-
-/**
- * A Postgres `uuid[]` array literal built from parameterised elements. A bare `sql`${ids}` `
- * interpolation of a JS array is *not* an array literal to Postgres — drizzle spreads it as
- * `($1, $2)`, a row/record constructor, which `::uuid[]` cannot cast. `array[$1, $2]::uuid[]` is
- * the correct literal form.
- */
-function uuidArrayLiteral(ids: readonly string[]): SQL {
-  if (ids.length === 0) return sql`array[]::uuid[]`;
-  return sql`array[${sql.join(
-    ids.map((id) => sql`${id}::uuid`),
-    sql`, `,
-  )}]`;
-}
-
-const MIN_PHONE_QUERY_DIGITS = 2;
 
 /**
  * Patients of the current tenant (RLS). Repositories never accept or filter by `tenantId`
@@ -266,10 +199,17 @@ export class PatientsRepository {
 
   /**
    * Locks both rows `FOR UPDATE` in id order (never in `(a, b)` argument order), so two concurrent
-   * merges touching an overlapping pair of patients can never deadlock. Throws `PatientNotFoundError`
-   * if either id doesn't resolve (e.g. already deleted by a raw admin action).
+   * merges touching an overlapping pair of patients can never deadlock. Must run inside an
+   * already-open transaction — `TenantDb.run()` would otherwise open and commit its own, releasing
+   * the row lock before the caller (the merge use case) gets to apply its updates in the "same"
+   * transaction — so it throws immediately if none is open, rather than silently locking nothing
+   * useful. Throws `PatientNotFoundError` if either id doesn't resolve under the caller's RLS view
+   * (already deleted, or another tenant's id).
    */
   async lockPair(a: string, b: string): Promise<{ a: DomainPatient; b: DomainPatient }> {
+    if (!this.db.currentTransaction()) {
+      throw new Error('lockPair must run inside a transaction');
+    }
     const [first, second] = a < b ? [a, b] : [b, a];
     return this.db.run(async (tx) => {
       const rows = await tx
@@ -287,15 +227,25 @@ export class PatientsRepository {
     });
   }
 
-  /** Archives (`at` a timestamp) or restores (`at` `null`) every id; returns the ids affected. */
+  /**
+   * Archives every id currently active (`deleted_at is null`), or restores every id currently
+   * archived and not merged away (`deleted_at is not null and merged_into_id is null` — a merged
+   * record is never restored directly, design Q11: `patient.merged`). An id already in the target
+   * state, already merged (on restore), or invisible under RLS is silently skipped rather than
+   * erroring; returns only the ids that were truly changed.
+   */
   async setArchived(ids: readonly string[], at: Date | null): Promise<string[]> {
     if (ids.length === 0) return [];
+    const condition =
+      at === null
+        ? and(
+            inArray(patients.id, [...ids]),
+            isNotNull(patients.deletedAt),
+            isNull(patients.mergedIntoId),
+          )
+        : and(inArray(patients.id, [...ids]), isNull(patients.deletedAt));
     const rows = await this.db.run((tx) =>
-      tx
-        .update(patients)
-        .set({ deletedAt: at })
-        .where(inArray(patients.id, [...ids]))
-        .returning({ id: patients.id }),
+      tx.update(patients).set({ deletedAt: at }).where(condition).returning({ id: patients.id }),
     );
     return rows.map((row) => row.id);
   }
@@ -312,91 +262,6 @@ export class PatientsRepository {
     return row ? toDomain(row) : undefined;
   }
 
-  private whereFor(filters: PatientSearchFilters, idsIn: readonly string[] | undefined): SQL {
-    const conditions: SQL[] = [];
-
-    if (filters.view === 'archived') {
-      conditions.push(isNotNull(patients.deletedAt));
-    } else {
-      conditions.push(isNull(patients.deletedAt));
-    }
-
-    if (filters.q) {
-      const escapedQ = escapeLike(filters.q);
-      const qNameKey = escapeLike(nameKey(filters.q));
-      const ors: SQL[] = [
-        like(patients.nameKey, `%${qNameKey}%`),
-        ilike(patients.displayNumber, `%${escapedQ}%`),
-        ilike(patients.email, `%${escapedQ}%`),
-      ];
-      const qDigits = digitsOf(filters.q);
-      if (qDigits.length >= MIN_PHONE_QUERY_DIGITS) {
-        ors.push(like(patients.phoneSearch, `%${escapeLike(qDigits)}%`));
-      }
-      const qCondition = or(...ors);
-      if (qCondition) conditions.push(qCondition);
-    }
-
-    if (filters.dentist === 'none') {
-      conditions.push(isNull(patients.primaryDentistUserId));
-    } else if (filters.dentist) {
-      conditions.push(eq(patients.primaryDentistUserId, filters.dentist));
-    }
-
-    if (filters.dobAfter) conditions.push(gt(patients.dateOfBirth, filters.dobAfter));
-    if (filters.dobOnOrBefore) conditions.push(lte(patients.dateOfBirth, filters.dobOnOrBefore));
-
-    if (filters.alerts === 'yes') {
-      conditions.push(sql`cardinality(${patients.medicalAlerts}) > 0`);
-    } else if (filters.alerts === 'no') {
-      conditions.push(sql`cardinality(${patients.medicalAlerts}) = 0`);
-    }
-
-    if (idsIn) conditions.push(inArray(patients.id, [...idsIn]));
-
-    return and(...conditions) ?? sql`true`;
-  }
-
-  /**
-   * Orders by the requested sort, always tie-broken by `name_key` then `id` for stable paging.
-   * `sort=age`: ascending age (youngest first) means the *most recent* date of birth first, so the
-   * date-of-birth direction is inverted relative to `dir`; patients with no date of birth always
-   * sort last, in either direction. `sort=recent` ignores `dir` — it always means "most recently
-   * updated first" (documented design choice: there is no meaningful "least recently updated"
-   * saved view). `sort=dentist`/`'balance'` require `options.rank` (design Q7).
-   */
-  private orderByFor(options: PatientSearchOptions): SQL[] {
-    const idTieBreak = sql`${patients.id} asc`;
-    const tieBreak = [sql`${patients.nameKey} asc`, idTieBreak];
-    switch (options.sort) {
-      case 'name':
-        return [
-          sql`${patients.nameKey} ${options.dir === 'desc' ? sql`desc` : sql`asc`}`,
-          idTieBreak,
-        ];
-      case 'age': {
-        const dobDirection = options.dir === 'desc' ? sql`asc` : sql`desc`;
-        return [sql`${patients.dateOfBirth} ${dobDirection} nulls last`, ...tieBreak];
-      }
-      case 'recent':
-        return [sql`${patients.updatedAt} desc`, ...tieBreak];
-      case 'dentist':
-      case 'balance': {
-        if (!options.rank) {
-          throw new Error(`search: sort=${options.sort} requires a rank option`);
-        }
-        const column =
-          options.rank.column === 'primaryDentistUserId'
-            ? patients.primaryDentistUserId
-            : patients.id;
-        return [
-          sql`coalesce(array_position(${uuidArrayLiteral(options.rank.ids)}, ${column}), ${options.rank.restAt})`,
-          ...tieBreak,
-        ];
-      }
-    }
-  }
-
   async search(
     filters: PatientSearchFilters,
     options: PatientSearchOptions,
@@ -405,8 +270,8 @@ export class PatientsRepository {
       return { rows: [], total: 0 };
     }
 
-    const where = this.whereFor(filters, options.idsIn);
-    const orderBy = this.orderByFor(options);
+    const where = whereFor(filters, options.idsIn);
+    const orderBy = orderByFor(options);
 
     // Postgres `count()` is `bigint`, which node-postgres returns as a string (not a `number`,
     // which could lose precision) — typed and converted explicitly rather than trusted as `number`.
@@ -419,6 +284,21 @@ export class PatientsRepository {
         .limit(options.size)
         .offset((options.page - 1) * options.size),
     );
+
+    if (rows.length === 0 && options.page > 1) {
+      // `count(*) over ()` is a window over the *returned* rows: an out-of-range page (e.g. the
+      // list shrank after the client fetched page 3) returns zero rows and so zero window total,
+      // which would misreport `total` as 0 rather than the real count — worth a second query only
+      // in this (uncommon) case.
+      const total = await this.db.run(async (tx) => {
+        const [row] = await tx
+          .select({ total: sql<string>`count(*)` })
+          .from(patients)
+          .where(where);
+        return Number(row?.total ?? 0);
+      });
+      return { rows: [], total };
+    }
 
     const total = Number(rows.at(0)?.total ?? 0);
     return { rows: rows.map((row) => toDomain(row)), total };
@@ -462,11 +342,15 @@ export class PatientsRepository {
     });
   }
 
-  /** Active rows sharing `nameKey`/`dateOfBirth`, the create/edit panel's duplicate check. */
-  async findTwins(key: string, dateOfBirth: string, excludeId?: string): Promise<DomainPatient[]> {
+  /** Active rows sharing a name (matched via `nameKey`) and date of birth — the duplicate check. */
+  async findTwins(
+    fullName: string,
+    dateOfBirth: string,
+    excludeId?: string,
+  ): Promise<DomainPatient[]> {
     const conditions = [
       isNull(patients.deletedAt),
-      eq(patients.nameKey, key),
+      eq(patients.nameKey, nameKey(fullName)),
       eq(patients.dateOfBirth, dateOfBirth),
     ];
     if (excludeId) conditions.push(ne(patients.id, excludeId));

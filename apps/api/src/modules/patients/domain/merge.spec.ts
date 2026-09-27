@@ -1,4 +1,6 @@
+import { MEDICAL_ALERTS_MAX } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
+import { MergeAlertsOverflowError } from './patient-errors';
 import type { DomainPatient } from './patient';
 import { resolveMerge } from './merge';
 
@@ -135,14 +137,19 @@ describe('resolveMerge', () => {
     expect(patch.medicalAlerts).toEqual(['Penicillin', 'Latex', 'Nut allergy']);
   });
 
-  it('caps the unioned alerts at 20, kept alerts taking priority', () => {
-    const keptAlerts = Array.from({ length: 12 }, (_, i) => `Kept-${i}`);
-    const droppedAlertsList = Array.from({ length: 12 }, (_, i) => `Dropped-${i}`);
+  it('throws MergeAlertsOverflowError instead of truncating when the union exceeds the cap', () => {
+    const keptAlerts = Array.from({ length: MEDICAL_ALERTS_MAX }, (_, i) => `Kept-${i}`);
+    const droppedAlerts = patient({ id: 'dropped-id', medicalAlerts: ['One more allergy'] });
     const kept = patient({ medicalAlerts: keptAlerts });
-    const droppedAlerts = patient({ id: 'dropped-id', medicalAlerts: droppedAlertsList });
+    expect(() => resolveMerge(kept, droppedAlerts, {})).toThrow(MergeAlertsOverflowError);
+  });
+
+  it('does not throw when the union is exactly at the cap', () => {
+    const keptAlerts = Array.from({ length: MEDICAL_ALERTS_MAX - 1 }, (_, i) => `Kept-${i}`);
+    const droppedAlerts = patient({ id: 'dropped-id', medicalAlerts: ['One more allergy'] });
+    const kept = patient({ medicalAlerts: keptAlerts });
     const { patch } = resolveMerge(kept, droppedAlerts, {});
-    expect(patch.medicalAlerts).toHaveLength(20);
-    expect(patch.medicalAlerts).toEqual([...keptAlerts, ...droppedAlertsList.slice(0, 8)]);
+    expect(patch.medicalAlerts).toHaveLength(MEDICAL_ALERTS_MAX);
   });
 
   it('omits medicalAlerts from the patch when the union equals the kept alerts', () => {

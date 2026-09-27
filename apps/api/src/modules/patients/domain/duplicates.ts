@@ -14,8 +14,11 @@ function displayNumberValue(displayNumber: string): number {
  * can never be grouped, since two people who share a name but whose birth date is unknown are not
  * provably the same duplicate. Only groups of 2 or more survive, each ordered by display number
  * in numeric order (`P-000010` sorts after `P-000009`, not before it as a string compare would).
- * Pure; no I/O (CLAUDE.md §4.5) — `PatientsRepository.duplicateRows()` does the ≥ 2 pre-filter in
- * SQL, but this function re-groups from scratch so it stays correct for any input.
+ * The groups themselves are then ordered by their (now-first) display number too, so the result
+ * is deterministic regardless of the input's row order or `Map` iteration order — not left to
+ * whatever order duplicate name/dob keys happened to be first seen in. Pure; no I/O (CLAUDE.md
+ * §4.5) — `PatientsRepository.duplicateRows()` does the ≥ 2 pre-filter in SQL, but this function
+ * re-groups from scratch so it stays correct for any input.
  */
 export function groupDuplicates<T extends DuplicateCandidate>(rows: readonly T[]): T[][] {
   const groups = new Map<string, T[]>();
@@ -32,5 +35,10 @@ export function groupDuplicates<T extends DuplicateCandidate>(rows: readonly T[]
       [...group].sort(
         (a, b) => displayNumberValue(a.displayNumber) - displayNumberValue(b.displayNumber),
       ),
+    )
+    .sort(
+      (a, b) =>
+        displayNumberValue(a[0]?.displayNumber ?? '') -
+        displayNumberValue(b[0]?.displayNumber ?? ''),
     );
 }

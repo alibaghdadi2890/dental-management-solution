@@ -1,7 +1,6 @@
-import { MERGE_FIELDS, type MergeField } from '@dcm/contracts';
+import { dedupeAlerts, MEDICAL_ALERTS_MAX, MERGE_FIELDS, type MergeField } from '@dcm/contracts';
+import { MergeAlertsOverflowError } from './patient-errors';
 import type { DomainPatient } from './patient';
-
-const MEDICAL_ALERTS_MAX = 20;
 
 /** The patch `resolveMerge` writes onto the kept record; only the fields that actually change. */
 export type MergePatch = Partial<
@@ -51,24 +50,6 @@ export interface MergeResolution {
   changedFields: MergeField[];
 }
 
-/**
- * Case- and normalization-insensitive de-dupe (NFKC-folded, lower-cased), keeping the first
- * occurrence — the same semantics `medicalAlertsSchema` uses in `@dcm/contracts`, reimplemented
- * here so `domain/` stays free of a runtime dependency on that package's internal (non-exported)
- * helper (CLAUDE.md §4.5).
- */
-function dedupeAlertsCaseInsensitive(values: readonly string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const key = value.normalize('NFKC').toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(value);
-  }
-  return result;
-}
-
 function sameAlerts(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
@@ -77,9 +58,11 @@ function sameAlerts(a: readonly string[], b: readonly string[]): boolean {
  * Resolves a patient merge (design Q8, Q11): each pickable field comes from `kept` unless
  * `choices` says `'drop'`, in which case it comes from `dropped`; a missing choice means "keep".
  * `guardian` moves `guardianName`/`guardianPhone` together as one choice. Medical alerts are
- * always the case-insensitive union of both records (kept's own alerts first), capped at 20 —
- * never a field choice. Returns only the fields whose resolved value differs from `kept`'s own,
- * so an all-kept merge with unchanged alerts produces an empty patch.
+ * always the case-insensitive union of both records (kept's own alerts first) — never a field
+ * choice, and never truncated: a dropped allergy is a clinical risk, so a union bigger than
+ * `MEDICAL_ALERTS_MAX` throws `MergeAlertsOverflowError` rather than silently losing alerts;
+ * the caller must remove some first. Returns only the fields whose resolved value differs from
+ * `kept`'s own, so an all-kept merge with an unchanged alert union produces an empty patch.
  */
 export function resolveMerge(
   kept: DomainPatient,
@@ -110,10 +93,12 @@ export function resolveMerge(
     changedFields.push('guardian');
   }
 
-  const unionAlerts = dedupeAlertsCaseInsensitive([
-    ...kept.medicalAlerts,
-    ...dropped.medicalAlerts,
-  ]).slice(0, MEDICAL_ALERTS_MAX);
+  const unionAlerts = dedupeAlerts([...kept.medicalAlerts, ...dropped.medicalAlerts]);
+  if (unionAlerts.length > MEDICAL_ALERTS_MAX) {
+    throw new MergeAlertsOverflowError(
+      `Merging would leave ${unionAlerts.length} medical alerts, more than the ${MEDICAL_ALERTS_MAX} allowed; remove some alerts before merging`,
+    );
+  }
   if (!sameAlerts(unionAlerts, kept.medicalAlerts)) {
     patch.medicalAlerts = unionAlerts;
   }

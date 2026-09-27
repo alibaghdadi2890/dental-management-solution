@@ -28,3 +28,13 @@ export class UnknownDentistError extends DomainError {
   readonly code = 'patient.unknown_dentist';
   readonly kind = 'invalid';
 }
+
+/**
+ * The unioned medical alerts of a merge exceed `MEDICAL_ALERTS_MAX` (`@dcm/contracts`). Alerts are
+ * never truncated (a dropped allergy is a clinical risk, design Q8): the caller must remove some
+ * alerts from one of the two records before merging.
+ */
+export class MergeAlertsOverflowError extends DomainError {
+  readonly code = 'patient.merge_alerts_overflow';
+  readonly kind = 'invalid';
+}

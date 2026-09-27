@@ -14,8 +14,13 @@ export class PatientCountersRepository {
 
   /**
    * Atomically increments and returns the tenant's counter, starting at 1. The upsert's row lock
-   * serialises concurrent creates the way `SELECT ... FOR UPDATE` would, and a rolled-back create
-   * still burns the number (acceptable: numbers are unique, not gap-free).
+   * serialises concurrent creates the way `SELECT ... FOR UPDATE` would. Must run inside the same
+   * transaction as the patient insert it mints a number for (`TenantDb.run()` nests automatically,
+   * so calling it from within the create use case's own `db.run()` is enough — no separate guard
+   * like `lockPair`'s) — that way a create that's rolled back rolls this increment back with it,
+   * *freeing* the number rather than burning it. Called outside that transaction, a rolled-back
+   * create would burn the number instead (acceptable in isolation: numbers are unique, not
+   * required to be gap-free — but not the intended usage).
    */
   async nextValue(): Promise<number> {
     const [row] = await this.db.run((tx) =>

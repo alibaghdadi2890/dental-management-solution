@@ -1,5 +1,5 @@
 {
-  "id": "bf78bd2e-525f-4597-839a-d53964a1611a",
+  "id": "a7c05ed1-9f6f-43f0-ae57-e323bf4ce946",
   "prevId": "8f140cb0-7f77-478a-afdb-cb3b00e95702",
   "version": "7",
   "dialect": "postgresql",
@@ -1675,7 +1675,16 @@
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
       },
-      "checkConstraints": {},
+      "checkConstraints": {
+        "patients_merged_requires_archived": {
+          "name": "patients_merged_requires_archived",
+          "value": "\"patients\".\"merged_into_id\" is null or \"patients\".\"deleted_at\" is not null"
+        },
+        "patients_not_merged_into_self": {
+          "name": "patients_not_merged_into_self",
+          "value": "\"patients\".\"merged_into_id\" <> \"patients\".\"id\""
+        }
+      },
       "isRLSEnabled": false
     },
     "public.role_permissions": {

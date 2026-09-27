@@ -30,7 +30,9 @@ CREATE TABLE "patients" (
 	"merged_into_id" uuid,
 	"deleted_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "patients_merged_requires_archived" CHECK ("patients"."merged_into_id" is null or "patients"."deleted_at" is not null),
+	CONSTRAINT "patients_not_merged_into_self" CHECK ("patients"."merged_into_id" <> "patients"."id")
 );
 --> statement-breakpoint
 ALTER TABLE "patients" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

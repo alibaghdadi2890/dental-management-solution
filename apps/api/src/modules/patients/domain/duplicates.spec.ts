@@ -43,4 +43,17 @@ describe('groupDuplicates', () => {
     const p1 = row({ displayNumber: 'P-000001' });
     expect(groupDuplicates([p10, p1, p9])).toEqual([[p1, p9, p10]]);
   });
+
+  it('orders the groups themselves by their first (lowest) display number, deterministically', () => {
+    // The "later" name (bob) has the numerically lower duplicate pair, so it must sort first —
+    // this only passes if group order depends on display numbers, not row/insertion order.
+    const aliceLo = row({ displayNumber: 'P-000005', nameKey: 'alice a' });
+    const aliceHi = row({ displayNumber: 'P-000006', nameKey: 'alice a' });
+    const bobLo = row({ displayNumber: 'P-000001', nameKey: 'bob b' });
+    const bobHi = row({ displayNumber: 'P-000002', nameKey: 'bob b' });
+    expect(groupDuplicates([aliceLo, aliceHi, bobLo, bobHi])).toEqual([
+      [bobLo, bobHi],
+      [aliceLo, aliceHi],
+    ]);
+  });
 });

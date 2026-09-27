@@ -7,6 +7,7 @@ import {
   PatientsRepository,
 } from '../../src/modules/patients/persistence/patients.repository';
 import { type ContextSeed, RequestContext } from '../../src/platform/cls/request-context';
+import { TenantDb } from '../../src/platform/db/tenant-db';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createTestApp, type TestApp } from '../support/test-app';
@@ -45,6 +46,7 @@ describe('patients: repositories', () => {
   let database: TestDatabase;
   let testApp: TestApp;
   let context: RequestContext;
+  let tenantDb: TenantDb;
   let repo: PatientsRepository;
   let counters: PatientCountersRepository;
 
@@ -57,6 +59,9 @@ describe('patients: repositories', () => {
   });
   const inTenant = <T>(tenantId: string, fn: () => Promise<T>): Promise<T> =>
     context.run(seed(tenantId), fn);
+  /** Runs `fn` inside an open transaction in `tenantId` — required by `lockPair`. */
+  const inTenantTx = <T>(tenantId: string, fn: () => Promise<T>): Promise<T> =>
+    inTenant(tenantId, () => tenantDb.run(fn));
   const create = (tenantId: string, overrides: Partial<NewPatient> = {}) =>
     inTenant(tenantId, () => repo.insert(newPatient(overrides)));
 
@@ -64,6 +69,7 @@ describe('patients: repositories', () => {
     database = connectTestDatabase();
     testApp = await createTestApp(database);
     context = testApp.app.get(RequestContext);
+    tenantDb = testApp.app.get(TenantDb);
     repo = testApp.app.get(PatientsRepository);
     counters = testApp.app.get(PatientCountersRepository);
   });
@@ -102,6 +108,8 @@ describe('patients: repositories', () => {
     const tenant = newId();
     let jose: string;
     let percent: string;
+    let underscoreId: string;
+    let backslashId: string;
 
     beforeAll(async () => {
       jose = (
@@ -122,6 +130,20 @@ describe('patients: repositories', () => {
           displayNumber: 'P-000003',
           fullName: 'Percent Test',
           email: 'a%b@example.com',
+        })
+      ).id;
+      underscoreId = (
+        await create(tenant, {
+          displayNumber: 'P-000004',
+          fullName: 'Underscore Test',
+          email: 'a_b@example.com',
+        })
+      ).id;
+      backslashId = (
+        await create(tenant, {
+          displayNumber: 'P-000005',
+          fullName: 'Backslash Test',
+          email: String.raw`a\b@example.com`,
         })
       ).id;
     });
@@ -165,6 +187,86 @@ describe('patients: repositories', () => {
     it('treats a literal "%" in the query as a literal character, not a wildcard', async () => {
       const { rows } = await q('a%b');
       expect(rows.map((r) => r.id)).toEqual([percent]);
+    });
+
+    it('treats a literal "_" in the query as a literal character, not a single-char wildcard', async () => {
+      const { rows } = await q('a_b');
+      expect(rows.map((r) => r.id)).toEqual([underscoreId]);
+    });
+
+    it('treats a literal "\\" in the query as a literal character', async () => {
+      const { rows } = await q(String.raw`a\b`);
+      expect(rows.map((r) => r.id)).toEqual([backslashId]);
+    });
+  });
+
+  describe('update', () => {
+    it('re-derives name_key and phone_search, so search finds the new value and not the old', async () => {
+      const tenant = newId();
+      const patient = await create(tenant, {
+        fullName: 'Original Name',
+        phone: PHONE('+9613111111', '03111111'),
+      });
+
+      await inTenant(tenant, () =>
+        repo.update(patient.id, {
+          fullName: 'Renamed Person',
+          phone: PHONE('+9613222222', '03222222'),
+        }),
+      );
+
+      const byNewName = await inTenant(tenant, () =>
+        repo.search(
+          { view: 'active', q: 'Renamed' },
+          { page: 1, size: 10, sort: 'name', dir: 'asc' },
+        ),
+      );
+      expect(byNewName.rows.map((r) => r.id)).toContain(patient.id);
+
+      const byOldName = await inTenant(tenant, () =>
+        repo.search(
+          { view: 'active', q: 'Original' },
+          { page: 1, size: 10, sort: 'name', dir: 'asc' },
+        ),
+      );
+      expect(byOldName.rows.map((r) => r.id)).not.toContain(patient.id);
+
+      const byNewPhone = await inTenant(tenant, () =>
+        repo.search(
+          { view: 'active', q: '03222222' },
+          { page: 1, size: 10, sort: 'name', dir: 'asc' },
+        ),
+      );
+      expect(byNewPhone.rows.map((r) => r.id)).toContain(patient.id);
+
+      const byOldPhone = await inTenant(tenant, () =>
+        repo.search(
+          { view: 'active', q: '03111111' },
+          { page: 1, size: 10, sort: 'name', dir: 'asc' },
+        ),
+      );
+      expect(byOldPhone.rows.map((r) => r.id)).not.toContain(patient.id);
+    });
+  });
+
+  describe('search: view', () => {
+    it('active excludes archived rows; archived includes only archived rows', async () => {
+      const tenant = newId();
+      const active = await create(tenant, { fullName: 'Active Patient' });
+      const archived = await create(tenant, { fullName: 'Archived Patient' });
+      await inTenant(tenant, () => repo.setArchived([archived.id], new Date()));
+
+      const activeView = await inTenant(tenant, () =>
+        repo.search({ view: 'active' }, { page: 1, size: 50, sort: 'name', dir: 'asc' }),
+      );
+      expect(activeView.rows.map((r) => r.id)).toContain(active.id);
+      expect(activeView.rows.map((r) => r.id)).not.toContain(archived.id);
+
+      const archivedView = await inTenant(tenant, () =>
+        repo.search({ view: 'archived' }, { page: 1, size: 50, sort: 'name', dir: 'asc' }),
+      );
+      expect(archivedView.rows.map((r) => r.id)).toContain(archived.id);
+      expect(archivedView.rows.map((r) => r.id)).not.toContain(active.id);
     });
   });
 
@@ -267,20 +369,21 @@ describe('patients: repositories', () => {
     });
 
     it('sorts by recently updated, most recent first, regardless of dir', async () => {
-      // Touch all three via the application clock (`$onUpdate`) so their relative order never
-      // depends on comparing against a bare `created_at`: that comes from Postgres' own clock
-      // (`defaultNow()`), which can drift from the application clock (e.g. Docker Desktop on
-      // Windows) enough to flip an otherwise-correct ordering.
-      await inTenant(tenant, () => repo.update(carol, { notes: 'touched 1st' }));
+      // Touch all three via the application clock (`$onUpdate`), in name order, so their relative
+      // order never depends on comparing against a bare `created_at` (which comes from Postgres'
+      // own clock, `defaultNow()`, and can drift from the application clock — e.g. Docker Desktop
+      // on Windows — enough to flip an otherwise-correct ordering). The expected result is the
+      // *reverse* of touch order: whichever was touched last sorts first.
+      await inTenant(tenant, () => repo.update(alice, { notes: 'touched 1st' }));
       await inTenant(tenant, () => repo.update(bob, { notes: 'touched 2nd' }));
-      await inTenant(tenant, () => repo.update(alice, { notes: 'touched 3rd, most recent' }));
+      await inTenant(tenant, () => repo.update(carol, { notes: 'touched 3rd, most recent' }));
       const { rows } = await inTenant(tenant, () =>
         repo.search({ view: 'active' }, { page: 1, size: 50, sort: 'recent', dir: 'asc' }),
       );
-      expect(rows.map((r) => r.id)).toEqual([alice, bob, carol]);
+      expect(rows.map((r) => r.id)).toEqual([carol, bob, alice]);
     });
 
-    it('orders by rank with unlisted rows at restAt', async () => {
+    it('orders by rank (column: id) with unlisted rows at restAt', async () => {
       const { rows } = await inTenant(tenant, () =>
         repo.search(
           { view: 'active' },
@@ -306,6 +409,14 @@ describe('patients: repositories', () => {
       expect(rows).toHaveLength(2);
     });
 
+    it('returns the true total (not 0) for a page past the last row', async () => {
+      const { total, rows } = await inTenant(tenant, () =>
+        repo.search({ view: 'active' }, { page: 5, size: 2, sort: 'name', dir: 'asc' }),
+      );
+      expect(rows).toEqual([]);
+      expect(total).toBe(3);
+    });
+
     it('returns no rows when idsIn is empty', async () => {
       const { rows, total } = await inTenant(tenant, () =>
         repo.search({ view: 'active' }, { page: 1, size: 50, sort: 'name', dir: 'asc', idsIn: [] }),
@@ -313,19 +424,66 @@ describe('patients: repositories', () => {
       expect(rows).toEqual([]);
       expect(total).toBe(0);
     });
+
+    it('finds nothing by id for another tenant (RLS)', async () => {
+      const other = newId();
+      const { rows } = await inTenant(other, () =>
+        repo.search({ view: 'active' }, { page: 1, size: 50, sort: 'name', dir: 'asc' }),
+      );
+      expect(rows).toEqual([]);
+    });
+  });
+
+  describe('search: rank by dentist', () => {
+    it('ranks by primaryDentistUserId, with a NULL dentist landing at restAt', async () => {
+      const tenant = newId();
+      const dentistX = newId();
+      const dentistY = newId();
+      const withX = (await create(tenant, { primaryDentistUserId: dentistX })).id;
+      const withY = (await create(tenant, { primaryDentistUserId: dentistY })).id;
+      const withNone = (await create(tenant, { primaryDentistUserId: null })).id;
+
+      const { rows } = await inTenant(tenant, () =>
+        repo.search(
+          { view: 'active' },
+          {
+            page: 1,
+            size: 50,
+            sort: 'dentist',
+            dir: 'asc',
+            rank: { column: 'primaryDentistUserId', ids: [dentistX, dentistY], restAt: 999 },
+          },
+        ),
+      );
+      const ids = rows.map((r) => r.id);
+      expect(ids.indexOf(withX)).toBeLessThan(ids.indexOf(withY));
+      expect(ids.indexOf(withY)).toBeLessThan(ids.indexOf(withNone));
+    });
+  });
+
+  describe('findByIds', () => {
+    it('returns exactly the requested ids, and none for an empty list', async () => {
+      const tenant = newId();
+      const a = await create(tenant);
+      const b = await create(tenant);
+      await create(tenant); // a third, unrelated patient — must not come back
+
+      const found = await inTenant(tenant, () => repo.findByIds([a.id, b.id]));
+      expect(found.map((p) => p.id).sort()).toEqual([a.id, b.id].sort());
+
+      expect(await inTenant(tenant, () => repo.findByIds([]))).toEqual([]);
+    });
   });
 
   describe('counts, duplicateRows, findTwins', () => {
-    const tenant = newId();
-
-    it('counts active and archived separately', async () => {
+    it('counts active and archived exactly', async () => {
+      const tenant = newId();
       const active = await create(tenant);
       const toArchive = await create(tenant);
       await inTenant(tenant, () => repo.setArchived([toArchive.id], new Date()));
 
       const counts = await inTenant(tenant, () => repo.counts());
-      expect(counts.active).toBeGreaterThanOrEqual(1);
-      expect(counts.archived).toBeGreaterThanOrEqual(1);
+      expect(counts).toEqual({ active: 1, archived: 1 });
       expect(await inTenant(tenant, () => repo.findById(active.id))).toBeDefined();
     });
 
@@ -347,16 +505,22 @@ describe('patients: repositories', () => {
       expect(ids.sort()).toEqual([twinA.id, twinB.id].sort());
     });
 
-    it('finds twins by name key and date of birth, excluding a given id', async () => {
+    it('finds twins by full name (case-insensitively) and date of birth, excluding a given id', async () => {
       const twinTenant = newId();
       const a = await create(twinTenant, { fullName: 'Same Name', dateOfBirth: '1985-03-03' });
       const b = await create(twinTenant, { fullName: 'same name', dateOfBirth: '1985-03-03' });
 
-      const twins = await inTenant(twinTenant, () => repo.findTwins('same name', '1985-03-03'));
+      const twins = await inTenant(twinTenant, () => repo.findTwins('Same Name', '1985-03-03'));
       expect(twins.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
 
+      // Case-insensitive: a differently-cased full name still finds the same twins.
+      const twinsOtherCase = await inTenant(twinTenant, () =>
+        repo.findTwins('SAME NAME', '1985-03-03'),
+      );
+      expect(twinsOtherCase.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
+
       const excluding = await inTenant(twinTenant, () =>
-        repo.findTwins('same name', '1985-03-03', a.id),
+        repo.findTwins('Same Name', '1985-03-03', a.id),
       );
       expect(excluding.map((t) => t.id)).toEqual([b.id]);
     });
@@ -365,36 +529,66 @@ describe('patients: repositories', () => {
   describe('lockPair, setArchived, markMerged', () => {
     const tenant = newId();
 
+    it('throws when called outside a transaction', async () => {
+      const a = await create(tenant);
+      const b = await create(tenant);
+      await expect(inTenant(tenant, () => repo.lockPair(a.id, b.id))).rejects.toThrow(
+        'lockPair must run inside a transaction',
+      );
+    });
+
     it('locks both rows regardless of argument order', async () => {
       const a = await create(tenant, { fullName: 'Lock A' });
       const b = await create(tenant, { fullName: 'Lock B' });
-      const { a: lockedA, b: lockedB } = await inTenant(tenant, () => repo.lockPair(a.id, b.id));
+      const { a: lockedA, b: lockedB } = await inTenantTx(tenant, () => repo.lockPair(a.id, b.id));
       expect(lockedA.id).toBe(a.id);
       expect(lockedB.id).toBe(b.id);
 
-      const reversed = await inTenant(tenant, () => repo.lockPair(b.id, a.id));
+      const reversed = await inTenantTx(tenant, () => repo.lockPair(b.id, a.id));
       expect(reversed.a.id).toBe(b.id);
       expect(reversed.b.id).toBe(a.id);
     });
 
     it('throws PatientNotFoundError when one id is missing', async () => {
       const a = await create(tenant);
-      await expect(inTenant(tenant, () => repo.lockPair(a.id, newId()))).rejects.toBeInstanceOf(
+      await expect(inTenantTx(tenant, () => repo.lockPair(a.id, newId()))).rejects.toBeInstanceOf(
         PatientNotFoundError,
       );
     });
 
-    it('archives and restores by id, returning the affected ids', async () => {
-      const a = await create(tenant);
-      const b = await create(tenant);
+    it('archives an active id and returns it as affected; leaves an already-archived id untouched', async () => {
+      const active = await create(tenant);
+      const alreadyArchived = await create(tenant);
       const at = new Date();
-      const archived = await inTenant(tenant, () => repo.setArchived([a.id, b.id], at));
-      expect(archived.sort()).toEqual([a.id, b.id].sort());
-      expect((await inTenant(tenant, () => repo.findById(a.id)))?.deletedAt).toBeInstanceOf(Date);
+      await inTenant(tenant, () => repo.setArchived([alreadyArchived.id], at));
 
-      const restored = await inTenant(tenant, () => repo.setArchived([a.id, b.id], null));
-      expect(restored.sort()).toEqual([a.id, b.id].sort());
-      expect((await inTenant(tenant, () => repo.findById(a.id)))?.deletedAt).toBeNull();
+      const affected = await inTenant(tenant, () =>
+        repo.setArchived([active.id, alreadyArchived.id], at),
+      );
+      expect(affected).toEqual([active.id]);
+    });
+
+    it('restores an archived id and returns it as affected', async () => {
+      const patient = await create(tenant);
+      const at = new Date();
+      await inTenant(tenant, () => repo.setArchived([patient.id], at));
+
+      const restored = await inTenant(tenant, () => repo.setArchived([patient.id], null));
+      expect(restored).toEqual([patient.id]);
+      expect((await inTenant(tenant, () => repo.findById(patient.id)))?.deletedAt).toBeNull();
+    });
+
+    it('refuses to restore a merged-away record: not returned as affected, stays archived', async () => {
+      const kept = await create(tenant);
+      const dropped = await create(tenant);
+      await inTenantTx(tenant, () => repo.lockPair(kept.id, dropped.id));
+      await inTenant(tenant, () => repo.markMerged(dropped.id, kept.id, new Date()));
+
+      const restored = await inTenant(tenant, () => repo.setArchived([dropped.id], null));
+      expect(restored).toEqual([]);
+      const stillMerged = await inTenant(tenant, () => repo.findById(dropped.id));
+      expect(stillMerged?.deletedAt).toBeInstanceOf(Date);
+      expect(stillMerged?.mergedIntoId).toBe(kept.id);
     });
 
     it('marks the dropped record merged into the kept one', async () => {
@@ -435,6 +629,30 @@ describe('patients: repositories', () => {
 
       expect(await inTenant(tenantB, () => counters.nextValue())).toBe(1);
       expect(await inTenant(tenantA, () => counters.nextValue())).toBe(3);
+    });
+
+    it('writes from tenant B never affect a patient that belongs to tenant A', async () => {
+      const tenantA = newId();
+      const tenantB = newId();
+      const a = await create(tenantA, { fullName: 'A Only' });
+      const bOwn = await create(tenantB, { fullName: 'B Own' });
+
+      expect(
+        await inTenant(tenantB, () => repo.update(a.id, { fullName: 'Hijacked' })),
+      ).toBeUndefined();
+      expect((await inTenant(tenantA, () => repo.findById(a.id)))?.fullName).toBe('A Only');
+
+      expect(await inTenant(tenantB, () => repo.setArchived([a.id], new Date()))).toEqual([]);
+      expect((await inTenant(tenantA, () => repo.findById(a.id)))?.deletedAt).toBeNull();
+
+      expect(
+        await inTenant(tenantB, () => repo.markMerged(a.id, bOwn.id, new Date())),
+      ).toBeUndefined();
+      expect((await inTenant(tenantA, () => repo.findById(a.id)))?.mergedIntoId).toBeNull();
+
+      await expect(inTenantTx(tenantB, () => repo.lockPair(a.id, bOwn.id))).rejects.toBeInstanceOf(
+        PatientNotFoundError,
+      );
     });
   });
 });

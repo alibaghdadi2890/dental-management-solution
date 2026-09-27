@@ -24,7 +24,8 @@ export const PATIENT_SEXES = ['female', 'male', 'other', 'unknown'] as const;
 export const patientSexSchema = z.enum(PATIENT_SEXES);
 export type PatientSex = z.infer<typeof patientSexSchema>;
 
-const MEDICAL_ALERTS_MAX = 20;
+/** Also the merge patch's overflow threshold (`MergeAlertsOverflowError`, `domain/merge.ts`). */
+export const MEDICAL_ALERTS_MAX = 20;
 
 /**
  * De-dupes case- and normalization-insensitively (NFKC folds compatibility forms — full-width,
@@ -32,8 +33,10 @@ const MEDICAL_ALERTS_MAX = 20;
  * (NFD) collapses with "Café" typed as the single precomposed `é` (NFC)), keeping the first
  * occurrence. Values have already been normalized to NFC (canonical composition) by
  * `medicalAlertItemSchema` — the text isn't rewritten more than necessary to make it comparable.
+ * Exported so `domain/merge.ts` (patient merge's alert union) reuses this exact semantics instead
+ * of a copy.
  */
-function dedupeAlerts(values: string[]): string[] {
+export function dedupeAlerts(values: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of values) {
