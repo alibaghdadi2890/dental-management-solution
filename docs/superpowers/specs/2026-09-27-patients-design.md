@@ -307,7 +307,7 @@ locales/{en,ar,fr}/patients.json, billing.json
 - **⌘K / Ctrl+K** opens the command palette (workspace spec §Global Patient Search): no query → 5
   most recently updated patients (Q15); otherwise `GET /patients?q=&size=10`, first 8 shown (the same matching);
   rows show avatar, name, ID, phone, "Age n", "Never seen"; Enter/arrows navigate; no results →
-  **Create "{query}"** → the create panel pre-filled (digits → phone, otherwise name). Archived
+  **Create "{query}"** → the create panel pre-filled (digits → phone, otherwise name) through router history state, never the URL (CLAUDE.md §15). Archived
   patients never appear.
 
 ### Patient record `/patients/$patientId`
