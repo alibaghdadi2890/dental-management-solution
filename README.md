@@ -41,15 +41,15 @@ services: Postgres `55432`, Redis `56379`, S3 (SeaweedFS) `58333`. Override with
 
 ## Everyday commands
 
-| Command                              | What it does                                                                             |
-| ------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `pnpm lint`                          | ESLint, including module-boundary and RTL/i18n rules                                     |
-| `pnpm typecheck`                     | TypeScript across the workspace                                                          |
-| `pnpm test`                          | Unit tests plus the Testcontainers integration suite (needs Docker)                      |
-| `pnpm build`                         | Production builds                                                                        |
-| `pnpm --filter @dcm/web e2e`         | Playwright: shell smoke tests, the identity and catalog flows (needs `pnpm dev`'s stack) |
-| `pnpm --filter @dcm/api db:generate` | Generate a migration from module schemas                                                 |
-| `pnpm --filter @dcm/api db:migrate`  | Apply migrations (as the schema owner)                                                   |
+| Command                              | What it does                                                                                       |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `pnpm lint`                          | ESLint, including module-boundary and RTL/i18n rules                                               |
+| `pnpm typecheck`                     | TypeScript across the workspace                                                                    |
+| `pnpm test`                          | Unit tests plus the Testcontainers integration suite (needs Docker)                                |
+| `pnpm build`                         | Production builds                                                                                  |
+| `pnpm --filter @dcm/web e2e`         | Playwright: shell smoke tests, the identity, catalog and patients flows (needs `pnpm dev`'s stack) |
+| `pnpm --filter @dcm/api db:generate` | Generate a migration from module schemas                                                           |
+| `pnpm --filter @dcm/api db:migrate`  | Apply migrations (as the schema owner)                                                             |
 
 ## Layout
 

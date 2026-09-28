@@ -29,7 +29,8 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
   `GET /users/practitioners` still requires `user:read` (every system role holds it).
 - `practitionersByIds(ids)` — practitioners among `ids` whatever their current type or active
   status, ordered the same way, for showing the display name of a dentist already assigned to a
-  patient even after they leave or change role.
+  patient even after they leave or change role. Not permission-gated either: `patients` ranks
+  `sort=dentist` with it and `billing` names dentists in the CSV export.
 - `createStaffUser(input)` (`user:write`, roles also need `role:write`): identity with a temporary
   password (D6) → membership mirror → profile → branches → roles, one transaction; a failure in any
   step rolls the identity back. `409 user.email_taken` for a registered email (D7 extension point:

@@ -47,7 +47,7 @@ apps/
     src/
       modules/         one folder per domain module (see §4)
       platform/        cross-cutting infra: db, cls, events, queue, storage, logging, otel
-                       (platform/kernel: pure DomainError, ValidationFailedError, ids, Clock and local-date
+                       (platform/kernel: pure DomainError and its platform errors, ids, Clock and local-date
                        helpers; the only platform code domain/ may import)
       main.ts
     migrations/        drizzle-kit migrations (committed, never edited after merge)

@@ -374,3 +374,40 @@ locales/{en,ar,fr}/patients.json, billing.json
   (practitioners), `tenancy.md` (country).
 - CLAUDE.md: §4 map (`patients → tenancy, users`; `billing` owns `ledger_entries`, depends on
   `patients, tenancy`, `clinical` from feature 5); §12 pagination exception.
+
+## Implementation notes
+
+Decisions taken while implementing that Q1–Q17 do not already record (the module pages and
+ADR-0017/0018 have the detail):
+
+- **`externalId` is import-only.** It is read-only over HTTP and absent from the create and edit
+  contracts; only the feature 6 import sets it (unique per tenant where set, archived included).
+- **Full phone metadata** (`libphonenumber-js/max`): `/min` accepted about 6% of invalid numbers.
+  The tenant `country` is limited to the countries that metadata knows.
+- **Search by patient number:** a `q` shaped like `P-000123`/`p000123` matches display numbers
+  only, never phone digits; bare digits stay a phone query (at least 2 digits).
+- **Export snapshot and language:** instead of paging through `search` (§Backend `billing`), the
+  export takes every matching id up front (`PatientsService.searchIds`) and reads rows 500 ids at a
+  time, so concurrent writes never shift or repeat rows. The header language is the query's `lang`
+  (the SPA's UI language), else `Accept-Language`, else `en`. Phones of the tenant's country are
+  written in national format (`03 123 456`), others internationally behind the CSV injection
+  guard's `'`, which the feature 6 import must strip.
+- **Ledger writes lock the patient** (`PatientsService.lockForLedger`, `FOR SHARE`), so a merge
+  (`FOR UPDATE`) waits for them and the re-point job moves their entries; a merged-away patient
+  refuses new entries (409 `patient.merged`).
+- **Merge re-point follows the survivor** (`PatientsService.survivorOf`): entries move to the end
+  of the kept patient's merge chain, and only if the dropped patient really resolves to it. A merge
+  refuses archived or merged-away records before taking any lock (fail fast), then re-checks under
+  the lock.
+- **The platform-admin flag is audit-only outside the admin's own request** (ADR-0017 amends
+  0008/0010): a job carries it for the audit entry and gets no authority from it.
+- **Create pre-fill travels in router history state**, never the URL (patient names and phones
+  are PII, CLAUDE.md §15).
+- **Error log sanitising:** an error with a failed query anywhere in its cause chain is logged
+  (also through pino-http) with the SQL text, stack frames and the driver's identifying fields
+  (`code`, `constraint`, `table`, …) only; the bound params, the "Failed query" message and
+  `detail`, which echo patient data, are dropped.
+- **Redis in the integration harness:** each test app gets its own `QUEUE_PREFIX`
+  (`test-<id>`), so parallel suites never share BullMQ queues. `QUEUE_PREFIX` defaults to `bull`.
+- **Patient information tab:** a refetch under unsaved edits does not move the form's base, so
+  undoing the edits shows the latest server values.

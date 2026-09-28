@@ -32,5 +32,6 @@ cursor encoding.
   example keyset paging with an estimated total.
 - A write between two page requests can shift rows across a page boundary, so a row may appear
   twice or be skipped. This is acceptable for a UI list that refetches on change.
-- Export (`billing`) walks the same search in pages of 500. It has the same shift risk, which is
-  acceptable for a point-in-time CSV.
+- Export (`billing`) does not page: it takes every matching id up front in the list's order
+  (`PatientsService.searchIds`) and reads the rows 500 ids at a time, so rows written while it
+  streams never shift or repeat.

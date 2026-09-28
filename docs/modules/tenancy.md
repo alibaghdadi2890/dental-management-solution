@@ -6,7 +6,8 @@
 
 Clinics (tenants), their settings (IANA time zone, currency, locale, country; defaults
 `Asia/Beirut`, `USD`, `en`, `LB`), their branches, and each branch's rooms. Country is ISO 3166-1
-alpha-2 and drives phone parsing (`patients`, feature 3 Q3) and date order (feature 3 Q17). A room
+alpha-2, limited to the countries the phone metadata knows (`countrySchema`), and drives phone
+parsing (`patients`, feature 3 Q3) and the date input order (feature 3 Q17). A room
 is the physical unit a visit happens in and the unit `scheduling` will later book as a resource
 (ADR-0007); there is no chair concept. Tenants are created and listed only by platform admins
 through `withoutTenant()`; everything else runs inside the current tenant under RLS. End-to-end
