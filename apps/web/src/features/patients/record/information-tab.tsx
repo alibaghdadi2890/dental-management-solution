@@ -1,5 +1,5 @@
 import { type Patient, profileCompleteness, type Session } from '@dcm/contracts';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -7,9 +7,17 @@ import { SaveState, type SaveStatus } from '@/components/ui/save-state';
 import { useToast } from '@/components/ui/toast-context';
 import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 import { usePermission } from '@/features/auth/use-permission';
+import { todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { contactsQuery } from '../contacts-api';
 import { failureOf, fieldErrorsOf } from '../panels/form-server-errors';
-import { fromPatient, isEditDirty, type PatientFormValues, toPatchPayload } from '../patient-form';
+import {
+  fromPatient,
+  isEditDirty,
+  minorOn,
+  type PatientFormValues,
+  toPatchPayload,
+} from '../patient-form';
 import { PatientField, type PatientFieldName } from '../patient-form-fields';
 import { invalidatePatientData, patientQuery, updatePatient } from '../patients-api';
 import { usePatientForm } from '../use-patient-form';
@@ -27,9 +35,24 @@ const leavesTab = (current: GuardLocation, next: GuardLocation) =>
 
 type Phase = 'idle' | 'saving' | 'saved' | 'failed';
 
-function CompletenessBadge({ patient }: { patient: Patient }) {
+/**
+ * Complete once email and address are recorded and, for a minor on the tenant's today, a guardian
+ * is among the contacts (design addendum C10). A minor's badge waits for the contacts rather than
+ * reading "Partly complete" before they have loaded.
+ */
+function CompletenessBadge({ patient, tenant }: { patient: Patient; tenant: Tenant }) {
   const { t } = useTranslation('patients');
-  const complete = profileCompleteness(patient) === 'complete';
+  const contacts = useQuery(contactsQuery(patient.id));
+  const minor = minorOn(patient.dateOfBirth, todayIn(tenant.timeZone));
+  const hasGuardian = contacts.data?.some((link) => link.isGuardian);
+  if (minor && hasGuardian === undefined) return null;
+  const complete =
+    profileCompleteness({
+      email: patient.email,
+      address: patient.address,
+      minor,
+      hasGuardian: hasGuardian ?? false,
+    }) === 'complete';
   return (
     <span
       className={cn(
@@ -164,7 +187,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
         <h2 id={titleId} className="m-0 text-[14px] leading-none font-semibold">
           {t('record.form.title')}
         </h2>
-        <CompletenessBadge patient={patient} />
+        <CompletenessBadge patient={patient} tenant={tenant} />
       </div>
       <p className="mb-5 text-[12.5px] leading-normal text-ink-muted">{t('record.form.intro')}</p>
       {archived && !dirty && (

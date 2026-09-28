@@ -57,6 +57,70 @@ describe('fieldErrorsOf', () => {
     });
   });
 
+  it('puts a pending contact error on its index, with or without the patient. prefix', () => {
+    expect(
+      fieldErrorsOf(
+        apiError(422, 'validation_failed', ['contacts.1.target.contactId'], 'not_found'),
+      ),
+    ).toEqual({ 'contacts.1': 'contactNotFound' });
+    expect(
+      fieldErrorsOf(
+        apiError(422, 'validation_failed', ['patient.contacts.0.target.patientId'], 'not_found'),
+      ),
+    ).toEqual({ 'contacts.0': 'contactNotFound' });
+    expect(
+      fieldErrorsOf(apiError(422, 'validation_failed', ['contacts.2.target.patientId'], 'merged')),
+    ).toEqual({ 'contacts.2': 'contactMerged' });
+    expect(
+      fieldErrorsOf(
+        apiError(422, 'validation_failed', ['patient.contacts.0.target.newContact.phone']),
+      ),
+    ).toEqual({ 'contacts.0': 'invalidPhone' });
+    expect(
+      fieldErrorsOf(apiError(422, 'validation_failed', ['contacts.0.target.newContact.fullName'])),
+    ).toEqual({ 'contacts.0': 'invalid' });
+    expect(fieldErrorsOf(apiError(422, 'validation_failed', ['contacts.3.relationship']))).toEqual({
+      'contacts.3': 'invalid',
+    });
+    expect(fieldErrorsOf(apiError(422, 'validation_failed', ['contacts.0.isGuardian']))).toEqual({
+      'contacts.0': 'roleRequired',
+    });
+  });
+
+  it('names a contact linked twice as a duplicate', () => {
+    expect(
+      fieldErrorsOf(apiError(422, 'validation_failed', ['patient.contacts.1'], 'duplicate')),
+    ).toEqual({ 'contacts.1': 'contactDuplicate' });
+    expect(fieldErrorsOf(apiError(422, 'validation_failed', ['contacts.1.target']))).toEqual({
+      'contacts.1': 'contactDuplicate',
+    });
+  });
+
+  it('puts linkContactId errors on the link offer, with or without the prefix', () => {
+    expect(
+      fieldErrorsOf(apiError(422, 'validation_failed', ['linkContactId'], 'not_found')),
+    ).toEqual({ linkContactId: 'contactNotFound' });
+    expect(
+      fieldErrorsOf(apiError(422, 'validation_failed', ['patient.linkContactId'], 'not_found')),
+    ).toEqual({ linkContactId: 'contactNotFound' });
+    expect(fieldErrorsOf(apiError(422, 'validation_failed', ['patient.linkContactId']))).toEqual({
+      linkContactId: 'contactIsPatient',
+    });
+  });
+
+  it('keeps the first error of a field', () => {
+    expect(
+      fieldErrorsOf(
+        apiError(
+          422,
+          'validation_failed',
+          ['contacts.0.target.contactId', 'contacts.0'],
+          'not_found',
+        ),
+      ),
+    ).toEqual({ 'contacts.0': 'contactNotFound' });
+  });
+
   it('is null when nothing maps to a field', () => {
     expect(fieldErrorsOf(apiError(422, 'validation_failed', ['somethingElse']))).toBeNull();
     expect(fieldErrorsOf(apiError(409, 'patient.archived'))).toBeNull();
@@ -80,6 +144,33 @@ describe('failureOf', () => {
     expect(failureOf(apiError(422, 'patient.merge_alerts_overflow'))).toBe('alertsOverflow');
     expect(failureOf(apiError(422, 'patient.unknown_dentist'))).toBe('unknownDentist');
     expect(failureOf(apiError(404, 'patient.not_found'))).toBe('notFound');
+  });
+
+  it('names every contact failure', () => {
+    expect(failureOf(apiError(404, 'contact.not_found'))).toBe('contactNotFound');
+    expect(failureOf(apiError(409, 'contact.already_linked'))).toBe('contactAlreadyLinked');
+    expect(failureOf(apiError(409, 'contact.linked'))).toBe('contactLinked');
+    expect(failureOf(apiError(409, 'contact.conflict'))).toBe('contactConflict');
+    expect(failureOf(apiError(422, 'contact.is_patient'))).toBe('contactIsPatient');
+    expect(failureOf(apiError(422, 'contact.role_required'))).toBe('contactRoleRequired');
+    expect(failureOf(apiError(422, 'contact.primary_without_role'))).toBe(
+      'contactPrimaryWithoutRole',
+    );
+  });
+
+  it('names a link target that is merged away or gone (422 at target.…)', () => {
+    expect(failureOf(apiError(422, 'validation_failed', ['target.patientId'], 'merged'))).toBe(
+      'contactMerged',
+    );
+    expect(
+      failureOf(apiError(422, 'validation_failed', ['contacts.0.target.patientId'], 'merged')),
+    ).toBe('contactMerged');
+    expect(failureOf(apiError(422, 'validation_failed', ['target.contactId'], 'not_found'))).toBe(
+      'contactNotFound',
+    );
+    expect(failureOf(apiError(422, 'validation_failed', ['target.newContact.phone']))).toBe(
+      'contactInvalidPhone',
+    );
   });
 
   it('falls back on the status, never the server’s English title', () => {

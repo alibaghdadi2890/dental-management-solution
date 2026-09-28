@@ -1,7 +1,15 @@
 import type { Patient } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { json, mockApi, patient, problem, renderRecord, sent } from '../patients.test-utils';
+import {
+  json,
+  mockApi,
+  patient,
+  patientContact,
+  problem,
+  renderRecord,
+  sent,
+} from '../patients.test-utils';
 import { patientKeys } from '../patients-api';
 import { SAVED_SHOWN_MS } from './information-tab';
 
@@ -77,6 +85,45 @@ describe('InformationTab', () => {
     expect(within(form).queryByRole('textbox', { name: /Emergency/ })).toBeNull();
     expect(blocked()).toBe(true);
     expect(await indicator()).toBe('');
+  });
+
+  describe('completeness (design addendum C10)', () => {
+    const reachable = { email: 'k@example.com', address: '12 Hamra St' };
+    // 10 years old on the tenant's today, whatever the test's date.
+    const KARIM = patient(2, 'Karim Haddad', { ...reachable, dateOfBirth: '2016-01-01' });
+    const badge = async (name: string) => within(await card()).findByText(name);
+
+    it('asks a minor for a guardian as well as email and address', async () => {
+      mockApi({ patients: [KARIM], contacts: { [KARIM.id]: [] } });
+      renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
+      expect(await badge('Partly complete')).toBeTruthy();
+    });
+
+    it('is complete for a minor with a guardian among the contacts', async () => {
+      mockApi({
+        patients: [KARIM],
+        contacts: {
+          [KARIM.id]: [
+            patientContact(60, 'Nadia Haddad', {
+              isGuardian: false,
+              isPrimaryGuardian: false,
+              isEmergencyContact: true,
+              isPrimaryEmergency: true,
+            }),
+            patientContact(61, 'Maria Haddad'),
+          ],
+        },
+      });
+      renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
+      expect(await badge('Complete')).toBeTruthy();
+    });
+
+    it('never asks an adult for a guardian', async () => {
+      const adult = { ...KARIM, dateOfBirth: '1990-05-01' };
+      mockApi({ patients: [adult] });
+      renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
+      expect(await badge('Complete')).toBeTruthy();
+    });
   });
 
   it('saves a notes-only change for a phoneless patient who has come of age', async () => {

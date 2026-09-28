@@ -10,7 +10,7 @@ import {
   type DuplicateCheckQuery,
   type ExportLanguage,
   type PatientArchive,
-  type PatientInput,
+  type PatientCreateInput,
   type PatientListQuery,
   type PatientMerge,
   type PatientPatch,
@@ -137,7 +137,8 @@ export function patientAuditQuery(id: string, tenantId?: string) {
   });
 }
 
-export function createPatient(input: PatientInput) {
+/** `POST /patients`: the fields plus contacts linked in the same transaction (addendum C4). */
+export function createPatient(input: PatientCreateInput) {
   return apiFetch('/patients', patientSchema, { method: 'POST', json: input });
 }
 

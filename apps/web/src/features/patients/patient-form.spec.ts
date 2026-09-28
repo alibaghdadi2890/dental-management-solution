@@ -1,18 +1,26 @@
 import type { Patient, PatientSex } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
 import {
+  addPendingContact,
   amountValue,
   emptyForm,
   fromPatient,
+  guardianLink,
   isDirty,
   isEditDirty,
   parseAlerts,
+  pendingExclusions,
   phoneOptional,
+  removePendingContact,
+  setLinkContactId,
+  showGuardianBlock,
   toCreatePayload,
   toOpeningBalance,
   toPatchPayload,
+  updatePendingContact,
   validate,
   wantsOpeningBalance,
+  type ContactDisplay,
   type PatientFormValues,
 } from './patient-form';
 
@@ -308,6 +316,211 @@ describe('toCreatePayload', () => {
     expect(payload.primaryDentistId).toBe('01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5e80');
     expect(payload).not.toHaveProperty('guardianName');
     expect(payload).not.toHaveProperty('emergencyContact');
+  });
+
+  it('sends no contacts and no linkContactId by default', () => {
+    const payload = toCreatePayload({ ...emptyForm(), fullName: 'Jane', phone: '03123456' });
+    expect(payload.contacts).toEqual([]);
+    expect(payload).not.toHaveProperty('linkContactId');
+  });
+
+  it('sends every pending contact as a ContactLinkInput, in order, without its display', () => {
+    let values: PatientFormValues = {
+      ...emptyForm(),
+      fullName: 'Karim',
+      dateOfBirth: '2015-03-02',
+    };
+    values = addPendingContact(
+      values,
+      guardianLink(
+        { newContact: { fullName: 'Maria Haddad', phone: '+9613123456', email: null } },
+        'parent',
+      ),
+      display('Maria Haddad'),
+    );
+    values = addPendingContact(
+      values,
+      guardianLink({ contactId: CONTACT_ID }, 'caregiver', { billing: false, emergency: false }),
+      display('Nadia'),
+    );
+    values = addPendingContact(
+      values,
+      {
+        target: { patientId: OTHER_PATIENT_ID },
+        relationship: 'parent',
+        isGuardian: false,
+        isBillingContact: true,
+        isEmergencyContact: false,
+      },
+      display('Omar Haddad', 'P-000042'),
+    );
+
+    expect(toCreatePayload(values).contacts).toEqual([
+      {
+        target: { newContact: { fullName: 'Maria Haddad', phone: '+9613123456', email: null } },
+        relationship: 'parent',
+        isGuardian: true,
+        isBillingContact: true,
+        isEmergencyContact: true,
+      },
+      {
+        target: { contactId: CONTACT_ID },
+        relationship: 'caregiver',
+        isGuardian: true,
+        isBillingContact: false,
+        isEmergencyContact: false,
+      },
+      {
+        target: { patientId: OTHER_PATIENT_ID },
+        relationship: 'parent',
+        isGuardian: false,
+        isBillingContact: true,
+        isEmergencyContact: false,
+      },
+    ]);
+  });
+
+  it('sends linkContactId once set, and not after it is cleared', () => {
+    const base = { ...emptyForm(), fullName: 'Maria Haddad', phone: '03123456' };
+    const linked = setLinkContactId(base, CONTACT_ID);
+    expect(toCreatePayload(linked).linkContactId).toBe(CONTACT_ID);
+    expect(toCreatePayload(setLinkContactId(linked, null))).not.toHaveProperty('linkContactId');
+  });
+});
+
+const CONTACT_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70';
+const OTHER_PATIENT_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d71';
+
+function display(fullName: string, patientNumber: string | null = null): ContactDisplay {
+  return { fullName, phone: '+9613123456', patientNumber, archived: false };
+}
+
+describe('guardianLink', () => {
+  it('defaults a guardian to guardian + billing + emergency (both toggles on)', () => {
+    expect(guardianLink({ contactId: CONTACT_ID }, 'parent')).toEqual({
+      target: { contactId: CONTACT_ID },
+      relationship: 'parent',
+      isGuardian: true,
+      isBillingContact: true,
+      isEmergencyContact: true,
+    });
+  });
+
+  it('turns either toggle off', () => {
+    expect(guardianLink({ contactId: CONTACT_ID }, 'parent', { billing: false })).toMatchObject({
+      isGuardian: true,
+      isBillingContact: false,
+      isEmergencyContact: true,
+    });
+    expect(guardianLink({ contactId: CONTACT_ID }, 'parent', { emergency: false })).toMatchObject({
+      isGuardian: true,
+      isBillingContact: true,
+      isEmergencyContact: false,
+    });
+  });
+});
+
+describe('pending contacts', () => {
+  const base = emptyForm({ fullName: 'Karim' });
+  const guardian = guardianLink({ contactId: CONTACT_ID }, 'parent');
+
+  it('adds, updates and removes by key, leaving the others alone', () => {
+    let values = addPendingContact(base, guardian, display('Nadia'));
+    values = addPendingContact(
+      values,
+      guardianLink({ patientId: OTHER_PATIENT_ID }, 'sibling'),
+      display('Omar', 'P-000042'),
+    );
+    expect(values.pendingContacts).toHaveLength(2);
+    const [first, second] = values.pendingContacts;
+    expect(first?.key).not.toBe(second?.key);
+
+    values = updatePendingContact(values, second?.key ?? '', {
+      relationship: 'other',
+      isBillingContact: false,
+    });
+    expect(values.pendingContacts[1]?.link).toMatchObject({
+      relationship: 'other',
+      isGuardian: true,
+      isBillingContact: false,
+    });
+    expect(values.pendingContacts[0]).toBe(first);
+
+    values = removePendingContact(values, first?.key ?? '');
+    expect(values.pendingContacts.map((pending) => pending.display.fullName)).toEqual(['Omar']);
+  });
+
+  it('ignores a contact or patient that is already pending', () => {
+    const once = addPendingContact(base, guardian, display('Nadia'));
+    expect(addPendingContact(once, guardian, display('Nadia'))).toBe(once);
+  });
+
+  it('stops at the most a create links (10)', () => {
+    let values = base;
+    for (let n = 0; n < 12; n++) {
+      const fullName = `Contact ${String(n)}`;
+      values = addPendingContact(
+        values,
+        guardianLink({ newContact: { fullName, phone: '03123456', email: null } }, 'other'),
+        display(fullName),
+      );
+    }
+    expect(values.pendingContacts).toHaveLength(10);
+  });
+
+  it('never links the contact the new patient becomes (linkContactId)', () => {
+    const linked = setLinkContactId(base, CONTACT_ID);
+    expect(addPendingContact(linked, guardian, display('Nadia'))).toBe(linked);
+    const pending = addPendingContact(base, guardian, display('Nadia'));
+    expect(setLinkContactId(pending, CONTACT_ID).pendingContacts).toEqual([]);
+  });
+
+  it('lists the pending contact and patient ids for the picker to leave out', () => {
+    let values = addPendingContact(base, guardian, display('Nadia'));
+    values = addPendingContact(
+      values,
+      guardianLink({ patientId: OTHER_PATIENT_ID }, 'sibling'),
+      display('Omar', 'P-000042'),
+    );
+    expect(pendingExclusions(values)).toEqual({
+      contactIds: [CONTACT_ID],
+      patientIds: [OTHER_PATIENT_ID],
+    });
+  });
+
+  it('marks the create form dirty, and a link without a role invalid', () => {
+    const values = addPendingContact(base, guardian, display('Nadia'));
+    expect(isDirty(base, values)).toBe(true);
+    expect(isDirty(base, setLinkContactId(base, CONTACT_ID))).toBe(true);
+    const roleless = updatePendingContact(values, values.pendingContacts[0]?.key ?? '', {
+      isGuardian: false,
+      isBillingContact: false,
+      isEmergencyContact: false,
+    });
+    expect(validate({ ...roleless, phone: '03123456' }, CTX)['contacts.0']).toBe('roleRequired');
+    expect(validate({ ...values, phone: '03123456' }, CTX)['contacts.0']).toBeUndefined();
+  });
+
+  it('flags a new contact whose phone is not valid for the tenant country', () => {
+    const values = addPendingContact(
+      base,
+      guardianLink({ newContact: { fullName: 'Maria', phone: '12', email: null } }, 'parent'),
+      display('Maria'),
+    );
+    expect(validate({ ...values, phone: '03123456' }, CTX)['contacts.0']).toBe('invalidPhone');
+  });
+});
+
+describe('showGuardianBlock', () => {
+  it('shows for a minor by date of birth on the tenant today, and hides at 18', () => {
+    expect(showGuardianBlock({ ...emptyForm(), dateOfBirth: '2008-09-28' }, TODAY)).toBe(true);
+    expect(showGuardianBlock({ ...emptyForm(), dateOfBirth: '2008-09-27' }, TODAY)).toBe(false);
+  });
+
+  it('hides without a date of birth, for a partial one, and for one in the future', () => {
+    expect(showGuardianBlock(emptyForm(), TODAY)).toBe(false);
+    expect(showGuardianBlock({ ...emptyForm(), dateOfBirth: '07/03/20' }, TODAY)).toBe(false);
+    expect(showGuardianBlock({ ...emptyForm(), dateOfBirth: '2027-01-01' }, TODAY)).toBe(false);
   });
 });
 

@@ -152,6 +152,8 @@ export const patientCreateSchema = patientInputSchema
     }
   });
 export type PatientCreate = z.infer<typeof patientCreateSchema>;
+/** What a client sends (defaults such as `contacts: []` may be left out). */
+export type PatientCreateInput = z.input<typeof patientCreateSchema>;
 
 export const patientPatchSchema = z
   .object(patientFields)
@@ -323,10 +325,18 @@ export const patientMergeSchema = z
   });
 export type PatientMerge = z.infer<typeof patientMergeSchema>;
 
-/** `complete` only when both email and address are recorded (README §Patient information). */
+/**
+ * `complete` when email and address are recorded (README §Patient information) and, for a minor,
+ * a guardian too (design addendum C10). `minor` is the caller's: `isMinor` on the date of birth
+ * against the tenant's today (no date of birth is an adult); `hasGuardian` is whether any of the
+ * patient's contacts holds the guardian role.
+ */
 export function profileCompleteness(patient: {
   email: string | null;
   address: string | null;
+  minor: boolean;
+  hasGuardian: boolean;
 }): 'complete' | 'partial' {
-  return patient.email && patient.address ? 'complete' : 'partial';
+  const reachable = Boolean(patient.email) && Boolean(patient.address);
+  return reachable && (!patient.minor || patient.hasGuardian) ? 'complete' : 'partial';
 }

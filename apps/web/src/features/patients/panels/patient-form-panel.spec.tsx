@@ -78,6 +78,7 @@ describe('PatientFormPanel — create', () => {
       medicalAlerts: [],
       primaryDentistId: null,
       notes: null,
+      contacts: [],
     });
     expect(sent(fetchMock, 'POST', '/billing/opening-balances')).toBeUndefined();
     await waitFor(() => {

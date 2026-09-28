@@ -1,4 +1,7 @@
 import {
+  type ContactLinkInput,
+  type ContactLinkTarget,
+  type ContactRelationship,
   decimalAmountSchema,
   dedupeAlerts,
   emailSchema,
@@ -8,11 +11,13 @@ import {
   nameSchema,
   normalizePhone,
   openingBalanceInputSchema,
-  patientInputSchema,
+  PATIENT_CREATE_CONTACTS_MAX,
+  patientCreateSchema,
   patientPatchSchema,
   type OpeningBalanceInput,
   type Patient,
-  type PatientInput,
+  type PatientCreate,
+  type PatientCreateInput,
   type PatientPatch,
   type PatientSex,
 } from '@dcm/contracts';
@@ -22,8 +27,10 @@ import { formatPhone } from '@/lib/format';
 /**
  * The pure create/edit patient form model (design "Create / Edit" panel and the Patient
  * information tab, which share this exact model). Every field is a plain string so a controlled
- * `<input>` can bind to it directly; conversion to/from the wire types (`Patient`, `PatientInput`,
- * `PatientPatch`) happens only at the edges (`fromPatient`, `toCreatePayload`, `toPatchPayload`).
+ * `<input>` can bind to it directly — except the create-only contacts, which are picked, not typed
+ * (`pendingContacts`, `linkContactId`); conversion to/from the wire types (`Patient`,
+ * `PatientCreate`, `PatientPatch`) happens only at the edges (`fromPatient`, `toCreatePayload`,
+ * `toPatchPayload`).
  */
 export interface PatientFormValues {
   fullName: string;
@@ -47,6 +54,32 @@ export interface PatientFormValues {
   openingBalanceAmount: string;
   openingBalanceAsOf: string;
   openingBalanceNote: string;
+  /**
+   * Create-only: the contacts linked in the create's transaction (design addendum C4). Once the
+   * patient exists, contact changes are immediate actions (`contacts-api.ts`), never form state.
+   */
+  pendingContacts: PendingContact[];
+  /** Create-only: an unlinked contact who becomes this patient ("Link to {name}"), or `''`. */
+  linkContactId: string;
+}
+
+/** How a picked contact reads in the form before it exists as a link (the picker's row). */
+export interface ContactDisplay {
+  fullName: string;
+  /** E.164, or null for a contact linked to a patient recorded without a phone (a minor). */
+  phone: string | null;
+  /** The "Patient P-000042" badge: the display number of the patient this contact is. */
+  patientNumber: string | null;
+  /** That patient is archived. */
+  archived: boolean;
+}
+
+/** A contact to link on create: the `ContactLinkInput` sent, plus how it reads meanwhile. */
+export interface PendingContact {
+  /** Stable while the form is open (a list key), never sent. */
+  key: string;
+  link: ContactLinkInput;
+  display: ContactDisplay;
 }
 
 export interface PatientFormPrefill {
@@ -68,6 +101,8 @@ const EMPTY: PatientFormValues = {
   openingBalanceAmount: '',
   openingBalanceAsOf: '',
   openingBalanceNote: '',
+  pendingContacts: [],
+  linkContactId: '',
 };
 
 /** A blank create form, optionally pre-filled (⌘K "Create '{query}'": digits → phone, else name). */
@@ -105,10 +140,21 @@ export type FormField =
   | 'alerts'
   | 'openingBalanceAmount'
   | 'openingBalanceAsOf'
-  | 'openingBalanceNote';
+  | 'openingBalanceNote'
+  | 'linkContactId'
+  | ContactErrorField;
+
+/** A pending contact's error, by its index in `pendingContacts` (the create's `contacts.<i>`). */
+export type ContactErrorField = `contacts.${number}`;
+
+export function contactErrorField(index: number): ContactErrorField {
+  return `contacts.${String(index)}` as ContactErrorField;
+}
 
 /** i18n keys, not messages — the panel looks these up in its own namespace. */
 export type FormErrorKey =
+  | 'roleRequired'
+  | 'invalid'
   | 'required'
   | 'invalidPhone'
   | 'invalidEmail'
@@ -176,12 +222,131 @@ export function phoneOptional(
     initial.phone.trim() === '' &&
     values.phone.trim() === '' &&
     values.dateOfBirth === initial.dateOfBirth;
+  return untouchedWithoutPhone || minorByDateOfBirth(values, today);
+}
+
+/** A valid date of birth, not after `today` (the tenant's), under 18 on `today` (see
+ * `phoneOptional`); `''` or `null` (no date of birth) is an adult. Shared with the record's
+ * completeness (design addendum C10). */
+export function minorOn(dateOfBirth: string | null, today: string): boolean {
   return (
-    untouchedWithoutPhone ||
-    (isoDateSchema.safeParse(values.dateOfBirth).success &&
-      values.dateOfBirth <= today &&
-      isMinor(values.dateOfBirth, today))
+    dateOfBirth !== null &&
+    isoDateSchema.safeParse(dateOfBirth).success &&
+    dateOfBirth <= today &&
+    isMinor(dateOfBirth, today)
   );
+}
+
+function minorByDateOfBirth(values: PatientFormValues, today: string): boolean {
+  return minorOn(values.dateOfBirth, today);
+}
+
+/** The create panel's Guardian block (design addendum "Create panel"): shown while the date of
+ * birth makes the patient a minor on the tenant's `today`; adults get the optional "Contacts &
+ * family" disclosure instead. */
+export function showGuardianBlock(values: PatientFormValues, today: string): boolean {
+  return minorByDateOfBirth(values, today);
+}
+
+/** A guardian added from the Guardian block: always the guardian, and — the two toggles, on by
+ * default — the billing and the emergency contact too. */
+export function guardianLink(
+  target: ContactLinkTarget,
+  relationship: ContactRelationship,
+  { billing = true, emergency = true }: { billing?: boolean; emergency?: boolean } = {},
+): ContactLinkInput {
+  return {
+    target,
+    relationship,
+    isGuardian: true,
+    isBillingContact: billing,
+    isEmergencyContact: emergency,
+  };
+}
+
+/** Who a target names, when it names someone who already exists (`contact:<id>`,
+ * `patient:<id>`); a new contact names nobody yet. */
+function targetKey(target: ContactLinkTarget): string | undefined {
+  if ('contactId' in target) return `contact:${target.contactId}`;
+  if ('patientId' in target) return `patient:${target.patientId}`;
+  return undefined;
+}
+
+let pendingKeys = 0;
+
+/**
+ * Adds a contact to link on create. Unchanged (the same object) when it would be refused anyway:
+ * the create already links 10, the contact or patient is already pending, or it is the contact
+ * this patient becomes (`linkContactId`: a patient is never their own contact).
+ */
+export function addPendingContact(
+  values: PatientFormValues,
+  link: ContactLinkInput,
+  display: ContactDisplay,
+): PatientFormValues {
+  if (values.pendingContacts.length >= PATIENT_CREATE_CONTACTS_MAX) return values;
+  const key = targetKey(link.target);
+  if (key !== undefined) {
+    if (values.pendingContacts.some((pending) => targetKey(pending.link.target) === key)) {
+      return values;
+    }
+    if (key === `contact:${values.linkContactId}`) return values;
+  }
+  pendingKeys += 1;
+  const pending: PendingContact = { key: `pending-${String(pendingKeys)}`, link, display };
+  return { ...values, pendingContacts: [...values.pendingContacts, pending] };
+}
+
+/** Changes a pending link's relationship or roles (its target stays). */
+export function updatePendingContact(
+  values: PatientFormValues,
+  key: string,
+  patch: Partial<Omit<ContactLinkInput, 'target'>>,
+): PatientFormValues {
+  return {
+    ...values,
+    pendingContacts: values.pendingContacts.map((pending) =>
+      pending.key === key ? { ...pending, link: { ...pending.link, ...patch } } : pending,
+    ),
+  };
+}
+
+export function removePendingContact(values: PatientFormValues, key: string): PatientFormValues {
+  return {
+    ...values,
+    pendingContacts: values.pendingContacts.filter((pending) => pending.key !== key),
+  };
+}
+
+/** Sets (or, with `null`, clears) the unlinked contact this patient becomes; a pending link to
+ * that same contact is dropped, since a patient is never their own contact. */
+export function setLinkContactId(
+  values: PatientFormValues,
+  contactId: string | null,
+): PatientFormValues {
+  if (contactId === null) return { ...values, linkContactId: '' };
+  return {
+    ...values,
+    linkContactId: contactId,
+    pendingContacts: values.pendingContacts.filter(
+      (pending) => targetKey(pending.link.target) !== `contact:${contactId}`,
+    ),
+  };
+}
+
+/** The contacts and patients already pending — and the contact this patient becomes — for the
+ * picker to leave out. */
+export function pendingExclusions(values: PatientFormValues): {
+  contactIds: string[];
+  patientIds: string[];
+} {
+  const contactIds: string[] = values.linkContactId === '' ? [] : [values.linkContactId];
+  const patientIds: string[] = [];
+  for (const { link } of values.pendingContacts) {
+    if ('contactId' in link.target) contactIds.push(link.target.contactId);
+    else if ('patientId' in link.target) patientIds.push(link.target.patientId);
+  }
+  return { contactIds, patientIds };
 }
 
 /** `'.5'` → `'.5'`, `'5.'` → `'5.'` (unchanged) — normalised separately by each caller that needs
@@ -279,7 +444,26 @@ export function validate(
     }
   }
 
+  values.pendingContacts.forEach(({ link }, index) => {
+    const error = contactLinkError(link, country);
+    if (error) errors[contactErrorField(index)] = error;
+  });
+
   return errors;
+}
+
+/** What `patientCreateSchema` would refuse in one pending link: no role, or a new contact whose
+ * name or phone does not hold (the picker checks both before adding it; this keeps
+ * `toCreatePayload` from ever throwing on a link added some other way). */
+function contactLinkError(link: ContactLinkInput, country: string): FormErrorKey | undefined {
+  if (!link.isGuardian && !link.isBillingContact && !link.isEmergencyContact) {
+    return 'roleRequired';
+  }
+  if (!('newContact' in link.target)) return undefined;
+  const { fullName, phone } = link.target.newContact;
+  if (!nameSchema.safeParse(fullName).success) return 'invalid';
+  if (!normalizePhone(phone, country as PhoneCountry)) return 'invalidPhone';
+  return undefined;
 }
 
 /** True when any field differs from the form's starting values, trimmed (the create panel's
@@ -287,10 +471,14 @@ export function validate(
  * (`openingBalance…`) a patch never touches, so it uses this simpler field-by-field check rather
  * than `isEditDirty`). */
 export function isDirty(initial: PatientFormValues, current: PatientFormValues): boolean {
+  if (initial.pendingContacts !== current.pendingContacts) {
+    if (JSON.stringify(initial.pendingContacts) !== JSON.stringify(current.pendingContacts)) {
+      return true;
+    }
+  }
   return (Object.keys(initial) as (keyof PatientFormValues)[]).some((key) => {
-    const a = initial[key];
-    const b = current[key];
-    return a.trim() !== b.trim();
+    if (key === 'pendingContacts') return false;
+    return initial[key].trim() !== current[key].trim();
   });
 }
 
@@ -313,9 +501,11 @@ export function wantsOpeningBalance(values: PatientFormValues): boolean {
   return Number(normalizeAmountText(values.openingBalanceAmount) || '0') > 0;
 }
 
-/** The create payload; a blank phone is sent as `null` (allowed for a minor, `validate`). */
-export function toCreatePayload(values: PatientFormValues): PatientInput {
-  return patientInputSchema.parse({
+/** The create payload; a blank phone is sent as `null` (allowed for a minor, `validate`). The
+ * pending contacts go as `contacts` (their `ContactLinkInput`s, in order: a server error at
+ * `contacts.<i>` is the i-th pending contact), and `linkContactId` only once set. */
+export function toCreatePayload(values: PatientFormValues): PatientCreate {
+  const input: PatientCreateInput = {
     fullName: values.fullName,
     phone: values.phone,
     dateOfBirth: values.dateOfBirth || null,
@@ -326,7 +516,10 @@ export function toCreatePayload(values: PatientFormValues): PatientInput {
     medicalAlerts: parseAlerts(values.alertsText),
     primaryDentistId: values.primaryDentistId || null,
     notes: values.notes,
-  });
+    contacts: values.pendingContacts.map((pending) => pending.link),
+    ...(values.linkContactId === '' ? {} : { linkContactId: values.linkContactId }),
+  };
+  return patientCreateSchema.parse(input);
 }
 
 const PATCHABLE_TEXT_FIELDS = [

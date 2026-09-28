@@ -1,14 +1,37 @@
-import type { PatientSex, Session } from '@dcm/contracts';
+import type { ContactLinkInput, PatientSex, Session } from '@dcm/contracts';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateInputOrder, todayIn } from '@/lib/format';
 import { type ErrorField, type FormErrors } from './panels/form-server-errors';
-import { type PatientFormValues, phoneOptional, validate } from './patient-form';
+import {
+  addPendingContact,
+  type ContactDisplay,
+  type PatientFormValues,
+  phoneOptional,
+  removePendingContact,
+  setLinkContactId,
+  showGuardianBlock,
+  updatePendingContact,
+  validate,
+} from './patient-form';
 
 type Tenant = NonNullable<Session['tenant']>;
 
-/** Every form value but `sex` is plain text. */
-export type TextField = Exclude<keyof PatientFormValues, 'sex'>;
+/** Every form value but `sex` and the create's contacts (picked, not typed) is plain text. */
+export type TextField = Exclude<
+  keyof PatientFormValues,
+  'sex' | 'pendingContacts' | 'linkContactId'
+>;
+
+/** Drops the server's errors on the contacts (`contacts.<i>`: indexes shift once the list
+ * changes) and on the link offer. */
+function withoutContactErrors(errors: FormErrors): FormErrors {
+  return Object.fromEntries(
+    Object.entries(errors).filter(
+      ([field]) => field !== 'linkContactId' && !field.startsWith('contacts.'),
+    ),
+  );
+}
 
 /**
  * The state of one patient form (`patient-form.ts`'s model), shared by the create/edit panel and
@@ -58,6 +81,11 @@ export function usePatientForm(
     setServerErrors(({ [errorField]: _, ...rest }) => rest);
   };
 
+  const changeContacts = (change: (current: PatientFormValues) => PatientFormValues) => {
+    setValues(change);
+    setServerErrors(withoutContactErrors);
+  };
+
   /** Replaces the values with `next` (a new starting point) and forgets past attempts, so fields
    * are not validated eagerly again until the next save. */
   const replaceWith = (next: PatientFormValues) => {
@@ -84,6 +112,22 @@ export function usePatientForm(
     set,
     setSex: (sex: PatientSex) => {
       setValues((current) => ({ ...current, sex }));
+    },
+    /** The create panel's Guardian block shows while the DOB makes the patient a minor. */
+    showGuardianBlock: showGuardianBlock(values, today),
+    /** Create only: a contact to link in the create's transaction (`addPendingContact`). */
+    addContact: (link: ContactLinkInput, display: ContactDisplay) => {
+      changeContacts((current) => addPendingContact(current, link, display));
+    },
+    updateContact: (key: string, patch: Partial<Omit<ContactLinkInput, 'target'>>) => {
+      changeContacts((current) => updatePendingContact(current, key, patch));
+    },
+    removeContact: (key: string) => {
+      changeContacts((current) => removePendingContact(current, key));
+    },
+    /** Create only: the unlinked contact this patient becomes ("Link to {name}"), or null. */
+    setLinkContactId: (contactId: string | null) => {
+      changeContacts((current) => setLinkContactId(current, contactId));
     },
     /** Starts a save attempt: shows every client-side error (focusing the first) and clears the
      * server's; true when the values are valid. */

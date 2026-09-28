@@ -1,7 +1,9 @@
 import type {
   AuditEntry,
   BalanceMoney,
+  ContactLookupItem,
   Patient,
+  PatientContact,
   PatientListItem,
   Permission,
   Session,
@@ -78,6 +80,25 @@ export const listItem = (p: Patient): PatientListItem => ({
   matchedContact: null,
 });
 
+/** A contact link of a patient: by default an unlinked contact who is the primary guardian. */
+export function patientContact(
+  n: number,
+  fullName: string,
+  extra: Partial<PatientContact> = {},
+): PatientContact {
+  return {
+    contact: { id: id(n), fullName, phone: '+9613987654', email: null, linkedPatient: null },
+    relationship: 'parent',
+    isGuardian: true,
+    isBillingContact: false,
+    isEmergencyContact: false,
+    isPrimaryGuardian: true,
+    isPrimaryBilling: false,
+    isPrimaryEmergency: false,
+    ...extra,
+  };
+}
+
 export const ALL_PERMISSIONS: Permission[] = [
   'patient:read',
   'patient:write',
@@ -149,6 +170,10 @@ export interface MockApi {
   patients?: Patient[];
   balances?: Record<string, BalanceMoney[]>;
   audit?: Record<string, AuditEntry[]>;
+  /** `GET /patients/:id/contacts` per patient id (none by default). */
+  contacts?: Record<string, PatientContact[]>;
+  /** `GET /contacts/lookup` answer, whatever the query. */
+  lookup?: ContactLookupItem[];
   /** `GET /patients/duplicates/check` answer. */
   twins?: PatientListItem[];
   /** Overrides a mutation's answer (`POST /patients`, `PATCH /patients/:id`, …); a pending
@@ -169,6 +194,8 @@ export function mockApi({
   patients = [],
   balances = {},
   audit = {},
+  contacts = {},
+  lookup = [],
   twins = [],
   mutation,
   get,
@@ -231,6 +258,9 @@ export function mockApi({
       );
     }
     if (bare === '/billing/balances') return Promise.resolve(json([]));
+    if (bare === '/contacts/lookup') return Promise.resolve(json(lookup));
+    const contactsOf = /^\/patients\/([^/]+)\/contacts$/.exec(bare)?.[1];
+    if (contactsOf) return Promise.resolve(json(contacts[contactsOf] ?? []));
     if (bare === '/patients' || bare === '/billing/patients') {
       return Promise.resolve(json({ items: [], total: 0, page: 1, size: 25 }));
     }

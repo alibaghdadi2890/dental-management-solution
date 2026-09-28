@@ -16,11 +16,26 @@ const ID_A = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
 const ID_B = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
 
 describe('profileCompleteness', () => {
-  it('is complete only when both email and address are present', () => {
-    expect(profileCompleteness({ email: 'a@b.io', address: '1 Main St' })).toBe('complete');
-    expect(profileCompleteness({ email: null, address: '1 Main St' })).toBe('partial');
-    expect(profileCompleteness({ email: 'a@b.io', address: null })).toBe('partial');
-    expect(profileCompleteness({ email: null, address: null })).toBe('partial');
+  const full = { email: 'a@b.io', address: '1 Main St' };
+
+  it('is complete for an adult only when both email and address are present', () => {
+    const adult = { minor: false, hasGuardian: false };
+    expect(profileCompleteness({ ...full, ...adult })).toBe('complete');
+    expect(profileCompleteness({ ...full, email: null, ...adult })).toBe('partial');
+    expect(profileCompleteness({ ...full, address: null, ...adult })).toBe('partial');
+    expect(profileCompleteness({ email: null, address: null, ...adult })).toBe('partial');
+  });
+
+  it('never asks an adult for a guardian', () => {
+    expect(profileCompleteness({ ...full, minor: false, hasGuardian: true })).toBe('complete');
+  });
+
+  it('asks a minor for a guardian too (design addendum C10)', () => {
+    expect(profileCompleteness({ ...full, minor: true, hasGuardian: true })).toBe('complete');
+    expect(profileCompleteness({ ...full, minor: true, hasGuardian: false })).toBe('partial');
+    expect(
+      profileCompleteness({ email: null, address: '1 Main St', minor: true, hasGuardian: true }),
+    ).toBe('partial');
   });
 });
 

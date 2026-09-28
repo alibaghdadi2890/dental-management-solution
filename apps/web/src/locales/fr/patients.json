@@ -252,7 +252,12 @@
       "invalidAmount": "Saisissez un montant comme 250 ou 12,50",
       "negativeAmount": "Saisissez zéro ou un montant positif",
       "invalid": "Vérifiez cette valeur",
-      "unknownDentist": "Ce dentiste n’est plus disponible"
+      "unknownDentist": "Ce dentiste n’est plus disponible",
+      "roleRequired": "Attribuez au moins un rôle",
+      "contactNotFound": "Ce contact n’existe plus",
+      "contactMerged": "Ce patient a été fusionné avec un autre dossier — recherchez à nouveau",
+      "contactDuplicate": "Ce contact est déjà ajouté",
+      "contactIsPatient": "Ce contact est le patient en cours d’enregistrement"
     },
     "archivedWhileEditing": "Ce patient a été archivé pendant votre modification. Vos changements restent ici, mais ne pourront être enregistrés qu’une fois le dossier restauré."
   },
@@ -299,7 +304,16 @@
     "notFound": "le patient n’existe plus",
     "conflict": "quelqu’un d’autre a modifié ce dossier — rechargez et réessayez",
     "forbidden": "vous n’avez pas l’autorisation de le faire",
-    "unexpected": "une erreur s’est produite, réessayez dans un instant"
+    "unexpected": "une erreur s’est produite, réessayez dans un instant",
+    "contactNotFound": "le contact n’existe plus",
+    "contactAlreadyLinked": "ce contact est déjà lié au patient",
+    "contactLinked": "ce contact est un patient — modifiez plutôt son dossier",
+    "contactConflict": "quelqu’un d’autre a modifié ces contacts — rechargez et réessayez",
+    "contactIsPatient": "un patient ne peut pas être son propre contact",
+    "contactRoleRequired": "un contact doit avoir au moins un rôle",
+    "contactPrimaryWithoutRole": "un contact principal doit avoir ce rôle",
+    "contactMerged": "ce patient a été fusionné avec un autre dossier",
+    "contactInvalidPhone": "le numéro de téléphone du contact n’est pas valide"
   },
   "palette": {
     "title": "Rechercher un patient",
@@ -362,6 +376,38 @@
       "intro": "Rien n’est obligatoire ici. Complétez-le quand cela devient utile.",
       "archived": "Ce dossier est archivé : ses informations ne peuvent pas être modifiées. Restaurez-le pour les modifier.",
       "merged": "Ce dossier a été fusionné avec un autre : ses informations ne peuvent pas être modifiées."
+    }
+  },
+  "contacts": {
+    "relationship": "Lien",
+    "relationships": {
+      "parent": "Parent",
+      "spouse": "Conjoint(e)",
+      "child": "Enfant",
+      "sibling": "Frère ou sœur",
+      "caregiver": "Aidant(e)",
+      "other": "Autre"
+    },
+    "picker": {
+      "searchParent": "Rechercher un parent par nom ou téléphone…",
+      "searchContact": "Rechercher un contact…",
+      "loading": "Recherche de contacts",
+      "failed": "Impossible de rechercher les contacts.",
+      "noResults": "Personne ne correspond à « {{query}} »",
+      "results_one": "{{count, number}} résultat",
+      "results_other": "{{count, number}} résultats",
+      "patientBadge": "Patient {{number}}",
+      "archivedBadge": "Archivé",
+      "addNew": "Ajouter un nouveau contact",
+      "newTitle": "Nouveau contact",
+      "name": "Nom",
+      "phone": "Téléphone",
+      "add": "Ajouter le contact",
+      "errors": {
+        "required": "Obligatoire",
+        "tooLong": "Trop long",
+        "invalidPhone": "Saisissez un numéro de téléphone valide"
+      }
     }
   }
 }

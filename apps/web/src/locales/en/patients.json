@@ -252,7 +252,12 @@
       "invalidAmount": "Enter an amount like 250 or 12.50",
       "negativeAmount": "Enter zero or a positive amount",
       "invalid": "Check this value",
-      "unknownDentist": "This dentist is no longer available"
+      "unknownDentist": "This dentist is no longer available",
+      "roleRequired": "Give at least one role",
+      "contactNotFound": "This contact no longer exists",
+      "contactMerged": "This patient was merged into another record — search again",
+      "contactDuplicate": "This contact is already added",
+      "contactIsPatient": "This contact is the patient being registered"
     },
     "archivedWhileEditing": "This patient was archived while you were editing. Your changes are kept here, but they can’t be saved until the record is restored."
   },
@@ -299,7 +304,16 @@
     "notFound": "the patient no longer exists",
     "conflict": "someone else changed this record — reload and try again",
     "forbidden": "you don’t have permission to do this",
-    "unexpected": "something went wrong, try again in a moment"
+    "unexpected": "something went wrong, try again in a moment",
+    "contactNotFound": "the contact no longer exists",
+    "contactAlreadyLinked": "this contact is already linked to the patient",
+    "contactLinked": "this contact is a patient — edit their patient record instead",
+    "contactConflict": "someone else changed these contacts — reload and try again",
+    "contactIsPatient": "a patient can’t be their own contact",
+    "contactRoleRequired": "a contact needs at least one role",
+    "contactPrimaryWithoutRole": "a primary contact must hold that role",
+    "contactMerged": "that patient has been merged into another record",
+    "contactInvalidPhone": "the contact’s phone number isn’t valid"
   },
   "palette": {
     "title": "Find patient",
@@ -362,6 +376,38 @@
       "intro": "Nothing here is required. Fill it in when it becomes relevant.",
       "archived": "This record is archived, so its details can’t be changed. Restore it to edit them.",
       "merged": "This record was merged into another one, so its details can’t be changed."
+    }
+  },
+  "contacts": {
+    "relationship": "Relationship",
+    "relationships": {
+      "parent": "Parent",
+      "spouse": "Spouse",
+      "child": "Child",
+      "sibling": "Sibling",
+      "caregiver": "Caregiver",
+      "other": "Other"
+    },
+    "picker": {
+      "searchParent": "Search a parent by name or phone…",
+      "searchContact": "Search a contact…",
+      "loading": "Searching contacts",
+      "failed": "Couldn’t search contacts.",
+      "noResults": "No one matches “{{query}}”",
+      "results_one": "{{count, number}} match",
+      "results_other": "{{count, number}} matches",
+      "patientBadge": "Patient {{number}}",
+      "archivedBadge": "Archived",
+      "addNew": "Add new contact",
+      "newTitle": "New contact",
+      "name": "Name",
+      "phone": "Phone",
+      "add": "Add contact",
+      "errors": {
+        "required": "Required",
+        "tooLong": "Too long",
+        "invalidPhone": "Enter a valid phone number"
+      }
     }
   }
 }
