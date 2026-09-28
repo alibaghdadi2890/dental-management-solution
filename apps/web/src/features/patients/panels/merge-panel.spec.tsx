@@ -1,6 +1,14 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mockApi, patient, problem, renderPanels, sent } from '../patients.test-utils';
+import {
+  id,
+  mockApi,
+  patient,
+  patientContact,
+  problem,
+  renderPanels,
+  sent,
+} from '../patients.test-utils';
 
 const OLDER = patient(1, 'Rana Haddad', {
   phone: '+9613123456',
@@ -188,5 +196,85 @@ describe('MergePanel', () => {
     const aside = await mergePanel();
     expect(within(aside).getByRole('alert').textContent).toContain("can't be merged");
     expect(within(aside).queryByRole('button', { name: 'Merge records' })).toBeNull();
+  });
+});
+
+describe('MergePanel — contacts', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const MARIA_AS_GUARDIAN = patientContact(60, 'Maria Haddad');
+  const MARIA_AS_BILLING = patientContact(60, 'Maria Haddad', {
+    relationship: 'caregiver',
+    isGuardian: false,
+    isPrimaryGuardian: false,
+    isBillingContact: true,
+    isPrimaryBilling: true,
+  });
+  const OMAR = patientContact(61, 'Omar Haddad', {
+    relationship: 'sibling',
+    isGuardian: false,
+    isPrimaryGuardian: false,
+    isEmergencyContact: true,
+    isPrimaryEmergency: true,
+  });
+  /** The newer record, as a contact of the older one: the merge makes it its own contact. */
+  const NEWER_AS_CONTACT = patientContact(62, 'Rana Haddad', {
+    relationship: 'other',
+    isGuardian: false,
+    isPrimaryGuardian: false,
+    isEmergencyContact: true,
+    isPrimaryEmergency: true,
+    contact: {
+      id: id(62),
+      fullName: 'Rana Haddad',
+      phone: '+9613654321',
+      email: null,
+      linkedPatient: { id: NEWER.id, displayNumber: 'P-000002', archived: false },
+    },
+  });
+
+  it('lists both records’ contacts as kept, once each, with where they come from', async () => {
+    mockApi({
+      patients: [OLDER, NEWER],
+      contacts: {
+        [OLDER.id]: [MARIA_AS_GUARDIAN, NEWER_AS_CONTACT],
+        [NEWER.id]: [MARIA_AS_BILLING, OMAR],
+      },
+    });
+    renderPanels({ url: URL });
+    const aside = await mergePanel();
+    const list = await within(aside).findByRole('list', { name: 'Contacts — will be kept' });
+    const rows = () => Array.from(list.querySelectorAll<HTMLElement>(':scope > li'));
+    await waitFor(() => {
+      expect(rows()).toHaveLength(2);
+    });
+    const [maria, omar] = rows();
+    expect(maria?.textContent).toContain('Maria Haddad');
+    // The kept record's relationship wins; the roles are both records' together.
+    expect(maria?.textContent).toContain('Parent');
+    expect(
+      within(maria as HTMLElement)
+        .getAllByRole('listitem')
+        .map((pill) => pill.textContent),
+    ).toEqual(['Guardian', 'Billing']);
+    expect(maria?.textContent).toContain('from P-000001 and P-000002');
+    expect(omar?.textContent).toContain('Sibling');
+    expect(omar?.textContent).toContain('from P-000002');
+    expect(
+      within(aside).getByText(
+        'Rana Haddad is P-000002, one of these records: that link is removed by the merge.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('says when neither record has contacts', async () => {
+    mockApi({ patients: [OLDER, NEWER] });
+    renderPanels({ url: URL });
+    const aside = await mergePanel();
+    expect(within(aside).getByRole('heading', { name: 'Contacts — will be kept' })).toBeTruthy();
+    expect(await within(aside).findByText('Neither record has contacts.')).toBeTruthy();
   });
 });

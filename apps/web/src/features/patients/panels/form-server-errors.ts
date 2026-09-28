@@ -1,3 +1,4 @@
+import { PATIENT_CREATE_CONTACTS_MAX } from '@dcm/contracts';
 import { ApiError } from '@/lib/api';
 import { contactErrorField, type FormErrorKey, type FormField } from '../patient-form';
 
@@ -136,6 +137,10 @@ export type PatientFailure =
   | 'contactMerged'
   | 'contactInvalidPhone'
   | 'contactsTooMany';
+
+/** What the `failures.*` messages interpolate (`contactsTooMany` reads the create's contact cap):
+ * every `t('failures.<key>')` passes it. */
+export const FAILURE_VALUES = { max: PATIENT_CREATE_CONTACTS_MAX } as const;
 
 const FAILURES: Record<string, PatientFailure> = {
   'patient.archived': 'archived',

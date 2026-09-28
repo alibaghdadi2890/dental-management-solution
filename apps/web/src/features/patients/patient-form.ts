@@ -272,6 +272,25 @@ function targetKey(target: ContactLinkTarget): string | undefined {
   return undefined;
 }
 
+/** A random v4 UUID for a pending contact's list key. `crypto.randomUUID` exists only in a secure
+ * context (HTTPS or localhost): on a plain-HTTP address (a clinic's own LAN server) the key is made
+ * from `crypto.getRandomValues`, which every context has. */
+function pendingKey(): string {
+  const { randomUUID } = crypto as Partial<Crypto>;
+  if (randomUUID) return randomUUID.call(crypto);
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join('-');
+}
+
 /**
  * Adds a contact to link on create. Unchanged (the same object) when it would be refused anyway:
  * the create already links 10, the contact or patient is already pending, or it is the contact
@@ -290,7 +309,7 @@ export function addPendingContact(
     }
     if (key === `contact:${values.linkContactId}`) return values;
   }
-  const pending: PendingContact = { key: crypto.randomUUID(), link, display };
+  const pending: PendingContact = { key: pendingKey(), link, display };
   return { ...values, pendingContacts: [...values.pendingContacts, pending] };
 }
 

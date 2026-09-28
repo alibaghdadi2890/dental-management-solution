@@ -9,6 +9,7 @@ import {
   json,
   mockApi,
   patient,
+  patientContact,
   problem,
   profileId,
   renderPanels,
@@ -241,6 +242,102 @@ describe('QuickViewPanel', () => {
     fireEvent.click(within(aside).getByRole('button', { name: 'Close' }));
     await waitFor(() => {
       expect(router.state.location.search).not.toHaveProperty('panel');
+    });
+  });
+});
+
+describe('QuickViewPanel — Contacts', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const MOTHER = patientContact(70, 'Maria Haddad', {
+    isBillingContact: true,
+    isPrimaryBilling: true,
+  });
+  const HUSBAND = patientContact(71, 'Omar Haddad', {
+    relationship: 'spouse',
+    isGuardian: false,
+    isPrimaryGuardian: false,
+    isEmergencyContact: true,
+    isPrimaryEmergency: false,
+    contact: {
+      id: id(71),
+      fullName: 'Omar Haddad',
+      phone: '+9613111222',
+      email: null,
+      linkedPatient: { id: id(42), displayNumber: 'P-000042', archived: false },
+    },
+  });
+  const rows = (aside: HTMLElement) =>
+    Array.from(
+      within(aside)
+        .getByRole('list', { name: 'Contacts' })
+        .querySelectorAll<HTMLElement>(':scope > li'),
+    );
+
+  it('lists each contact with relationship, role pills, phone and patient link', async () => {
+    mockApi({ patients: [RANA], contacts: { [RANA.id]: [MOTHER, HUSBAND] } });
+    const router = renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    const heading = within(aside).getByRole('heading', { name: 'Contacts' });
+    // After the details and the open balance, before the activity.
+    const activity = await within(aside).findByRole('heading', { name: 'Activity' });
+    expect(heading.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    await waitFor(() => {
+      expect(rows(aside)).toHaveLength(2);
+    });
+    const [mother, husband] = rows(aside);
+    expect(mother?.textContent).toContain('Maria Haddad');
+    expect(mother?.textContent).toContain('Parent');
+    expect(
+      within(mother as HTMLElement)
+        .getByText('03 987 654')
+        .getAttribute('dir'),
+    ).toBe('ltr');
+    expect(
+      within(mother as HTMLElement)
+        .getAllByRole('listitem')
+        .map((pill) => pill.textContent),
+    ).toEqual(['Guardian · Primary', 'Billing · Primary']);
+    expect(
+      within(husband as HTMLElement)
+        .getAllByRole('listitem')
+        .map((pill) => pill.textContent),
+    ).toEqual(['Emergency']);
+    fireEvent.click(within(husband as HTMLElement).getByRole('link', { name: 'Patient P-000042' }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${id(42)}`);
+    });
+  });
+
+  it('says when no contact is recorded', async () => {
+    mockApi({ patients: [RANA] });
+    renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    expect(await within(aside).findByText('No contacts recorded')).toBeTruthy();
+    expect(within(aside).queryByText('No guardian recorded')).toBeNull();
+  });
+
+  it('notes a minor without a guardian in amber', async () => {
+    const minorDob = `${String(Number(todayIn('Asia/Beirut').slice(0, 4)) - 8)}-01-01`;
+    const LINA = patient(3, 'Lina Aoun', { dateOfBirth: minorDob, phone: null });
+    const aunt = patientContact(72, 'Nour Aoun', {
+      relationship: 'other',
+      isGuardian: false,
+      isPrimaryGuardian: false,
+      isEmergencyContact: true,
+      isPrimaryEmergency: true,
+    });
+    mockApi({ patients: [LINA], contacts: { [LINA.id]: [aunt] } });
+    renderPanels({ url: `/?panel=quick:${LINA.id}` });
+    const aside = await screen.findByRole('complementary', { name: 'Lina Aoun' });
+    expect(await within(aside).findByText('No guardian recorded')).toBeTruthy();
+    await waitFor(() => {
+      expect(rows(aside)).toHaveLength(1);
     });
   });
 });

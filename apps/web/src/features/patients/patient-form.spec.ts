@@ -1,5 +1,5 @@
 import type { Patient, PatientSex } from '@dcm/contracts';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   addPendingContact,
   amountValue,
@@ -423,6 +423,26 @@ describe('guardianLink', () => {
 describe('pending contacts', () => {
   const base = emptyForm({ fullName: 'Karim' });
   const guardian = guardianLink({ contactId: CONTACT_ID }, 'parent');
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('keys pending contacts without crypto.randomUUID (a non-secure origin)', () => {
+    const { getRandomValues } = crypto;
+    vi.stubGlobal('crypto', { getRandomValues: getRandomValues.bind(crypto) });
+    let values = addPendingContact(base, guardian, display('Nadia'));
+    values = addPendingContact(
+      values,
+      guardianLink({ patientId: OTHER_PATIENT_ID }, 'sibling'),
+      display('Omar', 'P-000042'),
+    );
+    const [first, second] = values.pendingContacts.map((pending) => pending.key);
+    expect(first).not.toBe(second);
+    for (const key of [first, second]) {
+      expect(key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    }
+  });
 
   it('adds, updates and removes by key, leaving the others alone', () => {
     let values = addPendingContact(base, guardian, display('Nadia'));

@@ -62,6 +62,27 @@ phone country comes from the tenant `country` (base spec Q3); zero opening balan
   CSV injection guard as the patient's own phone column; a linked guardian who is themself a
   patient resolves from that patient's own name and phone (`PatientsService.listItemsByIds`,
   backed by the same `listRowsByIds` resolution the Patients list uses for C7).
+- **Panels (J2):**
+  - **Guardian toggles.** "Also billing contact" and "Also emergency contact" start on for the first
+    guardian and off once one is linked or pending: a second guardian is rarely also the payer or
+    the first call. They go back to that default after each add. A new contact from "Add new
+    contact" is added at once, since it carries its relationship. An existing contact or patient is
+    staged first, so its relationship can be chosen (default Parent).
+  - **Adults.** Every pick is staged with its relationship (default Other: nothing is presumed of
+    an adult's contact) and the three role checkboxes, none pre-checked. Add waits for at least one
+    role.
+  - **Role editing.** Each row has Edit and Remove. Edit opens an inline "Roles of {name}" editor
+    (relationship + roles, applied together, only what changed). On a saved link it also offers
+    "Make primary" per held role, which applies at once. Pending rows can be edited too; removing a
+    pending row needs no confirm, while unlinking a saved one does.
+  - **Link offer.** The typed phone, once valid for the tenant country, is looked up by its E.164
+    digits (`GET /contacts/lookup`, debounced) and matched exactly against unlinked contacts. It
+    is never offered for a contact already pending on this patient, since a minor's phone is often
+    a parent's. The link holds while the phone stays that number, however it is typed.
+  - **Edit panel.** The adult disclosure opens by itself when the patient has contacts.
+  - **Merge.** "Contacts — will be kept" ORs the roles and keeps the kept record's relationship.
+    It sets apart a contact that is one of the two records, since the merge removes that
+    self-link.
 
 ## Frontend
 

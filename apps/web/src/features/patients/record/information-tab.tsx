@@ -10,7 +10,7 @@ import { usePermission } from '@/features/auth/use-permission';
 import { todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { contactsQuery } from '../contacts-api';
-import { failureOf, fieldErrorsOf } from '../panels/form-server-errors';
+import { FAILURE_VALUES, failureOf, fieldErrorsOf } from '../panels/form-server-errors';
 import {
   fromPatient,
   isEditDirty,
@@ -167,7 +167,9 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
         return;
       }
       setPhase('failed');
-      toast(t('form.failed', { reason: t(`failures.${failure}`) }), { tone: 'danger' });
+      toast(t('form.failed', { reason: t(`failures.${failure}`, FAILURE_VALUES) }), {
+        tone: 'danger',
+      });
     } finally {
       saving.current = false;
     }

@@ -316,7 +316,7 @@
     "contactPrimaryWithoutRole": "a primary contact must hold that role",
     "contactMerged": "that patient has been merged into another record",
     "contactInvalidPhone": "the contact’s phone number isn’t valid",
-    "contactsTooMany": "a patient can be registered with at most 10 contacts"
+    "contactsTooMany": "a patient can be registered with at most {{max, number}} contacts"
   },
   "palette": {
     "title": "Find patient",
@@ -411,6 +411,81 @@
         "tooLong": "Too long",
         "invalidPhone": "Enter a valid phone number"
       }
+    },
+    "list": "Contacts",
+    "guardian": {
+      "title": "Guardian",
+      "search": "Guardian",
+      "roles": "Roles of the next guardian added",
+      "alsoBilling": "Also billing contact",
+      "alsoEmergency": "Also emergency contact",
+      "add": "Add guardian",
+      "none": "No guardian recorded",
+      "noneHint": "Add a parent or legal guardian when you can. You can save without one."
+    },
+    "family": {
+      "toggle": "Contacts & family (optional)",
+      "search": "Contact",
+      "add": "Add contact",
+      "roleHint": "Choose at least one role"
+    },
+    "roles": {
+      "label": "Roles",
+      "guardian": "Guardian",
+      "billing": "Billing",
+      "emergency": "Emergency",
+      "primary": "Primary"
+    },
+    "roleOptions": {
+      "guardian": "Guardian",
+      "billing": "Billing contact",
+      "emergency": "Emergency contact"
+    },
+    "row": {
+      "edit": "Edit",
+      "editNamed": "Edit {{name}}",
+      "remove": "Remove",
+      "removeNamed": "Remove {{name}}"
+    },
+    "editor": {
+      "title": "Roles of {{name}}",
+      "apply": "Apply",
+      "primary": "Primary",
+      "makePrimary": "Make primary",
+      "makePrimaryGuardian": "Make {{name}} the primary guardian",
+      "makePrimaryBilling": "Make {{name}} the primary billing contact",
+      "makePrimaryEmergency": "Make {{name}} the primary emergency contact"
+    },
+    "tooMany": "A patient can be registered with at most {{max, number}} contacts. Add more from the record afterwards.",
+    "linkOffer": {
+      "body": "This phone belongs to contact {{name}}. Link this patient to {{name}}?",
+      "link": "Link",
+      "notNow": "Not now",
+      "chip": "Will link to {{name}}",
+      "remove": "Don’t link to {{name}}"
+    },
+    "current": {
+      "loading": "Loading contacts",
+      "failed": "Couldn’t load the contacts.",
+      "added": "Contact added",
+      "updated": "Contact updated",
+      "removed": "Contact removed",
+      "actionFailed": "Couldn't update contacts: {{reason}}",
+      "removeTitle": "Remove {{name}}?",
+      "removeBody": "{{name}} will no longer be a contact of this patient. They stay on record, and on any other patient they are a contact of.",
+      "removeOk": "Remove"
+    },
+    "quickView": {
+      "title": "Contacts",
+      "empty": "No contacts recorded"
+    },
+    "merge": {
+      "title": "Contacts — will be kept",
+      "fromOne": "from {{number}}",
+      "fromBoth": "from {{first}} and {{second}}",
+      "empty": "Neither record has contacts.",
+      "selfLink": "{{name}} is {{number}}, one of these records: that link is removed by the merge.",
+      "failed": "Couldn’t load the contacts."
     }
   }
 }

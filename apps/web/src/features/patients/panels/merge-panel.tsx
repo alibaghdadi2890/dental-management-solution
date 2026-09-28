@@ -21,7 +21,8 @@ import {
   toMergePayload,
 } from '../merge-draft';
 import { invalidatePatientData, mergePatients, patientQuery } from '../patients-api';
-import { failureOf } from './form-server-errors';
+import { FAILURE_VALUES, failureOf } from './form-server-errors';
+import { MergeContactsList } from './merge-contacts-list';
 import { PanelFallback } from './panel-fallback';
 
 type Tenant = NonNullable<Session['tenant']>;
@@ -34,7 +35,8 @@ const GRID = 'grid grid-cols-[96px_minmax(0,1fr)_minmax(0,1fr)]';
  * Merge duplicates (`Patients.dc.html` merge panel, design §Right panel): a compare grid of the
  * fields the two records disagree on, one radio per row (defaulting to the kept record's value),
  * the "Keep ID" choice in the header row, and the medical alerts shown as the union both records
- * keep (Q8, never picked). Confirming asks for a reason in the POC's confirm dialog.
+ * keep (Q8, never picked); beneath it, the contacts the kept record will have (design addendum
+ * C8). Confirming asks for a reason in the POC's confirm dialog.
  */
 export function MergePanel({
   ids,
@@ -167,9 +169,12 @@ function MergeEditor({
         try {
           await mergePatients(toMergePayload(draft, reason));
         } catch (error) {
-          throw new Error(t('merge.failed', { reason: t(`failures.${failureOf(error)}`) }), {
-            cause: error,
-          });
+          throw new Error(
+            t('merge.failed', { reason: t(`failures.${failureOf(error)}`, FAILURE_VALUES) }),
+            {
+              cause: error,
+            },
+          );
         }
         void invalidatePatientData(queryClient);
         toast(t('merge.done'));
@@ -303,6 +308,8 @@ function MergeEditor({
           </div>
         )}
       </div>
+
+      <MergeContactsList kept={kept} dropped={dropped} country={tenant.country} />
 
       {overflow && (
         <p

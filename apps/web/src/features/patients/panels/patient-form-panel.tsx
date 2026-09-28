@@ -18,6 +18,7 @@ import {
   isDirty,
   isEditDirty,
   type PatientFormPrefill,
+  pendingExclusions,
   toCreatePayload,
   toOpeningBalance,
   toPatchPayload,
@@ -28,9 +29,12 @@ import { usePatientNavigation } from '../patient-navigation';
 import { createPatient, invalidatePatientData, patientQuery, updatePatient } from '../patients-api';
 import { usePatientForm } from '../use-patient-form';
 import { AccountFields } from './account-fields';
-import { failureOf, fieldErrorsOf } from './form-server-errors';
+import { CurrentContactsSection, PendingContactsSection } from './contacts-section';
+import { FAILURE_VALUES, failureOf, fieldErrorsOf, type SentContext } from './form-server-errors';
+import { LinkChip, LinkOffer } from './link-offer';
 import { PanelFallback } from './panel-fallback';
 import { useDuplicateTwin } from './use-duplicate-twin';
+import { useLinkOffer } from './use-link-offer';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -53,8 +57,11 @@ const leavesForm = (current: GuardLocation, next: GuardLocation) =>
 /**
  * Create / Edit patient (design §Right panel, `Patients.dc.html` form, workspace spec §Screen 2
  * styling): Full name* and Phone* up front (the phone optional while the date of birth makes the
- * patient a minor, design addendum C3), the optional details demoted below, and — create only,
- * with `payment:write` — the Account group's opening balance (design Q1).
+ * patient a minor, design addendum C3) — on create, with the offer to link a contact whose phone
+ * it is (C4) — then the contacts (the Guardian block for a minor, "Contacts & family" for an
+ * adult: pending links sent with the create, or, when editing, immediate actions, C5), the
+ * optional details demoted below, and — create only, with `payment:write` — the Account group's
+ * opening balance (design Q1).
  */
 export function PatientFormPanel({
   mode,
@@ -183,6 +190,26 @@ function PatientForm({
 
   const dirty = editing ? isEditDirty(initial, values, country) : isDirty(initial, values);
   const ready = values.fullName.trim() !== '' && (values.phone.trim() !== '' || form.phoneOptional);
+  // The phone matches an unlinked contact: offer to link it (`linkContactId`). The link holds
+  // while the phone stays that number (however it is typed), and goes when it changes.
+  const offer = useLinkOffer(values.phone, country, !editing);
+  const [linked, setLinked] = useState<{ id: string; fullName: string; phone: string } | null>(
+    null,
+  );
+  const [dismissed, setDismissed] = useState<readonly string[]>([]);
+  if (linked !== null && offer.e164 !== linked.phone) {
+    setLinked(null);
+    form.setLinkContactId(null);
+  }
+  // Never offered: a contact already added to this patient (a minor's phone is often a parent's).
+  const offered =
+    linked === null &&
+    offer.match !== null &&
+    !dismissed.includes(offer.match.id) &&
+    !pendingExclusions(values).contactIds.includes(offer.match.id)
+      ? offer.match
+      : null;
+
   const twin = useDuplicateTwin({
     fullName: values.fullName,
     dateOfBirth: values.dateOfBirth,
@@ -213,6 +240,8 @@ function PatientForm({
     if (saving.current) return;
     if (!form.check()) return;
     saving.current = true;
+    // What a failure is read against: a create's 409 `contact.already_linked` is its link offer.
+    const sent: SentContext = editing ? {} : { linkContactId: values.linkContactId || undefined };
     try {
       const id = await mutation.mutateAsync();
       void invalidatePatientData(queryClient);
@@ -230,16 +259,18 @@ function PatientForm({
         });
       }
     } catch (error) {
-      const failure = failureOf(error);
+      const failure = failureOf(error, sent);
       // Someone archived the patient meanwhile: reload it, so the form shows why.
       if (failure === 'archived') void invalidatePatientData(queryClient);
       if (!mounted.current) return;
-      const fields = fieldErrorsOf(error);
+      const fields = fieldErrorsOf(error, sent);
       if (fields) {
         form.showServerErrors(fields);
         return;
       }
-      toast(t('form.failed', { reason: t(`failures.${failure}`) }), { tone: 'danger' });
+      toast(t('form.failed', { reason: t(`failures.${failure}`, FAILURE_VALUES) }), {
+        tone: 'danger',
+      });
     } finally {
       saving.current = false;
     }
@@ -331,6 +362,38 @@ function PatientForm({
 
         {field('fullName')}
         {field('phone')}
+        {offered && (
+          <LinkOffer
+            contact={offered}
+            onDismiss={() => {
+              setDismissed((ids) => [...ids, offered.id]);
+            }}
+            onLink={() => {
+              if (offer.e164 === null) return;
+              form.setLinkContactId(offered.id);
+              setLinked({ id: offered.id, fullName: offered.fullName, phone: offer.e164 });
+            }}
+          />
+        )}
+        {linked && (
+          <LinkChip
+            name={linked.fullName}
+            error={message('linkContactId')}
+            onRemove={() => {
+              setLinked(null);
+              form.setLinkContactId(null);
+            }}
+          />
+        )}
+        {patient ? (
+          <CurrentContactsSection
+            patient={patient}
+            minor={form.showGuardianBlock}
+            country={country}
+          />
+        ) : (
+          <PendingContactsSection form={form} country={country} />
+        )}
 
         <Eyebrow className="mt-1">{t('form.optional')}</Eyebrow>
         <div className="grid grid-cols-2 gap-x-2.5 gap-y-3">

@@ -223,6 +223,17 @@ export function mockApi({
         const { keepId } = body as { keepId: string };
         return Promise.resolve(json(patients.find((p) => p.id === keepId)));
       }
+      // The contact actions answer the patient's contacts: as they are (link, patch), or
+      // without the one unlinked; a spec's `mutation` answers what the change made.
+      const link = /^\/patients\/([^/]+)\/contacts(?:\/([^/]+))?$/.exec(bare);
+      if (link) {
+        const [, patientId = '', contactId] = link;
+        const current = contacts[patientId] ?? [];
+        if (method === 'DELETE') {
+          return Promise.resolve(json(current.filter((c) => c.contact.id !== contactId)));
+        }
+        return Promise.resolve(json(current, method === 'POST' ? 201 : 200));
+      }
       const edited = /^\/patients\/([^/]+)$/.exec(bare)?.[1];
       const found = patients.find((p) => p.id === edited);
       if (method === 'PATCH' && found) return Promise.resolve(json(found));

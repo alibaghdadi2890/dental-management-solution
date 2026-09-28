@@ -17,6 +17,7 @@ import { usePatientNavigation } from '../patient-navigation';
 import { patientQuery } from '../patients-api';
 import { PatientAvatar } from '../patients-table';
 import { PanelFallback } from './panel-fallback';
+import { QuickViewContacts } from './quick-view-contacts';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -24,7 +25,8 @@ const NONE = '—';
 
 /**
  * Quick view (`Patients.dc.html` "view" panel, design §Right panel): who the patient is, their
- * alerts, the open balance (`payment:read`) and the activity timeline (`audit:read` only, Q10).
+ * alerts, the open balance (`payment:read`), their contacts (design addendum "Quick view") and
+ * the activity timeline (`audit:read` only, Q10).
  * The footer opens the full record, and offers Edit details (`patient:write`, not archived).
  */
 export function QuickViewPanel({
@@ -115,7 +117,8 @@ function QuickView({
   const { openPatient } = usePatientNavigation();
   const archived = patient.archivedAt !== null;
 
-  const ageLine = formatAgeLine(patient.dateOfBirth, todayIn(tenant.timeZone), { locale });
+  const today = todayIn(tenant.timeZone);
+  const ageLine = formatAgeLine(patient.dateOfBirth, today, { locale });
   const summary = [
     ageLine.kind === 'full'
       ? t('ageYears', { count: ageLine.age })
@@ -232,6 +235,8 @@ function QuickView({
           </Detail>
         )}
       </dl>
+
+      <QuickViewContacts patient={patient} country={tenant.country} today={today} />
 
       {canAudit && (
         <ActivityTimeline

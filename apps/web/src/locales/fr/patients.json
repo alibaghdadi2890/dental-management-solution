@@ -316,7 +316,7 @@
     "contactPrimaryWithoutRole": "un contact principal doit avoir ce rôle",
     "contactMerged": "ce patient a été fusionné avec un autre dossier",
     "contactInvalidPhone": "le numéro de téléphone du contact n’est pas valide",
-    "contactsTooMany": "un patient peut être enregistré avec 10 contacts au maximum"
+    "contactsTooMany": "un patient peut être enregistré avec {{max, number}} contacts au maximum"
   },
   "palette": {
     "title": "Rechercher un patient",
@@ -411,6 +411,81 @@
         "tooLong": "Trop long",
         "invalidPhone": "Saisissez un numéro de téléphone valide"
       }
+    },
+    "list": "Contacts",
+    "guardian": {
+      "title": "Responsable légal",
+      "search": "Responsable légal",
+      "roles": "Rôles du prochain responsable ajouté",
+      "alsoBilling": "Également contact de facturation",
+      "alsoEmergency": "Également contact d’urgence",
+      "add": "Ajouter le responsable",
+      "none": "Aucun responsable légal enregistré",
+      "noneHint": "Ajoutez un parent ou un tuteur légal dès que possible. L’enregistrement reste possible sans."
+    },
+    "family": {
+      "toggle": "Contacts et famille (facultatif)",
+      "search": "Contact",
+      "add": "Ajouter le contact",
+      "roleHint": "Choisissez au moins un rôle"
+    },
+    "roles": {
+      "label": "Rôles",
+      "guardian": "Responsable",
+      "billing": "Facturation",
+      "emergency": "Urgence",
+      "primary": "Principal"
+    },
+    "roleOptions": {
+      "guardian": "Responsable légal",
+      "billing": "Contact de facturation",
+      "emergency": "Contact d’urgence"
+    },
+    "row": {
+      "edit": "Modifier",
+      "editNamed": "Modifier {{name}}",
+      "remove": "Retirer",
+      "removeNamed": "Retirer {{name}}"
+    },
+    "editor": {
+      "title": "Rôles de {{name}}",
+      "apply": "Appliquer",
+      "primary": "Principal",
+      "makePrimary": "Rendre principal",
+      "makePrimaryGuardian": "Faire de {{name}} le responsable légal principal",
+      "makePrimaryBilling": "Faire de {{name}} le contact de facturation principal",
+      "makePrimaryEmergency": "Faire de {{name}} le contact d’urgence principal"
+    },
+    "tooMany": "Un patient peut être enregistré avec {{max, number}} contacts au maximum. Ajoutez-en d’autres depuis le dossier ensuite.",
+    "linkOffer": {
+      "body": "Ce numéro appartient au contact {{name}}. Relier ce patient à {{name}} ?",
+      "link": "Relier",
+      "notNow": "Plus tard",
+      "chip": "Sera relié à {{name}}",
+      "remove": "Ne pas relier à {{name}}"
+    },
+    "current": {
+      "loading": "Chargement des contacts",
+      "failed": "Impossible de charger les contacts.",
+      "added": "Contact ajouté",
+      "updated": "Contact mis à jour",
+      "removed": "Contact retiré",
+      "actionFailed": "Impossible de modifier les contacts : {{reason}}",
+      "removeTitle": "Retirer {{name}} ?",
+      "removeBody": "{{name}} ne sera plus un contact de ce patient. Le contact reste enregistré, ainsi qu’auprès des autres patients dont il est le contact.",
+      "removeOk": "Retirer"
+    },
+    "quickView": {
+      "title": "Contacts",
+      "empty": "Aucun contact enregistré"
+    },
+    "merge": {
+      "title": "Contacts — conservés",
+      "fromOne": "de {{number}}",
+      "fromBoth": "de {{first}} et {{second}}",
+      "empty": "Aucun des deux dossiers n’a de contacts.",
+      "selfLink": "{{name}} est {{number}}, l’un de ces dossiers : ce lien est supprimé par la fusion.",
+      "failed": "Impossible de charger les contacts."
     }
   }
 }

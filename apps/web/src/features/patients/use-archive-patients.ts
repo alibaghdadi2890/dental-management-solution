@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '@/components/ui/confirm-context';
 import { useToast } from '@/components/ui/toast-context';
-import { failureOf } from './panels/form-server-errors';
+import { FAILURE_VALUES, failureOf } from './panels/form-server-errors';
 import { archivePatients, invalidatePatientData, restorePatients } from './patients-api';
 
 type Target = Pick<PatientListItem, 'id' | 'fullName'>;
@@ -37,7 +37,7 @@ export function useArchivePatients({
 
   // The reason in the person's language, never the server's English problem title.
   const failure = (action: Action, error: unknown) =>
-    t(`${action}.failed`, { reason: t(`failures.${failureOf(error)}`) });
+    t(`${action}.failed`, { reason: t(`failures.${failureOf(error)}`, FAILURE_VALUES) });
 
   const doneText = (action: Action, targets: readonly Target[]) => {
     const [only] = targets;
