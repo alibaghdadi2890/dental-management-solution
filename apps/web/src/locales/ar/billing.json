@@ -4,6 +4,7 @@
     "openingBalance": "الرصيد الافتتاحي",
     "openingBalanceHint": "اختياري",
     "asOf": "بتاريخ",
+    "chooseAsOf": "اختيار تاريخ الرصيد",
     "note": "ملاحظة",
     "notePlaceholder": "اختياري — مثال: منقول من النظام السابق"
   },

@@ -23,7 +23,6 @@
     "YMD": "YYYY/MM/DD"
   },
   "datePicker": {
-    "open": "Choose date",
     "calendar": "Calendar"
   },
   "saveState": {

@@ -75,6 +75,11 @@ describe('new tenant form', () => {
     });
   });
 
+  it('reports an unknown owner practitioner type on its field', () => {
+    const result = toProvisionRequest({ ...EMPTY_NEW_TENANT, ownerPractitionerType: 'surgeon' });
+    expect(result.ok || result.errors.ownerPractitionerType).toBe('required');
+  });
+
   it("sends the owner's chosen practitioner type", () => {
     const form = editNewTenant(
       {

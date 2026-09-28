@@ -10,29 +10,36 @@ function Harness({
   initial = '',
   onChange = () => undefined,
   min,
+  readOnly,
 }: {
   initial?: string;
   onChange?: (value: string) => void;
   min?: string;
+  readOnly?: boolean;
 }) {
   const [value, setValue] = useState(initial);
   return (
-    <DateInput
-      aria-label="Date of birth"
-      order="DMY"
-      today={TODAY}
-      {...(min === undefined ? {} : { min })}
-      value={value}
-      onChange={(next) => {
-        setValue(next);
-        onChange(next);
-      }}
-    />
+    <>
+      <DateInput
+        aria-label="Date of birth"
+        pickerLabel="Choose date of birth"
+        order="DMY"
+        today={TODAY}
+        {...(min === undefined ? {} : { min })}
+        {...(readOnly === undefined ? {} : { readOnly })}
+        value={value}
+        onChange={(next) => {
+          setValue(next);
+          onChange(next);
+        }}
+      />
+      <input aria-label="Phone" />
+    </>
   );
 }
 
 const input = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Date of birth' });
-const openCalendar = async (name = 'Choose date') => {
+const openCalendar = async (name = 'Choose date of birth') => {
   fireEvent.click(screen.getByRole('button', { name }));
   return screen.findByRole('dialog');
 };
@@ -117,10 +124,47 @@ describe('DateInput', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('leaves focus where the person clicked when they close it by clicking elsewhere', async () => {
+    render(<Harness />);
+    await openCalendar();
+    // The outside-click listener is attached on the next tick after opening.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    // A click's own sequence: Radix dismisses on the click that follows the pointer down.
+    const phone = screen.getByRole('textbox', { name: 'Phone' });
+    fireEvent.pointerDown(phone);
+    phone.focus();
+    fireEvent.click(phone);
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(document.activeElement).toBe(phone);
+  });
+
+  it('gives focus back to the input when its button closes the calendar', async () => {
+    render(<Harness />);
+    await openCalendar();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const button = screen.getByRole('button', { name: 'Choose date of birth' });
+    fireEvent.pointerDown(button);
+    fireEvent.click(button);
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(document.activeElement).toBe(input());
+  });
+
+  it('offers no calendar on a read-only field', () => {
+    render(<Harness readOnly />);
+    expect(screen.getByRole('button', { name: 'Choose date of birth' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+  });
+
   it('renders the calendar right to left in Arabic, weeks starting on Saturday', async () => {
     await i18n.changeLanguage('ar');
     render(<Harness />);
-    const calendar = await openCalendar('اختيار التاريخ');
+    const calendar = await openCalendar();
     expect(calendar.querySelector('[dir="rtl"]')).toBeTruthy();
     // The weekday row is aria-hidden: each day button's label already names its weekday.
     const [first] = within(calendar).getAllByRole('columnheader', { hidden: true });

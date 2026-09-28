@@ -223,6 +223,7 @@
     },
     "noDentist": "No primary dentist",
     "noDentistsHint": "No dentists yet. Staff with the practitioner type Dentist appear here.",
+    "chooseDateOfBirth": "Choose date of birth",
     "optional": "More details",
     "ageLine": "{{age}} · {{stage}}",
     "dentition": {

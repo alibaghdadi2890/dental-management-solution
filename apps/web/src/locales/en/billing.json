@@ -4,6 +4,7 @@
     "openingBalance": "Opening balance",
     "openingBalanceHint": "Optional",
     "asOf": "As of",
+    "chooseAsOf": "Choose as-of date",
     "note": "Note",
     "notePlaceholder": "Optional — e.g. carried over from previous system"
   },

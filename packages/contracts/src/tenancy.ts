@@ -143,7 +143,11 @@ export const provisionTenantRequestSchema = z.object({
     practitionerType: practitionerTypeSchema.default('dentist'),
   }),
 });
+/** What the service receives, defaults applied. */
 export type ProvisionTenantRequest = z.infer<typeof provisionTenantRequestSchema>;
+/** What a client may send: the defaulted fields (clinic settings, owner practitioner type) are
+ * optional on the wire. */
+export type ProvisionTenantRequestInput = z.input<typeof provisionTenantRequestSchema>;
 
 /** A row of the platform admin's tenants list. */
 export const platformTenantSchema = tenantSchema.extend({

@@ -298,7 +298,8 @@ locales/{en,ar,fr}/patients.json, billing.json
   tenant currency suffix), As of (date, default today in the tenant time zone), Note ("Optional —
   e.g. carried over from previous system"). Amount > 0 → `POST /billing/opening-balances`;
   blank or zero (`0`, `0.00`: no opening balance, no ledger entry) → `POST /patients`; a negative
-  amount is refused ("Enter zero or a positive amount"). Success toast "Patient created" with **Open record**.
+  amount is refused ("Enter zero or a positive amount"). As of and Note belong to a recorded
+  balance: they are disabled (and not validated) until the amount is above zero. Success toast "Patient created" with **Open record**.
 - **Merge**: 3-column compare grid (field · record A · record B) with a radio per differing field,
   "Keep ID" choice, medical alerts shown as the union (Q8), required reason (≥ 3 chars) →
   `POST /patients/merge` → toast "Records merged" → the kept record's quick view.
@@ -425,13 +426,17 @@ ADR-0017/0018 have the detail):
 - **Zero opening balance:** the form accepts `0`/`0.00` as "no opening balance" and creates
   through `POST /patients`, so no entry is written (the ledger checks `amount <> 0`);
   `openingBalanceInputSchema` keeps `amount > 0`, since the client never sends a zero entry. Only
-  a negative amount is an error.
+  a negative amount is an error. As of and Note stay disabled while the amount is blank, zero or
+  not a number, so nothing typed there is silently dropped, and `validate` skips them then.
 - **Date picker** (Q17): every `DateInput` (date of birth, the opening balance's As of) has a
   "Choose date" button opening a react-day-picker calendar in a Radix popover. Years run from 1900
   (the DOB floor) to the tenant's today; days after today are disabled. It opens on the field's
   date, else on the current month (not a guessed "typical" birth year): the year dropdown is one
   pick away, and a guess would be wrong for every child. A picked day is built from its
   year/month/day (never `new Date(iso)`), fills the typed text in the tenant order, closes the
-  popover and returns focus to the input; Esc does the same without a change. Week start, month
+  popover and returns focus to the input; Esc does the same without a change, but a click
+  elsewhere leaves focus where it landed. Each button is named for its field ("Choose date of
+  birth", "Choose as-of date"); a disabled or read-only field's button is disabled. The button sits
+  on the input's physical right in RTL too, beside the LTR digits. Week start, month
   names and the calendar's own labels follow the app language (Saturday first in Arabic, RTL);
   digits stay Latin, like the typed field.

@@ -203,7 +203,13 @@ describe('validate', () => {
   it('rejects an opening-balance as-of date after today', () => {
     expect(
       validate(
-        { ...base, fullName: 'Jane', phone: '03123456', openingBalanceAsOf: '2026-09-28' },
+        {
+          ...base,
+          fullName: 'Jane',
+          phone: '03123456',
+          openingBalanceAmount: '50',
+          openingBalanceAsOf: '2026-09-28',
+        },
         CTX,
       ).openingBalanceAsOf,
     ).toBe('futureDate');
@@ -216,11 +222,30 @@ describe('validate', () => {
           ...base,
           fullName: 'Jane',
           phone: '03123456',
+          openingBalanceAmount: '50',
           openingBalanceNote: 'x'.repeat(201),
         },
         CTX,
       ).openingBalanceNote,
     ).toBe('tooLong');
+  });
+
+  it('ignores As of and Note without an amount above zero (nothing is recorded)', () => {
+    for (const openingBalanceAmount of ['', '0', 'abc']) {
+      const errors = validate(
+        {
+          ...base,
+          fullName: 'Jane',
+          phone: '03123456',
+          openingBalanceAmount,
+          openingBalanceAsOf: '2026-09-28',
+          openingBalanceNote: 'x'.repeat(201),
+        },
+        CTX,
+      );
+      expect(errors.openingBalanceAsOf).toBeUndefined();
+      expect(errors.openingBalanceNote).toBeUndefined();
+    }
   });
 });
 

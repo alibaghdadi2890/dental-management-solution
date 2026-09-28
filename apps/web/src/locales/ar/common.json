@@ -23,7 +23,6 @@
     "YMD": "سنة/شهر/يوم"
   },
   "datePicker": {
-    "open": "اختيار التاريخ",
     "calendar": "التقويم"
   },
   "saveState": {

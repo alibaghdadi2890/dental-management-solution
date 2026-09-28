@@ -223,6 +223,7 @@
     },
     "noDentist": "Aucun dentiste référent",
     "noDentistsHint": "Aucun dentiste pour l’instant. Le personnel de type de praticien Dentiste apparaît ici.",
+    "chooseDateOfBirth": "Choisir la date de naissance",
     "optional": "Autres informations",
     "ageLine": "{{age}} · {{stage}}",
     "dentition": {

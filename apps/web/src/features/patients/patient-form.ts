@@ -146,17 +146,16 @@ const GUARDIAN_NAME_MAX = 120;
 /** Only the `FormField`s that are also plain string properties of `PatientFormValues` with a
  * simple, always-applicable max-length rule — `guardianName` has the same 120-char limit but is
  * checked separately (only while `showGuardian` is true; the hidden field is sent as `null`
- * regardless of what stale text it holds); `alerts`/`openingBalanceAmount`/`openingBalanceAsOf`
- * have their own dedicated checks in `validate`. Keyed to this narrower type (not `FormField`) so
+ * regardless of what stale text it holds); `alerts` and the `openingBalance…` fields (checked
+ * only while a balance will be recorded) have their own dedicated checks in `validate`. Keyed to this narrower type (not `FormField`) so
  * `values[field]` below can't be asked for a field that doesn't exist. */
-type TextLimitField = 'address' | 'insurance' | 'emergencyContact' | 'notes' | 'openingBalanceNote';
+type TextLimitField = 'address' | 'insurance' | 'emergencyContact' | 'notes';
 
 const TEXT_FIELD_MAX: Record<TextLimitField, number> = {
   address: 240,
   insurance: 120,
   emergencyContact: 160,
   notes: 2000,
-  openingBalanceNote: OPENING_BALANCE_NOTE_MAX,
 };
 
 export interface ValidateContext {
@@ -272,11 +271,18 @@ export function validate(
     }
   }
 
-  if (values.openingBalanceAsOf.trim() !== '') {
-    if (!isoDateSchema.safeParse(values.openingBalanceAsOf).success) {
-      errors.openingBalanceAsOf = 'invalidDate';
-    } else if (values.openingBalanceAsOf > today) {
-      errors.openingBalanceAsOf = 'futureDate';
+  // As of and Note belong to a recorded balance: without an amount above zero nothing is
+  // recorded, the panel disables them, and they are not sent — so there is nothing to check.
+  if (wantsOpeningBalance(values)) {
+    if (values.openingBalanceAsOf.trim() !== '') {
+      if (!isoDateSchema.safeParse(values.openingBalanceAsOf).success) {
+        errors.openingBalanceAsOf = 'invalidDate';
+      } else if (values.openingBalanceAsOf > today) {
+        errors.openingBalanceAsOf = 'futureDate';
+      }
+    }
+    if (values.openingBalanceNote.trim().length > OPENING_BALANCE_NOTE_MAX) {
+      errors.openingBalanceNote = 'tooLong';
     }
   }
 

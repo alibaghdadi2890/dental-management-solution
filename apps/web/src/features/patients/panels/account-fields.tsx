@@ -7,12 +7,15 @@ import type { DateInputOrder } from '@/lib/format';
 /**
  * The create panel's "Account" group (design Q1, create only, `payment:write`): the opening
  * balance as typed (36px Mono, tenant currency after it), its "as of" date and an optional note.
- * The owner keeps the values and turns the typed amount into one (`amountValue`).
+ * The owner keeps the values and turns the typed amount into one (`amountValue`). As of and Note
+ * belong to a recorded balance, so they are disabled until the amount is above zero: a blank or
+ * zero amount records nothing, and they would be dropped.
  */
 export function AccountFields({
   amountText,
   asOf,
   note,
+  recording,
   errors,
   currency,
   locale,
@@ -26,6 +29,8 @@ export function AccountFields({
   amountText: string;
   asOf: string;
   note: string;
+  /** Whether the amount is above zero, i.e. a balance will be recorded (`wantsOpeningBalance`). */
+  recording: boolean;
   errors: { amount?: string | undefined; asOf?: string | undefined; note?: string | undefined };
   currency: string;
   locale: string;
@@ -58,7 +63,15 @@ export function AccountFields({
         </Field>
         <Field label={t('account.asOf')} hint={t(`common:dateFormat.${order}`)} error={errors.asOf}>
           {(props) => (
-            <DateInput {...props} order={order} today={today} value={asOf} onChange={onAsOf} />
+            <DateInput
+              {...props}
+              order={order}
+              today={today}
+              pickerLabel={t('account.chooseAsOf')}
+              disabled={!recording}
+              value={asOf}
+              onChange={onAsOf}
+            />
           )}
         </Field>
         <Field label={t('account.note')} error={errors.note} className="col-span-2">
@@ -66,6 +79,7 @@ export function AccountFields({
             <TextInput
               {...props}
               placeholder={t('account.notePlaceholder')}
+              disabled={!recording}
               value={note}
               onChange={(event) => {
                 onNote(event.target.value);

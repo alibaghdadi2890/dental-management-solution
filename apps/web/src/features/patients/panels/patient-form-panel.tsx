@@ -355,6 +355,7 @@ function PatientForm({
             amountText={amountText}
             asOf={values.openingBalanceAsOf}
             note={values.openingBalanceNote}
+            recording={wantsOpeningBalance(values)}
             errors={{
               amount: message('openingBalanceAmount'),
               asOf: message('openingBalanceAsOf'),

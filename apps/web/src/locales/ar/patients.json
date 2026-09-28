@@ -255,6 +255,7 @@
     },
     "noDentist": "بلا طبيب معالج",
     "noDentistsHint": "لا يوجد أطباء أسنان بعد. يظهر هنا الموظفون من نوع الممارس «طبيب أسنان».",
+    "chooseDateOfBirth": "اختيار تاريخ الميلاد",
     "optional": "تفاصيل إضافية",
     "ageLine": "{{age}} · {{stage}}",
     "dentition": {

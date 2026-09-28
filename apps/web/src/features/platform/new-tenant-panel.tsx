@@ -148,7 +148,7 @@ export function NewTenantPanel({
         hint: t('newTenant.fields.slugHint'),
         mono: true,
       })}
-      <Field label={t('newTenant.fields.timeZone')}>
+      <Field label={t('newTenant.fields.timeZone')} error={message(errors.timeZone)}>
         {(props) => (
           <Select
             {...props}
@@ -166,7 +166,7 @@ export function NewTenantPanel({
         )}
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={t('newTenant.fields.currency')}>
+        <Field label={t('newTenant.fields.currency')} error={message(errors.currency)}>
           {(props) => (
             <Select
               {...props}
@@ -183,7 +183,7 @@ export function NewTenantPanel({
             </Select>
           )}
         </Field>
-        <Field label={t('newTenant.fields.locale')}>
+        <Field label={t('newTenant.fields.locale')} error={message(errors.locale)}>
           {(props) => (
             <Select
               {...props}
@@ -204,6 +204,7 @@ export function NewTenantPanel({
       <CountrySelect
         label={t('newTenant.fields.country')}
         value={form.country}
+        error={message(errors.country)}
         onChange={set('country')}
       />
 
@@ -215,7 +216,10 @@ export function NewTenantPanel({
       <Eyebrow className="mt-2">{t('newTenant.sections.owner')}</Eyebrow>
       {text('ownerName', t('newTenant.fields.ownerName'))}
       {text('ownerEmail', t('newTenant.fields.ownerEmail'), { type: 'email' })}
-      <Field label={t('users.fields.practitionerType')}>
+      <Field
+        label={t('users.fields.practitionerType')}
+        error={message(errors.ownerPractitionerType)}
+      >
         {(props) => (
           <Select
             {...props}

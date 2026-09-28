@@ -181,6 +181,7 @@ export function PatientField({
                 order={form.order}
                 today={form.today}
                 min={DATE_OF_BIRTH_FLOOR}
+                pickerLabel={t('form.chooseDateOfBirth')}
                 value={dob}
                 onChange={set('dateOfBirth')}
                 className={INPUT[tone]}

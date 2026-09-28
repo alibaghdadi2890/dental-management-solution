@@ -4,6 +4,7 @@
     "openingBalance": "Solde d’ouverture",
     "openingBalanceHint": "Facultatif",
     "asOf": "Au",
+    "chooseAsOf": "Choisir la date du solde",
     "note": "Note",
     "notePlaceholder": "Facultatif — ex. repris de l’ancien logiciel"
   },

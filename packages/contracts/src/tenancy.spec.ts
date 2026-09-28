@@ -3,6 +3,7 @@ import {
   branchCreateSchema,
   deriveSlug,
   provisionTenantRequestSchema,
+  type ProvisionTenantRequestInput,
   roomBatchSchema,
   slugSchema,
   tenantSettingsPatchSchema,
@@ -60,7 +61,9 @@ describe('provisionTenantRequestSchema', () => {
   });
 
   it('makes the owner a dentist unless another practitioner type is chosen', () => {
-    expect(provisionTenantRequestSchema.parse(request).owner.practitionerType).toBe('dentist');
+    // The wire type leaves the defaulted field out; the parsed one always has it.
+    const wire: ProvisionTenantRequestInput = request;
+    expect(provisionTenantRequestSchema.parse(wire).owner.practitionerType).toBe('dentist');
     const other = { ...request, owner: { ...request.owner, practitionerType: 'other' } };
     expect(provisionTenantRequestSchema.parse(other).owner.practitionerType).toBe('other');
     const unknown = { ...request, owner: { ...request.owner, practitionerType: 'surgeon' } };

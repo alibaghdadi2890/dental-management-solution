@@ -51,12 +51,16 @@ export function DateInput({
   today,
   min = CALENDAR_FLOOR,
   max = today,
+  pickerLabel,
   className,
   ...props
 }: NativeProps & {
   value: string;
   onChange: (value: string) => void;
   order: DateInputOrder;
+  /** The calendar button's accessible name, naming its field ("Choose date of birth"): a form
+   * with two date fields must not have two buttons called just "Choose date". */
+  pickerLabel: string;
   /** Today in the tenant's timezone (`todayIn`), marked in the calendar. */
   today: string;
   min?: string;
@@ -65,6 +69,9 @@ export function DateInput({
   const { t } = useTranslation('common');
   const inputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
+  // Closed by a click or focus elsewhere: focus stays where the person put it.
+  const interactedOutside = useRef(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const [text, setText] = useState(() => dateTextOf(value, order));
   const [shown, setShown] = useState(value);
   // A value set from outside (not by typing here) replaces the text.
@@ -104,11 +111,14 @@ export function DateInput({
             }}
             className={cn('pe-10 font-mono tabular-nums', className)}
           />
+          {/* The button stays on the input's physical right in RTL too: the wrapper is LTR like
+              the digits, so it sits after the date's end, where the typed text never runs. */}
           <Popover.Trigger asChild>
             <button
+              ref={buttonRef}
               type="button"
-              aria-label={t('datePicker.open')}
-              disabled={props.disabled}
+              aria-label={pickerLabel}
+              disabled={Boolean(props.disabled) || Boolean(props.readOnly)}
               className="absolute end-1 top-1/2 inline-flex size-7 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md text-ink-muted hover:bg-subtle hover:text-ink disabled:cursor-default disabled:opacity-45"
             >
               <CalendarIcon />
@@ -124,10 +134,19 @@ export function DateInput({
           // The calendar focuses the selected day (else today) itself, so arrows move by day.
           onOpenAutoFocus={(event) => {
             event.preventDefault();
+            interactedOutside.current = false;
           }}
+          onInteractOutside={(event) => {
+            const { target } = event;
+            // The button toggling it shut counts as the calendar's own control, not "elsewhere".
+            if (!(target instanceof Node && buttonRef.current?.contains(target))) {
+              interactedOutside.current = true;
+            }
+          }}
+          // Esc, a picked day or the button: back to the input to go on typing.
           onCloseAutoFocus={(event) => {
             event.preventDefault();
-            inputRef.current?.focus();
+            if (!interactedOutside.current) inputRef.current?.focus();
           }}
           className="z-30 animate-fadein rounded-[10px] border border-border bg-surface p-3 shadow-[0_10px_28px_rgba(27,26,31,.14)]"
         >

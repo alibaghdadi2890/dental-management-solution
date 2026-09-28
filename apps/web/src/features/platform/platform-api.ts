@@ -4,7 +4,7 @@ import {
   branchSchema,
   type PlatformTenantQuery,
   platformTenantSchema,
-  type ProvisionTenantRequest,
+  type ProvisionTenantRequestInput,
   type RoomBatch,
   roleSchema,
   roomSchema,
@@ -75,7 +75,7 @@ export const rolesQuery = (tenantId: string) =>
     staleTime: Infinity,
   });
 
-export function provisionTenant(request: ProvisionTenantRequest) {
+export function provisionTenant(request: ProvisionTenantRequestInput) {
   return apiFetch('/platform/tenants', tenantSchema, { method: 'POST', json: request });
 }
 

@@ -8,15 +8,17 @@ import { useCountryOptions } from './use-country-options';
 export function CountrySelect({
   label,
   value,
+  error,
   onChange,
 }: {
   label: string;
   value: string;
+  error?: string | undefined;
   onChange: (value: string) => void;
 }) {
   const options = useCountryOptions();
   return (
-    <Field label={label}>
+    <Field label={label} error={error}>
       {(props) => (
         <Select
           {...props}

@@ -99,8 +99,9 @@ describe('PatientFormPanel — create', () => {
     await panel('Register a patient');
     type('Full name', 'Rana Haddad');
     type('Phone', '03 123 456');
-    const dob = field('Date of birth').closest('div') ?? document.body;
-    fireEvent.click(within(dob).getByRole('button', { name: 'Choose date' }));
+    // Each date field names its own calendar button.
+    expect(screen.getByRole('button', { name: 'Choose as-of date' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Choose date of birth' }));
     const calendar = await screen.findByRole('dialog', { name: 'Calendar' });
     fireEvent.change(within(calendar).getByRole('combobox', { name: 'Choose the Year' }), {
       target: { value: '1990' },
@@ -173,6 +174,23 @@ describe('PatientFormPanel — create', () => {
       expect(sent(fetchMock, 'POST', '/billing/opening-balances')).toBeUndefined();
       cleanup();
     }
+  });
+
+  it('enables As of and Note only while the opening balance is above zero', async () => {
+    mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    const note = () => screen.getByRole<HTMLInputElement>('textbox', { name: 'Note' });
+    const enabled = () => [field('As of').disabled, note().disabled].map((off) => !off);
+    expect(enabled()).toEqual([false, false]);
+    expect(screen.getByRole('button', { name: 'Choose as-of date' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    type('Opening balance', '250');
+    expect(enabled()).toEqual([true, true]);
+    type('Opening balance', '0');
+    expect(enabled()).toEqual([false, false]);
   });
 
   it('refuses a negative opening balance', async () => {
