@@ -26,7 +26,9 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
 - `listPractitioners()` — active staff whose `practitioner_type = 'dentist'`, ordered by display
   name (tenant-locale collation), then user id. Not permission-gated: a building block like
   `TenancyService.activeBranches`, used wherever the app offers "assign a dentist" (feature 3 Q2);
-  `GET /users/practitioners` still requires `user:read` (every system role holds it).
+  `GET /users/practitioners` still requires `user:read` (every system role holds it). A new
+  clinic's owner is a dentist unless the platform admin chose another type (`provisioning`), so
+  the list is not empty on day one.
 - `practitionersByIds(ids)` — practitioners among `ids` whatever their current type or active
   status, ordered the same way, for showing the display name of a dentist already assigned to a
   patient even after they leave or change role. Not permission-gated either: `patients` ranks

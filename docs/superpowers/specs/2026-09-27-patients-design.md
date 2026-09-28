@@ -417,6 +417,10 @@ ADR-0017/0018 have the detail):
   (or a later change moves the duplicate check to a `POST` body).
 - **Patient information tab:** a refetch under unsaved edits does not move the form's base, so
   undoing the edits shows the latest server values.
+- **Primary dentist on a new clinic:** provisioning makes the owner a `dentist` unless the
+  platform admin picks another practitioner type (`docs/modules/provisioning.md`), so the
+  picker is not empty on day one. When `GET /users/practitioners` is empty anyway, the field keeps
+  "No primary dentist" and says under it that staff of type Dentist appear there.
 - **Date picker** (Q17): every `DateInput` (date of birth, the opening balance's As of) has a
   "Choose date" button opening a react-day-picker calendar in a Radix popover. Years run from 1900
   (the DOB floor) to the tenant's today; days after today are disabled. It opens on the field's

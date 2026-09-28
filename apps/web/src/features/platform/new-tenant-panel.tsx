@@ -1,4 +1,4 @@
-import { LOCALES, PASSWORD_MIN_LENGTH } from '@dcm/contracts';
+import { LOCALES, PASSWORD_MIN_LENGTH, PRACTITIONER_TYPES } from '@dcm/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -215,6 +215,23 @@ export function NewTenantPanel({
       <Eyebrow className="mt-2">{t('newTenant.sections.owner')}</Eyebrow>
       {text('ownerName', t('newTenant.fields.ownerName'))}
       {text('ownerEmail', t('newTenant.fields.ownerEmail'), { type: 'email' })}
+      <Field label={t('users.fields.practitionerType')}>
+        {(props) => (
+          <Select
+            {...props}
+            value={form.ownerPractitionerType}
+            onChange={(event) => {
+              set('ownerPractitionerType')(event.target.value);
+            }}
+          >
+            {PRACTITIONER_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {t(`users.practitionerTypes.${type}`)}
+              </option>
+            ))}
+          </Select>
+        )}
+      </Field>
       <Field
         label={t('newTenant.fields.password')}
         hint={t('newTenant.fields.passwordHint')}

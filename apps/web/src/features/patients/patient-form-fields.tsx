@@ -1,5 +1,5 @@
 import { dentitionStage, isoDateSchema, PATIENT_SEXES } from '@dcm/contracts';
-import type { SelectHTMLAttributes } from 'react';
+import { type SelectHTMLAttributes, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DateInput } from '@/components/ui/date-input';
 import { Field, Select, TextInput } from '@/components/ui/field';
@@ -298,10 +298,12 @@ export function PatientField({
 }
 
 /** The primary dentist picker: the active practitioners, plus the patient's `current` dentist
- * when no longer one of them (deactivated), so saving other fields never drops it. */
+ * when no longer one of them (deactivated), so saving other fields never drops it. A clinic with
+ * no practitioners yet gets a line under it saying where they come from. */
 function DentistSelect({
   current,
   onValue,
+  'aria-describedby': describedBy,
   ...props
 }: SelectHTMLAttributes<HTMLSelectElement> & {
   value: string;
@@ -309,25 +311,36 @@ function DentistSelect({
   onValue: (value: string) => void;
 }) {
   const { t } = useTranslation('patients');
+  const hintId = useId();
   const { names, practitioners } = useStaffNames();
   const active = new Set((practitioners ?? []).map((p) => p.userId));
   const kept = current !== '' && !active.has(current) ? current : null;
+  const none = practitioners?.length === 0;
+  const described = [describedBy, none ? hintId : undefined].filter(Boolean).join(' ');
   return (
-    <Select
-      {...props}
-      onChange={(event) => {
-        onValue(event.target.value);
-      }}
-    >
-      <option value="">{t('form.noDentist')}</option>
-      {(practitioners ?? []).map((practitioner) => (
-        <option key={practitioner.userId} value={practitioner.userId}>
-          {practitioner.displayName}
-        </option>
-      ))}
-      {kept !== null && (
-        <option value={kept}>{names.get(kept) ?? t('quickView.unknownDentist')}</option>
+    <>
+      <Select
+        {...props}
+        {...(described ? { 'aria-describedby': described } : {})}
+        onChange={(event) => {
+          onValue(event.target.value);
+        }}
+      >
+        <option value="">{t('form.noDentist')}</option>
+        {(practitioners ?? []).map((practitioner) => (
+          <option key={practitioner.userId} value={practitioner.userId}>
+            {practitioner.displayName}
+          </option>
+        ))}
+        {kept !== null && (
+          <option value={kept}>{names.get(kept) ?? t('quickView.unknownDentist')}</option>
+        )}
+      </Select>
+      {none && (
+        <span id={hintId} className="mt-[5px] block text-xs leading-tight text-ink-muted">
+          {t('form.noDentistsHint')}
+        </span>
       )}
-    </Select>
+    </>
   );
 }

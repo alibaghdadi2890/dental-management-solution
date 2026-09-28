@@ -116,6 +116,30 @@ describe('PatientFormPanel — create', () => {
     expect(sent(fetchMock, 'POST', '/patients')).toMatchObject({ dateOfBirth: '1990-05-01' });
   });
 
+  it('explains an empty primary dentist list and keeps "No primary dentist"', async () => {
+    const hint = 'No dentists yet. Staff with the practitioner type Dentist appear here.';
+    mockApi({ get: (path) => (path === '/users/practitioners' ? json([]) : undefined) });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    const dentist = screen.getByRole('combobox', { name: 'Primary dentist' });
+    const note = await screen.findByText(hint);
+    expect(dentist.getAttribute('aria-describedby')).toBe(note.id);
+    expect(
+      within(dentist)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['No primary dentist']);
+    cleanup();
+
+    mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    await within(screen.getByRole('combobox', { name: 'Primary dentist' })).findByRole('option', {
+      name: 'Dr. Ana Reyes',
+    });
+    expect(screen.queryByText(hint)).toBeNull();
+  });
+
   it('records an opening balance through POST /billing/opening-balances', async () => {
     const fetchMock = mockApi();
     renderPanels({ url: '/?panel=new' });

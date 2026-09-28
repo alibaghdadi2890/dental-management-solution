@@ -2,6 +2,8 @@ import {
   type AuditPage,
   PERMISSIONS,
   type PlatformTenant,
+  type Practitioner,
+  type PractitionerType,
   type Role,
   type Session,
   type StaffUser,
@@ -25,7 +27,14 @@ describe('provisioning (platform admin)', () => {
   let testApp: TestApp;
   let admin: TestAgent;
 
-  const request = (overrides: { slug?: string; email?: string; country?: string } = {}) => {
+  const request = (
+    overrides: {
+      slug?: string;
+      email?: string;
+      country?: string;
+      practitionerType?: PractitionerType;
+    } = {},
+  ) => {
     const slug = overrides.slug ?? `clinic-${newId().slice(-12)}`;
     return {
       clinic: {
@@ -38,6 +47,7 @@ describe('provisioning (platform admin)', () => {
         displayName: 'Dr. Owner',
         email: overrides.email ?? uniqueEmail('owner'),
         temporaryPassword: 'temporary-pw-1',
+        ...(overrides.practitionerType && { practitionerType: overrides.practitionerType }),
       },
     };
   };
@@ -97,7 +107,7 @@ describe('provisioning (platform admin)', () => {
     expect(users[0]).toMatchObject({
       email: body.owner.email,
       displayName: 'Dr. Owner',
-      practitionerType: 'other',
+      practitionerType: 'dentist',
       active: true,
       roles: [{ key: 'owner', name: 'Owner' }],
       branches: [{ name: 'Main St' }],
@@ -107,6 +117,25 @@ describe('provisioning (platform admin)', () => {
       ownerUserId: users[0]?.id,
       firstBranchId: session.branches[0]?.id,
     });
+  });
+
+  it("makes the owner a dentist by default, listed as the new clinic's practitioner", async () => {
+    const tenant = (await provision(request())).body as Tenant;
+    const practitioners = (
+      await admin.get('/api/v1/users/practitioners').set('X-Tenant-Id', tenant.id)
+    ).body as Practitioner[];
+    expect(practitioners).toMatchObject([{ displayName: 'Dr. Owner' }]);
+  });
+
+  it('keeps an owner of another practitioner type out of the practitioners list', async () => {
+    const tenant = (await provision(request({ practitionerType: 'other' }))).body as Tenant;
+    const users = (await admin.get('/api/v1/users').set('X-Tenant-Id', tenant.id))
+      .body as StaffUser[];
+    expect(users).toMatchObject([{ practitionerType: 'other' }]);
+    const practitioners = (
+      await admin.get('/api/v1/users/practitioners').set('X-Tenant-Id', tenant.id)
+    ).body as Practitioner[];
+    expect(practitioners).toEqual([]);
   });
 
   it('stores an explicit clinic country instead of the LB default', async () => {

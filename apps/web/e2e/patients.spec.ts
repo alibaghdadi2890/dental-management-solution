@@ -29,6 +29,7 @@ test('the owner registers a patient with an opening balance, completes the recor
   await panel.getByLabel('Branch name').fill('Main St');
   await panel.getByLabel('Full name').fill('Dr. Patients Owner');
   await panel.getByLabel('Email').fill(owner.email);
+  await expect(panel.getByLabel('Practitioner type')).toHaveValue('dentist');
   await panel.getByRole('button', { name: 'Generate' }).click();
   const temporaryPassword = await panel.getByLabel('Temporary password').inputValue();
   await panel.getByRole('button', { name: 'Create tenant' }).click();
@@ -49,6 +50,8 @@ test('the owner registers a patient with an opening balance, completes the recor
   await form.getByRole('textbox', { name: /^Full name/ }).fill(rana.name);
   await form.getByRole('textbox', { name: /^Phone/ }).fill(rana.phone);
   await form.getByRole('textbox', { name: 'Email' }).fill(rana.email);
+  // The owner is a dentist from provisioning, so the new clinic has a primary dentist to pick.
+  await form.getByRole('combobox', { name: 'Primary dentist' }).selectOption('Dr. Patients Owner');
   await form.getByRole('textbox', { name: /^Opening balance/ }).fill('250');
   await form.getByRole('button', { name: 'Create patient' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Patient created' })).toBeVisible();

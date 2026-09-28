@@ -20,6 +20,8 @@ export interface NewTenantForm {
   ownerName: string;
   ownerEmail: string;
   password: string;
+  /** A `PractitionerType`; the contract checks it like the clinic's selects. */
+  ownerPractitionerType: string;
 }
 
 export type NewTenantField = Exclude<keyof NewTenantForm, 'slugEdited'>;
@@ -35,6 +37,7 @@ export const EMPTY_NEW_TENANT: NewTenantForm = {
   ownerName: '',
   ownerEmail: '',
   password: '',
+  ownerPractitionerType: 'dentist',
 };
 
 /** Applies one edit; the slug follows the clinic name until edited directly. */
@@ -74,6 +77,7 @@ const FIELD_BY_PATH: Record<string, NewTenantField> = {
   'owner.displayName': 'ownerName',
   'owner.email': 'ownerEmail',
   'owner.temporaryPassword': 'password',
+  'owner.practitionerType': 'ownerPractitionerType',
 };
 
 function errorFor(field: NewTenantField, value: string): FieldError {
@@ -104,6 +108,7 @@ export function toProvisionRequest(
       displayName: form.ownerName,
       email: form.ownerEmail,
       temporaryPassword: form.password,
+      practitionerType: form.ownerPractitionerType,
     },
   });
   if (result.success) return { ok: true, request: result.data };

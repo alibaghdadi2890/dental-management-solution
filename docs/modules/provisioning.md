@@ -15,10 +15,17 @@ Provisioning:
 3. `runInTenant(tenantId)` → one transaction: organization mirror (`auth`), the four system roles
    with the D5 matrix (`roles.seedSystemRoles`, called directly because the owner needs them —
    A5), first branch (`tenancy`), the owner account (`users.createStaffUser`: identity with the
-   temporary password, membership, profile with practitioner type `other`, the first branch, role
-   `owner` — ADR-0012), audit `tenant.provision`, `TenantProvisioned` (dispatched after commit).
+   temporary password, membership, profile with the request's `owner.practitionerType`, the first
+   branch, role `owner` — ADR-0012), audit `tenant.provision`, `TenantProvisioned` (dispatched
+   after commit).
 4. If step 3 fails, the tenant row is removed (compensation) and the error is rethrown; nothing
    else was committed, identity included.
+
+The owner's practitioner type defaults to `dentist` (the New-clinic form offers the four types,
+Dentist selected): most owners treat patients, and a clinic whose only user is not a dentist has
+an empty primary dentist picker (`GET /users/practitioners`) until one is added. Clinics
+provisioned before this default have an owner of type `other` and are not migrated: a platform
+admin changes the owner's practitioner type in the tenant's Users tab.
 
 ## Owns
 

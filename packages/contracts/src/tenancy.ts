@@ -11,6 +11,7 @@ import {
   timeZoneSchema,
 } from './common.js';
 import { reasonSchema } from './audit.js';
+import { practitionerTypeSchema } from './users.js';
 
 /** Tenant defaults (D8); all editable per tenant. Country default LB (feature 3 Q3). */
 export const TENANT_DEFAULTS = {
@@ -137,6 +138,9 @@ export const provisionTenantRequestSchema = z.object({
     displayName: nameSchema,
     email: emailSchema,
     temporaryPassword: passwordSchema,
+    /** Most owners treat patients: a dentist unless chosen otherwise, so a new clinic has a
+     * practitioner for its primary dentist picker from day one. */
+    practitionerType: practitionerTypeSchema.default('dentist'),
   }),
 });
 export type ProvisionTenantRequest = z.infer<typeof provisionTenantRequestSchema>;

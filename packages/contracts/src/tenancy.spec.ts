@@ -59,6 +59,14 @@ describe('provisionTenantRequestSchema', () => {
     expect(provisionTenantRequestSchema.safeParse(invalid).success).toBe(false);
   });
 
+  it('makes the owner a dentist unless another practitioner type is chosen', () => {
+    expect(provisionTenantRequestSchema.parse(request).owner.practitionerType).toBe('dentist');
+    const other = { ...request, owner: { ...request.owner, practitionerType: 'other' } };
+    expect(provisionTenantRequestSchema.parse(other).owner.practitionerType).toBe('other');
+    const unknown = { ...request, owner: { ...request.owner, practitionerType: 'surgeon' } };
+    expect(provisionTenantRequestSchema.safeParse(unknown).success).toBe(false);
+  });
+
   it('applies the password policy to the temporary password', () => {
     const weak = { ...request, owner: { ...request.owner, temporaryPassword: 'short' } };
     expect(provisionTenantRequestSchema.safeParse(weak).success).toBe(false);

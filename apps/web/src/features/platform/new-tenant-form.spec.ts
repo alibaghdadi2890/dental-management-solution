@@ -16,6 +16,7 @@ describe('new tenant form', () => {
       currency: 'USD',
       locale: 'en',
       country: 'LB',
+      ownerPractitionerType: 'dentist',
     });
     expect(isDirty(EMPTY_NEW_TENANT)).toBe(false);
     expect(isDirty(editNewTenant(EMPTY_NEW_TENANT, 'phone', '1'))).toBe(true);
@@ -68,8 +69,28 @@ describe('new tenant form', () => {
           displayName: 'Dr. Ana Reyes',
           email: 'ana@northgate.dental',
           temporaryPassword: 'Kp7r-Wm2x-9tQa',
+          practitionerType: 'dentist',
         },
       },
     });
+  });
+
+  it("sends the owner's chosen practitioner type", () => {
+    const form = editNewTenant(
+      {
+        ...EMPTY_NEW_TENANT,
+        name: 'Northgate Dental',
+        slug: 'northgate-dental',
+        branchName: 'Main St',
+        ownerName: 'Ana Reyes',
+        ownerEmail: 'ana@northgate.dental',
+        password: 'Kp7r-Wm2x-9tQa',
+      },
+      'ownerPractitionerType',
+      'other',
+    );
+    expect(isDirty(form)).toBe(true);
+    const result = toProvisionRequest(form);
+    expect(result.ok && result.request.owner.practitionerType).toBe('other');
   });
 });
