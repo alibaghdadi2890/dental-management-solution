@@ -93,6 +93,12 @@ export function formatCalendarDate(iso: string, locale: string): string {
   return formatDate(iso, { timeZone: 'UTC', locale });
 }
 
+/** Whole years on `today` (the tenant's `YYYY-MM-DD`), or `null` without a date of birth or for
+ * one after `today` (bad data or clock skew: never a negative age). */
+export function ageOrNull(dob: string | null, today: string): number | null {
+  return dob !== null && dob <= today ? ageOn(dob, today) : null;
+}
+
 /**
  * The record header / quick-view age line (design "`<age> yrs · <dob>`, the DOB alone, or 'Age
  * not recorded'"), as structured data — the surrounding text ("yrs", the "·" separator, "Age not

@@ -1,23 +1,25 @@
 import {
-  ageOn,
   type PatientListItem,
   type PatientListQuery,
   patientListQuerySchema,
   type Session,
+  toAsciiDigits,
 } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Dialog } from 'radix-ui';
-import { type KeyboardEvent, useId, useRef, useState } from 'react';
+import { type KeyboardEvent, useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { SHIMMER } from '@/components/ui/list';
+import { SearchIcon } from '@/components/ui/search-icon';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
-import { formatPhone, todayIn } from '@/lib/format';
+import { ageOrNull, formatPhone, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { cn } from '@/lib/utils';
-import { type NewPatientPrefill, usePatientNavigation } from './patient-navigation';
+import type { PatientPrefill } from './list-query';
+import { usePatientNavigation } from './patient-navigation';
 import { patientListQuery } from './patients-api';
 
 type Tenant = NonNullable<Session['tenant']>;
@@ -31,14 +33,16 @@ const MAX_QUERY = 100;
 
 /** Design Q15: the most recently updated active patients (the default view excludes archived). */
 const RECENT: PatientListQuery = patientListQuerySchema.parse({ sort: 'recent', size: FETCH_SIZE });
+/** Arabic-Indic digits are sent as ASCII, so a phone typed on an Arabic keyboard still matches. */
 const searchFor = (q: string): PatientListQuery =>
-  patientListQuerySchema.parse({ q, size: FETCH_SIZE });
+  patientListQuerySchema.parse({ q: toAsciiDigits(q), size: FETCH_SIZE });
 
 /** A query that reads as a phone number pre-fills the create panel's phone, anything else its
  * name (design "digits → phone, otherwise name"). */
 const PHONE_LIKE = /^[\d\s()+-]+$/;
-function prefillFor(query: string): NewPatientPrefill {
-  return PHONE_LIKE.test(query) && /\d/.test(query) ? { phone: query } : { fullName: query };
+function prefillFor(query: string): PatientPrefill {
+  const ascii = toAsciiDigits(query);
+  return PHONE_LIKE.test(ascii) && /\d/.test(ascii) ? { phone: ascii } : { fullName: query };
 }
 
 /**
@@ -58,16 +62,17 @@ export function CommandPalette({
   const { t } = useTranslation('patients');
   const { data: session } = useSession();
   const { openPatient, openNewPatient } = usePatientNavigation();
-  // Leaving for a patient or the create panel: focus belongs to the panel that opens, not back
-  // on the button (or whatever else) that had it before the palette.
-  const leaving = useRef(false);
+  // Radix only hands focus back to a `Dialog.Trigger`, and the palette has none (the shortcut or
+  // the header opens it): it remembers what had focus itself.
+  const returnFocus = useRef<HTMLElement | null>(null);
+  // Where a picked row (or "Create …") goes, once the palette has closed.
+  const pending = useRef<(() => void) | null>(null);
   const tenant = session?.tenant;
   if (!tenant) return null;
 
   const leave = (go: () => void) => {
-    leaving.current = true;
+    pending.current = go;
     onOpenChange(false);
-    go();
   };
 
   return (
@@ -76,9 +81,21 @@ export function CommandPalette({
         <Dialog.Overlay className="fixed inset-0 z-50 animate-fadein bg-[rgba(27,26,31,.28)]" />
         <Dialog.Content
           aria-describedby={undefined}
+          onOpenAutoFocus={() => {
+            const opener = document.activeElement;
+            returnFocus.current = opener instanceof HTMLElement ? opener : null;
+          }}
           onCloseAutoFocus={(event) => {
-            if (leaving.current) event.preventDefault();
-            leaving.current = false;
+            event.preventDefault();
+            const opener = returnFocus.current;
+            returnFocus.current = null;
+            if (opener?.isConnected) opener.focus();
+            // Navigate only once focus is back where it was before the palette: the panel that
+            // opens takes it from there (and hands it back on close), and a dirty form's
+            // unsaved-changes prompt that stops the navigation returns it to that form.
+            const go = pending.current;
+            pending.current = null;
+            go?.();
           }}
           className="fixed inset-x-6 top-[88px] z-50 mx-auto flex max-h-[calc(100%-112px)] max-w-[540px] animate-popin flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-[0_18px_48px_rgba(27,26,31,.18)]"
         >
@@ -102,6 +119,19 @@ export function CommandPalette({
   );
 }
 
+/** The typed text, debounced into the query that is searched, and what that query found. The
+ * results are `settled` once they answer exactly what is typed (a background refresh of the same
+ * list doesn't unsettle them). */
+function usePaletteSearch(text: string) {
+  const typed = text.trim();
+  const query = useDebouncedValue(typed, DEBOUNCE_MS);
+  const searching = query !== '';
+  const results = useQuery(patientListQuery(searching ? searchFor(query) : RECENT));
+  const rows = results.data?.items.slice(0, searching ? RESULTS_SHOWN : RECENT_SHOWN) ?? [];
+  const settled = typed === query && results.isSuccess;
+  return { typed, query, searching, results, rows, settled };
+}
+
 function PaletteBody({
   tenant,
   onOpenPatient,
@@ -111,7 +141,7 @@ function PaletteBody({
   onOpenPatient: (id: string) => void;
   onCreate: (query: string) => void;
 }) {
-  const { t, i18n } = useTranslation(['patients', 'common']);
+  const { t } = useTranslation(['patients', 'common']);
   const canCreate = usePermission('patient:write');
   const baseId = useId();
   const listId = `${baseId}-list`;
@@ -119,11 +149,7 @@ function PaletteBody({
   const optionId = (index: number) => `${baseId}-option-${String(index)}`;
 
   const [text, setText] = useState('');
-  const typed = text.trim();
-  const query = useDebouncedValue(typed, DEBOUNCE_MS);
-  const searching = query !== '';
-  const results = useQuery(patientListQuery(searching ? searchFor(query) : RECENT));
-  const rows = results.data?.items.slice(0, searching ? RESULTS_SHOWN : RECENT_SHOWN) ?? [];
+  const { typed, query, searching, results, rows, settled } = usePaletteSearch(text);
 
   // The active row starts at the top of every new result list.
   const [cursor, setCursor] = useState({ query, index: 0 });
@@ -132,11 +158,30 @@ function PaletteBody({
     setCursor({ query, index });
     document.getElementById(optionId(index))?.scrollIntoView({ block: 'nearest' });
   };
-  // Enter acts on what is on screen only once it answers what was typed, never on the previous
-  // list while the debounce or the request is still catching up.
-  const settled = typed === query && results.isSuccess && !results.isFetching;
+
+  // Enter opens the active row — or, with nothing found, creates — but only once the results
+  // answer what was typed: an Enter pressed while the debounce or the request is still catching
+  // up waits for them (and is dropped if the person types on).
+  const pendingEnter = useRef<string | null>(null);
+  const enter = () => {
+    const row = rows[active];
+    if (row) onOpenPatient(row.id);
+    else if (searching && canCreate) onCreate(query);
+  };
+  const enterWhenSettled = useEffectEvent(() => {
+    if (pendingEnter.current === null || pendingEnter.current !== query || !settled) return;
+    pendingEnter.current = null;
+    enter();
+  });
+  useEffect(() => {
+    enterWhenSettled();
+  }, [query, settled]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    // An input method (Arabic, CJK…) uses Enter and the arrows to pick its own candidates.
+    // Safari reports the Enter that ends a composition with `isComposing` off but keyCode 229.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- no standard replacement
+    if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       if (rows.length === 0) return;
@@ -144,108 +189,23 @@ function PaletteBody({
       moveTo(Math.min(Math.max(active + step, 0), rows.length - 1));
       return;
     }
-    if (event.key !== 'Enter' || !settled) return;
+    if (event.key !== 'Enter') return;
     event.preventDefault();
-    const row = rows[active];
-    if (row) onOpenPatient(row.id);
-    else if (searching && canCreate) onCreate(query);
+    if (settled) enter();
+    else pendingEnter.current = typed;
   };
 
-  const locale = i18n.resolvedLanguage ?? 'en';
   const today = todayIn(tenant.timeZone);
+  const failed = results.isError && results.data === undefined;
+  const loading = !failed && results.isPending;
+  const hasRows = !failed && !loading && rows.length > 0;
+  const noMatch = !failed && !loading && rows.length === 0 && searching;
+  const noPatients = !failed && !loading && rows.length === 0 && !searching;
 
-  let body;
-  if (results.isError) {
-    body = (
-      <div role="alert" className="flex items-center gap-2 px-4 py-5">
-        <span className="text-[13px] leading-snug text-ink-secondary">{t('palette.failed')}</span>
-        <Button variant="ghost" size="sm" className="px-0" onClick={() => void results.refetch()}>
-          {t('common:tryAgain')}
-        </Button>
-      </div>
-    );
-  } else if (results.isPending) {
-    body = <PaletteSkeleton label={t('palette.loading')} />;
-  } else if (rows.length === 0 && searching) {
-    body = (
-      <div className="flex flex-col items-center px-6 pt-7 pb-6 text-center">
-        <p className="text-[13.5px] leading-snug font-medium">{t('palette.noMatch', { query })}</p>
-        <p className="mt-1 text-[12.5px] leading-snug text-ink-muted">{t('palette.noMatchHint')}</p>
-        {canCreate && (
-          <Button
-            variant="primary"
-            className="mt-4 max-w-full"
-            onClick={() => {
-              onCreate(query);
-            }}
-          >
-            <span className="truncate">{t('palette.create', { query })}</span>
-          </Button>
-        )}
-      </div>
-    );
-  } else if (rows.length === 0) {
-    body = (
-      <p className="px-4 py-5 text-[13px] leading-snug text-ink-muted">{t('palette.noPatients')}</p>
-    );
-  } else {
-    body = (
-      <>
-        <div
-          id={headingId}
-          className="px-4 pt-3 pb-1.5 text-[11.5px] leading-none font-medium tracking-[0.06em] text-ink-muted uppercase"
-        >
-          {searching ? t('palette.results', { count: results.data.total }) : t('palette.recent')}
-        </div>
-        <ul
-          id={listId}
-          role="listbox"
-          aria-labelledby={headingId}
-          className="m-0 list-none p-0 pb-1.5"
-        >
-          {rows.map((row, index) => (
-            <PaletteRow
-              key={row.id}
-              id={optionId(index)}
-              patient={row}
-              active={index === active}
-              age={
-                row.dateOfBirth !== null && row.dateOfBirth <= today
-                  ? ageOn(row.dateOfBirth, today)
-                  : null
-              }
-              phone={formatPhone(row.phone, tenant.country)}
-              locale={locale}
-              onHover={() => {
-                if (index !== active) setCursor({ query, index });
-              }}
-              onOpen={() => {
-                onOpenPatient(row.id);
-              }}
-            />
-          ))}
-        </ul>
-      </>
-    );
-  }
-
-  const hasRows = !results.isError && !results.isPending && rows.length > 0;
   return (
     <>
       <div className="flex flex-none items-center gap-2.5 border-b border-border px-4 py-[13px]">
-        <svg
-          aria-hidden
-          width="15"
-          height="15"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          className="flex-none text-ink-muted"
-        >
-          <circle cx="6.8" cy="6.8" r="4.6" />
-          <path d="M10.3 10.3 14 14" />
-        </svg>
+        <SearchIcon size={15} className="text-ink-muted" />
         <input
           role="combobox"
           aria-label={t('palette.label')}
@@ -259,6 +219,7 @@ function PaletteBody({
           autoComplete="off"
           spellCheck={false}
           onChange={(event) => {
+            pendingEnter.current = null;
             setText(event.target.value);
           }}
           onKeyDown={onKeyDown}
@@ -271,7 +232,93 @@ function PaletteBody({
           {t('palette.esc')}
         </kbd>
       </div>
-      <div className="max-h-[396px] min-h-0 overflow-y-auto">{body}</div>
+      <div className="max-h-[396px] min-h-0 overflow-y-auto">
+        {failed && (
+          <div role="alert" className="flex items-center gap-2 px-4 py-5">
+            <span className="text-[13px] leading-snug text-ink-secondary">
+              {t('palette.failed')}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="px-0"
+              onClick={() => void results.refetch()}
+            >
+              {t('common:tryAgain')}
+            </Button>
+          </div>
+        )}
+        {/* One polite live region, always present, so what the list now shows is announced. */}
+        <div role="status">
+          {loading && <span className="sr-only">{t('palette.loading')}</span>}
+          {hasRows && (
+            <div
+              id={headingId}
+              className="px-4 pt-3 pb-1.5 text-[11.5px] leading-none font-medium tracking-[0.06em] text-ink-muted uppercase"
+            >
+              {searching
+                ? t('palette.results', { count: results.data.total })
+                : t('palette.recent')}
+            </div>
+          )}
+          {noMatch && (
+            <div className="px-6 pt-7 text-center">
+              <p className="text-[13.5px] leading-snug font-medium">
+                {t('palette.noMatch', { query })}
+              </p>
+              <p className="mt-1 text-[12.5px] leading-snug text-ink-muted">
+                {t('palette.noMatchHint')}
+              </p>
+            </div>
+          )}
+          {noPatients && (
+            <p className="px-4 py-5 text-[13px] leading-snug text-ink-muted">
+              {t('palette.noPatients')}
+            </p>
+          )}
+        </div>
+        {loading && <PaletteSkeleton />}
+        {noMatch && (
+          <div className="flex justify-center px-6 pt-4 pb-6">
+            {canCreate && (
+              <Button
+                variant="primary"
+                className="max-w-full"
+                onClick={() => {
+                  onCreate(query);
+                }}
+              >
+                <span className="truncate">{t('palette.create', { query })}</span>
+              </Button>
+            )}
+          </div>
+        )}
+        {hasRows && (
+          <ul
+            id={listId}
+            role="listbox"
+            aria-labelledby={headingId}
+            className="m-0 list-none p-0 pb-1.5"
+          >
+            {rows.map((row, index) => (
+              <PaletteRow
+                key={row.id}
+                id={optionId(index)}
+                patient={row}
+                active={index === active}
+                age={ageOrNull(row.dateOfBirth, today)}
+                phone={formatPhone(row.phone, tenant.country)}
+                onHover={() => {
+                  if (index !== active) setCursor({ query, index });
+                }}
+                onOpen={() => {
+                  onOpenPatient(row.id);
+                }}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
     </>
   );
 }
@@ -282,7 +329,6 @@ function PaletteRow({
   active,
   age,
   phone,
-  locale,
   onHover,
   onOpen,
 }: {
@@ -291,7 +337,6 @@ function PaletteRow({
   active: boolean;
   age: number | null;
   phone: string;
-  locale: string;
   onHover: () => void;
   onOpen: () => void;
 }) {
@@ -325,11 +370,10 @@ function PaletteRow({
           <span dir="ltr" className="font-mono tabular-nums">
             {phone}
           </span>
-          {age !== null && (
-            <span>{t('palette.age', { age: new Intl.NumberFormat(locale).format(age) })}</span>
-          )}
+          <span>{age === null ? t('palette.ageUnknown') : t('palette.age', { age })}</span>
         </span>
       </span>
+      {/* Visits arrive with feature 4; until then no patient has a last visit to show. */}
       <span className="flex-none text-xs leading-none text-ink-muted">
         {t('palette.neverSeen')}
       </span>
@@ -339,9 +383,9 @@ function PaletteRow({
 
 const SKELETON_WIDTHS = [150, 120, 170];
 
-function PaletteSkeleton({ label }: { label: string }) {
+function PaletteSkeleton() {
   return (
-    <div aria-busy="true" aria-label={label} className="py-1.5">
+    <div aria-hidden className="py-1.5">
       {SKELETON_WIDTHS.map((width) => (
         <div key={width} className="flex items-center gap-3 px-4 py-2">
           <span className={cn('size-[34px] flex-none rounded-full', SHIMMER)} />

@@ -1,10 +1,14 @@
-import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ALL_PERMISSIONS, mockApi, sessionWith } from '@/features/patients/patients.test-utils';
 import { renderShell } from './shell.test-utils';
 
-const findPatient = () => screen.queryByRole('button', { name: 'Find patient' });
-const newPatient = () => screen.queryByRole('button', { name: 'New patient' });
+const header = () => within(screen.getByRole('banner'));
+const findPatient = () => header().queryByRole('button', { name: 'Find patient' });
+const newPatient = () => header().queryByRole('button', { name: 'New patient' });
+const ctrlK = () => {
+  fireEvent.keyDown(window, { key: 'k', code: 'KeyK', ctrlKey: true });
+};
 
 describe('AppShell header', () => {
   afterEach(() => {
@@ -61,27 +65,61 @@ describe('AppShell header', () => {
     });
     expect(location().search).toMatchObject({ panel: 'new', view: 'active' });
     expect(location().search.q).toBeUndefined();
+    expect(location().state.patientsPanelPushed).toBe(false);
   });
 
-  it('New patient keeps the list search when already on /patients, dropping any pre-fill', async () => {
+  it('New patient keeps the list search when already on /patients', async () => {
     mockApi();
     const { location } = renderShell({
-      url: '/patients?q=rana&view=archived&panel=new&fullName=Old',
+      url: '/patients?q=rana&view=archived',
       session: sessionWith(ALL_PERMISSIONS),
     });
-    await screen.findByText('Patients screen');
+    await screen.findByRole('heading', { name: 'Patients' });
     fireEvent.click(newPatient() as HTMLElement);
     await waitFor(() => {
-      expect(location().search.fullName).toBeUndefined();
+      expect(location().search.panel).toBe('new');
     });
-    expect(location().search).toMatchObject({ panel: 'new', q: 'rana', view: 'archived' });
+    expect(location().search).toMatchObject({ q: 'rana', view: 'archived' });
+    expect(location().state.patientsPanelPushed).toBe(true);
+    expect(location().state.patientPrefill).toBeUndefined();
   });
 
-  it('Find patient opens the palette', async () => {
+  it('Find patient opens the palette, and focus returns to it on close', async () => {
     mockApi();
     renderShell({ url: '/visits', session: sessionWith(ALL_PERMISSIONS) });
     await screen.findByText('Visits screen');
-    fireEvent.click(findPatient() as HTMLElement);
+    const button = findPatient() as HTMLElement;
+    button.focus();
+    fireEvent.click(button);
+    const dialog = await screen.findByRole('dialog', { name: 'Find patient' });
+    fireEvent.keyDown(within(dialog).getByRole('combobox'), { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Find patient' })).toBeNull();
+    });
+    expect(document.activeElement).toBe(button);
+  });
+
+  it('Ctrl+K closes the palette when it is open', async () => {
+    mockApi();
+    renderShell({ url: '/visits', session: sessionWith(ALL_PERMISSIONS) });
+    await screen.findByText('Visits screen');
+    ctrlK();
     expect(await screen.findByRole('dialog', { name: 'Find patient' })).toBeTruthy();
+    ctrlK();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Find patient' })).toBeNull();
+    });
+  });
+
+  it('Ctrl+K does not open the palette over a confirm dialog', async () => {
+    mockApi();
+    renderShell({ url: '/patients?panel=new', session: sessionWith(ALL_PERMISSIONS) });
+    const name = await screen.findByRole('textbox', { name: /^Full name/ });
+    fireEvent.change(name, { target: { value: 'Rana' } });
+    fireEvent.keyDown(name, { key: 'Escape' });
+    const confirm = await screen.findByRole('alertdialog', { name: 'Discard unsaved changes?' });
+    ctrlK();
+    expect(screen.queryByRole('dialog', { name: 'Find patient' })).toBeNull();
+    expect(confirm.isConnected).toBe(true);
   });
 });

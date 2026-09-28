@@ -54,6 +54,10 @@ describe('phoneDigits', () => {
   it('strips everything but digits', () => {
     expect(phoneDigits(' (03) 12-3 ')).toBe('03123');
   });
+
+  it('reads Arabic-Indic digits as digits, so `q=٠٣١٢` matches a phone', () => {
+    expect(phoneDigits('٠٣ ١٢٣')).toBe('03123');
+  });
 });
 
 describe('SUPPORTED_COUNTRIES', () => {

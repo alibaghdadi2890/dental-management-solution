@@ -1,5 +1,6 @@
 import { getCountries, parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import type { CountryCode } from 'libphonenumber-js/max';
+import { toAsciiDigits } from './digits.js';
 
 /**
  * Phone parsing for `patients` (feature 3 Q3) — used for both the patient's own `phone` and
@@ -50,9 +51,10 @@ export function formatPhoneFor(e164: string, country: CountryCode): string {
     : phoneNumber.formatInternational();
 }
 
-/** Strips everything but digits, for matching a typed search query against `phone_search`. */
+/** Strips everything but digits, for matching a typed search query against `phone_search`.
+ * Arabic-Indic digits count as digits (`٠٣١٢` → `0312`). */
 export function phoneDigits(query: string): string {
-  return query.replace(/\D/g, '');
+  return toAsciiDigits(query).replace(/\D/g, '');
 }
 
 /**

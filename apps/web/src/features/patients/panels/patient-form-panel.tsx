@@ -1,5 +1,4 @@
 import {
-  ageOn,
   dentitionStage,
   isoDateSchema,
   PATIENT_SEXES,
@@ -18,7 +17,7 @@ import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-ch
 import { usePermission } from '@/features/auth/use-permission';
 import { createWithOpeningBalance } from '@/features/billing/billing-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
-import { dateInputOrder, formatCalendarDate, todayIn } from '@/lib/format';
+import { ageOrNull, dateInputOrder, formatCalendarDate, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { type PatientPanel, parsePatientsSearch } from '../list-query';
 import {
@@ -49,16 +48,17 @@ export type FormMode =
   | { kind: 'new'; prefill: { fullName?: string | undefined; phone?: string | undefined } }
   | { kind: 'edit'; id: string };
 
-/** What identifies the open form in the URL: the panel, plus the create pre-fill. */
-const formKeyOf = (search: unknown) => {
-  const { panel, fullName, phone } = parsePatientsSearch(search);
-  return JSON.stringify([panel ?? '', fullName ?? '', phone ?? '']);
+/** What identifies the open form: the URL's panel, plus the create pre-fill (history state). */
+const formKeyOf = ({ search, state }: GuardLocation) => {
+  const { panel } = parsePatientsSearch(search);
+  const prefill = state.patientPrefill;
+  return JSON.stringify([panel ?? '', prefill?.fullName ?? '', prefill?.phone ?? '']);
 };
 
-/** A form held in the URL search is left when that search changes (another panel, or a new
+/** A form held in the URL search is left when that panel changes (another panel, or a new
  * pre-fill), not only when the path does. */
 const leavesForm = (current: GuardLocation, next: GuardLocation) =>
-  current.pathname !== next.pathname || formKeyOf(current.search) !== formKeyOf(next.search);
+  current.pathname !== next.pathname || formKeyOf(current) !== formKeyOf(next);
 
 /** Every form value but `sex` is plain text. */
 type TextField = Exclude<keyof PatientFormValues, 'sex'>;
@@ -338,7 +338,7 @@ function PatientForm({
   );
 
   const dob = values.dateOfBirth;
-  const age = isoDateSchema.safeParse(dob).success && dob <= today ? ageOn(dob, today) : null;
+  const age = isoDateSchema.safeParse(dob).success ? ageOrNull(dob, today) : null;
   const alerts = parseAlerts(values.alertsText);
   const dentistIds = new Set((practitioners ?? []).map((p) => p.userId));
   const keptDentist =

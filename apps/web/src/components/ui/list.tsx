@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
+import { SearchIcon } from './search-icon';
 
 /** Saved-view tabs with count chips (POC list anatomy §2): 2px indigo underline when active. */
 export function ViewTabs<TKey extends string>({
@@ -74,19 +75,7 @@ export function SearchInput({
 }) {
   return (
     <label className="flex h-9 max-w-[360px] flex-[1_1_260px] items-center gap-2 rounded-lg border border-border-control bg-surface px-[11px]">
-      <svg
-        aria-hidden
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="#6f6b64"
-        strokeWidth="1.6"
-        className="flex-none"
-      >
-        <circle cx="6.8" cy="6.8" r="4.6" />
-        <path d="M10.3 10.3 14 14" />
-      </svg>
+      <SearchIcon className="text-ink-muted" />
       <input
         value={value}
         onChange={(event) => {

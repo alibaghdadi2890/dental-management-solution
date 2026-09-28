@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ageOrNull,
   currencySymbol,
   dateInputOrder,
   type DateFormatOptions,
@@ -79,6 +80,18 @@ describe('formatCalendarDate', () => {
     // UTC-midnight instant back as 31 Dec 1999 in New York (UTC-5) — a calendar date has no
     // instant to convert, so this must always read the literal calendar date back.
     expect(formatCalendarDate('2000-01-01', 'en')).toBe('1 Jan 2000');
+  });
+});
+
+describe('ageOrNull', () => {
+  it('is the whole years on today, counting the birthday itself', () => {
+    expect(ageOrNull('1990-05-01', '2026-04-30')).toBe(35);
+    expect(ageOrNull('1990-05-01', '2026-05-01')).toBe(36);
+  });
+
+  it('is null without a date of birth, or for one after today', () => {
+    expect(ageOrNull(null, '2026-05-01')).toBeNull();
+    expect(ageOrNull('2026-05-02', '2026-05-01')).toBeNull();
   });
 });
 

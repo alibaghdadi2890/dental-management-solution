@@ -6,7 +6,7 @@ import { QuickViewPanel } from './quick-view-panel';
 
 /**
  * The Patients right panel for the URL's `panel` param (design §Right panel): the quick view, the
- * create/edit form (create pre-filled from the `fullName`/`phone` search params), or the merge
+ * create/edit form (create pre-filled from `HistoryState.patientPrefill`), or the merge
  * compare grid. Keyed by the caller per panel, so swapping panels starts each one afresh.
  */
 export function PatientPanel({

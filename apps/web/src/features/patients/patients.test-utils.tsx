@@ -285,3 +285,12 @@ export function renderPanels({
   );
   return router;
 }
+
+/** Opens the create panel the way the shell's "New patient" / palette "Create …" does: the
+ * pre-fill rides in history state, never in the URL. */
+export function prefilled(
+  router: ReturnType<typeof renderPanels>,
+  prefill: { fullName?: string; phone?: string },
+) {
+  return router.navigate({ to: '/', search: { panel: 'new' }, state: { patientPrefill: prefill } });
+}

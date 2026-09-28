@@ -4,6 +4,7 @@ import {
   clearFilters,
   LIST_QUERY_DEFAULTS,
   listQueryOf,
+  panelNavigation,
   panelParam,
   parsePanel,
   parsePatientsSearch,
@@ -35,15 +36,15 @@ describe('patientsSearchSchema', () => {
     expect(patientsSearchSchema.parse({ dentist: '' }).dentist).toBeUndefined();
   });
 
-  it('carries the panel and create-prefill fields through', () => {
+  it('carries the panel through, but never a create pre-fill (history state only, not the URL)', () => {
     const parsed = patientsSearchSchema.parse({
       panel: 'new',
       fullName: 'Jane',
       phone: '03123456',
     });
     expect(parsed.panel).toBe('new');
-    expect(parsed.fullName).toBe('Jane');
-    expect(parsed.phone).toBe('03123456');
+    expect(parsed).not.toHaveProperty('fullName');
+    expect(parsed).not.toHaveProperty('phone');
   });
 });
 
@@ -131,21 +132,23 @@ describe('parsePatientsSearch', () => {
     expect(parsePatientsSearch(42)).toEqual(LIST_QUERY_DEFAULTS);
   });
 
-  it('coerces q/fullName/phone/panel back to strings when the router parsed them as numbers', () => {
+  it('coerces q/panel back to strings when the router parsed them as numbers', () => {
     // TanStack Router's default search parser turns a numeric-looking value into a JS number.
-    expect(parsePatientsSearch({ phone: 71123456 }).phone).toBe('71123456');
     expect(parsePatientsSearch({ q: 12345 }).q).toBe('12345');
-    expect(parsePatientsSearch({ fullName: 2000 }).fullName).toBe('2000');
     expect(parsePatientsSearch({ panel: 12345 }).panel).toBe('12345');
   });
 
-  it('drops q/fullName/phone/panel entirely for a type that is neither string nor number', () => {
+  it('drops q/panel entirely for a type that is neither string nor number', () => {
     // Unlike `z.coerce.string()`, a boolean/object/array isn't silently stringified into
     // "true"/"[object Object]"/a joined list — it's treated as absent, like any other bad value.
-    expect(parsePatientsSearch({ phone: true }).phone).toBeUndefined();
     expect(parsePatientsSearch({ q: { nested: 'x' } }).q).toBeUndefined();
-    expect(parsePatientsSearch({ fullName: ['a', 'b'] }).fullName).toBeUndefined();
     expect(parsePatientsSearch({ panel: null }).panel).toBeUndefined();
+  });
+
+  it('ignores a stale fullName/phone pre-fill left in an old URL', () => {
+    const parsed = parsePatientsSearch({ panel: 'new', fullName: 'Rana', phone: '03' });
+    expect(parsed).not.toHaveProperty('fullName');
+    expect(parsed).not.toHaveProperty('phone');
   });
 
   it('still parses a fully valid search normally', () => {
@@ -206,8 +209,8 @@ describe('toSearch', () => {
 });
 
 describe('listQueryOf', () => {
-  it('drops the panel and create pre-fill fields, keeping the list query', () => {
-    const search = parsePatientsSearch({ view: 'archived', q: 'rana', panel: 'new', phone: '03' });
+  it('drops the panel, keeping the list query', () => {
+    const search = parsePatientsSearch({ view: 'archived', q: 'rana', panel: 'new' });
     expect(listQueryOf(search)).toEqual({ ...LIST_QUERY_DEFAULTS, view: 'archived', q: 'rana' });
     expect(toSearch(listQueryOf(search))).toEqual({ view: 'archived', q: 'rana' });
   });
@@ -246,5 +249,55 @@ describe('withoutBalanceViews', () => {
       page: 3,
     };
     expect(withoutBalanceViews(query)).toEqual({ ...LIST_QUERY_DEFAULTS, q: 'rana' });
+  });
+});
+
+describe('panelNavigation', () => {
+  const at = (search: Record<string, unknown>, patientsPanelPushed?: boolean) => ({
+    search,
+    state: patientsPanelPushed === undefined ? {} : { patientsPanelPushed },
+  });
+
+  it('pushes a panel opened over the bare list, marked as pushed, keeping the list query', () => {
+    expect(panelNavigation(at({ q: 'rana' }), { kind: 'new' })).toEqual({
+      kind: 'navigate',
+      search: { ...LIST_QUERY_DEFAULTS, q: 'rana', panel: 'new' },
+      replace: false,
+      panelPushed: true,
+    });
+  });
+
+  it('swaps an open panel in place, keeping its pushed flag', () => {
+    const pushed = at({ q: 'rana', panel: 'new' }, true);
+    expect(panelNavigation(pushed, { kind: 'quick', id: 'p-1' })).toMatchObject({
+      kind: 'navigate',
+      search: { q: 'rana', panel: 'quick:p-1' },
+      replace: true,
+      panelPushed: true,
+    });
+    const shared = at({ panel: 'new' });
+    expect(panelNavigation(shared, { kind: 'quick', id: 'p-1' })).toMatchObject({
+      replace: true,
+      panelPushed: false,
+    });
+  });
+
+  it('goes back to close a panel the list pushed, and replaces any other', () => {
+    expect(panelNavigation(at({ panel: 'new' }, true), null)).toEqual({ kind: 'back' });
+    expect(panelNavigation(at({ q: 'x', panel: 'new' }), null)).toMatchObject({
+      kind: 'navigate',
+      search: { q: 'x', panel: undefined },
+      replace: true,
+      panelPushed: false,
+    });
+  });
+
+  it('opens a panel from another screen as a plain push over the default list', () => {
+    expect(panelNavigation(null, { kind: 'new' })).toEqual({
+      kind: 'navigate',
+      search: { ...LIST_QUERY_DEFAULTS, panel: 'new' },
+      replace: false,
+      panelPushed: false,
+    });
   });
 });

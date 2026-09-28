@@ -1,4 +1,4 @@
-import type { HistoryState } from '@tanstack/react-router';
+import { type HistoryState, useLocation } from '@tanstack/react-router';
 import { type PatientsSearch, panelParam } from './list-query';
 import { PatientPanel } from './panels/patient-panel';
 import { PatientsPage } from './patients-page';
@@ -11,9 +11,10 @@ export interface PatientsNavigation {
 
 /**
  * The `/patients` route's wiring, shared with the tests so they drive exactly what ships: the
- * URL search in, navigations out (with the "panel opened from the list" history flag), and the
- * right panel for the `panel` param. The create panel is keyed by its pre-fill too, so a new
- * `?panel=new&fullName=…` starts a fresh form (asking first if the current one is dirty).
+ * URL search in, navigations out (with the "panel opened from the list" history flag and the
+ * create pre-fill, both history state), and the right panel for the `panel` param. The create
+ * panel is keyed by its pre-fill too, so a new pre-fill starts a fresh form (asking first if the
+ * current one is dirty). A `?panel=new` reached without one — a link, a bookmark — is empty.
  */
 export function PatientsScreen({
   search,
@@ -22,6 +23,7 @@ export function PatientsScreen({
   search: PatientsSearch;
   navigate: (navigation: PatientsNavigation) => void;
 }) {
+  const prefill = useLocation({ select: (location) => location.state.patientPrefill });
   return (
     <PatientsPage
       search={search}
@@ -29,18 +31,21 @@ export function PatientsScreen({
         navigate({
           search: next,
           replace: options?.replace ?? false,
-          state: { patientsPanelPushed: options?.panelPushed ?? false },
+          state: {
+            patientsPanelPushed: options?.panelPushed ?? false,
+            patientPrefill: options?.prefill,
+          },
         });
       }}
       renderPanel={(panel, { close, open }) => (
         <PatientPanel
           key={
             panel.kind === 'new'
-              ? JSON.stringify([panelParam(panel), search.fullName, search.phone])
+              ? JSON.stringify([panelParam(panel), prefill?.fullName, prefill?.phone])
               : panelParam(panel)
           }
           panel={panel}
-          prefill={{ fullName: search.fullName, phone: search.phone }}
+          prefill={prefill ?? {}}
           onClose={close}
           onOpen={open}
         />

@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@/lib/i18n';
-import { ConfirmDialog } from './confirm-dialog';
+import { ConfirmDialog, ConfirmProvider } from './confirm-dialog';
+import { useConfirm } from './confirm-context';
 import type { ConfirmOptions } from './confirm-context';
 
 const base: ConfirmOptions = {
@@ -68,5 +69,35 @@ describe('ConfirmDialog', () => {
       expect(onClose).toHaveBeenCalled();
     });
     expect(onConfirm).toHaveBeenCalledWith('Moved');
+  });
+
+  it('returns focus to what had it when cancelled', async () => {
+    function Opener() {
+      const confirm = useConfirm();
+      return (
+        <input
+          aria-label="Name"
+          onKeyDown={() => {
+            confirm(base);
+          }}
+        />
+      );
+    }
+    render(
+      <ConfirmProvider>
+        <Opener />
+      </ConfirmProvider>,
+    );
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    input.focus();
+    fireEvent.keyDown(input, { key: 'Escape' });
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('alertdialog')).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(input);
+    });
   });
 });

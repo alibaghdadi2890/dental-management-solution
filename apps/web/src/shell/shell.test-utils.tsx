@@ -6,6 +6,8 @@ import {
   createRoute,
   createRouter,
   RouterProvider,
+  useNavigate,
+  useSearch,
 } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
 import '@/lib/i18n';
@@ -13,21 +15,35 @@ import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import { ToastProvider } from '@/components/ui/toast';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { parsePatientsSearch, type PatientsSearch } from '@/features/patients/list-query';
+import { PatientsScreen } from '@/features/patients/patients-screen';
 import { AppShell } from './app-shell';
 
-/** Test-only: the real `AppShell` on a memory router with stand-in `/patients` and `/visits`
- * screens, and `session` already loaded (as the `_app` guard would have it). */
+/** Test-only: the real `AppShell` on a memory router with the real `/patients` screen and a
+ * stand-in `/visits`, and `session` already loaded (as the `_app` guard would have it). */
 export function renderShell({ url, session }: { url: string; session: Session }) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
   client.setQueryData(sessionQueryOptions().queryKey, session);
   const rootRoute = createRootRoute({ component: AppShell });
+  // `/patients` wired exactly as its route is (`PatientsScreen`).
+  function PatientsRoute() {
+    const search = parsePatientsSearch(useSearch({ strict: false }));
+    const navigate = useNavigate();
+    return (
+      <PatientsScreen
+        search={search}
+        navigate={(navigation) => {
+          void navigate({ to: '/patients', ...navigation });
+        }}
+      />
+    );
+  }
   const patientsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/patients',
     validateSearch: (search: Record<string, unknown>) => parsePatientsSearch(search),
-    component: () => <p>{'Patients screen'}</p>,
+    component: PatientsRoute,
   });
   const visitsRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -49,10 +65,12 @@ export function renderShell({ url, session }: { url: string; session: Session })
   );
   return {
     router,
-    /** Where the shell navigated to: the pathname and the `/patients` search it carries. */
-    location: (): { pathname: string; search: PatientsSearch } => ({
+    client,
+    /** Where the shell navigated to: the pathname, the `/patients` search and the history state. */
+    location: () => ({
       pathname: router.state.location.pathname,
-      search: parsePatientsSearch(router.state.location.search),
+      search: parsePatientsSearch(router.state.location.search) satisfies PatientsSearch,
+      state: router.state.location.state,
     }),
   };
 }

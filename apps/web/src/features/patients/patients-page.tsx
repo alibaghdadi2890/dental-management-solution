@@ -16,11 +16,11 @@ import { FilterBar } from './filter-bar';
 import {
   clearFilters,
   listQueryOf,
+  panelNavigation,
   type PatientPanel,
+  type PatientPrefill,
   type PatientsSearch,
-  panelParam,
   parsePanel,
-  parsePatientsSearch,
   sortPatch,
   toSearch,
   withFilter,
@@ -44,18 +44,12 @@ const NO_SELECTION: ReadonlySet<string> = new Set();
 
 type Tenant = NonNullable<Session['tenant']>;
 
-declare module '@tanstack/react-router' {
-  interface HistoryState {
-    /** On the history entry that opening a panel from the list pushed: closing that panel goes
-     * back to the entry before it instead of adding a second, identical list entry. */
-    patientsPanelPushed?: boolean;
-  }
-}
-
 export interface SearchOptions {
   replace?: boolean;
   /** The new entry shows a panel opened from the list (`HistoryState.patientsPanelPushed`). */
   panelPushed?: boolean;
+  /** The open create panel's pre-fill, carried over (`HistoryState.patientPrefill`). */
+  prefill?: PatientPrefill;
 }
 
 type OnSearch = (next: PatientsSearch, options?: SearchOptions) => void;
@@ -138,30 +132,25 @@ function PatientsList({
   });
 
   // `next` replaces the whole list query: a filter it clears is absent, not `undefined`, so
-  // spreading it over `search` would keep the old value.
+  // spreading it over `search` would keep the old value. An open create panel keeps its pre-fill.
   const setQuery = (next: PatientListQuery, options?: { replace?: boolean }) => {
-    onSearch(
-      { ...next, panel: search.panel, fullName: search.fullName, phone: search.phone },
-      options,
-    );
+    const prefill = router.state.location.state.patientPrefill;
+    onSearch({ ...next, panel: search.panel }, { ...options, prefill });
   };
   // Opening a panel from the list drops any create pre-fill (it belongs to a "New patient" the
   // shell opened), and swaps an already open panel rather than stacking history entries. It reads
   // the location as it is when called, not as it was rendered: a toast's "Open record" runs after
   // its panel has closed, and possibly after the filters changed.
   const openPanel = (next: PatientPanel | null) => {
-    const { location } = router.state;
-    const current = parsePatientsSearch(location.search);
-    const open = parsePanel(current.panel) !== null;
-    const pushed = open && location.state.patientsPanelPushed === true;
-    if (next === null && pushed) {
+    const navigation = panelNavigation(router.state.location, next);
+    if (navigation.kind === 'back') {
       router.history.back();
       return;
     }
-    onSearch(
-      { ...listQueryOf(current), panel: panelParam(next) },
-      { replace: open, panelPushed: next !== null && (!open || pushed) },
-    );
+    onSearch(navigation.search, {
+      replace: navigation.replace,
+      panelPushed: navigation.panelPushed,
+    });
   };
 
   // A page past the end (after archiving the last rows of the last page, or a stale URL) moves

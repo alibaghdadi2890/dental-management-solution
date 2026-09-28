@@ -1,3 +1,5 @@
+import { toAsciiDigits } from '@dcm/contracts';
+
 /**
  * Locale-aware reading of typed amounts: `sanitizeAmountInput` for fields that clean as you type
  * (the catalog's price cells), `parseAmount` for fields that must refuse rather than clean (the
@@ -13,36 +15,9 @@
  * trailing dot while a price is still being typed.
  */
 
-const ARABIC_INDIC_DIGITS: Record<string, string> = {
-  '٠': '0',
-  '١': '1',
-  '٢': '2',
-  '٣': '3',
-  '٤': '4',
-  '٥': '5',
-  '٦': '6',
-  '٧': '7',
-  '٨': '8',
-  '٩': '9',
-  '۰': '0',
-  '۱': '1',
-  '۲': '2',
-  '۳': '3',
-  '۴': '4',
-  '۵': '5',
-  '۶': '6',
-  '۷': '7',
-  '۸': '8',
-  '۹': '9',
-};
-
 /** The Arabic decimal separator, U+066B — distinct from the Arabic thousands separator, U+066C. */
 const ARABIC_DECIMAL_SEPARATOR = '٫';
 const ARABIC_GROUP_SEPARATOR = '٬';
-
-function toAsciiDigits(text: string): string {
-  return text.replace(/[٠-٩۰-۹]/g, (digit) => ARABIC_INDIC_DIGITS[digit] ?? digit);
-}
 
 function decimalSeparatorFor(locale: string): string {
   const part = new Intl.NumberFormat(locale).formatToParts(1.1).find((p) => p.type === 'decimal');

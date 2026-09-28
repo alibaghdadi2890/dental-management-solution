@@ -7,21 +7,23 @@ import {
   patientViewSchema,
   type PatientListQuery,
 } from '@dcm/contracts';
+import type { HistoryState } from '@tanstack/react-router';
 import { z } from 'zod';
 
 /**
  * The `/patients` route's URL search: the shared list query (already carrying its own defaults
- * and blank-tolerance, `patientListQuerySchema`) plus the right-panel `panel` token and the two
- * fields the shell's "New patient" / palette "Create …" pre-fill (design "Create pre-filled with
- * digits → phone, otherwise name"). This is the *strict* schema — it throws on an invalid field,
- * exactly like `patientListQuerySchema` does. `routes/_app/patients/index.tsx`'s `validateSearch`
- * calls `parsePatientsSearch` instead, which never throws; this schema is what that function
- * parses into once every field is already known-valid-or-absent.
+ * and blank-tolerance, `patientListQuerySchema`) plus the right-panel `panel` token. This is the
+ * *strict* schema — it throws on an invalid field, exactly like `patientListQuerySchema` does.
+ * `routes/_app/patients/index.tsx`'s `validateSearch` calls `parsePatientsSearch` instead, which
+ * never throws; this schema is what that function parses into once every field is already
+ * known-valid-or-absent.
+ *
+ * The create panel's pre-fill (a name or phone typed into the ⌘K palette) is deliberately *not*
+ * here: it is patient data, and a URL ends up in history, logs and shared links (CLAUDE.md §15).
+ * It rides in history state instead (`HistoryState.patientPrefill`).
  */
 export const patientsSearchSchema = patientListQuerySchema.extend({
   panel: z.string().optional(),
-  fullName: z.string().optional(),
-  phone: z.string().optional(),
 });
 export type PatientsSearch = z.infer<typeof patientsSearchSchema>;
 
@@ -36,7 +38,7 @@ export const LIST_QUERY_DEFAULTS: PatientListQuery = patientListQuerySchema.pars
 
 /** Parses a field but turns any invalid raw value into `undefined` instead of throwing, so one
  * bad query param — a stale bookmark, a hand-edited URL, or TanStack Router's own search parser
- * turning a numeric-looking value (e.g. `?phone=71123456`) into a JS `number` — can't blank the
+ * turning a numeric-looking value (e.g. `?q=71123456`) into a JS `number` — can't blank the
  * whole route with a thrown error. `patientsSearchSchema`'s own default then takes over exactly as
  * it would for an absent field. */
 function lenient<T extends z.ZodType>(schema: T) {
@@ -50,8 +52,8 @@ const pageSizeSchema = z.union([
 ]);
 
 /** A string or a number (TanStack Router's default search parser infers a JS type per value, so a
- * numeric-looking `q`, `fullName` or `phone` — a phone number *is* numeric-looking — arrives as a
- * `number`, not a `string`), turned into a string. Deliberately *not* `z.coerce.string()`: that
+ * numeric-looking `q` — a phone number *is* numeric-looking — arrives as a `number`, not a
+ * `string`), turned into a string. Deliberately *not* `z.coerce.string()`: that
  * coerces anything (`true` → `"true"`, an object → `"[object Object]"`, an array → a comma-joined
  * string), which would silently accept nonsense a person never typed; a boolean/object/array here
  * should fall through `lenient`'s `.catch(undefined)` like any other wrong-shaped value instead. */
@@ -70,8 +72,6 @@ const rawSearchSchema = z.object({
   page: lenient(z.coerce.number().int().min(1)),
   size: lenient(z.coerce.number().pipe(pageSizeSchema)),
   panel: lenient(stringLike),
-  fullName: lenient(stringLike),
-  phone: lenient(stringLike),
 });
 
 /** `lastVisit: 'any'` means "no filter" — the same as the field being absent (design Q14's "Any
@@ -98,8 +98,8 @@ export function parsePatientsSearch(raw: unknown): PatientsSearch {
   }
 }
 
-/** The list query inside the route search — without `panel` and the create pre-fill fields, which
- * must never reach `GET /patients`, its query key, or the "selection resets on query change" key. */
+/** The list query inside the route search — without `panel`, which must never reach
+ * `GET /patients`, its query key, or the "selection resets on query change" key. */
 export function listQueryOf(search: PatientsSearch): PatientListQuery {
   const { view, q, dentist, age, alerts, lastVisit, sort, dir, page, size } = search;
   return { view, q, dentist, age, alerts, lastVisit, sort, dir, page, size };
@@ -147,6 +147,57 @@ export function panelParam(panel: PatientPanel | null): string | undefined {
     case 'merge':
       return `merge:${panel.ids[0]},${panel.ids[1]}`;
   }
+}
+
+/** What the create panel starts with (design "digits → phone, otherwise name"). */
+export interface PatientPrefill {
+  fullName?: string;
+  phone?: string;
+}
+
+declare module '@tanstack/react-router' {
+  interface HistoryState {
+    /** On the history entry that opening a panel from the list pushed: closing that panel goes
+     * back to the entry before it instead of adding a second, identical list entry. */
+    patientsPanelPushed?: boolean;
+    /** The create panel's pre-fill (see `patientsSearchSchema`: never in the URL). */
+    patientPrefill?: PatientPrefill;
+  }
+}
+
+/** A `/patients` location: its (unparsed) search and its history state. */
+export interface PatientsLocation {
+  search: unknown;
+  state: HistoryState;
+}
+
+export type PanelNavigation =
+  | { kind: 'back' }
+  | { kind: 'navigate'; search: PatientsSearch; replace: boolean; panelPushed: boolean };
+
+/**
+ * How to open, swap or close the right panel from `location` (`null` when not on `/patients`
+ * at all), keeping the list query. Opening a panel over the bare list pushes an entry marked
+ * `panelPushed`; swapping an open panel replaces its entry and keeps its mark; closing a panel the
+ * list pushed goes back (so Back afterwards leaves the list rather than landing on the same list
+ * again), and closing any other — a shared link, or a filter changed while it was open — replaces
+ * its entry. From another screen it is a plain push over the default list, never marked: going
+ * back from there would leave `/patients` altogether.
+ */
+export function panelNavigation(
+  location: PatientsLocation | null,
+  panel: PatientPanel | null,
+): PanelNavigation {
+  const current = parsePatientsSearch(location?.search ?? {});
+  const open = location !== null && parsePanel(current.panel) !== null;
+  const pushed = open && location.state.patientsPanelPushed === true;
+  if (panel === null && pushed) return { kind: 'back' };
+  return {
+    kind: 'navigate',
+    search: { ...listQueryOf(current), panel: panelParam(panel) },
+    replace: open,
+    panelPushed: location !== null && panel !== null && (!open || pushed),
+  };
 }
 
 /** The chip/search fields the filter bar's "Clear filters" and its tinted-chip state track. */

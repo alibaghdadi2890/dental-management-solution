@@ -20,6 +20,9 @@ export function ConfirmDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const confirmed = useRef(false);
+  // Radix only returns focus to an `AlertDialog.Trigger`, and these dialogs are opened by code:
+  // remember what had focus so cancelling puts it back there.
+  const opener = useRef<HTMLElement | null>(null);
   const danger = options.tone === 'danger';
   const blocked =
     options.reasonLabel !== undefined &&
@@ -51,10 +54,17 @@ export function ConfirmDialog({
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-50 animate-fadein bg-[rgba(27,26,31,.28)]" />
         <AlertDialog.Content
+          onOpenAutoFocus={() => {
+            const active = document.activeElement;
+            opener.current = active instanceof HTMLElement ? active : null;
+          }}
           onCloseAutoFocus={(event) => {
             if (confirmed.current && options.focusAfterConfirm) {
               event.preventDefault();
               options.focusAfterConfirm();
+            } else if (opener.current?.isConnected) {
+              event.preventDefault();
+              opener.current.focus();
             }
           }}
           className="fixed start-1/2 top-1/2 z-50 w-[calc(100%-48px)] max-w-[420px] -translate-x-1/2 -translate-y-1/2 animate-popin rounded-2xl border border-border bg-surface shadow-[0_18px_48px_rgba(27,26,31,.18)] rtl:translate-x-1/2"

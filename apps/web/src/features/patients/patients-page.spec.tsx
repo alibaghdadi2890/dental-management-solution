@@ -712,12 +712,35 @@ describe('PatientsPage', () => {
 
   it('opening a panel from a row drops the create pre-fill', async () => {
     mockApi();
-    const router = renderPage({ url: '/?panel=new&fullName=Rana' });
+    const router = renderPage();
+    await router.navigate({
+      to: '/',
+      search: { panel: 'new' },
+      state: { patientPrefill: { fullName: 'Rana' } },
+    });
     fireEvent.click(await rowOf('Rana Haddad'));
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ panel: `quick:${RANA.id}` });
     });
-    expect(router.state.location.search).not.toHaveProperty('fullName');
+    expect(router.state.location.state.patientPrefill).toBeUndefined();
+  });
+
+  it('keeps the create pre-fill while the list search changes under the open form', async () => {
+    mockApi();
+    const router = renderPage();
+    await router.navigate({
+      to: '/',
+      search: { panel: 'new' },
+      state: { patientPrefill: { fullName: 'Rana' } },
+    });
+    const name = await screen.findByRole<HTMLInputElement>('textbox', { name: /Full name/ });
+    expect(name.value).toBe('Rana');
+    fireEvent.change(searchBox(), { target: { value: 'sami' } });
+    await waitFor(() => {
+      expect(router.state.location.search).toMatchObject({ q: 'sami', panel: 'new' });
+    });
+    expect(router.state.location.state.patientPrefill).toEqual({ fullName: 'Rana' });
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: /Full name/ })).toBe(name);
   });
 
   it('closing a panel opened from the list goes back instead of adding an entry', async () => {

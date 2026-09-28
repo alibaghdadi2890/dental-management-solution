@@ -12,6 +12,7 @@ import {
   problem,
   renderPanels,
   sent,
+  prefilled,
 } from '../patients.test-utils';
 
 const RANA = patient(1, 'Rana Haddad', {
@@ -316,15 +317,16 @@ describe('PatientFormPanel — create', () => {
 
   it('starts afresh for a new pre-fill, asking first when the form is dirty', async () => {
     mockApi();
-    const router = renderPanels({ url: '/?panel=new&fullName=Rana' });
+    const router = renderPanels({ url: '/' });
+    await prefilled(router, { fullName: 'Rana' });
     await panel('Register a patient');
-    await router.navigate({ to: '/', search: { panel: 'new', fullName: 'Sami' } });
+    await prefilled(router, { fullName: 'Sami' });
     await waitFor(() => {
       expect(field('Full name').value).toBe('Sami');
     });
 
     type('Phone', '03 123 456');
-    void router.navigate({ to: '/', search: { panel: 'new', fullName: 'Lina' } });
+    void prefilled(router, { fullName: 'Lina' });
     const dialog = await screen.findByRole('alertdialog');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Discard and leave' }));
     await waitFor(() => {
@@ -333,12 +335,23 @@ describe('PatientFormPanel — create', () => {
     expect(field('Phone').value).toBe('');
   });
 
-  it('pre-fills the name from the URL without counting it as a change', async () => {
+  it('pre-fills from history state (never the URL) without counting it as a change', async () => {
     mockApi();
-    renderPanels({ url: '/?panel=new&fullName=Rana' });
+    const router = renderPanels({ url: '/' });
+    await prefilled(router, { fullName: 'Rana', phone: '03 123 456' });
     const aside = await panel('Register a patient');
     expect(field('Full name').value).toBe('Rana');
+    expect(field('Phone').value).toBe('03 123 456');
     expect(within(aside).queryByText('Unsaved')).toBeNull();
+    expect(router.state.location.href).toBe('/?panel=new');
+  });
+
+  it('ignores a pre-fill left in an old URL', async () => {
+    mockApi();
+    renderPanels({ url: '/?panel=new&fullName=Rana&phone=03123456' });
+    await panel('Register a patient');
+    expect(field('Full name').value).toBe('');
+    expect(field('Phone').value).toBe('');
   });
 });
 

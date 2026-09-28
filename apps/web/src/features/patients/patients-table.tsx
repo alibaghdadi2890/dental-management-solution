@@ -1,14 +1,9 @@
-import {
-  ageOn,
-  type BalanceMoney,
-  type PatientListItem,
-  type PatientListQuery,
-} from '@dcm/contracts';
+import { type BalanceMoney, type PatientListItem, type PatientListQuery } from '@dcm/contracts';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SHIMMER } from '@/components/ui/list';
 import { owedBalances } from '@/features/billing/owed-balances';
-import { formatMoney, formatPhone } from '@/lib/format';
+import { ageOrNull, formatMoney, formatPhone } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
 import type { SortableColumn } from './list-query';
@@ -271,10 +266,8 @@ export function PatientRow({
 }) {
   const { t } = useTranslation('patients');
   const archived = patient.archivedAt !== null;
-  const age =
-    patient.dateOfBirth !== null && patient.dateOfBirth <= context.today
-      ? String(ageOn(patient.dateOfBirth, context.today))
-      : NONE;
+  const years = ageOrNull(patient.dateOfBirth, context.today);
+  const age = years === null ? NONE : String(years);
   const ageSex =
     patient.sex === 'unknown' ? age : t('ageSex', { age, sex: t(`sex.${patient.sex}`) });
   const [firstAlert] = patient.medicalAlerts;

@@ -2,6 +2,7 @@ import type { Session } from '@dcm/contracts';
 import { useMatches } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { SearchIcon } from '@/components/ui/search-icon';
 import { usePatientNavigation } from '@/features/patients/patient-navigation';
 import { patientActions } from './nav-items';
 
@@ -49,19 +50,7 @@ export function AppHeader({
               onClick={onFindPatient}
               className="flex h-[34px] w-[260px] max-w-[34vw] min-w-0 cursor-pointer items-center gap-[9px] rounded-lg border border-border bg-faint px-[11px] text-start hover:border-border-strong hover:bg-surface"
             >
-              <svg
-                aria-hidden
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                className="flex-none text-ink-muted"
-              >
-                <circle cx="6.8" cy="6.8" r="4.6" />
-                <path d="M10.3 10.3 14 14" />
-              </svg>
+              <SearchIcon className="text-ink-muted" />
               <span className="min-w-0 flex-1 truncate text-[12.5px] leading-none text-ink-muted">
                 {t('header.findPatient')}
               </span>
