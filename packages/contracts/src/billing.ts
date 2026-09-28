@@ -8,7 +8,7 @@ import {
   optionalText,
 } from './common.js';
 import { reasonSchema } from './audit.js';
-import { patientInputSchema, patientListQuerySchema, patientSchema } from './patients.js';
+import { patientCreateSchema, patientListQuerySchema, patientSchema } from './patients.js';
 
 /**
  * `billing` (feature 3, ADR-0017): opening balances and adjustments on the patient ledger, and
@@ -32,11 +32,14 @@ export const openingBalanceInputSchema = z.object({
 export type OpeningBalanceInput = z.infer<typeof openingBalanceInputSchema>;
 
 /** `POST /billing/opening-balances`: one transaction, `PatientsService.create` then the entry. */
+/** The patient is a full create (addendum C4): its contacts are linked in the same transaction. */
 export const createWithOpeningBalanceSchema = z.object({
-  patient: patientInputSchema,
+  patient: patientCreateSchema,
   openingBalance: openingBalanceInputSchema,
 });
 export type CreateWithOpeningBalance = z.infer<typeof createWithOpeningBalanceSchema>;
+/** What a client sends (defaults such as `contacts: []` may be left out). */
+export type CreateWithOpeningBalanceInput = z.input<typeof createWithOpeningBalanceSchema>;
 
 /** No UI in this feature; a building block for corrections and feature 6 import. */
 export const adjustmentInputSchema = z.object({

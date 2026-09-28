@@ -31,6 +31,15 @@ export class ContactIsPatientError extends DomainError {
 }
 
 /**
+ * The contact is linked to a patient: its name, phone and e-mail are the patient's, so they are
+ * edited on the patient record (addendum C1).
+ */
+export class ContactLinkedError extends DomainError {
+  readonly code = 'contact.linked';
+  readonly kind = 'conflict';
+}
+
+/**
  * A concurrent change won a race on a unique index (one primary per role per patient, one live
  * contact per linked patient): the caller re-reads and retries rather than seeing a 500.
  */

@@ -76,7 +76,7 @@ describe('createWithOpeningBalance', () => {
       patient: { fullName: 'Jane', phone: '03123456' },
       openingBalance: { amount: '50', asOf: '2026-09-27', note: null },
     };
-    await createWithOpeningBalance(input as never);
+    await createWithOpeningBalance(input);
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/billing/opening-balances',
       expect.anything(),

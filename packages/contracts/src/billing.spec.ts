@@ -102,6 +102,29 @@ describe('createWithOpeningBalanceSchema', () => {
     expect(parsed.patient.phone).toBeNull();
     expect(parsed.patient.primaryDentistId).toBe(ID_A);
   });
+
+  it('takes the create schema: contacts default to none and are linked with the patient', () => {
+    const bare = createWithOpeningBalanceSchema.parse({
+      patient: { fullName: 'Jane Doe', phone: '03123456' },
+      openingBalance: { amount: '100', asOf: '2026-01-01' },
+    });
+    expect(bare.patient.contacts).toEqual([]);
+    const withGuardian = createWithOpeningBalanceSchema.parse({
+      patient: {
+        fullName: 'Sam Doe',
+        dateOfBirth: '2020-01-01',
+        contacts: [
+          {
+            target: { newContact: { fullName: 'Mona Doe', phone: '03123456' } },
+            relationship: 'parent',
+            isGuardian: true,
+          },
+        ],
+      },
+      openingBalance: { amount: '100', asOf: '2026-01-01' },
+    });
+    expect(withGuardian.patient.contacts).toHaveLength(1);
+  });
 });
 
 describe('balancesQuerySchema', () => {

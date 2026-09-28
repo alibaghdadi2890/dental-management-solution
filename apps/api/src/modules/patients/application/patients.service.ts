@@ -5,7 +5,7 @@ import {
   type Patient,
   type PatientArchive,
   type PatientCounts,
-  type PatientInput,
+  type PatientCreate,
   type PatientListItem,
   type PatientListQuery,
   type PatientMerge,
@@ -56,6 +56,7 @@ import {
   type PatientSearchFilters,
   PatientsRepository,
 } from '../persistence/patients.repository';
+import { ContactLinks, type LinkRequest } from './contact-links';
 import { assertMergePhoneRule, changesOf, mergeSet, normalizeFields } from './patient-changes';
 import { toListItem, toPatient } from './patient-mapping';
 
@@ -108,6 +109,7 @@ export class PatientsService {
     private readonly users: UsersService,
     private readonly patients: PatientsRepository,
     private readonly counters: PatientCountersRepository,
+    private readonly contactLinks: ContactLinks,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -116,8 +118,11 @@ export class PatientsService {
   /**
    * Mints the next display number in the same transaction — the caller's, when it runs inside
    * one (`billing`'s create with an opening balance) — so a create that rolls back frees it.
+   * `contacts` are linked and `linkContactId` becomes this patient in the same transaction
+   * (addendum C4; `ContactLinks.link`), audited after `patient.create`: any failing link rolls
+   * the whole create back. Errors about a link point at `contacts.<i>.target…`.
    */
-  async create(input: PatientInput): Promise<Patient> {
+  async create(input: PatientCreate): Promise<Patient> {
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
       const tenant = await this.tenancy.currentTenant();
@@ -152,6 +157,7 @@ export class PatientsService {
       });
       const event: PatientCreated = this.events.create(PATIENT_CREATED, { patientId: created.id });
       await this.events.publish(event);
+      await this.linkContactsOnCreate(created.id, input, tenant);
       return created;
     });
   }
@@ -381,7 +387,9 @@ export class PatientsService {
   /**
    * One transaction with both rows locked in id order (no deadlock between overlapping merges).
    * The kept record takes the chosen fields and the union of alerts; the dropped one is archived
-   * with `mergedIntoId`. Returns the kept record.
+   * with `mergedIntoId`. Its contacts move to the kept record and the contacts that are either
+   * record are re-pointed or folded (addendum C8; `ContactLinks.mergeContacts`). Returns the kept
+   * record.
    */
   async merge(input: PatientMerge): Promise<Patient> {
     this.context.requirePermission('patient:write');
@@ -396,7 +404,14 @@ export class PatientsService {
       if (current.some((patient) => patient.deletedAt !== null)) {
         throw new PatientArchivedError(ARCHIVED_MERGE);
       }
-      const { a: kept, b: dropped } = await this.patients.lockPair(input.keepId, input.dropId);
+      // Lock order (ContactLinks): every patient whose links the merge rewrites, in one
+      // statement in id order, before any contact or link row.
+      const touched = await this.contactLinks.mergeTouches(input.keepId, input.dropId);
+      const { a: kept, b: dropped } = await this.patients.lockPair(
+        input.keepId,
+        input.dropId,
+        touched,
+      );
       if (kept.deletedAt !== null || dropped.deletedAt !== null) {
         throw new PatientArchivedError(ARCHIVED_MERGE);
       }
@@ -418,6 +433,11 @@ export class PatientsService {
         after,
         reason: input.reason,
       });
+      await this.contactLinks.mergeContacts(
+        kept.id,
+        dropped.id,
+        new Set([kept.id, dropped.id, ...touched]),
+      );
       const event: PatientsMerged = this.events.create(PATIENTS_MERGED, {
         keptId: kept.id,
         droppedId: dropped.id,
@@ -428,6 +448,21 @@ export class PatientsService {
   }
 
   // --- Shared rules ---
+
+  /** The contacts of a create (addendum C4), after the patient row exists. */
+  private async linkContactsOnCreate(
+    patientId: string,
+    input: PatientCreate,
+    tenant: Tenant,
+  ): Promise<void> {
+    if (input.contacts.length === 0 && input.linkContactId === undefined) return;
+    const requests: LinkRequest[] = input.contacts.map((link, index) => ({
+      input: link,
+      path: `contacts.${String(index)}`,
+    }));
+    const locked = await this.contactLinks.lockPatients(patientId, requests);
+    await this.contactLinks.link(patientId, requests, locked, tenant, input.linkContactId);
+  }
 
   /** `profileId` must be the staff profile id (ADR-0020) of an active practitioner. */
   private async assertActiveDentist(profileId: string): Promise<void> {

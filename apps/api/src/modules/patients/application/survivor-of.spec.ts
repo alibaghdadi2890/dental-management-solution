@@ -29,6 +29,7 @@ function setup(chain: Record<string, string | null>, inTransaction = true) {
     { findForShare } as unknown as PatientsRepository,
     unused,
     unused,
+    unused,
   );
   return { service, findForShare };
 }

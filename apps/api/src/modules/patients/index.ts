@@ -1,6 +1,7 @@
 // Public API of the patients module. Other modules import from this file only (CLAUDE.md §4).
 export { PatientsModule } from './patients.module';
 export { type PatientSearchInternal, PatientsService } from './application/patients.service';
+export { ContactsService } from './application/contacts.service';
 export type { PatientRankKeys } from './domain/rank-keys';
 export {
   MergeAlertsOverflowError,
@@ -10,6 +11,13 @@ export {
   PatientNotFoundError,
   UnknownDentistError,
 } from './domain/patient-errors';
+export {
+  ContactAlreadyLinkedError,
+  ContactConflictError,
+  ContactIsPatientError,
+  ContactLinkedError,
+  ContactNotFoundError,
+} from './domain/contact-errors';
 export {
   PATIENT_ARCHIVED,
   PATIENT_CREATED,
@@ -22,3 +30,11 @@ export {
   type PatientsMerged,
   type PatientUpdated,
 } from './events/patient-events';
+export {
+  CONTACT_LINKED,
+  CONTACT_UNLINKED,
+  CONTACT_UPDATED,
+  type ContactLinked,
+  type ContactUnlinked,
+  type ContactUpdated,
+} from './events/contact-events';

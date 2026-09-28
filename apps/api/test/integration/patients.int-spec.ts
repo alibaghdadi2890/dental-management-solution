@@ -14,7 +14,7 @@ import type {
 } from '@dcm/contracts';
 import {
   patientArchiveSchema,
-  patientInputSchema,
+  patientCreateSchema,
   patientListQuerySchema,
   patientMergeSchema,
 } from '@dcm/contracts';
@@ -215,7 +215,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(patchedByUserId.body).toMatchObject({ code: 'patient.unknown_dentist' });
     });
 
-    it('frees the number of a create rolled back after minting (caller transaction)', async () => {
+    it('frees the number and the contacts of a create rolled back after minting (caller transaction)', async () => {
       const clinic = await provision('Rollback Clinic');
       const first = await createPatient(clinic.owner, {
         fullName: 'Rollback One',
@@ -232,7 +232,17 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         asPlatformAdminIn(testApp.app, clinic.tenant.id, () =>
           tenantDb.run(async () => {
             lost = await service.create(
-              patientInputSchema.parse({ fullName: 'Rollback Lost', phone: '71000051' }),
+              patientCreateSchema.parse({
+                fullName: 'Rollback Lost',
+                phone: '71000051',
+                contacts: [
+                  {
+                    target: { newContact: { fullName: 'Rollback Sister', phone: '71000053' } },
+                    relationship: 'sibling',
+                    isEmergencyContact: true,
+                  },
+                ],
+              }),
             );
             throw new Error('opening balance failed');
           }),
@@ -249,6 +259,8 @@ describe('patients: records, search, duplicates, archive and merge', () => {
 
       const leftovers = await database.ownerPool.query<{ n: number }>(
         `select (select count(*) from patients where id = $1)::int
+              + (select count(*) from patient_contacts where patient_id = $1)::int
+              + (select count(*) from contacts where name_key = 'rollback sister')::int
               + (select count(*) from audit_log
                  where resource_id = $1::text or after->>'patientId' = $1::text)::int as n`,
         [lost.id],

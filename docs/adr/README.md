@@ -23,4 +23,5 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0016](0016-patients-depend-on-users.md)                | `patients` depends on `users` (primary dentist)  | Accepted (amended by 0020)         |
 | [0017](0017-opening-balances-in-billing.md)             | Opening balances and patient views in `billing`  | Accepted                           |
 | [0018](0018-offset-paging-for-patients.md)              | Offset paging for the patients list              | Accepted (amends CLAUDE.md §12)    |
+| [0019](0019-contacts-are-people.md)                     | Contacts are people; ledgers stay per patient    | Accepted                           |
 | [0020](0020-dentists-referenced-by-staff-profile-id.md) | Dentists referenced by staff profile id          | Accepted (amends 0016)             |

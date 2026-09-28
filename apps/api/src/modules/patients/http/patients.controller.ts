@@ -1,10 +1,13 @@
 import {
+  contactLinkInputSchema,
+  contactLinkPatchSchema,
   duplicateCheckQuerySchema,
   duplicateGroupSchema,
   idSchema,
   patientArchiveSchema,
+  patientContactSchema,
   patientCountsSchema,
-  patientInputSchema,
+  patientCreateSchema,
   patientListItemSchema,
   patientListQuerySchema,
   patientMergeSchema,
@@ -16,6 +19,7 @@ import {
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -27,6 +31,7 @@ import {
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
+import { ContactsService } from '../application/contacts.service';
 import { PatientsService } from '../application/patients.service';
 
 /**
@@ -44,7 +49,7 @@ const patientsRouteQuerySchema = patientListQuerySchema
   });
 
 class PatientDto extends createZodDto(patientSchema) {}
-class PatientInputDto extends createZodDto(patientInputSchema) {}
+class PatientCreateDto extends createZodDto(patientCreateSchema) {}
 class PatientPatchDto extends createZodDto(patientPatchSchema) {}
 class PatientListItemDto extends createZodDto(patientListItemSchema) {}
 class PatientsQueryDto extends createZodDto(patientsRouteQuerySchema) {}
@@ -56,11 +61,23 @@ class PatientArchiveDto extends createZodDto(patientArchiveSchema) {}
 class PatientRestoreDto extends createZodDto(patientRestoreSchema) {}
 class PatientMergeDto extends createZodDto(patientMergeSchema) {}
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
+class PatientContactParamsDto extends createZodDto(
+  z.object({ id: idSchema, contactId: idSchema }),
+) {}
+class PatientContactDto extends createZodDto(patientContactSchema) {}
+class ContactLinkInputDto extends createZodDto(contactLinkInputSchema) {}
+class ContactLinkPatchDto extends createZodDto(contactLinkPatchSchema) {}
 
-/** The Patients screen, the ⌘K palette and the patient record (docs/modules/patients.md). */
+/**
+ * The Patients screen, the ⌘K palette and the patient record (docs/modules/patients.md), with the
+ * record's contacts (addendum C5): each contact write returns the patient's contacts after it.
+ */
 @Controller('patients')
 export class PatientsController {
-  constructor(private readonly patients: PatientsService) {}
+  constructor(
+    private readonly patients: PatientsService,
+    private readonly contacts: ContactsService,
+  ) {}
 
   @Get()
   @RequirePermission('patient:read')
@@ -126,7 +143,7 @@ export class PatientsController {
   @Post()
   @RequirePermission('patient:write')
   @ZodResponse({ status: 201, type: PatientDto })
-  create(@Body() body: PatientInputDto) {
+  create(@Body() body: PatientCreateDto) {
     return this.patients.create(body);
   }
 
@@ -135,5 +152,33 @@ export class PatientsController {
   @ZodResponse({ type: PatientDto })
   update(@Param() params: PatientParamsDto, @Body() body: PatientPatchDto) {
     return this.patients.update(params.id, body);
+  }
+
+  @Get(':id/contacts')
+  @RequirePermission('patient:read')
+  @ZodResponse({ type: [PatientContactDto] })
+  contactsOf(@Param() params: PatientParamsDto) {
+    return this.contacts.contactsOf(params.id);
+  }
+
+  @Post(':id/contacts')
+  @RequirePermission('patient:write')
+  @ZodResponse({ status: 201, type: [PatientContactDto] })
+  link(@Param() params: PatientParamsDto, @Body() body: ContactLinkInputDto) {
+    return this.contacts.link(params.id, body);
+  }
+
+  @Patch(':id/contacts/:contactId')
+  @RequirePermission('patient:write')
+  @ZodResponse({ type: [PatientContactDto] })
+  updateLink(@Param() params: PatientContactParamsDto, @Body() body: ContactLinkPatchDto) {
+    return this.contacts.updateLink(params.id, params.contactId, body);
+  }
+
+  @Delete(':id/contacts/:contactId')
+  @RequirePermission('patient:write')
+  @ZodResponse({ type: [PatientContactDto] })
+  unlink(@Param() params: PatientContactParamsDto) {
+    return this.contacts.unlink(params.id, params.contactId);
   }
 }

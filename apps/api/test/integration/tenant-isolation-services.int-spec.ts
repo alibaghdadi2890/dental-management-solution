@@ -1,6 +1,7 @@
 import type {
   AuditPage,
   Branch,
+  ContactLookupItem,
   DiagnosisItem,
   OpeningBalanceResult,
   Patient,
@@ -15,6 +16,7 @@ import type {
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BillingService } from '../../src/modules/billing';
+import { ContactsService } from '../../src/modules/patients';
 import { UsersService } from '../../src/modules/users';
 import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
@@ -433,6 +435,119 @@ describe('tenant isolation through the public services', () => {
         );
       expect(moved).toBe(0);
       expect(await bLedger()).toEqual(bBefore);
+    });
+
+    it("contacts: B's patients and contacts are not found on any contact route", async () => {
+      // B: a child whose guardian is a new contact, and whose emergency contact is B's patient.
+      const bChild = await admin
+        .post('/api/v1/patients')
+        .set('X-Tenant-Id', b.tenant.id)
+        .send({
+          fullName: 'Bravo Child',
+          dateOfBirth: '2018-01-01',
+          contacts: [
+            {
+              target: { newContact: { fullName: 'Bravo Guardian', phone: '03 123 456' } },
+              relationship: 'parent',
+              isGuardian: true,
+              isBillingContact: true,
+            },
+            {
+              target: { patientId: b.patient.id },
+              relationship: 'other',
+              isEmergencyContact: true,
+            },
+          ],
+        });
+      expect(bChild.status, JSON.stringify(bChild.body)).toBe(201);
+      const childId = (bChild.body as Patient).id;
+      const bLinks = await database.ownerPool.query<{ contact_id: string }>(
+        'select contact_id from patient_contacts where patient_id = $1 order by created_at',
+        [childId],
+      );
+      const [guardianId, patientContactId] = bLinks.rows.map((row) => row.contact_id);
+      if (!guardianId || !patientContactId) throw new Error("B's contacts were not linked");
+      const snapshot = async () =>
+        (
+          await database.ownerPool.query<Record<string, unknown>>(
+            `select c.id, c.full_name, c.phone, c.linked_patient_id, c.deleted_at,
+                    pc.patient_id, pc.is_guardian, pc.is_primary_guardian
+             from contacts c left join patient_contacts pc on pc.contact_id = c.id
+             where c.tenant_id = $1 order by c.id, pc.patient_id`,
+            [b.tenant.id],
+          )
+        ).rows;
+      const before = await snapshot();
+
+      const link = (patientId: string, target: object) =>
+        ownerA
+          .post(`/api/v1/patients/${patientId}/contacts`)
+          .send({ target, relationship: 'other', isEmergencyContact: true });
+      const patientRoutes = [
+        ownerA.get(`/api/v1/patients/${childId}/contacts`),
+        link(childId, { newContact: { fullName: 'Hijack', phone: '71 000 000' } }),
+        ownerA
+          .patch(`/api/v1/patients/${childId}/contacts/${guardianId}`)
+          .send({ isEmergencyContact: true }),
+        ownerA.delete(`/api/v1/patients/${childId}/contacts/${guardianId}`),
+      ];
+      for (const response of await Promise.all(patientRoutes)) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'patient.not_found' });
+      }
+      const contactRoutes = [
+        ownerA.patch(`/api/v1/contacts/${guardianId}`).send({ fullName: 'Hijacked' }),
+        ownerA.get(`/api/v1/contacts/${guardianId}/billed-patients`),
+        ownerA
+          .patch(`/api/v1/patients/${a.patient.id}/contacts/${guardianId}`)
+          .send({ isGuardian: true }),
+        ownerA.delete(`/api/v1/patients/${a.patient.id}/contacts/${guardianId}`),
+      ];
+      for (const response of await Promise.all(contactRoutes)) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'contact.not_found' });
+      }
+      // As link targets in A's own requests they do not exist either.
+      for (const [target, path] of [
+        [{ contactId: guardianId }, 'target.contactId'],
+        [{ contactId: patientContactId }, 'target.contactId'],
+        [{ patientId: b.patient.id }, 'target.patientId'],
+      ] as const) {
+        const refused = await link(a.patient.id, target);
+        expect(refused.status).toBe(422);
+        expect(refused.body).toMatchObject({ errors: [{ path, code: 'not_found' }] });
+      }
+      const created = await ownerA.post('/api/v1/patients').send({
+        fullName: 'Alpha Hijack',
+        phone: '71 000 000',
+        linkContactId: guardianId,
+      });
+      expect(created.status).toBe(422);
+
+      for (const q of ['Bravo', '03123456', '123 456']) {
+        const found = await ownerA.get(`/api/v1/contacts/lookup?q=${encodeURIComponent(q)}`);
+        expect(found.status).toBe(200);
+        const hits = (found.body as ContactLookupItem[]).map((item) =>
+          item.kind === 'contact' ? item.contact.id : item.patient.id,
+        );
+        // A's own patient shares B's phone; B's rows never appear.
+        for (const id of [childId, b.patient.id, guardianId, patientContactId]) {
+          expect(hits).not.toContain(id);
+        }
+      }
+      const found = await ownerA.get('/api/v1/patients?q=03123456');
+      expect((found.body as PatientPage).items.map((item) => item.id)).not.toContain(childId);
+
+      const contacts = testApp.app.get(ContactsService);
+      await expect(
+        asPlatformAdminIn(testApp.app, a.tenant.id, () => contacts.patientsBilledBy(guardianId)),
+      ).rejects.toMatchObject({ code: 'contact.not_found' });
+      expect(
+        await asPlatformAdminIn(testApp.app, a.tenant.id, () =>
+          contacts.findContactsByPhone('03 123 456'),
+        ),
+      ).toEqual([]);
+      expect(await snapshot()).toEqual(before);
     });
 
     it("A's patient creates never advance B's counter", async () => {

@@ -11,6 +11,7 @@ import type { DomainPatient, DomainPatientListRow, GuardianSummary } from '../do
 import { linkedPatients, resolvedFullName, resolvedPhone } from './contact-resolution.sql';
 import {
   idAmong,
+  lookupMatch,
   matchedContactColumn,
   orderByFor,
   whereFor,
@@ -316,23 +317,29 @@ export class PatientsRepository {
 
   /**
    * Locks both rows `FOR UPDATE` in id order (never in `(a, b)` argument order), so two concurrent
-   * merges touching an overlapping pair of patients can never deadlock. Must run inside an
+   * merges touching an overlapping pair of patients can never deadlock. `others` are locked in the
+   * same statement and the same id order (a merge that folds contacts also locks the other patients
+   * whose links it rewrites); those not visible are simply not locked. Must run inside an
    * already-open transaction — `TenantDb.run()` would otherwise open and commit its own, releasing
    * the row lock before the caller (the merge use case) gets to apply its updates in the "same"
    * transaction — so it throws immediately if none is open, rather than silently locking nothing
-   * useful. Throws `PatientNotFoundError` if either id doesn't resolve under the caller's RLS view
+   * useful. Throws `PatientNotFoundError` if `a` or `b` doesn't resolve under the caller's RLS view
    * (already deleted, or another tenant's id).
    */
-  async lockPair(a: string, b: string): Promise<{ a: DomainPatient; b: DomainPatient }> {
+  async lockPair(
+    a: string,
+    b: string,
+    others: readonly string[] = [],
+  ): Promise<{ a: DomainPatient; b: DomainPatient }> {
     if (!this.db.currentTransaction()) {
       throw new Error('lockPair must run inside a transaction');
     }
-    const [first, second] = a < b ? [a, b] : [b, a];
+    const ids = [...new Set([a, b, ...others])];
     return this.db.run(async (tx) => {
       const rows = await tx
         .select()
         .from(patients)
-        .where(idAmong(patients.id, [first, second]))
+        .where(idAmong(patients.id, ids))
         .orderBy(patients.id)
         .for('update');
       const byId = new Map(rows.map((row) => [row.id, toDomain(row)]));
@@ -502,6 +509,47 @@ export class PatientsRepository {
         .where(isNotNull(patients.primaryDentistId)),
     );
     return rows.flatMap((row) => (row.id === null ? [] : [row.id]));
+  }
+
+  /**
+   * The patient half of the search-or-create lookup (addendum C5): active patients matching `q` by
+   * name or phone digits (`lookupMatch`, own columns only) who are nobody's contact yet (no live
+   * contact is linked to them; those appear as that contact). Ordered by name, then id.
+   */
+  async lookupUnlinked(q: string, limit: number): Promise<DomainPatient[]> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .select()
+        .from(patients)
+        .where(
+          and(
+            isNull(patients.deletedAt),
+            lookupMatch(patients.nameKey, patients.phoneSearch, q),
+            sql`not exists (select 1 from ${contacts} where ${contacts.linkedPatientId} = ${patients.id} and ${contacts.deletedAt} is null)`,
+          ),
+        )
+        .orderBy(patients.nameKey, patients.id)
+        .limit(limit),
+    );
+    return rows.map(toDomain);
+  }
+
+  /**
+   * The list rows (with the primary guardian) of the patients among `ids`, archived ones included,
+   * ordered by name then id. Ids invisible under RLS are absent.
+   */
+  async listRowsByIds(ids: readonly string[]): Promise<DomainPatientListRow[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.run((tx) => {
+      const guardian = primaryGuardians(tx);
+      return tx
+        .select({ ...getTableColumns(patients), ...guardianColumns(guardian) })
+        .from(patients)
+        .leftJoin(guardian, eq(guardian.patientId, patients.id))
+        .where(idAmong(patients.id, ids))
+        .orderBy(patients.nameKey, patients.id);
+    });
+    return rows.map((row) => toListRow(row));
   }
 
   /** Active rows sharing a name (matched via `nameKey`) and date of birth — the duplicate check. */

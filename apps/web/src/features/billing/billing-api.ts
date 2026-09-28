@@ -2,7 +2,7 @@ import {
   openingBalanceResultSchema,
   patientBalanceSchema,
   patientBalancesSchema,
-  type CreateWithOpeningBalance,
+  type CreateWithOpeningBalanceInput,
 } from '@dcm/contracts';
 import { queryOptions } from '@tanstack/react-query';
 import { actingTenantId } from '@/features/platform/acting-tenant';
@@ -59,7 +59,7 @@ export function balanceQuery(id: string, tenantId?: string) {
 
 /** `POST /billing/opening-balances` (design Q1): one transaction, `PatientsService.create` then
  * the ledger entry. Used instead of `createPatient` only when `wantsOpeningBalance` is true. */
-export function createWithOpeningBalance(input: CreateWithOpeningBalance) {
+export function createWithOpeningBalance(input: CreateWithOpeningBalanceInput) {
   return apiFetch('/billing/opening-balances', openingBalanceResultSchema, {
     method: 'POST',
     json: input,

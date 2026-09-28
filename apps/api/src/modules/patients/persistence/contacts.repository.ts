@@ -1,4 +1,3 @@
-import { phoneDigits } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -13,7 +12,7 @@ import {
   resolvedPhone,
   resolvedPhoneSearch,
 } from './contact-resolution.sql';
-import { escapeLike, idAmong } from './patient-search.sql';
+import { idAmong, lookupMatch } from './patient-search.sql';
 import { type NormalizedPhoneInput, phoneColumns } from './patients.repository';
 import { contacts } from './schema';
 
@@ -22,9 +21,6 @@ type LinkedPatientRow = typeof linkedPatients.$inferSelect;
 
 /** Same database clock as `patients` (see `PatientsRepository`). */
 const DB_NOW = sql`now()`;
-
-/** A lookup by digits needs at least this many, like the patients search (addendum C5). */
-const MIN_PHONE_QUERY_DIGITS = 2;
 
 /**
  * Runs `work`, turning a race on "one live contact per linked patient" into a 409
@@ -222,6 +218,39 @@ export class ContactsRepository {
   }
 
   /**
+   * Everything a link change reads about contacts, in one statement so the rows are locked in a
+   * single id order (two planners never deadlock): the live contacts among `ids` and the live
+   * contacts that are the patients `linkedPatientIds` (the `{ patientId }` targets), `FOR UPDATE`,
+   * with their linked patients (not locked; the service locked the patients first). Must run inside
+   * an already-open transaction (throws otherwise).
+   */
+  async lockForLinking(
+    ids: readonly string[],
+    linkedPatientIds: readonly string[],
+  ): Promise<ContactRecord[]> {
+    requireTransaction(this.db, 'lockForLinking');
+    if (ids.length === 0 && linkedPatientIds.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({ contact: contacts, linkedPatient: linkedPatients })
+        .from(contacts)
+        .leftJoin(linkedPatients, eq(linkedPatients.id, contacts.linkedPatientId))
+        .where(
+          and(
+            or(idAmong(contacts.id, ids), idAmong(contacts.linkedPatientId, linkedPatientIds)),
+            isNull(contacts.deletedAt),
+          ),
+        )
+        .orderBy(contacts.id)
+        .for('update', { of: contacts }),
+    );
+    return rows.map((row) => ({
+      contact: toDomainContact(row.contact),
+      linkedPatient: toLinkedPatient(row.linkedPatient),
+    }));
+  }
+
+  /**
    * The live contacts that are the patients `patientIds` (a merge's kept and dropped patients),
    * locked `FOR UPDATE` in id order. Must run inside an already-open transaction (throws
    * otherwise).
@@ -257,12 +286,7 @@ export class ContactsRepository {
    * phone digits contain them. Ordered by resolved name, then id; at most `limit`.
    */
   lookup(q: string, limit: number): Promise<ContactRecord[]> {
-    const conditions: SQL[] = [sql`${resolvedNameKey} like ${`%${escapeLike(nameKey(q))}%`}`];
-    const digits = phoneDigits(q);
-    if (digits.length >= MIN_PHONE_QUERY_DIGITS) {
-      conditions.push(sql`${resolvedPhoneSearch} like ${`%${escapeLike(digits)}%`}`);
-    }
-    return this.findWhere(or(...conditions) ?? sql`false`, limit);
+    return this.findWhere(lookupMatch(resolvedNameKey, resolvedPhoneSearch, q), limit);
   }
 
   /**

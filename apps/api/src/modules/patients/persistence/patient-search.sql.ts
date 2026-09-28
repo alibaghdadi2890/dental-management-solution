@@ -78,6 +78,24 @@ export function escapeLike(value: string): string {
 const MIN_PHONE_QUERY_DIGITS = 2;
 
 /**
+ * The search-or-create lookup's match (addendum C5), over any pair of name-key and phone-search
+ * expressions (a patient's own columns, or a contact's resolved ones): a diacritics-insensitive
+ * name substring, or, when `q` has at least 2 digits, a phone-digits substring.
+ */
+export function lookupMatch(
+  nameKeyColumn: AnyColumn | SQL,
+  phoneSearchColumn: AnyColumn | SQL,
+  q: string,
+): SQL {
+  const conditions: SQL[] = [sql`${nameKeyColumn} like ${`%${escapeLike(nameKey(q))}%`}`];
+  const digits = phoneDigits(q);
+  if (digits.length >= MIN_PHONE_QUERY_DIGITS) {
+    conditions.push(sql`${phoneSearchColumn} like ${`%${escapeLike(digits)}%`}`);
+  }
+  return or(...conditions) ?? sql`false`;
+}
+
+/**
  * A query typed as a patient number (`P-000123`, `p000123`): it is looked up among display
  * numbers only. Its digits would otherwise also match any phone containing them.
  */
