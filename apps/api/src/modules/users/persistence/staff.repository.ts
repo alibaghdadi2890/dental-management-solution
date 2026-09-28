@@ -87,14 +87,15 @@ export class StaffRepository {
 
   /**
    * Profiles among `authUserIds`, whatever their type or status, ordered by id (for
-   * `practitionersByIds`, which re-sorts by display name the same way as `practitioners`).
+   * `practitionersByAuthUserIds`, which re-sorts by display name the same way as
+   * `practitioners`).
    *
    * Superseded by `byProfileIds`: domain models refer to a dentist by the staff profile id, not
    * the auth user id (ADR-0020). Kept only for the `patients` and `billing` callers that still
    * store the auth user id; the patients-contacts addendum (task H1/H2) moves them to
-   * `byProfileIds` and removes this method.
+   * `byProfileIds` and deletes this method.
    */
-  async byUserIds(authUserIds: readonly string[]): Promise<StaffProfile[]> {
+  async byAuthUserIds(authUserIds: readonly string[]): Promise<StaffProfile[]> {
     if (authUserIds.length === 0) return [];
     return this.db.run(async (tx) =>
       (

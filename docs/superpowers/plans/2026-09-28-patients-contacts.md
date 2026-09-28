@@ -101,9 +101,13 @@ feature in place (the branch is unmerged).
 
 - [ ] **Integration tests first:**
   - `GET /users/practitioners` returns `{ id: profileId, userId, displayName, title }`;
-  - `practitionersByIds(profileIds)` includes deactivated staff;
+  - `practitionersByProfileIds(profileIds)` includes deactivated staff;
   - `GET /users` items carry `profileId`.
-- [ ] **Implement.**
+- [ ] **Implement.** Add `practitionersByProfileIds` / `byProfileIds` alongside the existing
+      auth-user-id lookups, renamed `practitionersByAuthUserIds` / `byAuthUserIds` (not
+      `practitionersByIds` / `byUserIds`, which would be ambiguous about which id they take now
+      that both exist). `patients` and `billing` keep calling the auth-user-id lookup until
+      H1/H2.
 - [ ] **Commit:** `feat(users): expose staff profile ids for practitioner references`.
 
 ## Step (h) — patients backend
@@ -174,7 +178,9 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
 **Files:**
 
 - `modules/patients/application/patients.service.ts`: the phone rule (C3); create with
-  `contacts` and `linkContactId` (C4); merge (C8); completeness (C10); dentist by profile id.
+  `contacts` and `linkContactId` (C4); merge (C8); completeness (C10); dentist by profile id
+  (`assertActiveDentist` and `rankFor` switch from `practitionersByAuthUserIds` to
+  `practitionersByProfileIds`).
 - `modules/patients/application/contacts.service.ts`, new: C5, C11, C12.
 - `modules/patients/http/{patients.controller,contacts.controller}.ts`.
 - `modules/patients/events/contact-events.ts`.
@@ -218,7 +224,10 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
 - `modules/billing/application/{billing.service,patient-export.service}.ts`:
   - create-with-opening-balance accepts the create schema, including contacts;
   - the export adds the Guardian name and Guardian phone columns;
-  - dentist names come from profile ids.
+  - dentist names come from profile ids (`patient-export.service.ts` switches from
+    `practitionersByAuthUserIds` to `practitionersByProfileIds` — the last caller, so this task
+    also deletes `UsersService.practitionersByAuthUserIds` and
+    `StaffRepository.byAuthUserIds`).
 - `http/export-headers.ts`: labels in en, ar and fr.
 - `test/integration/{billing,billing-views}.int-spec.ts`.
 - `docs/modules/billing.md`.

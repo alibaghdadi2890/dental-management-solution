@@ -471,7 +471,9 @@ export class PatientsService {
       return { column: 'id', ...internal.rank };
     }
     if (query.sort !== 'dentist') return undefined;
-    const dentists = await this.users.practitionersByIds(await this.patients.assignedDentistIds());
+    const dentists = await this.users.practitionersByAuthUserIds(
+      await this.patients.assignedDentistIds(),
+    );
     const { locale } = await this.tenancy.currentTenant();
     return { column: 'primaryDentistUserId', ...dentistRank(dentists, query.dir, locale) };
   }

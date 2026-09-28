@@ -27,12 +27,15 @@ import { parsePatientsSearch } from './list-query';
 import { PatientsScreen } from './patients-screen';
 
 const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
+/** A distinct-looking uuid for a staff profile id, so fixtures never reuse the auth user id as
+ * the profile id (they are different ids in the real schema). */
+const profileId = (userId: string) => userId.replace('4c5d', '4c5e');
 const DENTIST_ID = id(80);
 const INACTIVE_DENTIST_ID = id(81);
 
 const staff = (userId: string, displayName: string, active: boolean) => ({
   id: userId,
-  profileId: userId,
+  profileId: profileId(userId),
   email: `${userId}@example.com`,
   displayName,
   title: null,
@@ -147,7 +150,14 @@ function mockApi({
     if (path === '/patients/duplicates') return Promise.resolve(json(duplicates));
     if (path === '/users/practitioners') {
       return Promise.resolve(
-        json([{ id: DENTIST_ID, userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null }]),
+        json([
+          {
+            id: profileId(DENTIST_ID),
+            userId: DENTIST_ID,
+            displayName: 'Dr. Ana Reyes',
+            title: null,
+          },
+        ]),
       );
     }
     if (path === '/users') {

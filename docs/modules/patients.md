@@ -77,8 +77,9 @@ with an opening balance) are composed by `billing` on top of this module (design
 - `sort`:
   - `name`, `age` (youngest first for `asc`; no date of birth last), `recent` (most recently
     updated first, whatever `dir` says).
-  - `dentist`: ranks patients by their dentist in `UsersService.practitionersByIds` over every
-    assigned dentist, inactive ones included, in display-name order (tenant-locale collation).
+  - `dentist`: ranks patients by their dentist in `UsersService.practitionersByAuthUserIds` over
+    every assigned dentist, inactive ones included, in display-name order (tenant-locale
+    collation).
     `domain/dentist-rank.ts` gives each dentist an integer key, dense-ranked: dentists whose
     names are equal under that collation share a key, so their patients sort by patient name.
     `desc` reverses the keys. Patients without a dentist come last in both directions.

@@ -193,7 +193,7 @@ export class PatientExportService {
 
   /**
    * Adds the display names of the batch's dentists not seen in an earlier batch, through
-   * `UsersService.practitionersByIds` — a building block with no permission check of its own
+   * `UsersService.practitionersByAuthUserIds` — a building block with no permission check of its own
    * (every system role holds `user:read`, which the Patients screen's dentist names need anyway).
    */
   private async resolveDentists(
@@ -211,7 +211,7 @@ export class PatientExportService {
     ];
     if (unseen.length === 0) return;
     for (const id of unseen) names.set(id, '');
-    for (const practitioner of await this.users.practitionersByIds(unseen)) {
+    for (const practitioner of await this.users.practitionersByAuthUserIds(unseen)) {
       names.set(practitioner.userId, practitioner.displayName);
     }
   }

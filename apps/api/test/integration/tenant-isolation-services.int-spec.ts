@@ -15,6 +15,7 @@ import type {
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BillingService } from '../../src/modules/billing';
+import { UsersService } from '../../src/modules/users';
 import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
@@ -201,6 +202,13 @@ describe('tenant isolation through the public services', () => {
       }
       // B's user is untouched: still active and able to sign in with their password.
       await signIn(testApp.app, b.staff.email, TEMPORARY);
+
+      // B's staff profile id resolves to nothing in A's tenant context either (RLS, not just the
+      // controller's own lookup).
+      const byProfileId = await asPlatformAdminIn(testApp.app, a.tenant.id, () =>
+        testApp.app.get(UsersService).practitionersByProfileIds([b.staff.profileId]),
+      );
+      expect(byProfileId).toEqual([]);
     });
 
     it('branches and rooms: not found', async () => {

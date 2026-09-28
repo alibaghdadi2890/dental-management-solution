@@ -304,7 +304,7 @@ describe('users: staff profiles with identity, branches and roles', () => {
       expect(after.map((row) => row.userId)).toContain(amir.id);
 
       const byIds = await asPlatformAdminIn(testApp.app, tenant.id, () =>
-        testApp.app.get(UsersService).practitionersByIds([zed.id, amir.id]),
+        testApp.app.get(UsersService).practitionersByAuthUserIds([zed.id, amir.id]),
       );
       expect(byIds.map((row) => row.userId).sort()).toEqual([zed.id, amir.id].sort());
       expect(byIds.find((row) => row.userId === zed.id)).toMatchObject({
@@ -315,6 +315,7 @@ describe('users: staff profiles with identity, branches and roles', () => {
     it('carries the staff profile id, and the profile-id lookup includes deactivated staff', async () => {
       const zed = await createUser({ displayName: 'Dr. Zed Nassar' });
       const amir = await createUser({ displayName: 'Dr. Amir Haddad' });
+      const chi = await createUser({ displayName: 'Dr. Chi Nasser' });
 
       const list = (await api.get('/users/practitioners')).body as Practitioner[];
       const zedRow = list.find((row) => row.userId === zed.id);
@@ -330,12 +331,18 @@ describe('users: staff profiles with identity, branches and roles', () => {
         (await api.post(`/users/${zed.id}/deactivate`, { reason: 'Left the clinic' })).status,
       ).toBe(200);
 
+      // Ids passed out of display-name order (zed, amir, chi) come back in display-name order
+      // (Amir, Chi, Zed) — the same collation order as `listPractitioners`, not the input order.
       const byProfileIds = await asPlatformAdminIn(testApp.app, tenant.id, () =>
-        testApp.app.get(UsersService).practitionersByProfileIds([zed.profileId, amir.profileId]),
+        testApp.app
+          .get(UsersService)
+          .practitionersByProfileIds([zed.profileId, amir.profileId, chi.profileId]),
       );
-      expect(byProfileIds.map((row) => row.id).sort()).toEqual(
-        [zed.profileId, amir.profileId].sort(),
-      );
+      expect(byProfileIds.map((row) => row.id)).toEqual([
+        amir.profileId,
+        chi.profileId,
+        zed.profileId,
+      ]);
       expect(byProfileIds.find((row) => row.id === zed.profileId)).toMatchObject({
         displayName: 'Dr. Zed Nassar',
         userId: zed.id,

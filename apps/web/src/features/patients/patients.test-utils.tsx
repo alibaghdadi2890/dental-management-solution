@@ -32,6 +32,9 @@ import { parseRecordSearch } from './record/record-search';
  * (`PatientsScreen`) on a memory router. */
 
 export const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
+/** A distinct-looking uuid for a staff profile id, so fixtures never reuse the auth user id as
+ * the profile id (they are different ids in the real schema). */
+const profileId = (userId: string) => userId.replace('4c5d', '4c5e');
 export const DENTIST_ID = id(80);
 export const INACTIVE_DENTIST_ID = id(81);
 export const FRONT_DESK_ID = id(82);
@@ -109,7 +112,7 @@ export function sessionWith(permissions: Permission[]): Session {
 
 const staff = (userId: string, displayName: string, active: boolean) => ({
   id: userId,
-  profileId: userId,
+  profileId: profileId(userId),
   email: `${userId}@example.com`,
   displayName,
   title: null,
@@ -209,7 +212,14 @@ export function mockApi({
     if (bare === '/patients/duplicates/check') return Promise.resolve(json(twins));
     if (bare === '/users/practitioners') {
       return Promise.resolve(
-        json([{ id: DENTIST_ID, userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null }]),
+        json([
+          {
+            id: profileId(DENTIST_ID),
+            userId: DENTIST_ID,
+            displayName: 'Dr. Ana Reyes',
+            title: null,
+          },
+        ]),
       );
     }
     if (bare === '/users') {
