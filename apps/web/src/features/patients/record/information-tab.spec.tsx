@@ -2,6 +2,7 @@ import type { Patient } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { json, mockApi, patient, problem, renderRecord, sent } from '../patients.test-utils';
+import { patientKeys } from '../patients-api';
 import { SAVED_SHOWN_MS } from './information-tab';
 
 const RANA = patient(1, 'Rana Haddad', { email: 'rana@example.com' });
@@ -221,6 +222,51 @@ describe('InformationTab', () => {
       await screen.findByRole('alertdialog', { name: 'Discard unsaved changes?' }),
     ).toBeTruthy();
     expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
+  });
+
+  it('keeps unsaved edits, with a warning, when the record is archived elsewhere', async () => {
+    let current: Patient = RANA;
+    const fetchMock = mockApi({
+      get: (path) => (path === `/patients/${RANA.id}` ? json(current) : undefined),
+    });
+    const { client } = renderRecord({ url: URL_ });
+    await card();
+    type('Address', '12 Hamra St');
+    current = {
+      ...RANA,
+      archivedAt: '2026-09-28T09:00:00.000Z',
+      updatedAt: '2026-09-28T09:00:00.000Z',
+    };
+    await client.refetchQueries({ queryKey: patientKeys.detail(null, RANA.id) });
+
+    expect(
+      await screen.findByText(
+        'This patient was archived while you were editing. Your changes are kept here, but they can’t be saved until the record is restored.',
+      ),
+    ).toBeTruthy();
+    expect(field('Address').value).toBe('12 Hamra St');
+    expect(field('Address').matches(':disabled')).toBe(false);
+    expect(saveButton().disabled).toBe(true);
+    expect(await indicator()).toBe('Unsaved changes');
+    fireEvent.submit(saveButton());
+    expect(sent(fetchMock, 'PATCH', `/patients/${RANA.id}`)).toBeUndefined();
+  });
+
+  it('turns read-only, without edits to keep, when the record is archived elsewhere', async () => {
+    let current: Patient = RANA;
+    mockApi({ get: (path) => (path === `/patients/${RANA.id}` ? json(current) : undefined) });
+    const { client } = renderRecord({ url: URL_ });
+    await card();
+    current = {
+      ...RANA,
+      archivedAt: '2026-09-28T09:00:00.000Z',
+      updatedAt: '2026-09-28T09:00:00.000Z',
+    };
+    await client.refetchQueries({ queryKey: patientKeys.detail(null, RANA.id) });
+    await waitFor(() => {
+      expect(field('Address').matches(':disabled')).toBe(true);
+    });
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
   });
 
   it('is read-only for an archived record', async () => {

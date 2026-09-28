@@ -48,7 +48,9 @@ function CompletenessBadge({ patient }: { patient: Patient }) {
  * the whole patient form — the edit panel's model and fields, guardian rule included — with its
  * completeness badge, Save changes, and the save-state indicator. A failed save keeps what was
  * typed and retries from the indicator; leaving the tab or the record while dirty asks first.
- * An archived (or merged) record is shown read-only: the server would refuse the save.
+ * An archived (or merged) record is shown read-only: the server would refuse the save. One
+ * archived elsewhere while this form holds unsaved edits keeps the form and the edits (as the edit
+ * panel does), with a warning and Save turned off — nothing typed is silently replaced.
  */
 export function InformationTab({ patient, tenant }: { patient: Patient; tenant: Tenant }) {
   const { t } = useTranslation(['patients', 'common']);
@@ -68,8 +70,12 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
     };
   }, []);
 
-  const readOnly = patient.archivedAt !== null;
-  const dirty = !readOnly && isEditDirty(initial, values, today, country);
+  const archived = patient.archivedAt !== null;
+  const dirty = isEditDirty(initial, values, today, country);
+  // Archived with nothing typed: nothing to lose, so the form turns read-only.
+  const readOnly = archived && !dirty;
+  // Archived under unsaved edits: they stay, editable, but can't be saved.
+  const keptEdits = archived && dirty;
 
   // The record changed underneath (a refetch, another tab's save): an untouched form follows it.
   const [basedOn, setBasedOn] = useState(patient.updatedAt);
@@ -93,7 +99,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
     phase === 'saving'
       ? 'saving'
       : dirty
-        ? phase === 'failed'
+        ? phase === 'failed' && !archived
           ? 'failed'
           : 'dirty'
         : phase === 'saved'
@@ -101,7 +107,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
           : 'clean';
 
   const submit = async () => {
-    if (saving.current || readOnly) return;
+    if (saving.current || archived) return;
     if (!form.check()) return;
     const patch = toPatchPayload(initial, values, today, country);
     if (!patch) return;
@@ -119,7 +125,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
       toast(t('record.form.updated'));
     } catch (error) {
       const failure = failureOf(error);
-      // Archived meanwhile: reload the record, so the form turns read-only and says why.
+      // Archived meanwhile: reload the record, so the form says why (and keeps the edits).
       if (failure === 'archived' || failure === 'merged') void invalidatePatientData(queryClient);
       if (!mounted.current) return;
       const fields = fieldErrorsOf(error);
@@ -160,6 +166,14 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
           {patient.mergedIntoId === null ? t('record.form.archived') : t('record.form.merged')}
         </p>
       )}
+      {keptEdits && (
+        <p
+          role="alert"
+          className="mb-4 rounded-lg border border-danger-border bg-danger-bg px-3 py-2.5 text-[12.5px] leading-[1.45] font-medium text-danger"
+        >
+          {t('form.archivedWhileEditing')}
+        </p>
+      )}
       <form
         ref={formRef}
         noValidate
@@ -191,7 +205,11 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
         </fieldset>
         {!readOnly && (
           <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-row-divider pt-4">
-            <Button type="submit" variant="primary" disabled={!dirty || phase === 'saving'}>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={!dirty || archived || phase === 'saving'}
+            >
               {t('common:save')}
             </Button>
             <SaveState
