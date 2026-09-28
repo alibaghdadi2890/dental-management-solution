@@ -1,6 +1,6 @@
 # Feature 3 — Patients — design
 
-Date: 2026-09-27 · Status: draft for review
+Date: 2026-09-27 · Status: Implemented
 
 ## Goal
 
@@ -44,7 +44,7 @@ designing.
 
 ```
 patients  → tenancy (time zone, country), users (practitioners), audit   patients, patient_counters
-billing   → patients, tenancy (currency), audit                          ledger_entries   (new)
+billing   → patients, tenancy (currency), users (dentist names), audit   ledger_entries   (new)
 users     + listPractitioners(), GET /users/practitioners
 tenancy   + tenants.country
 ```
@@ -375,7 +375,7 @@ locales/{en,ar,fr}/patients.json, billing.json
 - `docs/modules/patients.md` (implemented), new `docs/modules/billing.md`, `users.md`
   (practitioners), `tenancy.md` (country).
 - CLAUDE.md: §4 map (`patients → tenancy, users`; `billing` owns `ledger_entries`, depends on
-  `patients, tenancy`, `clinical` from feature 5); §12 pagination exception.
+  `patients, tenancy, users`, `clinical` from feature 5); §12 pagination exception.
 
 ## Implementation notes
 
@@ -411,5 +411,9 @@ ADR-0017/0018 have the detail):
   `detail`, which echo patient data, are dropped.
 - **Redis in the integration harness:** each test app gets its own `QUEUE_PREFIX`
   (`test-<id>`), so parallel suites never share BullMQ queues. `QUEUE_PREFIX` defaults to `bull`.
+- **Accepted trade-off: search terms in query strings.** The list's `q` and the duplicate check's
+  `fullName` and `dateOfBirth` travel in `GET` query strings, which are patient data. Our pino
+  request logs strip query strings; a reverse proxy in front of the API must not log them either
+  (or a later change moves the duplicate check to a `POST` body).
 - **Patient information tab:** a refetch under unsaved edits does not move the form's base, so
   undoing the edits shows the latest server values.

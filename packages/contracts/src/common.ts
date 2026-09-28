@@ -50,7 +50,7 @@ export function optionalDate(message?: string) {
 /**
  * ISO 3166-1 alpha-2 country code, upper-case, and one `libphonenumber-js` actually has dialling
  * data for — its output type is the library's own `CountryCode`, so `normalizePhone` can take it
- * directly with no cast (tenant country, ADR pending — feature 3 Q3).
+ * directly with no cast (the tenant country: patients design spec, Q3).
  */
 export const countrySchema = z
   .string()
