@@ -399,6 +399,29 @@ describe('billing: ledger, opening balances and balances', () => {
       expect(after?.contact.linkedPatient?.id).toBe(patient.id);
     });
 
+    it('reports an unknown linkContactId under patient.linkContactId and creates nothing', async () => {
+      const clinic = await provision('LinkContactId Rollback Clinic');
+      const before = await counterOf(clinic.tenant.id);
+
+      const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
+        patient: { fullName: 'Ghost Link', phone: '71 700 003', linkContactId: newId() },
+        openingBalance: { amount: '10.00', asOf: TODAY },
+      });
+      expect(response.status).toBe(422);
+      expect(problem(response.body)).toMatchObject({
+        code: 'validation_failed',
+        errors: [{ path: 'patient.linkContactId', code: 'not_found' }],
+      });
+
+      expect(await contactsLeftovers(clinic.tenant.id)).toEqual({
+        patients: 0,
+        contacts: 0,
+        links: 0,
+        entries: 0,
+      });
+      expect(await counterOf(clinic.tenant.id)).toBe(before);
+    });
+
     it('reports an unknown contact target under patient.contacts and creates nothing', async () => {
       const clinic = await provision('Contacts Rollback Clinic');
       const before = await counterOf(clinic.tenant.id);

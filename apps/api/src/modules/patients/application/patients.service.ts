@@ -12,7 +12,6 @@ import {
   type PatientPage,
   type PatientPatch,
   type PatientRestore,
-  type PrimaryGuardian,
   type Tenant,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -222,15 +221,15 @@ export class PatientsService {
   }
 
   /**
-   * For `billing`'s export (design addendum C14): each id's resolved primary guardian, keyed by
-   * patient id. Ids without one (or invisible under RLS) are simply absent from the map.
+   * For other modules' services (e.g. `billing`'s export rows, design addendum C14): the list
+   * items — with the resolved primary guardian, C14 (resolved per C7) — among `ids`, archived
+   * ones included, in no particular order (one `listRowsByIds` query; a caller that needs a
+   * particular order re-orders itself, as the export does from its snapshot). Unknown ids are
+   * simply absent. `matchedContact` is always `null` here: it is a search-only field.
    */
-  async guardiansFor(ids: readonly string[]): Promise<Map<string, PrimaryGuardian>> {
+  async listItemsByIds(ids: readonly string[]): Promise<PatientListItem[]> {
     this.context.requirePermission('patient:read');
-    const rows = await this.patients.listRowsByIds(ids);
-    return new Map(
-      rows.flatMap((row) => (row.primaryGuardian ? [[row.id, row.primaryGuardian] as const] : [])),
-    );
+    return (await this.patients.listRowsByIds(ids)).map(toListItem);
   }
 
   /**

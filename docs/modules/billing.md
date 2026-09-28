@@ -99,18 +99,20 @@ today, takes the **snapshot** — the ids to export, in order — and returns `{
 - **Rows:** `ids` (1–100) → exactly those patients, in that order, archived ones included; ids the
   tenant can't see are skipped. Otherwise every patient of the filtered and sorted view
   (`idsFor`, `owing` and `balance` included).
-- **Chunks:** the rows are read with `PatientsService.getMany` 500 ids at a time as the chunks
-  are pulled, in snapshot order, with their balances (one aggregate per chunk) and dentist names.
-  The first chunk holds the UTF-8 byte order mark (for Excel and Arabic), the header row and the
+- **Chunks:** the rows are read with `PatientsService.listItemsByIds` 500 ids at a time (one query
+  per chunk) as the chunks are pulled, then re-ordered to the snapshot (the method itself returns
+  no particular order), with their balances (one aggregate per chunk) and dentist names. The
+  first chunk holds the UTF-8 byte order mark (for Excel and Arabic), the header row and the
   first rows. Because the order is fixed up front, rows written while the file streams never
   shift or repeat; a patient created meanwhile is simply not in the file.
-- **Columns** (the table's order, one `COLUMNS` spec that also marks the numeric ones): Patient ID
-  (display number), Name, Age (whole years on the tenant's today; empty without a date of
-  birth), Sex (localised; `unknown` is empty), Phone, **Guardian name** and **Guardian phone**
-  (design addendum C14: the resolved primary guardian, empty when the patient has none), Last
-  visit and Visits (empty until visits exist, feature 4), Dentist, Balance (`<label> (<tenant
-currency>)`: the tenant-currency amount as a plain decimal, `0.00` when none). Balances in
-  another currency (after a tenant currency change) are not in the file.
+- **Columns** (the Patients table's order, one `COLUMNS` spec that also marks the numeric ones,
+  plus two export-only additions): Patient ID (display number), Name, Age (whole years on the
+  tenant's today; empty without a date of birth), Sex (localised; `unknown` is empty), Phone,
+  **Guardian name** and **Guardian phone** (design addendum C14, resolved per C7 — the resolved
+  primary guardian, export-only, no column of their own in the Patients table; empty when the
+  patient has none), Last visit and Visits (empty until visits exist, feature 4), Dentist, Balance
+  (`<label> (<tenant currency>)`: the tenant-currency amount as a plain decimal, `0.00` when
+  none). Balances in another currency (after a tenant currency change) are not in the file.
   - The guardian columns sit right after Phone rather than at the end: both are "how to reach
     someone about this patient" and read better together than split across the sheet by the
     visit/billing columns (implementation choice for I1; the addendum only specified the two new
@@ -120,9 +122,9 @@ currency>)`: the tenant-currency amount as a plain decimal, `0.00` when none). B
     forms included — is prefixed with `'`).
   - **Guardian phone**: formatted exactly like the patient's own Phone column — the tenant
     country's numbers in national format, others in international format (guarded by the leading
-    `'` because it starts with `+`). Resolved through `PatientsService.guardiansFor`, which reads
-    `patients.listRowsByIds` (the same resolution the Patients list uses, addendum C7): a guardian
-    who is themself a patient is read from that patient's own name and phone.
+    `'` because it starts with `+`). Resolved through `PatientsService.listItemsByIds`, the same
+    `patients.listRowsByIds` resolution the Patients list uses (design addendum C14, resolved per
+    C7): a guardian who is themself a patient is read from that patient's own name and phone.
 - **Phone:** numbers of the tenant's country in national format (`formatPhoneFor`, e.g.
   `03 123 456`), other numbers in international format — which starts with `+`, so the
   injection guard writes them as `'+33 6 12 34 56 78` (unguarded, a spreadsheet would evaluate
@@ -245,11 +247,11 @@ pipe a `Readable`: stream callbacks run outside the request's async context, whe
 
 ## Depends on
 
-- `patients`: existence and export rows (`getMany`), the export's guardian columns
-  (`guardiansFor`, design addendum C14), the ledger-write lock (`lockForLedger`), `create` for the
-  opening-balance create (contacts and `linkContactId` included), `search` and `searchIds` with
-  their internal options for the patient views and the export, `survivorOf` for the merge
-  re-point; the `PatientsMerged` event.
+- `patients`: existence checks (`getMany`), the export's rows and guardian columns
+  (`listItemsByIds`, design addendum C14, resolved per C7), the ledger-write lock
+  (`lockForLedger`), `create` for the opening-balance create (contacts and `linkContactId`
+  included), `search` and `searchIds` with their internal options for the patient views and the
+  export, `survivorOf` for the merge re-point; the `PatientsMerged` event.
 - `tenancy`: currency, time zone and country (`currentTenant`).
 - `users`: dentist display names in the export (`practitionersByProfileIds`, by staff profile
   id).

@@ -1,10 +1,9 @@
 import {
   ageOn,
   formatPhoneFor,
-  type Patient,
   type PatientExportQuery,
+  type PatientListItem,
   type PatientSex,
-  type PrimaryGuardian,
   type Tenant,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -49,10 +48,11 @@ export interface PatientExport {
   chunks: AsyncGenerator<string>;
 }
 
-type ExportPatient = Pick<
-  Patient,
-  'id' | 'displayNumber' | 'fullName' | 'phone' | 'dateOfBirth' | 'sex' | 'primaryDentistId'
->;
+/**
+ * The list item already carries everything a row needs beyond the balance and dentist name: its
+ * own fields and the resolved primary guardian (design addendum C14, resolved per C7).
+ */
+type ExportPatient = PatientListItem;
 
 /** What a row is written from: the patient plus what the export looked up for its chunk. */
 interface RowContext {
@@ -62,8 +62,6 @@ interface RowContext {
   labels: ExportLabels;
   balance: string | undefined;
   dentistName: string | undefined;
-  /** The patient's resolved primary guardian (design addendum C7), absent when none. */
-  guardian: PrimaryGuardian | undefined;
 }
 
 interface Column {
@@ -73,7 +71,11 @@ interface Column {
   value(row: RowContext): string;
 }
 
-/** The Patients table's columns, in its order (design Q4). */
+/**
+ * The export's columns, in the Patients table's order (design Q4) — except Guardian name and
+ * Guardian phone, which are export-only additions (design addendum C14) with no table column of
+ * their own; they sit next to Phone (see docs/modules/billing.md for that placement choice).
+ */
 const COLUMNS: readonly Column[] = [
   { key: 'patientId', value: ({ patient }) => patient.displayNumber },
   { key: 'name', value: ({ patient }) => patient.fullName },
@@ -95,14 +97,16 @@ const COLUMNS: readonly Column[] = [
     value: ({ patient, tenant }) =>
       patient.phone === null ? '' : formatPhoneFor(patient.phone, tenant.country),
   },
-  // The resolved primary guardian (design addendum C14), placed next to the patient's own phone;
-  // empty cells when the patient has none. The guardian's phone follows the same national/foreign
-  // formatting (and injection guard) as the patient's own.
-  { key: 'guardianName', value: ({ guardian }) => guardian?.fullName ?? '' },
+  // The resolved primary guardian (design addendum C14, resolved per C7), placed next to the
+  // patient's own phone; empty cells when the patient has none. The guardian's phone follows the
+  // same national/foreign formatting (and injection guard) as the patient's own.
+  { key: 'guardianName', value: ({ patient }) => patient.primaryGuardian?.fullName ?? '' },
   {
     key: 'guardianPhone',
-    value: ({ guardian, tenant }) =>
-      guardian?.phone == null ? '' : formatPhoneFor(guardian.phone, tenant.country),
+    value: ({ patient, tenant }) => {
+      const phone = patient.primaryGuardian?.phone;
+      return phone === null || phone === undefined ? '' : formatPhoneFor(phone, tenant.country);
+    },
   },
   // Last visit and Visits: empty until visits exist (feature 4).
   { key: 'lastVisit', value: () => '' },
@@ -139,9 +143,9 @@ export class PatientExportService {
    * Checks the permissions and takes the snapshot — the ids to export, in order (the given `ids`,
    * or the whole view via `PatientViewsService.idsFor`) — before anything is sent, so these
    * failures reach the caller as errors. The rows are then read `CHUNK_SIZE` at a time with
-   * `getMany` as the chunks are pulled, in snapshot order: rows written meanwhile never shift or
-   * repeat, and a patient that disappeared from view (not possible today: nothing is hard
-   * deleted) would be skipped.
+   * `listItemsByIds` (one query per chunk) as the chunks are pulled, in snapshot order: rows
+   * written meanwhile never shift or repeat, and a patient that disappeared from view (not
+   * possible today: nothing is hard deleted) would be skipped.
    */
   async open(query: PatientExportQuery, labels: ExportLabels): Promise<PatientExport> {
     this.context.requirePermission('payment:read');
@@ -175,7 +179,6 @@ export class PatientExportService {
       if (batch.length === 0) continue;
       const balances = await this.balancesIn(batch, shared.tenant.currency);
       await this.resolveDentists(batch, dentistNames);
-      const guardians = await this.patients.guardiansFor(batch.map((patient) => patient.id));
       const lines = batch.map((patient) => {
         const row: RowContext = {
           ...shared,
@@ -185,7 +188,6 @@ export class PatientExportService {
             patient.primaryDentistId === null
               ? undefined
               : dentistNames.get(patient.primaryDentistId),
-          guardian: guardians.get(patient.id),
         };
         return csvRow(
           COLUMNS.map((column) => column.value(row)),
@@ -198,10 +200,13 @@ export class PatientExportService {
     if (head) yield head;
   }
 
-  /** The visible patients among `ids`, in `ids` order (`getMany` returns no particular order). */
+  /**
+   * The visible patients among `ids`, in `ids` (snapshot) order: `listItemsByIds` returns them in
+   * no particular order, so this re-orders them from the map, in one query per chunk.
+   */
   private async patientsIn(ids: readonly string[]): Promise<ExportPatient[]> {
     const found = new Map(
-      (await this.patients.getMany(ids)).map((patient) => [patient.id, patient]),
+      (await this.patients.listItemsByIds(ids)).map((patient) => [patient.id, patient]),
     );
     return ids.flatMap((id) => {
       const patient = found.get(id);

@@ -356,6 +356,22 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         '250.00',
       ].join(',');
 
+    const ranadRow = () =>
+      [
+        ranad.displayNumber,
+        'Ranad Plain',
+        '',
+        '',
+        '03 123 456',
+        // No primary guardian, no dentist, no balance.
+        '',
+        '',
+        '',
+        '',
+        '',
+        '0.00',
+      ].join(',');
+
     it('streams the filtered view as UTF-8 CSV with a BOM, in the table column order', async () => {
       const response = await exportCsv(clinic.owner, 'view=active&q=rana');
       expect(response.status).toBe(200);
@@ -368,9 +384,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
       expect(csvLines(response.text)).toEqual([
         'Patient ID,Name,Age,Sex,Phone,Guardian name,Guardian phone,Last visit,Dentist,Visits,Balance (USD)',
         ranaRow(),
-        [ranad.displayNumber, 'Ranad Plain', '', '', '03 123 456', '', '', '', '', '', '0.00'].join(
-          ',',
-        ),
+        ranadRow(),
       ]);
     });
 
@@ -514,6 +528,25 @@ describe('billing: patient views, CSV export and merge re-point', () => {
             '0.00',
           ].join(','),
         );
+      });
+
+      it('writes a foreign guardian phone internationally, guarded', async () => {
+        const kid = await createPatient(clinic.owner, {
+          fullName: 'Foreign Guardian Kid',
+          phone: null,
+          dateOfBirth: '2018-06-10',
+          contacts: [
+            {
+              target: { newContact: { fullName: 'Foreign Guardian', phone: '+33 6 12 34 56 78' } },
+              relationship: 'parent',
+              isGuardian: true,
+            },
+          ],
+        });
+        const lines = csvLines((await exportCsv(clinic.owner, `ids=${kid.id}`)).text);
+        const cells = lines[1]?.split(',') ?? [];
+        expect(cells[5]).toBe('Foreign Guardian');
+        expect(cells[6]).toBe("'+33 6 12 34 56 78");
       });
 
       it('resolves a guardian who is themself a patient from that patient record', async () => {

@@ -16,7 +16,7 @@ import type {
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BillingService } from '../../src/modules/billing';
-import { ContactsService } from '../../src/modules/patients';
+import { ContactsService, PatientsService } from '../../src/modules/patients';
 import { UsersService } from '../../src/modules/users';
 import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
@@ -545,6 +545,12 @@ describe('tenant isolation through the public services', () => {
       expect(
         await asPlatformAdminIn(testApp.app, a.tenant.id, () =>
           contacts.findContactsByPhone('03 123 456'),
+        ),
+      ).toEqual([]);
+      // billing's export building block never resolves B's guardian through A's RLS view either.
+      expect(
+        await asPlatformAdminIn(testApp.app, a.tenant.id, () =>
+          testApp.app.get(PatientsService).listItemsByIds([b.patient.id]),
         ),
       ).toEqual([]);
       expect(await snapshot()).toEqual(before);
