@@ -24,8 +24,9 @@ const owing = (money: BalanceMoney) => Number(money.amount) > 0;
 /**
  * The patient record's Overview "Balance" card (workspace spec §Tab: Overview, patients design
  * Q13), for callers with `payment:read`. Until visits exist there is no current visit, so
- * "Current visit outstanding" reads "—" and "Previous outstanding" is the whole ledger balance in
- * the tenant currency; a balance in any other currency is listed under it. Total outstanding is
+ * "Current visit outstanding" reads "—" and "Previous outstanding" is the whole ledger balance,
+ * led by the tenant currency (or, when nothing is owed in it, by the first currency that is); any
+ * other currency's balance is listed under it. Total outstanding is
  * danger-toned while anything is owed, in any currency, and success-toned when clear. No
  * "Payments →" link and no Record payment yet: payments arrive with their own feature.
  */
@@ -53,8 +54,9 @@ export function BalanceCard({
     );
   } else {
     const owed = owedBalances(balance.data.balances, currency);
-    const lead = owed.find((money) => money.currency === currency) ?? { amount: '0', currency };
-    const others = owed.filter((money) => money.currency !== currency);
+    // The tenant currency leads — unless nothing is owed in it, when the first currency that is
+    // owed does (never a red "$0" over a debt in euros).
+    const [lead = { amount: '0', currency }, ...others] = owed;
     const anyOwing = owed.some(owing);
     body = (
       <>

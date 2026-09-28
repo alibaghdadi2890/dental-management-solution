@@ -1,5 +1,5 @@
 import { createFileRoute, type SearchSchemaInput, stripSearchParams } from '@tanstack/react-router';
-import { PatientRecordPage } from '@/features/patients/record/patient-record-page';
+import { PatientRecordScreen } from '@/features/patients/record/patient-record-page';
 import {
   DEFAULT_RECORD_TAB,
   parseRecordSearch,
@@ -16,15 +16,5 @@ export const Route = createFileRoute('/_app/patients/$patientId')({
 function PatientRecordRoute() {
   const { patientId } = Route.useParams();
   const { tab } = Route.useSearch();
-  const navigate = Route.useNavigate();
-  return (
-    <PatientRecordPage
-      key={patientId}
-      patientId={patientId}
-      tab={tab}
-      onTab={(next) => {
-        void navigate({ search: { tab: next } });
-      }}
-    />
-  );
+  return <PatientRecordScreen patientId={patientId} tab={tab} />;
 }

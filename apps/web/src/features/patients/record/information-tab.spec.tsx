@@ -15,6 +15,8 @@ const card = async () => {
 };
 const field = (name: RegExp | string) => screen.getByRole<HTMLInputElement>('textbox', { name });
 const saveButton = () => screen.getByRole<HTMLButtonElement>('button', { name: 'Save changes' });
+/** Save is `aria-disabled` (it keeps focus), not `disabled`. */
+const blocked = () => saveButton().getAttribute('aria-disabled') === 'true';
 const indicator = async () =>
   (await card()).querySelector('form [role="status"]')?.textContent ?? null;
 const type = (name: RegExp | string, value: string) => {
@@ -72,7 +74,7 @@ describe('InformationTab', () => {
     expect(within(form).getByRole('combobox', { name: 'Sex' })).toBeTruthy();
     expect(within(form).getByRole('combobox', { name: 'Primary dentist' })).toBeTruthy();
     expect(within(form).queryByRole('textbox', { name: /Guardian/ })).toBeNull();
-    expect(saveButton().disabled).toBe(true);
+    expect(blocked()).toBe(true);
     expect(await indicator()).toBe('');
   });
 
@@ -100,29 +102,110 @@ describe('InformationTab', () => {
     const form = await card();
     type('Address', '12 Hamra St, Beirut');
     expect(await indicator()).toBe('Unsaved changes');
-    expect(saveButton().disabled).toBe(false);
+    expect(blocked()).toBe(false);
 
+    saveButton().focus();
     fireEvent.click(saveButton());
     await waitFor(async () => {
       expect(await indicator()).toBe('Saving…');
     });
-    expect(saveButton().disabled).toBe(true);
+    expect(document.activeElement).toBe(saveButton());
+    expect(blocked()).toBe(true);
     expect(sent(fetchMock, 'PATCH', `/patients/${RANA.id}`)).toEqual({
       address: '12 Hamra St, Beirut',
     });
 
     release();
     await waitFor(async () => {
-      expect(await indicator()).toBe('✓ Saved just now');
+      expect(await indicator()).toBe('✓Saved just now');
     });
     expect(within(form).getByText('Complete')).toBeTruthy();
     expect(within(form).queryByText('Partly complete')).toBeNull();
-    expect(await screen.findByText('Patient information updated')).toBeTruthy();
+    // The indicator confirms the save; there is no toast, and the tick is decoration.
+    expect(screen.queryByText('Patient information updated')).toBeNull();
+    expect(screen.getByText('✓').getAttribute('aria-hidden')).toBe('true');
     expect(field('Address').value).toBe('12 Hamra St, Beirut');
-    expect(saveButton().disabled).toBe(true);
+    expect(blocked()).toBe(true);
+    expect(document.activeElement).toBe(saveButton());
 
     type('Insurance', 'Allianz');
     expect(await indicator()).toBe('Unsaved changes');
+  });
+
+  it('keeps edits typed while a save is in flight', async () => {
+    let release: () => void = () => undefined;
+    let hold = true;
+    const fetchMock = serverWith(RANA, (ok) =>
+      hold
+        ? new Promise<Response>((resolve) => {
+            release = () => {
+              resolve(ok());
+            };
+          })
+        : ok(),
+    );
+    renderRecord({ url: URL_ });
+    await card();
+    type('Address', '12 Hamra St');
+    fireEvent.click(saveButton());
+    await waitFor(async () => {
+      expect(await indicator()).toBe('Saving…');
+    });
+    type('Insurance', 'Allianz');
+    release();
+    await waitFor(async () => {
+      expect(await indicator()).toBe('Unsaved changes');
+    });
+    expect(field('Address').value).toBe('12 Hamra St');
+    expect(field('Insurance').value).toBe('Allianz');
+
+    hold = false;
+    fireEvent.click(saveButton());
+    await waitFor(async () => {
+      expect(await indicator()).toBe('✓Saved just now');
+    });
+    expect(sent(fetchMock, 'PATCH', `/patients/${RANA.id}`)).toEqual({ insurance: 'Allianz' });
+  });
+
+  it('follows a refetched record while clean, but keeps what is typed while dirty', async () => {
+    let current: Patient = RANA;
+    mockApi({ get: (path) => (path === `/patients/${RANA.id}` ? json(current) : undefined) });
+    const { client } = renderRecord({ url: URL_ });
+    await card();
+    const refetch = async (patch: Partial<Patient>, at: string) => {
+      current = { ...current, ...patch, updatedAt: at };
+      await client.refetchQueries({ queryKey: patientKeys.detail(null, RANA.id) });
+    };
+
+    await refetch({ insurance: 'Allianz' }, '2026-09-28T09:00:00.000Z');
+    await waitFor(() => {
+      expect(field('Insurance').value).toBe('Allianz');
+    });
+
+    type('Address', '12 Hamra St');
+    await refetch({ insurance: 'AXA', fullName: 'Rana H. Haddad' }, '2026-09-28T09:05:00.000Z');
+    // The header shows the new record; the dirty form keeps its own values.
+    expect(await screen.findByRole('heading', { level: 1, name: 'Rana H. Haddad' })).toBeTruthy();
+    expect(field(/Full name/).value).toBe('Rana Haddad');
+    expect(field('Address').value).toBe('12 Hamra St');
+    expect(field('Insurance').value).toBe('Allianz');
+    expect(await indicator()).toBe('Unsaved changes');
+  });
+
+  it('does not validate eagerly again after a successful save', async () => {
+    serverWith(RANA);
+    renderRecord({ url: URL_ });
+    await card();
+    type('Email', 'not-an-email');
+    fireEvent.click(saveButton());
+    expect(await screen.findByText('Check the email address')).toBeTruthy();
+    type('Email', 'rana@clinic.io');
+    fireEvent.click(saveButton());
+    await waitFor(async () => {
+      expect(await indicator()).toBe('✓Saved just now');
+    });
+    type('Email', 'rana@');
+    expect(screen.queryByText('Check the email address')).toBeNull();
   });
 
   it('lets "Saved just now" go quiet after a while', async () => {
@@ -133,7 +216,7 @@ describe('InformationTab', () => {
     type('Address', '12 Hamra St');
     fireEvent.click(saveButton());
     await waitFor(async () => {
-      expect(await indicator()).toBe('✓ Saved just now');
+      expect(await indicator()).toBe('✓Saved just now');
     });
     await vi.advanceTimersByTimeAsync(SAVED_SHOWN_MS);
     await waitFor(async () => {
@@ -148,17 +231,25 @@ describe('InformationTab', () => {
     await card();
     type('Address', '12 Hamra St');
     fireEvent.click(saveButton());
-    const retry = await screen.findByRole('button', { name: 'Failed to save — retry' });
+    expect(await screen.findByRole('button', { name: 'Failed to save — retry' })).toBeTruthy();
     expect(field('Address').value).toBe('12 Hamra St');
     expect(await screen.findByText(/^Couldn't save:/)).toBeTruthy();
 
+    // Back to clean, the failure is forgotten: new edits read "Unsaved changes" again.
+    type('Address', '');
+    expect(await indicator()).toBe('');
+    type('Address', '12 Hamra St');
+    expect(await indicator()).toBe('Unsaved changes');
+    fireEvent.click(saveButton());
+    const again = await screen.findByRole('button', { name: 'Failed to save — retry' });
+
     fail = false;
-    fireEvent.click(retry);
+    fireEvent.click(again);
     await waitFor(async () => {
-      expect(await indicator()).toBe('✓ Saved just now');
+      expect(await indicator()).toBe('✓Saved just now');
     });
     const patches = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH');
-    expect(patches).toHaveLength(2);
+    expect(patches).toHaveLength(3);
     expect(sent(fetchMock, 'PATCH', `/patients/${RANA.id}`)).toEqual({ address: '12 Hamra St' });
   });
 
@@ -246,7 +337,7 @@ describe('InformationTab', () => {
     ).toBeTruthy();
     expect(field('Address').value).toBe('12 Hamra St');
     expect(field('Address').matches(':disabled')).toBe(false);
-    expect(saveButton().disabled).toBe(true);
+    expect(blocked()).toBe(true);
     expect(await indicator()).toBe('Unsaved changes');
     fireEvent.submit(saveButton());
     expect(sent(fetchMock, 'PATCH', `/patients/${RANA.id}`)).toBeUndefined();
@@ -267,6 +358,15 @@ describe('InformationTab', () => {
       expect(field('Address').matches(':disabled')).toBe(true);
     });
     expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+  });
+
+  it('is read-only without patient:write', async () => {
+    mockApi({ patients: [RANA] });
+    renderRecord({ url: URL_, permissions: ['patient:read', 'payment:read'] });
+    const form = await card();
+    expect(field('Address').matches(':disabled')).toBe(true);
+    expect(within(form).queryByRole('button', { name: 'Save changes' })).toBeNull();
+    expect(within(form).queryByRole('status')).toBeNull();
   });
 
   it('is read-only for an archived record', async () => {

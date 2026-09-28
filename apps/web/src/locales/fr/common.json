@@ -25,7 +25,7 @@
   "saveState": {
     "unsaved": "Modifications non enregistrées",
     "saving": "Enregistrement…",
-    "saved": "✓ Enregistré à l’instant",
+    "saved": "Enregistré à l’instant",
     "failed": "Échec de l’enregistrement — réessayer"
   }
 }

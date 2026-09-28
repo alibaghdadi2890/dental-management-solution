@@ -6,7 +6,6 @@ import { Field, Select, TextInput } from '@/components/ui/field';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { ageOrNull } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { ErrorField } from './panels/form-server-errors';
 import { parseAlerts } from './patient-form';
 import type { PatientForm, TextField } from './use-patient-form';
 
@@ -70,10 +69,7 @@ export function PatientField({
   const tone: Tone = variant === 'page' ? 'page' : REQUIRED.has(name) ? 'required' : 'demoted';
   const wrapper = cn(tone === 'demoted' && 'text-ink-muted', className);
 
-  const message = (field: ErrorField) => {
-    const key = form.errors[field];
-    return key === undefined ? undefined : t(`form.errors.${key}`);
-  };
+  const message = form.messageOf;
 
   const label = (text: string) => {
     const required = REQUIRED.has(name) && (

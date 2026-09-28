@@ -680,7 +680,7 @@ describe('PatientsPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Archive' }));
 
     expect((await within(dialog).findByRole('alert')).textContent).toBe(
-      "Couldn't archive: Conflict",
+      "Couldn't archive: the record has already been merged into another",
     );
     expect(within(dialog).getByRole<HTMLTextAreaElement>('textbox').value).toBe('Duplicate');
   });

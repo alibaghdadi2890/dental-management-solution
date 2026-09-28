@@ -28,7 +28,7 @@ import { usePatientNavigation } from '../patient-navigation';
 import { createPatient, invalidatePatientData, patientQuery, updatePatient } from '../patients-api';
 import { usePatientForm } from '../use-patient-form';
 import { AccountFields } from './account-fields';
-import { type ErrorField, failureOf, fieldErrorsOf } from './form-server-errors';
+import { failureOf, fieldErrorsOf } from './form-server-errors';
 import { PanelFallback } from './panel-fallback';
 import { useDuplicateTwin } from './use-duplicate-twin';
 
@@ -244,10 +244,7 @@ function PatientForm({
     }
   };
 
-  const message = (field: ErrorField) => {
-    const key = form.errors[field];
-    return key === undefined ? undefined : t(`form.errors.${key}`);
-  };
+  const message = form.messageOf;
 
   const field = (name: PatientFieldName, className?: string) => (
     <PatientField form={form} name={name} variant="panel" className={className} />

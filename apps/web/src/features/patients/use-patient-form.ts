@@ -1,5 +1,6 @@
 import type { PatientSex, Session } from '@dcm/contracts';
-import { type RefObject, useEffect, useState } from 'react';
+import { type RefObject, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { dateInputOrder, todayIn } from '@/lib/format';
 import { type ErrorField, type FormErrors } from './panels/form-server-errors';
 import { type PatientFormValues, showGuardian, validate } from './patient-form';
@@ -21,6 +22,7 @@ export function usePatientForm(
   tenant: Tenant,
   formRef: RefObject<HTMLFormElement | null>,
 ) {
+  const { t } = useTranslation('patients');
   const { country } = tenant;
   const today = todayIn(tenant.timeZone);
   const order = dateInputOrder(country);
@@ -29,6 +31,11 @@ export function usePatientForm(
   const [values, setValues] = useState(initial);
   const [attempts, setAttempts] = useState(0);
   const [serverErrors, setServerErrors] = useState<FormErrors>({});
+  // The values as last rendered, for a save that settles after the person typed on.
+  const latest = useRef(values);
+  useEffect(() => {
+    latest.current = values;
+  }, [values]);
 
   // Each attempt that shows errors moves focus to the first field in error.
   useEffect(() => {
@@ -46,10 +53,24 @@ export function usePatientForm(
     setServerErrors(({ [errorField]: _, ...rest }) => rest);
   };
 
+  /** Replaces the values with `next` (a new starting point) and forgets past attempts, so fields
+   * are not validated eagerly again until the next save. */
+  const replaceWith = (next: PatientFormValues) => {
+    setInitial(next);
+    setValues(next);
+    setAttempts(0);
+    setServerErrors({});
+  };
+
   return {
     initial,
     values,
     errors,
+    /** A field's error message, in the person's language. */
+    messageOf: (field: ErrorField): string | undefined => {
+      const key = errors[field];
+      return key === undefined ? undefined : t(`form.errors.${key}`);
+    },
     country,
     today,
     order,
@@ -71,11 +92,14 @@ export function usePatientForm(
       setServerErrors(fields);
       setAttempts((count) => count + 1);
     },
+    /** The record changed underneath an untouched form: it follows. */
+    reset: replaceWith,
     /** After a save: `saved` becomes the new starting point, and the values too — unless they
-     * were edited again while `submitted` was being saved, in which case those edits stay. */
+     * were edited again while `submitted` was being saved, in which case those edits stay (and so
+     * do their errors). */
     rebase: (saved: PatientFormValues, submitted: PatientFormValues) => {
-      setInitial(saved);
-      setValues((current) => (current === submitted ? saved : current));
+      if (latest.current === submitted) replaceWith(saved);
+      else setInitial(saved);
     },
   };
 }

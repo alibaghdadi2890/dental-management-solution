@@ -2,7 +2,7 @@ import { ageOn, type Patient } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { todayIn } from '@/lib/format';
-import { json, mockApi, patient, renderRecord, sent } from '../patients.test-utils';
+import { json, mockApi, patient, problem, renderRecord, sent } from '../patients.test-utils';
 
 const RANA = patient(1, 'Rana Haddad', {
   dateOfBirth: '1990-05-01',
@@ -101,8 +101,27 @@ describe('RecordHeader', () => {
     fireEvent.click(within(banner).getByRole('button', { name: 'Restore' }));
     expect(await screen.findByText('Rana Haddad restored')).toBeTruthy();
     expect(sent(fetchMock, 'POST', '/patients/restore')).toEqual({ ids: [RANA.id] });
-    expect(await within(banner).findByRole('button', { name: 'Edit patient' })).toBeTruthy();
+    const edit = await within(banner).findByRole('button', { name: 'Edit patient' });
     expect(within(banner).queryByText('Archived')).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(edit);
+    });
+  });
+
+  it('says why a restore failed, in the person’s language', async () => {
+    const archived: Patient = { ...RANA, archivedAt: '2026-09-01T10:00:00.000Z' };
+    mockApi({
+      patients: [archived],
+      mutation: (method, path) =>
+        method === 'POST' && path === '/patients/restore'
+          ? problem(409, 'patient.merged')
+          : undefined,
+    });
+    renderRecord({ url: recordOf(archived) });
+    fireEvent.click(await within(await header()).findByRole('button', { name: 'Restore' }));
+    expect(
+      await screen.findByText("Couldn't restore: the record has already been merged into another"),
+    ).toBeTruthy();
   });
 
   it('links a merged record to the kept one, without Restore', async () => {

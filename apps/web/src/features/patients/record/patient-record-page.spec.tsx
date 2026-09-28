@@ -39,6 +39,49 @@ describe('PatientRecordPage', () => {
     expect(await screen.findByRole('tabpanel', { name: 'Overview' })).toBeTruthy();
   });
 
+  it('keeps the record one history entry across tabs: All patients returns to the list', async () => {
+    mockApi({ patients: [RANA] });
+    const { router } = renderRecord({ url: `/patients/${RANA.id}`, before: ['/patients'] });
+    fireEvent.click(await screen.findByRole('tab', { name: 'Patient information' }));
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'information' });
+    });
+    fireEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'overview' });
+    });
+    fireEvent.click(await screen.findByRole('button', { name: 'Complete' }));
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'information' });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'All patients' }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/patients');
+    });
+  });
+
+  it('moves between tabs from the keyboard', async () => {
+    mockApi({ patients: [RANA] });
+    const { router } = renderRecord({ url: `/patients/${RANA.id}` });
+    const overview = await screen.findByRole('tab', { name: 'Overview' });
+    const information = screen.getByRole('tab', { name: 'Patient information' });
+    expect(overview.tabIndex).toBe(0);
+    expect(information.tabIndex).toBe(-1);
+    expect(overview.getAttribute('aria-controls')).toBe(screen.getByRole('tabpanel').id);
+    overview.focus();
+    fireEvent.keyDown(overview, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(information);
+    fireEvent.keyDown(information, { key: 'Home' });
+    expect(document.activeElement).toBe(overview);
+    fireEvent.keyDown(overview, { key: 'End' });
+    expect(document.activeElement).toBe(information);
+    fireEvent.click(information);
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({ tab: 'information' });
+    });
+    expect(await screen.findByRole('tabpanel', { name: 'Patient information' })).toBeTruthy();
+  });
+
   it('shows the Overview for an unknown tab', async () => {
     mockApi({ patients: [RANA] });
     renderRecord({ url: `/patients/${RANA.id}?tab=chart` });

@@ -364,7 +364,6 @@
       "complete": "Complet",
       "partial": "Partiellement complet",
       "intro": "Rien n’est obligatoire ici. Complétez-le quand cela devient utile.",
-      "updated": "Informations du patient mises à jour",
       "archived": "Ce dossier est archivé : ses informations ne peuvent pas être modifiées. Restaurez-le pour les modifier.",
       "merged": "Ce dossier a été fusionné avec un autre : ses informations ne peuvent pas être modifiées."
     }

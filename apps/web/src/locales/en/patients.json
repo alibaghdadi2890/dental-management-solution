@@ -364,7 +364,6 @@
       "complete": "Complete",
       "partial": "Partly complete",
       "intro": "Nothing here is required. Fill it in when it becomes relevant.",
-      "updated": "Patient information updated",
       "archived": "This record is archived, so its details can’t be changed. Restore it to edit them.",
       "merged": "This record was merged into another one, so its details can’t be changed."
     }

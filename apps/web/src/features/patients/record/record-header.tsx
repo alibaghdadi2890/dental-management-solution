@@ -1,18 +1,17 @@
 import type { Patient, Session } from '@dcm/contracts';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/list';
-import { useToast } from '@/components/ui/toast-context';
+import { Tabs } from '@/components/ui/tabs';
 import { usePermission } from '@/features/auth/use-permission';
-import { ApiError } from '@/lib/api';
 import { formatAgeLine, formatPhone, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
-import { cn } from '@/lib/utils';
 import { usePatientNavigation } from '../patient-navigation';
-import { invalidatePatientData, patientQuery, restorePatients } from '../patients-api';
+import { patientQuery } from '../patients-api';
+import { useArchivePatients } from '../use-archive-patients';
 import { RECORD_TABS, type RecordTab } from './record-search';
 
 type Tenant = NonNullable<Session['tenant']>;
@@ -87,39 +86,6 @@ function MergedNotice({ keptId }: { keptId: string }) {
   );
 }
 
-/** Restores an archived record from its header, then reloads it (and the lists) in place. */
-function RestoreButton({ patient }: { patient: Patient }) {
-  const { t } = useTranslation(['patients', 'common']);
-  const toast = useToast();
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  return (
-    <Button
-      busy={busy}
-      onClick={() => {
-        setBusy(true);
-        restorePatients({ ids: [patient.id] })
-          .then(
-            () => {
-              toast(t('restore.doneNamed', { name: patient.fullName }));
-              return invalidatePatientData(queryClient);
-            },
-            (error: unknown) => {
-              const reason =
-                error instanceof ApiError ? error.problem.title : t('common:unexpected');
-              toast(t('restore.failed', { reason }), { tone: 'danger' });
-            },
-          )
-          .finally(() => {
-            setBusy(false);
-          });
-      }}
-    >
-      {t('record.restore')}
-    </Button>
-  );
-}
-
 /**
  * The patient record's header (workspace spec §Screen 3 header, design §Patient record): the
  * "All patients" back link, the avatar, name and metadata (number, age line, phone), the medical
@@ -131,12 +97,15 @@ export function RecordHeader({
   patient,
   tenant,
   locale,
+  tabsId,
   tab,
   onTab,
 }: {
   patient: Patient;
   tenant: Tenant;
   locale: string;
+  /** Ties the tabs to the page's `TabPanel`. */
+  tabsId: string;
   tab: RecordTab;
   onTab: (tab: RecordTab) => void;
 }) {
@@ -145,6 +114,22 @@ export function RecordHeader({
   const { editPatient } = usePatientNavigation();
   const archived = patient.archivedAt !== null;
   const merged = patient.mergedIntoId;
+
+  // Restore (as the list's, with Undo), then — once the reloaded record swaps Restore for Edit
+  // patient — focus lands on Edit patient rather than on the page.
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const focusEdit = useRef(false);
+  const restoring = useArchivePatients({
+    onDone: () => undefined,
+    focusAfter: () => {
+      focusEdit.current = true;
+    },
+  });
+  useEffect(() => {
+    if (archived || !focusEdit.current) return;
+    focusEdit.current = false;
+    actionsRef.current?.querySelector('button')?.focus();
+  }, [archived]);
 
   const ageLine = formatAgeLine(patient.dateOfBirth, todayIn(tenant.timeZone), { locale });
   const age =
@@ -198,9 +183,16 @@ export function RecordHeader({
           </ul>
         )}
         {canWrite && merged === null && (
-          <div className="ms-auto flex gap-2 pt-1">
+          <div ref={actionsRef} className="ms-auto flex gap-2 pt-1">
             {archived ? (
-              <RestoreButton patient={patient} />
+              <Button
+                busy={restoring.busy}
+                onClick={() => {
+                  restoring.restore([patient]);
+                }}
+              >
+                {t('record.restore')}
+              </Button>
             ) : (
               <Button
                 onClick={() => {
@@ -214,30 +206,14 @@ export function RecordHeader({
         )}
       </div>
       {merged !== null && <MergedNotice keptId={merged} />}
-      <div role="tablist" aria-label={t('record.tabs.label')} className="mt-[18px] flex gap-0.5">
-        {RECORD_TABS.map((key) => {
-          const on = key === tab;
-          return (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => {
-                if (!on) onTab(key);
-              }}
-              className={cn(
-                '-mb-px h-9 cursor-pointer border-b-2 px-[13px] text-[12.5px] leading-none whitespace-nowrap',
-                on
-                  ? 'border-primary font-semibold text-ink'
-                  : 'border-transparent font-medium text-ink-tertiary hover:text-ink',
-              )}
-            >
-              {t(`record.tabs.${key}`)}
-            </button>
-          );
-        })}
-      </div>
+      <Tabs
+        idBase={tabsId}
+        label={t('record.tabs.label')}
+        tabs={RECORD_TABS.map((key) => ({ key, label: t(`record.tabs.${key}`) }))}
+        active={tab}
+        onChange={onTab}
+        className="mt-[18px]"
+      />
     </header>
   );
 }

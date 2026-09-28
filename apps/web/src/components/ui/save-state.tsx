@@ -3,8 +3,9 @@ import { cn } from '@/lib/utils';
 
 /**
  * Where an explicitly saved form stands (patients design Q16): `clean` shows nothing, `dirty`
- * "Unsaved changes", `saving` "Saving…" with the POC's 11px spinner, `saved` "✓ Saved just now",
- * `failed` "Failed to save — retry", which retries when clicked.
+ * "Unsaved changes", `saving` "Saving…" with the POC's 11px spinner, `saved` "✓ Saved just now"
+ * (the tick is decoration, hidden from screen readers), `failed` "Failed to save — retry", which
+ * retries when clicked.
  */
 export type SaveStatus = 'clean' | 'dirty' | 'saving' | 'saved' | 'failed';
 
@@ -29,7 +30,10 @@ export function SaveState({ status, onRetry }: { status: SaveStatus; onRetry: ()
         </span>
       )}
       {status === 'saved' && (
-        <span className={cn(TEXT, 'text-success')}>{t('saveState.saved')}</span>
+        <span className={cn(TEXT, 'text-success')}>
+          <span aria-hidden>{'✓'}</span>
+          {t('saveState.saved')}
+        </span>
       )}
       {status === 'failed' && (
         <button

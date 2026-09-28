@@ -55,12 +55,46 @@ describe('OverviewTab', () => {
   });
 
   it('lists a balance in another currency after the tenant currency', async () => {
+    mockApi({
+      patients: [RANA],
+      balances: {
+        [RANA.id]: [
+          { amount: '40.00', currency: 'EUR' },
+          { amount: '250.00', currency: 'USD' },
+        ],
+      },
+    });
+    renderRecord({ url: URL_ });
+    const figure = await total();
+    expect(figure.textContent).toBe('$250');
+    expect(within(await card('Balance')).getByText('Also €40')).toBeTruthy();
+  });
+
+  it('leads with the owed currency when nothing is owed in the tenant currency', async () => {
     mockApi({ patients: [RANA], balances: { [RANA.id]: [{ amount: '40.00', currency: 'EUR' }] } });
     renderRecord({ url: URL_ });
     const figure = await total();
-    expect(figure.textContent).toBe('$0');
+    expect(figure.textContent).toBe('€40');
     expect(figure.className).toContain('text-danger');
-    expect(within(await card('Balance')).getByText('Also €40')).toBeTruthy();
+    expect(within(await card('Balance')).queryByText(/^Also/)).toBeNull();
+  });
+
+  it('shows a Balance skeleton card while the record loads, only with payment:read', async () => {
+    const base = mockApi({ patients: [RANA] });
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+      url === `/api/v1/patients/${RANA.id}`
+        ? new Promise<Response>(() => undefined)
+        : base(url, init),
+    );
+    renderRecord({ url: URL_ });
+    const balance = await screen.findByRole('region', { name: 'Balance' });
+    expect(within(balance).getByLabelText('Loading patient…').getAttribute('aria-busy')).toBe(
+      'true',
+    );
+    cleanup();
+    renderRecord({ url: URL_, permissions: ['patient:read'] });
+    await screen.findByRole('region', { name: 'Treatment summary' });
+    expect(screen.queryByRole('region', { name: 'Balance' })).toBeNull();
   });
 
   it('says so when the balance fails to load', async () => {
@@ -73,6 +107,13 @@ describe('OverviewTab', () => {
       'textContent',
       'Couldn’t load the balance',
     );
+  });
+
+  it('has no Complete link without patient:write', async () => {
+    mockApi({ patients: [RANA] });
+    renderRecord({ url: URL_, permissions: ['patient:read', 'payment:read'] });
+    const info = await card('Patient information');
+    expect(within(info).queryByRole('button', { name: 'Complete' })).toBeNull();
   });
 
   it('has no Balance card without payment:read, and never asks for it', async () => {

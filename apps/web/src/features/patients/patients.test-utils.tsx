@@ -25,7 +25,7 @@ import { ToastProvider } from '@/components/ui/toast';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { parsePatientsSearch } from './list-query';
 import { PatientsScreen } from './patients-screen';
-import { PatientRecordPage } from './record/patient-record-page';
+import { PatientRecordScreen } from './record/patient-record-page';
 import { parseRecordSearch } from './record/record-search';
 
 /** Test-only: shared by the panel specs — fixtures, an API mock, and the route's own wiring
@@ -303,7 +303,8 @@ export function renderPanels({
 
 /**
  * Renders the patient record at `url` (after `before`, earlier history entries) with the real
- * `/patients` list beside it, both wired as their routes are, plus a stand-in `/visits`. Returns
+ * `/patients` list beside it, both wired as their routes are (`PatientRecordScreen`,
+ * `PatientsScreen`), plus a stand-in `/visits`. Returns
  * the router and the query client.
  */
 export function renderRecord({
@@ -341,21 +342,7 @@ export function renderRecord({
   function RecordRoute() {
     const { patientId } = recordRoute.useParams();
     const { tab } = recordRoute.useSearch();
-    const navigate = useNavigate();
-    return (
-      <PatientRecordPage
-        key={patientId}
-        patientId={patientId}
-        tab={tab}
-        onTab={(next) => {
-          void navigate({
-            to: '/patients/$patientId',
-            params: { patientId },
-            search: { tab: next },
-          });
-        }}
-      />
-    );
+    return <PatientRecordScreen patientId={patientId} tab={tab} />;
   }
   const routeTree = rootRoute.addChildren([
     createRoute({

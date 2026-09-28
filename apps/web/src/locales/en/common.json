@@ -25,7 +25,7 @@
   "saveState": {
     "unsaved": "Unsaved changes",
     "saving": "Saving…",
-    "saved": "✓ Saved just now",
+    "saved": "Saved just now",
     "failed": "Failed to save — retry"
   }
 }

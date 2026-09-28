@@ -74,23 +74,26 @@ function PatientInfoCard({
   patient: Patient;
   tenant: Tenant;
   locale: string;
-  onComplete: () => void;
+  /** "Complete →", only for those who may edit the patient. */
+  onComplete: (() => void) | undefined;
 }) {
   const { t } = useTranslation('patients');
   return (
     <Card
       title={t('record.info.title')}
       action={
-        <button
-          type="button"
-          onClick={onComplete}
-          className="flex cursor-pointer items-center gap-1 text-[12.5px] leading-none font-medium text-primary hover:underline"
-        >
-          {t('record.info.complete')}
-          <span aria-hidden className="rtl:-scale-x-100">
-            {'→'}
-          </span>
-        </button>
+        onComplete && (
+          <button
+            type="button"
+            onClick={onComplete}
+            className="flex cursor-pointer items-center gap-1 text-[12.5px] leading-none font-medium text-primary hover:underline"
+          >
+            {t('record.info.complete')}
+            <span aria-hidden className="rtl:-scale-x-100">
+              {'→'}
+            </span>
+          </button>
+        )
       }
     >
       <dl className="m-0">
@@ -131,6 +134,7 @@ export function OverviewTab({
   onComplete: () => void;
 }) {
   const canPay = usePermission('payment:read');
+  const canWrite = usePermission('patient:write');
   return (
     <div className="flex flex-wrap items-start gap-4">
       <div className="flex min-w-0 flex-[1_1_520px] flex-col gap-4">
@@ -138,7 +142,7 @@ export function OverviewTab({
           patient={patient}
           tenant={tenant}
           locale={locale}
-          onComplete={onComplete}
+          onComplete={canWrite ? onComplete : undefined}
         />
       </div>
       <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">

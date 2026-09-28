@@ -1,10 +1,13 @@
 import type { Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
+import { TabPanel } from '@/components/ui/tabs';
 import { useSession } from '@/features/auth/session';
+import { usePermission } from '@/features/auth/use-permission';
 import { ApiError } from '@/lib/api';
 import { patientQuery } from '../patients-api';
 import { InformationTab } from './information-tab';
@@ -14,27 +17,56 @@ import type { RecordTab } from './record-search';
 
 type Tenant = NonNullable<Session['tenant']>;
 
-interface RecordPageProps {
+interface RecordProps {
   patientId: string;
   tab: RecordTab;
-  onTab: (tab: RecordTab) => void;
 }
 
 /**
- * The patient record, `/patients/$patientId` (workspace spec §Screen 3, design §Patient record):
- * the header with its two tabs, then Overview or Patient information. Loading shows skeleton bars
- * inside the cards; an unknown id (or another clinic's patient) reads "Patient not found" with a
- * way back to the list; any other failure offers Try again.
+ * The `/patients/$patientId` route's wiring, shared with the tests so they drive exactly what
+ * ships: a fresh record per patient id, and tab changes that replace the history entry — the
+ * record is one entry however many tabs were visited, so Back (and "All patients") leaves it.
  */
-export function PatientRecordPage(props: RecordPageProps) {
+export function PatientRecordScreen({ patientId, tab }: RecordProps) {
+  const navigate = useNavigate();
+  return (
+    <PatientRecordPage
+      key={patientId}
+      patientId={patientId}
+      tab={tab}
+      onTab={(next) => {
+        void navigate({
+          to: '/patients/$patientId',
+          params: { patientId },
+          search: { tab: next },
+          replace: true,
+        });
+      }}
+    />
+  );
+}
+
+/**
+ * The patient record (workspace spec §Screen 3, design §Patient record): the header with its two
+ * tabs, then Overview or Patient information. Loading shows skeleton bars inside the cards; an
+ * unknown id (or another clinic's patient) reads "Patient not found" with a way back to the list;
+ * any other failure offers Try again.
+ */
+function PatientRecordPage(props: RecordProps & { onTab: (tab: RecordTab) => void }) {
   const { data: session } = useSession();
   if (!session?.tenant) return null;
   return <PatientRecord {...props} tenant={session.tenant} />;
 }
 
-function PatientRecord({ patientId, tab, onTab, tenant }: RecordPageProps & { tenant: Tenant }) {
+function PatientRecord({
+  patientId,
+  tab,
+  onTab,
+  tenant,
+}: RecordProps & { onTab: (tab: RecordTab) => void; tenant: Tenant }) {
   const { t, i18n } = useTranslation(['patients', 'common']);
   const locale = i18n.resolvedLanguage ?? 'en';
+  const tabsId = useId();
   const patient = useQuery(patientQuery(patientId));
 
   if (!patient.data) {
@@ -78,14 +110,11 @@ function PatientRecord({ patientId, tab, onTab, tenant }: RecordPageProps & { te
         patient={patient.data}
         tenant={tenant}
         locale={locale}
+        tabsId={tabsId}
         tab={tab}
         onTab={onTab}
       />
-      <div
-        role="tabpanel"
-        aria-label={t(`record.tabs.${tab}`)}
-        className="max-w-[1320px] px-[26px] pt-[22px] pb-11"
-      >
+      <TabPanel idBase={tabsId} tabKey={tab} className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
         {tab === 'overview' ? (
           <OverviewTab
             patient={patient.data}
@@ -98,14 +127,16 @@ function PatientRecord({ patientId, tab, onTab, tenant }: RecordPageProps & { te
         ) : (
           <InformationTab patient={patient.data} tenant={tenant} />
         )}
-      </div>
+      </TabPanel>
     </div>
   );
 }
 
-/** The header's shape and the active tab's cards, filled with skeleton bars. */
+/** The header's shape and the active tab's cards — the Balance card too, for those who will see
+ * it — filled with skeleton bars, so nothing shifts when the record arrives. */
 function RecordSkeleton({ tab }: { tab: RecordTab }) {
-  const { t } = useTranslation('patients');
+  const { t } = useTranslation(['patients', 'billing']);
+  const canPay = usePermission('payment:read');
   const label = t('panel.loading');
   return (
     <div className="h-full overflow-auto">
@@ -127,7 +158,12 @@ function RecordSkeleton({ tab }: { tab: RecordTab }) {
                 <CardSkeleton label={label} />
               </Card>
             </div>
-            <div className="min-w-0 flex-[1_1_300px]">
+            <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
+              {canPay && (
+                <Card title={t('billing:balance.title')}>
+                  <CardSkeleton label={label} />
+                </Card>
+              )}
               <Card title={t('record.summary.title')}>
                 <CardSkeleton label={label} />
               </Card>
