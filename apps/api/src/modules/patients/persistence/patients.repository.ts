@@ -2,20 +2,23 @@ import type { PatientSex } from '@dcm/contracts';
 import { phoneDigits } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, eq, getTableColumns, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import type { Transaction } from '../../../platform/db/database';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { newId } from '../../../platform/kernel/id';
 import { nameKey } from '../domain/name-key';
 import { PatientNotFoundError } from '../domain/patient-errors';
-import type { DomainPatient } from '../domain/patient';
+import type { DomainPatient, DomainPatientListRow, GuardianSummary } from '../domain/patient';
+import { linkedPatients, resolvedFullName, resolvedPhone } from './contact-resolution.sql';
 import {
   idAmong,
+  matchedContactColumn,
   orderByFor,
   whereFor,
   type PatientOrderOptions,
   type PatientSearchFilters,
   type PatientSearchOptions,
 } from './patient-search.sql';
-import { patients } from './schema';
+import { contacts, patientContacts, patients } from './schema';
 
 export type {
   PatientOrderOptions,
@@ -60,6 +63,70 @@ function toDomain(row: PatientRow): DomainPatient {
 }
 
 /**
+ * Each patient's primary guardian, resolved (design addendum C7): at most one row per patient
+ * (the partial unique index on `is_primary_guardian`), so a left join keeps one row per patient.
+ * Not lateral: Postgres can hash-join it once instead of probing it per patient.
+ */
+function primaryGuardians(tx: Transaction) {
+  return tx
+    .select({
+      patientId: patientContacts.patientId,
+      contactId: patientContacts.contactId,
+      relationship: patientContacts.relationship,
+      fullName: sql<string>`${resolvedFullName}`.as('guardian_full_name'),
+      phone: sql<string | null>`${resolvedPhone}`.as('guardian_phone'),
+    })
+    .from(patientContacts)
+    .innerJoin(
+      contacts,
+      and(eq(contacts.id, patientContacts.contactId), isNull(contacts.deletedAt)),
+    )
+    .leftJoin(linkedPatients, eq(linkedPatients.id, contacts.linkedPatientId))
+    .where(eq(patientContacts.isPrimaryGuardian, true))
+    .as('primary_guardian');
+}
+
+type GuardianColumns = {
+  guardianContactId: string | null;
+  guardianFullName: string | null;
+  guardianPhone: string | null;
+  guardianRelationship: GuardianSummary['relationship'] | null;
+};
+
+/** The list columns of a `primaryGuardians` join (all null for a patient without one). */
+function guardianColumns(guardian: ReturnType<typeof primaryGuardians>) {
+  return {
+    guardianContactId: guardian.contactId,
+    guardianFullName: guardian.fullName,
+    guardianPhone: guardian.phone,
+    guardianRelationship: guardian.relationship,
+  };
+}
+
+function toGuardian(row: GuardianColumns): GuardianSummary | null {
+  if (
+    row.guardianContactId === null ||
+    row.guardianFullName === null ||
+    row.guardianRelationship === null
+  ) {
+    return null;
+  }
+  return {
+    contactId: row.guardianContactId,
+    fullName: row.guardianFullName,
+    phone: row.guardianPhone,
+    relationship: row.guardianRelationship,
+  };
+}
+
+function toListRow(
+  row: PatientRow & GuardianColumns,
+  matchedContact: DomainPatientListRow['matchedContact'] = null,
+): DomainPatientListRow {
+  return { ...toDomain(row), primaryGuardian: toGuardian(row), matchedContact };
+}
+
+/**
  * A phone already normalised against the tenant's country (`@dcm/contracts` `normalizePhone`).
  * The repository stores `e164` and derives `phone_search` from both fields — passed in explicit
  * form rather than a raw string so a caller can never accidentally write an unnormalised number.
@@ -69,8 +136,11 @@ export interface NormalizedPhoneInput {
   national: string;
 }
 
-/** The stored phone and its search digits; both null without one (digit queries never match). */
-function phoneColumns(phone: NormalizedPhoneInput | null): {
+/**
+ * The stored phone and its search digits; both null without one (digit queries never match).
+ * Contacts store theirs the same way (`ContactsRepository`).
+ */
+export function phoneColumns(phone: NormalizedPhoneInput | null): {
   phone: string | null;
   phoneSearch: string | null;
 } {
@@ -113,7 +183,7 @@ export interface PatientPatch {
 }
 
 export interface PatientSearchResult {
-  rows: DomainPatient[];
+  rows: DomainPatientListRow[];
   total: number;
 }
 
@@ -321,15 +391,24 @@ export class PatientsRepository {
 
     // Postgres `count()` is `bigint`, which node-postgres returns as a string (not a `number`,
     // which could lose precision) — typed and converted explicitly rather than trusted as `number`.
-    const rows = await this.db.run((tx) =>
-      tx
-        .select({ ...getTableColumns(patients), total: sql<string>`count(*) over ()` })
+    // `q` narrows by `where` alone (the contact-phone match is a subquery, never a join), so
+    // `count(*) over ()` counts each patient once however many of their contacts match.
+    const rows = await this.db.run((tx) => {
+      const guardian = primaryGuardians(tx);
+      return tx
+        .select({
+          ...getTableColumns(patients),
+          ...guardianColumns(guardian),
+          matchedContact: matchedContactColumn(filters),
+          total: sql<string>`count(*) over ()`,
+        })
         .from(patients)
+        .leftJoin(guardian, eq(guardian.patientId, patients.id))
         .where(where)
         .orderBy(...orderBy)
         .limit(options.size)
-        .offset((options.page - 1) * options.size),
-    );
+        .offset((options.page - 1) * options.size);
+    });
 
     if (rows.length === 0 && options.page > 1) {
       // `count(*) over ()` is a window over the *returned* rows: an out-of-range page (e.g. the
@@ -347,7 +426,7 @@ export class PatientsRepository {
     }
 
     const total = Number(rows.at(0)?.total ?? 0);
-    return { rows: rows.map((row) => toDomain(row)), total };
+    return { rows: rows.map((row) => toListRow(row, row.matchedContact)), total };
   }
 
   /**
@@ -383,7 +462,7 @@ export class PatientsRepository {
   }
 
   /** Active rows with a non-null date of birth whose (name_key, dob) is shared by ≥ 2 rows. */
-  async duplicateRows(): Promise<DomainPatient[]> {
+  async duplicateRows(): Promise<DomainPatientListRow[]> {
     return this.db.run(async (tx) => {
       const dupeGroups = tx
         .select({ nameKey: patients.nameKey, dateOfBirth: patients.dateOfBirth })
@@ -393,9 +472,11 @@ export class PatientsRepository {
         .having(sql`count(*) >= 2`)
         .as('dupe_groups');
 
+      const guardian = primaryGuardians(tx);
       const rows = await tx
-        .select(getTableColumns(patients))
+        .select({ ...getTableColumns(patients), ...guardianColumns(guardian) })
         .from(patients)
+        .leftJoin(guardian, eq(guardian.patientId, patients.id))
         .innerJoin(
           dupeGroups,
           and(
@@ -404,7 +485,7 @@ export class PatientsRepository {
           ),
         )
         .where(and(isNull(patients.deletedAt), isNotNull(patients.dateOfBirth)));
-      return rows.map((row) => toDomain(row));
+      return rows.map((row) => toListRow(row));
     });
   }
 
@@ -428,19 +509,21 @@ export class PatientsRepository {
     fullName: string,
     dateOfBirth: string,
     excludeId?: string,
-  ): Promise<DomainPatient[]> {
+  ): Promise<DomainPatientListRow[]> {
     const conditions = [
       isNull(patients.deletedAt),
       eq(patients.nameKey, nameKey(fullName)),
       eq(patients.dateOfBirth, dateOfBirth),
     ];
     if (excludeId) conditions.push(ne(patients.id, excludeId));
-    const rows = await this.db.run((tx) =>
-      tx
-        .select()
+    const rows = await this.db.run((tx) => {
+      const guardian = primaryGuardians(tx);
+      return tx
+        .select({ ...getTableColumns(patients), ...guardianColumns(guardian) })
         .from(patients)
-        .where(and(...conditions)),
-    );
-    return rows.map(toDomain);
+        .leftJoin(guardian, eq(guardian.patientId, patients.id))
+        .where(and(...conditions));
+    });
+    return rows.map((row) => toListRow(row));
   }
 }

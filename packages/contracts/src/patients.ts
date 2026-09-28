@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { emailSchema } from './auth.js';
+import { optionalEmailSchema } from './auth.js';
 import {
   blankToUndefined,
+  displayNumberSchema,
   idSchema,
   isoDateSchema,
   isoDateTimeSchema,
@@ -11,6 +12,7 @@ import {
   optionalText,
 } from './common.js';
 import { reasonSchema } from './audit.js';
+import { contactLinkInputSchema, matchedContactSchema, primaryGuardianSchema } from './contacts.js';
 import { AGE_BANDS } from './patient-age.js';
 
 /**
@@ -64,17 +66,6 @@ export const medicalAlertsSchema = z
   .transform(dedupeAlerts)
   .pipe(z.array(z.string()).max(MEDICAL_ALERTS_MAX));
 
-/** `P-` + at least 6 digits, zero-padded (`P-000001`), minted by the create transaction. */
-export const displayNumberSchema = z.string().regex(/^P-\d{6,}$/, 'Expected a patient number');
-
-/** Blank/absent → null, validated as an email only when present. */
-const optionalEmailSchema = z
-  .string()
-  .trim()
-  .nullish()
-  .transform((value) => (value ? value : null))
-  .pipe(z.union([z.null(), emailSchema]));
-
 const primaryDentistIdSchema = idSchema.nullish().transform((value) => value ?? null);
 
 /** No patient can plausibly have been born before this; also keeps display formatting sane. */
@@ -119,6 +110,49 @@ export const patientInputSchema = z.object({
 });
 export type PatientInput = z.infer<typeof patientInputSchema>;
 
+/** At most this many contacts are linked by one create (addendum C4). */
+export const PATIENT_CREATE_CONTACTS_MAX = 10;
+
+/**
+ * Creating a patient (addendum C4): the fields, plus contacts linked in the same transaction, plus
+ * `linkContactId` — an existing *unlinked* contact who becomes this patient ("the mother becomes
+ * a patient"). The same contact or patient may not be targeted twice.
+ */
+export const patientCreateSchema = patientInputSchema
+  .extend({
+    contacts: z.array(contactLinkInputSchema).max(PATIENT_CREATE_CONTACTS_MAX).default([]),
+    linkContactId: idSchema.optional(),
+  })
+  .superRefine((input, context) => {
+    const seen = new Set<string>();
+    input.contacts.forEach((link, index) => {
+      const target = link.target;
+      const key =
+        'contactId' in target
+          ? `contact:${target.contactId}`
+          : 'patientId' in target
+            ? `patient:${target.patientId}`
+            : undefined;
+      if (key === undefined) return;
+      if (seen.has(key)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'The same contact is linked twice',
+          path: ['contacts', index, 'target'],
+        });
+      }
+      seen.add(key);
+    });
+    if (input.linkContactId !== undefined && seen.has(`contact:${input.linkContactId}`)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A patient is never their own contact',
+        path: ['linkContactId'],
+      });
+    }
+  });
+export type PatientCreate = z.infer<typeof patientCreateSchema>;
+
 export const patientPatchSchema = z
   .object(patientFields)
   .partial()
@@ -149,20 +183,29 @@ export const patientSchema = z.object({
 });
 export type Patient = z.infer<typeof patientSchema>;
 
-/** The list/palette columns (README §Patients, §App shell). */
-export const patientListItemSchema = patientSchema.pick({
-  id: true,
-  displayNumber: true,
-  fullName: true,
-  phone: true,
-  dateOfBirth: true,
-  sex: true,
-  medicalAlerts: true,
-  primaryDentistId: true,
-  email: true,
-  archivedAt: true,
-  updatedAt: true,
-});
+/**
+ * The list/palette columns (README §Patients, §App shell), plus (addendum C7) the resolved primary
+ * guardian, and `matchedContact` when a search `q` matched this patient only through a contact's
+ * phone (null otherwise, and always null outside a search).
+ */
+export const patientListItemSchema = patientSchema
+  .pick({
+    id: true,
+    displayNumber: true,
+    fullName: true,
+    phone: true,
+    dateOfBirth: true,
+    sex: true,
+    medicalAlerts: true,
+    primaryDentistId: true,
+    email: true,
+    archivedAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    primaryGuardian: primaryGuardianSchema.nullable(),
+    matchedContact: matchedContactSchema.nullable(),
+  });
 export type PatientListItem = z.infer<typeof patientListItemSchema>;
 
 export const PATIENT_VIEWS = ['active', 'owing', 'notSeen', 'archived'] as const;

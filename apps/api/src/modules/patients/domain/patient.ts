@@ -1,4 +1,4 @@
-import type { PatientSex } from '@dcm/contracts';
+import type { ContactRelationship, PatientSex } from '@dcm/contracts';
 
 /**
  * The domain shape of a patient row: mirrors the contract `Patient` plus two internal fields the
@@ -32,4 +32,25 @@ export interface DomainPatient {
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** A list item's primary guardian, resolved through a linked patient (design addendum C7). */
+export interface GuardianSummary {
+  contactId: string;
+  fullName: string;
+  phone: string | null;
+  relationship: ContactRelationship;
+}
+
+/** The contact through whose phone a search `q` matched a patient (addendum C7). */
+export interface MatchedContactSummary {
+  fullName: string;
+  relationship: ContactRelationship;
+}
+
+/** A patient as the list, palette and duplicate views read it. */
+export interface DomainPatientListRow extends DomainPatient {
+  primaryGuardian: GuardianSummary | null;
+  /** Set only by a search whose `q` matched this patient through a contact's phone alone. */
+  matchedContact: MatchedContactSummary | null;
 }

@@ -1,5 +1,5 @@
 import type { Patient, PatientListItem } from '@dcm/contracts';
-import type { DomainPatient } from '../domain/patient';
+import type { DomainPatient, DomainPatientListRow } from '../domain/patient';
 
 /** The contract record: ISO timestamps, `archivedAt` from `deleted_at`, no internal columns. */
 export function toPatient(patient: DomainPatient): Patient {
@@ -24,8 +24,8 @@ export function toPatient(patient: DomainPatient): Patient {
   };
 }
 
-/** The list/palette columns. */
-export function toListItem(patient: DomainPatient): PatientListItem {
+/** The list/palette columns, with the resolved primary guardian and the matched contact (C7). */
+export function toListItem(patient: DomainPatientListRow): PatientListItem {
   return {
     id: patient.id,
     displayNumber: patient.displayNumber,
@@ -38,5 +38,7 @@ export function toListItem(patient: DomainPatient): PatientListItem {
     email: patient.email,
     archivedAt: patient.deletedAt?.toISOString() ?? null,
     updatedAt: patient.updatedAt.toISOString(),
+    primaryGuardian: patient.primaryGuardian,
+    matchedContact: patient.matchedContact,
   };
 }

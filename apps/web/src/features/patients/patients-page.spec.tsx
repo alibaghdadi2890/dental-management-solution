@@ -60,6 +60,8 @@ const item = (n: number, fullName: string, extra: Partial<PatientListItem> = {})
     email: null,
     archivedAt: null,
     updatedAt: '2026-09-01T10:00:00.000Z',
+    primaryGuardian: null,
+    matchedContact: null,
     ...extra,
   }) satisfies PatientListItem;
 

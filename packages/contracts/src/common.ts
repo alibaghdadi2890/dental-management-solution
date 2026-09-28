@@ -78,6 +78,13 @@ function isKnownTimeZone(value: string): boolean {
   }
 }
 
+/**
+ * A patient number: `P-` + at least 6 digits, zero-padded (`P-000001`), minted by the patient
+ * create transaction. Here rather than in `patients.ts` because `contacts.ts` needs it too, and
+ * `patients.ts` imports `contacts.ts` (no import cycle between the two).
+ */
+export const displayNumberSchema = z.string().regex(/^P-\d{6,}$/, 'Expected a patient number');
+
 /** A person's, clinic's or place's display name. */
 export const nameSchema = z.string().trim().min(1).max(120);
 

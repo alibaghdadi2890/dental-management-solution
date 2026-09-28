@@ -2,8 +2,9 @@
 
 **Status:** implemented. Patient records, search, duplicates, archive/restore and merge are done
 (feature 3). Contacts & family (design addendum `2026-09-28-patients-contacts-design.md`): the
-`contacts` and `patient_contacts` tables have landed; their service, routes and events arrive with
-task H2. The odontogram is planned.
+tables, the domain rules, the repositories, the contact-phone search and the list items'
+`primaryGuardian`/`matchedContact` have landed; the service, routes and events arrive with task H2
+(see [Contacts](#contacts-persistence-and-domain)). The odontogram is planned.
 
 ## Purpose
 
@@ -39,7 +40,8 @@ with an opening balance) are composed by `billing` on top of this module (design
 - **Dates:** the date of birth must not be after the tenant's today, computed from the injected
   clock in the tenant time zone (`localDate` in `platform/kernel`). Age bands use the same today.
 - **Search `q`:** a diacritics-insensitive substring of `name_key`, the display number, the
-  e-mail, and, when the query has at least 2 digits, the phone digits. A query shaped like a
+  e-mail, and, when the query has at least 2 digits, the phone digits — the patient's own, and the
+  resolved phone of any of the patient's live contacts (addendum C7). A query shaped like a
   patient number (`P-000123`, `p000123`: `/^p-?\d+$/i`) matches display numbers only, as
   `P-<digits>`; its digits never search phones. Bare digits (`000123`) are still a phone query.
 - **Archive** sets `deleted_at` (design Q11). The optional reason goes to the audit entry only.
@@ -62,13 +64,15 @@ with an opening balance) are composed by `billing` on top of this module (design
   `(tenant_id, name_key, date_of_birth)` where active (duplicates); `(tenant_id, updated_at)`
   (recent). `updated_at` always comes from the database clock.
 - `patient_counters` (tenant RLS): one row per tenant (`tenant_id` PK, `last_value`).
-- `contacts` (tenant RLS, soft delete; schema landed, API in H2): `full_name?`, `phone?` (E.164),
-  `phone_search?`, `email?`, `linked_patient_id?`. A contact linked to a patient stores no name,
-  phone or e-mail of its own (they are read from the patient), so a check requires
+- `contacts` (tenant RLS, soft delete; API in H2): `full_name?`, `name_key?`, `phone?` (E.164),
+  `phone_search?`, `email?`, `linked_patient_id?`. `name_key`/`phone_search` are internal search
+  columns derived by the repository exactly as on `patients` (migration 0012 added `name_key`; a
+  check keeps it present exactly when `full_name` is). A contact linked to a patient stores no
+  name, phone or e-mail of its own (they are read from the patient), so a check requires
   `linked_patient_id` or `full_name`. Unique `(tenant_id, id)`; at most one live contact per
   linked patient (partial unique `(tenant_id, linked_patient_id)` where linked and not deleted);
   `(tenant_id, linked_patient_id)` → `patients (tenant_id, id)`.
-- `patient_contacts` (tenant RLS, junction: hard delete; schema landed, API in H2): PK
+- `patient_contacts` (tenant RLS, junction: hard delete; API in H2): PK
   `(patient_id, contact_id)`, `relationship` (Postgres enum `contact_relationship`: parent,
   spouse, child, sibling, caregiver, other — the contact's relation to the patient), the role
   flags `is_guardian`, `is_billing_contact`, `is_emergency_contact` and one primary flag per role.
@@ -104,6 +108,15 @@ with an opening balance) are composed by `billing` on top of this module (design
 
 ### `search(query, internal?)`
 
+- Items are `PatientListItem`s, which carry (addendum C7):
+  - `primaryGuardian`: `{ contactId, fullName, phone, relationship }` of the patient's primary
+    guardian link, resolved (a contact linked to a patient shows that patient's name and phone),
+    or null. Also on `duplicates()` and `checkDuplicates()` items.
+  - `matchedContact`: `{ fullName, relationship }` of the contact through whose phone a digit `q`
+    matched the patient — only when the patient's own name, number, e-mail and phone did not
+    match (else null, and always null without a phone query). Several matching contacts: the
+    primary guardian first, then the oldest link.
+
 - `query` is `PatientListQuery`: `view`, `q`, `dentist` (staff profile id or `none`), `age`
   (`child`/`adult`/`senior`, by date of birth against the tenant's today), `alerts`, `lastVisit`
   (no effect until visits exist), `sort`, `dir`, `page`, `size`.
@@ -132,6 +145,58 @@ column)], restKey)` ascending, then `name_key`, then `id`; `dir` is ignored, the
   - `size`: overrides the page size (1–500) for `search` (e.g. a one-row page when only the total
     counts).
   - Without them, `view=owing` or `sort=balance` → 422 `validation_failed` (path `view`/`sort`).
+
+## Contacts (persistence and domain)
+
+The routes, service methods, events and exported read API arrive with task H2; this is what they
+build on.
+
+- **Contracts** (`@dcm/contracts` `contacts.ts`): `contactRelationshipSchema`,
+  `contactRolesSchema`, `contactLinkTargetSchema` (exactly one of `{ contactId }`,
+  `{ patientId }`, `{ newContact: { fullName, phone, email? } }`), `contactLinkInputSchema`,
+  `contactLinkPatchSchema` (primaries can only be set to `true`), `contactPatchSchema`,
+  `contactViewSchema`, `patientContactSchema`, `contactLookupQuerySchema`,
+  `contactLookupItemSchema`; `patientCreateSchema` in `patients.ts` (the input plus up to 10
+  `contacts` and `linkContactId`).
+- **Domain** (`domain/contacts.ts`, pure):
+  - `planLinkChange(patientId, links, change)` for `link`, `update` (relationship, roles,
+    `makePrimary`) and `unlink`, returning `{ deletes, updates, inserts }`. Primaries follow
+    `assignPrimaries`: per role, an explicit primary, else the current one, else the oldest
+    holder (link `created_at`, then contact id). So the first holder becomes primary, a new
+    primary clears the old one, and removing the primary (unlink or role removal) promotes the
+    oldest remaining holder. A primary without its role, a link without a role, linking twice
+    and changing a link that does not exist are domain errors (`contact.primary_without_role`,
+    `contact.role_required`, `contact.already_linked`, `contact.not_found`).
+  - `planContactMerge(input)` (both ids, both link lists, both patients' linked contacts with their
+    links) → `{ deletes, updates, moves, relinks, folds }` (addendum C8): the
+    dropped record's links move to the kept one; a contact on both gets the roles OR-ed, and the
+    kept link's relationship. Per role, the kept primary wins, else the dropped one, else the
+    oldest holder. Links that would make the kept patient its own contact are deleted. The contact
+    linked to the dropped patient is re-pointed to the kept one, or folded into the kept
+    patient's linked contact (its links on other patients re-pointed, deduplicated with roles
+    and primaries OR-ed, and the contact soft-deleted).
+  - `resolveContact(contact, linkedPatient?)` → `ContactView`; `isOwnContact` /
+    `assertNotOwnContact` (`contact.is_patient`: a patient is never their own contact).
+- **Repositories** (every query through `TenantDb`, RLS only, no tenant parameters):
+  - `ContactsRepository`: `insert` (derives `name_key`/`phone_search`), `insertLinked(patientId)`,
+    `update` (live unlinked contacts only), `findById(s)` (with the linked patient),
+    `linkToPatient(contactId, patientId)` (sets the link and clears the own name, phone and
+    e-mail in one update), `findByLinkedPatient`, `lookup(q, limit)` (resolved `name_key` or ≥ 2
+    digits of the resolved phone digits), `findByPhoneDigits(e164Digits)` (exact resolved
+    E.164), `relink`, `softDelete`. Reads skip soft-deleted contacts.
+  - `PatientContactsRepository`: `listForPatient` (resolved; primaries first, then oldest),
+    `linksOf`, `listForContact`, `patientsBilledBy`, `link`, `updateLink`, `unlink`, and
+    `applyLinkPlan`/`applyMergePlan`, which write a plan in one transaction in an order the
+    one-primary-per-role indexes accept: deletes, then the changed rows' primaries cleared, then
+    their full state, then inserts, moves and re-points.
+- **Search SQL** (`patient-search.sql.ts`, `contact-resolution.sql.ts`): the contact-phone match
+  is `patients.id in (select patient_id … where resolved phone_search like …)`. It is
+  uncorrelated, so Postgres evaluates it once as a hashed subplan, and a patient is counted once
+  however many contacts match (`count(*) over ()` stays exact). `matchedContact` is a correlated
+  subquery behind `case when <own match> then null`, so it runs only for rows matched through a
+  contact. `primaryGuardian` is a left join to the primary-guardian links, at most one per
+  patient by the partial unique index. At 5,000 patients and 2,500 contacts the search runs in
+  about 17 ms (ADR-0018 bounds).
 
 ## HTTP
 

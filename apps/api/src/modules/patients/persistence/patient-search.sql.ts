@@ -14,15 +14,20 @@ import {
   type SQL,
 } from 'drizzle-orm';
 import { nameKey } from '../domain/name-key';
+import type { MatchedContactSummary } from '../domain/patient';
 import type { PatientRankKeys } from '../domain/rank-keys';
-import { patients } from './schema';
+import { joinLinkedPatient, resolvedFullName, resolvedPhoneSearch } from './contact-resolution.sql';
+import { contacts, patientContacts, patients } from './schema';
 
 /** `active`/`notSeen` (currently identical — design Q14) map to `deleted_at is null`. */
 export type PatientView = 'active' | 'notSeen' | 'archived';
 
 export interface PatientSearchFilters {
   view: PatientView;
-  /** Diacritics-insensitive name substring, or number/e-mail/phone-digits substring. */
+  /**
+   * Diacritics-insensitive name substring, or number/e-mail/phone-digits substring; phone digits
+   * also match the resolved phone of the patient's contacts (design addendum C7).
+   */
   q?: string;
   /** A practitioner's staff profile id (ADR-0020), or the literal `'none'` for "no dentist". */
   dentist?: string;
@@ -91,6 +96,54 @@ export function idAmong(column: AnyColumn, ids: readonly string[]): SQL {
   return sql`${column} = any(${uuidArray(ids)})`;
 }
 
+/**
+ * What a search `q` matches: `own` over the patient's own columns, and — for a phone query (at
+ * least 2 digits, not a patient number) — `contactPhone`, the LIKE pattern matched against the
+ * resolved phone digits of the patient's live contacts.
+ */
+interface QueryMatch {
+  own: SQL;
+  contactPhone: string | null;
+}
+
+function queryMatch(q: string): QueryMatch {
+  const patientNumber = PATIENT_NUMBER_QUERY.exec(q);
+  if (patientNumber) {
+    return {
+      own: ilike(patients.displayNumber, `%P-${patientNumber[1] ?? ''}%`),
+      contactPhone: null,
+    };
+  }
+  const escapedQ = escapeLike(q);
+  const qNameKey = escapeLike(nameKey(q));
+  const own: SQL[] = [
+    like(patients.nameKey, `%${qNameKey}%`),
+    ilike(patients.displayNumber, `%${escapedQ}%`),
+    ilike(patients.email, `%${escapedQ}%`),
+  ];
+  const qDigits = phoneDigits(q);
+  if (qDigits.length < MIN_PHONE_QUERY_DIGITS) {
+    return { own: or(...own) ?? sql`false`, contactPhone: null };
+  }
+  const pattern = `%${escapeLike(qDigits)}%`;
+  // A patient without a phone has a null `phone_search`: the LIKE is null, never a match.
+  own.push(like(patients.phoneSearch, pattern));
+  return { own: or(...own) ?? sql`false`, contactPhone: pattern };
+}
+
+/**
+ * The patients having a live contact whose resolved phone digits match `pattern`. Uncorrelated,
+ * so Postgres evaluates it once per query (a hashed subplan), whatever the number of patients.
+ */
+function patientIdsByContactPhone(pattern: string): SQL {
+  return sql`${patients.id} in (
+    select ${patientContacts.patientId} from ${patientContacts}
+    inner join ${contacts} on ${contacts.id} = ${patientContacts.contactId}
+    ${joinLinkedPatient}
+    where ${contacts.deletedAt} is null and ${resolvedPhoneSearch} like ${pattern}
+  )`;
+}
+
 export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[] | undefined): SQL {
   const conditions: SQL[] = [];
 
@@ -101,25 +154,12 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
   }
 
   if (filters.q) {
-    const patientNumber = PATIENT_NUMBER_QUERY.exec(filters.q);
-    if (patientNumber) {
-      conditions.push(ilike(patients.displayNumber, `%P-${patientNumber[1] ?? ''}%`));
-    } else {
-      const escapedQ = escapeLike(filters.q);
-      const qNameKey = escapeLike(nameKey(filters.q));
-      const ors: SQL[] = [
-        like(patients.nameKey, `%${qNameKey}%`),
-        ilike(patients.displayNumber, `%${escapedQ}%`),
-        ilike(patients.email, `%${escapedQ}%`),
-      ];
-      const qDigits = phoneDigits(filters.q);
-      // A patient without a phone has a null `phone_search`: the LIKE is null, never a match.
-      if (qDigits.length >= MIN_PHONE_QUERY_DIGITS) {
-        ors.push(like(patients.phoneSearch, `%${escapeLike(qDigits)}%`));
-      }
-      const qCondition = or(...ors);
-      if (qCondition) conditions.push(qCondition);
-    }
+    const match = queryMatch(filters.q);
+    const qCondition =
+      match.contactPhone === null
+        ? match.own
+        : or(match.own, patientIdsByContactPhone(match.contactPhone));
+    if (qCondition) conditions.push(qCondition);
   }
 
   if (filters.dentist === 'none') {
@@ -140,6 +180,30 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
   if (idsIn) conditions.push(idAmong(patients.id, idsIn));
 
   return and(...conditions) ?? sql`true`;
+}
+
+/**
+ * The `matchedContact` column of a search row (design addendum C7): for a patient that a phone
+ * query matched only through a contact, that contact (the primary guardian first, then the oldest
+ * link) as `{ fullName, relationship }` JSON; null otherwise, and a constant null when `q` is not a
+ * phone query. The correlated subquery runs only for rows the patient's own columns did not match.
+ */
+export function matchedContactColumn(
+  filters: PatientSearchFilters,
+): SQL<MatchedContactSummary | null> {
+  const match = filters.q ? queryMatch(filters.q) : undefined;
+  if (!match || match.contactPhone === null) return sql<null>`null::json`;
+  return sql<MatchedContactSummary | null>`case when ${match.own} then null else (
+    select json_build_object('fullName', ${resolvedFullName}, 'relationship', ${patientContacts.relationship})
+    from ${patientContacts}
+    inner join ${contacts} on ${contacts.id} = ${patientContacts.contactId}
+    ${joinLinkedPatient}
+    where ${patientContacts.patientId} = ${patients.id}
+      and ${contacts.deletedAt} is null
+      and ${resolvedPhoneSearch} like ${match.contactPhone}
+    order by ${patientContacts.isPrimaryGuardian} desc, ${patientContacts.createdAt}, ${patientContacts.contactId}
+    limit 1
+  ) end`;
 }
 
 /**

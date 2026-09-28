@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
-import type { DomainPatient } from '../domain/patient';
+import type { DomainPatient, DomainPatientListRow } from '../domain/patient';
 import { assertMergePhoneRule, changesOf, mergeSet, normalizeFields } from './patient-changes';
 import { toListItem, toPatient } from './patient-mapping';
 
@@ -231,8 +231,8 @@ describe('mapping', () => {
     });
     expect(record).not.toHaveProperty('nameKey');
     expect(record).not.toHaveProperty('phoneSearch');
-    expect(toListItem(archived)).toMatchObject({ archivedAt: '2026-02-01T10:00:00.000Z' });
-    expect(toListItem(patient()).archivedAt).toBeNull();
+    expect(toListItem(listRow(archived))).toMatchObject({ archivedAt: '2026-02-01T10:00:00.000Z' });
+    expect(toListItem(listRow(patient())).archivedAt).toBeNull();
   });
 
   it('carries the dentist profile id and a null phone, and no guardian fields', () => {
@@ -240,6 +240,28 @@ describe('mapping', () => {
     expect(record).toMatchObject({ phone: null, primaryDentistId: DENTIST });
     expect(record).not.toHaveProperty('guardianName');
     expect(record).not.toHaveProperty('emergencyContact');
-    expect(toListItem(patient())).toMatchObject({ primaryDentistId: DENTIST });
+    expect(toListItem(listRow(patient()))).toMatchObject({ primaryDentistId: DENTIST });
+  });
+
+  it('carries the primary guardian and the matched contact of a list row', () => {
+    const primaryGuardian = {
+      contactId: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5e99',
+      fullName: 'Mona Haddad',
+      phone: '+9613123456',
+      relationship: 'parent' as const,
+    };
+    const matchedContact = { fullName: 'Mona Haddad', relationship: 'parent' as const };
+    expect(toListItem({ ...patient(), primaryGuardian, matchedContact })).toMatchObject({
+      primaryGuardian,
+      matchedContact,
+    });
+    expect(toListItem(listRow(patient()))).toMatchObject({
+      primaryGuardian: null,
+      matchedContact: null,
+    });
   });
 });
+
+function listRow(value: DomainPatient): DomainPatientListRow {
+  return { ...value, primaryGuardian: null, matchedContact: null };
+}

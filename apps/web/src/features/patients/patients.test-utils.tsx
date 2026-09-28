@@ -74,6 +74,8 @@ export const listItem = (p: Patient): PatientListItem => ({
   email: p.email,
   archivedAt: p.archivedAt,
   updatedAt: p.updatedAt,
+  primaryGuardian: null,
+  matchedContact: null,
 });
 
 export const ALL_PERMISSIONS: Permission[] = [

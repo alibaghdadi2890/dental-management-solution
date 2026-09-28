@@ -3,6 +3,7 @@ import {
   MERGE_FIELDS,
   medicalAlertsSchema,
   patientArchiveSchema,
+  patientCreateSchema,
   patientInputSchema,
   patientListQuerySchema,
   patientMergeSchema,
@@ -240,6 +241,8 @@ describe('patientPageSchema', () => {
       email: null,
       archivedAt: null,
       updatedAt: '2026-01-01T00:00:00.000Z',
+      primaryGuardian: null,
+      matchedContact: null,
     };
     const page = { items: [item], total: 1, page: 1, size: 25 };
     expect(patientPageSchema.parse(page)).toEqual(page);
@@ -259,10 +262,127 @@ describe('patientPageSchema', () => {
       email: null,
       archivedAt: null,
       updatedAt: '2026-01-01T00:00:00.000Z',
+      primaryGuardian: {
+        contactId: ID_A,
+        fullName: 'Mona Doe',
+        phone: '+9613123456',
+        relationship: 'parent',
+      },
+      matchedContact: { fullName: 'Mona Doe', relationship: 'parent' },
     };
     const parsed = patientPageSchema.parse({ items: [item], total: 1, page: 1, size: 25 });
     expect(parsed.items[0]).toEqual(item);
     expect(parsed.items[0]).not.toHaveProperty('guardianName');
+  });
+
+  it('requires primaryGuardian and matchedContact on every list item (null when none)', () => {
+    const item = {
+      id: ID_A,
+      displayNumber: 'P-000001',
+      fullName: 'Sam Doe',
+      phone: null,
+      dateOfBirth: null,
+      sex: 'unknown',
+      medicalAlerts: [],
+      primaryDentistId: null,
+      email: null,
+      archivedAt: null,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      primaryGuardian: null,
+      matchedContact: null,
+    };
+    const page = (items: unknown[]) => ({ items, total: 1, page: 1, size: 25 });
+    expect(patientPageSchema.safeParse(page([item])).success).toBe(true);
+    const { primaryGuardian: _guardian, ...withoutGuardian } = item;
+    expect(patientPageSchema.safeParse(page([withoutGuardian])).success).toBe(false);
+    const { matchedContact: _matched, ...withoutMatched } = item;
+    expect(patientPageSchema.safeParse(page([withoutMatched])).success).toBe(false);
+    expect(
+      patientPageSchema.safeParse(
+        page([{ ...item, matchedContact: { fullName: 'X', relationship: 'uncle' } }]),
+      ).success,
+    ).toBe(false);
+  });
+});
+
+describe('patientCreateSchema', () => {
+  const base = { fullName: 'Sam Doe', dateOfBirth: '2020-01-01' };
+  const guardian = {
+    target: { newContact: { fullName: 'Mona Doe', phone: '03 123 456' } },
+    relationship: 'parent',
+    isGuardian: true,
+    isBillingContact: true,
+  };
+
+  it('is the patient input plus contacts (default none) and an optional linkContactId', () => {
+    const parsed = patientCreateSchema.parse(base);
+    expect(parsed.contacts).toEqual([]);
+    expect(parsed.linkContactId).toBeUndefined();
+    expect(parsed.sex).toBe('unknown');
+    const withContacts = patientCreateSchema.parse({
+      ...base,
+      contacts: [guardian],
+      linkContactId: ID_A,
+    });
+    expect(withContacts.contacts).toEqual([
+      {
+        target: { newContact: { fullName: 'Mona Doe', phone: '03 123 456', email: null } },
+        relationship: 'parent',
+        isGuardian: true,
+        isBillingContact: true,
+        isEmergencyContact: false,
+      },
+    ]);
+    expect(withContacts.linkContactId).toBe(ID_A);
+  });
+
+  it('links at most 10 contacts', () => {
+    const link = (index: number) => ({
+      ...guardian,
+      target: { newContact: { fullName: `Contact ${String(index)}`, phone: '03 123 456' } },
+    });
+    const contacts = (count: number) => Array.from({ length: count }, (_, index) => link(index));
+    expect(patientCreateSchema.safeParse({ ...base, contacts: contacts(10) }).success).toBe(true);
+    expect(patientCreateSchema.safeParse({ ...base, contacts: contacts(11) }).success).toBe(false);
+  });
+
+  it('validates each link and refuses the same contact or patient twice', () => {
+    expect(
+      patientCreateSchema.safeParse({
+        ...base,
+        contacts: [{ ...guardian, isGuardian: false, isBillingContact: false }],
+      }).success,
+    ).toBe(false);
+    const byContact = { ...guardian, target: { contactId: ID_A } };
+    const byPatient = { ...guardian, target: { patientId: ID_B } };
+    expect(
+      patientCreateSchema.safeParse({ ...base, contacts: [byContact, byPatient] }).success,
+    ).toBe(true);
+    expect(
+      patientCreateSchema.safeParse({ ...base, contacts: [byContact, byContact] }).success,
+    ).toBe(false);
+    expect(
+      patientCreateSchema.safeParse({ ...base, contacts: [byPatient, byPatient] }).success,
+    ).toBe(false);
+    // Two new contacts may share a name: they are different people until someone links them.
+    expect(patientCreateSchema.safeParse({ ...base, contacts: [guardian, guardian] }).success).toBe(
+      true,
+    );
+  });
+
+  it('refuses linkContactId naming one of the new patient’s own contacts', () => {
+    const byContact = { ...guardian, target: { contactId: ID_A } };
+    const result = patientCreateSchema.safeParse({
+      ...base,
+      contacts: [byContact],
+      linkContactId: ID_A,
+    });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues[0]?.path).toEqual(['linkContactId']);
+  });
+
+  it('rejects a linkContactId that is not a uuid', () => {
+    expect(patientCreateSchema.safeParse({ ...base, linkContactId: 'x' }).success).toBe(false);
   });
 });
 

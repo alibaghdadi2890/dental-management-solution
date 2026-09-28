@@ -4,6 +4,8 @@ import { TenancyModule } from '../tenancy';
 import { UsersModule } from '../users';
 import { PatientsService } from './application/patients.service';
 import { PatientsController } from './http/patients.controller';
+import { ContactsRepository } from './persistence/contacts.repository';
+import { PatientContactsRepository } from './persistence/patient-contacts.repository';
 import { PatientCountersRepository } from './persistence/patient-counters.repository';
 import { PatientsRepository } from './persistence/patients.repository';
 
@@ -11,7 +13,13 @@ import { PatientsRepository } from './persistence/patients.repository';
 @Module({
   imports: [AuditModule, TenancyModule, UsersModule],
   controllers: [PatientsController],
-  providers: [PatientsService, PatientsRepository, PatientCountersRepository],
+  providers: [
+    PatientsService,
+    PatientsRepository,
+    PatientCountersRepository,
+    ContactsRepository,
+    PatientContactsRepository,
+  ],
   exports: [PatientsService],
 })
 export class PatientsModule {}

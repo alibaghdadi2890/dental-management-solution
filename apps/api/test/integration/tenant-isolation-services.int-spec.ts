@@ -513,6 +513,8 @@ describe('tenant isolation through the public services', () => {
       'diagnoses',
       'patients',
       'patient_counters',
+      'contacts',
+      'patient_contacts',
       'ledger_entries',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(

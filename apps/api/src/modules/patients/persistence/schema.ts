@@ -120,7 +120,8 @@ export const patientCounters = pgTable(
  * People known to the clinic who relate to patients as guardians, billing or emergency contacts
  * (design addendum C1, ADR-0019). A contact *linked* to a patient (`linkedPatientId`) stores no
  * name/phone/email of its own — they are read from the patient record — so either it is linked or
- * it has a name. At most one live contact per linked patient. `phoneSearch` mirrors `patients`.
+ * it has a name. At most one live contact per linked patient. `nameKey`/`phoneSearch` are internal
+ * search columns derived by the repository, as on `patients`.
  */
 export const contacts = pgTable(
   'contacts',
@@ -128,6 +129,8 @@ export const contacts = pgTable(
     id: idColumn(),
     tenantId: tenantIdColumn(),
     fullName: text(),
+    /** `nameKey(fullName)` (`domain/name-key.ts`) for the lookup; null exactly when `fullName` is. */
+    nameKey: text(),
     /** E.164, as normalised against the tenant's country at write time. */
     phone: text(),
     phoneSearch: text(),
@@ -151,6 +154,10 @@ export const contacts = pgTable(
     check(
       'contacts_linked_or_named',
       sql`${table.linkedPatientId} is not null or ${table.fullName} is not null`,
+    ),
+    check(
+      'contacts_name_key_with_name',
+      sql`(${table.fullName} is null) = (${table.nameKey} is null)`,
     ),
     tenantIsolationPolicy(),
   ],

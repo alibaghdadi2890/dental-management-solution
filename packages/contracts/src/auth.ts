@@ -9,6 +9,14 @@ export const passwordSchema = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_M
 /** Emails are compared case-insensitively everywhere (sign-in, lockout, uniqueness). */
 export const emailSchema = z.string().trim().toLowerCase().pipe(z.email());
 
+/** Blank/absent → null, validated as an email only when present (patient and contact records). */
+export const optionalEmailSchema = z
+  .string()
+  .trim()
+  .nullish()
+  .transform((value) => (value ? value : null))
+  .pipe(z.union([z.null(), emailSchema]));
+
 /** Body of `POST /auth/sign-in/email`. `rememberMe` is "Trust this workstation for 30 days". */
 export const signInRequestSchema = z.object({
   email: emailSchema,
