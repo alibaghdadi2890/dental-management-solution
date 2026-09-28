@@ -23,6 +23,18 @@ feature in place (the branch is unmerged).
 
 **Tech stack:** unchanged from the base plan.
 
+**Execution order (keeps every commit green):** G2 → **R1** → **R2** → H2 → I1 → J1 → J2 → J3 →
+K1, where:
+
+- **R1** combines G1's breaking contract changes with H1's schema rewrite. It removes the three
+  fields, makes the minor phone optional, switches the dentist to a profile id, and rewrites
+  0009 (including the still-unused contacts tables). It also makes the minimal API, billing and
+  web adaptations so everything compiles, and deletes `practitionersByAuthUserIds`.
+- **R2** is G1's additive contact schemas plus the rest of H1: the contacts domain, the
+  repositories, contact-phone search, and `primaryGuardian`/`matchedContact` on list items.
+
+Completeness with a guardian (C10) lands with H2/J3.
+
 **Gate for every task:**
 
 - `pnpm lint && pnpm typecheck` green.
