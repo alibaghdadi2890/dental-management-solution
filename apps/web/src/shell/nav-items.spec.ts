@@ -1,6 +1,6 @@
 import type { Session } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
-import { visibleNav } from './nav-items';
+import { patientActions, visibleNav } from './nav-items';
 
 const base: Session = {
   user: { id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e', displayName: 'Jamie Ortiz', email: 'j@x.io' },
@@ -52,5 +52,34 @@ describe('visibleNav', () => {
     expect(nav.main).toEqual([]);
     expect(nav.admin).toEqual([]);
     expect(keys(nav.platform)).toEqual(['tenants']);
+  });
+});
+
+describe('patientActions', () => {
+  it('offers Find patient with patient:read and New patient with patient:write', () => {
+    expect(patientActions({ ...base, permissions: ['patient:read'] })).toEqual({
+      find: true,
+      create: false,
+    });
+    expect(patientActions({ ...base, permissions: ['patient:read', 'patient:write'] })).toEqual({
+      find: true,
+      create: true,
+    });
+    expect(patientActions({ ...base, permissions: ['visit:read'] })).toEqual({
+      find: false,
+      create: false,
+    });
+  });
+
+  it('offers neither outside a clinic or before the session loads', () => {
+    const everything = {
+      ...base,
+      permissions: ['patient:read' as const, 'patient:write' as const],
+    };
+    expect(patientActions({ ...everything, platformAdmin: true, tenant: null })).toEqual({
+      find: false,
+      create: false,
+    });
+    expect(patientActions(undefined)).toEqual({ find: false, create: false });
   });
 });

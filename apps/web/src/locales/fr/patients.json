@@ -182,7 +182,8 @@
     "assistant": "Assistant",
     "viaAssistant": "{{name}} via l’assistant",
     "unknownUser": "Ancien membre du personnel",
-    "more": "Afficher plus"
+    "more": "Afficher plus",
+    "moreFailed": "Impossible de charger plus d’activité."
   },
   "form": {
     "newEyebrow": "Nouveau patient",
@@ -300,5 +301,22 @@
     "conflict": "quelqu’un d’autre a modifié ce dossier — rechargez et réessayez",
     "forbidden": "vous n’avez pas l’autorisation de le faire",
     "unexpected": "une erreur s’est produite, réessayez dans un instant"
+  },
+  "palette": {
+    "title": "Rechercher un patient",
+    "label": "Rechercher un patient par nom, téléphone ou numéro de patient",
+    "placeholder": "Nom, téléphone ou numéro de patient",
+    "esc": "ÉCHAP",
+    "recent": "Patients récents",
+    "results_one": "{{count, number}} résultat",
+    "results_other": "{{count, number}} résultats",
+    "age": "{{age}} ans",
+    "neverSeen": "Jamais vu",
+    "noMatch": "Aucun patient ne correspond à « {{query}} »",
+    "noMatchHint": "Recherchez par nom complet, numéro de téléphone ou numéro de patient.",
+    "create": "Créer « {{query}} »",
+    "noPatients": "Aucun patient pour le moment.",
+    "loading": "Recherche de patients",
+    "failed": "Impossible de rechercher les patients."
   }
 }

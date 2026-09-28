@@ -80,7 +80,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'audit:read',
 ];
 
-function sessionWith(permissions: Permission[]): Session {
+export function sessionWith(permissions: Permission[]): Session {
   return {
     user: { id: id(90), displayName: 'Jamie Ortiz', email: 'j@example.com' },
     platformAdmin: false,

@@ -43,3 +43,13 @@ export function visibleNav(session: Session): VisibleNav {
     platform: session.platformAdmin ? [...PLATFORM_NAV] : [],
   };
 }
+
+/** The header's "Find patient" (and its Ctrl/⌘+K shortcut) and "New patient": only inside a
+ * clinic — a platform admin not acting in one has no patients — and only with the permission. */
+export function patientActions(session: Session | undefined): { find: boolean; create: boolean } {
+  if (!session?.tenant) return { find: false, create: false };
+  return {
+    find: session.permissions.includes('patient:read'),
+    create: session.permissions.includes('patient:write'),
+  };
+}

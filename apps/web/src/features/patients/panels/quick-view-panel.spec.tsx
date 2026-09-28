@@ -153,6 +153,34 @@ describe('QuickViewPanel', () => {
     expect(within(activity).queryByRole('button', { name: 'Show more' })).toBeNull();
   });
 
+  it('keeps the entries shown when Show more fails, with an inline retry', async () => {
+    const [first, second, third] = AUDIT[RANA.id] ?? [];
+    let failMore = true;
+    mockApi({
+      patients: [RANA],
+      get: (path) => {
+        if (!path.startsWith('/audit')) return undefined;
+        if (!path.includes('cursor=c2')) return json({ items: [first, second], nextCursor: 'c2' });
+        return failMore ? problem(500, 'internal') : json({ items: [third], nextCursor: null });
+      },
+    });
+    renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    const activity = within(aside).getByRole('region', { name: 'Activity' });
+    expect(await within(activity).findAllByRole('listitem')).toHaveLength(2);
+    fireEvent.click(within(activity).getByRole('button', { name: 'Show more' }));
+    expect(await within(activity).findByText("Couldn't load more activity.")).toBeTruthy();
+    expect(within(activity).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(activity).queryByText("Couldn't load the activity.")).toBeNull();
+
+    failMore = false;
+    fireEvent.click(within(activity).getByRole('button', { name: 'Try again' }));
+    await waitFor(() => {
+      expect(within(activity).getAllByRole('listitem')).toHaveLength(3);
+    });
+    expect(within(activity).queryByText("Couldn't load more activity.")).toBeNull();
+  });
+
   it('shows the activity with audit:read, naming the actor, the system and the reason', async () => {
     mockApi({ patients: [RANA], audit: AUDIT });
     renderPanels({ url: `/?panel=quick:${RANA.id}` });

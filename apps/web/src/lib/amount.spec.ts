@@ -41,6 +41,13 @@ describe('parseAmount', () => {
     expect(parseAmount('١٢٫٥', 'ar')).toBe('12.5');
   });
 
+  it('reads ASCII `,` groups and a `.` decimal in Arabic, whatever digits the locale uses', () => {
+    expect(parseAmount('1,234.50', 'ar')).toBe('1234.50');
+    expect(parseAmount('1,234.50', 'ar-EG')).toBe('1234.50');
+    expect(parseAmount('١٬٢٣٤٫٥٠', 'ar-EG')).toBe('1234.50');
+    expect(parseAmount('12,50', 'ar-EG')).toBeNull();
+  });
+
   it('tidies a leading or trailing decimal separator', () => {
     expect(parseAmount('.5', 'en')).toBe('0.5');
     expect(parseAmount('5.', 'en')).toBe('5');

@@ -24,6 +24,12 @@
   },
   "breadcrumb": "Fil d’Ariane",
   "platformCrumb": "Plateforme",
+  "header": {
+    "findPatient": "Rechercher un patient",
+    "newPatient": "Nouveau patient",
+    "shortcutApple": "⌘K",
+    "shortcutOther": "Ctrl K"
+  },
   "user": {
     "fallbackRole": "Personnel",
     "platformAdmin": "Administrateur plateforme",

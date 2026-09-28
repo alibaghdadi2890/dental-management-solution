@@ -214,7 +214,8 @@
     "assistant": "المساعد",
     "viaAssistant": "{{name}} عبر المساعد",
     "unknownUser": "موظف سابق",
-    "more": "عرض المزيد"
+    "more": "عرض المزيد",
+    "moreFailed": "تعذّر تحميل المزيد من النشاط."
   },
   "form": {
     "newEyebrow": "مريض جديد",
@@ -336,5 +337,26 @@
     "conflict": "عدّل شخص آخر هذا الملف — أعد التحميل وحاول مجددًا",
     "forbidden": "ليست لديك صلاحية للقيام بذلك",
     "unexpected": "حدث خطأ ما، حاول مرة أخرى بعد قليل"
+  },
+  "palette": {
+    "title": "البحث عن مريض",
+    "label": "ابحث عن المرضى بالاسم أو الهاتف أو رقم المريض",
+    "placeholder": "الاسم أو الهاتف أو رقم المريض",
+    "esc": "ESC",
+    "recent": "المرضى الأخيرون",
+    "results_zero": "لا نتائج",
+    "results_one": "نتيجة واحدة",
+    "results_two": "نتيجتان",
+    "results_few": "{{count, number}} نتائج",
+    "results_many": "{{count, number}} نتيجة",
+    "results_other": "{{count, number}} نتيجة",
+    "age": "العمر {{age}}",
+    "neverSeen": "لم تتم زيارته بعد",
+    "noMatch": "لا يوجد مريض يطابق «{{query}}»",
+    "noMatchHint": "ابحث بالاسم الكامل أو رقم الهاتف أو رقم المريض.",
+    "create": "إنشاء «{{query}}»",
+    "noPatients": "لا يوجد مرضى بعد.",
+    "loading": "جارٍ البحث عن المرضى",
+    "failed": "تعذّر البحث عن المرضى."
   }
 }

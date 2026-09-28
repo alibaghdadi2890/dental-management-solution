@@ -182,7 +182,8 @@
     "assistant": "Assistant",
     "viaAssistant": "{{name}} via assistant",
     "unknownUser": "Former staff member",
-    "more": "Show more"
+    "more": "Show more",
+    "moreFailed": "Couldn't load more activity."
   },
   "form": {
     "newEyebrow": "New patient",
@@ -300,5 +301,22 @@
     "conflict": "someone else changed this record — reload and try again",
     "forbidden": "you don’t have permission to do this",
     "unexpected": "something went wrong, try again in a moment"
+  },
+  "palette": {
+    "title": "Find patient",
+    "label": "Search patients by name, phone or patient ID",
+    "placeholder": "Name, phone or patient ID",
+    "esc": "ESC",
+    "recent": "Recent patients",
+    "results_one": "{{count, number}} result",
+    "results_other": "{{count, number}} results",
+    "age": "Age {{age}}",
+    "neverSeen": "Never seen",
+    "noMatch": "No patient matches \"{{query}}\"",
+    "noMatchHint": "Search by full name, phone number or patient ID.",
+    "create": "Create \"{{query}}\"",
+    "noPatients": "No patients yet.",
+    "loading": "Searching patients",
+    "failed": "Couldn't search patients."
   }
 }

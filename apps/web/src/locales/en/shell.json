@@ -24,6 +24,12 @@
   },
   "breadcrumb": "Breadcrumb",
   "platformCrumb": "Platform",
+  "header": {
+    "findPatient": "Find patient",
+    "newPatient": "New patient",
+    "shortcutApple": "⌘K",
+    "shortcutOther": "Ctrl K"
+  },
   "user": {
     "fallbackRole": "Staff",
     "platformAdmin": "Platform admin",

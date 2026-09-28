@@ -41,7 +41,9 @@ function actorOf(
 
 /**
  * The quick view's activity (design Q10: shown only with `audit:read`): the patient's audit
- * entries, newest first as `GET /audit` returns them, a page at a time behind "Show more". Actors
+ * entries, newest first as `GET /audit` returns them, a page at a time behind "Show more". A
+ * failed "Show more" keeps the entries already shown and offers a retry in its place; the full
+ * error only replaces the list when there is nothing to show. Actors
  * are named from the staff list; jobs and the system read "System", a platform admin "Platform
  * admin".
  */
@@ -56,7 +58,7 @@ export function ActivityTimeline({
   timeZone: string;
   locale: string;
 }) {
-  const { t } = useTranslation('patients');
+  const { t } = useTranslation(['patients', 'common']);
   const headingId = useId();
   const audit = useInfiniteQuery(patientAuditQuery(patientId));
   const entries = audit.data?.pages.flatMap((page) => page.items) ?? [];
@@ -69,7 +71,7 @@ export function ActivityTimeline({
         <span className={cn('h-2.5 w-32', SHIMMER)} />
       </div>
     );
-  } else if (audit.isError) {
+  } else if (audit.isError && entries.length === 0) {
     body = <p className="text-[12.5px] leading-snug text-ink-muted">{t('activity.failed')}</p>;
   } else if (entries.length === 0) {
     body = <p className="text-[12.5px] leading-snug text-ink-muted">{t('activity.empty')}</p>;
@@ -102,16 +104,32 @@ export function ActivityTimeline({
             </li>
           ))}
         </ol>
-        {audit.hasNextPage && (
-          <Button
-            variant="ghost"
-            size="sm"
-            busy={audit.isFetchingNextPage}
-            onClick={() => void audit.fetchNextPage()}
-            className="self-start px-0"
-          >
-            {t('activity.more')}
-          </Button>
+        {audit.isFetchNextPageError && !audit.isFetchingNextPage ? (
+          <div role="alert" className="flex items-center gap-2">
+            <span className="text-[12.5px] leading-snug text-ink-muted">
+              {t('activity.moreFailed')}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void audit.fetchNextPage()}
+              className="px-0"
+            >
+              {t('common:tryAgain')}
+            </Button>
+          </div>
+        ) : (
+          audit.hasNextPage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              busy={audit.isFetchingNextPage}
+              onClick={() => void audit.fetchNextPage()}
+              className="self-start px-0"
+            >
+              {t('activity.more')}
+            </Button>
+          )
         )}
       </>
     );

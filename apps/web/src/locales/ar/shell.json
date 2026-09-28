@@ -24,6 +24,12 @@
   },
   "breadcrumb": "مسار التنقل",
   "platformCrumb": "المنصة",
+  "header": {
+    "findPatient": "البحث عن مريض",
+    "newPatient": "مريض جديد",
+    "shortcutApple": "⌘K",
+    "shortcutOther": "Ctrl K"
+  },
   "user": {
     "fallbackRole": "موظف",
     "platformAdmin": "مسؤول المنصة",
