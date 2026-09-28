@@ -4,7 +4,7 @@ import { E2E_ADMIN } from './global-setup';
 /** Unique per run so the flow can be repeated against the same database. */
 const run = Date.now().toString(36);
 const clinic = { name: `Catalog Clinic ${run}`, slug: `catalog-clinic-${run}` };
-const owner = { email: `owner-${run}@e2e.test`, password: 'owner-own-password-1' };
+const owner = { email: `catalog-owner-${run}@e2e.test`, password: 'owner-own-password-1' };
 
 async function signIn(page: Page, email: string, password: string) {
   await page.goto('/login');

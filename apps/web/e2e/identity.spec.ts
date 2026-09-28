@@ -34,7 +34,7 @@ test('platform admin provisions a clinic and a user, who then signs in to the cl
   await expect(panel.getByLabel(/^Slug/)).toHaveValue(clinic.slug);
   await panel.getByLabel('Branch name').fill('Main St');
   await panel.getByLabel('Full name').fill('Dr. E2E Owner');
-  await panel.getByLabel('Email').fill(`owner-${run}@e2e.test`);
+  await panel.getByLabel('Email').fill(`identity-owner-${run}@e2e.test`);
   await panel.getByRole('button', { name: 'Generate' }).click();
   await panel.getByRole('button', { name: 'Create tenant' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Tenant created' })).toBeVisible();
@@ -98,4 +98,18 @@ test('platform admin provisions a clinic and a user, who then signs in to the cl
   await expect(page.getByText(/managed by the clinic owner/)).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Name' }).first()).toHaveValue('Extraction');
   await expect(page.getByRole('button', { name: 'Add service' })).toBeHidden();
+
+  // The front desk registers a patient; without `audit:read` the quick view has no activity.
+  await page.getByRole('link', { name: 'Patients' }).click();
+  await page.getByRole('banner').getByRole('button', { name: 'New patient' }).click();
+  const form = page.getByRole('complementary', { name: 'Register a patient' });
+  await form.getByRole('textbox', { name: /^Full name/ }).fill('Omar Khalil');
+  await form.getByRole('textbox', { name: /^Phone/ }).fill('03 555 111');
+  await form.getByRole('button', { name: 'Create patient' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Patient created' })).toBeVisible();
+  await page.getByRole('button', { name: 'Actions for Omar Khalil' }).click();
+  await page.getByRole('menuitem', { name: 'Quick view' }).click();
+  const quickView = page.getByRole('complementary', { name: 'Omar Khalil' });
+  await expect(quickView.getByText('Primary dentist')).toBeVisible();
+  await expect(quickView.getByRole('region', { name: 'Activity' })).toBeHidden();
 });

@@ -26,7 +26,10 @@ const session: Session = {
 };
 
 // Stub the session contract so the shell renders without a backend (real flow: identity.spec.ts).
+// Every other API call fails as a network error: a real API would answer the stubbed session's
+// screens (the patients list) with 401, which signs the SPA out and back in, in a loop.
 async function signedIn(page: Page) {
+  await page.route('**/api/v1/**', (route) => route.abort());
   await page.route('**/api/v1/session', (route) => route.fulfill({ json: session }));
 }
 
