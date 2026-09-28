@@ -158,6 +158,36 @@ describe('PatientFormPanel — create', () => {
     });
   });
 
+  it('creates through POST /patients when the opening balance is zero', async () => {
+    for (const zero of ['0', '0.00']) {
+      const fetchMock = mockApi();
+      renderPanels({ url: '/?panel=new' });
+      await panel('Register a patient');
+      type('Full name', 'Rana Haddad');
+      type('Phone', '03 123 456');
+      type('Opening balance', zero);
+      fireEvent.click(screen.getByRole('button', { name: 'Create patient' }));
+
+      await screen.findByText('Patient created');
+      expect(sent(fetchMock, 'POST', '/patients')).toMatchObject({ fullName: 'Rana Haddad' });
+      expect(sent(fetchMock, 'POST', '/billing/opening-balances')).toBeUndefined();
+      cleanup();
+    }
+  });
+
+  it('refuses a negative opening balance', async () => {
+    const fetchMock = mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Rana Haddad');
+    type('Phone', '03 123 456');
+    type('Opening balance', '-5');
+    fireEvent.click(screen.getByRole('button', { name: 'Create patient' }));
+    expect(await screen.findByText('Enter zero or a positive amount')).toBeTruthy();
+    expect(field('Opening balance').getAttribute('aria-invalid')).toBe('true');
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+
   it('reads a French 12,50 as 12.50 and keeps what was typed', async () => {
     await i18n.changeLanguage('fr');
     const fetchMock = mockApi();

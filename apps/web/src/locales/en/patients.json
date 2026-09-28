@@ -254,7 +254,7 @@
       "tooLong": "Too long",
       "tooMany": "At most 20 alerts",
       "invalidAmount": "Enter an amount like 250 or 12.50",
-      "notPositive": "Must be more than zero",
+      "negativeAmount": "Enter zero or a positive amount",
       "invalid": "Check this value",
       "unknownDentist": "This dentist is no longer available"
     },

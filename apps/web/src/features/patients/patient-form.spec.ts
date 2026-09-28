@@ -166,19 +166,21 @@ describe('validate', () => {
     expect(errors.alerts).toBe('tooMany');
   });
 
-  it('requires a properly formatted, positive opening balance amount when one is entered', () => {
+  it('requires a properly formatted, zero or positive opening balance amount when one is entered', () => {
     expect(
       validate({ ...base, fullName: 'Jane', phone: '03123456', openingBalanceAmount: 'abc' }, CTX)
         .openingBalanceAmount,
     ).toBe('invalidAmount');
-    expect(
-      validate({ ...base, fullName: 'Jane', phone: '03123456', openingBalanceAmount: '0' }, CTX)
-        .openingBalanceAmount,
-    ).toBe('notPositive');
+    for (const zero of ['0', '0.00']) {
+      expect(
+        validate({ ...base, fullName: 'Jane', phone: '03123456', openingBalanceAmount: zero }, CTX)
+          .openingBalanceAmount,
+      ).toBeUndefined();
+    }
     expect(
       validate({ ...base, fullName: 'Jane', phone: '03123456', openingBalanceAmount: '-5' }, CTX)
         .openingBalanceAmount,
-    ).toBe('notPositive');
+    ).toBe('negativeAmount');
     expect(
       validate(
         { ...base, fullName: 'Jane', phone: '03123456', openingBalanceAmount: '12345678901' },
@@ -391,6 +393,7 @@ describe('wantsOpeningBalance / toOpeningBalance', () => {
   it('wants a balance only when the amount is greater than zero', () => {
     expect(wantsOpeningBalance({ ...emptyForm(), openingBalanceAmount: '' })).toBe(false);
     expect(wantsOpeningBalance({ ...emptyForm(), openingBalanceAmount: '0' })).toBe(false);
+    expect(wantsOpeningBalance({ ...emptyForm(), openingBalanceAmount: '0.00' })).toBe(false);
     expect(wantsOpeningBalance({ ...emptyForm(), openingBalanceAmount: '50' })).toBe(true);
   });
 

@@ -296,8 +296,9 @@ locales/{en,ar,fr}/patients.json, billing.json
   changes?". Debounced duplicate warning when name + DOB match (not blocking; "Open P-…").
 - **Account** group (create only, `payment:write`): Opening balance (36px Mono, right-aligned,
   tenant currency suffix), As of (date, default today in the tenant time zone), Note ("Optional —
-  e.g. carried over from previous system"). Amount > 0 → `POST /billing/opening-balances`,
-  otherwise `POST /patients`. Success toast "Patient created" with **Open record**.
+  e.g. carried over from previous system"). Amount > 0 → `POST /billing/opening-balances`;
+  blank or zero (`0`, `0.00`: no opening balance, no ledger entry) → `POST /patients`; a negative
+  amount is refused ("Enter zero or a positive amount"). Success toast "Patient created" with **Open record**.
 - **Merge**: 3-column compare grid (field · record A · record B) with a radio per differing field,
   "Keep ID" choice, medical alerts shown as the union (Q8), required reason (≥ 3 chars) →
   `POST /patients/merge` → toast "Records merged" → the kept record's quick view.
@@ -421,6 +422,10 @@ ADR-0017/0018 have the detail):
   platform admin picks another practitioner type (`docs/modules/provisioning.md`), so the
   picker is not empty on day one. When `GET /users/practitioners` is empty anyway, the field keeps
   "No primary dentist" and says under it that staff of type Dentist appear there.
+- **Zero opening balance:** the form accepts `0`/`0.00` as "no opening balance" and creates
+  through `POST /patients`, so no entry is written (the ledger checks `amount <> 0`);
+  `openingBalanceInputSchema` keeps `amount > 0`, since the client never sends a zero entry. Only
+  a negative amount is an error.
 - **Date picker** (Q17): every `DateInput` (date of birth, the opening balance's As of) has a
   "Choose date" button opening a react-day-picker calendar in a Radix popover. Years run from 1900
   (the DOB floor) to the tenant's today; days after today are disabled. It opens on the field's

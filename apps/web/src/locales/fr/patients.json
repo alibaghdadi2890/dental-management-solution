@@ -254,7 +254,7 @@
       "tooLong": "Trop long",
       "tooMany": "20 alertes au maximum",
       "invalidAmount": "Saisissez un montant comme 250 ou 12,50",
-      "notPositive": "Doit être supérieur à zéro",
+      "negativeAmount": "Saisissez zéro ou un montant positif",
       "invalid": "Vérifiez cette valeur",
       "unknownDentist": "Ce dentiste n’est plus disponible"
     },

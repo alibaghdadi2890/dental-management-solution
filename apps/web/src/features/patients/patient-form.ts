@@ -126,7 +126,7 @@ export type FormErrorKey =
   | 'tooLong'
   | 'tooMany'
   | 'invalidAmount'
-  | 'notPositive';
+  | 'negativeAmount';
 
 export type FormErrors = Partial<Record<FormField, FormErrorKey>>;
 
@@ -265,8 +265,10 @@ export function validate(
     const amount = normalizeAmountText(values.openingBalanceAmount);
     if (!decimalAmountSchema.safeParse(amount).success) {
       errors.openingBalanceAmount = 'invalidAmount';
-    } else if (Number(amount) <= 0) {
-      errors.openingBalanceAmount = 'notPositive';
+    } else if (Number(amount) < 0) {
+      // Zero is valid and means no opening balance: `wantsOpeningBalance` then creates through
+      // `POST /patients` and no ledger entry is written.
+      errors.openingBalanceAmount = 'negativeAmount';
     }
   }
 
