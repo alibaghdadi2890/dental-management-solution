@@ -60,8 +60,8 @@ phone country comes from the tenant `country` (base spec Q3); zero opening balan
   with the patient's own phone reads better than splitting them across the sheet by the
   visit/dentist/balance columns. Guardian phone reuses the same national/foreign formatting and
   CSV injection guard as the patient's own phone column; a linked guardian who is themself a
-  patient resolves from that patient's own name and phone (`PatientsService.guardiansFor`, backed
-  by the same `listRowsByIds` resolution the Patients list uses for C7).
+  patient resolves from that patient's own name and phone (`PatientsService.listItemsByIds`,
+  backed by the same `listRowsByIds` resolution the Patients list uses for C7).
 
 ## Frontend
 

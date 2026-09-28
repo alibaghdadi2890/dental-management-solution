@@ -547,10 +547,11 @@ describe('tenant isolation through the public services', () => {
           contacts.findContactsByPhone('03 123 456'),
         ),
       ).toEqual([]);
-      // billing's export building block never resolves B's guardian through A's RLS view either.
+      // billing's export building block never resolves B's guardian through A's RLS view either
+      // (childId has one — Bravo Guardian, primary — set up at the top of this test).
       expect(
         await asPlatformAdminIn(testApp.app, a.tenant.id, () =>
-          testApp.app.get(PatientsService).listItemsByIds([b.patient.id]),
+          testApp.app.get(PatientsService).listItemsByIds([childId]),
         ),
       ).toEqual([]);
       expect(await snapshot()).toEqual(before);
