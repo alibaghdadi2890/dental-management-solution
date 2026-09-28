@@ -27,7 +27,12 @@ const OWNER: SystemRoleKey = 'owner';
 const distinct = (ids: readonly string[]) => [...new Set(ids)];
 
 function toPractitioner(profile: StaffProfile): Practitioner {
-  return { userId: profile.authUserId, displayName: profile.displayName, title: profile.title };
+  return {
+    id: profile.id,
+    userId: profile.authUserId,
+    displayName: profile.displayName,
+    title: profile.title,
+  };
 }
 
 /**
@@ -73,13 +78,34 @@ export class UsersService {
   }
 
   /**
-   * Practitioners among `userIds` whatever their current type or active status, ordered the same
-   * way as `listPractitioners` — for showing the display name of a dentist already assigned to a
-   * patient even after they leave or change role.
+   * Practitioners among `userIds` (auth user ids) whatever their current type or active status,
+   * ordered the same way as `listPractitioners` — for showing the display name of a dentist
+   * already assigned to a patient even after they leave or change role.
+   *
+   * Superseded by `practitionersByProfileIds`: domain models refer to a dentist by the staff
+   * profile id, not the auth user id (ADR-0020). Kept only for the `patients` and `billing`
+   * callers that still store the auth user id; the patients-contacts addendum (task H1/H2) moves
+   * them to `practitionersByProfileIds` and removes this method. (Not `@deprecated`: that would
+   * fail `@typescript-eslint/no-deprecated` at the call sites this method exists to serve until
+   * they are migrated.)
    */
   practitionersByIds(userIds: readonly string[]): Promise<Practitioner[]> {
     return this.tenantDb.run(async () => {
       const profiles = await this.staff.byUserIds(distinct(userIds));
+      const { locale } = await this.tenancy.currentTenant();
+      return sortByDisplayName(profiles, locale).map(toPractitioner);
+    });
+  }
+
+  /**
+   * Practitioners among `profileIds` (`staff_profiles.id`, ADR-0020) whatever their current type
+   * or active status, ordered the same way as `listPractitioners` — for showing the display name
+   * of a dentist already assigned to a patient even after they leave or change role. Includes
+   * deactivated staff.
+   */
+  practitionersByProfileIds(profileIds: readonly string[]): Promise<Practitioner[]> {
+    return this.tenantDb.run(async () => {
+      const profiles = await this.staff.byProfileIds(distinct(profileIds));
       const { locale } = await this.tenancy.currentTenant();
       return sortByDisplayName(profiles, locale).map(toPractitioner);
     });
@@ -258,6 +284,7 @@ export class UsersService {
       return [
         {
           id: profile.authUserId,
+          profileId: profile.id,
           email: identity.email,
           displayName: profile.displayName,
           title: profile.title,

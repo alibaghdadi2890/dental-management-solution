@@ -22,17 +22,26 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
 
 `UsersModule`, `UsersService`:
 
-- `list()`, `get(userId)` (`user:read`) — `StaffUser` with email, roles and branches.
+- `list()`, `get(userId)` (`user:read`) — `StaffUser` with email, roles and branches. `StaffUser.id`
+  is the global auth user id (D7); `StaffUser.profileId` is this tenant's `staff_profiles.id` — the
+  id a domain model refers to a staff member in a clinical role by (ADR-0020).
 - `listPractitioners()` — active staff whose `practitioner_type = 'dentist'`, ordered by display
-  name (tenant-locale collation), then user id. Not permission-gated: a building block like
+  name (tenant-locale collation), then auth user id. Not permission-gated: a building block like
   `TenancyService.activeBranches`, used wherever the app offers "assign a dentist" (feature 3 Q2);
   `GET /users/practitioners` still requires `user:read` (every system role holds it). A new
   clinic's owner is a dentist unless the platform admin chose another type (`provisioning`), so
-  the list is not empty on day one.
-- `practitionersByIds(ids)` — practitioners among `ids` whatever their current type or active
-  status, ordered the same way, for showing the display name of a dentist already assigned to a
-  patient even after they leave or change role. Not permission-gated either: `patients` ranks
-  `sort=dentist` with it and `billing` names dentists in the CSV export.
+  the list is not empty on day one. Each `Practitioner` carries `id` (the staff profile id,
+  ADR-0020 — the id other modules should store) and `userId` (the auth user id, kept for links
+  back to `users`).
+- `practitionersByProfileIds(profileIds)` — practitioners among `profileIds`
+  (`staff_profiles.id`) whatever their current type or active status, ordered the same way, for
+  showing the display name of a dentist already assigned to a patient even after they leave or
+  change role. Not permission-gated either: this is how `patients` and `billing` are expected to
+  resolve dentist names once they store profile ids (ADR-0020).
+- `practitionersByIds(userIds)` — the same lookup by auth user id. Superseded by
+  `practitionersByProfileIds`; kept only until the `patients` and `billing` callers that still
+  store the auth user id in `primary_dentist_user_id` are migrated to the profile id (the
+  patients-contacts addendum, task H1/H2), which removes this method.
 - `createStaffUser(input)` (`user:write`, roles also need `role:write`): identity with a temporary
   password (D6) → membership mirror → profile → branches → roles, one transaction; a failure in any
   step rolls the identity back. `409 user.email_taken` for a registered email (D7 extension point:

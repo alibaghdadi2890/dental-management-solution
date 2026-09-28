@@ -14,6 +14,7 @@ const NORTH = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
 
 const user: StaffUser = {
   id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70',
+  profileId: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d71',
   email: 'ana@northgate.dental',
   displayName: 'Dr. Ana Reyes',
   title: null,

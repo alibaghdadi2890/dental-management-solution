@@ -206,6 +206,8 @@ Rules:
 - Concurrency-sensitive writes (booking) use DB constraints (exclusion constraints on
   `tstzrange`) or `SELECT ... FOR UPDATE`. Never "check then insert" without a lock.
 - No ORM in `domain/`. Repositories map rows to domain types at the persistence boundary.
+- A domain model refers to a staff member in a clinical role (e.g. a patient's primary dentist) by
+  `staff_profiles.id`, never the auth user id (ADR-0020).
 
 ## 8. Scheduling module — specific invariants
 

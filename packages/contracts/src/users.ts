@@ -10,9 +10,14 @@ export const PRACTITIONER_TYPES = ['dentist', 'assistant', 'frontdesk', 'other']
 export const practitionerTypeSchema = z.enum(PRACTITIONER_TYPES);
 export type PractitionerType = z.infer<typeof practitionerTypeSchema>;
 
-/** A clinic staff member. `id` is the global auth user id (D7). */
+/**
+ * A clinic staff member. `id` is the global auth user id (D7); `profileId` is this tenant's
+ * `staff_profiles.id` — the id a domain model refers to a staff member in a clinical role by
+ * (e.g. a patient's primary dentist, ADR-0020).
+ */
 export const staffUserSchema = z.object({
   id: idSchema,
+  profileId: idSchema,
   email: z.email(),
   displayName: z.string(),
   title: z.string().nullable(),
@@ -64,10 +69,13 @@ export const resetPasswordRequestSchema = z.object({ temporaryPassword: password
 export type ResetPasswordRequest = z.infer<typeof resetPasswordRequestSchema>;
 
 /**
- * A dentist a patient can be assigned to (`GET /users/practitioners`, feature 3 Q2). `userId` is
- * the auth user id, the key `patients.primary_dentist_user_id` stores (ADR-0016).
+ * A dentist a patient can be assigned to (`GET /users/practitioners`, feature 3 Q2). `id` is the
+ * staff profile id — the key a domain model refers to a dentist by (ADR-0020, amends ADR-0016,
+ * which stored the auth user id). `userId` is kept for links back to `users` (sign-in identity,
+ * `GET /users/:id`).
  */
 export const practitionerSchema = z.object({
+  id: idSchema,
   userId: idSchema,
   displayName: z.string(),
   title: z.string().nullable(),

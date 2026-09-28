@@ -109,6 +109,7 @@ export function sessionWith(permissions: Permission[]): Session {
 
 const staff = (userId: string, displayName: string, active: boolean) => ({
   id: userId,
+  profileId: userId,
   email: `${userId}@example.com`,
   displayName,
   title: null,
@@ -208,7 +209,7 @@ export function mockApi({
     if (bare === '/patients/duplicates/check') return Promise.resolve(json(twins));
     if (bare === '/users/practitioners') {
       return Promise.resolve(
-        json([{ userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null }]),
+        json([{ id: DENTIST_ID, userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null }]),
       );
     }
     if (bare === '/users') {

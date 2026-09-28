@@ -32,6 +32,7 @@ const INACTIVE_DENTIST_ID = id(81);
 
 const staff = (userId: string, displayName: string, active: boolean) => ({
   id: userId,
+  profileId: userId,
   email: `${userId}@example.com`,
   displayName,
   title: null,
@@ -146,7 +147,7 @@ function mockApi({
     if (path === '/patients/duplicates') return Promise.resolve(json(duplicates));
     if (path === '/users/practitioners') {
       return Promise.resolve(
-        json([{ userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null }]),
+        json([{ id: DENTIST_ID, userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null }]),
       );
     }
     if (path === '/users') {

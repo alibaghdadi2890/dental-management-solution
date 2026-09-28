@@ -99,6 +99,16 @@ describe('users: staff profiles with identity, branches and roles', () => {
     expect((await api.get(`/users/${user.id}`)).body).toEqual(user);
     expect(((await api.get('/users')).body as StaffUser[]).map((row) => row.id)).toContain(user.id);
 
+    // `profileId` is `staff_profiles.id` (ADR-0020) — checked against the row directly.
+    const profileRow = await database.ownerPool.query<{ id: string }>(
+      'select id from staff_profiles where tenant_id = $1 and auth_user_id = $2',
+      [tenant.id, user.id],
+    );
+    expect(user.profileId).toBe(profileRow.rows[0]?.id);
+    expect(
+      ((await api.get('/users')).body as StaffUser[]).find((row) => row.id === user.id)?.profileId,
+    ).toBe(user.profileId);
+
     const agent = await signIn(testApp.app, body.email, TEMPORARY);
     const session = (await agent.get('/api/v1/session')).body as Session;
     expect(session).toMatchObject({
@@ -299,6 +309,36 @@ describe('users: staff profiles with identity, branches and roles', () => {
       expect(byIds.map((row) => row.userId).sort()).toEqual([zed.id, amir.id].sort());
       expect(byIds.find((row) => row.userId === zed.id)).toMatchObject({
         displayName: 'Dr. Zed Nassar',
+      });
+    });
+
+    it('carries the staff profile id, and the profile-id lookup includes deactivated staff', async () => {
+      const zed = await createUser({ displayName: 'Dr. Zed Nassar' });
+      const amir = await createUser({ displayName: 'Dr. Amir Haddad' });
+
+      const list = (await api.get('/users/practitioners')).body as Practitioner[];
+      const zedRow = list.find((row) => row.userId === zed.id);
+      // `id` is `staff_profiles.id` (ADR-0020), checked against the row via the owner pool.
+      const profileRow = await database.ownerPool.query<{ id: string }>(
+        'select id from staff_profiles where tenant_id = $1 and auth_user_id = $2',
+        [tenant.id, zed.id],
+      );
+      expect(zedRow?.id).toBe(profileRow.rows[0]?.id);
+      expect(zedRow?.id).toBe(zed.profileId);
+
+      expect(
+        (await api.post(`/users/${zed.id}/deactivate`, { reason: 'Left the clinic' })).status,
+      ).toBe(200);
+
+      const byProfileIds = await asPlatformAdminIn(testApp.app, tenant.id, () =>
+        testApp.app.get(UsersService).practitionersByProfileIds([zed.profileId, amir.profileId]),
+      );
+      expect(byProfileIds.map((row) => row.id).sort()).toEqual(
+        [zed.profileId, amir.profileId].sort(),
+      );
+      expect(byProfileIds.find((row) => row.id === zed.profileId)).toMatchObject({
+        displayName: 'Dr. Zed Nassar',
+        userId: zed.id,
       });
     });
 
