@@ -27,6 +27,7 @@ import { formatPhone } from '@/lib/format';
  */
 export interface PatientFormValues {
   fullName: string;
+  /** Required unless the date of birth makes the patient a minor (`phoneOptional`). */
   phone: string;
   /** ISO `YYYY-MM-DD`, or `''` for not set — an `<input type="date">`'s own empty value. */
   dateOfBirth: string;
@@ -34,14 +35,14 @@ export interface PatientFormValues {
   email: string;
   address: string;
   insurance: string;
-  emergencyContact: string;
   /** Comma-separated, as typed; see `parseAlerts`. */
   alertsText: string;
-  /** A practitioner's auth user id, or `''` for none (a native `<select>`'s empty option). */
-  primaryDentistUserId: string;
+  /**
+   * A practitioner's staff profile id (`Practitioner.id`, ADR-0020), or `''` for none (a native
+   * `<select>`'s empty option).
+   */
+  primaryDentistId: string;
   notes: string;
-  guardianName: string;
-  guardianPhone: string;
   /** Create-only "Account" group (design Q1); ignored once a patient already exists. */
   openingBalanceAmount: string;
   openingBalanceAsOf: string;
@@ -61,12 +62,9 @@ const EMPTY: PatientFormValues = {
   email: '',
   address: '',
   insurance: '',
-  emergencyContact: '',
   alertsText: '',
-  primaryDentistUserId: '',
+  primaryDentistId: '',
   notes: '',
-  guardianName: '',
-  guardianPhone: '',
   openingBalanceAmount: '',
   openingBalanceAsOf: '',
   openingBalanceNote: '',
@@ -84,18 +82,15 @@ export function fromPatient(patient: Patient, country: string): PatientFormValue
   return {
     ...EMPTY,
     fullName: patient.fullName,
-    phone: formatPhone(patient.phone, country),
+    phone: patient.phone ? formatPhone(patient.phone, country) : '',
     dateOfBirth: patient.dateOfBirth ?? '',
     sex: patient.sex,
     email: patient.email ?? '',
     address: patient.address ?? '',
     insurance: patient.insurance ?? '',
-    emergencyContact: patient.emergencyContact ?? '',
     alertsText: patient.medicalAlerts.join(', '),
-    primaryDentistUserId: patient.primaryDentistUserId ?? '',
+    primaryDentistId: patient.primaryDentistId ?? '',
     notes: patient.notes ?? '',
-    guardianName: patient.guardianName ?? '',
-    guardianPhone: patient.guardianPhone ? formatPhone(patient.guardianPhone, country) : '',
   };
 }
 
@@ -106,10 +101,7 @@ export type FormField =
   | 'email'
   | 'address'
   | 'insurance'
-  | 'emergencyContact'
   | 'notes'
-  | 'guardianName'
-  | 'guardianPhone'
   | 'alerts'
   | 'openingBalanceAmount'
   | 'openingBalanceAsOf'
@@ -141,20 +133,17 @@ export const DATE_OF_BIRTH_FLOOR = '1900-01-01';
 type PhoneCountry = Parameters<typeof normalizePhone>[1];
 
 const OPENING_BALANCE_NOTE_MAX = 200;
-const GUARDIAN_NAME_MAX = 120;
 
 /** Only the `FormField`s that are also plain string properties of `PatientFormValues` with a
- * simple, always-applicable max-length rule — `guardianName` has the same 120-char limit but is
- * checked separately (only while `showGuardian` is true; the hidden field is sent as `null`
- * regardless of what stale text it holds); `alerts` and the `openingBalance…` fields (checked
- * only while a balance will be recorded) have their own dedicated checks in `validate`. Keyed to this narrower type (not `FormField`) so
- * `values[field]` below can't be asked for a field that doesn't exist. */
-type TextLimitField = 'address' | 'insurance' | 'emergencyContact' | 'notes';
+ * simple, always-applicable max-length rule — `alerts` and the `openingBalance…` fields (checked
+ * only while a balance will be recorded) have their own dedicated checks in `validate`. Keyed to
+ * this narrower type (not `FormField`) so `values[field]` below can't be asked for a field that
+ * doesn't exist. */
+type TextLimitField = 'address' | 'insurance' | 'notes';
 
 const TEXT_FIELD_MAX: Record<TextLimitField, number> = {
   address: 240,
   insurance: 120,
-  emergencyContact: 160,
   notes: 2000,
 };
 
@@ -165,11 +154,12 @@ export interface ValidateContext {
   today: string;
 }
 
-/** True once a valid, not-in-the-future date of birth makes the patient under 18 on `today` — the
- * guardian fields' visibility rule (design "Create / Edit" panel). An unset, half-typed, or
- * future-dated DOB never shows it: `isMinor`'s age arithmetic goes negative for a future date,
- * which is not "a minor" by any reading. */
-export function showGuardian(values: PatientFormValues, today: string): boolean {
+/** True once a valid, not-in-the-future date of birth makes the patient under 18 on `today` (the
+ * tenant's today) — then the phone is optional (design addendum C3, the server's own rule). An
+ * unset, half-typed, or future-dated DOB never does: no date of birth means an adult, and
+ * `isMinor`'s age arithmetic goes negative for a future date, which is not "a minor" by any
+ * reading. */
+export function phoneOptional(values: PatientFormValues, today: string): boolean {
   return (
     isoDateSchema.safeParse(values.dateOfBirth).success &&
     values.dateOfBirth <= today &&
@@ -214,7 +204,7 @@ export function validate(
   }
 
   if (values.phone.trim() === '') {
-    errors.phone = 'required';
+    if (!phoneOptional(values, today)) errors.phone = 'required';
   } else if (!normalizePhone(values.phone, country as PhoneCountry)) {
     errors.phone = 'invalidPhone';
   }
@@ -231,20 +221,6 @@ export function validate(
 
   if (values.email.trim() !== '' && !emailSchema.safeParse(values.email).success) {
     errors.email = 'invalidEmail';
-  }
-
-  // A hidden guardian is sent as `null` regardless of what its fields hold (`toCreatePayload`,
-  // `toPatchPayload`'s `effectiveGuardian`), so there is nothing to validate while it's hidden.
-  if (showGuardian(values, today)) {
-    if (values.guardianName.trim().length > GUARDIAN_NAME_MAX) {
-      errors.guardianName = 'tooLong';
-    }
-    if (
-      values.guardianPhone.trim() !== '' &&
-      !normalizePhone(values.guardianPhone, country as PhoneCountry)
-    ) {
-      errors.guardianPhone = 'invalidPhone';
-    }
   }
 
   for (const [field, max] of Object.entries(TEXT_FIELD_MAX) as [TextLimitField, number][]) {
@@ -320,11 +296,8 @@ export function wantsOpeningBalance(values: PatientFormValues): boolean {
   return Number(normalizeAmountText(values.openingBalanceAmount) || '0') > 0;
 }
 
-/** The create payload; a guardian hidden by `showGuardian` is sent as `null` even if the fields
- * still hold text (e.g. the operator typed a DOB, filled the guardian in, then changed the DOB
- * back to an adult date) — the panel is the one place this rule needs enforcing, not the server. */
-export function toCreatePayload(values: PatientFormValues, today: string): PatientInput {
-  const guardianShown = showGuardian(values, today);
+/** The create payload; a blank phone is sent as `null` (allowed for a minor, `validate`). */
+export function toCreatePayload(values: PatientFormValues): PatientInput {
   return patientInputSchema.parse({
     fullName: values.fullName,
     phone: values.phone,
@@ -333,12 +306,9 @@ export function toCreatePayload(values: PatientFormValues, today: string): Patie
     email: values.email,
     address: values.address,
     insurance: values.insurance,
-    emergencyContact: values.emergencyContact,
     medicalAlerts: parseAlerts(values.alertsText),
-    primaryDentistUserId: values.primaryDentistUserId || null,
+    primaryDentistId: values.primaryDentistId || null,
     notes: values.notes,
-    guardianName: guardianShown ? values.guardianName : null,
-    guardianPhone: guardianShown ? values.guardianPhone : null,
   });
 }
 
@@ -349,20 +319,8 @@ const PATCHABLE_TEXT_FIELDS = [
   'email',
   'address',
   'insurance',
-  'emergencyContact',
   'notes',
 ] as const;
-
-/** The effective guardian text: cleared to `''` once `showGuardian` is false, so a patch compares
- * (and, when changed, sends) the value the record will actually end up with, not stale text left
- * in a now-hidden field. */
-function effectiveGuardian(values: PatientFormValues, today: string) {
-  const shown = showGuardian(values, today);
-  return {
-    guardianName: shown ? values.guardianName : '',
-    guardianPhone: shown ? values.guardianPhone : '',
-  };
-}
 
 function normalizedPhoneOf(text: string, country: string): string {
   const parsed = normalizePhone(text, country as PhoneCountry);
@@ -383,11 +341,11 @@ function normalizedFieldValue(
 }
 
 /** The changed fields as raw form text, not yet parsed — `toPatchPayload`'s core, shared with
- * `isEditDirty`, which must answer while a field still holds a half-typed (invalid) value. */
+ * `isEditDirty`, which must answer while a field still holds a half-typed (invalid) value. A
+ * cleared phone is sent as `''`, which the patch schema turns into `null`. */
 function changedFields(
   initial: PatientFormValues,
   current: PatientFormValues,
-  today: string,
   country: string,
 ): Record<string, unknown> {
   const patch: Record<string, unknown> = {};
@@ -405,8 +363,8 @@ function changedFields(
     patch.sex = current.sex;
   }
 
-  if (initial.primaryDentistUserId !== current.primaryDentistUserId) {
-    patch.primaryDentistUserId = current.primaryDentistUserId || null;
+  if (initial.primaryDentistId !== current.primaryDentistId) {
+    patch.primaryDentistId = current.primaryDentistId || null;
   }
 
   const initialAlerts = parseAlerts(initial.alertsText);
@@ -416,18 +374,6 @@ function changedFields(
     initialAlerts.some((alert, index) => alert !== currentAlerts[index])
   ) {
     patch.medicalAlerts = currentAlerts;
-  }
-
-  const initialGuardian = effectiveGuardian(initial, today);
-  const currentGuardian = effectiveGuardian(current, today);
-  if (initialGuardian.guardianName.trim() !== currentGuardian.guardianName.trim()) {
-    patch.guardianName = currentGuardian.guardianName.trim() || null;
-  }
-  if (
-    normalizedPhoneOf(initialGuardian.guardianPhone, country) !==
-    normalizedPhoneOf(currentGuardian.guardianPhone, country)
-  ) {
-    patch.guardianPhone = currentGuardian.guardianPhone.trim() || null;
   }
 
   return patch;
@@ -443,10 +389,9 @@ function changedFields(
 export function toPatchPayload(
   initial: PatientFormValues,
   current: PatientFormValues,
-  today: string,
   country: string,
 ): PatientPatch | null {
-  const patch = changedFields(initial, current, today, country);
+  const patch = changedFields(initial, current, country);
   if (Object.keys(patch).length === 0) return null;
   return patientPatchSchema.parse(patch);
 }
@@ -454,15 +399,14 @@ export function toPatchPayload(
 /** Edit-mode "Unsaved changes" check (design Q16): whether saving would actually send a patch,
  * using `toPatchPayload`'s own normalised comparison (phone by parsed E.164, email case/
  * whitespace-insensitively, everything else trimmed) — so re-typing the same phone number in a
- * different format, or a guardian field that's simply hidden again, never shows "Unsaved". Never
- * throws: a half-typed value is a change, not an error. */
+ * different format never shows "Unsaved". Never throws: a half-typed value is a change, not an
+ * error. */
 export function isEditDirty(
   initial: PatientFormValues,
   current: PatientFormValues,
-  today: string,
   country: string,
 ): boolean {
-  return Object.keys(changedFields(initial, current, today, country)).length > 0;
+  return Object.keys(changedFields(initial, current, country)).length > 0;
 }
 
 /** `POST /billing/opening-balances`'s `openingBalance` leg; only call once `wantsOpeningBalance`

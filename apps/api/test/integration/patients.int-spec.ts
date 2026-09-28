@@ -4,6 +4,7 @@ import type {
   Branch,
   DuplicateGroup,
   Patient,
+  Practitioner,
   PatientCounts,
   PatientListItem,
   PatientPage,
@@ -181,9 +182,37 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     it('refuses a dentist who is not an active practitioner', async () => {
       const refused = await main.owner
         .post('/api/v1/patients')
-        .send({ fullName: 'No Dentist', phone: '71 000 000', primaryDentistUserId: newId() });
+        .send({ fullName: 'No Dentist', phone: '71 000 000', primaryDentistId: newId() });
       expect(refused.status).toBe(422);
       expect(refused.body).toMatchObject({ code: 'patient.unknown_dentist' });
+    });
+
+    it("takes the dentist's staff profile id (ADR-0020), never the auth user id", async () => {
+      const dentist = await createStaff(main, { displayName: 'Dr. Profile Id' });
+      const [practitioner] = (
+        (await main.owner.get('/api/v1/users/practitioners')).body as Practitioner[]
+      ).filter((row) => row.userId === dentist.id);
+      expect(practitioner?.id).toBe(dentist.profileId);
+
+      const byProfile = await createPatient(main.owner, {
+        fullName: 'Profile Dentist',
+        phone: '71000060',
+        primaryDentistId: practitioner?.id,
+      });
+      expect(byProfile.primaryDentistId).toBe(dentist.profileId);
+      expect(byProfile).not.toHaveProperty('primaryDentistUserId');
+
+      const byUserId = await main.owner
+        .post('/api/v1/patients')
+        .send({ fullName: 'User Id Dentist', phone: '71000061', primaryDentistId: dentist.id });
+      expect(byUserId.status).toBe(422);
+      expect(byUserId.body).toMatchObject({ code: 'patient.unknown_dentist' });
+
+      const patchedByUserId = await main.owner
+        .patch(`/api/v1/patients/${byProfile.id}`)
+        .send({ primaryDentistId: dentist.id });
+      expect(patchedByUserId.status).toBe(422);
+      expect(patchedByUserId.body).toMatchObject({ code: 'patient.unknown_dentist' });
     });
 
     it('frees the number of a create rolled back after minting (caller transaction)', async () => {
@@ -241,19 +270,26 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect((await getPatient(main.owner, created.id)).externalId).toBeNull();
     });
 
-    it('rejects an invalid phone or guardian phone at the field', async () => {
+    it('rejects an invalid phone at the field', async () => {
       const phone = await main.owner
         .post('/api/v1/patients')
         .send({ fullName: 'Bad Phone', phone: '12' });
       expect(phone.status).toBe(422);
       expect(phone.body).toMatchObject({ code: 'validation_failed' });
       expect(firstPath(phone.body)).toBe('phone');
+    });
 
-      const guardian = await main.owner
-        .post('/api/v1/patients')
-        .send({ fullName: 'Bad Guardian', phone: '71000000', guardianPhone: '999' });
-      expect(guardian.status).toBe(422);
-      expect(firstPath(guardian.body)).toBe('guardianPhone');
+    it('ignores the removed guardian and emergency-contact fields', async () => {
+      const created = await createPatient(main.owner, {
+        fullName: 'No Guardian Fields',
+        phone: '71000062',
+        guardianName: 'Mona',
+        guardianPhone: '999',
+        emergencyContact: 'Mona',
+      });
+      expect(created).not.toHaveProperty('guardianName');
+      expect(created).not.toHaveProperty('guardianPhone');
+      expect(created).not.toHaveProperty('emergencyContact');
     });
 
     it("checks the date of birth against the tenant's today, not UTC's", async () => {
@@ -279,6 +315,102 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         expect(patched.status).toBe(422);
         expect(firstPath(patched.body)).toBe('dateOfBirth');
       });
+    });
+  });
+
+  describe('the phone rule (addendum C3)', () => {
+    /** The problem body's first issue, for 422 validation responses. */
+    const firstIssue = (body: unknown) => (body as ProblemDetails).errors?.[0];
+    const PHONE_REQUIRED = { path: 'phone', code: 'required' };
+
+    it('requires a phone for an adult, and for a patient without a date of birth', async () => {
+      const adult = await main.owner
+        .post('/api/v1/patients')
+        .send({ fullName: 'Phoneless Adult', dateOfBirth: '1990-01-01' });
+      expect(adult.status).toBe(422);
+      expect(adult.body).toMatchObject({ code: 'validation_failed' });
+      expect(firstIssue(adult.body)).toMatchObject(PHONE_REQUIRED);
+
+      const noDob = await main.owner
+        .post('/api/v1/patients')
+        .send({ fullName: 'Phoneless Unknown Age', phone: '  ' });
+      expect(noDob.status).toBe(422);
+      expect(firstIssue(noDob.body)).toMatchObject(PHONE_REQUIRED);
+    });
+
+    it("lets a minor, in the tenant's time zone, be created without a phone", async () => {
+      // 22:30 UTC on 1 March is already 2 March in Beirut: born 2 March 2008 turns 18 there,
+      // while a UTC clock would still see a 17-year-old.
+      await withClockAt('2026-03-01T22:30:00Z', async () => {
+        const turned18 = await main.owner
+          .post('/api/v1/patients')
+          .send({ fullName: 'Birthday Adult', dateOfBirth: '2008-03-02' });
+        expect(turned18.status).toBe(422);
+        expect(firstIssue(turned18.body)).toMatchObject(PHONE_REQUIRED);
+
+        const minor = await createPatient(main.owner, {
+          fullName: 'Phoneless Minor',
+          dateOfBirth: '2008-03-03',
+        });
+        expect(minor).toMatchObject({ phone: null, dateOfBirth: '2008-03-03' });
+        expect((await getPatient(main.owner, minor.id)).phone).toBeNull();
+        // Listed, found by name and never by phone digits.
+        expect(ids(await search(main.owner, 'q=phoneless minor'))).toEqual([minor.id]);
+      });
+    });
+
+    it("refuses a PATCH that clears an adult's phone", async () => {
+      const adult = await createPatient(main.owner, {
+        fullName: 'Keeps Phone',
+        phone: '71000063',
+        dateOfBirth: '1980-01-01',
+      });
+      const cleared = await main.owner.patch(`/api/v1/patients/${adult.id}`).send({ phone: '' });
+      expect(cleared.status).toBe(422);
+      expect(firstIssue(cleared.body)).toMatchObject(PHONE_REQUIRED);
+      expect((await getPatient(main.owner, adult.id)).phone).toBe('+96171000063');
+    });
+
+    it('refuses a PATCH that gives a phoneless minor an adult (or no) date of birth', async () => {
+      const minor = await createPatient(main.owner, {
+        fullName: 'Growing Up',
+        dateOfBirth: '2020-05-05',
+      });
+      for (const dateOfBirth of ['1990-05-05', null]) {
+        const response = await main.owner
+          .patch(`/api/v1/patients/${minor.id}`)
+          .send({ dateOfBirth });
+        expect(response.status).toBe(422);
+        expect(firstIssue(response.body)).toMatchObject(PHONE_REQUIRED);
+      }
+      // With a phone in the same patch, it goes through; another minor date needs none.
+      const withPhone = await main.owner
+        .patch(`/api/v1/patients/${minor.id}`)
+        .send({ dateOfBirth: '1990-05-05', phone: '71000064' });
+      expect(withPhone.status).toBe(200);
+      expect(withPhone.body).toMatchObject({ phone: '+96171000064', dateOfBirth: '1990-05-05' });
+
+      const other = await createPatient(main.owner, {
+        fullName: 'Still Growing',
+        dateOfBirth: '2019-01-01',
+      });
+      const notes = await main.owner
+        .patch(`/api/v1/patients/${other.id}`)
+        .send({ dateOfBirth: '2018-01-01', notes: 'Corrected' });
+      expect(notes.status).toBe(200);
+      expect(notes.body).toMatchObject({ phone: null, dateOfBirth: '2018-01-01' });
+    });
+
+    it("lets a minor's phone be cleared", async () => {
+      const minor = await createPatient(main.owner, {
+        fullName: 'Minor With Phone',
+        phone: '71000065',
+        dateOfBirth: '2015-01-01',
+      });
+      const cleared = await main.owner.patch(`/api/v1/patients/${minor.id}`).send({ phone: null });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body).toMatchObject({ phone: null });
+      expect(ids(await search(main.owner, 'q=71000065'))).toEqual([]);
     });
   });
 
@@ -354,7 +486,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       const patient = await createPatient(main.owner, {
         fullName: 'Loyal Patient',
         phone: '71000004',
-        primaryDentistUserId: dentist.id,
+        primaryDentistId: dentist.profileId,
       });
       const other = await createPatient(main.owner, { fullName: 'New Patient', phone: '71000005' });
       const deactivated = await main.owner
@@ -364,13 +496,16 @@ describe('patients: records, search, duplicates, archive and merge', () => {
 
       const kept = await main.owner
         .patch(`/api/v1/patients/${patient.id}`)
-        .send({ primaryDentistUserId: dentist.id, notes: 'Still theirs' });
+        .send({ primaryDentistId: dentist.profileId, notes: 'Still theirs' });
       expect(kept.status).toBe(200);
-      expect(kept.body).toMatchObject({ primaryDentistUserId: dentist.id, notes: 'Still theirs' });
+      expect(kept.body).toMatchObject({
+        primaryDentistId: dentist.profileId,
+        notes: 'Still theirs',
+      });
 
       const chosen = await main.owner
         .patch(`/api/v1/patients/${other.id}`)
-        .send({ primaryDentistUserId: dentist.id });
+        .send({ primaryDentistId: dentist.profileId });
       expect(chosen.status).toBe(422);
       expect(chosen.body).toMatchObject({ code: 'patient.unknown_dentist' });
     });
@@ -400,13 +535,13 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         fullName: 'José Álvarez',
         phone: '03 123 456',
         medicalAlerts: ['Penicillin'],
-        primaryDentistUserId: zed.id,
+        primaryDentistId: zed.profileId,
       });
       amira = await createPatient(clinic.owner, {
         fullName: 'Amira Khalil',
         phone: '71 123 456',
         email: 'amira@example.com',
-        primaryDentistUserId: amir.id,
+        primaryDentistId: amir.profileId,
       });
       omar = await createPatient(clinic.owner, { fullName: 'Omar Said', phone: '70 111 222' });
       turning18 = await createPatient(clinic.owner, {
@@ -459,9 +594,11 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(ids(await search(clinic.owner, 'q=example.com'))).toEqual([amira.id]);
     });
 
-    it('filters by alerts and dentist', async () => {
+    it('filters by alerts and dentist (staff profile id)', async () => {
       expect(ids(await search(clinic.owner, 'alerts=yes'))).toEqual([jose.id]);
-      expect(ids(await search(clinic.owner, `dentist=${zed.id}`))).toEqual([jose.id]);
+      expect(ids(await search(clinic.owner, `dentist=${zed.profileId}`))).toEqual([jose.id]);
+      // The auth user id is not what a patient refers to its dentist by (ADR-0020).
+      expect(ids(await search(clinic.owner, `dentist=${zed.id}`))).toEqual([]);
       const none = ids(await search(clinic.owner, 'dentist=none&size=50'));
       expect(none).toContain(omar.id);
       expect(none).not.toContain(jose.id);
@@ -486,22 +623,22 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       const zara = await createPatient(twins.owner, {
         fullName: 'Zara Twin',
         phone: '70000010',
-        primaryDentistUserId: first.id,
+        primaryDentistId: first.profileId,
       });
       const adam = await createPatient(twins.owner, {
         fullName: 'Adam Twin',
         phone: '70000011',
-        primaryDentistUserId: second.id,
+        primaryDentistId: second.profileId,
       });
       const mona = await createPatient(twins.owner, {
         fullName: 'Mona Twin',
         phone: '70000012',
-        primaryDentistUserId: first.id,
+        primaryDentistId: first.profileId,
       });
       const basma = await createPatient(twins.owner, {
         fullName: 'Yara Other',
         phone: '70000013',
-        primaryDentistUserId: other.id,
+        primaryDentistId: other.profileId,
       });
       const nobody = await createPatient(twins.owner, {
         fullName: 'Aaron None',
@@ -747,6 +884,43 @@ describe('patients: records, search, duplicates, archive and merge', () => {
   describe('merge', () => {
     const merge = (agent: TestAgent, body: Record<string, unknown>) =>
       agent.post('/api/v1/patients/merge').send(body);
+
+    it("refuses to leave an adult without a phone, and takes a minor's missing one", async () => {
+      const adult = await createPatient(main.owner, {
+        fullName: 'Mergephone Adult',
+        phone: '71000066',
+        dateOfBirth: '1990-01-01',
+      });
+      const phonelessMinor = await createPatient(main.owner, {
+        fullName: 'Mergephone Minor',
+        dateOfBirth: '2016-01-01',
+      });
+      const refused = await merge(main.owner, {
+        keepId: adult.id,
+        dropId: phonelessMinor.id,
+        fieldChoices: { phone: 'drop' },
+        reason: 'Same person',
+      });
+      expect(refused.status).toBe(422);
+      expect((refused.body as ProblemDetails).errors?.[0]).toMatchObject({
+        path: 'phone',
+        code: 'required',
+      });
+
+      const minor = await createPatient(main.owner, {
+        fullName: 'Mergephone Kid',
+        phone: '71000067',
+        dateOfBirth: '2016-01-01',
+      });
+      const kept = await merge(main.owner, {
+        keepId: minor.id,
+        dropId: phonelessMinor.id,
+        fieldChoices: { phone: 'drop' },
+        reason: 'Same person',
+      });
+      expect(kept.status, JSON.stringify(kept.body)).toBe(200);
+      expect(kept.body).toMatchObject({ id: minor.id, phone: null });
+    });
 
     it('takes the chosen fields, unions the alerts and archives the dropped record', async () => {
       const kept = await createPatient(main.owner, {

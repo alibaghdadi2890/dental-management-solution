@@ -34,7 +34,7 @@ import { parseRecordSearch } from './record/record-search';
 export const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
 /** A distinct-looking uuid for a staff profile id, so fixtures never reuse the auth user id as
  * the profile id (they are different ids in the real schema). */
-const profileId = (userId: string) => userId.replace('4c5d', '4c5e');
+export const profileId = (userId: string) => userId.replace('4c5d', '4c5e');
 export const DENTIST_ID = id(80);
 export const INACTIVE_DENTIST_ID = id(81);
 export const FRONT_DESK_ID = id(82);
@@ -50,12 +50,9 @@ export function patient(n: number, fullName: string, extra: Partial<Patient> = {
     email: null,
     address: null,
     insurance: null,
-    emergencyContact: null,
     medicalAlerts: [],
-    primaryDentistUserId: null,
+    primaryDentistId: null,
     notes: null,
-    guardianName: null,
-    guardianPhone: null,
     externalId: null,
     archivedAt: null,
     mergedIntoId: null,
@@ -73,7 +70,7 @@ export const listItem = (p: Patient): PatientListItem => ({
   dateOfBirth: p.dateOfBirth,
   sex: p.sex,
   medicalAlerts: p.medicalAlerts,
-  primaryDentistUserId: p.primaryDentistUserId,
+  primaryDentistId: p.primaryDentistId,
   email: p.email,
   archivedAt: p.archivedAt,
   updatedAt: p.updatedAt,

@@ -10,6 +10,7 @@ import {
   mockApi,
   patient,
   problem,
+  profileId,
   renderPanels,
   sent,
   prefilled,
@@ -17,7 +18,7 @@ import {
 
 const RANA = patient(1, 'Rana Haddad', {
   address: '1 Main St',
-  primaryDentistUserId: INACTIVE_DENTIST_ID,
+  primaryDentistId: profileId(INACTIVE_DENTIST_ID),
 });
 const TODAY = todayIn('Asia/Beirut');
 
@@ -74,12 +75,9 @@ describe('PatientFormPanel — create', () => {
       email: null,
       address: null,
       insurance: null,
-      emergencyContact: null,
       medicalAlerts: [],
-      primaryDentistUserId: null,
+      primaryDentistId: null,
       notes: null,
-      guardianName: null,
-      guardianPhone: null,
     });
     expect(sent(fetchMock, 'POST', '/billing/opening-balances')).toBeUndefined();
     await waitFor(() => {
@@ -231,26 +229,58 @@ describe('PatientFormPanel — create', () => {
     expect(screen.queryByRole('textbox', { name: 'Opening balance' })).toBeNull();
   });
 
-  it('shows the guardian pair only for a minor, and never sends a hidden one', async () => {
+  it('makes the phone optional for a minor, sent as null, with no guardian text fields', async () => {
     const fetchMock = mockApi();
     renderPanels({ url: '/?panel=new' });
     await panel('Register a patient');
     type('Full name', 'Lina Aoun');
-    type('Phone', '03 123 456');
-    expect(screen.queryByRole('textbox', { name: 'Guardian name' })).toBeNull();
+    const create = screen.getByRole('button', { name: 'Create patient' });
+    expect(create).toHaveProperty('disabled', true);
+    expect(field('Phone').getAttribute('aria-required')).toBe('true');
 
     type('Date of birth', dobYearsAgo(7));
     expect(screen.getByText('7 yrs · mixed dentition')).toBeTruthy();
-    type('Guardian name', 'Maya Aoun');
-    type('Guardian phone', '03 654 321');
+    expect(field('Phone').getAttribute('aria-required')).toBeNull();
+    // Contacts replace the guardian and emergency-contact text fields (J1–J3 add their UI).
+    expect(screen.queryByRole('textbox', { name: /Guardian/ })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: /Emergency/ })).toBeNull();
+    expect(create).toHaveProperty('disabled', false);
+    fireEvent.click(create);
+    await screen.findByText('Patient created');
+    expect(sent(fetchMock, 'POST', '/patients')).toMatchObject({ phone: null });
+  });
 
-    type('Date of birth', dobYearsAgo(30));
-    expect(screen.queryByRole('textbox', { name: 'Guardian name' })).toBeNull();
+  it('keeps the phone required for an adult (or no date of birth)', async () => {
+    const fetchMock = mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Lina Aoun');
+    type('Date of birth', dobYearsAgo(18));
+    const create = screen.getByRole('button', { name: 'Create patient' });
+    expect(create).toHaveProperty('disabled', true);
+    expect(field('Phone').getAttribute('aria-required')).toBe('true');
+    type('Date of birth', dobYearsAgo(7));
+    type('Date of birth', '');
+    expect(create).toHaveProperty('disabled', true);
+    expect(sent(fetchMock, 'POST', '/patients')).toBeUndefined();
+  });
+
+  it("sends the chosen dentist's staff profile id", async () => {
+    const fetchMock = mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Rana Haddad');
+    type('Phone', '03 123 456');
+    const dentist = screen.getByRole<HTMLSelectElement>('combobox', { name: 'Primary dentist' });
+    const option = await within(dentist).findByRole<HTMLOptionElement>('option', {
+      name: 'Dr. Ana Reyes',
+    });
+    expect(option.value).toBe(profileId(DENTIST_ID));
+    fireEvent.change(dentist, { target: { value: option.value } });
     fireEvent.click(screen.getByRole('button', { name: 'Create patient' }));
     await screen.findByText('Patient created');
     expect(sent(fetchMock, 'POST', '/patients')).toMatchObject({
-      guardianName: null,
-      guardianPhone: null,
+      primaryDentistId: profileId(DENTIST_ID),
     });
   });
 
@@ -512,7 +542,7 @@ describe('PatientFormPanel — edit', () => {
     const aside = await panel('Rana Haddad');
     const dentist = screen.getByRole('combobox', { name: 'Primary dentist' });
     await within(dentist).findByRole('option', { name: 'Dr. Ana Reyes' });
-    fireEvent.change(dentist, { target: { value: DENTIST_ID } });
+    fireEvent.change(dentist, { target: { value: profileId(DENTIST_ID) } });
     fireEvent.click(within(aside).getByRole('button', { name: 'Save changes' }));
     expect(await screen.findByText('This dentist is no longer available')).toBeTruthy();
     expect(dentist.getAttribute('aria-invalid')).toBe('true');

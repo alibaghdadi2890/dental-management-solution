@@ -199,21 +199,16 @@
       "email": "Email",
       "address": "Address",
       "insurance": "Insurance",
-      "emergencyContact": "Emergency contact",
       "alerts": "Medical alerts",
       "dentist": "Primary dentist",
-      "notes": "Notes",
-      "guardianName": "Guardian name",
-      "guardianPhone": "Guardian phone"
+      "notes": "Notes"
     },
     "alertsHint": "Comma-separated",
-    "guardianHint": "Under 18",
     "placeholders": {
       "fullName": "e.g. Rana Haddad",
       "email": "name@email.com",
       "insurance": "Carrier — plan",
-      "alerts": "e.g. Penicillin allergy",
-      "emergencyContact": "Name and phone"
+      "alerts": "e.g. Penicillin allergy"
     },
     "sexOptions": {
       "unknown": "—",
@@ -276,10 +271,8 @@
       "email": "Email",
       "address": "Address",
       "insurance": "Insurance",
-      "emergencyContact": "Emergency",
-      "primaryDentistUserId": "Dentist",
+      "primaryDentistId": "Dentist",
       "notes": "Notes",
-      "guardian": "Guardian",
       "alerts": "Alerts"
     },
     "valueFor": "{{field}} from {{number}}: {{value}}",
@@ -358,7 +351,6 @@
       "email": "Email",
       "address": "Address",
       "insurance": "Insurance",
-      "emergency": "Emergency",
       "notRecorded": "Not recorded"
     },
     "form": {

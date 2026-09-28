@@ -161,9 +161,11 @@ export function RecordHeader({
               {patient.displayNumber}
             </span>
             <span>{age}</span>
-            <span dir="ltr" className="font-mono tabular-nums">
-              {formatPhone(patient.phone, tenant.country)}
-            </span>
+            {patient.phone && (
+              <span dir="ltr" className="font-mono tabular-nums">
+                {formatPhone(patient.phone, tenant.country)}
+              </span>
+            )}
           </div>
         </div>
         {patient.medicalAlerts.length > 0 && (

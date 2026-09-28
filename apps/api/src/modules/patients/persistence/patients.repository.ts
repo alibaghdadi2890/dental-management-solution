@@ -48,12 +48,9 @@ function toDomain(row: PatientRow): DomainPatient {
     email: row.email,
     address: row.address,
     insurance: row.insurance,
-    emergencyContact: row.emergencyContact,
     notes: row.notes,
     medicalAlerts: row.medicalAlerts,
-    primaryDentistUserId: row.primaryDentistUserId,
-    guardianName: row.guardianName,
-    guardianPhone: row.guardianPhone,
+    primaryDentistId: row.primaryDentistId,
     externalId: row.externalId,
     mergedIntoId: row.mergedIntoId,
     deletedAt: row.deletedAt,
@@ -72,25 +69,28 @@ export interface NormalizedPhoneInput {
   national: string;
 }
 
-function phoneSearchOf(phone: NormalizedPhoneInput): string {
-  return `${phoneDigits(phone.e164)} ${phone.national}`;
+/** The stored phone and its search digits; both null without one (digit queries never match). */
+function phoneColumns(phone: NormalizedPhoneInput | null): {
+  phone: string | null;
+  phoneSearch: string | null;
+} {
+  if (phone === null) return { phone: null, phoneSearch: null };
+  return { phone: phone.e164, phoneSearch: `${phoneDigits(phone.e164)} ${phone.national}` };
 }
 
 export interface NewPatient {
   displayNumber: string;
   fullName: string;
-  phone: NormalizedPhoneInput;
+  /** Null only for a minor recorded without one (the service enforces the phone rule). */
+  phone: NormalizedPhoneInput | null;
   dateOfBirth: string | null;
   sex: PatientSex;
   email: string | null;
   address: string | null;
   insurance: string | null;
-  emergencyContact: string | null;
   notes: string | null;
   medicalAlerts: string[];
-  primaryDentistUserId: string | null;
-  guardianName: string | null;
-  guardianPhone: string | null;
+  primaryDentistId: string | null;
   externalId: string | null;
 }
 
@@ -101,18 +101,15 @@ export interface NewPatient {
  */
 export interface PatientPatch {
   fullName?: string;
-  phone?: NormalizedPhoneInput;
+  phone?: NormalizedPhoneInput | null;
   dateOfBirth?: string | null;
   sex?: PatientSex;
   email?: string | null;
   address?: string | null;
   insurance?: string | null;
-  emergencyContact?: string | null;
   notes?: string | null;
   medicalAlerts?: string[];
-  primaryDentistUserId?: string | null;
-  guardianName?: string | null;
-  guardianPhone?: string | null;
+  primaryDentistId?: string | null;
 }
 
 export interface PatientSearchResult {
@@ -138,19 +135,15 @@ export class PatientsRepository {
           displayNumber: input.displayNumber,
           fullName: input.fullName,
           nameKey: nameKey(input.fullName),
-          phone: input.phone.e164,
-          phoneSearch: phoneSearchOf(input.phone),
+          ...phoneColumns(input.phone),
           dateOfBirth: input.dateOfBirth,
           sex: input.sex,
           email: input.email,
           address: input.address,
           insurance: input.insurance,
-          emergencyContact: input.emergencyContact,
           notes: input.notes,
           medicalAlerts: input.medicalAlerts,
-          primaryDentistUserId: input.primaryDentistUserId,
-          guardianName: input.guardianName,
-          guardianPhone: input.guardianPhone,
+          primaryDentistId: input.primaryDentistId,
           externalId: input.externalId,
         })
         .returning();
@@ -165,23 +158,15 @@ export class PatientsRepository {
       set.fullName = patch.fullName;
       set.nameKey = nameKey(patch.fullName);
     }
-    if (patch.phone !== undefined) {
-      set.phone = patch.phone.e164;
-      set.phoneSearch = phoneSearchOf(patch.phone);
-    }
+    if (patch.phone !== undefined) Object.assign(set, phoneColumns(patch.phone));
     if (patch.dateOfBirth !== undefined) set.dateOfBirth = patch.dateOfBirth;
     if (patch.sex !== undefined) set.sex = patch.sex;
     if (patch.email !== undefined) set.email = patch.email;
     if (patch.address !== undefined) set.address = patch.address;
     if (patch.insurance !== undefined) set.insurance = patch.insurance;
-    if (patch.emergencyContact !== undefined) set.emergencyContact = patch.emergencyContact;
     if (patch.notes !== undefined) set.notes = patch.notes;
     if (patch.medicalAlerts !== undefined) set.medicalAlerts = patch.medicalAlerts;
-    if (patch.primaryDentistUserId !== undefined) {
-      set.primaryDentistUserId = patch.primaryDentistUserId;
-    }
-    if (patch.guardianName !== undefined) set.guardianName = patch.guardianName;
-    if (patch.guardianPhone !== undefined) set.guardianPhone = patch.guardianPhone;
+    if (patch.primaryDentistId !== undefined) set.primaryDentistId = patch.primaryDentistId;
 
     return this.db.run(async (tx) => {
       const [row] = await tx
@@ -424,15 +409,16 @@ export class PatientsRepository {
   }
 
   /**
-   * The distinct dentists assigned to any patient, archived ones included — `sort=dentist` ranks
-   * by these, so a patient whose dentist has since been deactivated still sorts under that name.
+   * The distinct dentists (staff profile ids, ADR-0020) assigned to any patient, archived ones
+   * included — `sort=dentist` ranks by these, so a patient whose dentist has since been
+   * deactivated still sorts under that name.
    */
   async assignedDentistIds(): Promise<string[]> {
     const rows = await this.db.run((tx) =>
       tx
-        .selectDistinct({ id: patients.primaryDentistUserId })
+        .selectDistinct({ id: patients.primaryDentistId })
         .from(patients)
-        .where(isNotNull(patients.primaryDentistUserId)),
+        .where(isNotNull(patients.primaryDentistId)),
     );
     return rows.flatMap((row) => (row.id === null ? [] : [row.id]));
   }

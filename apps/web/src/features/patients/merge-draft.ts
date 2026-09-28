@@ -9,9 +9,6 @@ import {
   type PatientSex,
 } from '@dcm/contracts';
 
-/** Every `MergeField` except the composite `guardian`, which reads/writes a pair. */
-type ScalarMergeField = Exclude<MergeField, 'guardian'>;
-
 export type MergeChoice = 'keep' | 'drop';
 
 /**
@@ -30,17 +27,10 @@ function displayNumberValue(displayNumber: string): number {
   return Number(displayNumber.slice(2));
 }
 
-function guardianDiffers(a: Patient, b: Patient): boolean {
-  return a.guardianName !== b.guardianName || a.guardianPhone !== b.guardianPhone;
-}
-
 /** The pickable fields (`MERGE_FIELDS`) where the two records actually disagree — the only rows
- * the compare grid needs a radio for. `guardian` is one field even though it's a pair (design: "the
- * guardian pair moves together"). */
+ * the compare grid needs a radio for. */
 export function differingFields(a: Patient, b: Patient): MergeField[] {
-  return MERGE_FIELDS.filter((field) =>
-    field === 'guardian' ? guardianDiffers(a, b) : a[field] !== b[field],
-  );
+  return MERGE_FIELDS.filter((field) => a[field] !== b[field]);
 }
 
 /**
@@ -80,17 +70,15 @@ function droppedOf(draft: MergeDraft): Patient {
 
 export interface MergePreview {
   fullName: string;
-  phone: string;
+  /** Null when the picked record has none (a minor); the server refuses it for an adult. */
+  phone: string | null;
   dateOfBirth: string | null;
   sex: PatientSex;
   email: string | null;
   address: string | null;
   insurance: string | null;
-  emergencyContact: string | null;
-  primaryDentistUserId: string | null;
+  primaryDentistId: string | null;
   notes: string | null;
-  guardianName: string | null;
-  guardianPhone: string | null;
   /** The union of both records' alerts, kept's own first (matches the server's `resolveMerge`) —
    * not capped here; see `alertsOverflow` for the 422 `patient.merge_alerts_overflow` guard. */
   medicalAlerts: string[];
@@ -100,9 +88,8 @@ export interface MergePreview {
 export function preview(draft: MergeDraft): MergePreview {
   const kept = keptOf(draft);
   const dropped = droppedOf(draft);
-  const pick = <K extends ScalarMergeField>(field: K): Patient[K] =>
+  const pick = <K extends MergeField>(field: K): Patient[K] =>
     draft.choices[field] === 'drop' ? dropped[field] : kept[field];
-  const guardianFrom = draft.choices.guardian === 'drop' ? dropped : kept;
 
   return {
     fullName: pick('fullName'),
@@ -112,11 +99,8 @@ export function preview(draft: MergeDraft): MergePreview {
     email: pick('email'),
     address: pick('address'),
     insurance: pick('insurance'),
-    emergencyContact: pick('emergencyContact'),
-    primaryDentistUserId: pick('primaryDentistUserId'),
+    primaryDentistId: pick('primaryDentistId'),
     notes: pick('notes'),
-    guardianName: guardianFrom.guardianName,
-    guardianPhone: guardianFrom.guardianPhone,
     medicalAlerts: dedupeAlerts([...kept.medicalAlerts, ...dropped.medicalAlerts]),
   };
 }

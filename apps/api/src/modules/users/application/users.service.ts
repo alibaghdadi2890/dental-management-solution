@@ -78,26 +78,6 @@ export class UsersService {
   }
 
   /**
-   * Practitioners among `authUserIds` whatever their current type or active status, ordered the
-   * same way as `listPractitioners` — for showing the display name of a dentist already assigned
-   * to a patient even after they leave or change role.
-   *
-   * Superseded by `practitionersByProfileIds`: domain models refer to a dentist by the staff
-   * profile id, not the auth user id (ADR-0020). Kept only for the `patients` and `billing`
-   * callers that still store the auth user id; the patients-contacts addendum (task H1/H2) moves
-   * them to `practitionersByProfileIds` and deletes this method. (Not `@deprecated`: that would
-   * fail `@typescript-eslint/no-deprecated` at the call sites this method exists to serve until
-   * they are migrated.)
-   */
-  practitionersByAuthUserIds(authUserIds: readonly string[]): Promise<Practitioner[]> {
-    return this.tenantDb.run(async () => {
-      const profiles = await this.staff.byAuthUserIds(distinct(authUserIds));
-      const { locale } = await this.tenancy.currentTenant();
-      return sortByDisplayName(profiles, locale).map(toPractitioner);
-    });
-  }
-
-  /**
    * Practitioners among `profileIds` (`staff_profiles.id`, ADR-0020) whatever their current type
    * or active status, ordered the same way as `listPractitioners` — for showing the display name
    * of a dentist already assigned to a patient even after they leave or change role. Includes

@@ -94,19 +94,21 @@ const dateOfBirthSchema = optionalDate('Date of birth cannot be in the future').
  */
 const patientFields = {
   fullName: nameSchema,
-  /** Raw text as typed; the server normalises it against the tenant's country (`phone.ts`). */
-  phone: z.string().trim().min(1).max(40),
+  /**
+   * Raw text as typed; the server normalises it against the tenant's country (`phone.ts`). Blank
+   * → null: the phone is required for adults only, a rule the server enforces against the tenant's
+   * time zone (design addendum C3), so the schema alone cannot decide it.
+   */
+  phone: optionalText(40),
   dateOfBirth: dateOfBirthSchema,
   sex: patientSexSchema,
   email: optionalEmailSchema,
   address: optionalText(240),
   insurance: optionalText(120),
-  emergencyContact: optionalText(160),
   medicalAlerts: medicalAlertsSchema,
-  primaryDentistUserId: primaryDentistIdSchema,
+  /** A staff profile id (`staff_profiles.id`, ADR-0020), never an auth user id. */
+  primaryDentistId: primaryDentistIdSchema,
   notes: optionalText(2000),
-  guardianName: optionalText(120),
-  guardianPhone: optionalText(40),
   // No `externalId`: it is the import key, set only by the import (feature 6), never by an edit.
 };
 
@@ -128,19 +130,16 @@ export const patientSchema = z.object({
   id: idSchema,
   displayNumber: displayNumberSchema,
   fullName: z.string(),
-  /** E.164, as stored. */
-  phone: z.string(),
+  /** E.164, as stored; null only for a minor recorded without one (addendum C3). */
+  phone: z.string().nullable(),
   dateOfBirth: isoDateSchema.nullable(),
   sex: patientSexSchema,
   email: z.string().nullable(),
   address: z.string().nullable(),
   insurance: z.string().nullable(),
-  emergencyContact: z.string().nullable(),
   medicalAlerts: z.array(z.string()),
-  primaryDentistUserId: idSchema.nullable(),
+  primaryDentistId: idSchema.nullable(),
   notes: z.string().nullable(),
-  guardianName: z.string().nullable(),
-  guardianPhone: z.string().nullable(),
   /** The import key (feature 6); read-only here, null for records not imported. */
   externalId: z.string().nullable(),
   archivedAt: isoDateTimeSchema.nullable(),
@@ -159,7 +158,7 @@ export const patientListItemSchema = patientSchema.pick({
   dateOfBirth: true,
   sex: true,
   medicalAlerts: true,
-  primaryDentistUserId: true,
+  primaryDentistId: true,
   email: true,
   archivedAt: true,
   updatedAt: true,
@@ -196,6 +195,7 @@ export const patientListQuerySchema = z.object({
     .max(100)
     .nullish()
     .transform((value) => (value ? value : undefined)),
+  /** A staff profile id (ADR-0020), or `none` for patients without a primary dentist. */
   dentist: blankToUndefined(z.union([idSchema, z.literal('none')]).optional()),
   age: blankToUndefined(z.enum(AGE_BANDS).optional()),
   alerts: blankToUndefined(z.enum(['yes', 'no']).optional()),
@@ -248,7 +248,7 @@ export type PatientArchive = z.infer<typeof patientArchiveSchema>;
 export const patientRestoreSchema = z.object({ ids: patientIdsSchema });
 export type PatientRestore = z.infer<typeof patientRestoreSchema>;
 
-/** The pickable fields of a merge; `guardian` moves `guardianName`/`guardianPhone` together. */
+/** The pickable fields of a merge. */
 export const MERGE_FIELDS = [
   'fullName',
   'phone',
@@ -257,10 +257,8 @@ export const MERGE_FIELDS = [
   'email',
   'address',
   'insurance',
-  'emergencyContact',
-  'primaryDentistUserId',
+  'primaryDentistId',
   'notes',
-  'guardian',
 ] as const;
 export const mergeFieldSchema = z.enum(MERGE_FIELDS);
 export type MergeField = z.infer<typeof mergeFieldSchema>;

@@ -17,12 +17,9 @@ function patient(overrides: Partial<DomainPatient> = {}): DomainPatient {
     email: 'kept@example.com',
     address: 'Kept Addr',
     insurance: 'Kept Ins',
-    emergencyContact: 'Kept EC',
     notes: 'Kept notes',
     medicalAlerts: ['Penicillin'],
-    primaryDentistUserId: 'dentist-1',
-    guardianName: null,
-    guardianPhone: null,
+    primaryDentistId: 'dentist-1',
     externalId: null,
     mergedIntoId: null,
     deletedAt: null,
@@ -44,12 +41,9 @@ const dropped = patient({
   email: 'dropped@example.com',
   address: 'Dropped Addr',
   insurance: 'Dropped Ins',
-  emergencyContact: 'Dropped EC',
   notes: 'Dropped notes',
   medicalAlerts: ['penicillin', 'Latex'],
-  primaryDentistUserId: 'dentist-2',
-  guardianName: 'Guardian G',
-  guardianPhone: '+96100000003',
+  primaryDentistId: 'dentist-2',
 });
 
 describe('resolveMerge', () => {
@@ -74,8 +68,7 @@ describe('resolveMerge', () => {
       email: 'drop',
       address: 'drop',
       insurance: 'drop',
-      emergencyContact: 'drop',
-      primaryDentistUserId: 'drop',
+      primaryDentistId: 'drop',
       notes: 'drop',
     });
     expect(patch).toMatchObject({
@@ -85,29 +78,25 @@ describe('resolveMerge', () => {
       email: 'dropped@example.com',
       address: 'Dropped Addr',
       insurance: 'Dropped Ins',
-      emergencyContact: 'Dropped EC',
-      primaryDentistUserId: 'dentist-2',
+      primaryDentistId: 'dentist-2',
       notes: 'Dropped notes',
     });
     expect(patch.fullName).toBeUndefined();
   });
 
-  it('moves guardianName and guardianPhone together under the single "guardian" choice', () => {
+  it("takes the dropped record's missing phone (a minor recorded without one) when chosen", () => {
     const kept = patient();
-    const patch = resolveMerge(kept, dropped, { guardian: 'drop' });
-    expect(patch).toMatchObject({ guardianName: 'Guardian G', guardianPhone: '+96100000003' });
+    const phoneless = patient({ id: 'dropped-id', phone: null, phoneSearch: null });
+    expect(resolveMerge(kept, phoneless, { phone: 'drop' })).toMatchObject({ phone: null });
+    expect(resolveMerge(phoneless, kept, { phone: 'drop' })).toMatchObject({
+      phone: '+96100000001',
+    });
   });
 
-  it('leaves the guardian out of the patch when both sides already agree', () => {
-    const kept = patient({ guardianName: 'Same', guardianPhone: '+96100000009' });
-    const droppedSameGuardian = patient({
-      id: 'dropped-id',
-      guardianName: 'Same',
-      guardianPhone: '+96100000009',
-      medicalAlerts: kept.medicalAlerts,
-    });
-    const patch = resolveMerge(kept, droppedSameGuardian, { guardian: 'drop' });
-    expect(patch).toEqual({});
+  it('leaves out the fields where both sides already agree', () => {
+    const kept = patient();
+    const same = patient({ id: 'dropped-id', displayNumber: 'P-000002' });
+    expect(resolveMerge(kept, same, { phone: 'drop', primaryDentistId: 'drop' })).toEqual({});
   });
 
   it('unions medical alerts case-insensitively, kept first then dropped, never as a choice', () => {

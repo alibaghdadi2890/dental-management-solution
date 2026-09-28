@@ -13,20 +13,14 @@ export type MergePatch = Partial<
     | 'email'
     | 'address'
     | 'insurance'
-    | 'emergencyContact'
-    | 'primaryDentistUserId'
+    | 'primaryDentistId'
     | 'notes'
-    | 'guardianName'
-    | 'guardianPhone'
     | 'medicalAlerts'
   >
 >;
 
-/** The scalar merge fields, i.e. every `MergeField` except `guardian` (which moves a pair). */
-type ScalarMergeField = Exclude<MergeField, 'guardian'>;
-
-/** Where each scalar merge field lives on a `DomainPatient` (and, 1:1, on the `MergePatch`). */
-const SCALAR_FIELD_KEYS: Record<ScalarMergeField, keyof MergePatch> = {
+/** Where each merge field lives on a `DomainPatient` (and, 1:1, on the `MergePatch`). */
+const FIELD_KEYS: Record<MergeField, keyof MergePatch> = {
   fullName: 'fullName',
   phone: 'phone',
   dateOfBirth: 'dateOfBirth',
@@ -34,8 +28,7 @@ const SCALAR_FIELD_KEYS: Record<ScalarMergeField, keyof MergePatch> = {
   email: 'email',
   address: 'address',
   insurance: 'insurance',
-  emergencyContact: 'emergencyContact',
-  primaryDentistUserId: 'primaryDentistUserId',
+  primaryDentistId: 'primaryDentistId',
   notes: 'notes',
 };
 
@@ -50,8 +43,8 @@ function sameAlerts(a: readonly string[], b: readonly string[]): boolean {
 
 /**
  * Resolves a patient merge (design Q8, Q11): each pickable field comes from `kept` unless
- * `choices` says `'drop'`, in which case it comes from `dropped`; a missing choice means "keep".
- * `guardian` moves `guardianName`/`guardianPhone` together as one choice. Medical alerts are
+ * `choices` says `'drop'`, in which case it comes from `dropped`; a missing choice means "keep"
+ * (a phone may resolve to null: a minor recorded without one). Medical alerts are
  * always the case-insensitive union of both records (kept's own alerts first) — never a field
  * choice, and never truncated: a dropped allergy is a clinical risk, so a union bigger than
  * `MEDICAL_ALERTS_MAX` throws `MergeAlertsOverflowError` rather than silently losing alerts;
@@ -66,22 +59,12 @@ export function resolveMerge(
   const patch: MergePatch = {};
 
   for (const field of MERGE_FIELDS) {
-    if (field === 'guardian') continue;
-    const key = SCALAR_FIELD_KEYS[field];
+    const key = FIELD_KEYS[field];
     const source = choices[field] === 'drop' ? dropped : kept;
     const value = source[key];
     if (value !== kept[key]) {
       assign(patch, key, value);
     }
-  }
-
-  const guardianSource = choices.guardian === 'drop' ? dropped : kept;
-  if (
-    guardianSource.guardianName !== kept.guardianName ||
-    guardianSource.guardianPhone !== kept.guardianPhone
-  ) {
-    patch.guardianName = guardianSource.guardianName;
-    patch.guardianPhone = guardianSource.guardianPhone;
   }
 
   const unionAlerts = dedupeAlerts([...kept.medicalAlerts, ...dropped.medicalAlerts]);

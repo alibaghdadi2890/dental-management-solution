@@ -1,6 +1,6 @@
 # Feature 3 — Patients — design
 
-Date: 2026-09-27 · Status: Implemented
+Date: 2026-09-27 · Status: Implemented · Amended by `2026-09-28-patients-contacts-design.md`
 
 ## Goal
 

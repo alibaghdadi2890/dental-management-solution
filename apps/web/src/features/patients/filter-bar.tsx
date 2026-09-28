@@ -107,7 +107,7 @@ export function FilterBar({
   const unlistedDentist =
     query.dentist !== undefined &&
     query.dentist !== 'none' &&
-    !practitioners.some((p) => p.userId === query.dentist)
+    !practitioners.some((p) => p.id === query.dentist)
       ? query.dentist
       : undefined;
 
@@ -129,7 +129,7 @@ export function FilterBar({
         value={query.dentist ?? ''}
         options={[
           { value: '', label: t('filters.anyDentist') },
-          ...practitioners.map((p) => ({ value: p.userId, label: p.displayName })),
+          ...practitioners.map((p) => ({ value: p.id, label: p.displayName })),
           ...(unlistedDentist
             ? [
                 {

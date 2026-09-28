@@ -231,21 +231,16 @@
       "email": "البريد الإلكتروني",
       "address": "العنوان",
       "insurance": "التأمين",
-      "emergencyContact": "جهة اتصال للطوارئ",
       "alerts": "تنبيهات طبية",
       "dentist": "طبيب الأسنان المعالج",
-      "notes": "ملاحظات",
-      "guardianName": "اسم ولي الأمر",
-      "guardianPhone": "هاتف ولي الأمر"
+      "notes": "ملاحظات"
     },
     "alertsHint": "مفصولة بفواصل",
-    "guardianHint": "دون 18 سنة",
     "placeholders": {
       "fullName": "مثال: رنا حداد",
       "email": "name@email.com",
       "insurance": "شركة التأمين — الخطة",
-      "alerts": "مثال: حساسية من البنسلين",
-      "emergencyContact": "الاسم والهاتف"
+      "alerts": "مثال: حساسية من البنسلين"
     },
     "sexOptions": {
       "unknown": "—",
@@ -308,10 +303,8 @@
       "email": "البريد الإلكتروني",
       "address": "العنوان",
       "insurance": "التأمين",
-      "emergencyContact": "الطوارئ",
-      "primaryDentistUserId": "الطبيب",
+      "primaryDentistId": "الطبيب",
       "notes": "ملاحظات",
-      "guardian": "ولي الأمر",
       "alerts": "التنبيهات"
     },
     "valueFor": "{{field}} من {{number}}: {{value}}",
@@ -398,7 +391,6 @@
       "email": "البريد الإلكتروني",
       "address": "العنوان",
       "insurance": "التأمين",
-      "emergency": "الطوارئ",
       "notRecorded": "غير مسجّل"
     },
     "form": {

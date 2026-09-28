@@ -14,12 +14,9 @@ export type PatientFieldName =
   | 'phone'
   | 'dateOfBirth'
   | 'sex'
-  | 'guardianName'
-  | 'guardianPhone'
   | 'email'
   | 'address'
   | 'insurance'
-  | 'emergencyContact'
   | 'alerts'
   | 'dentist'
   | 'notes';
@@ -34,7 +31,8 @@ export type FieldVariant = 'panel' | 'page';
 
 type Tone = 'required' | 'demoted' | 'page';
 
-const REQUIRED: ReadonlySet<PatientFieldName> = new Set(['fullName', 'phone']);
+/** Prominent in the panel; the phone is required unless the patient is a minor (`required`). */
+const PROMINENT: ReadonlySet<PatientFieldName> = new Set(['fullName', 'phone']);
 
 const INPUT: Record<Tone, string> = {
   required: '',
@@ -51,7 +49,6 @@ const TEXTAREA: Record<Tone, string> = {
 /**
  * One field of the patient form, bound to `form` (`usePatientForm`) — the one rendering of each
  * field the create/edit panel and the Patient information tab share; each arranges them itself.
- * The guardian pair is the caller's to show only while `form.guardian` holds.
  */
 export function PatientField({
   form,
@@ -66,13 +63,14 @@ export function PatientField({
 }) {
   const { t } = useTranslation(['patients', 'common']);
   const { values, set } = form;
-  const tone: Tone = variant === 'page' ? 'page' : REQUIRED.has(name) ? 'required' : 'demoted';
+  const tone: Tone = variant === 'page' ? 'page' : PROMINENT.has(name) ? 'required' : 'demoted';
+  const isRequired = name === 'fullName' || (name === 'phone' && !form.phoneOptional);
   const wrapper = cn(tone === 'demoted' && 'text-ink-muted', className);
 
   const message = form.messageOf;
 
   const label = (text: string) => {
-    const required = REQUIRED.has(name) && (
+    const required = isRequired && (
       <span aria-hidden className="ms-0.5 text-danger">
         {'*'}
       </span>
@@ -115,7 +113,7 @@ export function PatientField({
           type={options.type ?? 'text'}
           inputSize={tone === 'required' ? 'lg' : 'md'}
           placeholder={options.placeholder}
-          aria-required={REQUIRED.has(name) || undefined}
+          aria-required={isRequired || undefined}
           value={values[field]}
           onChange={(event) => {
             set(field)(event.target.value);
@@ -135,17 +133,6 @@ export function PatientField({
       });
     case 'phone':
       return text('phone', { label: t('form.fields.phone'), type: 'tel', mono: true });
-    case 'guardianName':
-      return text('guardianName', {
-        label: t('form.fields.guardianName'),
-        hint: t('form.guardianHint'),
-      });
-    case 'guardianPhone':
-      return text('guardianPhone', {
-        label: t('form.fields.guardianPhone'),
-        type: 'tel',
-        mono: true,
-      });
     case 'email':
       return text('email', {
         label: t('form.fields.email'),
@@ -158,11 +145,6 @@ export function PatientField({
       return text('insurance', {
         label: t('form.fields.insurance'),
         placeholder: t('form.placeholders.insurance'),
-      });
-    case 'emergencyContact':
-      return text('emergencyContact', {
-        label: t('form.fields.emergencyContact'),
-        placeholder: t('form.placeholders.emergencyContact'),
       });
     case 'dateOfBirth': {
       const dob = values.dateOfBirth;
@@ -262,15 +244,15 @@ export function PatientField({
       return (
         <Field
           label={label(t('form.fields.dentist'))}
-          error={message('primaryDentistUserId')}
+          error={message('primaryDentistId')}
           className={wrapper}
         >
           {(props) => (
             <DentistSelect
               {...props}
-              value={values.primaryDentistUserId}
-              current={form.initial.primaryDentistUserId}
-              onValue={set('primaryDentistUserId')}
+              value={values.primaryDentistId}
+              current={form.initial.primaryDentistId}
+              onValue={set('primaryDentistId')}
               className={INPUT[tone]}
             />
           )}
@@ -298,9 +280,10 @@ export function PatientField({
   }
 }
 
-/** The primary dentist picker: the active practitioners, plus the patient's `current` dentist
- * when no longer one of them (deactivated), so saving other fields never drops it. A clinic with
- * no practitioners yet gets a line under it saying where they come from. */
+/** The primary dentist picker: the active practitioners by staff profile id (`Practitioner.id`,
+ * ADR-0020), plus the patient's `current` dentist when no longer one of them (deactivated), so
+ * saving other fields never drops it. A clinic with no practitioners yet gets a line under it
+ * saying where they come from. */
 function DentistSelect({
   current,
   onValue,
@@ -313,8 +296,8 @@ function DentistSelect({
 }) {
   const { t } = useTranslation('patients');
   const hintId = useId();
-  const { names, practitioners } = useStaffNames();
-  const active = new Set((practitioners ?? []).map((p) => p.userId));
+  const { dentistNames, practitioners } = useStaffNames();
+  const active = new Set((practitioners ?? []).map((p) => p.id));
   const kept = current !== '' && !active.has(current) ? current : null;
   const none = practitioners?.length === 0;
   const described = [describedBy, none ? hintId : undefined].filter(Boolean).join(' ');
@@ -329,12 +312,12 @@ function DentistSelect({
       >
         <option value="">{t('form.noDentist')}</option>
         {(practitioners ?? []).map((practitioner) => (
-          <option key={practitioner.userId} value={practitioner.userId}>
+          <option key={practitioner.id} value={practitioner.id}>
             {practitioner.displayName}
           </option>
         ))}
         {kept !== null && (
-          <option value={kept}>{names.get(kept) ?? t('quickView.unknownDentist')}</option>
+          <option value={kept}>{dentistNames.get(kept) ?? t('quickView.unknownDentist')}</option>
         )}
       </Select>
       {none && (

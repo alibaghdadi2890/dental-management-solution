@@ -324,7 +324,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
           phone: '71 123 456',
           dateOfBirth: '1990-06-11',
           sex: 'female',
-          primaryDentistUserId: dentist.id,
+          primaryDentistId: dentist.profileId,
         },
         '250.00',
       );
@@ -443,6 +443,26 @@ describe('billing: patient views, CSV export and merge re-point', () => {
           `${evil.displayNumber},"'=HYPERLINK(""http://evil.example"",""Click"")",`,
         ),
       ).toBe(true);
+    });
+
+    it("names the dentist from the staff profile id, deactivated too; a minor's phone may be blank", async () => {
+      const leaving = await createStaff(clinic, { displayName: 'Dr. Gone Since' });
+      const kid = await createPatient(clinic.owner, {
+        fullName: 'Kid Nophone',
+        phone: null,
+        dateOfBirth: '2018-06-10',
+        primaryDentistId: leaving.profileId,
+      });
+      expect(kid).toMatchObject({ phone: null, primaryDentistId: leaving.profileId });
+      const deactivated = await clinic.owner
+        .post(`/api/v1/users/${leaving.id}/deactivate`)
+        .send({ reason: 'Left the clinic' });
+      expect(deactivated.status).toBe(200);
+
+      const lines = csvLines((await exportCsv(clinic.owner, `ids=${kid.id}`)).text);
+      expect(lines[1]).toBe(
+        [kid.displayNumber, 'Kid Nophone', '8', '', '', '', 'Dr. Gone Since', '', '0.00'].join(','),
+      );
     });
 
     describe('1,200 patients', () => {

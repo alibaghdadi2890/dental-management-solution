@@ -24,7 +24,7 @@ export interface PatientSearchFilters {
   view: PatientView;
   /** Diacritics-insensitive name substring, or number/e-mail/phone-digits substring. */
   q?: string;
-  /** A practitioner's auth user id, or the literal `'none'` for "no dentist assigned". */
+  /** A practitioner's staff profile id (ADR-0020), or the literal `'none'` for "no dentist". */
   dentist?: string;
   /** Exclusive lower bound: `date_of_birth > dobAfter`. */
   dobAfter?: string;
@@ -38,15 +38,16 @@ export type PatientSortKey = 'name' | 'age' | 'recent' | 'dentist' | 'balance';
 /**
  * `sort=dentist`/`sort=balance` order by an integer key per row (design Q7):
  * `coalesce(keys[array_position(ids, <column>)], restKey)`, then `name_key`, then `id`.
- * `column: 'id'` ranks patients directly (billing's balance order); `'primaryDentistUserId'` ranks
- * by the practitioner each patient is assigned to (resolved by the caller via `users`). `keys[i]`
+ * `column: 'id'` ranks patients directly (billing's balance order); `'primaryDentistId'` ranks by
+ * the practitioner (staff profile id) each patient is assigned to (resolved by the caller via
+ * `users`). `keys[i]`
  * is the key of `ids[i]`; rows whose column is not among `ids` (or is null) get `restKey`. Equal
  * keys tie, so the name order decides between them: callers give equal values (the same balance,
  * two dentists with the same name) the same key. The caller encodes the direction in the keys;
  * `PatientSearchOptions.dir` is ignored for these two sorts. Never exposed over HTTP.
  */
 export interface PatientRank extends PatientRankKeys {
-  column: 'id' | 'primaryDentistUserId';
+  column: 'id' | 'primaryDentistId';
 }
 
 export interface PatientSearchOptions {
@@ -112,6 +113,7 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
         ilike(patients.email, `%${escapedQ}%`),
       ];
       const qDigits = phoneDigits(filters.q);
+      // A patient without a phone has a null `phone_search`: the LIKE is null, never a match.
       if (qDigits.length >= MIN_PHONE_QUERY_DIGITS) {
         ors.push(like(patients.phoneSearch, `%${escapeLike(qDigits)}%`));
       }
@@ -121,9 +123,9 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
   }
 
   if (filters.dentist === 'none') {
-    conditions.push(isNull(patients.primaryDentistUserId));
+    conditions.push(isNull(patients.primaryDentistId));
   } else if (filters.dentist) {
-    conditions.push(eq(patients.primaryDentistUserId, filters.dentist));
+    conditions.push(eq(patients.primaryDentistId, filters.dentist));
   }
 
   if (filters.dobAfter) conditions.push(gt(patients.dateOfBirth, filters.dobAfter));
@@ -169,8 +171,7 @@ export function orderByFor(options: PatientOrderOptions): SQL[] {
         throw new Error(`search: sort=${options.sort} requires a rank option`);
       }
       const { column, ids, keys, restKey } = assertRank(options.rank);
-      const ranked =
-        column === 'primaryDentistUserId' ? patients.primaryDentistUserId : patients.id;
+      const ranked = column === 'primaryDentistId' ? patients.primaryDentistId : patients.id;
       const position = sql`array_position(${uuidArray(ids)}, ${ranked})`;
       return [
         sql`coalesce((${sql.param([...keys])}::int[])[${position}], ${restKey}::int)`,

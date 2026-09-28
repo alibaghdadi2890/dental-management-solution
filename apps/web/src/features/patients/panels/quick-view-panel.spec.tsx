@@ -10,6 +10,7 @@ import {
   mockApi,
   patient,
   problem,
+  profileId,
   renderPanels,
 } from '../patients.test-utils';
 
@@ -18,7 +19,7 @@ const RANA = patient(1, 'Rana Haddad', {
   email: 'rana@example.com',
   insurance: 'Allianz — Gold',
   medicalAlerts: ['Penicillin allergy', 'Latex'],
-  primaryDentistUserId: DENTIST_ID,
+  primaryDentistId: profileId(DENTIST_ID),
 });
 
 const entry = (n: number, extra: Partial<AuditEntry>): AuditEntry => ({

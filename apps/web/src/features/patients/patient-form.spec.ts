@@ -7,7 +7,7 @@ import {
   isDirty,
   isEditDirty,
   parseAlerts,
-  showGuardian,
+  phoneOptional,
   toCreatePayload,
   toOpeningBalance,
   toPatchPayload,
@@ -29,12 +29,9 @@ const PATIENT: Patient = {
   email: 'jane@example.com',
   address: '1 Main St',
   insurance: null,
-  emergencyContact: null,
   medicalAlerts: ['Penicillin'],
-  primaryDentistUserId: null,
+  primaryDentistId: null,
   notes: null,
-  guardianName: null,
-  guardianPhone: null,
   externalId: null,
   archivedAt: null,
   mergedIntoId: null,
@@ -53,9 +50,18 @@ describe('emptyForm / fromPatient', () => {
     const values = fromPatient(PATIENT, 'LB');
     expect(values.fullName).toBe('Jane Doe');
     expect(values.alertsText).toBe('Penicillin');
-    expect(values.primaryDentistUserId).toBe('');
+    expect(values.primaryDentistId).toBe('');
     expect(values.dateOfBirth).toBe('1990-01-01');
     expect(values.phone).toBe('03 123 456');
+  });
+
+  it("reads the dentist's staff profile id, and a missing phone as blank", () => {
+    const values = fromPatient(
+      { ...PATIENT, phone: null, primaryDentistId: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5e80' },
+      'LB',
+    );
+    expect(values.phone).toBe('');
+    expect(values.primaryDentistId).toBe('01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5e80');
   });
 
   it('never carries an opening balance into the edit form (create-only, Q1/Q12)', () => {
@@ -70,6 +76,20 @@ describe('validate', () => {
     const errors = validate(base, CTX);
     expect(errors.fullName).toBe('required');
     expect(errors.phone).toBe('required');
+  });
+
+  it("makes the phone optional for a minor on the tenant's today, not for an adult", () => {
+    const named = { ...base, fullName: 'Jane' };
+    // 16 on TODAY: a minor.
+    expect(validate({ ...named, dateOfBirth: '2009-09-28' }, CTX).phone).toBeUndefined();
+    // Exactly 18 on TODAY: an adult.
+    expect(validate({ ...named, dateOfBirth: '2008-09-27' }, CTX).phone).toBe('required');
+    // No date of birth means an adult.
+    expect(validate(named, CTX).phone).toBe('required');
+    // A minor's phone, when typed, is still checked.
+    expect(validate({ ...named, dateOfBirth: '2009-09-28', phone: '12' }, CTX).phone).toBe(
+      'invalidPhone',
+    );
   });
 
   it('flags a full name over the contract limit (120 chars)', () => {
@@ -133,23 +153,6 @@ describe('validate', () => {
       CTX,
     );
     expect(errors.notes).toBeUndefined();
-  });
-
-  it('skips guardian field checks entirely while the guardian is hidden', () => {
-    // No date of birth → showGuardian is false → the fields are hidden and sent as null
-    // regardless of what stale, otherwise-invalid text they hold.
-    const errors = validate(
-      {
-        ...base,
-        fullName: 'Jane',
-        phone: '03123456',
-        guardianName: 'x'.repeat(121),
-        guardianPhone: 'not a phone',
-      },
-      CTX,
-    );
-    expect(errors.guardianName).toBeUndefined();
-    expect(errors.guardianPhone).toBeUndefined();
   });
 
   it('flags a single alert over 60 characters', () => {
@@ -249,56 +252,41 @@ describe('validate', () => {
   });
 });
 
-describe('showGuardian', () => {
+describe('phoneOptional', () => {
   it('is false at exactly 18', () => {
-    expect(showGuardian({ ...emptyForm(), dateOfBirth: '2008-09-27' }, TODAY)).toBe(false);
+    expect(phoneOptional({ ...emptyForm(), dateOfBirth: '2008-09-27' }, TODAY)).toBe(false);
   });
 
   it('is true at 17', () => {
-    expect(showGuardian({ ...emptyForm(), dateOfBirth: '2009-09-27' }, TODAY)).toBe(true);
+    expect(phoneOptional({ ...emptyForm(), dateOfBirth: '2009-09-27' }, TODAY)).toBe(true);
   });
 
   it('is false with no date of birth set', () => {
-    expect(showGuardian(emptyForm(), TODAY)).toBe(false);
+    expect(phoneOptional(emptyForm(), TODAY)).toBe(false);
   });
 
   it('is false for a date of birth after today', () => {
-    expect(showGuardian({ ...emptyForm(), dateOfBirth: '2027-01-01' }, TODAY)).toBe(false);
+    expect(phoneOptional({ ...emptyForm(), dateOfBirth: '2027-01-01' }, TODAY)).toBe(false);
   });
 
   it('is false while the date of birth is still partly typed', () => {
-    expect(showGuardian({ ...emptyForm(), dateOfBirth: '07/03/20' }, TODAY)).toBe(false);
+    expect(phoneOptional({ ...emptyForm(), dateOfBirth: '07/03/20' }, TODAY)).toBe(false);
   });
 });
 
 describe('toCreatePayload', () => {
-  it('sends a hidden guardian as null even when the fields still hold text', () => {
+  it("sends a minor's blank phone as null, and the dentist as a staff profile id", () => {
     const values: PatientFormValues = {
       ...emptyForm(),
       fullName: 'Jane',
-      phone: '03123456',
-      dateOfBirth: '2009-09-27', // 17 — guardian shown
-      guardianName: 'Guardian Doe',
-      guardianPhone: '03654321',
-    };
-    // The date of birth is then edited back to an adult date before submitting.
-    const adult = { ...values, dateOfBirth: '1990-01-01' };
-    const payload = toCreatePayload(adult, TODAY);
-    expect(payload.guardianName).toBeNull();
-    expect(payload.guardianPhone).toBeNull();
-  });
-
-  it('keeps the guardian while the patient is still a minor', () => {
-    const values: PatientFormValues = {
-      ...emptyForm(),
-      fullName: 'Jane',
-      phone: '03123456',
       dateOfBirth: '2009-09-27',
-      guardianName: 'Guardian Doe',
-      guardianPhone: '03654321',
+      primaryDentistId: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5e80',
     };
-    const payload = toCreatePayload(values, TODAY);
-    expect(payload.guardianName).toBe('Guardian Doe');
+    const payload = toCreatePayload(values);
+    expect(payload.phone).toBeNull();
+    expect(payload.primaryDentistId).toBe('01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5e80');
+    expect(payload).not.toHaveProperty('guardianName');
+    expect(payload).not.toHaveProperty('emergencyContact');
   });
 });
 
@@ -319,24 +307,24 @@ describe('isEditDirty', () => {
   const initial = fromPatient(PATIENT, 'LB');
 
   it('is false for identical values', () => {
-    expect(isEditDirty(initial, { ...initial }, TODAY, 'LB')).toBe(false);
+    expect(isEditDirty(initial, { ...initial }, 'LB')).toBe(false);
   });
 
   it('is false when the phone is re-typed in a different but equivalent format', () => {
     // initial.phone is '03 123 456' (fromPatient's national display); this must not read as
     // "Unsaved" just because the field's raw text differs while the number is the same.
     const current = { ...initial, phone: '03123456' };
-    expect(isEditDirty(initial, current, TODAY, 'LB')).toBe(false);
+    expect(isEditDirty(initial, current, 'LB')).toBe(false);
   });
 
   it('is true once a field actually changes', () => {
     const current = { ...initial, address: '2 Second St' };
-    expect(isEditDirty(initial, current, TODAY, 'LB')).toBe(true);
+    expect(isEditDirty(initial, current, 'LB')).toBe(true);
   });
 
   it('does not throw while a field holds a value that is still being typed', () => {
-    expect(isEditDirty(initial, { ...initial, email: 'jane@' }, TODAY, 'LB')).toBe(true);
-    expect(isEditDirty(initial, { ...initial, dateOfBirth: '07/03/20' }, TODAY, 'LB')).toBe(true);
+    expect(isEditDirty(initial, { ...initial, email: 'jane@' }, 'LB')).toBe(true);
+    expect(isEditDirty(initial, { ...initial, dateOfBirth: '07/03/20' }, 'LB')).toBe(true);
   });
 });
 
@@ -355,42 +343,44 @@ describe('toPatchPayload', () => {
   const initial = fromPatient(PATIENT, 'LB');
 
   it('is null when nothing changed', () => {
-    expect(toPatchPayload(initial, { ...initial }, TODAY, 'LB')).toBeNull();
+    expect(toPatchPayload(initial, { ...initial }, 'LB')).toBeNull();
   });
 
   it('sends only the fields that changed', () => {
     const current = { ...initial, address: '2 Second St' };
-    expect(toPatchPayload(initial, current, TODAY, 'LB')).toEqual({ address: '2 Second St' });
+    expect(toPatchPayload(initial, current, 'LB')).toEqual({ address: '2 Second St' });
   });
 
   it('is null when the phone is re-typed in a different but equivalent format', () => {
     // initial.phone is '03 123 456' (fromPatient's national display); re-typing the same number
     // without the spaces normalises to the same E.164 and so isn't a real change.
     const current = { ...initial, phone: '03123456' };
-    expect(toPatchPayload(initial, current, TODAY, 'LB')).toBeNull();
+    expect(toPatchPayload(initial, current, 'LB')).toBeNull();
   });
 
   it('is null when only whitespace around text changes', () => {
     const current = { ...initial, address: `${initial.address} ` };
-    expect(toPatchPayload(initial, current, TODAY, 'LB')).toBeNull();
+    expect(toPatchPayload(initial, current, 'LB')).toBeNull();
   });
 
   it('is null when the email only changes case', () => {
     const current = { ...initial, email: initial.email.toUpperCase() };
-    expect(toPatchPayload(initial, current, TODAY, 'LB')).toBeNull();
+    expect(toPatchPayload(initial, current, 'LB')).toBeNull();
   });
 
-  it('clears the guardian in the patch once it is hidden again', () => {
-    const withGuardian = {
-      ...fromPatient({ ...PATIENT, dateOfBirth: '2009-09-27' }, 'LB'),
-      guardianName: 'Guardian Doe',
-      guardianPhone: '03654321',
-    };
-    const madeAdult = { ...withGuardian, dateOfBirth: '1990-01-01' };
-    expect(toPatchPayload(withGuardian, madeAdult, TODAY, 'LB')).toEqual({
-      dateOfBirth: '1990-01-01',
-      guardianName: null,
-      guardianPhone: null,
+  it("clears a minor's phone as null", () => {
+    const minor = fromPatient({ ...PATIENT, dateOfBirth: '2015-01-01' }, 'LB');
+    expect(toPatchPayload(minor, { ...minor, phone: '' }, 'LB')).toEqual({ phone: null });
+  });
+
+  it('sends a changed dentist as a staff profile id, and a cleared one as null', () => {
+    const profile = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5e80';
+    expect(toPatchPayload(initial, { ...initial, primaryDentistId: profile }, 'LB')).toEqual({
+      primaryDentistId: profile,
+    });
+    const assigned = fromPatient({ ...PATIENT, primaryDentistId: profile }, 'LB');
+    expect(toPatchPayload(assigned, { ...assigned, primaryDentistId: '' }, 'LB')).toEqual({
+      primaryDentistId: null,
     });
   });
 });
@@ -475,12 +465,9 @@ describe('validate/payload-builder parity (property-style)', () => {
       email: pick(EMAILS),
       address: '',
       insurance: '',
-      emergencyContact: '',
       alertsText: pick(ALERTS),
-      primaryDentistUserId: '',
+      primaryDentistId: '',
       notes: '',
-      guardianName: '',
-      guardianPhone: '',
       openingBalanceAmount: pick(AMOUNTS),
       openingBalanceAsOf: pick(AS_OFS),
       openingBalanceNote: '',
@@ -495,8 +482,8 @@ describe('validate/payload-builder parity (property-style)', () => {
       if (Object.keys(errors).length > 0) continue;
       checkedAtLeastOneValidCombination = true;
 
-      expect(() => toCreatePayload(values, TODAY)).not.toThrow();
-      expect(() => toPatchPayload(emptyForm(), values, TODAY, CTX.country)).not.toThrow();
+      expect(() => toCreatePayload(values)).not.toThrow();
+      expect(() => toPatchPayload(emptyForm(), values, CTX.country)).not.toThrow();
       if (wantsOpeningBalance(values)) {
         expect(() => toOpeningBalance(values, TODAY)).not.toThrow();
       }

@@ -1,7 +1,8 @@
 import type { PatientRankKeys } from './rank-keys';
 
+/** A practitioner as `users` returns it: `id` is the staff profile id (ADR-0020). */
 interface NamedDentist {
-  userId: string;
+  id: string;
   displayName: string;
 }
 
@@ -29,7 +30,7 @@ export function dentistRank(
   });
   const max = ascending.at(-1) ?? 0;
   return {
-    ids: dentists.map((dentist) => dentist.userId),
+    ids: dentists.map((dentist) => dentist.id),
     keys: dir === 'asc' ? ascending : ascending.map((key) => max + 1 - key),
     restKey: max + 1,
   };

@@ -21,7 +21,8 @@ const NO_ROWS: readonly PatientListItem[] = [];
  * - Balances are per page of ids, so the previous page's answer is no use for the next one:
  *   `balancesLoading` holds while the rows on screen have no balances yet, and their cells
  *   shimmer instead of reading "—" (which means "no balance").
- * - Dentist names come from `useStaffNames` (all staff with `user:read`, else the practitioners).
+ * - Dentist names come from `useStaffNames` (all staff with `user:read`, else the practitioners),
+ *   keyed by staff profile id (ADR-0020).
  */
 export function usePatientsListData(query: PatientListQuery, { canPay }: { canPay: boolean }) {
   const list = useQuery({ ...patientListQuery(query), placeholderData: keepPreviousData });
@@ -65,7 +66,7 @@ export function usePatientsListData(query: PatientListQuery, { canPay }: { canPa
     counts: counts.data,
     owingCount: owing.data?.count,
     practitioners: staff.practitioners ?? [],
-    dentistNames: staff.names,
+    dentistNames: staff.dentistNames,
     balanceById,
     balancesLoading: balances.isLoading,
     twins,

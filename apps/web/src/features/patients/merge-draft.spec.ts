@@ -25,12 +25,9 @@ function patient(overrides: Partial<Patient>): Patient {
     email: 'jane@example.com',
     address: '1 Main St',
     insurance: null,
-    emergencyContact: null,
     medicalAlerts: [],
-    primaryDentistUserId: null,
+    primaryDentistId: null,
     notes: null,
-    guardianName: null,
-    guardianPhone: null,
     externalId: null,
     archivedAt: null,
     mergedIntoId: null,
@@ -53,10 +50,11 @@ describe('differingFields', () => {
     expect(differingFields(older, newer)).toEqual(['phone', 'address']);
   });
 
-  it('treats guardianName/guardianPhone as one field', () => {
-    const a = patient({ guardianName: 'A' });
-    const b = patient({ guardianName: 'B' });
-    expect(differingFields(a, b)).toEqual(['guardian']);
+  it('compares the dentist by staff profile id, and a missing phone like any value', () => {
+    const a = patient({ primaryDentistId: ID_C, phone: null });
+    const b = patient({ primaryDentistId: ID_D });
+    expect(differingFields(a, b)).toEqual(['phone', 'primaryDentistId']);
+    expect(preview({ ...mergeDraft(b, a), choices: { phone: 'drop' } }).phone).toBeNull();
   });
 
   it('is empty for two otherwise-identical records', () => {

@@ -23,7 +23,10 @@ export class MergeSameError extends DomainError {
   readonly kind = 'invalid';
 }
 
-/** `primaryDentistUserId` is not an active practitioner (`UsersService.listPractitioners`). */
+/**
+ * `primaryDentistId` is not the staff profile id of an active practitioner
+ * (`UsersService.listPractitioners`, ADR-0020).
+ */
 export class UnknownDentistError extends DomainError {
   readonly code = 'patient.unknown_dentist';
   readonly kind = 'invalid';

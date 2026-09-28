@@ -100,7 +100,11 @@ function PatientInfoCard({
         <InfoRow
           label={t('record.info.phone')}
           mono
-          value={<span dir="ltr">{formatPhone(patient.phone, tenant.country)}</span>}
+          value={
+            patient.phone ? (
+              <span dir="ltr">{formatPhone(patient.phone, tenant.country)}</span>
+            ) : null
+          }
         />
         <InfoRow
           label={t('record.info.dateOfBirth')}
@@ -110,7 +114,6 @@ function PatientInfoCard({
         <InfoRow label={t('record.info.email')} value={patient.email} />
         <InfoRow label={t('record.info.address')} value={patient.address} />
         <InfoRow label={t('record.info.insurance')} value={patient.insurance} />
-        <InfoRow label={t('record.info.emergency')} value={patient.emergencyContact} />
       </dl>
     </Card>
   );

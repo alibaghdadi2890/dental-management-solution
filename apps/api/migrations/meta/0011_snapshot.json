@@ -1,6 +1,6 @@
 {
-  "id": "5e779e35-4352-43cc-b378-2ec578b54d4c",
-  "prevId": "d1fe7a71-314e-4d19-9068-0e33fd8d7d4f",
+  "id": "ff8632c6-8d8c-4682-9bdf-4cb590e715e0",
+  "prevId": "d7cc507f-dfee-472b-aed0-a29eaf044cfd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -168,7 +168,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -282,9 +284,13 @@
         "auth_accounts_user_id_auth_users_id_fk": {
           "name": "auth_accounts_user_id_auth_users_id_fk",
           "tableFrom": "auth_accounts",
-          "columnsFrom": ["user_id"],
+          "columnsFrom": [
+            "user_id"
+          ],
           "tableTo": "auth_users",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -367,18 +373,26 @@
         "auth_invitations_organization_id_auth_organizations_id_fk": {
           "name": "auth_invitations_organization_id_auth_organizations_id_fk",
           "tableFrom": "auth_invitations",
-          "columnsFrom": ["organization_id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
           "tableTo": "auth_organizations",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
         "auth_invitations_inviter_id_auth_users_id_fk": {
           "name": "auth_invitations_inviter_id_auth_users_id_fk",
           "tableFrom": "auth_invitations",
-          "columnsFrom": ["inviter_id"],
+          "columnsFrom": [
+            "inviter_id"
+          ],
           "tableTo": "auth_users",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -453,18 +467,26 @@
         "auth_members_organization_id_auth_organizations_id_fk": {
           "name": "auth_members_organization_id_auth_organizations_id_fk",
           "tableFrom": "auth_members",
-          "columnsFrom": ["organization_id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
           "tableTo": "auth_organizations",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
         "auth_members_user_id_auth_users_id_fk": {
           "name": "auth_members_user_id_auth_users_id_fk",
           "tableFrom": "auth_members",
-          "columnsFrom": ["user_id"],
+          "columnsFrom": [
+            "user_id"
+          ],
           "tableTo": "auth_users",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -473,7 +495,10 @@
       "uniqueConstraints": {
         "auth_members_org_user_unique": {
           "name": "auth_members_org_user_unique",
-          "columns": ["organization_id", "user_id"],
+          "columns": [
+            "organization_id",
+            "user_id"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -536,7 +561,9 @@
       "uniqueConstraints": {
         "auth_organizations_slug_unique": {
           "name": "auth_organizations_slug_unique",
-          "columns": ["slug"],
+          "columns": [
+            "slug"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -652,9 +679,13 @@
         "auth_sessions_user_id_auth_users_id_fk": {
           "name": "auth_sessions_user_id_auth_users_id_fk",
           "tableFrom": "auth_sessions",
-          "columnsFrom": ["user_id"],
+          "columnsFrom": [
+            "user_id"
+          ],
           "tableTo": "auth_users",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -663,7 +694,9 @@
       "uniqueConstraints": {
         "auth_sessions_token_unique": {
           "name": "auth_sessions_token_unique",
-          "columns": ["token"],
+          "columns": [
+            "token"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -787,18 +820,26 @@
         "auth_team_members_team_id_auth_teams_id_fk": {
           "name": "auth_team_members_team_id_auth_teams_id_fk",
           "tableFrom": "auth_team_members",
-          "columnsFrom": ["team_id"],
+          "columnsFrom": [
+            "team_id"
+          ],
           "tableTo": "auth_teams",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         },
         "auth_team_members_user_id_auth_users_id_fk": {
           "name": "auth_team_members_user_id_auth_users_id_fk",
           "tableFrom": "auth_team_members",
-          "columnsFrom": ["user_id"],
+          "columnsFrom": [
+            "user_id"
+          ],
           "tableTo": "auth_users",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -807,7 +848,9 @@
       "uniqueConstraints": {
         "auth_team_members_membershipKey_unique": {
           "name": "auth_team_members_membershipKey_unique",
-          "columns": ["membership_key"],
+          "columns": [
+            "membership_key"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -864,9 +907,13 @@
         "auth_teams_organization_id_auth_organizations_id_fk": {
           "name": "auth_teams_organization_id_auth_organizations_id_fk",
           "tableFrom": "auth_teams",
-          "columnsFrom": ["organization_id"],
+          "columnsFrom": [
+            "organization_id"
+          ],
           "tableTo": "auth_organizations",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -965,7 +1012,9 @@
       "uniqueConstraints": {
         "auth_users_email_unique": {
           "name": "auth_users_email_unique",
-          "columns": ["email"],
+          "columns": [
+            "email"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -1151,7 +1200,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -1281,7 +1332,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -1425,7 +1478,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -1434,6 +1489,420 @@
         "procedures_price_non_negative": {
           "name": "procedures_price_non_negative",
           "value": "\"procedures\".\"price_amount\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.contacts": {
+      "name": "contacts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.tenant_id', true), '')::uuid"
+        },
+        "full_name": {
+          "name": "full_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "phone_search": {
+          "name": "phone_search",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "linked_patient_id": {
+          "name": "linked_patient_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deleted_at": {
+          "name": "deleted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "contacts_tenant_idx": {
+          "name": "contacts_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "contacts_linked_patient_unique": {
+          "name": "contacts_linked_patient_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "linked_patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"contacts\".\"linked_patient_id\" is not null and \"contacts\".\"deleted_at\" is null",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "contacts_linked_patient_fk": {
+          "name": "contacts_linked_patient_fk",
+          "tableFrom": "contacts",
+          "columnsFrom": [
+            "tenant_id",
+            "linked_patient_id"
+          ],
+          "tableTo": "patients",
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "contacts_tenant_id_unique": {
+          "name": "contacts_tenant_id_unique",
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
+      "policies": {
+        "tenant_isolation": {
+          "name": "tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {
+        "contacts_linked_or_named": {
+          "name": "contacts_linked_or_named",
+          "value": "\"contacts\".\"linked_patient_id\" is not null or \"contacts\".\"full_name\" is not null"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.patient_contacts": {
+      "name": "patient_contacts",
+      "schema": "",
+      "columns": {
+        "tenant_id": {
+          "name": "tenant_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "nullif(current_setting('app.tenant_id', true), '')::uuid"
+        },
+        "patient_id": {
+          "name": "patient_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contact_id": {
+          "name": "contact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "relationship": {
+          "name": "relationship",
+          "type": "contact_relationship",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "is_guardian": {
+          "name": "is_guardian",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_billing_contact": {
+          "name": "is_billing_contact",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_emergency_contact": {
+          "name": "is_emergency_contact",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_primary_guardian": {
+          "name": "is_primary_guardian",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_primary_billing": {
+          "name": "is_primary_billing",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "is_primary_emergency": {
+          "name": "is_primary_emergency",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "patient_contacts_tenant_idx": {
+          "name": "patient_contacts_tenant_idx",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "patient_contacts_contact_idx": {
+          "name": "patient_contacts_contact_idx",
+          "columns": [
+            {
+              "expression": "contact_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "with": {},
+          "method": "btree",
+          "concurrently": false
+        },
+        "patient_contacts_primary_guardian_unique": {
+          "name": "patient_contacts_primary_guardian_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"patient_contacts\".\"is_primary_guardian\"",
+          "concurrently": false
+        },
+        "patient_contacts_primary_billing_unique": {
+          "name": "patient_contacts_primary_billing_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"patient_contacts\".\"is_primary_billing\"",
+          "concurrently": false
+        },
+        "patient_contacts_primary_emergency_unique": {
+          "name": "patient_contacts_primary_emergency_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "patient_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "with": {},
+          "method": "btree",
+          "where": "\"patient_contacts\".\"is_primary_emergency\"",
+          "concurrently": false
+        }
+      },
+      "foreignKeys": {
+        "patient_contacts_patient_fk": {
+          "name": "patient_contacts_patient_fk",
+          "tableFrom": "patient_contacts",
+          "columnsFrom": [
+            "tenant_id",
+            "patient_id"
+          ],
+          "tableTo": "patients",
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        },
+        "patient_contacts_contact_fk": {
+          "name": "patient_contacts_contact_fk",
+          "tableFrom": "patient_contacts",
+          "columnsFrom": [
+            "tenant_id",
+            "contact_id"
+          ],
+          "tableTo": "contacts",
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
+          "onUpdate": "no action",
+          "onDelete": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "patient_contacts_pk": {
+          "name": "patient_contacts_pk",
+          "columns": [
+            "patient_id",
+            "contact_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "tenant_isolation": {
+          "name": "tenant_isolation",
+          "as": "PERMISSIVE",
+          "for": "ALL",
+          "to": [
+            "public"
+          ],
+          "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
+          "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
+        }
+      },
+      "checkConstraints": {
+        "patient_contacts_has_role": {
+          "name": "patient_contacts_has_role",
+          "value": "\"patient_contacts\".\"is_guardian\" or \"patient_contacts\".\"is_billing_contact\" or \"patient_contacts\".\"is_emergency_contact\""
+        },
+        "patient_contacts_primary_guardian_role": {
+          "name": "patient_contacts_primary_guardian_role",
+          "value": "not \"patient_contacts\".\"is_primary_guardian\" or \"patient_contacts\".\"is_guardian\""
+        },
+        "patient_contacts_primary_billing_role": {
+          "name": "patient_contacts_primary_billing_role",
+          "value": "not \"patient_contacts\".\"is_primary_billing\" or \"patient_contacts\".\"is_billing_contact\""
+        },
+        "patient_contacts_primary_emergency_role": {
+          "name": "patient_contacts_primary_emergency_role",
+          "value": "not \"patient_contacts\".\"is_primary_emergency\" or \"patient_contacts\".\"is_emergency_contact\""
         }
       },
       "isRLSEnabled": false
@@ -1479,7 +1948,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -1526,13 +1997,13 @@
           "name": "phone",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "phone_search": {
           "name": "phone_search",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "date_of_birth": {
           "name": "date_of_birth",
@@ -1566,12 +2037,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "emergency_contact": {
-          "name": "emergency_contact",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "notes": {
           "name": "notes",
           "type": "text",
@@ -1585,21 +2050,9 @@
           "notNull": true,
           "default": "'{}'::text[]"
         },
-        "primary_dentist_user_id": {
-          "name": "primary_dentist_user_id",
+        "primary_dentist_id": {
+          "name": "primary_dentist_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "guardian_name": {
-          "name": "guardian_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "guardian_phone": {
-          "name": "guardian_phone",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -1747,13 +2200,24 @@
       },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "patients_tenant_id_unique": {
+          "name": "patients_tenant_id_unique",
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
+          "nullsNotDistinct": false
+        }
+      },
       "policies": {
         "tenant_isolation": {
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -1829,9 +2293,15 @@
         "role_permissions_role_fk": {
           "name": "role_permissions_role_fk",
           "tableFrom": "role_permissions",
-          "columnsFrom": ["tenant_id", "role_id"],
+          "columnsFrom": [
+            "tenant_id",
+            "role_id"
+          ],
           "tableTo": "roles",
-          "columnsTo": ["tenant_id", "id"],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -1839,7 +2309,10 @@
       "compositePrimaryKeys": {
         "role_permissions_pk": {
           "name": "role_permissions_pk",
-          "columns": ["role_id", "permission"]
+          "columns": [
+            "role_id",
+            "permission"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -1848,7 +2321,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -1929,12 +2404,18 @@
       "uniqueConstraints": {
         "roles_tenant_key_unique": {
           "name": "roles_tenant_key_unique",
-          "columns": ["tenant_id", "key"],
+          "columns": [
+            "tenant_id",
+            "key"
+          ],
           "nullsNotDistinct": false
         },
         "roles_tenant_id_unique": {
           "name": "roles_tenant_id_unique",
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -1943,7 +2424,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -2025,9 +2508,15 @@
         "user_roles_role_fk": {
           "name": "user_roles_role_fk",
           "tableFrom": "user_roles",
-          "columnsFrom": ["tenant_id", "role_id"],
+          "columnsFrom": [
+            "tenant_id",
+            "role_id"
+          ],
           "tableTo": "roles",
-          "columnsTo": ["tenant_id", "id"],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -2035,7 +2524,10 @@
       "compositePrimaryKeys": {
         "user_roles_pk": {
           "name": "user_roles_pk",
-          "columns": ["user_id", "role_id"]
+          "columns": [
+            "user_id",
+            "role_id"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -2044,7 +2536,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -2179,9 +2673,13 @@
         "branches_tenant_id_tenants_id_fk": {
           "name": "branches_tenant_id_tenants_id_fk",
           "tableFrom": "branches",
-          "columnsFrom": ["tenant_id"],
+          "columnsFrom": [
+            "tenant_id"
+          ],
           "tableTo": "tenants",
-          "columnsTo": ["id"],
+          "columnsTo": [
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "no action"
         }
@@ -2190,7 +2688,10 @@
       "uniqueConstraints": {
         "branches_tenant_id_unique": {
           "name": "branches_tenant_id_unique",
-          "columns": ["tenant_id", "id"],
+          "columns": [
+            "tenant_id",
+            "id"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -2199,7 +2700,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -2343,9 +2846,15 @@
         "rooms_branch_fk": {
           "name": "rooms_branch_fk",
           "tableFrom": "rooms",
-          "columnsFrom": ["tenant_id", "branch_id"],
+          "columnsFrom": [
+            "tenant_id",
+            "branch_id"
+          ],
           "tableTo": "branches",
-          "columnsTo": ["tenant_id", "id"],
+          "columnsTo": [
+            "tenant_id",
+            "id"
+          ],
           "onUpdate": "no action",
           "onDelete": "no action"
         }
@@ -2357,7 +2866,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -2441,7 +2952,9 @@
       "uniqueConstraints": {
         "tenants_slug_unique": {
           "name": "tenants_slug_unique",
-          "columns": ["slug"],
+          "columns": [
+            "slug"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -2450,7 +2963,9 @@
           "name": "tenant_self",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -2528,9 +3043,15 @@
         "staff_branches_profile_fk": {
           "name": "staff_branches_profile_fk",
           "tableFrom": "staff_branches",
-          "columnsFrom": ["tenant_id", "auth_user_id"],
+          "columnsFrom": [
+            "tenant_id",
+            "auth_user_id"
+          ],
           "tableTo": "staff_profiles",
-          "columnsTo": ["tenant_id", "auth_user_id"],
+          "columnsTo": [
+            "tenant_id",
+            "auth_user_id"
+          ],
           "onUpdate": "no action",
           "onDelete": "cascade"
         }
@@ -2538,7 +3059,10 @@
       "compositePrimaryKeys": {
         "staff_branches_pk": {
           "name": "staff_branches_pk",
-          "columns": ["auth_user_id", "branch_id"]
+          "columns": [
+            "auth_user_id",
+            "branch_id"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -2547,7 +3071,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -2646,7 +3172,10 @@
       "uniqueConstraints": {
         "staff_profiles_tenant_user_unique": {
           "name": "staff_profiles_tenant_user_unique",
-          "columns": ["tenant_id", "auth_user_id"],
+          "columns": [
+            "tenant_id",
+            "auth_user_id"
+          ],
           "nullsNotDistinct": false
         }
       },
@@ -2655,7 +3184,9 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": ["public"],
+          "to": [
+            "public"
+          ],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -2668,27 +3199,58 @@
     "public.actor_kind": {
       "name": "actor_kind",
       "schema": "public",
-      "values": ["user", "agent", "system", "job"]
+      "values": [
+        "user",
+        "agent",
+        "system",
+        "job"
+      ]
     },
     "public.ledger_entry_kind": {
       "name": "ledger_entry_kind",
       "schema": "public",
-      "values": ["opening_balance", "adjustment"]
+      "values": [
+        "opening_balance",
+        "adjustment"
+      ]
     },
     "public.charge_unit": {
       "name": "charge_unit",
       "schema": "public",
-      "values": ["per_tooth", "per_jaw"]
+      "values": [
+        "per_tooth",
+        "per_jaw"
+      ]
+    },
+    "public.contact_relationship": {
+      "name": "contact_relationship",
+      "schema": "public",
+      "values": [
+        "parent",
+        "spouse",
+        "child",
+        "sibling",
+        "caregiver",
+        "other"
+      ]
     },
     "public.patient_sex": {
       "name": "patient_sex",
       "schema": "public",
-      "values": ["female", "male", "other", "unknown"]
+      "values": [
+        "female",
+        "male",
+        "other",
+        "unknown"
+      ]
     },
     "public.tenant_status": {
       "name": "tenant_status",
       "schema": "public",
-      "values": ["active", "suspended"]
+      "values": [
+        "active",
+        "suspended"
+      ]
     }
   },
   "schemas": {},

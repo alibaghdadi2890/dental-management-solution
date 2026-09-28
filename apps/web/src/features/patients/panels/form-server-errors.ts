@@ -3,7 +3,7 @@ import type { FormErrorKey, FormField } from '../patient-form';
 
 /** Every field an error can sit on: the form's own plus the dentist select (a server-only
  * `patient.unknown_dentist`). */
-export type ErrorField = FormField | 'primaryDentistUserId';
+export type ErrorField = FormField | 'primaryDentistId';
 export type ErrorKey = FormErrorKey | 'invalid' | 'unknownDentist';
 export type FormErrors = Partial<Record<ErrorField, ErrorKey>>;
 
@@ -15,12 +15,9 @@ const SERVER_FIELDS: Record<string, ErrorField> = {
   email: 'email',
   address: 'address',
   insurance: 'insurance',
-  emergencyContact: 'emergencyContact',
   notes: 'notes',
-  guardianName: 'guardianName',
-  guardianPhone: 'guardianPhone',
   medicalAlerts: 'alerts',
-  primaryDentistUserId: 'primaryDentistUserId',
+  primaryDentistId: 'primaryDentistId',
   'openingBalance.amount': 'openingBalanceAmount',
   'openingBalance.asOf': 'openingBalanceAsOf',
   'openingBalance.note': 'openingBalanceNote',
@@ -29,7 +26,6 @@ const SERVER_FIELDS: Record<string, ErrorField> = {
 /** The message a field gets for a server error; anything not listed reads "Check this value". */
 const SERVER_ERROR_KEYS: Partial<Record<ErrorField, ErrorKey>> = {
   phone: 'invalidPhone',
-  guardianPhone: 'invalidPhone',
   email: 'invalidEmail',
   openingBalanceAmount: 'invalidAmount',
 };
@@ -42,7 +38,7 @@ function fieldOfPath(path: string): ErrorField | undefined {
 /** The field errors a failed save maps onto the form, or `null` when it isn't about a field. */
 export function fieldErrorsOf(error: unknown): FormErrors | null {
   if (!(error instanceof ApiError)) return null;
-  if (error.code === 'patient.unknown_dentist') return { primaryDentistUserId: 'unknownDentist' };
+  if (error.code === 'patient.unknown_dentist') return { primaryDentistId: 'unknownDentist' };
   const errors: FormErrors = {};
   for (const { path } of error.problem.errors ?? []) {
     const field = fieldOfPath(path);

@@ -276,8 +276,8 @@ export function PatientRow({
     patient.medicalAlerts.length > 1
       ? t('alertBadge', { alert: alertWord, more: patient.medicalAlerts.length - 1 })
       : alertWord;
-  const dentist = patient.primaryDentistUserId
-    ? (context.dentistNames.get(patient.primaryDentistUserId) ?? NONE)
+  const dentist = patient.primaryDentistId
+    ? (context.dentistNames.get(patient.primaryDentistId) ?? NONE)
     : NONE;
 
   return (
@@ -350,7 +350,11 @@ export function PatientRow({
         role="cell"
         className="font-mono text-[12.5px] leading-none whitespace-nowrap text-ink-secondary tabular-nums"
       >
-        <span dir="ltr">{formatPhone(patient.phone, context.country)}</span>
+        {patient.phone ? (
+          <span dir="ltr">{formatPhone(patient.phone, context.country)}</span>
+        ) : (
+          NONE
+        )}
       </span>
       <span role="cell" className="text-[12.5px] leading-[1.3] text-ink-secondary">
         {NONE}

@@ -93,6 +93,15 @@ describe('createWithOpeningBalanceSchema', () => {
     });
     expect(result.success).toBe(true);
   });
+
+  it('accepts a patient without a phone (a minor; the adult rule is server-side)', () => {
+    const parsed = createWithOpeningBalanceSchema.parse({
+      patient: { fullName: 'Sam Doe', dateOfBirth: '2020-01-01', primaryDentistId: ID_A },
+      openingBalance: { amount: '100', asOf: '2026-01-01' },
+    });
+    expect(parsed.patient.phone).toBeNull();
+    expect(parsed.patient.primaryDentistId).toBe(ID_A);
+  });
 });
 
 describe('balancesQuerySchema', () => {

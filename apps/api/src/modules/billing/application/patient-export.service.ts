@@ -40,7 +40,7 @@ export interface PatientExport {
 
 type ExportPatient = Pick<
   Patient,
-  'id' | 'displayNumber' | 'fullName' | 'phone' | 'dateOfBirth' | 'sex' | 'primaryDentistUserId'
+  'id' | 'displayNumber' | 'fullName' | 'phone' | 'dateOfBirth' | 'sex' | 'primaryDentistId'
 >;
 
 /** What a row is written from: the patient plus what the export looked up for its chunk. */
@@ -76,7 +76,12 @@ const COLUMNS: readonly Column[] = [
   },
   // The tenant country's numbers nationally (`03 123 456`); others internationally, which the
   // injection guard then prefixes with `'` (a leading `+` would be evaluated).
-  { key: 'phone', value: ({ patient, tenant }) => formatPhoneFor(patient.phone, tenant.country) },
+  {
+    key: 'phone',
+    // A minor may have no phone of their own (design addendum C3).
+    value: ({ patient, tenant }) =>
+      patient.phone === null ? '' : formatPhoneFor(patient.phone, tenant.country),
+  },
   // Last visit and Visits: empty until visits exist (feature 4).
   { key: 'lastVisit', value: () => '' },
   { key: 'dentist', value: ({ dentistName }) => dentistName ?? '' },
@@ -154,9 +159,9 @@ export class PatientExportService {
           patient,
           balance: balances.get(patient.id),
           dentistName:
-            patient.primaryDentistUserId === null
+            patient.primaryDentistId === null
               ? undefined
-              : dentistNames.get(patient.primaryDentistUserId),
+              : dentistNames.get(patient.primaryDentistId),
         };
         return csvRow(
           COLUMNS.map((column) => column.value(row)),
@@ -192,9 +197,10 @@ export class PatientExportService {
   }
 
   /**
-   * Adds the display names of the batch's dentists not seen in an earlier batch, through
-   * `UsersService.practitionersByAuthUserIds` — a building block with no permission check of its own
-   * (every system role holds `user:read`, which the Patients screen's dentist names need anyway).
+   * Adds the display names of the batch's dentists (staff profile ids, ADR-0020) not seen in an
+   * earlier batch, through `UsersService.practitionersByProfileIds` — a building block with no
+   * permission check of its own (every system role holds `user:read`, which the Patients screen's
+   * dentist names need anyway). Deactivated dentists still resolve.
    */
   private async resolveDentists(
     batch: readonly ExportPatient[],
@@ -203,16 +209,16 @@ export class PatientExportService {
     const unseen = [
       ...new Set(
         batch.flatMap((patient) =>
-          patient.primaryDentistUserId === null || names.has(patient.primaryDentistUserId)
+          patient.primaryDentistId === null || names.has(patient.primaryDentistId)
             ? []
-            : [patient.primaryDentistUserId],
+            : [patient.primaryDentistId],
         ),
       ),
     ];
     if (unseen.length === 0) return;
     for (const id of unseen) names.set(id, '');
-    for (const practitioner of await this.users.practitionersByAuthUserIds(unseen)) {
-      names.set(practitioner.userId, practitioner.displayName);
+    for (const practitioner of await this.users.practitionersByProfileIds(unseen)) {
+      names.set(practitioner.id, practitioner.displayName);
     }
   }
 }

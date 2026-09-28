@@ -3,7 +3,7 @@ import { type RefObject, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateInputOrder, todayIn } from '@/lib/format';
 import { type ErrorField, type FormErrors } from './panels/form-server-errors';
-import { type PatientFormValues, showGuardian, validate } from './patient-form';
+import { type PatientFormValues, phoneOptional, validate } from './patient-form';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -74,8 +74,8 @@ export function usePatientForm(
     country,
     today,
     order,
-    /** The guardian pair shows only while the DOB makes the patient a minor. */
-    guardian: showGuardian(values, today),
+    /** The phone is optional while the DOB makes the patient a minor (design addendum C3). */
+    phoneOptional: phoneOptional(values, today),
     set,
     setSex: (sex: PatientSex) => {
       setValues((current) => ({ ...current, sex }));

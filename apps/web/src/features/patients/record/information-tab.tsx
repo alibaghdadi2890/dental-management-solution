@@ -46,7 +46,7 @@ function CompletenessBadge({ patient }: { patient: Patient }) {
 
 /**
  * The record's Patient information tab (workspace spec §Tab: Patient information, design Q16):
- * the whole patient form — the edit panel's model and fields, guardian rule included — with its
+ * the whole patient form — the edit panel's model and fields, phone rule included — with its
  * completeness badge, Save changes, and the save-state indicator (which also confirms a save: no
  * toast). A failed save keeps what was typed and retries from the indicator; leaving the tab or
  * the record while dirty asks first.
@@ -64,7 +64,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
   const titleId = useId();
   const formRef = useRef<HTMLFormElement>(null);
   const form = usePatientForm(() => fromPatient(patient, tenant.country), tenant, formRef);
-  const { initial, values, country, today } = form;
+  const { initial, values, country } = form;
   const [phase, setPhase] = useState<Phase>('idle');
   const saving = useRef(false);
   const mounted = useRef(false);
@@ -76,7 +76,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
   }, []);
 
   const archived = patient.archivedAt !== null;
-  const dirty = isEditDirty(initial, values, today, country);
+  const dirty = isEditDirty(initial, values, country);
   // Archived with nothing typed: nothing to lose, so the form turns read-only.
   const readOnly = !canWrite || (archived && !dirty);
   // Archived under unsaved edits: they stay, editable, but can't be saved.
@@ -118,7 +118,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
   const submit = async () => {
     if (saving.current || blocked) return;
     if (!form.check()) return;
-    const patch = toPatchPayload(initial, values, today, country);
+    const patch = toPatchPayload(initial, values, country);
     if (!patch) return;
     const submitted: PatientFormValues = values;
     saving.current = true;
@@ -197,17 +197,10 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
             {field('phone')}
             {field('dateOfBirth')}
             {field('sex')}
-            {form.guardian && (
-              <>
-                {field('guardianName')}
-                {field('guardianPhone')}
-              </>
-            )}
             {field('email')}
             {field('dentist')}
             {field('address', 'col-span-full')}
             {field('insurance')}
-            {field('emergencyContact')}
             {field('alerts', 'col-span-full')}
             {field('notes', 'col-span-full')}
           </div>

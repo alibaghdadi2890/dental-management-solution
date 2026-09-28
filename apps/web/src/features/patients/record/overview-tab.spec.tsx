@@ -161,7 +161,6 @@ describe('OverviewTab', () => {
       Email: 'rana@example.com',
       Address: 'Not recorded',
       Insurance: 'Allianz — Gold',
-      Emergency: 'Not recorded',
     });
     fireEvent.click(within(info).getByRole('button', { name: 'Complete' }));
     await waitFor(() => {

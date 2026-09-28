@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PatientNotFoundError } from '../../src/modules/patients/domain/patient-errors';
 import { PatientCountersRepository } from '../../src/modules/patients/persistence/patient-counters.repository';
@@ -31,12 +32,9 @@ function newPatient(overrides: Partial<NewPatient> = {}): NewPatient {
     email: null,
     address: null,
     insurance: null,
-    emergencyContact: null,
     notes: null,
     medicalAlerts: [],
-    primaryDentistUserId: null,
-    guardianName: null,
-    guardianPhone: null,
+    primaryDentistId: null,
     externalId: null,
     ...overrides,
   };
@@ -195,6 +193,28 @@ describe('patients: repositories', () => {
       expect((await q('000002')).rows.map((r) => r.id)).toContain(phoneTwin);
     });
 
+    it('stores a patient without a phone, whom a digit query never matches by phone', async () => {
+      const phoneless = await create(tenant, {
+        displayNumber: 'P-000080',
+        fullName: 'Phoneless Minor',
+        phone: null,
+        dateOfBirth: '2020-01-01',
+      });
+      expect(phoneless).toMatchObject({ phone: null, phoneSearch: null });
+      const stored = await database.ownerPool.query<{ phone: null; phone_search: null }>(
+        'select phone, phone_search from patients where id = $1',
+        [phoneless.id],
+      );
+      expect(stored.rows).toEqual([{ phone: null, phone_search: null }]);
+      // Digits that match other patients' phones leave the phoneless one out, without failing.
+      const byDigits = (await q('03123')).rows.map((r) => r.id);
+      expect(byDigits).toContain(jose);
+      expect(byDigits).not.toContain(phoneless.id);
+      // The name and the number still find them.
+      expect((await q('phoneless')).rows.map((r) => r.id)).toEqual([phoneless.id]);
+      expect((await q('P-000080')).rows.map((r) => r.id)).toEqual([phoneless.id]);
+    });
+
     it('does not match phone digits when the query is a single digit', async () => {
       const { rows } = await q('7');
       expect(rows.map((r) => r.id)).not.toContain(jose);
@@ -263,6 +283,20 @@ describe('patients: repositories', () => {
       );
       expect(byOldPhone.rows.map((r) => r.id)).not.toContain(patient.id);
     });
+
+    it('clears the phone and its search digits together', async () => {
+      const tenant = newId();
+      const patient = await create(tenant, { phone: PHONE('+9613444444', '03444444') });
+      const cleared = await inTenant(tenant, () => repo.update(patient.id, { phone: null }));
+      expect(cleared).toMatchObject({ phone: null, phoneSearch: null });
+      const byOldPhone = await inTenant(tenant, () =>
+        repo.search(
+          { view: 'active', q: '03444444' },
+          { page: 1, size: 10, sort: 'name', dir: 'asc' },
+        ),
+      );
+      expect(byOldPhone.rows).toEqual([]);
+    });
   });
 
   describe('search: view', () => {
@@ -300,9 +334,9 @@ describe('patients: repositories', () => {
     beforeAll(async () => {
       dentistA = newId();
       dentistB = newId();
-      withDentistA = (await create(tenant, { primaryDentistUserId: dentistA })).id;
-      await create(tenant, { primaryDentistUserId: dentistB });
-      noDentist = (await create(tenant, { primaryDentistUserId: null })).id;
+      withDentistA = (await create(tenant, { primaryDentistId: dentistA })).id;
+      await create(tenant, { primaryDentistId: dentistB });
+      noDentist = (await create(tenant, { primaryDentistId: null })).id;
       withAlerts = (await create(tenant, { medicalAlerts: ['Penicillin'] })).id;
       withoutAlerts = (await create(tenant, { medicalAlerts: [] })).id;
       youngPatient = (await create(tenant, { dateOfBirth: '2020-01-01' })).id;
@@ -466,13 +500,13 @@ describe('patients: repositories', () => {
   });
 
   describe('search: rank by dentist', () => {
-    it('ranks by primaryDentistUserId, with a NULL dentist landing at restKey', async () => {
+    it('ranks by primaryDentistId (profile ids), with a NULL dentist landing at restKey', async () => {
       const tenant = newId();
       const dentistX = newId();
       const dentistY = newId();
-      const withX = (await create(tenant, { primaryDentistUserId: dentistX })).id;
-      const withY = (await create(tenant, { primaryDentistUserId: dentistY })).id;
-      const withNone = (await create(tenant, { primaryDentistUserId: null })).id;
+      const withX = (await create(tenant, { primaryDentistId: dentistX })).id;
+      const withY = (await create(tenant, { primaryDentistId: dentistY })).id;
+      const withNone = (await create(tenant, { primaryDentistId: null })).id;
 
       const { rows } = await inTenant(tenant, () =>
         repo.search(
@@ -483,7 +517,7 @@ describe('patients: repositories', () => {
             sort: 'dentist',
             dir: 'asc',
             rank: {
-              column: 'primaryDentistUserId',
+              column: 'primaryDentistId',
               ids: [dentistX, dentistY],
               keys: [1, 2],
               restKey: 3,
@@ -665,6 +699,137 @@ describe('patients: repositories', () => {
       const locked = await inTenantTx(tenant, () => repo.findByIdsForUpdate([b.id, newId(), a.id]));
       expect(locked.map((row) => row.id).sort()).toEqual([a.id, b.id].sort());
       expect(await inTenantTx(newId(), () => repo.findByIdsForUpdate([a.id]))).toEqual([]);
+    });
+  });
+
+  describe('contacts and patient_contacts: constraints (schema only until R2)', () => {
+    const tenant = newId();
+    let patientA: string;
+    let patientB: string;
+
+    /** Inserts through the owner pool (no RLS) with an explicit tenant; returns the contact id. */
+    const insertContact = async (
+      values: { fullName?: string; linkedPatientId?: string; deletedAt?: Date },
+      tenantId = tenant,
+    ): Promise<string> => {
+      const id = newId();
+      await database.ownerPool.query(
+        `insert into contacts (id, tenant_id, full_name, linked_patient_id, deleted_at)
+         values ($1, $2, $3, $4, $5)`,
+        [
+          id,
+          tenantId,
+          values.fullName ?? null,
+          values.linkedPatientId ?? null,
+          values.deletedAt ?? null,
+        ],
+      );
+      return id;
+    };
+    type Flag =
+      | 'is_guardian'
+      | 'is_billing_contact'
+      | 'is_emergency_contact'
+      | 'is_primary_guardian'
+      | 'is_primary_billing'
+      | 'is_primary_emergency';
+    const insertLink = (
+      patientId: string,
+      contactId: string,
+      flags: Partial<Record<Flag, boolean>>,
+      tenantId = tenant,
+    ) => {
+      const columns = Object.keys(flags).map((column) => `, ${column}`);
+      const params = Object.keys(flags).map((_, index) => `, $${String(index + 4)}`);
+      return database.ownerPool.query(
+        `insert into patient_contacts (tenant_id, patient_id, contact_id, relationship${columns.join('')})
+         values ($1, $2, $3, 'parent'${params.join('')})`,
+        [tenantId, patientId, contactId, ...Object.values(flags)],
+      );
+    };
+
+    beforeAll(async () => {
+      patientA = (await create(tenant, { fullName: 'Child A' })).id;
+      patientB = (await create(tenant, { fullName: 'Child B' })).id;
+    });
+
+    it('rejects a contact with neither a linked patient nor a name', async () => {
+      await expect(insertContact({})).rejects.toThrow(/contacts_linked_or_named/);
+      await expect(insertContact({ fullName: 'Mona Haddad' })).resolves.toBeTypeOf('string');
+      await expect(insertContact({ linkedPatientId: patientB })).resolves.toBeTypeOf('string');
+    });
+
+    it('allows one live contact per linked patient; a soft-deleted one does not count', async () => {
+      const linked = (await create(tenant, { fullName: 'Linked Parent' })).id;
+      await insertContact({ linkedPatientId: linked, deletedAt: new Date() });
+      await insertContact({ linkedPatientId: linked });
+      await expect(insertContact({ linkedPatientId: linked })).rejects.toThrow(
+        /contacts_linked_patient_unique/,
+      );
+    });
+
+    it('rejects a link without a role, and a primary flag without its role', async () => {
+      const contact = await insertContact({ fullName: 'No Role' });
+      await expect(insertLink(patientA, contact, {})).rejects.toThrow(/patient_contacts_has_role/);
+      await expect(
+        insertLink(patientA, contact, { is_billing_contact: true, is_primary_guardian: true }),
+      ).rejects.toThrow(/patient_contacts_primary_guardian_role/);
+      await expect(
+        insertLink(patientA, contact, { is_guardian: true, is_primary_billing: true }),
+      ).rejects.toThrow(/patient_contacts_primary_billing_role/);
+      await expect(
+        insertLink(patientA, contact, { is_guardian: true, is_primary_emergency: true }),
+      ).rejects.toThrow(/patient_contacts_primary_emergency_role/);
+    });
+
+    it('allows one primary per role per patient', async () => {
+      const mother = await insertContact({ fullName: 'Mother' });
+      const father = await insertContact({ fullName: 'Father' });
+      await insertLink(patientA, mother, { is_guardian: true, is_primary_guardian: true });
+      await expect(
+        insertLink(patientA, father, { is_guardian: true, is_primary_guardian: true }),
+      ).rejects.toThrow(/patient_contacts_primary_guardian_unique/);
+      // A second, non-primary guardian is fine; so is the same contact as primary elsewhere.
+      await insertLink(patientA, father, { is_guardian: true, is_billing_contact: true });
+      await insertLink(patientB, father, { is_guardian: true, is_primary_guardian: true });
+      await insertLink(patientB, mother, { is_billing_contact: true, is_primary_billing: true });
+      await expect(
+        insertLink(patientB, father, { is_billing_contact: true, is_primary_billing: true }),
+      ).rejects.toThrow(/patient_contacts_pk/);
+    });
+
+    it("never links a patient to another tenant's contact or patient (composite keys)", async () => {
+      const otherTenant = newId();
+      const otherPatient = (await create(otherTenant, { fullName: 'Elsewhere' })).id;
+      const otherContact = await insertContact({ fullName: 'Elsewhere' }, otherTenant);
+      await expect(insertLink(patientA, otherContact, { is_guardian: true })).rejects.toThrow(
+        /patient_contacts_contact_fk/,
+      );
+      const own = await insertContact({ fullName: 'Own' });
+      await expect(insertLink(otherPatient, own, { is_guardian: true })).rejects.toThrow(
+        /patient_contacts_patient_fk/,
+      );
+      await expect(insertContact({ linkedPatientId: otherPatient })).rejects.toThrow(
+        /contacts_linked_patient_fk/,
+      );
+    });
+
+    it('hides both tables from another tenant (RLS)', async () => {
+      const contact = await insertContact({ fullName: 'Visible In A' });
+      await insertLink(patientB, contact, { is_emergency_contact: true });
+      const count = (tenantId: string, table: 'contacts' | 'patient_contacts') =>
+        inTenant(tenantId, () =>
+          tenantDb.run(async (tx) => {
+            const result = await tx.execute<{ n: string }>(
+              sql.raw(`select count(*) as n from ${table}`),
+            );
+            return Number(result.rows[0]?.n ?? 0);
+          }),
+        );
+      expect(await count(tenant, 'contacts')).toBeGreaterThan(0);
+      expect(await count(tenant, 'patient_contacts')).toBeGreaterThan(0);
+      expect(await count(newId(), 'contacts')).toBe(0);
+      expect(await count(newId(), 'patient_contacts')).toBe(0);
     });
   });
 

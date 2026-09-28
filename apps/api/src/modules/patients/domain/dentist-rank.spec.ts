@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { dentistRank } from './dentist-rank';
 
-const dentist = (userId: string, displayName: string) => ({ userId, displayName });
+/** `id` is the staff profile id (ADR-0020). */
+const dentist = (id: string, displayName: string) => ({ id, displayName });
 
 describe('dentistRank', () => {
   const inNameOrder = [

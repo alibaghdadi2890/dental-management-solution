@@ -56,7 +56,7 @@ import {
   type PatientSearchFilters,
   PatientsRepository,
 } from '../persistence/patients.repository';
-import { changesOf, mergeSet, normalizeFields } from './patient-changes';
+import { assertMergePhoneRule, changesOf, mergeSet, normalizeFields } from './patient-changes';
 import { toListItem, toPatient } from './patient-mapping';
 
 /**
@@ -121,10 +121,10 @@ export class PatientsService {
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
       const tenant = await this.tenancy.currentTenant();
-      const normalized = normalizeFields(input, tenant.country, this.today(tenant));
-      if (!normalized.phone) throw new Error('create: phone was not normalised');
-      if (input.primaryDentistUserId !== null) {
-        await this.assertActiveDentist(input.primaryDentistUserId);
+      const normalized = normalizeFields(input, tenant.country, this.today(tenant), null);
+      if (normalized.phone === undefined) throw new Error('create: phone was not normalised');
+      if (input.primaryDentistId !== null) {
+        await this.assertActiveDentist(input.primaryDentistId);
       }
       const displayNumber = formatDisplayNumber(await this.counters.nextValue());
       const created = toPatient(
@@ -137,12 +137,9 @@ export class PatientsService {
           email: input.email,
           address: input.address,
           insurance: input.insurance,
-          emergencyContact: input.emergencyContact,
           notes: input.notes,
           medicalAlerts: input.medicalAlerts,
-          primaryDentistUserId: input.primaryDentistUserId,
-          guardianName: input.guardianName,
-          guardianPhone: normalized.guardianPhone ?? null,
+          primaryDentistId: input.primaryDentistId,
           // The import key is set only by the import (feature 6).
           externalId: null,
         }),
@@ -162,7 +159,8 @@ export class PatientsService {
   /**
    * Changes only the fields whose stored value differs; a patch that changes nothing writes,
    * audits and emits nothing. A dentist kept from before may be inactive; a newly chosen one must
-   * be an active practitioner.
+   * be an active practitioner. The phone rule is re-checked when the patch touches the phone or
+   * the date of birth (`phoneRuleIssue`).
    */
   async update(id: string, patch: PatientPatch): Promise<Patient> {
     this.context.requirePermission('patient:write');
@@ -173,9 +171,9 @@ export class PatientsService {
         throw new PatientArchivedError('Archived patients cannot be edited; restore them first');
       }
       const tenant = await this.tenancy.currentTenant();
-      const normalized = normalizeFields(patch, tenant.country, this.today(tenant));
-      const dentist = patch.primaryDentistUserId;
-      if (dentist !== undefined && dentist !== null && dentist !== before.primaryDentistUserId) {
+      const normalized = normalizeFields(patch, tenant.country, this.today(tenant), before);
+      const dentist = patch.primaryDentistId;
+      if (dentist !== undefined && dentist !== null && dentist !== before.primaryDentistId) {
         await this.assertActiveDentist(dentist);
       }
 
@@ -402,8 +400,10 @@ export class PatientsService {
       if (kept.deletedAt !== null || dropped.deletedAt !== null) {
         throw new PatientArchivedError(ARCHIVED_MERGE);
       }
-      const { country } = await this.tenancy.currentTenant();
-      const set = mergeSet(resolveMerge(kept, dropped, input.fieldChoices), country);
+      const tenant = await this.tenancy.currentTenant();
+      const patch = resolveMerge(kept, dropped, input.fieldChoices);
+      assertMergePhoneRule(kept, patch, this.today(tenant));
+      const set = mergeSet(patch, tenant.country);
       const keptAfter =
         Object.keys(set).length === 0 ? kept : await this.patients.update(kept.id, set);
       if (!keptAfter) throw new PatientNotFoundError(NOT_FOUND);
@@ -429,9 +429,10 @@ export class PatientsService {
 
   // --- Shared rules ---
 
-  private async assertActiveDentist(userId: string): Promise<void> {
+  /** `profileId` must be the staff profile id (ADR-0020) of an active practitioner. */
+  private async assertActiveDentist(profileId: string): Promise<void> {
     const practitioners = await this.users.listPractitioners();
-    if (!practitioners.some((practitioner) => practitioner.userId === userId)) {
+    if (!practitioners.some((practitioner) => practitioner.id === profileId)) {
       throw new UnknownDentistError('The primary dentist is not an active dentist of this clinic');
     }
   }
@@ -458,10 +459,10 @@ export class PatientsService {
   }
 
   /**
-   * `sort=dentist`: every dentist assigned to a patient (inactive ones too), in the practitioner
-   * display-name order of `users`, dense-ranked so same-named dentists tie (`dentistRank`);
-   * reversed for `desc`. Patients without a dentist come last in both directions. `sort=balance`:
-   * the caller's keys over patient ids.
+   * `sort=dentist`: every dentist assigned to a patient (inactive ones too; staff profile ids,
+   * ADR-0020), in the practitioner display-name order of `users`, dense-ranked so same-named
+   * dentists tie (`dentistRank`); reversed for `desc`. Patients without a dentist come last in
+   * both directions. `sort=balance`: the caller's keys over patient ids.
    */
   private async rankFor(
     query: UnpagedQuery,
@@ -471,11 +472,11 @@ export class PatientsService {
       return { column: 'id', ...internal.rank };
     }
     if (query.sort !== 'dentist') return undefined;
-    const dentists = await this.users.practitionersByAuthUserIds(
+    const dentists = await this.users.practitionersByProfileIds(
       await this.patients.assignedDentistIds(),
     );
     const { locale } = await this.tenancy.currentTenant();
-    return { column: 'primaryDentistUserId', ...dentistRank(dentists, query.dir, locale) };
+    return { column: 'primaryDentistId', ...dentistRank(dentists, query.dir, locale) };
   }
 
   /**

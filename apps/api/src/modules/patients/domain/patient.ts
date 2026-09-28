@@ -14,21 +14,19 @@ export interface DomainPatient {
   fullName: string;
   /** Normalized form of `fullName` for diacritics-insensitive search (`domain/name-key.ts`). */
   nameKey: string;
-  /** E.164, as stored. */
-  phone: string;
-  /** E.164 digits + national digits, space-separated, for phone search. */
-  phoneSearch: string;
+  /** E.164, as stored; null only for a minor recorded without one (design addendum C3). */
+  phone: string | null;
+  /** E.164 digits + national digits, space-separated, for phone search; null without a phone. */
+  phoneSearch: string | null;
   dateOfBirth: string | null;
   sex: PatientSex;
   email: string | null;
   address: string | null;
   insurance: string | null;
-  emergencyContact: string | null;
   notes: string | null;
   medicalAlerts: string[];
-  primaryDentistUserId: string | null;
-  guardianName: string | null;
-  guardianPhone: string | null;
+  /** `staff_profiles.id` (ADR-0020). */
+  primaryDentistId: string | null;
   externalId: string | null;
   mergedIntoId: string | null;
   deletedAt: Date | null;

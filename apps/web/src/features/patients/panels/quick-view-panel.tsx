@@ -111,7 +111,7 @@ function QuickView({
   const canWrite = usePermission('patient:write');
   const canPay = usePermission('payment:read');
   const canAudit = usePermission('audit:read');
-  const { names } = useStaffNames();
+  const { names, dentistNames } = useStaffNames();
   const { openPatient } = usePatientNavigation();
   const archived = patient.archivedAt !== null;
 
@@ -124,8 +124,8 @@ function QuickView({
         : null,
     patient.sex === 'unknown' ? null : t(`quickView.sex.${patient.sex}`),
   ].filter((part) => part !== null);
-  const dentist = patient.primaryDentistUserId
-    ? (names.get(patient.primaryDentistUserId) ?? t('quickView.unknownDentist'))
+  const dentist = patient.primaryDentistId
+    ? (dentistNames.get(patient.primaryDentistId) ?? t('quickView.unknownDentist'))
     : NONE;
 
   return (
@@ -215,9 +215,13 @@ function QuickView({
           {patient.dateOfBirth ? formatCalendarDate(patient.dateOfBirth, locale) : NONE}
         </Detail>
         <Detail label={t('quickView.fields.phone')}>
-          <span dir="ltr" className="font-mono tabular-nums">
-            {formatPhone(patient.phone, tenant.country)}
-          </span>
+          {patient.phone ? (
+            <span dir="ltr" className="font-mono tabular-nums">
+              {formatPhone(patient.phone, tenant.country)}
+            </span>
+          ) : (
+            NONE
+          )}
         </Detail>
         <Detail label={t('quickView.fields.email')}>{patient.email ?? NONE}</Detail>
         <Detail label={t('quickView.fields.insurance')}>{patient.insurance ?? NONE}</Detail>

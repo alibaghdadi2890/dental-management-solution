@@ -1,4 +1,4 @@
-import { normalizePhone, type PatientPatch, type Tenant } from '@dcm/contracts';
+import { isMinor, normalizePhone, type PatientPatch, type Tenant } from '@dcm/contracts';
 import {
   type ValidationIssue,
   ValidationFailedError,
@@ -21,44 +21,77 @@ export type PatientPatchField = keyof PatientPatch;
 
 /** The editable fields every write re-checks against the tenant (country, time zone). */
 export interface TenantCheckedFields {
-  phone?: string | undefined;
-  guardianPhone?: string | null | undefined;
+  /** Raw text as typed, or null for "no phone"; `undefined` leaves the stored phone alone. */
+  phone?: string | null | undefined;
   dateOfBirth?: string | null | undefined;
 }
 
 export interface NormalizedFields {
-  phone?: NormalizedPhoneInput;
-  /** E.164, or null to clear. */
-  guardianPhone?: string | null;
+  /** Normalised against the tenant country, or null to clear. */
+  phone?: NormalizedPhoneInput | null;
 }
 
-function invalidPhone(path: 'phone' | 'guardianPhone'): ValidationIssue {
-  return { path, code: 'invalid_phone', message: 'Not a valid phone number' };
+/** The stored values a patch is checked against by the phone rule; `null` on create. */
+export type PhoneRuleBaseline = Pick<DomainPatient, 'phone' | 'dateOfBirth'> | null;
+
+function invalidPhone(): ValidationIssue {
+  return { path: 'phone', code: 'invalid_phone', message: 'Not a valid phone number' };
 }
 
 /**
- * Normalises `phone`/`guardianPhone` against the tenant country and checks that the date of
- * birth is not after the tenant's `today` (the contract only knows UTC, with a day of
- * tolerance). Every failure is reported at once as `ValidationFailedError`, addressed by field.
+ * The phone rule (design addendum C3): a phone is required unless the date of birth makes the
+ * patient a minor on the tenant's `today` (no date of birth = adult). On create (`before` null)
+ * it always applies. On an edit or merge it applies only when the change touches the phone or
+ * the date of birth — clearing an adult's phone, or giving a phoneless minor an adult date of
+ * birth — so a minor who has since come of age can still be edited without adding a phone first.
+ */
+export function phoneRuleIssue(
+  change: TenantCheckedFields,
+  before: PhoneRuleBaseline,
+  today: string,
+): ValidationIssue | null {
+  if (before !== null && change.phone === undefined && change.dateOfBirth === undefined) {
+    return null;
+  }
+  const phone = change.phone === undefined ? (before?.phone ?? null) : change.phone;
+  const dateOfBirth =
+    change.dateOfBirth === undefined ? (before?.dateOfBirth ?? null) : change.dateOfBirth;
+  if (phone !== null) return null;
+  if (dateOfBirth !== null && isMinor(dateOfBirth, today)) return null;
+  return { path: 'phone', code: 'required', message: 'A phone number is required for adults' };
+}
+
+function validationFailed(issues: ValidationIssue[]): ValidationFailedError {
+  return new ValidationFailedError(
+    issues.length === 1 ? '1 field is invalid' : `${issues.length} fields are invalid`,
+    issues,
+  );
+}
+
+/**
+ * Normalises `phone` against the tenant country, checks that the date of birth is not after the
+ * tenant's `today` (the contract only knows UTC, with a day of tolerance) and applies the phone
+ * rule (`phoneRuleIssue`) against `before` (null on create). Every failure is reported at once as
+ * `ValidationFailedError`, addressed by field.
  */
 export function normalizeFields(
   fields: TenantCheckedFields,
   country: Tenant['country'],
   today: string,
+  before: PhoneRuleBaseline,
 ): NormalizedFields {
   const issues: ValidationIssue[] = [];
   const normalized: NormalizedFields = {};
-  if (fields.phone !== undefined) {
+  if (fields.phone === null) {
+    normalized.phone = null;
+  } else if (fields.phone !== undefined) {
     const phone = normalizePhone(fields.phone, country);
     if (phone) normalized.phone = phone;
-    else issues.push(invalidPhone('phone'));
+    else issues.push(invalidPhone());
   }
-  if (fields.guardianPhone === null) {
-    normalized.guardianPhone = null;
-  } else if (fields.guardianPhone !== undefined) {
-    const guardianPhone = normalizePhone(fields.guardianPhone, country);
-    if (guardianPhone) normalized.guardianPhone = guardianPhone.e164;
-    else issues.push(invalidPhone('guardianPhone'));
+  if (issues.length === 0) {
+    const required = phoneRuleIssue(fields, before, today);
+    if (required) issues.push(required);
   }
   if (fields.dateOfBirth && fields.dateOfBirth > today) {
     issues.push({
@@ -67,13 +100,14 @@ export function normalizeFields(
       message: 'Date of birth cannot be in the future',
     });
   }
-  if (issues.length > 0) {
-    throw new ValidationFailedError(
-      issues.length === 1 ? '1 field is invalid' : `${issues.length} fields are invalid`,
-      issues,
-    );
-  }
+  if (issues.length > 0) throw validationFailed(issues);
   return normalized;
+}
+
+/** A merge that leaves an adult without a phone breaks the same rule (`phoneRuleIssue`). */
+export function assertMergePhoneRule(kept: DomainPatient, patch: MergePatch, today: string): void {
+  const issue = phoneRuleIssue({ phone: patch.phone, dateOfBirth: patch.dateOfBirth }, kept, today);
+  if (issue) throw validationFailed([issue]);
 }
 
 /** Patch fields stored as given (no normalisation, plain equality). */
@@ -84,10 +118,8 @@ const PLAIN_FIELDS = [
   'email',
   'address',
   'insurance',
-  'emergencyContact',
-  'primaryDentistUserId',
+  'primaryDentistId',
   'notes',
-  'guardianName',
 ] as const satisfies readonly (PatientPatchField & keyof PatientRecordPatch)[];
 
 const sameList = (a: readonly string[], b: readonly string[]) =>
@@ -105,7 +137,7 @@ export function changesOf(
 ): { set: PatientRecordPatch; fields: PatientPatchField[] } {
   const set: PatientRecordPatch = {};
   const fields: PatientPatchField[] = [];
-  if (normalized.phone && normalized.phone.e164 !== before.phone) {
+  if (normalized.phone !== undefined && (normalized.phone?.e164 ?? null) !== before.phone) {
     set.phone = normalized.phone;
     fields.push('phone');
   }
@@ -119,20 +151,18 @@ export function changesOf(
     set.medicalAlerts = patch.medicalAlerts;
     fields.push('medicalAlerts');
   }
-  if (normalized.guardianPhone !== undefined && normalized.guardianPhone !== before.guardianPhone) {
-    set.guardianPhone = normalized.guardianPhone;
-    fields.push('guardianPhone');
-  }
   return { set, fields };
 }
 
 /**
  * The merge patch as a repository patch. A stored phone is E.164 (leading `+`), so re-parsing it
  * yields the same number whatever the country; it is only needed for the national search digits.
+ * A null phone (the picked record had none) clears it.
  */
 export function mergeSet(patch: MergePatch, country: Tenant['country']): PatientRecordPatch {
   const { phone, ...rest } = patch;
   if (phone === undefined) return rest;
+  if (phone === null) return { ...rest, phone: null };
   const normalized = normalizePhone(phone, country);
   if (!normalized) throw new Error('merge: a stored phone is not a valid E.164 number');
   return { ...rest, phone: normalized };

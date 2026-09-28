@@ -52,9 +52,9 @@ const leavesForm = (current: GuardLocation, next: GuardLocation) =>
 
 /**
  * Create / Edit patient (design §Right panel, `Patients.dc.html` form, workspace spec §Screen 2
- * styling): Full name* and Phone* up front, the optional details demoted below, the guardian
- * pair only while the date of birth makes the patient a minor, and — create only, with
- * `payment:write` — the Account group's opening balance (design Q1).
+ * styling): Full name* and Phone* up front (the phone optional while the date of birth makes the
+ * patient a minor, design addendum C3), the optional details demoted below, and — create only,
+ * with `payment:write` — the Account group's opening balance (design Q1).
  */
 export function PatientFormPanel({
   mode,
@@ -180,8 +180,8 @@ function PatientForm({
     };
   }, []);
 
-  const dirty = editing ? isEditDirty(initial, values, today, country) : isDirty(initial, values);
-  const ready = values.fullName.trim() !== '' && values.phone.trim() !== '';
+  const dirty = editing ? isEditDirty(initial, values, country) : isDirty(initial, values);
+  const ready = values.fullName.trim() !== '' && (values.phone.trim() !== '' || form.phoneOptional);
   const twin = useDuplicateTwin({
     fullName: values.fullName,
     dateOfBirth: values.dateOfBirth,
@@ -192,11 +192,11 @@ function PatientForm({
   const mutation = useMutation({
     mutationFn: async (): Promise<string> => {
       if (patient) {
-        const patch = toPatchPayload(initial, values, today, country);
+        const patch = toPatchPayload(initial, values, country);
         if (patch) await updatePatient(patient.id, patch);
         return patient.id;
       }
-      const input = toCreatePayload(values, today);
+      const input = toCreatePayload(values);
       if (showAccount && wantsOpeningBalance(values)) {
         const result = await createWithOpeningBalance({
           patient: input,
@@ -335,16 +335,9 @@ function PatientForm({
         <div className="grid grid-cols-2 gap-x-2.5 gap-y-3">
           {field('dateOfBirth')}
           {field('sex')}
-          {form.guardian && (
-            <>
-              {field('guardianName')}
-              {field('guardianPhone')}
-            </>
-          )}
           {field('email', 'col-span-2')}
           {field('address', 'col-span-2')}
-          {field('insurance')}
-          {field('emergencyContact')}
+          {field('insurance', 'col-span-2')}
           {field('alerts', 'col-span-2')}
           {field('dentist', 'col-span-2')}
           {field('notes', 'col-span-2')}

@@ -113,7 +113,7 @@ function MergeEditor({
   const confirm = useConfirm();
   const toast = useToast();
   const queryClient = useQueryClient();
-  const { names } = useStaffNames();
+  const { dentistNames } = useStaffNames();
   const name = useId();
   const [draft, setDraft] = useState(() => mergeDraft(a, b));
 
@@ -128,22 +128,15 @@ function MergeEditor({
   const valueOf = (patient: Patient, field: MergeField): string => {
     switch (field) {
       case 'phone':
-        return formatPhone(patient.phone, tenant.country);
+        return patient.phone ? formatPhone(patient.phone, tenant.country) : NONE;
       case 'dateOfBirth':
         return patient.dateOfBirth ? formatCalendarDate(patient.dateOfBirth, locale) : NONE;
       case 'sex':
         return patient.sex === 'unknown' ? NONE : t(`quickView.sex.${patient.sex}`);
-      case 'primaryDentistUserId':
-        return patient.primaryDentistUserId
-          ? (names.get(patient.primaryDentistUserId) ?? t('quickView.unknownDentist'))
+      case 'primaryDentistId':
+        return patient.primaryDentistId
+          ? (dentistNames.get(patient.primaryDentistId) ?? t('quickView.unknownDentist'))
           : NONE;
-      case 'guardian': {
-        const parts = [
-          patient.guardianName,
-          patient.guardianPhone && formatPhone(patient.guardianPhone, tenant.country),
-        ].filter(Boolean);
-        return parts.length > 0 ? parts.join(' · ') : NONE;
-      }
       default:
         return patient[field] ?? NONE;
     }

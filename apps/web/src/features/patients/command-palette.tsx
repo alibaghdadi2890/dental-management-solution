@@ -317,7 +317,7 @@ function PaletteBody({
                 patient={row}
                 active={index === active}
                 age={ageOrNull(row.dateOfBirth, today)}
-                phone={formatPhone(row.phone, tenant.country)}
+                phone={row.phone ? formatPhone(row.phone, tenant.country) : null}
                 onHover={() => {
                   if (index !== active) setCursor({ query, index });
                 }}
@@ -346,7 +346,8 @@ function PaletteRow({
   patient: PatientListItem;
   active: boolean;
   age: number | null;
-  phone: string;
+  /** Formatted for display; null for a minor recorded without one. */
+  phone: string | null;
   onHover: () => void;
   onOpen: () => void;
 }) {
@@ -377,9 +378,11 @@ function PaletteRow({
           <span dir="ltr" className="font-mono">
             {patient.displayNumber}
           </span>
-          <span dir="ltr" className="font-mono tabular-nums">
-            {phone}
-          </span>
+          {phone !== null && (
+            <span dir="ltr" className="font-mono tabular-nums">
+              {phone}
+            </span>
+          )}
           <span>{age === null ? t('palette.ageUnknown') : t('palette.age', { age })}</span>
         </span>
       </span>

@@ -56,7 +56,7 @@ const item = (n: number, fullName: string, extra: Partial<PatientListItem> = {})
     dateOfBirth: '1990-05-01',
     sex: 'female',
     medicalAlerts: [],
-    primaryDentistUserId: null,
+    primaryDentistId: null,
     email: null,
     archivedAt: null,
     updatedAt: '2026-09-01T10:00:00.000Z',
@@ -67,10 +67,7 @@ const full = (patient: PatientListItem, archivedAt: string | null): Patient => (
   ...patient,
   address: null,
   insurance: null,
-  emergencyContact: null,
   notes: null,
-  guardianName: null,
-  guardianPhone: null,
   externalId: null,
   archivedAt,
   mergedIntoId: null,
@@ -79,7 +76,7 @@ const full = (patient: PatientListItem, archivedAt: string | null): Patient => (
 
 const RANA = item(1, 'Rana Haddad', {
   medicalAlerts: ['Penicillin allergy'],
-  primaryDentistUserId: DENTIST_ID,
+  primaryDentistId: profileId(DENTIST_ID),
 });
 const SAMI = item(2, 'Sami Khoury', { sex: 'male', dateOfBirth: null });
 const LINA = item(3, 'Lina Aoun');
@@ -317,8 +314,17 @@ describe('PatientsPage', () => {
     expect(sami[2]?.textContent).toBe('— · M');
   });
 
+  it('shows "—" for a minor recorded without a phone', async () => {
+    mockApi({ items: [item(6, 'Kid Aoun', { phone: null, dateOfBirth: '2020-01-01' })] });
+    renderPage();
+    const cells = within(await rowOf('Kid Aoun')).getAllByRole('cell');
+    expect(cells[3]?.textContent).toBe('—');
+  });
+
   it('names a deactivated dentist from the staff list', async () => {
-    mockApi({ items: [item(5, 'Omar Nassar', { primaryDentistUserId: INACTIVE_DENTIST_ID })] });
+    mockApi({
+      items: [item(5, 'Omar Nassar', { primaryDentistId: profileId(INACTIVE_DENTIST_ID) })],
+    });
     renderPage();
     const cells = within(await rowOf('Omar Nassar')).getAllByRole('cell');
     await waitFor(() => {
@@ -405,9 +411,10 @@ describe('PatientsPage', () => {
     await within(dentist).findByRole('option', { name: 'Dr. Ana Reyes' });
     expect(dentist.closest('label')?.className).not.toContain('bg-primary-tint');
 
-    fireEvent.change(dentist, { target: { value: DENTIST_ID } });
+    // The chip's values are staff profile ids (ADR-0020), never auth user ids.
+    fireEvent.change(dentist, { target: { value: profileId(DENTIST_ID) } });
     await waitFor(() => {
-      expect(calledUrls(fetchMock)).toContain(`/api/v1/patients?dentist=${DENTIST_ID}`);
+      expect(calledUrls(fetchMock)).toContain(`/api/v1/patients?dentist=${profileId(DENTIST_ID)}`);
     });
     const chip = screen.getByRole('combobox', { name: 'Dentist' });
     expect(chip.closest('label')?.className).toContain('bg-primary-tint');
@@ -741,7 +748,7 @@ describe('PatientsPage', () => {
 
   it('names an unlisted dentist in the Dentist chip', async () => {
     mockApi();
-    renderPage({ url: `/?dentist=${INACTIVE_DENTIST_ID}` });
+    renderPage({ url: `/?dentist=${profileId(INACTIVE_DENTIST_ID)}` });
     const dentist = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'Dentist' });
     await waitFor(() => {
       expect(dentist.selectedOptions[0]?.textContent).toBe('Dr. Marcus Lee');

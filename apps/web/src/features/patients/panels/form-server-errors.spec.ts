@@ -44,7 +44,7 @@ describe('fieldErrorsOf', () => {
 
   it('puts an unknown dentist on the dentist field', () => {
     expect(fieldErrorsOf(apiError(422, 'patient.unknown_dentist'))).toEqual({
-      primaryDentistUserId: 'unknownDentist',
+      primaryDentistId: 'unknownDentist',
     });
   });
 

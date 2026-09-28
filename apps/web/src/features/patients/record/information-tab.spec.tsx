@@ -68,23 +68,25 @@ describe('InformationTab', () => {
     expect(field(/Phone/).value).toBe('03 123 456');
     expect(field(/Date of birth/).value).toBe('01/05/1990');
     expect(field('Email').value).toBe('rana@example.com');
-    for (const name of ['Address', 'Insurance', 'Emergency contact', /Medical alerts/, 'Notes']) {
+    for (const name of ['Address', 'Insurance', /Medical alerts/, 'Notes']) {
       expect(within(form).getByRole('textbox', { name })).toBeTruthy();
     }
     expect(within(form).getByRole('combobox', { name: 'Sex' })).toBeTruthy();
     expect(within(form).getByRole('combobox', { name: 'Primary dentist' })).toBeTruthy();
     expect(within(form).queryByRole('textbox', { name: /Guardian/ })).toBeNull();
+    expect(within(form).queryByRole('textbox', { name: /Emergency/ })).toBeNull();
     expect(blocked()).toBe(true);
     expect(await indicator()).toBe('');
   });
 
-  it('shows the guardian fields for a minor', async () => {
+  it('makes the phone optional for a minor, with no guardian text fields', async () => {
     mockApi({ patients: [RANA] });
     renderRecord({ url: URL_ });
     await card();
+    expect(field(/Phone/).getAttribute('aria-required')).toBe('true');
     type(/Date of birth/, '01/05/2020');
-    expect(field(/Guardian name/)).toBeTruthy();
-    expect(field(/Guardian phone/)).toBeTruthy();
+    expect(field(/Phone/).getAttribute('aria-required')).toBeNull();
+    expect(screen.queryByRole('textbox', { name: /Guardian/ })).toBeNull();
   });
 
   it('saves only what changed, moving from Unsaved to Saving to Saved, and the badge follows', async () => {

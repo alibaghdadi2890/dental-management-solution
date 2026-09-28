@@ -283,7 +283,7 @@ describe('users: staff profiles with identity, branches and roles', () => {
       ]);
     });
 
-    it('lists only active dentists; a deactivated one is absent but still found by id', async () => {
+    it('lists only active dentists; a deactivated one is absent from the list', async () => {
       const zed = await createUser({ displayName: 'Dr. Zed Nassar' });
       const amir = await createUser({ displayName: 'Dr. Amir Haddad' });
       const assistant = await createUser({
@@ -302,14 +302,6 @@ describe('users: staff profiles with identity, branches and roles', () => {
       const after = (await api.get('/users/practitioners')).body as Practitioner[];
       expect(after.map((row) => row.userId)).not.toContain(zed.id);
       expect(after.map((row) => row.userId)).toContain(amir.id);
-
-      const byIds = await asPlatformAdminIn(testApp.app, tenant.id, () =>
-        testApp.app.get(UsersService).practitionersByAuthUserIds([zed.id, amir.id]),
-      );
-      expect(byIds.map((row) => row.userId).sort()).toEqual([zed.id, amir.id].sort());
-      expect(byIds.find((row) => row.userId === zed.id)).toMatchObject({
-        displayName: 'Dr. Zed Nassar',
-      });
     });
 
     it('carries the staff profile id, and the profile-id lookup includes deactivated staff', async () => {

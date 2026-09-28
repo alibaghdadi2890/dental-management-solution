@@ -115,8 +115,9 @@ today, takes the **snapshot** — the ids to export, in order — and returns `{
   injection guard writes them as `'+33 6 12 34 56 78` (unguarded, a spreadsheet would evaluate
   them). The feature 6 import must strip that leading `'` from phone cells
   (docs/modules/imports.md).
-- **Dentist:** the display name from `UsersService.practitionersByAuthUserIds` (inactive dentists
-  included). That is a `users` building block with no permission check of its own; every system
+- **Dentist:** the display name of the patient's `primaryDentistId` (a staff profile id,
+  ADR-0020) from `UsersService.practitionersByProfileIds` (inactive dentists included). That is a
+  `users` building block with no permission check of its own; every system
   role holds `user:read`, which the Patients screen's dentist names need anyway, so the export
   shows nothing a `payment:read` + `patient:read` holder can't already see.
 - **Format** (`domain/csv.ts`): RFC 4180 quoting (a cell with a comma, quote, CR or LF is quoted,
@@ -236,7 +237,8 @@ pipe a `Readable`: stream callbacks run outside the request's async context, whe
   for the patient views and the export, `survivorOf` for the merge re-point; the
   `PatientsMerged` event.
 - `tenancy`: currency, time zone and country (`currentTenant`).
-- `users`: dentist display names in the export (`practitionersByAuthUserIds`).
+- `users`: dentist display names in the export (`practitionersByProfileIds`, by staff profile
+  id).
 - `audit`.
 
 None of them imports `billing` (ADR-0017).

@@ -40,7 +40,7 @@ describe('MergePanel', () => {
     expect(radio('Keep this ID P-000001').checked).toBe(true);
     expect(radio('Phone from P-000001: 03 123 456').checked).toBe(true);
     expect(radio('Email from P-000001: rana@example.com').checked).toBe(true);
-    expect(within(aside).getByText(/9 other fields match\./)).toBeTruthy();
+    expect(within(aside).getByText(/7 other fields match\./)).toBeTruthy();
     expect(
       within(aside).getByText(/P-000002 will be archived\. Its balance moves to P-000001\./),
     ).toBeTruthy();

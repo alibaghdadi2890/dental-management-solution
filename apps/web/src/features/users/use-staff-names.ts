@@ -4,10 +4,15 @@ import { usePermission } from '@/features/auth/use-permission';
 import { practitionersQuery, staffQuery } from './users-api';
 
 /**
- * Staff display names by auth user id, for naming a patient's dentist or an audit entry's actor:
- * every staff member (`GET /users`, deactivated ones included) with `user:read`, else — and while
- * that loads — the active practitioners. Also returns the practitioners themselves (the Primary
- * dentist and Dentist pickers).
+ * Staff display names from every staff member (`GET /users`, deactivated ones included) with
+ * `user:read`, else — and while that loads — the active practitioners:
+ *
+ * - `dentistNames`, by staff profile id (`StaffUser.profileId` / `Practitioner.id`): what a
+ *   patient refers to its dentist by (ADR-0020);
+ * - `names`, by auth user id (`StaffUser.id` / `Practitioner.userId`): an audit entry's actor.
+ *
+ * Also returns the practitioners themselves (the Primary dentist and Dentist pickers, whose values
+ * are `Practitioner.id`).
  */
 export function useStaffNames() {
   const canReadStaff = usePermission('user:read');
@@ -24,5 +29,15 @@ export function useStaffNames() {
     [staff.data, practitioners.data],
   );
 
-  return { names, practitioners: practitioners.data };
+  const dentistNames = useMemo(
+    () =>
+      new Map(
+        staff.data?.map((user) => [user.profileId, user.displayName]) ??
+          practitioners.data?.map((p) => [p.id, p.displayName]) ??
+          [],
+      ),
+    [staff.data, practitioners.data],
+  );
+
+  return { names, dentistNames, practitioners: practitioners.data };
 }

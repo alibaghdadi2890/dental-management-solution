@@ -36,12 +36,9 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
 - `practitionersByProfileIds(profileIds)` — practitioners among `profileIds`
   (`staff_profiles.id`) whatever their current type or active status, ordered the same way, for
   showing the display name of a dentist already assigned to a patient even after they leave or
-  change role. Not permission-gated either: this is how `patients` and `billing` are expected to
-  resolve dentist names once they store profile ids (ADR-0020).
-- `practitionersByIds(userIds)` — the same lookup by auth user id. Superseded by
-  `practitionersByProfileIds`; kept only until the `patients` and `billing` callers that still
-  store the auth user id in `primary_dentist_user_id` are migrated to the profile id (the
-  patients-contacts addendum, task H1/H2), which removes this method.
+  change role. Not permission-gated either: `patients` (`primary_dentist_id`, the `sort=dentist`
+  rank) and `billing` (the export's Dentist column) resolve dentist names through it (ADR-0020).
+  There is no lookup by auth user id: domain models never store one for a dentist.
 - `createStaffUser(input)` (`user:write`, roles also need `role:write`): identity with a temporary
   password (D6) → membership mirror → profile → branches → roles, one transaction; a failure in any
   step rolls the identity back. `409 user.email_taken` for a registered email (D7 extension point:

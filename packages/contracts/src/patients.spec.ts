@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MERGE_FIELDS,
   medicalAlertsSchema,
   patientArchiveSchema,
   patientInputSchema,
@@ -104,6 +105,34 @@ describe('patientInputSchema', () => {
     );
   });
 
+  it('treats a blank, null or absent phone as null: the adult-only rule is server-side', () => {
+    expect(patientInputSchema.parse({ fullName: 'Jane Doe' }).phone).toBeNull();
+    expect(patientInputSchema.parse({ ...input, phone: '  ' }).phone).toBeNull();
+    expect(patientInputSchema.parse({ ...input, phone: null }).phone).toBeNull();
+    expect(patientInputSchema.safeParse({ ...input, phone: '1'.repeat(41) }).success).toBe(false);
+  });
+
+  it('takes the primary dentist as a staff profile id under primaryDentistId', () => {
+    const parsed = patientInputSchema.parse({ ...input, primaryDentistId: ID_A });
+    expect(parsed.primaryDentistId).toBe(ID_A);
+    expect(patientInputSchema.parse(input).primaryDentistId).toBeNull();
+    expect(patientInputSchema.parse({ ...input, primaryDentistUserId: ID_A })).not.toHaveProperty(
+      'primaryDentistUserId',
+    );
+  });
+
+  it('has no guardian or emergency-contact text fields (contacts replace them)', () => {
+    const parsed = patientInputSchema.parse({
+      ...input,
+      guardianName: 'Mary Doe',
+      guardianPhone: '03 999 999',
+      emergencyContact: 'Mary Doe',
+    });
+    expect(parsed).not.toHaveProperty('guardianName');
+    expect(parsed).not.toHaveProperty('guardianPhone');
+    expect(parsed).not.toHaveProperty('emergencyContact');
+  });
+
   it('drops externalId: only the import (feature 6) sets it', () => {
     expect(patientInputSchema.parse({ ...input, externalId: 'EXT-1' })).not.toHaveProperty(
       'externalId',
@@ -130,6 +159,17 @@ describe('patientPatchSchema', () => {
 
   it('rejects a patch of externalId alone: it is not an editable field', () => {
     expect(patientPatchSchema.safeParse({ externalId: 'EXT-1' }).success).toBe(false);
+  });
+
+  it('clears the phone when patched to blank or null, and leaves it untouched when absent', () => {
+    expect(patientPatchSchema.parse({ phone: '' })).toEqual({ phone: null });
+    expect(patientPatchSchema.parse({ phone: null })).toEqual({ phone: null });
+    expect(patientPatchSchema.parse({ notes: 'x' })).not.toHaveProperty('phone');
+  });
+
+  it('rejects a patch of the removed guardian fields alone', () => {
+    expect(patientPatchSchema.safeParse({ guardianName: 'Mary' }).success).toBe(false);
+    expect(patientPatchSchema.safeParse({ emergencyContact: 'Mary' }).success).toBe(false);
   });
 
   it('leaves the date of birth untouched when the key is absent', () => {
@@ -196,7 +236,7 @@ describe('patientPageSchema', () => {
       dateOfBirth: null,
       sex: 'unknown',
       medicalAlerts: [],
-      primaryDentistUserId: null,
+      primaryDentistId: null,
       email: null,
       archivedAt: null,
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -204,6 +244,25 @@ describe('patientPageSchema', () => {
     const page = { items: [item], total: 1, page: 1, size: 25 };
     expect(patientPageSchema.parse(page)).toEqual(page);
     expect(patientPageSchema.safeParse({ ...page, total: -1 }).success).toBe(false);
+  });
+
+  it('accepts a list item without a phone (a minor) and never carries guardian fields', () => {
+    const item = {
+      id: ID_A,
+      displayNumber: 'P-000001',
+      fullName: 'Sam Doe',
+      phone: null,
+      dateOfBirth: '2020-01-01',
+      sex: 'unknown',
+      medicalAlerts: [],
+      primaryDentistId: ID_B,
+      email: null,
+      archivedAt: null,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const parsed = patientPageSchema.parse({ items: [item], total: 1, page: 1, size: 25 });
+    expect(parsed.items[0]).toEqual(item);
+    expect(parsed.items[0]).not.toHaveProperty('guardianName');
   });
 });
 
@@ -225,6 +284,26 @@ describe('patientMergeSchema', () => {
     expect(patientMergeSchema.safeParse({ ...base, fieldChoices: { bogus: 'keep' } }).success).toBe(
       false,
     );
+  });
+
+  it('has no guardian or emergencyContact merge field, and renames the dentist field', () => {
+    expect(MERGE_FIELDS).toEqual([
+      'fullName',
+      'phone',
+      'dateOfBirth',
+      'sex',
+      'email',
+      'address',
+      'insurance',
+      'primaryDentistId',
+      'notes',
+    ]);
+    expect(
+      patientMergeSchema.safeParse({ ...base, fieldChoices: { guardian: 'drop' } }).success,
+    ).toBe(false);
+    expect(
+      patientMergeSchema.safeParse({ ...base, fieldChoices: { emergencyContact: 'drop' } }).success,
+    ).toBe(false);
   });
 
   it('defaults fieldChoices to an empty object', () => {

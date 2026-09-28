@@ -1,13 +1,17 @@
 # `patients` module
 
 **Status:** implemented. Patient records, search, duplicates, archive/restore and merge are done
-(feature 3). The odontogram is planned.
+(feature 3). Contacts & family (design addendum `2026-09-28-patients-contacts-design.md`): the
+`contacts` and `patient_contacts` tables have landed; their service, routes and events arrive with
+task H2. The odontogram is planned.
 
 ## Purpose
 
-Patient records: demographics, contacts, insurance (as text), medical alerts/allergies, primary
-dentist, guardian, notes, archive (soft delete) and merge. The POC's Patients screen (list, quick
-view, create/edit, merge), the ⌘K palette and the patient record header are the UI reference.
+Patient records: demographics, phone and e-mail, insurance (as text), medical alerts/allergies,
+primary dentist, notes, archive (soft delete) and merge; contacts (guardians, billing and
+emergency contacts, who may themselves be patients: design addendum C1–C2). The POC's Patients
+screen (list, quick view, create/edit, merge), the ⌘K palette and the patient record header are
+the UI reference.
 Balances are not here: views that need them (Owes balance, sort by balance, CSV export, create
 with an opening balance) are composed by `billing` on top of this module (design Q5; ADR-0017).
 
@@ -19,7 +23,19 @@ with an opening balance) are composed by `billing` on top of this module (design
 - **Phones:** normalised against the tenant `country` (`normalizePhone` in `@dcm/contracts`) and
   stored in E.164. A number typed with a leading `+` is accepted for any country.
   `phone_search` holds the E.164 digits and the national digits, so `03123…` and `96131…` both
-  match. `guardianPhone` follows the same rule and is stored in E.164.
+  match.
+- **Phone rule** (addendum C3): the phone is required unless the date of birth makes the patient
+  a minor on the tenant's today (no date of birth = adult); blank means none. Create always
+  checks it; an edit checks it when the patch touches `phone` or `dateOfBirth` (clearing an
+  adult's phone, or giving a phoneless minor an adult or no date of birth), so a minor who has
+  since come of age can still be edited without adding a phone first; a merge checks the resolved
+  phone and date of birth the same way. Failure → 422 `validation_failed`, path `phone`, code
+  `required`. A patient without a phone has `phone` and `phone_search` null and is never matched
+  by phone digits.
+- **Primary dentist:** `primaryDentistId` is the dentist's staff profile id (`staff_profiles.id`,
+  `Practitioner.id`; ADR-0020, amending ADR-0016), never the auth user id. A newly chosen one
+  must be among `UsersService.listPractitioners()` (active dentists); names, inactive dentists
+  included, come from `practitionersByProfileIds`.
 - **Dates:** the date of birth must not be after the tenant's today, computed from the injected
   clock in the tenant time zone (`localDate` in `platform/kernel`). Age bands use the same today.
 - **Search `q`:** a diacritics-insensitive substring of `name_key`, the display number, the
@@ -28,20 +44,38 @@ with an opening balance) are composed by `billing` on top of this module (design
   `P-<digits>`; its digits never search phones. Bare digits (`000123`) are still a phone query.
 - **Archive** sets `deleted_at` (design Q11). The optional reason goes to the audit entry only.
   A merged-away record is archived and has `merged_into_id`; it can never be restored.
-- **Merge** (design Q8): each pickable field comes from the kept record unless the choice is
-  `drop`. `guardian` moves name and phone together. Medical alerts are always the union of both
-  records and are never truncated: more than 20 refuses the merge.
+- **Merge** (design Q8): each pickable field (`MERGE_FIELDS`: full name, phone, date of birth,
+  sex, e-mail, address, insurance, primary dentist, notes) comes from the kept record unless the
+  choice is `drop`; a picked phone may be null (a minor), subject to the phone rule. Medical
+  alerts are always the union of both records and are never truncated: more than 20 refuses the
+  merge.
 
 ## Owns
 
 - `patients` (tenant RLS): the record, plus the internal search columns `name_key` and
   `phone_search`. `sex` is a Postgres enum (`patient_sex`) and `medical_alerts` is a `text[]`.
-  `primary_dentist_user_id` is an auth user id with no foreign key (ADR-0016).
+  `phone`/`phone_search` are nullable (a minor without a phone). `primary_dentist_id` is a staff
+  profile id with no foreign key (ADR-0020; `users` owns `staff_profiles`).
   `merged_into_id` points at the kept patient; checks keep it off active records and off the
-  record itself. Indexes: unique `(tenant_id, display_number)`; unique `(tenant_id, external_id)`
-  where the id is set; `(tenant_id, name_key, date_of_birth)` where active (duplicates);
-  `(tenant_id, updated_at)` (recent). `updated_at` always comes from the database clock.
+  record itself. Indexes: unique `(tenant_id, id)` (target of the contact foreign keys); unique
+  `(tenant_id, display_number)`; unique `(tenant_id, external_id)` where the id is set;
+  `(tenant_id, name_key, date_of_birth)` where active (duplicates); `(tenant_id, updated_at)`
+  (recent). `updated_at` always comes from the database clock.
 - `patient_counters` (tenant RLS): one row per tenant (`tenant_id` PK, `last_value`).
+- `contacts` (tenant RLS, soft delete; schema landed, API in H2): `full_name?`, `phone?` (E.164),
+  `phone_search?`, `email?`, `linked_patient_id?`. A contact linked to a patient stores no name,
+  phone or e-mail of its own (they are read from the patient), so a check requires
+  `linked_patient_id` or `full_name`. Unique `(tenant_id, id)`; at most one live contact per
+  linked patient (partial unique `(tenant_id, linked_patient_id)` where linked and not deleted);
+  `(tenant_id, linked_patient_id)` → `patients (tenant_id, id)`.
+- `patient_contacts` (tenant RLS, junction: hard delete; schema landed, API in H2): PK
+  `(patient_id, contact_id)`, `relationship` (Postgres enum `contact_relationship`: parent,
+  spouse, child, sibling, caregiver, other — the contact's relation to the patient), the role
+  flags `is_guardian`, `is_billing_contact`, `is_emergency_contact` and one primary flag per role.
+  Checks: at least one role; each primary implies its role. At most one primary per role per
+  patient (partial unique `(tenant_id, patient_id)` per primary flag). Composite foreign keys
+  `(tenant_id, patient_id)` → `patients` and `(tenant_id, contact_id)` → `contacts` keep both
+  ends in the link's tenant. Indexes on `tenant_id` and `contact_id`.
 
 ## Public API (`index.ts`)
 
@@ -53,7 +87,7 @@ with an opening balance) are composed by `billing` on top of this module (design
 
 | Method                                                   | Access          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | -------------------------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `create(input)`                                          | `patient:write` | Invalid `phone`/`guardianPhone`, or a date of birth after the tenant's today → 422 `validation_failed` at that path. A dentist who is not an active practitioner → 422 `patient.unknown_dentist`. Mints the number, audits `patient.create`, emits `PatientCreated`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `create(input)`                                          | `patient:write` | An invalid `phone`, a missing one for an adult (the phone rule), or a date of birth after the tenant's today → 422 `validation_failed` at that path. A `primaryDentistId` that is not the profile id of an active practitioner → 422 `patient.unknown_dentist`. Mints the number, audits `patient.create`, emits `PatientCreated`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | `update(id, patch)`                                      | `patient:write` | The row is locked `FOR UPDATE`. 404 `patient.not_found`; archived → 409 `patient.archived`. Same field checks as create. A dentist kept from before may be inactive; a newly chosen one must be active. Only fields whose stored value changes are written; a patch that changes nothing writes, audits and emits nothing. Audits `patient.update` (before/after); emits `PatientUpdated { patientId, fields }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `get(id)`                                                | `patient:read`  | Archived and merged records included; 404 otherwise.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `getMany(ids)`                                           | `patient:read`  | For `billing` (existence checks, export rows): the visible patients among `ids`, archived included, in no particular order.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -70,16 +104,16 @@ with an opening balance) are composed by `billing` on top of this module (design
 
 ### `search(query, internal?)`
 
-- `query` is `PatientListQuery`: `view`, `q`, `dentist` (user id or `none`), `age`
+- `query` is `PatientListQuery`: `view`, `q`, `dentist` (staff profile id or `none`), `age`
   (`child`/`adult`/`senior`, by date of birth against the tenant's today), `alerts`, `lastVisit`
   (no effect until visits exist), `sort`, `dir`, `page`, `size`.
 - `view=notSeen` returns the active patients (design Q14).
 - `sort`:
   - `name`, `age` (youngest first for `asc`; no date of birth last), `recent` (most recently
     updated first, whatever `dir` says).
-  - `dentist`: ranks patients by their dentist in `UsersService.practitionersByAuthUserIds` over
-    every assigned dentist, inactive ones included, in display-name order (tenant-locale
-    collation).
+  - `dentist`: ranks patients by their dentist in `UsersService.practitionersByProfileIds` over
+    every assigned dentist (profile ids), inactive ones included, in display-name order
+    (tenant-locale collation).
     `domain/dentist-rank.ts` gives each dentist an integer key, dense-ranked: dentists whose
     names are equal under that collation share a key, so their patients sort by patient name.
     `desc` reverses the keys. Patients without a dentist come last in both directions.
@@ -128,7 +162,8 @@ column)], restKey)` ascending, then `name_key`, then `id`; `dir` is ignored, the
 ## Depends on
 
 - `tenancy`: country (phones) and time zone (today).
-- `users`: practitioners for the primary dentist (ADR-0016).
+- `users`: practitioners for the primary dentist, by staff profile id (`listPractitioners`,
+  `practitionersByProfileIds`; ADR-0016, ADR-0020).
 - `audit`.
 
 Nothing here imports `billing`. `billing` depends on `patients` (`create`, `getMany`,
