@@ -17,6 +17,7 @@ import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppVisitsRouteImport } from './routes/_app/visits'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
+import { Route as AppPatientsPatientIdRouteImport } from './routes/_app/patients/$patientId'
 import { Route as AppAdminTenantsIndexRouteImport } from './routes/_app/admin/tenants/index'
 import { Route as AppAdminTenantsTenantIdRouteImport } from './routes/_app/admin/tenants/$tenantId'
 
@@ -59,6 +60,11 @@ const AppPatientsIndexRoute = AppPatientsIndexRouteImport.update({
   path: '/patients/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPatientsPatientIdRoute = AppPatientsPatientIdRouteImport.update({
+  id: '/patients/$patientId',
+  path: '/patients/$patientId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminTenantsIndexRoute = AppAdminTenantsIndexRouteImport.update({
   id: '/admin/tenants/',
   path: '/admin/tenants/',
@@ -76,6 +82,7 @@ export interface FileRoutesByFullPath {
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
   '/visits': typeof AppVisitsRoute
+  '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/admin/': typeof AppAdminIndexRoute
   '/patients/': typeof AppPatientsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
@@ -87,6 +94,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/visits': typeof AppVisitsRoute
   '/': typeof AppIndexRoute
+  '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/admin': typeof AppAdminIndexRoute
   '/patients': typeof AppPatientsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
@@ -100,6 +108,7 @@ export interface FileRoutesById {
   '/_app/settings': typeof AppSettingsRoute
   '/_app/visits': typeof AppVisitsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/patients/': typeof AppPatientsIndexRoute
   '/_app/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
     | '/catalog'
     | '/settings'
     | '/visits'
+    | '/patients/$patientId'
     | '/admin/'
     | '/patients/'
     | '/admin/tenants/$tenantId'
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/visits'
     | '/'
+    | '/patients/$patientId'
     | '/admin'
     | '/patients'
     | '/admin/tenants/$tenantId'
@@ -136,6 +147,7 @@ export interface FileRouteTypes {
     | '/_app/settings'
     | '/_app/visits'
     | '/_app/'
+    | '/_app/patients/$patientId'
     | '/_app/admin/'
     | '/_app/patients/'
     | '/_app/admin/tenants/$tenantId'
@@ -205,6 +217,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPatientsIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/patients/$patientId': {
+      id: '/_app/patients/$patientId'
+      path: '/patients/$patientId'
+      fullPath: '/patients/$patientId'
+      preLoaderRoute: typeof AppPatientsPatientIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/admin/tenants/': {
       id: '/_app/admin/tenants/'
       path: '/admin/tenants'
@@ -227,6 +246,7 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppVisitsRoute: typeof AppVisitsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppPatientsPatientIdRoute: typeof AppPatientsPatientIdRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppPatientsIndexRoute: typeof AppPatientsIndexRoute
   AppAdminTenantsTenantIdRoute: typeof AppAdminTenantsTenantIdRoute
@@ -238,6 +258,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppVisitsRoute: AppVisitsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppPatientsPatientIdRoute: AppPatientsPatientIdRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppPatientsIndexRoute: AppPatientsIndexRoute,
   AppAdminTenantsTenantIdRoute: AppAdminTenantsTenantIdRoute,

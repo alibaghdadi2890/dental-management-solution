@@ -11,12 +11,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
   createRootRoute,
+  createRoute,
   createRouter,
   RouterProvider,
   useSearch,
 } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import '@/lib/i18n';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import { ToastProvider } from '@/components/ui/toast';
@@ -235,8 +236,18 @@ function renderPage({
       />
     );
   }
+  // Stand-ins so the list's own routes resolve: `/` is the list itself, and opening a record
+  // lands on `/patients/<id>` (asserted by its pathname).
+  const routeTree = rootRoute.addChildren([
+    createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => null }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/patients/$patientId',
+      component: () => null,
+    }),
+  ]);
   const router = createRouter({
-    routeTree: rootRoute,
+    routeTree,
     history: createMemoryHistory({ initialEntries: [url] }),
   });
   render(
@@ -266,6 +277,11 @@ const openMenu = async (name: string) => {
   const trigger = await screen.findByRole('button', { name: `Actions for ${name}` });
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
   return screen.findByRole('menu');
+};
+
+const quickView = async (name: string) => {
+  const menu = await openMenu(name);
+  fireEvent.click(within(menu).getByRole('menuitem', { name: 'Quick view' }));
 };
 
 describe('PatientsPage', () => {
@@ -670,8 +686,18 @@ describe('PatientsPage', () => {
   });
 
   it('exports the current query, or the selected ids, and is busy meanwhile', async () => {
+    const { createObjectURL, revokeObjectURL } = URL;
     URL.createObjectURL = vi.fn(() => 'blob:mock');
     URL.revokeObjectURL = vi.fn();
+    // jsdom can't save a download: clicking the link would try to navigate to it.
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    onTestFinished(() => {
+      URL.createObjectURL = createObjectURL;
+      URL.revokeObjectURL = revokeObjectURL;
+      click.mockRestore();
+    });
     let finish: (response: Response) => void = () => undefined;
     const fetchMock = mockApi({
       exportCsv: () =>
@@ -693,6 +719,7 @@ describe('PatientsPage', () => {
     await waitFor(() => {
       expect(exportCsv).toHaveProperty('disabled', false);
     });
+    expect(click).toHaveBeenCalledOnce();
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Sami Khoury' }));
     fireEvent.click(within(screen.getByRole('toolbar')).getByRole('button', { name: 'Export' }));
@@ -710,6 +737,31 @@ describe('PatientsPage', () => {
     });
   });
 
+  it('opens the record on a row click', async () => {
+    mockApi();
+    const router = renderPage({ url: '/?q=rana' });
+    fireEvent.click(await rowOf('Rana Haddad'));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
+    });
+    expect(router.history.canGoBack()).toBe(true);
+  });
+
+  it('offers Open record first in the row menu, then Quick view', async () => {
+    mockApi();
+    const router = renderPage();
+    const menu = await openMenu('Sami Khoury');
+    const items = within(menu).getAllByRole('menuitem');
+    expect(items.map((menuItem) => menuItem.textContent).slice(0, 2)).toEqual([
+      'Open record',
+      'Quick view',
+    ]);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Open record' }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${SAMI.id}`);
+    });
+  });
+
   it('opening a panel from a row drops the create pre-fill', async () => {
     mockApi();
     const router = renderPage();
@@ -718,7 +770,7 @@ describe('PatientsPage', () => {
       search: { panel: 'new' },
       state: { patientPrefill: { fullName: 'Rana' } },
     });
-    fireEvent.click(await rowOf('Rana Haddad'));
+    await quickView('Rana Haddad');
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ panel: `quick:${RANA.id}` });
     });
@@ -746,12 +798,12 @@ describe('PatientsPage', () => {
   it('closing a panel opened from the list goes back instead of adding an entry', async () => {
     mockApi();
     const router = renderPage();
-    fireEvent.click(await rowOf('Rana Haddad'));
+    await quickView('Rana Haddad');
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ panel: `quick:${RANA.id}` });
     });
     // Swapping panels replaces the entry and stays "opened from the list".
-    fireEvent.click(await rowOf('Sami Khoury'));
+    await quickView('Sami Khoury');
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ panel: `quick:${SAMI.id}` });
     });

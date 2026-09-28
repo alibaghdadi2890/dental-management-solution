@@ -88,6 +88,7 @@
     "menu": "إجراءات {{name}}"
   },
   "menu": {
+    "openRecord": "فتح السجل",
     "quickView": "عرض سريع",
     "edit": "تعديل البيانات",
     "merge": "دمج مع {{number}}",
@@ -187,7 +188,8 @@
       "dentist": "طبيب الأسنان المعالج"
     },
     "unknownDentist": "طبيب غير معروف",
-    "edit": "تعديل البيانات"
+    "edit": "تعديل البيانات",
+    "openRecord": "فتح السجل"
   },
   "activity": {
     "title": "النشاط",
@@ -350,6 +352,7 @@
     "results_few": "{{count, number}} نتائج",
     "results_many": "{{count, number}} نتيجة",
     "results_other": "{{count, number}} نتيجة",
+    "resultsFor": "لـ «{{query}}»",
     "age": "العمر {{age, number}}",
     "ageUnknown": "العمر —",
     "neverSeen": "لم تتم زيارته بعد",
@@ -359,5 +362,51 @@
     "noPatients": "لا يوجد مرضى بعد.",
     "loading": "جارٍ البحث عن المرضى",
     "failed": "تعذّر البحث عن المرضى."
+  },
+  "record": {
+    "back": "كل المرضى",
+    "ageLine": "{{age}} · {{dob}}",
+    "ageUnknown": "العمر غير مسجّل",
+    "archived": "مؤرشف",
+    "alerts": "التنبيهات الطبية",
+    "edit": "تعديل المريض",
+    "restore": "استعادة",
+    "mergedBody": "تم دمج هذا السجل في سجل آخر.",
+    "mergedInto": "دُمج في {{number}}",
+    "mergedIntoOther": "فتح السجل المحتفَظ به",
+    "tabs": {
+      "label": "سجل المريض",
+      "overview": "نظرة عامة",
+      "information": "معلومات المريض"
+    },
+    "summary": {
+      "title": "ملخص العلاج",
+      "visits": "الزيارات المسجّلة",
+      "diagnoses": "التشخيصات النشطة",
+      "planned": "الإجراءات المخطّطة",
+      "teeth": "الأسنان المعالَجة",
+      "services": "الخدمات المنفّذة",
+      "billed": "إجمالي ما فُوتر"
+    },
+    "info": {
+      "title": "معلومات المريض",
+      "complete": "إكمال",
+      "phone": "الهاتف",
+      "dateOfBirth": "تاريخ الميلاد",
+      "email": "البريد الإلكتروني",
+      "address": "العنوان",
+      "insurance": "التأمين",
+      "emergency": "الطوارئ",
+      "notRecorded": "غير مسجّل"
+    },
+    "form": {
+      "title": "معلومات المريض",
+      "complete": "مكتملة",
+      "partial": "مكتملة جزئيًا",
+      "intro": "لا شيء هنا إلزامي. املأه عندما يصبح ذا صلة.",
+      "updated": "تم تحديث معلومات المريض",
+      "archived": "هذا السجل مؤرشف، لذا لا يمكن تعديل بياناته. استعده لتعديلها.",
+      "merged": "تم دمج هذا السجل في سجل آخر، لذا لا يمكن تعديل بياناته."
+    }
   }
 }

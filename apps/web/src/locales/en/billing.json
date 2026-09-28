@@ -8,5 +8,13 @@
     "notePlaceholder": "Optional — e.g. carried over from previous system"
   },
   "openBalance": "Open balance",
-  "balanceFailed": "Couldn’t load the balance"
+  "balanceFailed": "Couldn’t load the balance",
+  "balance": {
+    "title": "Balance",
+    "loading": "Loading balance",
+    "currentVisit": "Current visit outstanding",
+    "previous": "Previous outstanding",
+    "total": "Total outstanding",
+    "otherCurrencies": "Also {{amounts}}"
+  }
 }

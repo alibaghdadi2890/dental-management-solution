@@ -2,16 +2,20 @@ import { useRouter } from '@tanstack/react-router';
 import { type PatientPanel, type PatientPrefill, panelNavigation } from './list-query';
 
 /**
- * Opening a patient or the create panel from outside the list: the shell's "New patient" and the
- * ⌘K palette. It follows the list's own history rules (`panelNavigation`): already on
- * `/patients`, the list keeps its search and an open panel is swapped in place; from another
- * screen it is a plain push. The create pre-fill travels in history state, never in the URL. A
- * dirty create/edit panel's unsaved-changes guard still gets its say.
+ * Opening a patient, or a Patients panel from outside the list: the shell's "New patient", the ⌘K
+ * palette, the list's rows and the patient record. A panel follows the list's own history rules
+ * (`panelNavigation`): already on `/patients`, the list keeps its search and an open panel is
+ * swapped in place; from another screen it is a plain push. The create pre-fill travels in
+ * history state, never in the URL. A dirty create/edit panel's (or record form's) unsaved-changes
+ * guard still gets its say.
  */
 export function usePatientNavigation() {
   const router = useRouter();
 
-  const openPanel = (panel: PatientPanel, prefill?: PatientPrefill) => {
+  const openPanel = (
+    panel: PatientPanel,
+    { prefill, returnOnClose = false }: { prefill?: PatientPrefill; returnOnClose?: boolean } = {},
+  ) => {
     const { location } = router.state;
     const onList = location.pathname.replace(/\/$/, '') === '/patients';
     const navigation = panelNavigation(onList ? location : null, panel);
@@ -20,18 +24,26 @@ export function usePatientNavigation() {
       to: '/patients',
       search: navigation.search,
       replace: navigation.replace,
-      state: { patientsPanelPushed: navigation.panelPushed, patientPrefill: prefill },
+      state: {
+        patientsPanelPushed: navigation.panelPushed || (!onList && returnOnClose),
+        patientPrefill: prefill,
+      },
     });
   };
 
   return {
     openNewPatient: (prefill?: PatientPrefill) => {
-      openPanel({ kind: 'new' }, prefill);
+      openPanel({ kind: 'new' }, { prefill });
     },
-    /** A patient picked from the palette. The record route does not exist yet, so this is the
-     * list's quick view. */
+    /** The patient record (`/patients/$patientId`). */
     openPatient: (patientId: string) => {
-      openPanel({ kind: 'quick', id: patientId });
+      void router.navigate({ to: '/patients/$patientId', params: { patientId } });
+    },
+    /** The record's "Edit patient": the Patients edit panel over the list (README "Patient record
+     * + visit workspace"). Its entry is marked as pushed, so closing the panel — or saving it —
+     * goes back to the record it was opened from. */
+    editPatient: (patientId: string) => {
+      openPanel({ kind: 'edit', id: patientId }, { returnOnClose: true });
     },
   };
 }

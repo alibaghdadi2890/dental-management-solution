@@ -103,7 +103,7 @@ describe('CommandPalette', () => {
     type(input, '0');
     type(input, '03');
     expect(await within(dialog).findByText('10 results')).toBeTruthy();
-    expect(within(dialog).getByRole('status').textContent).toBe('10 results');
+    expect(within(dialog).getByRole('status').textContent).toBe('10 results for “03”');
     expect(within(dialog).getAllByRole('option')).toHaveLength(8);
     const searches = fetchMock.mock.calls
       .map(([url]) => url)
@@ -123,9 +123,9 @@ describe('CommandPalette', () => {
     expect(options[1]?.getAttribute('aria-selected')).toBe('true');
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {
-      expect(location().search.panel).toBe(`quick:${id(2)}`);
+      expect(location().pathname).toBe(`/patients/${id(2)}`);
     });
-    expect(location().pathname).toBe('/patients');
+    expect(await screen.findByText('Patient record')).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -134,7 +134,7 @@ describe('CommandPalette', () => {
     const { dialog, location } = await openPalette();
     fireEvent.click(await within(dialog).findByText('Recent 3'));
     await waitFor(() => {
-      expect(location().search.panel).toBe(`quick:${id(3)}`);
+      expect(location().pathname).toBe(`/patients/${id(3)}`);
     });
   });
 
@@ -237,8 +237,43 @@ describe('CommandPalette', () => {
     expect(location().pathname).toBe('/visits');
     await vi.advanceTimersByTimeAsync(250);
     await waitFor(() => {
-      expect(location().search.panel).toBe(`quick:${id(7)}`);
+      expect(location().pathname).toBe(`/patients/${id(7)}`);
     });
+  });
+
+  it('names the query in the announcement, so the same count is announced again', async () => {
+    mockPatients({
+      [RECENT]: page([]),
+      [search('ra')]: page([patient(1, 'Rana Haddad')]),
+      [search('ram')]: page([patient(2, 'Rami Aoun')]),
+    });
+    const { dialog, input } = await openPalette();
+    type(input, 'ra');
+    expect(await within(dialog).findByText('Rana Haddad')).toBeTruthy();
+    expect(within(dialog).getByRole('status').textContent).toBe('1 result for “ra”');
+    type(input, 'ram');
+    expect(await within(dialog).findByText('Rami Aoun')).toBeTruthy();
+    expect(within(dialog).getByRole('status').textContent).toBe('1 result for “ram”');
+  });
+
+  it('drops a pending Enter when its search fails, so Try again does not act on it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let fail = true;
+    mockPatients({
+      [RECENT]: page([]),
+      [search('Sami')]: () => (fail ? problem(500, 'internal') : page([patient(7, 'Sami Aoun')])),
+    });
+    const { dialog, input, location } = await openPalette();
+    type(input, 'Sami');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await vi.advanceTimersByTimeAsync(250);
+    expect(await within(dialog).findByText("Couldn't search patients.")).toBeTruthy();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fail = false;
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Try again' }));
+    expect(await within(dialog).findByText('Sami Aoun')).toBeTruthy();
+    expect(location().pathname).toBe('/visits');
+    expect(screen.getByRole('dialog', { name: 'Find patient' })).toBeTruthy();
   });
 
   it('drops a pending Enter once the query changes again', async () => {
@@ -267,7 +302,7 @@ describe('CommandPalette', () => {
     void client.invalidateQueries({ queryKey: patientKeys.all(null) });
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {
-      expect(location().search.panel).toBe(`quick:${id(1)}`);
+      expect(location().pathname).toBe(`/patients/${id(1)}`);
     });
   });
 
@@ -294,29 +329,24 @@ describe('CommandPalette', () => {
     expect(location().pathname).toBe('/visits');
   });
 
-  it('swaps an open panel on /patients in place, keeping the list search', async () => {
+  it('opens the record from the list, and Back returns to the list with its search', async () => {
     mockPatients({ [RECENT]: page(many(2, 'Recent')) });
     const { router, location } = renderShell({
       url: '/patients?q=rana',
       session: sessionWith(ALL_PERMISSIONS),
     });
     await screen.findByRole('heading', { name: 'Patients' });
-    fireEvent.click(
-      within(screen.getByRole('banner')).getByRole('button', { name: 'New patient' }),
-    );
-    await waitFor(() => {
-      expect(location().search.panel).toBe('new');
-    });
-    const entries = router.history.length;
     fireEvent.keyDown(window, { key: 'k', code: 'KeyK', ctrlKey: true });
     const dialog = await screen.findByRole('dialog', { name: 'Find patient' });
     fireEvent.click(await within(dialog).findByText('Recent 2'));
     await waitFor(() => {
-      expect(location().search.panel).toBe(`quick:${id(2)}`);
+      expect(location().pathname).toBe(`/patients/${id(2)}`);
+    });
+    router.history.back();
+    await waitFor(() => {
+      expect(location().pathname).toBe('/patients');
     });
     expect(location().search.q).toBe('rana');
-    expect(location().state.patientsPanelPushed).toBe(true);
-    expect(router.history.length).toBe(entries);
   });
 
   it('returns focus to the dirty form when its unsaved-changes guard keeps it open', async () => {

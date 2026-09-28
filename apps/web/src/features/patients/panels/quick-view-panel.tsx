@@ -13,6 +13,7 @@ import { formatAgeLine, formatCalendarDate, formatMoney, formatPhone, todayIn } 
 import { cn } from '@/lib/utils';
 import { ActivityTimeline } from '../activity-timeline';
 import type { PatientPanel } from '../list-query';
+import { usePatientNavigation } from '../patient-navigation';
 import { patientQuery } from '../patients-api';
 import { PatientAvatar } from '../patients-table';
 import { PanelFallback } from './panel-fallback';
@@ -24,8 +25,7 @@ const NONE = '—';
 /**
  * Quick view (`Patients.dc.html` "view" panel, design §Right panel): who the patient is, their
  * alerts, the open balance (`payment:read`) and the activity timeline (`audit:read` only, Q10).
- * The footer offers Edit details (`patient:write`, not archived); "Open record" arrives with the
- * patient record route (D5).
+ * The footer opens the full record, and offers Edit details (`patient:write`, not archived).
  */
 export function QuickViewPanel({
   id,
@@ -112,6 +112,7 @@ function QuickView({
   const canPay = usePermission('payment:read');
   const canAudit = usePermission('audit:read');
   const { names } = useStaffNames();
+  const { openPatient } = usePatientNavigation();
   const archived = patient.archivedAt !== null;
 
   const ageLine = formatAgeLine(patient.dateOfBirth, todayIn(tenant.timeZone), { locale });
@@ -134,15 +135,26 @@ function QuickView({
       dirty={false}
       onClose={onClose}
       footer={
-        canWrite && !archived ? (
+        <>
+          {canWrite && !archived && (
+            <Button
+              className="me-auto"
+              onClick={() => {
+                onOpen({ kind: 'edit', id: patient.id });
+              }}
+            >
+              {t('quickView.edit')}
+            </Button>
+          )}
           <Button
+            variant="primary"
             onClick={() => {
-              onOpen({ kind: 'edit', id: patient.id });
+              openPatient(patient.id);
             }}
           >
-            {t('quickView.edit')}
+            {t('quickView.openRecord')}
           </Button>
-        ) : undefined
+        </>
       }
     >
       <div className="mb-1 flex items-center gap-3">

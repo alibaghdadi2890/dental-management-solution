@@ -18,8 +18,8 @@ import { parsePatientsSearch, type PatientsSearch } from '@/features/patients/li
 import { PatientsScreen } from '@/features/patients/patients-screen';
 import { AppShell } from './app-shell';
 
-/** Test-only: the real `AppShell` on a memory router with the real `/patients` screen and a
- * stand-in `/visits`, and `session` already loaded (as the `_app` guard would have it). */
+/** Test-only: the real `AppShell` on a memory router with the real `/patients` screen and
+ * stand-ins for the patient record and `/visits`, and `session` already loaded (as the `_app` guard would have it). */
 export function renderShell({ url, session }: { url: string; session: Session }) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
@@ -45,13 +45,18 @@ export function renderShell({ url, session }: { url: string; session: Session })
     validateSearch: (search: Record<string, unknown>) => parsePatientsSearch(search),
     component: PatientsRoute,
   });
+  const recordRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/patients/$patientId',
+    component: () => <p>{'Patient record'}</p>,
+  });
   const visitsRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/visits',
     component: () => <p>{'Visits screen'}</p>,
   });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([patientsRoute, visitsRoute]),
+    routeTree: rootRoute.addChildren([patientsRoute, recordRoute, visitsRoute]),
     history: createMemoryHistory({ initialEntries: [url] }),
   });
   render(

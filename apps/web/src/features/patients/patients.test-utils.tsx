@@ -10,8 +10,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
   createRootRoute,
+  createRoute,
   createRouter,
+  Outlet,
   RouterProvider,
+  useNavigate,
   useSearch,
 } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
@@ -22,6 +25,8 @@ import { ToastProvider } from '@/components/ui/toast';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { parsePatientsSearch } from './list-query';
 import { PatientsScreen } from './patients-screen';
+import { PatientRecordPage } from './record/patient-record-page';
+import { parseRecordSearch } from './record/record-search';
 
 /** Test-only: shared by the panel specs — fixtures, an API mock, and the route's own wiring
  * (`PatientsScreen`) on a memory router. */
@@ -270,8 +275,18 @@ export function renderPanels({
       />
     );
   }
+  // Stand-ins so the list's own routes resolve: `/` is the list itself, and opening a record
+  // lands on `/patients/<id>` (asserted by its pathname).
+  const routeTree = rootRoute.addChildren([
+    createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => null }),
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/patients/$patientId',
+      component: () => null,
+    }),
+  ]);
   const router = createRouter({
-    routeTree: rootRoute,
+    routeTree,
     history: createMemoryHistory({ initialEntries: [url] }),
   });
   render(
@@ -284,6 +299,92 @@ export function renderPanels({
     </QueryClientProvider>,
   );
   return router;
+}
+
+/**
+ * Renders the patient record at `url` (after `before`, earlier history entries) with the real
+ * `/patients` list beside it, both wired as their routes are, plus a stand-in `/visits`. Returns
+ * the router and the query client.
+ */
+export function renderRecord({
+  url,
+  before = [],
+  permissions = ALL_PERMISSIONS,
+}: {
+  url: string;
+  before?: string[];
+  permissions?: Permission[];
+}) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+  });
+  client.setQueryData(sessionQueryOptions().queryKey, sessionWith(permissions));
+  const rootRoute = createRootRoute({ component: Outlet });
+  function ListRoute() {
+    const search = parsePatientsSearch(useSearch({ strict: false }));
+    const navigate = useNavigate();
+    return (
+      <PatientsScreen
+        search={search}
+        navigate={(navigation) => {
+          void navigate({ to: '/patients', ...navigation });
+        }}
+      />
+    );
+  }
+  const recordRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/patients/$patientId',
+    validateSearch: (search: Record<string, unknown>) => parseRecordSearch(search),
+    component: RecordRoute,
+  });
+  function RecordRoute() {
+    const { patientId } = recordRoute.useParams();
+    const { tab } = recordRoute.useSearch();
+    const navigate = useNavigate();
+    return (
+      <PatientRecordPage
+        key={patientId}
+        patientId={patientId}
+        tab={tab}
+        onTab={(next) => {
+          void navigate({
+            to: '/patients/$patientId',
+            params: { patientId },
+            search: { tab: next },
+          });
+        }}
+      />
+    );
+  }
+  const routeTree = rootRoute.addChildren([
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/patients',
+      validateSearch: (search: Record<string, unknown>) => parsePatientsSearch(search),
+      component: ListRoute,
+    }),
+    recordRoute,
+    createRoute({
+      getParentRoute: () => rootRoute,
+      path: '/visits',
+      component: () => <p>{'Visits screen'}</p>,
+    }),
+  ]);
+  const router = createRouter({
+    routeTree,
+    history: createMemoryHistory({ initialEntries: [...before, url] }),
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>
+        <ConfirmProvider>
+          <RouterProvider router={router} />
+        </ConfirmProvider>
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+  return { router, client };
 }
 
 /** Opens the create panel the way the shell's "New patient" / palette "Create …" does: the

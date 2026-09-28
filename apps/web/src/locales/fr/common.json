@@ -21,5 +21,11 @@
     "DMY": "JJ/MM/AAAA",
     "MDY": "MM/JJ/AAAA",
     "YMD": "AAAA/MM/JJ"
+  },
+  "saveState": {
+    "unsaved": "Modifications non enregistrées",
+    "saving": "Enregistrement…",
+    "saved": "✓ Enregistré à l’instant",
+    "failed": "Échec de l’enregistrement — réessayer"
   }
 }

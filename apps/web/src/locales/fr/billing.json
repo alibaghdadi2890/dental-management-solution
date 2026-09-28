@@ -8,5 +8,13 @@
     "notePlaceholder": "Facultatif — ex. repris de l’ancien logiciel"
   },
   "openBalance": "Solde dû",
-  "balanceFailed": "Impossible de charger le solde"
+  "balanceFailed": "Impossible de charger le solde",
+  "balance": {
+    "title": "Solde",
+    "loading": "Chargement du solde",
+    "currentVisit": "Reste dû sur la visite en cours",
+    "previous": "Reste dû antérieur",
+    "total": "Total dû",
+    "otherCurrencies": "Aussi {{amounts}}"
+  }
 }

@@ -8,5 +8,13 @@
     "notePlaceholder": "اختياري — مثال: منقول من النظام السابق"
   },
   "openBalance": "الرصيد المستحق",
-  "balanceFailed": "تعذّر تحميل الرصيد"
+  "balanceFailed": "تعذّر تحميل الرصيد",
+  "balance": {
+    "title": "الرصيد",
+    "loading": "جارٍ تحميل الرصيد",
+    "currentVisit": "المستحق من الزيارة الحالية",
+    "previous": "المستحق السابق",
+    "total": "إجمالي المستحق",
+    "otherCurrencies": "وأيضًا {{amounts}}"
+  }
 }

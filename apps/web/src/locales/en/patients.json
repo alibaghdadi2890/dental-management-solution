@@ -72,6 +72,7 @@
     "menu": "Actions for {{name}}"
   },
   "menu": {
+    "openRecord": "Open record",
     "quickView": "Quick view",
     "edit": "Edit details",
     "merge": "Merge with {{number}}",
@@ -155,7 +156,8 @@
       "dentist": "Primary dentist"
     },
     "unknownDentist": "Unknown dentist",
-    "edit": "Edit details"
+    "edit": "Edit details",
+    "openRecord": "Open record"
   },
   "activity": {
     "title": "Activity",
@@ -310,6 +312,7 @@
     "recent": "Recent patients",
     "results_one": "{{count, number}} result",
     "results_other": "{{count, number}} results",
+    "resultsFor": "for “{{query}}”",
     "age": "Age {{age, number}}",
     "ageUnknown": "Age —",
     "neverSeen": "Never seen",
@@ -319,5 +322,51 @@
     "noPatients": "No patients yet.",
     "loading": "Searching patients",
     "failed": "Couldn't search patients."
+  },
+  "record": {
+    "back": "All patients",
+    "ageLine": "{{age}} · {{dob}}",
+    "ageUnknown": "Age not recorded",
+    "archived": "Archived",
+    "alerts": "Medical alerts",
+    "edit": "Edit patient",
+    "restore": "Restore",
+    "mergedBody": "This record was merged into another one.",
+    "mergedInto": "Merged into {{number}}",
+    "mergedIntoOther": "Open the kept record",
+    "tabs": {
+      "label": "Patient record",
+      "overview": "Overview",
+      "information": "Patient information"
+    },
+    "summary": {
+      "title": "Treatment summary",
+      "visits": "Visits recorded",
+      "diagnoses": "Active diagnoses",
+      "planned": "Planned procedures",
+      "teeth": "Teeth with treatment",
+      "services": "Services performed",
+      "billed": "Lifetime billed"
+    },
+    "info": {
+      "title": "Patient information",
+      "complete": "Complete",
+      "phone": "Phone",
+      "dateOfBirth": "Date of birth",
+      "email": "Email",
+      "address": "Address",
+      "insurance": "Insurance",
+      "emergency": "Emergency",
+      "notRecorded": "Not recorded"
+    },
+    "form": {
+      "title": "Patient information",
+      "complete": "Complete",
+      "partial": "Partly complete",
+      "intro": "Nothing here is required. Fill it in when it becomes relevant.",
+      "updated": "Patient information updated",
+      "archived": "This record is archived, so its details can’t be changed. Restore it to edit them.",
+      "merged": "This record was merged into another one, so its details can’t be changed."
+    }
   }
 }

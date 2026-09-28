@@ -72,6 +72,7 @@
     "menu": "Actions pour {{name}}"
   },
   "menu": {
+    "openRecord": "Ouvrir le dossier",
     "quickView": "Aperçu",
     "edit": "Modifier les informations",
     "merge": "Fusionner avec {{number}}",
@@ -155,7 +156,8 @@
       "dentist": "Dentiste référent"
     },
     "unknownDentist": "Dentiste inconnu",
-    "edit": "Modifier les informations"
+    "edit": "Modifier les informations",
+    "openRecord": "Ouvrir le dossier"
   },
   "activity": {
     "title": "Activité",
@@ -310,6 +312,7 @@
     "recent": "Patients récents",
     "results_one": "{{count, number}} résultat",
     "results_other": "{{count, number}} résultats",
+    "resultsFor": "pour « {{query}} »",
     "age": "{{age, number}} ans",
     "ageUnknown": "Âge —",
     "neverSeen": "Jamais vu",
@@ -319,5 +322,51 @@
     "noPatients": "Aucun patient pour le moment.",
     "loading": "Recherche de patients",
     "failed": "Impossible de rechercher les patients."
+  },
+  "record": {
+    "back": "Tous les patients",
+    "ageLine": "{{age}} · {{dob}}",
+    "ageUnknown": "Âge non renseigné",
+    "archived": "Archivé",
+    "alerts": "Alertes médicales",
+    "edit": "Modifier le patient",
+    "restore": "Restaurer",
+    "mergedBody": "Ce dossier a été fusionné avec un autre.",
+    "mergedInto": "Fusionné dans {{number}}",
+    "mergedIntoOther": "Ouvrir le dossier conservé",
+    "tabs": {
+      "label": "Dossier patient",
+      "overview": "Vue d’ensemble",
+      "information": "Informations patient"
+    },
+    "summary": {
+      "title": "Résumé des soins",
+      "visits": "Visites enregistrées",
+      "diagnoses": "Diagnostics actifs",
+      "planned": "Actes prévus",
+      "teeth": "Dents traitées",
+      "services": "Actes réalisés",
+      "billed": "Total facturé"
+    },
+    "info": {
+      "title": "Informations patient",
+      "complete": "Compléter",
+      "phone": "Téléphone",
+      "dateOfBirth": "Date de naissance",
+      "email": "E-mail",
+      "address": "Adresse",
+      "insurance": "Assurance",
+      "emergency": "Urgence",
+      "notRecorded": "Non renseigné"
+    },
+    "form": {
+      "title": "Informations patient",
+      "complete": "Complet",
+      "partial": "Partiellement complet",
+      "intro": "Rien n’est obligatoire ici. Complétez-le quand cela devient utile.",
+      "updated": "Informations du patient mises à jour",
+      "archived": "Ce dossier est archivé : ses informations ne peuvent pas être modifiées. Restaurez-le pour les modifier.",
+      "merged": "Ce dossier a été fusionné avec un autre : ses informations ne peuvent pas être modifiées."
+    }
   }
 }

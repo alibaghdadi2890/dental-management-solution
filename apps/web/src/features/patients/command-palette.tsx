@@ -159,9 +159,17 @@ function PaletteBody({
     document.getElementById(optionId(index))?.scrollIntoView({ block: 'nearest' });
   };
 
+  const today = todayIn(tenant.timeZone);
+  const failed = results.isError && results.data === undefined;
+  const loading = !failed && results.isPending;
+  const hasRows = !failed && !loading && rows.length > 0;
+  const noMatch = !failed && !loading && rows.length === 0 && searching;
+  const noPatients = !failed && !loading && rows.length === 0 && !searching;
+
   // Enter opens the active row — or, with nothing found, creates — but only once the results
   // answer what was typed: an Enter pressed while the debounce or the request is still catching
-  // up waits for them (and is dropped if the person types on).
+  // up waits for them (and is dropped if the person types on, or if that search fails: a later
+  // Try again must not act on a key pressed before the error showed).
   const pendingEnter = useRef<string | null>(null);
   const enter = () => {
     const row = rows[active];
@@ -176,6 +184,9 @@ function PaletteBody({
   useEffect(() => {
     enterWhenSettled();
   }, [query, settled]);
+  useEffect(() => {
+    if (failed) pendingEnter.current = null;
+  }, [failed]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     // An input method (Arabic, CJK…) uses Enter and the arrows to pick its own candidates.
@@ -192,15 +203,8 @@ function PaletteBody({
     if (event.key !== 'Enter') return;
     event.preventDefault();
     if (settled) enter();
-    else pendingEnter.current = typed;
+    else if (!(failed && typed === query)) pendingEnter.current = typed;
   };
-
-  const today = todayIn(tenant.timeZone);
-  const failed = results.isError && results.data === undefined;
-  const loading = !failed && results.isPending;
-  const hasRows = !failed && !loading && rows.length > 0;
-  const noMatch = !failed && !loading && rows.length === 0 && searching;
-  const noPatients = !failed && !loading && rows.length === 0 && !searching;
 
   return (
     <>
@@ -256,9 +260,15 @@ function PaletteBody({
               id={headingId}
               className="px-4 pt-3 pb-1.5 text-[11.5px] leading-none font-medium tracking-[0.06em] text-ink-muted uppercase"
             >
-              {searching
-                ? t('palette.results', { count: results.data.total })
-                : t('palette.recent')}
+              {searching ? (
+                <>
+                  {t('palette.results', { count: results.data.total })}
+                  {/* Named with the query too, so a new search with the same count is announced. */}
+                  <span className="sr-only">{` ${t('palette.resultsFor', { query })}`}</span>
+                </>
+              ) : (
+                t('palette.recent')
+              )}
             </div>
           )}
           {noMatch && (

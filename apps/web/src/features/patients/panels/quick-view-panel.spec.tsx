@@ -222,6 +222,17 @@ describe('QuickViewPanel', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy();
   });
 
+  it('opens the record from Open record', async () => {
+    mockApi({ patients: [RANA] });
+    const router = renderPanels({ url: `/?panel=quick:${RANA.id}`, permissions: ['patient:read'] });
+    const aside = await quickView();
+    expect(within(aside).queryByRole('button', { name: 'Edit details' })).toBeNull();
+    fireEvent.click(within(aside).getByRole('button', { name: 'Open record' }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
+    });
+  });
+
   it('shows not found for an unknown patient, and closes', async () => {
     mockApi();
     const router = renderPanels({ url: `/?panel=quick:${id(99)}` });

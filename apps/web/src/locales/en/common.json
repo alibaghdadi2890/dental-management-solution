@@ -21,5 +21,11 @@
     "DMY": "DD/MM/YYYY",
     "MDY": "MM/DD/YYYY",
     "YMD": "YYYY/MM/DD"
+  },
+  "saveState": {
+    "unsaved": "Unsaved changes",
+    "saving": "Saving…",
+    "saved": "✓ Saved just now",
+    "failed": "Failed to save — retry"
   }
 }

@@ -5,9 +5,9 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
 import type { PatientPanel } from './list-query';
 
 /**
- * The row's ⋯ menu (README §Patients): Quick view, Edit details, Merge with {twin}, Archive or
- * Restore. There is no Start visit (design §Patients list). Everything but Quick view needs
- * `patient:write`; an archived record can only be restored.
+ * The row's ⋯ menu (README §Patients): Open record, Quick view, Edit details, Merge with {twin},
+ * Archive or Restore. There is no Start visit (design §Patients list). Everything but Open record
+ * and Quick view needs `patient:write`; an archived record can only be restored.
  */
 export function PatientRowMenu({
   patient,
@@ -16,6 +16,7 @@ export function PatientRowMenu({
   disabled,
   busy,
   onPanel,
+  onOpenRecord,
   onArchive,
   onRestore,
 }: {
@@ -28,6 +29,7 @@ export function PatientRowMenu({
   /** An archive or restore is running: those actions wait for it. */
   busy: boolean;
   onPanel: (panel: PatientPanel) => void;
+  onOpenRecord: () => void;
   onArchive: () => void;
   onRestore: () => void;
 }) {
@@ -49,6 +51,7 @@ export function PatientRowMenu({
         </IconButton>
       </MenuTrigger>
       <MenuContent>
+        <MenuItem onSelect={onOpenRecord}>{t('menu.openRecord')}</MenuItem>
         <MenuItem
           onSelect={() => {
             onPanel({ kind: 'quick', id: patient.id });

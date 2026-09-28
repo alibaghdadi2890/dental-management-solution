@@ -89,7 +89,7 @@ describe('PatientFormPanel — create', () => {
     const status = toast.closest<HTMLElement>('[role="status"]') ?? document.body;
     fireEvent.click(within(status).getByRole('button', { name: 'Open record' }));
     await waitFor(() => {
-      expect(router.state.location.search).toMatchObject({ panel: `quick:${patient(50, '').id}` });
+      expect(router.state.location.pathname).toBe(`/patients/${patient(50, '').id}`);
     });
   });
 

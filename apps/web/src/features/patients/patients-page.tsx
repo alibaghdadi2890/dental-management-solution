@@ -27,6 +27,7 @@ import {
   withoutBalanceViews,
 } from './list-query';
 import { PagerBar } from './pager-bar';
+import { usePatientNavigation } from './patient-navigation';
 import { PatientRowMenu } from './patient-row-menu';
 import { downloadExport, type PatientExportRequest } from './patients-api';
 import {
@@ -75,9 +76,8 @@ interface PatientsPageProps {
  * tests); the row selection is local and resets whenever the query changes. The page is a flex
  * row: the list, then whatever `renderPanel` draws for the open `panel`.
  *
- * A row click opens the quick view: the patient record route (`/patients/$patientId`) does not
- * exist yet, so "Open record" is not offered either. Nothing renders until the session has a
- * tenant (the `_app` guard loads it first).
+ * A row click opens the patient record (`/patients/$patientId`); the row menu also offers the quick
+ * view. Nothing renders until the session has a tenant (the `_app` guard loads it first).
  *
  * History: opening a panel from the list pushes an entry; swapping panels replaces it; closing a
  * panel the list opened goes back (so Back afterwards leaves the list rather than landing on the
@@ -101,6 +101,7 @@ function PatientsList({
   const canWrite = usePermission('patient:write');
   const canPay = usePermission('payment:read');
   const router = useRouter();
+  const { openPatient } = usePatientNavigation();
   const locale = i18n.resolvedLanguage ?? 'en';
   const count = (value: number) => new Intl.NumberFormat(locale).format(value);
 
@@ -386,7 +387,7 @@ function PatientsList({
                       setSelected(next);
                     }}
                     onOpen={() => {
-                      openPanel({ kind: 'quick', id: patient.id });
+                      openPatient(patient.id);
                     }}
                     menu={
                       <PatientRowMenu
@@ -396,6 +397,9 @@ function PatientsList({
                         disabled={stale}
                         busy={archiving.busy}
                         onPanel={openPanel}
+                        onOpenRecord={() => {
+                          openPatient(patient.id);
+                        }}
                         onArchive={() => {
                           archiving.archive([patient]);
                         }}
