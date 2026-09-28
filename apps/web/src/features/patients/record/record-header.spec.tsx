@@ -2,7 +2,15 @@ import { ageOn, type Patient } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { todayIn } from '@/lib/format';
-import { json, mockApi, patient, problem, renderRecord, sent } from '../patients.test-utils';
+import {
+  json,
+  mockApi,
+  patient,
+  patientContact,
+  problem,
+  renderRecord,
+  sent,
+} from '../patients.test-utils';
 
 const RANA = patient(1, 'Rana Haddad', {
   dateOfBirth: '1990-05-01',
@@ -12,6 +20,13 @@ const KEPT = patient(2, 'Rana Haddad');
 const recordOf = (p: Patient) => `/patients/${p.id}`;
 
 const header = () => screen.findByRole('banner');
+
+// Born on 1 January 10 (or 30) years before the tenant's today: 9–10 years old (a minor), or
+// 29–30 (an adult), whatever day the tests run.
+const year = Number(todayIn('Asia/Beirut').slice(0, 4));
+const bornYearsAgo = (years: number) => `${String(year - years)}-01-01`;
+const KARIM = patient(4, 'Karim Haddad', { dateOfBirth: bornYearsAgo(10), phone: null });
+const guardianChip = (banner: HTMLElement) => within(banner).queryByText(/^Guardian ·/);
 
 describe('RecordHeader', () => {
   afterEach(() => {
@@ -34,6 +49,91 @@ describe('RecordHeader', () => {
         .getAllByRole('listitem')
         .map((chip) => chip.textContent),
     ).toEqual(['Penicillin allergy', 'Latex']);
+  });
+
+  describe('guardian chip (design addendum "Record")', () => {
+    it('follows the alert chips for a minor: the primary guardian, with their phone', async () => {
+      const minor = { ...KARIM, medicalAlerts: ['Latex'] };
+      mockApi({
+        patients: [minor],
+        contacts: {
+          [KARIM.id]: [
+            patientContact(61, 'Sami Haddad', { isPrimaryGuardian: false }),
+            patientContact(60, 'Maria Haddad'),
+          ],
+        },
+      });
+      renderRecord({ url: recordOf(minor) });
+      const banner = await header();
+      const chip = await within(banner).findByText(/^Guardian · Maria Haddad/);
+      expect(chip.textContent).toBe('Guardian · Maria Haddad · 03 987 654');
+      expect(chip.querySelector('[dir="ltr"]')?.textContent).toBe('03 987 654');
+      expect(chip.className).toContain('bg-primary-tint');
+      expect(chip.className).toContain('border-primary-tint-border');
+      expect(chip.className).toContain('text-[11.5px]');
+      const alerts = within(banner).getByRole('list', { name: 'Medical alerts' });
+      expect(alerts.compareDocumentPosition(chip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('leaves out the phone of a guardian recorded without one', async () => {
+      const maria = patientContact(60, 'Maria Haddad');
+      mockApi({
+        patients: [KARIM],
+        contacts: { [KARIM.id]: [{ ...maria, contact: { ...maria.contact, phone: null } }] },
+      });
+      renderRecord({ url: recordOf(KARIM) });
+      const chip = await within(await header()).findByText(/^Guardian ·/);
+      expect(chip.textContent).toBe('Guardian · Maria Haddad');
+    });
+
+    it('names the first guardian when none is marked primary', async () => {
+      mockApi({
+        patients: [KARIM],
+        contacts: { [KARIM.id]: [patientContact(61, 'Sami Haddad', { isPrimaryGuardian: false })] },
+      });
+      renderRecord({ url: recordOf(KARIM) });
+      expect(await within(await header()).findByText(/^Guardian · Sami Haddad/)).toBeTruthy();
+    });
+
+    it('is absent for a minor without a guardian', async () => {
+      const fetchMock = mockApi({
+        patients: [KARIM],
+        contacts: {
+          [KARIM.id]: [
+            patientContact(60, 'Maria Haddad', {
+              isGuardian: false,
+              isPrimaryGuardian: false,
+              isEmergencyContact: true,
+              isPrimaryEmergency: true,
+            }),
+          ],
+        },
+      });
+      renderRecord({ url: recordOf(KARIM) });
+      const banner = await header();
+      await waitFor(() => {
+        expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/contacts'))).toBe(true);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(guardianChip(banner)).toBeNull();
+      // Nor an empty place for chips: no alerts either.
+      expect(banner.querySelector('[data-record-chips]')).toBeNull();
+    });
+
+    it('is absent for an adult, even one with a guardian', async () => {
+      const adult = { ...KARIM, dateOfBirth: bornYearsAgo(30), phone: '+9613123456' };
+      const fetchMock = mockApi({
+        patients: [adult],
+        contacts: { [KARIM.id]: [patientContact(60, 'Maria Haddad')] },
+      });
+      renderRecord({ url: recordOf(adult) });
+      const banner = await header();
+      await waitFor(() => {
+        expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/contacts'))).toBe(true);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(guardianChip(banner)).toBeNull();
+    });
   });
 
   it('reads "Age not recorded" without a date of birth', async () => {

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useConfirm } from '@/components/ui/confirm-context';
 import { useToast } from '@/components/ui/toast-context';
-import { FAILURE_VALUES, failureOf } from './panels/form-server-errors';
+import { failureText } from './panels/form-server-errors';
 import { archivePatients, invalidatePatientData, restorePatients } from './patients-api';
 
 type Target = Pick<PatientListItem, 'id' | 'fullName'>;
@@ -19,7 +19,7 @@ type Action = 'archive' | 'restore';
  *   the Undo touches neither the selection nor focus, and its own toast has no further Undo.
  * - An archive that fails keeps its dialog open with the error inline (the reason is kept); a
  *   restore that fails, having no dialog, toasts the error. Either reads a localized reason
- *   (`failureOf`), not the server's problem title.
+ *   (`failureText`), not the server's problem title.
  * - `busy` is true while either runs, so callers can disable their buttons.
  */
 export function useArchivePatients({
@@ -37,7 +37,7 @@ export function useArchivePatients({
 
   // The reason in the person's language, never the server's English problem title.
   const failure = (action: Action, error: unknown) =>
-    t(`${action}.failed`, { reason: t(`failures.${failureOf(error)}`, FAILURE_VALUES) });
+    t(`${action}.failed`, { reason: failureText(t, error) });
 
   const doneText = (action: Action, targets: readonly Target[]) => {
     const [only] = targets;

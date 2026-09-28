@@ -385,6 +385,15 @@ function PaletteRow({
           )}
           <span>{age === null ? t('palette.ageUnknown') : t('palette.age', { age })}</span>
         </span>
+        {/* Found through a contact's phone (design addendum P11, C7): whose phone it is. */}
+        {patient.matchedContact && (
+          <span className="mt-0.5 block truncate text-xs leading-[1.4] text-ink-muted">
+            {t('palette.via', {
+              name: patient.matchedContact.fullName,
+              relationship: t(`contacts.relationships.${patient.matchedContact.relationship}`),
+            })}
+          </span>
+        )}
       </span>
       {/* Visits arrive with feature 4; until then no patient has a last visit to show. */}
       <span className="flex-none text-xs leading-none text-ink-muted">

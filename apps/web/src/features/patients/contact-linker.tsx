@@ -3,6 +3,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
+import { useContactDraft } from './contact-drafts';
 import { ContactPicker, type ContactSelection, RelationshipSelect } from './contact-picker';
 import { ContactIdentity, RoleCheckboxes, Toggle } from './contact-row';
 import { hasRole, NO_ROLES, type RoleFlags, roleFields } from './contact-rows';
@@ -28,6 +29,13 @@ const DEFAULT_RELATIONSHIP: Record<LinkerMode, ContactRelationship> = {
   family: 'other',
 };
 
+/** What a staged pick starts with, overriding the mode's (the record's Add contact panel starts a
+ * minor's contact as a guardian). */
+export interface StagedDefaults {
+  relationship: ContactRelationship;
+  roles: RoleFlags;
+}
+
 /**
  * Adds a contact to a patient: the search-or-create picker, then what the link needs before it is
  * made. In the Guardian block a new contact (which already carries its relationship) is added at
@@ -37,7 +45,12 @@ const DEFAULT_RELATIONSHIP: Record<LinkerMode, ContactRelationship> = {
  * pick is staged: relationship and roles, none pre-checked, and Add waits for one.
  *
  * `onAdd` makes the link — into the create's pending list (synchronously), or through the API (the
- * edit panel) — and answers whether it was made; a refused one stays staged to try again.
+ * edit panel) — and answers whether it was made; a refused one stays staged to try again (a new
+ * guardian refused by the server is staged then, so what was typed is not lost).
+ *
+ * `request` stages a contact from outside the picker (the create panel's "Add {name} as
+ * guardian?"): each new request object is staged once. `stagedDefaults` (family mode) sets the
+ * relationship and roles a pick starts with.
  */
 export function ContactLinker({
   mode,
@@ -46,6 +59,8 @@ export function ContactLinker({
   excludeContactIds,
   excludePatientIds,
   disabled = false,
+  request = null,
+  stagedDefaults,
   onAdd,
 }: {
   mode: LinkerMode;
@@ -55,6 +70,8 @@ export function ContactLinker({
   excludeContactIds: readonly string[];
   excludePatientIds: readonly string[];
   disabled?: boolean;
+  request?: ContactSelection | null;
+  stagedDefaults?: StagedDefaults | undefined;
   onAdd: (link: ContactLinkInput, display: ContactDisplay) => boolean | Promise<boolean>;
 }) {
   const { t } = useTranslation(['patients', 'common']);
@@ -64,6 +81,21 @@ export function ContactLinker({
   const [busy, setBusy] = useState(false);
   const guardianRoles = toggles ?? { billing: !hasGuardian, emergency: !hasGuardian };
   const off = disabled || busy;
+  const defaultRelationship = stagedDefaults?.relationship ?? DEFAULT_RELATIONSHIP[mode];
+
+  const stage = (selection: ContactSelection) => {
+    setStaged({
+      selection,
+      relationship: selection.relationship ?? defaultRelationship,
+      roles: stagedDefaults?.roles ?? NO_ROLES,
+    });
+  };
+
+  const [takenRequest, setTakenRequest] = useState(request);
+  if (request !== takenRequest) {
+    setTakenRequest(request);
+    if (request) stage(request);
+  }
 
   /** Back to the search box, which mounts again once the staged contact is gone. */
   const focusSearch = () => {
@@ -94,14 +126,12 @@ export function ContactLinker({
       void add(
         guardianLink(selection.target, selection.relationship, guardianRoles),
         selection.display,
-      );
+      ).then((added) => {
+        if (!added) stage(selection);
+      });
       return;
     }
-    setStaged({
-      selection,
-      relationship: selection.relationship ?? DEFAULT_RELATIONSHIP[mode],
-      roles: NO_ROLES,
-    });
+    stage(selection);
   };
 
   const cancel = () => {
@@ -133,7 +163,7 @@ export function ContactLinker({
           country={country}
           excludeContactIds={excludeContactIds}
           excludePatientIds={excludePatientIds}
-          defaultRelationship={DEFAULT_RELATIONSHIP[mode]}
+          defaultRelationship={defaultRelationship}
           disabled={off}
           onSelect={onSelect}
         />
@@ -191,6 +221,7 @@ function StagedContact({
   }, []);
   const needsRole = mode === 'family' && !hasRole(staged.roles);
   const { display } = staged.selection;
+  useContactDraft(true, 'adding');
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Escape') return;
@@ -202,7 +233,7 @@ function StagedContact({
     <div
       ref={boxRef}
       role="group"
-      aria-label={display.fullName}
+      aria-label={t('contacts.staged', { name: display.fullName })}
       onKeyDown={onKeyDown}
       className="flex flex-col gap-3 rounded-lg border border-border bg-faint p-3"
     >

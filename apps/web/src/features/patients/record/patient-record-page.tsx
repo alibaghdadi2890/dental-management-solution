@@ -9,38 +9,51 @@ import { TabPanel } from '@/components/ui/tabs';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { ApiError } from '@/lib/api';
+import { useContactDrafts } from '../contact-drafts';
 import { patientQuery } from '../patients-api';
+import { useContactActions } from '../use-contact-actions';
 import { InformationTab } from './information-tab';
 import { OverviewTab } from './overview-tab';
 import { BackToPatients, RecordHeader } from './record-header';
-import type { RecordTab } from './record-search';
+import { AddContactPanel } from './add-contact-panel';
+import type { RecordPanel, RecordTab } from './record-search';
 
 type Tenant = NonNullable<Session['tenant']>;
 
 interface RecordProps {
   patientId: string;
   tab: RecordTab;
+  /** The open right panel (`?panel=`), if any. */
+  panel: RecordPanel | undefined;
+}
+
+interface RecordNavigation {
+  onTab: (tab: RecordTab) => void;
+  onPanel: (panel: RecordPanel | undefined) => void;
 }
 
 /**
  * The `/patients/$patientId` route's wiring, shared with the tests so they drive exactly what
- * ships: a fresh record per patient id, and tab changes that replace the history entry — the
- * record is one entry however many tabs were visited, so Back (and "All patients") leaves it.
+ * ships: a fresh record per patient id, and tab and panel changes that replace the history entry
+ * — the record is one entry however many tabs or panels were opened, so Back (and "All patients")
+ * leaves it. Switching tabs closes a panel.
  */
-export function PatientRecordScreen({ patientId, tab }: RecordProps) {
+export function PatientRecordScreen({ patientId, tab, panel }: RecordProps) {
   const navigate = useNavigate();
+  const go = (search: { tab: RecordTab; panel?: RecordPanel | undefined }) => {
+    void navigate({ to: '/patients/$patientId', params: { patientId }, search, replace: true });
+  };
   return (
     <PatientRecordPage
       key={patientId}
       patientId={patientId}
       tab={tab}
+      panel={panel}
       onTab={(next) => {
-        void navigate({
-          to: '/patients/$patientId',
-          params: { patientId },
-          search: { tab: next },
-          replace: true,
-        });
+        go({ tab: next });
+      }}
+      onPanel={(next) => {
+        go({ tab, panel: next });
       }}
     />
   );
@@ -52,7 +65,7 @@ export function PatientRecordScreen({ patientId, tab }: RecordProps) {
  * unknown id (or another clinic's patient) reads "Patient not found" with a way back to the list;
  * any other failure offers Try again.
  */
-function PatientRecordPage(props: RecordProps & { onTab: (tab: RecordTab) => void }) {
+function PatientRecordPage(props: RecordProps & RecordNavigation) {
   const { data: session } = useSession();
   if (!session?.tenant) return null;
   return <PatientRecord {...props} tenant={session.tenant} />;
@@ -61,13 +74,23 @@ function PatientRecordPage(props: RecordProps & { onTab: (tab: RecordTab) => voi
 function PatientRecord({
   patientId,
   tab,
+  panel,
   onTab,
+  onPanel,
   tenant,
-}: RecordProps & { onTab: (tab: RecordTab) => void; tenant: Tenant }) {
+}: RecordProps & RecordNavigation & { tenant: Tenant }) {
   const { t, i18n } = useTranslation(['patients', 'common']);
   const locale = i18n.resolvedLanguage ?? 'en';
   const tabsId = useId();
   const patient = useQuery(patientQuery(patientId));
+  const canWrite = usePermission('patient:write');
+  // One set of contact actions for the Contacts & family card and the Add contact panel, so one
+  // runs at a time; the panel's unsaved work, for the Patient information tab's guard.
+  const contactActions = useContactActions(patientId);
+  const panelDrafts = useContactDrafts();
+  const closePanel = () => {
+    onPanel(undefined);
+  };
 
   if (!patient.data) {
     if (patient.error === null) return <RecordSkeleton tab={tab} />;
@@ -104,30 +127,57 @@ function PatientRecord({
     );
   }
 
+  // Adding a contact happens on Patient information, with `patient:write`, on a live record:
+  // otherwise `?panel=` opens nothing (and switching tabs drops it).
+  const addingContact =
+    panel === 'add-contact' &&
+    tab === 'information' &&
+    canWrite &&
+    patient.data.archivedAt === null;
+
   return (
-    <div className="h-full overflow-auto">
-      <RecordHeader
-        patient={patient.data}
-        tenant={tenant}
-        locale={locale}
-        tabsId={tabsId}
-        tab={tab}
-        onTab={onTab}
-      />
-      <TabPanel idBase={tabsId} tabKey={tab} className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
-        {tab === 'overview' ? (
-          <OverviewTab
-            patient={patient.data}
-            tenant={tenant}
-            locale={locale}
-            onComplete={() => {
-              onTab('information');
-            }}
-          />
-        ) : (
-          <InformationTab patient={patient.data} tenant={tenant} />
-        )}
-      </TabPanel>
+    <div className="flex h-full min-h-0">
+      <div className="h-full min-w-0 flex-1 overflow-auto">
+        <RecordHeader
+          patient={patient.data}
+          tenant={tenant}
+          locale={locale}
+          tabsId={tabsId}
+          tab={tab}
+          onTab={onTab}
+        />
+        <TabPanel idBase={tabsId} tabKey={tab} className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
+          {tab === 'overview' ? (
+            <OverviewTab
+              patient={patient.data}
+              tenant={tenant}
+              locale={locale}
+              onComplete={() => {
+                onTab('information');
+              }}
+            />
+          ) : (
+            <InformationTab
+              patient={patient.data}
+              tenant={tenant}
+              contactActions={contactActions}
+              panelDirty={addingContact && panelDrafts.dirty}
+              onAddContact={() => {
+                onPanel('add-contact');
+              }}
+            />
+          )}
+        </TabPanel>
+      </div>
+      {addingContact && (
+        <AddContactPanel
+          patient={patient.data}
+          tenant={tenant}
+          actions={contactActions}
+          drafts={panelDrafts}
+          onClose={closePanel}
+        />
+      )}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/lib/api';
-import { failureOf, fieldErrorsOf } from './form-server-errors';
+import i18n from '@/lib/i18n';
+import { failureOf, failureText, fieldErrorsOf } from './form-server-errors';
 
 const apiError = (status: number, code: string, paths: string[] = [], issueCode = 'custom') =>
   new ApiError({
@@ -220,5 +221,22 @@ describe('failureOf', () => {
     expect(failureOf(apiError(403, 'forbidden'))).toBe('forbidden');
     expect(failureOf(apiError(500, 'internal'))).toBe('unexpected');
     expect(failureOf(new Error('network'))).toBe('unexpected');
+  });
+});
+
+describe('failureText', () => {
+  it('reads a failure in the person’s language, the contact cap interpolated', async () => {
+    const en = i18n.getFixedT('en', 'patients');
+    expect(failureText(en, apiError(400, 'validation_failed', ['contacts']))).toBe(
+      'a patient can be registered with at most 10 contacts',
+    );
+    await i18n.loadLanguages('fr');
+    const fr = i18n.getFixedT('fr', 'patients');
+    expect(failureText(fr, apiError(400, 'validation_failed', ['contacts']))).toBe(
+      'un patient peut être enregistré avec 10 contacts au maximum',
+    );
+    expect(
+      failureText(en, apiError(409, 'contact.already_linked'), { linkContactId: CONTACT_ID }),
+    ).toBe('this contact is already a patient — search for their record instead');
   });
 });

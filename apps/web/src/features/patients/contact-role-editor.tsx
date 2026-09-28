@@ -3,6 +3,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
+import { useContactDraft } from './contact-drafts';
 import { RelationshipSelect } from './contact-picker';
 import { RoleCheckboxes } from './contact-row';
 import {
@@ -43,7 +44,7 @@ function changeOf(row: ContactRowModel, relationship: ContactRelationship, roles
  * together (only what changed; at least one role stays). For a saved link it also shows each held
  * role's primary: "Primary", or "Make primary", which applies at once (`onMakePrimary`) — a role
  * must be saved before its holder can become its primary. Opens with the relationship focused;
- * Escape cancels here, leaving the panel open.
+ * Escape cancels here, leaving the panel open. Changes not yet applied count as unsaved.
  */
 export function ContactRoleEditor({
   row,
@@ -68,6 +69,7 @@ export function ContactRoleEditor({
     boxRef.current?.querySelector('select')?.focus();
   }, []);
   const change = changeOf(row, relationship, roles);
+  useContactDraft(Object.keys(change).length > 0, 'roles');
   const off = disabled || busy;
   const { primary } = row;
 

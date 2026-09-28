@@ -1,37 +1,26 @@
-import {
-  type ContactLinkInput,
-  type Patient,
-  PATIENT_CREATE_CONTACTS_MAX,
-  type PatientContact,
-} from '@dcm/contracts';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useId, useState } from 'react';
+import { type Patient, PATIENT_CREATE_CONTACTS_MAX } from '@dcm/contracts';
+import { useQuery } from '@tanstack/react-query';
+import { type ReactNode, type RefObject, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { useConfirm } from '@/components/ui/confirm-context';
-import { SHIMMER } from '@/components/ui/list';
-import { useToast } from '@/components/ui/toast-context';
 import { cn } from '@/lib/utils';
 import { ContactLinker } from '../contact-linker';
+import type { ContactSelection } from '../contact-picker';
 import { ContactRoleEditor, type LinkChange } from '../contact-role-editor';
 import { ContactRow } from '../contact-row';
 import {
   type ContactRole,
   type ContactRowModel,
+  linkExclusions,
   PRIMARY_FIELD,
   rowOfLink,
   rowOfPending,
 } from '../contact-rows';
-import {
-  contactsQuery,
-  linkContact,
-  settleContacts,
-  unlinkContact,
-  updateContactLink,
-} from '../contacts-api';
+import { contactsQuery } from '../contacts-api';
 import { contactErrorField, pendingExclusions } from '../patient-form';
+import { useContactActions } from '../use-contact-actions';
 import type { PatientForm } from '../use-patient-form';
-import { FAILURE_VALUES, failureOf } from './form-server-errors';
+import { LoadState } from './load-state';
 
 /** The amber "No guardian recorded" note (design tokens: warning bg/border/fg): a minor may be
  * saved without one, so it informs, never blocks. */
@@ -51,24 +40,28 @@ export function NoGuardianNote({ hint = true }: { hint?: boolean }) {
  * Where a patient form shows its contacts (design addendum "Create panel"): for a minor the
  * Guardian block, headed and always open, with the amber note while no contact is a guardian; for
  * an adult the "Contacts & family (optional)" disclosure — collapsed while there is no contact,
- * open once there is one, unless the person closed it.
+ * opened once there is one, and from then on open or closed as the person leaves it (removing the
+ * last contact never closes it under them). `bodyRef` holds the rows and the picker.
  */
 function ContactsBlock({
   minor,
   count,
   hasGuardian,
+  bodyRef,
   children,
 }: {
   minor: boolean;
   count: number;
   hasGuardian: boolean;
+  bodyRef: RefObject<HTMLDivElement | null>;
   children: ReactNode;
 }) {
   const { t } = useTranslation('patients');
   const headingId = useId();
   const regionId = useId();
   const [expanded, setExpanded] = useState<boolean | null>(null);
-  const open = expanded ?? count > 0;
+  if (expanded === null && count > 0) setExpanded(true);
+  const open = expanded ?? false;
 
   if (minor) {
     return (
@@ -80,7 +73,9 @@ function ContactsBlock({
           {t('contacts.guardian.title')}
         </h3>
         {!hasGuardian && <NoGuardianNote />}
-        {children}
+        <div ref={bodyRef} className="flex flex-col gap-2.5">
+          {children}
+        </div>
       </section>
     );
   }
@@ -109,11 +104,33 @@ function ContactsBlock({
         </svg>
         {t('contacts.family.toggle')}
       </button>
-      <div id={regionId} hidden={!open} className="flex flex-col gap-2.5">
+      <div ref={bodyRef} id={regionId} hidden={!open} className="flex flex-col gap-2.5">
         {children}
       </div>
     </section>
   );
+}
+
+/**
+ * Where focus goes after a row action: back to a row's Edit button (after its editor applied or
+ * cancelled), or — the row gone — the next row's Edit, else the picker's search box. Waits a frame
+ * for the list to render the change.
+ */
+function useRowFocus() {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const focusRow = (key: string | null) => {
+    requestAnimationFrame(() => {
+      const body = bodyRef.current;
+      const target =
+        key === null
+          ? body?.querySelector<HTMLElement>('input[role="combobox"]')
+          : body?.querySelector<HTMLElement>(`[data-contact-edit="${key}"]`);
+      target?.focus();
+    });
+  };
+  /** The row after `key` in `keys`, or null (the picker) for the last. */
+  const after = (keys: readonly string[], key: string) => keys[keys.indexOf(key) + 1] ?? null;
+  return { bodyRef, focusRow, after };
 }
 
 function RowActions({
@@ -135,6 +152,7 @@ function RowActions({
         size="sm"
         className="h-6 px-1.5"
         disabled={disabled}
+        data-contact-edit={row.key}
         aria-label={t('contacts.row.editNamed', { name: row.fullName })}
         onClick={onEdit}
       >
@@ -158,23 +176,37 @@ function RowActions({
  * The create panel's contacts: the links that go with the create (`pendingContacts`, design
  * addendum C4). Each row can be edited (relationship, roles) or removed before saving; the server's
  * error about one (`contacts.<i>`) shows on its row. At the create's cap (10) the picker gives way
- * to a note.
+ * to a note. `guardianRequest` stages a contact in the Guardian block (the phone offer, C4).
  */
-export function PendingContactsSection({ form, country }: { form: PatientForm; country: string }) {
+export function PendingContactsSection({
+  form,
+  country,
+  guardianRequest,
+}: {
+  form: PatientForm;
+  country: string;
+  guardianRequest: ContactSelection | null;
+}) {
   const { t } = useTranslation('patients');
   const { values } = form;
   const [editing, setEditing] = useState<string | null>(null);
+  const { bodyRef, focusRow, after } = useRowFocus();
   const pending = values.pendingContacts;
   const minor = form.showGuardianBlock;
   const hasGuardian = pending.some(({ link }) => link.isGuardian);
   const exclusions = pendingExclusions(values);
+  const keys = pending.map(({ key }) => key);
 
   return (
-    <ContactsBlock minor={minor} count={pending.length} hasGuardian={hasGuardian}>
+    <ContactsBlock minor={minor} count={pending.length} hasGuardian={hasGuardian} bodyRef={bodyRef}>
       {pending.length > 0 && (
         <ul aria-label={t('contacts.list')} className="m-0 list-none p-0">
           {pending.map((contact, index) => {
             const row = rowOfPending(contact);
+            const closeEditor = () => {
+              setEditing(null);
+              focusRow(contact.key);
+            };
             return (
               <ContactRow
                 key={contact.key}
@@ -190,6 +222,7 @@ export function PendingContactsSection({ form, country }: { form: PatientForm; c
                     }}
                     onRemove={() => {
                       form.removeContact(contact.key);
+                      focusRow(after(keys, contact.key));
                     }}
                   />
                 }
@@ -198,12 +231,10 @@ export function PendingContactsSection({ form, country }: { form: PatientForm; c
                   <ContactRoleEditor
                     row={row}
                     disabled={false}
-                    onCancel={() => {
-                      setEditing(null);
-                    }}
+                    onCancel={closeEditor}
                     onApply={(change) => {
                       form.updateContact(contact.key, change);
-                      setEditing(null);
+                      closeEditor();
                     }}
                   />
                 )}
@@ -223,10 +254,8 @@ export function PendingContactsSection({ form, country }: { form: PatientForm; c
           hasGuardian={hasGuardian}
           excludeContactIds={exclusions.contactIds}
           excludePatientIds={exclusions.patientIds}
-          onAdd={(link, display) => {
-            form.addContact(link, display);
-            return true;
-          }}
+          request={minor ? guardianRequest : null}
+          onAdd={(link, display) => form.addContact(link, display)}
         />
       )}
     </ContactsBlock>
@@ -236,8 +265,9 @@ export function PendingContactsSection({ form, country }: { form: PatientForm; c
 /**
  * The edit panel's contacts (design addendum C5): the patient's current links, whose changes apply
  * at once through the contact routes — add, change relationship or roles, make primary, remove
- * (after a confirm) — each with a toast, never part of Save. An archived (or merged) patient's
- * contacts can't change: the server refuses, so the actions are off.
+ * (after a confirm) — each with a toast, never part of Save. One action at a time: the others wait
+ * while it runs. An archived (or merged) patient's contacts can't change: the server refuses, so
+ * the actions are off.
  */
 export function CurrentContactsSection({
   patient,
@@ -248,100 +278,38 @@ export function CurrentContactsSection({
   minor: boolean;
   country: string;
 }) {
-  const { t } = useTranslation(['patients', 'common']);
-  const toast = useToast();
-  const confirm = useConfirm();
-  const queryClient = useQueryClient();
+  const { t } = useTranslation('patients');
   const contacts = useQuery(contactsQuery(patient.id));
   const [editing, setEditing] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, add, update, remove } = useContactActions(patient.id);
+  const { bodyRef, focusRow, after } = useRowFocus();
   const archived = patient.archivedAt !== null;
   const links = contacts.data ?? [];
   const hasGuardian = links.some((link) => link.isGuardian);
-
-  const failed = (error: unknown) =>
-    t('contacts.current.actionFailed', {
-      reason: t(`failures.${failureOf(error)}`, FAILURE_VALUES),
-    });
-
-  /** Runs one contact action; true once it applied. */
-  const run = async (action: () => Promise<PatientContact[]>, done: string) => {
-    setBusy(true);
-    try {
-      void settleContacts(queryClient, patient.id, await action());
-      toast(done);
-      return true;
-    } catch (error) {
-      toast(failed(error), { tone: 'danger' });
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const add = (link: ContactLinkInput) =>
-    run(() => linkContact(patient.id, link), t('contacts.current.added'));
+  const keys = links.map((link) => link.contact.id);
 
   const apply = (contactId: string, change: LinkChange) => {
-    void run(
-      () => updateContactLink(patient.id, contactId, change),
-      t('contacts.current.updated'),
-    ).then((applied) => {
-      if (applied) setEditing(null);
+    void update(contactId, change).then((applied) => {
+      if (!applied) return;
+      setEditing(null);
+      focusRow(contactId);
     });
   };
 
   const makePrimary = (contactId: string, role: ContactRole) => {
-    void run(
-      () => updateContactLink(patient.id, contactId, { [PRIMARY_FIELD[role]]: true }),
-      t('contacts.current.updated'),
-    );
+    void update(contactId, { [PRIMARY_FIELD[role]]: true });
   };
 
-  const remove = (row: ContactRowModel) => {
-    confirm({
-      title: t('contacts.current.removeTitle', { name: row.fullName }),
-      body: t('contacts.current.removeBody', { name: row.fullName }),
-      okLabel: t('contacts.current.removeOk'),
-      tone: 'danger',
-      onConfirm: async () => {
-        let remaining: PatientContact[];
-        try {
-          remaining = await unlinkContact(patient.id, row.key);
-        } catch (error) {
-          throw new Error(failed(error), { cause: error });
-        }
-        void settleContacts(queryClient, patient.id, remaining);
-        toast(t('contacts.current.removed'));
-      },
-    });
-  };
-
-  const excludeContactIds = links.map((link) => link.contact.id);
-  const excludePatientIds = [
-    patient.id,
-    ...links.flatMap((link) => (link.contact.linkedPatient ? [link.contact.linkedPatient.id] : [])),
-  ];
+  const exclusions = linkExclusions(patient.id, links);
 
   let list: ReactNode = null;
-  if (contacts.isPending) {
+  if (!contacts.isSuccess) {
     list = (
-      <span
-        role="status"
-        aria-label={t('contacts.current.loading')}
-        className={cn('block h-9 w-full', SHIMMER)}
+      <LoadState
+        error={contacts.isError}
+        failed={t('contacts.current.failed')}
+        onRetry={() => void contacts.refetch()}
       />
-    );
-  } else if (contacts.isError) {
-    list = (
-      <div role="alert" className="flex items-center gap-2">
-        <span className="text-[12.5px] leading-snug text-ink-secondary">
-          {t('contacts.current.failed')}
-        </span>
-        <Button variant="ghost" size="sm" className="px-0" onClick={() => void contacts.refetch()}>
-          {t('common:tryAgain')}
-        </Button>
-      </div>
     );
   } else if (links.length > 0) {
     list = (
@@ -361,7 +329,10 @@ export function CurrentContactsSection({
                     setEditing(editing === row.key ? null : row.key);
                   }}
                   onRemove={() => {
-                    remove(row);
+                    const next = after(keys, row.key);
+                    remove(row, () => {
+                      focusRow(next);
+                    });
                   }}
                 />
               }
@@ -373,6 +344,7 @@ export function CurrentContactsSection({
                   busy={busy}
                   onCancel={() => {
                     setEditing(null);
+                    focusRow(row.key);
                   }}
                   onApply={(change) => {
                     apply(row.key, change);
@@ -394,15 +366,16 @@ export function CurrentContactsSection({
       minor={minor}
       count={links.length}
       hasGuardian={hasGuardian || !contacts.isSuccess}
+      bodyRef={bodyRef}
     >
       {list}
       <ContactLinker
         mode={minor ? 'guardian' : 'family'}
         country={country}
         hasGuardian={hasGuardian}
-        excludeContactIds={excludeContactIds}
-        excludePatientIds={excludePatientIds}
-        disabled={archived || !contacts.isSuccess}
+        excludeContactIds={exclusions.contactIds}
+        excludePatientIds={exclusions.patientIds}
+        disabled={archived || busy || !contacts.isSuccess}
         onAdd={add}
       />
     </ContactsBlock>

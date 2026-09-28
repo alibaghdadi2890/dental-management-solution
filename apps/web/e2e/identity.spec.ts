@@ -20,6 +20,7 @@ async function signIn(page: Page, email: string, password: string) {
 test('platform admin provisions a clinic and a user, who then signs in to the clinic', async ({
   page,
 }) => {
+  test.slow();
   await signIn(page, E2E_ADMIN.email, 'not-the-password');
   await expect(page.getByRole('alert')).toContainText('Email or password is incorrect.');
 
@@ -112,4 +113,31 @@ test('platform admin provisions a clinic and a user, who then signs in to the cl
   const quickView = page.getByRole('complementary', { name: 'Omar Khalil' });
   await expect(quickView.getByText('Primary dentist')).toBeVisible();
   await expect(quickView.getByRole('region', { name: 'Activity' })).toBeHidden();
+  await quickView.getByRole('button', { name: 'Close' }).click();
+
+  // The front desk adds his wife as his emergency contact from the record.
+  const table = page.getByRole('table', { name: 'Patients' });
+  await expect(table).toHaveAttribute('aria-busy', 'false');
+  await table.getByRole('row').filter({ hasText: 'Omar Khalil' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Omar Khalil' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Patient information' }).click();
+  const contacts = page.getByRole('region', { name: 'Contacts & family' });
+  await expect(contacts.getByText('No contacts recorded')).toBeVisible();
+  await contacts.getByRole('button', { name: 'Add contact' }).click();
+  const addPanel = page.getByRole('complementary', { name: 'Add contact' });
+  await addPanel.getByRole('button', { name: 'Add new contact' }).click();
+  const newContact = addPanel.getByRole('group', { name: 'New contact' });
+  await newContact.getByRole('textbox', { name: /^Name/ }).fill('Nadia Khalil');
+  await newContact.getByRole('textbox', { name: /^Phone/ }).fill('03 555 222');
+  await newContact.getByRole('combobox', { name: 'Relationship' }).selectOption('spouse');
+  await newContact.getByRole('button', { name: 'Add contact' }).click();
+  const staged = addPanel.getByRole('group', { name: 'Adding Nadia Khalil' });
+  await staged.getByRole('checkbox', { name: 'Emergency contact' }).check();
+  await staged.getByRole('button', { name: 'Add contact' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Contact added' })).toBeVisible();
+  await expect(addPanel).toBeHidden();
+  const list = contacts.getByRole('list', { name: 'Contacts' });
+  await expect(list).toContainText('Nadia Khalil');
+  await expect(list).toContainText('Spouse');
+  await expect(list).toContainText('Emergency');
 });

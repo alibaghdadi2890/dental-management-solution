@@ -15,6 +15,6 @@ export const Route = createFileRoute('/_app/patients/$patientId')({
 
 function PatientRecordRoute() {
   const { patientId } = Route.useParams();
-  const { tab } = Route.useSearch();
-  return <PatientRecordScreen patientId={patientId} tab={tab} />;
+  const { tab, panel } = Route.useSearch();
+  return <PatientRecordScreen patientId={patientId} tab={tab} panel={panel} />;
 }

@@ -138,9 +138,8 @@ export type PatientFailure =
   | 'contactInvalidPhone'
   | 'contactsTooMany';
 
-/** What the `failures.*` messages interpolate (`contactsTooMany` reads the create's contact cap):
- * every `t('failures.<key>')` passes it. */
-export const FAILURE_VALUES = { max: PATIENT_CREATE_CONTACTS_MAX } as const;
+/** What the `failures.*` messages interpolate (`contactsTooMany` reads the create's contact cap). */
+const FAILURE_VALUES = { max: PATIENT_CREATE_CONTACTS_MAX } as const;
 
 const FAILURES: Record<string, PatientFailure> = {
   'patient.archived': 'archived',
@@ -211,4 +210,13 @@ export function failureOf(error: unknown, sent: SentContext = {}): PatientFailur
   if (error.status === 409) return 'conflict';
   if (error.status === 403) return 'forbidden';
   return 'unexpected';
+}
+
+/** Any `t` that reads the patients namespace (`useTranslation('patients')` or with `common`). */
+type PatientsT = (key: `failures.${PatientFailure}`, options: typeof FAILURE_VALUES) => string;
+
+/** `failureOf` as the message the person reads (`patients:failures.<key>`, with the values it
+ * interpolates) — the one way every failed patient save, merge or contact action is worded. */
+export function failureText(t: PatientsT, error: unknown, sent: SentContext = {}): string {
+  return t(`failures.${failureOf(error, sent)}`, FAILURE_VALUES);
 }

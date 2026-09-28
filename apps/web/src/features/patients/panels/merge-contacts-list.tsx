@@ -2,30 +2,11 @@ import type { Patient } from '@dcm/contracts';
 import { useQueries } from '@tanstack/react-query';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
-import { SHIMMER } from '@/components/ui/list';
-import { cn } from '@/lib/utils';
 import { ContactRow } from '../contact-row';
-import type { ContactRowModel } from '../contact-rows';
+import { rowOfLink } from '../contact-rows';
 import { contactsQuery } from '../contacts-api';
-import { type KeptContact, mergeContacts } from '../merge-contacts';
-
-function rowOf({ contact, relationship, roles }: KeptContact): ContactRowModel {
-  return {
-    key: contact.id,
-    fullName: contact.fullName,
-    phone: contact.phone,
-    patient: contact.linkedPatient && {
-      id: contact.linkedPatient.id,
-      number: contact.linkedPatient.displayNumber,
-      archived: contact.linkedPatient.archived,
-    },
-    relationship,
-    roles,
-    // The server settles the primaries (the kept record's win); the list shows the roles.
-    primary: null,
-  };
-}
+import { mergeContacts } from '../merge-contacts';
+import { LoadState } from './load-state';
 
 /**
  * The merge panel's "Contacts — will be kept" (design addendum C8): both records' contacts, each
@@ -42,38 +23,22 @@ export function MergeContactsList({
   dropped: Patient;
   country: string;
 }) {
-  const { t } = useTranslation(['patients', 'common']);
+  const { t } = useTranslation('patients');
   const headingId = useId();
   const [keptContacts, droppedContacts] = useQueries({
     queries: [contactsQuery(kept.id), contactsQuery(dropped.id)],
   });
 
   let body;
-  if (keptContacts.isError || droppedContacts.isError) {
+  if (!keptContacts.data || !droppedContacts.data) {
     body = (
-      <div role="alert" className="flex items-center gap-2">
-        <span className="text-[12.5px] leading-snug text-ink-secondary">
-          {t('contacts.merge.failed')}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="px-0"
-          onClick={() => {
-            void keptContacts.refetch();
-            void droppedContacts.refetch();
-          }}
-        >
-          {t('common:tryAgain')}
-        </Button>
-      </div>
-    );
-  } else if (!keptContacts.data || !droppedContacts.data) {
-    body = (
-      <span
-        role="status"
-        aria-label={t('contacts.current.loading')}
-        className={cn('block h-9 w-full', SHIMMER)}
+      <LoadState
+        error={keptContacts.isError || droppedContacts.isError}
+        failed={t('contacts.merge.failed')}
+        onRetry={() => {
+          void keptContacts.refetch();
+          void droppedContacts.refetch();
+        }}
       />
     );
   } else {
@@ -88,23 +53,20 @@ export function MergeContactsList({
         <>
           {result.kept.length > 0 && (
             <ul aria-label={t('contacts.merge.title')} className="m-0 list-none p-0">
-              {result.kept.map((contact) => {
-                const [first = '', second] = contact.from;
-                return (
-                  <ContactRow
-                    key={contact.contact.id}
-                    row={rowOf(contact)}
-                    country={country}
-                    note={
-                      <span className="text-[11.5px] leading-snug text-ink-muted">
-                        {second === undefined
-                          ? t('contacts.merge.fromOne', { number: first })
-                          : t('contacts.merge.fromBoth', { first, second })}
-                      </span>
-                    }
-                  />
-                );
-              })}
+              {result.kept.map(({ link, from: [first = '', second] }) => (
+                <ContactRow
+                  key={link.contact.id}
+                  row={rowOfLink(link)}
+                  country={country}
+                  note={
+                    <span className="text-[11.5px] leading-snug text-ink-muted">
+                      {second === undefined
+                        ? t('contacts.merge.fromOne', { number: first })
+                        : t('contacts.merge.fromBoth', { first, second })}
+                    </span>
+                  }
+                />
+              ))}
             </ul>
           )}
           {result.removed.map(({ contact, number }) => (

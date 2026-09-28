@@ -2,14 +2,12 @@ import type { Patient } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
-import { SHIMMER } from '@/components/ui/list';
-import { cn } from '@/lib/utils';
 import { ContactRow } from '../contact-row';
 import { rowOfLink } from '../contact-rows';
 import { contactsQuery } from '../contacts-api';
 import { minorOn } from '../patient-form';
 import { NoGuardianNote } from './contacts-section';
+import { LoadState } from './load-state';
 
 /**
  * The quick view's Contacts block (design addendum "Quick view"): one line per contact — name ·
@@ -27,30 +25,19 @@ export function QuickViewContacts({
   /** Today in the tenant's time zone (a minor is under 18 there). */
   today: string;
 }) {
-  const { t } = useTranslation(['patients', 'common']);
+  const { t } = useTranslation('patients');
   const headingId = useId();
   const contacts = useQuery(contactsQuery(patient.id));
   const minor = minorOn(patient.dateOfBirth, today);
 
   let body;
-  if (contacts.isPending) {
+  if (!contacts.isSuccess) {
     body = (
-      <span
-        role="status"
-        aria-label={t('contacts.current.loading')}
-        className={cn('block h-9 w-full', SHIMMER)}
+      <LoadState
+        error={contacts.isError}
+        failed={t('contacts.current.failed')}
+        onRetry={() => void contacts.refetch()}
       />
-    );
-  } else if (contacts.isError) {
-    body = (
-      <div role="alert" className="flex items-center gap-2">
-        <span className="text-[12.5px] leading-snug text-ink-secondary">
-          {t('contacts.current.failed')}
-        </span>
-        <Button variant="ghost" size="sm" className="px-0" onClick={() => void contacts.refetch()}>
-          {t('common:tryAgain')}
-        </Button>
-      </div>
     );
   } else {
     const links = contacts.data;

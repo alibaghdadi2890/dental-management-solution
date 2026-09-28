@@ -1,17 +1,16 @@
-import type { ContactRelationship, ContactView, PatientContact } from '@dcm/contracts';
-import { CONTACT_ROLES, type RoleFlags, rolesOf } from './contact-rows';
+import type { ContactView, PatientContact } from '@dcm/contracts';
+import { CONTACT_ROLES, ROLE_FIELD } from './contact-rows';
 
 interface Side {
   patient: { id: string; displayNumber: string };
   contacts: readonly PatientContact[];
 }
 
-/** A contact the merged record keeps: roles from both records together, and which record(s) it
- * comes from (display numbers, the kept record's first). */
+/** A contact the merged record keeps: its link with the roles of both records together (no
+ * primaries: the server settles those, the kept record's first), and which record(s) it comes
+ * from (display numbers, the kept record's first). */
 export interface KeptContact {
-  contact: ContactView;
-  relationship: ContactRelationship;
-  roles: RoleFlags;
+  link: PatientContact;
   from: string[];
 }
 
@@ -21,6 +20,12 @@ export interface MergeContacts {
    * patient's own contact, so the server removes that link (addendum C8). */
   removed: { contact: ContactView; number: string }[];
 }
+
+const NO_PRIMARIES = {
+  isPrimaryGuardian: false,
+  isPrimaryBilling: false,
+  isPrimaryEmergency: false,
+} as const;
 
 /**
  * The merge panel's "Contacts — will be kept" (addendum C8, as the server does it): the kept
@@ -42,19 +47,19 @@ export function mergeContacts(kept: Side, dropped: Side): MergeContacts {
         }
         continue;
       }
-      const roles = rolesOf(link);
       const known = byContact.get(contact.id);
       if (known) {
-        for (const role of CONTACT_ROLES) known.roles[role] ||= roles[role];
+        for (const role of CONTACT_ROLES) {
+          const field = ROLE_FIELD[role];
+          known.link[field] ||= link[field];
+        }
         if (!known.from.includes(side.patient.displayNumber)) {
           known.from.push(side.patient.displayNumber);
         }
         continue;
       }
       byContact.set(contact.id, {
-        contact,
-        relationship: link.relationship,
-        roles,
+        link: { ...link, ...NO_PRIMARIES },
         from: [side.patient.displayNumber],
       });
     }

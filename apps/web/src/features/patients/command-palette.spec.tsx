@@ -111,6 +111,31 @@ describe('CommandPalette', () => {
     expect(searches).toEqual(['/api/v1/patients?q=03&size=10']);
   });
 
+  it('says "via {contact} · {relationship}" under a hit found through a contact’s phone', async () => {
+    const karim = patient(1, 'Karim Haddad', { phone: null });
+    const lina = patient(2, 'Lina Haddad');
+    mockPatients({
+      [RECENT]: page([]),
+      [search('987')]: json({
+        items: [
+          {
+            ...listItem(karim),
+            matchedContact: { fullName: 'Maria Haddad', relationship: 'parent' },
+          },
+          listItem(lina),
+        ],
+        total: 2,
+        page: 1,
+        size: 10,
+      }),
+    });
+    const { dialog, input } = await openPalette();
+    type(input, '987');
+    const [viaGuardian, own] = await within(dialog).findAllByRole('option');
+    expect(within(viaGuardian as HTMLElement).getByText('via Maria Haddad · Parent')).toBeTruthy();
+    expect(own?.textContent).not.toContain('via');
+  });
+
   it('moves the active row with the arrow keys and opens it with Enter', async () => {
     mockPatients({ [RECENT]: page(many(3, 'Recent')) });
     const { dialog, input, location } = await openPalette();

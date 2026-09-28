@@ -4,9 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { SHIMMER } from '@/components/ui/list';
 import { owedBalances } from '@/features/billing/owed-balances';
 import { ageOrNull, formatMoney, formatPhone } from '@/lib/format';
-import { initials } from '@/lib/initials';
+import { firstName, initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
 import type { SortableColumn } from './list-query';
+import { minorOn } from './patient-form';
 
 /** POC column widths: checkbox · Patient · Age·sex · Phone · Last visit · Dentist · Visits ·
  * Balance · ⋯ (README §Patients, list anatomy 5). */
@@ -228,6 +229,38 @@ function BalanceCell({
   );
 }
 
+/**
+ * The Phone cell (design addendum C7): for a minor (by the date of birth, on the tenant's today)
+ * with a primary guardian who has a phone, that phone — who to call — with an 11.5px muted
+ * "via {first name}" beneath; otherwise the patient's own phone, or "—".
+ */
+function PhoneCell({
+  patient,
+  today,
+  country,
+}: {
+  patient: PatientListItem;
+  today: string;
+  country: string;
+}) {
+  const { t } = useTranslation('patients');
+  const guardian = minorOn(patient.dateOfBirth, today) ? patient.primaryGuardian : null;
+  const phone = guardian?.phone ?? patient.phone;
+  return (
+    <span
+      role="cell"
+      className="font-mono text-[12.5px] leading-none whitespace-nowrap text-ink-secondary tabular-nums"
+    >
+      {phone ? <span dir="ltr">{formatPhone(phone, country)}</span> : NONE}
+      {guardian?.phone && (
+        <span className="mt-1 block truncate font-sans text-[11.5px] leading-[1.3] text-ink-muted">
+          {t('row.via', { name: firstName(guardian.fullName) })}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export interface PatientRowContext {
   /** Today in the tenant's time zone (`YYYY-MM-DD`). */
   today: string;
@@ -346,16 +379,7 @@ export function PatientRow({
       <span role="cell" className="text-[12.5px] leading-none text-ink-secondary">
         {ageSex}
       </span>
-      <span
-        role="cell"
-        className="font-mono text-[12.5px] leading-none whitespace-nowrap text-ink-secondary tabular-nums"
-      >
-        {patient.phone ? (
-          <span dir="ltr">{formatPhone(patient.phone, context.country)}</span>
-        ) : (
-          NONE
-        )}
-      </span>
+      <PhoneCell patient={patient} today={context.today} country={context.country} />
       <span role="cell" className="text-[12.5px] leading-[1.3] text-ink-secondary">
         {NONE}
       </span>

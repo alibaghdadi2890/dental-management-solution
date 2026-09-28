@@ -10,6 +10,7 @@ import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-ch
 import { usePermission } from '@/features/auth/use-permission';
 import { createWithOpeningBalance } from '@/features/billing/billing-api';
 import { formatCalendarDate, todayIn } from '@/lib/format';
+import { ContactDraftContext, useContactDrafts } from '../contact-drafts';
 import { type PatientPanel, parsePatientsSearch } from '../list-query';
 import {
   amountValue,
@@ -18,7 +19,6 @@ import {
   isDirty,
   isEditDirty,
   type PatientFormPrefill,
-  pendingExclusions,
   toCreatePayload,
   toOpeningBalance,
   toPatchPayload,
@@ -30,7 +30,7 @@ import { createPatient, invalidatePatientData, patientQuery, updatePatient } fro
 import { usePatientForm } from '../use-patient-form';
 import { AccountFields } from './account-fields';
 import { CurrentContactsSection, PendingContactsSection } from './contacts-section';
-import { FAILURE_VALUES, failureOf, fieldErrorsOf, type SentContext } from './form-server-errors';
+import { failureOf, failureText, fieldErrorsOf, type SentContext } from './form-server-errors';
 import { LinkChip, LinkOffer } from './link-offer';
 import { PanelFallback } from './panel-fallback';
 import { useDuplicateTwin } from './use-duplicate-twin';
@@ -190,25 +190,12 @@ function PatientForm({
 
   const dirty = editing ? isEditDirty(initial, values, country) : isDirty(initial, values);
   const ready = values.fullName.trim() !== '' && (values.phone.trim() !== '' || form.phoneOptional);
-  // The phone matches an unlinked contact: offer to link it (`linkContactId`). The link holds
-  // while the phone stays that number (however it is typed), and goes when it changes.
-  const offer = useLinkOffer(values.phone, country, !editing);
-  const [linked, setLinked] = useState<{ id: string; fullName: string; phone: string } | null>(
-    null,
-  );
-  const [dismissed, setDismissed] = useState<readonly string[]>([]);
-  if (linked !== null && offer.e164 !== linked.phone) {
-    setLinked(null);
-    form.setLinkContactId(null);
-  }
-  // Never offered: a contact already added to this patient (a minor's phone is often a parent's).
-  const offered =
-    linked === null &&
-    offer.match !== null &&
-    !dismissed.includes(offer.match.id) &&
-    !pendingExclusions(values).contactIds.includes(offer.match.id)
-      ? offer.match
-      : null;
+  // Contact work not yet applied (a staged pick, a role editor's changes) is unsaved too, though
+  // Save has nothing to send for it.
+  const drafts = useContactDrafts();
+  const unsaved = dirty || drafts.dirty;
+  // Create only: the typed phone matches someone known (design addendum C4).
+  const phoneOffer = useLinkOffer(form, !editing);
 
   const twin = useDuplicateTwin({
     fullName: values.fullName,
@@ -268,7 +255,7 @@ function PatientForm({
         form.showServerErrors(fields);
         return;
       }
-      toast(t('form.failed', { reason: t(`failures.${failure}`, FAILURE_VALUES) }), {
+      toast(t('form.failed', { reason: failureText(t, error, sent) }), {
         tone: 'danger',
       });
     } finally {
@@ -287,7 +274,7 @@ function PatientForm({
     <RightPanel
       eyebrow={t(editing ? 'form.editEyebrow' : 'form.newEyebrow')}
       title={patient ? patient.fullName : t('form.newTitle')}
-      dirty={dirty}
+      dirty={unsaved}
       onClose={onClose}
       closeDisabled={pending}
       initialFocus="field"
@@ -314,7 +301,7 @@ function PatientForm({
       }
     >
       <UnsavedChangesGuard
-        when={dirty}
+        when={unsaved}
         isLeaving={(current, next) => !saved.current && leavesForm(current, next)}
       />
       <form
@@ -362,38 +349,41 @@ function PatientForm({
 
         {field('fullName')}
         {field('phone')}
-        {offered && (
+        {phoneOffer.offer && (
           <LinkOffer
-            contact={offered}
+            offer={phoneOffer.offer}
+            // Staging the offered guardian would replace a pick or a new contact in progress.
+            blocked={phoneOffer.offer.kind === 'guardian' && drafts.adding}
+            onAccept={() => {
+              if (phoneOffer.offer) phoneOffer.accept(phoneOffer.offer);
+            }}
             onDismiss={() => {
-              setDismissed((ids) => [...ids, offered.id]);
-            }}
-            onLink={() => {
-              if (offer.e164 === null) return;
-              form.setLinkContactId(offered.id);
-              setLinked({ id: offered.id, fullName: offered.fullName, phone: offer.e164 });
+              if (phoneOffer.offer) phoneOffer.dismiss(phoneOffer.offer);
             }}
           />
         )}
-        {linked && (
+        {phoneOffer.linked && (
           <LinkChip
-            name={linked.fullName}
+            name={phoneOffer.linked.fullName}
             error={message('linkContactId')}
-            onRemove={() => {
-              setLinked(null);
-              form.setLinkContactId(null);
-            }}
+            onRemove={phoneOffer.unlink}
           />
         )}
-        {patient ? (
-          <CurrentContactsSection
-            patient={patient}
-            minor={form.showGuardianBlock}
-            country={country}
-          />
-        ) : (
-          <PendingContactsSection form={form} country={country} />
-        )}
+        <ContactDraftContext value={drafts.report}>
+          {patient ? (
+            <CurrentContactsSection
+              patient={patient}
+              minor={form.showGuardianBlock}
+              country={country}
+            />
+          ) : (
+            <PendingContactsSection
+              form={form}
+              country={country}
+              guardianRequest={phoneOffer.guardianRequest}
+            />
+          )}
+        </ContactDraftContext>
 
         <Eyebrow className="mt-1">{t('form.optional')}</Eyebrow>
         <div className="grid grid-cols-2 gap-x-2.5 gap-y-3">

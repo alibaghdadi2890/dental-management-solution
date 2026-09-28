@@ -129,12 +129,17 @@ describe('InformationTab', () => {
       expect(await badge('Complete')).toBeTruthy();
     });
 
-    it('never asks an adult for a guardian, nor reads their contacts for it', async () => {
+    it('never asks an adult for a guardian, nor waits for their contacts', async () => {
       const adult = { ...KARIM, dateOfBirth: bornYearsAgo(30) };
-      const fetchMock = mockApi({ patients: [adult] });
+      mockApi({
+        patients: [adult],
+        get: (path) =>
+          path === `/patients/${KARIM.id}/contacts`
+            ? new Promise<Response>(() => undefined)
+            : undefined,
+      });
       renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
       expect(await badge('Complete')).toBeTruthy();
-      expect(contactReads(fetchMock)).toEqual([]);
     });
 
     it('shows no badge for a minor while the contacts load', async () => {

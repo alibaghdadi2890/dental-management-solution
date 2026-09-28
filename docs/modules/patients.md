@@ -70,8 +70,8 @@ with an opening balance) are composed by `billing` on top of this module (design
 - `patient_counters` (tenant RLS): one row per tenant (`tenant_id` PK, `last_value`).
 - `contacts` (tenant RLS, soft delete): `full_name?`, `name_key?`, `phone?` (E.164),
   `phone_search?`, `email?`, `linked_patient_id?`. `name_key`/`phone_search` are internal search
-  columns derived by the repository exactly as on `patients` (migration 0012 added `name_key`; a
-  check keeps it present exactly when `full_name` is). A contact linked to a patient stores no
+  columns derived by the repository exactly as on `patients` (a check keeps `name_key` present
+  exactly when `full_name` is). A contact linked to a patient stores no
   name, phone or e-mail of its own (they are read from the patient), so a check requires
   `linked_patient_id` or `full_name`. Unique `(tenant_id, id)`; at most one live contact per
   linked patient (partial unique `(tenant_id, linked_patient_id)` where linked and not deleted);

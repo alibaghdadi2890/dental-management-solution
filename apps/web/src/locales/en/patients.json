@@ -69,7 +69,8 @@
   "archivedBadge": "Archived",
   "row": {
     "select": "Select {{name}}",
-    "menu": "Actions for {{name}}"
+    "menu": "Actions for {{name}}",
+    "via": "via {{name}}"
   },
   "menu": {
     "openRecord": "Open record",
@@ -335,7 +336,8 @@
     "create": "Create \"{{query}}\"",
     "noPatients": "No patients yet.",
     "loading": "Searching patients",
-    "failed": "Couldn't search patients."
+    "failed": "Couldn't search patients.",
+    "via": "via {{name}} · {{relationship}}"
   },
   "record": {
     "back": "All patients",
@@ -370,7 +372,15 @@
       "email": "Email",
       "address": "Address",
       "insurance": "Insurance",
-      "notRecorded": "Not recorded"
+      "notRecorded": "Not recorded",
+      "contacts": "Contacts",
+      "contactRole": "{{role}}: {{name}}",
+      "contactRoles": "{{name}} ({{roles}})",
+      "roleWords": {
+        "guardian": "guardian",
+        "billing": "billing",
+        "emergency": "emergency"
+      }
     },
     "form": {
       "title": "Patient information",
@@ -379,7 +389,9 @@
       "intro": "Nothing here is required. Fill it in when it becomes relevant.",
       "archived": "This record is archived, so its details can’t be changed. Restore it to edit them.",
       "merged": "This record was merged into another one, so its details can’t be changed."
-    }
+    },
+    "guardian": "Guardian · {{name}}",
+    "guardianWithPhone": "Guardian · {{name}} · <phone>{{phone}}</phone>"
   },
   "contacts": {
     "relationship": "Relationship",
@@ -415,7 +427,7 @@
     "list": "Contacts",
     "guardian": {
       "title": "Guardian",
-      "search": "Guardian",
+      "search": "Search a guardian",
       "roles": "Roles of the next guardian added",
       "alsoBilling": "Also billing contact",
       "alsoEmergency": "Also emergency contact",
@@ -458,11 +470,15 @@
     },
     "tooMany": "A patient can be registered with at most {{max, number}} contacts. Add more from the record afterwards.",
     "linkOffer": {
-      "body": "This phone belongs to contact {{name}}. Link this patient to {{name}}?",
-      "link": "Link",
+      "identity": "Is this patient {{name}}? Link to their contact record.",
+      "same": "Yes, same person",
+      "different": "No",
+      "guardian": "This phone belongs to {{name}}. Add {{name}} as guardian?",
+      "addGuardian": "Add as guardian",
       "notNow": "Not now",
       "chip": "Will link to {{name}}",
-      "remove": "Don’t link to {{name}}"
+      "remove": "Don’t link to {{name}}",
+      "finishFirst": "Finish or cancel the contact you’re adding first."
     },
     "current": {
       "loading": "Loading contacts",
@@ -470,7 +486,7 @@
       "added": "Contact added",
       "updated": "Contact updated",
       "removed": "Contact removed",
-      "actionFailed": "Couldn't update contacts: {{reason}}",
+      "actionFailed": "Couldn’t update contacts: {{reason}}",
       "removeTitle": "Remove {{name}}?",
       "removeBody": "{{name}} will no longer be a contact of this patient. They stay on record, and on any other patient they are a contact of.",
       "removeOk": "Remove"
@@ -486,6 +502,19 @@
       "empty": "Neither record has contacts.",
       "selfLink": "{{name}} is {{number}}, one of these records: that link is removed by the merge.",
       "failed": "Couldn’t load the contacts."
+    },
+    "staged": "Adding {{name}}",
+    "card": {
+      "title": "Contacts & family",
+      "add": "Add contact",
+      "menu": "Contact actions for {{name}}",
+      "editRoles": "Edit roles",
+      "remove": "Remove",
+      "openRecord": "Open record",
+      "empty": "No contacts recorded"
+    },
+    "addPanel": {
+      "title": "Add contact"
     }
   }
 }

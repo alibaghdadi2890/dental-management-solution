@@ -69,7 +69,8 @@
   "archivedBadge": "Archivé",
   "row": {
     "select": "Sélectionner {{name}}",
-    "menu": "Actions pour {{name}}"
+    "menu": "Actions pour {{name}}",
+    "via": "via {{name}}"
   },
   "menu": {
     "openRecord": "Ouvrir le dossier",
@@ -335,7 +336,8 @@
     "create": "Créer « {{query}} »",
     "noPatients": "Aucun patient pour le moment.",
     "loading": "Recherche de patients",
-    "failed": "Impossible de rechercher les patients."
+    "failed": "Impossible de rechercher les patients.",
+    "via": "via {{name}} · {{relationship}}"
   },
   "record": {
     "back": "Tous les patients",
@@ -370,7 +372,15 @@
       "email": "E-mail",
       "address": "Adresse",
       "insurance": "Assurance",
-      "notRecorded": "Non renseigné"
+      "notRecorded": "Non renseigné",
+      "contacts": "Contacts",
+      "contactRole": "{{role}} : {{name}}",
+      "contactRoles": "{{name}} ({{roles}})",
+      "roleWords": {
+        "guardian": "responsable",
+        "billing": "facturation",
+        "emergency": "urgence"
+      }
     },
     "form": {
       "title": "Informations patient",
@@ -379,7 +389,9 @@
       "intro": "Rien n’est obligatoire ici. Complétez-le quand cela devient utile.",
       "archived": "Ce dossier est archivé : ses informations ne peuvent pas être modifiées. Restaurez-le pour les modifier.",
       "merged": "Ce dossier a été fusionné avec un autre : ses informations ne peuvent pas être modifiées."
-    }
+    },
+    "guardian": "Responsable légal · {{name}}",
+    "guardianWithPhone": "Responsable légal · {{name}} · <phone>{{phone}}</phone>"
   },
   "contacts": {
     "relationship": "Lien",
@@ -415,7 +427,7 @@
     "list": "Contacts",
     "guardian": {
       "title": "Responsable légal",
-      "search": "Responsable légal",
+      "search": "Rechercher un responsable légal",
       "roles": "Rôles du prochain responsable ajouté",
       "alsoBilling": "Également contact de facturation",
       "alsoEmergency": "Également contact d’urgence",
@@ -458,11 +470,15 @@
     },
     "tooMany": "Un patient peut être enregistré avec {{max, number}} contacts au maximum. Ajoutez-en d’autres depuis le dossier ensuite.",
     "linkOffer": {
-      "body": "Ce numéro appartient au contact {{name}}. Relier ce patient à {{name}} ?",
-      "link": "Relier",
+      "identity": "Ce patient est-il {{name}} ? Le relier à sa fiche de contact.",
+      "same": "Oui, même personne",
+      "different": "Non",
+      "guardian": "Ce numéro appartient à {{name}}. Ajouter {{name}} comme responsable légal ?",
+      "addGuardian": "Ajouter comme responsable",
       "notNow": "Plus tard",
       "chip": "Sera relié à {{name}}",
-      "remove": "Ne pas relier à {{name}}"
+      "remove": "Ne pas relier à {{name}}",
+      "finishFirst": "Terminez ou annulez d’abord le contact en cours d’ajout."
     },
     "current": {
       "loading": "Chargement des contacts",
@@ -486,6 +502,19 @@
       "empty": "Aucun des deux dossiers n’a de contacts.",
       "selfLink": "{{name}} est {{number}}, l’un de ces dossiers : ce lien est supprimé par la fusion.",
       "failed": "Impossible de charger les contacts."
+    },
+    "staged": "Ajout de {{name}}",
+    "card": {
+      "title": "Contacts et famille",
+      "add": "Ajouter un contact",
+      "menu": "Actions du contact {{name}}",
+      "editRoles": "Modifier les rôles",
+      "remove": "Retirer",
+      "openRecord": "Ouvrir le dossier",
+      "empty": "Aucun contact enregistré"
+    },
+    "addPanel": {
+      "title": "Ajouter un contact"
     }
   }
 }

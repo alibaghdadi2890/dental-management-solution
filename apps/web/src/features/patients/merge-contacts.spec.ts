@@ -29,7 +29,7 @@ describe('mergeContacts', () => {
       { patient: KEPT, contacts: [link('a', { isGuardian: true })] },
       { patient: DROPPED, contacts: [link('b', { isEmergencyContact: true })] },
     );
-    expect(result.kept.map(({ contact, from }) => [contact.id, from])).toEqual([
+    expect(result.kept.map(({ link, from }) => [link.contact.id, from])).toEqual([
       ['a', ['P-000001']],
       ['b', ['P-000002']],
     ]);
@@ -46,12 +46,19 @@ describe('mergeContacts', () => {
     );
     expect(result.kept).toEqual([
       {
-        contact: expect.objectContaining({ id: 'a' }) as unknown,
-        relationship: 'parent',
-        roles: { guardian: true, billing: true, emergency: false },
+        link: link('a', { relationship: 'parent', isGuardian: true, isBillingContact: true }),
         from: ['P-000001', 'P-000002'],
       },
     ]);
+  });
+
+  it('leaves the primaries to the server', () => {
+    const result = mergeContacts(
+      { patient: KEPT, contacts: [link('a', { isGuardian: true, isPrimaryGuardian: true })] },
+      { patient: DROPPED, contacts: [] },
+    );
+    expect(result.kept[0]?.link.isPrimaryGuardian).toBe(false);
+    expect(result.kept[0]?.link.isGuardian).toBe(true);
   });
 
   it('sets apart a contact that is one of the two records (the merge drops that link)', () => {
@@ -61,7 +68,7 @@ describe('mergeContacts', () => {
       { patient: KEPT, contacts: [selfOfDropped] },
       { patient: DROPPED, contacts: [selfOfKept, link('e', { isGuardian: true })] },
     );
-    expect(result.kept.map(({ contact }) => contact.id)).toEqual(['e']);
+    expect(result.kept.map(({ link }) => link.contact.id)).toEqual(['e']);
     expect(result.removed.map(({ contact, number }) => [contact.id, number])).toEqual([
       ['c', 'P-000002'],
       ['d', 'P-000001'],

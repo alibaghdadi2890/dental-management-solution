@@ -70,7 +70,7 @@ Completeness with a guardian (C10) lands with H2/J3.
 - `packages/contracts/src/users.ts` (+ spec)
 - `packages/contracts/src/index.ts`
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - `patientFields` has no `guardianName`, `guardianPhone` or `emergencyContact`.
   - `phone` is optional or null in the schema; the rule is server-side (C3).
   - `primaryDentistUserId` is renamed to `primaryDentistId`.
@@ -90,11 +90,12 @@ Completeness with a guardian (C10) lands with H2/J3.
   - `profileCompleteness({ email, address, minor, hasGuardian })`.
   - `practitionerSchema` gains `id` (profile id).
   - `staffUserSchema` gains `profileId`.
-- [ ] **Implement, then verify** with `pnpm --filter @dcm/contracts test build`. API and web will
+- [x] **Implement, then verify** with `pnpm --filter @dcm/contracts test build`. API and web will
       not compile until G2–G8; that is expected within this chain. Commit anyway only if the
       repo gate can pass. Otherwise fold G1 into G3's commit — the implementer decides and
       reports which.
-- [ ] **Commit:** `refactor(contracts): contacts, optional minor phone and dentist profile ids`.
+- [x] **Commit:** `refactor(contracts): contacts, optional minor phone and dentist profile ids`
+      (folded into R1, `66e4ef9`).
 
 ### Task G2: Users expose staff profile ids
 
@@ -111,16 +112,16 @@ Completeness with a guardian (C10) lands with H2/J3.
     primary dentist) by `staff_profiles.id`, never the auth user id";
   - §4 unchanged.
 
-- [ ] **Integration tests first:**
+- [x] **Integration tests first:**
   - `GET /users/practitioners` returns `{ id: profileId, userId, displayName, title }`;
   - `practitionersByProfileIds(profileIds)` includes deactivated staff;
   - `GET /users` items carry `profileId`.
-- [ ] **Implement.** Add `practitionersByProfileIds` / `byProfileIds` alongside the existing
+- [x] **Implement.** Add `practitionersByProfileIds` / `byProfileIds` alongside the existing
       auth-user-id lookups, renamed `practitionersByAuthUserIds` / `byAuthUserIds` (not
       `practitionersByIds` / `byUserIds`, which would be ambiguous about which id they take now
       that both exist). `patients` and `billing` keep calling the auth-user-id lookup until
       H1/H2.
-- [ ] **Commit:** `feat(users): expose staff profile ids for practitioner references`.
+- [x] **Commit:** `feat(users): expose staff profile ids for practitioner references`.
 
 ## Step (h) — patients backend
 
@@ -162,7 +163,7 @@ Completeness with a guardian (C10) lands with H2/J3.
 
 Take a `pg_dump -Fc` backup into the scratchpad first.
 
-- [ ] **Unit tests first:**
+- [x] **Unit tests first:**
   - Primary rules:
     - the first holder of a role becomes primary;
     - an explicit primary clears the previous one;
@@ -174,16 +175,17 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
     - self-links are removed;
     - linked contacts are folded.
   - Resolved view: a linked contact reads name and phone from the patient.
-- [ ] **Repository integration tests first:**
+- [x] **Repository integration tests first:**
   - CHECK and partial unique indexes: one live contact per linked patient; one primary per role
     per patient; a primary implies its role; at least one role.
   - Contact-phone search, resolved through a linked patient's phone.
   - `primaryGuardian` in search rows.
   - RLS: tenant B sees no contacts.
-- [ ] **Implement and generate the migrations**, and review the SQL: enums, RLS on both new
+- [x] **Implement and generate the migrations**, and review the SQL: enums, RLS on both new
       tables, partial indexes, CHECKs, and ledger grants unchanged.
-- [ ] **Reset the dev database** as above.
-- [ ] **Commit:** `refactor(patients): contacts tables, optional minor phone and dentist profile id`.
+- [x] **Reset the dev database** as above.
+- [x] **Commit:** `refactor(patients): contacts tables, optional minor phone and dentist profile id`
+      (landed as R1 `66e4ef9` and R2 `4671265`).
 
 ### Task H2: Service, routes, events, merge, exported API
 
@@ -206,7 +208,7 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
   - CLAUDE.md §4 patients row: owns `patients, patient_counters, contacts, patient_contacts`;
   - the base spec status line: "Amended by 2026-09-28-patients-contacts-design.md".
 
-- [ ] **Integration tests first**, covering every case in the addendum's Testing → Integration
+- [x] **Integration tests first**, covering every case in the addendum's Testing → Integration
       list:
   - phone rule;
   - atomic create with a new guardian;
@@ -220,12 +222,12 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
   - permissions;
   - dentist by profile id;
   - isolation.
-- [ ] **Implement:**
+- [x] **Implement:**
   - Every mutation re-checks `patient:write`, audits and publishes after commit.
   - The lookup requires `patient:read`.
   - `PATCH /contacts/:id` on a linked contact → 409 `contact.linked` ("edit the patient
     record").
-- [ ] **Commit:** `feat(patients): contacts and family with roles, lookup and merge`.
+- [x] **Commit:** `feat(patients): contacts and family with roles, lookup and merge`.
 
 ## Step (i) — billing
 
@@ -244,11 +246,11 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
 - `test/integration/{billing,billing-views}.int-spec.ts`.
 - `docs/modules/billing.md`.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - opening balance plus a new guardian in one call → patient, link and entry are created, and
     a failure rolls back all three;
   - the export's guardian columns (national format), and the Dentist column from profile ids.
-- [ ] **Commit:** `feat(billing): guardian columns in the export and contacts on opening-balance create`.
+- [x] **Commit:** `feat(billing): guardian columns in the export and contacts on opening-balance create`.
 
 ## Step (j) — SPA
 
@@ -270,7 +272,7 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
 - `features/patients/contact-picker.tsx` (+ spec), new.
 - Locales in en, ar and fr.
 
-- [ ] **Unit tests first:**
+- [x] **Unit tests first:**
   - phone required for an adult and optional for a minor;
   - the guardian block shown and hidden with the DOB;
   - the pending-contacts payload;
@@ -279,7 +281,7 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
     - shows the "Patient P-…" badge;
     - "Add new contact" reveals name*, phone* and relationship;
     - emits a `ContactLinkInput`.
-- [ ] **Commit:** `feat(web): contacts API, form model and contact picker`.
+- [x] **Commit:** `feat(web): contacts API, form model and contact picker`.
 
 ### Task J2: Panels
 
@@ -296,8 +298,8 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
 - `panels/merge-panel.tsx`: "Contacts — will be kept".
 - Specs for each.
 
-- [ ] **Tests first**, for every item in the addendum's web list for panels.
-- [ ] **Commit:** `feat(web): guardian and contacts in the patient panels`.
+- [x] **Tests first**, for every item in the addendum's web list for panels.
+- [x] **Commit:** `feat(web): guardian and contacts in the patient panels`.
 
 ### Task J3: List, palette and record
 
@@ -313,7 +315,7 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
 - Dentist select, filter chip and table names use profile ids.
 - Specs for each.
 
-- [ ] **Tests first**, for the addendum's list, palette and record items.
+- [x] **Tests first**, for the addendum's list, palette and record items.
 - [ ] **Commit:** `feat(web): contacts on the list, palette and patient record`.
 
 ## Step (k) — end to end and docs
@@ -332,10 +334,10 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
   - the ADR index;
   - both specs and this plan (tick the checkboxes; add implementation notes to the addendum).
 
-- [ ] **E2E:** a minor with a new guardian and an opening balance → the list shows the "via"
+- [x] **E2E:** a minor with a new guardian and an opening balance → the list shows the "via"
       phone and the balance → open the record → the guardian chip → edit the address →
       completeness flips → ⌘K by the guardian's digits shows "via" → Enter opens the record.
-- [ ] **Full gate + `pnpm --filter @dcm/web e2e`**, run against the user's dev servers after the
+- [x] **Full gate + `pnpm --filter @dcm/web e2e`**, run against the user's dev servers after the
       dev DB reset.
 - [ ] **Commit:** `feat(web): contacts end-to-end flow and docs`.
 - [ ] **Final whole-branch review**, then `superpowers:finishing-a-development-branch`.

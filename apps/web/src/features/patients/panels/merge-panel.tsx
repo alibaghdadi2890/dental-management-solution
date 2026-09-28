@@ -21,7 +21,7 @@ import {
   toMergePayload,
 } from '../merge-draft';
 import { invalidatePatientData, mergePatients, patientQuery } from '../patients-api';
-import { FAILURE_VALUES, failureOf } from './form-server-errors';
+import { failureText } from './form-server-errors';
 import { MergeContactsList } from './merge-contacts-list';
 import { PanelFallback } from './panel-fallback';
 
@@ -169,12 +169,9 @@ function MergeEditor({
         try {
           await mergePatients(toMergePayload(draft, reason));
         } catch (error) {
-          throw new Error(
-            t('merge.failed', { reason: t(`failures.${failureOf(error)}`, FAILURE_VALUES) }),
-            {
-              cause: error,
-            },
-          );
+          throw new Error(t('merge.failed', { reason: failureText(t, error) }), {
+            cause: error,
+          });
         }
         void invalidatePatientData(queryClient);
         toast(t('merge.done'));

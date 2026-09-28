@@ -2,6 +2,7 @@ import { type KeyboardEvent, useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, TextInput } from '@/components/ui/field';
+import { useContactDraft } from './contact-drafts';
 import {
   type ContactSelection,
   draftErrors,
@@ -35,6 +36,8 @@ export function NewContactForm({
   const { t } = useTranslation(['patients', 'common']);
   const titleId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
+  // A name or phone typed is unsaved work for the form around it.
+  useContactDraft(draft.fullName.trim() !== '' || draft.phone.trim() !== '', 'adding');
   useEffect(() => {
     nameRef.current?.focus();
   }, []);

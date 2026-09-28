@@ -7,15 +7,22 @@ export type RecordTab = (typeof RECORD_TABS)[number];
 
 export const DEFAULT_RECORD_TAB: RecordTab = 'overview';
 
-/** `?tab=`: an absent or unknown tab (a stale bookmark, a hand-edited URL) is the Overview. */
+/** The record's right panels, held in `?panel=` (design addendum "Record": Add contact). */
+export const RECORD_PANELS = ['add-contact'] as const;
+export type RecordPanel = (typeof RECORD_PANELS)[number];
+
+/** `?tab=`: an absent or unknown tab (a stale bookmark, a hand-edited URL) is the Overview.
+ * `?panel=`: an unknown panel is none. */
 const recordSearchSchema = z.object({
   tab: z.enum(RECORD_TABS).catch(DEFAULT_RECORD_TAB),
+  panel: z.enum(RECORD_PANELS).optional().catch(undefined),
 });
 export type RecordSearch = z.infer<typeof recordSearchSchema>;
 
 /** What a `<Link>` or `navigate` may pass: the tab is optional (it defaults). */
 export interface RecordSearchInput {
   tab?: RecordTab;
+  panel?: RecordPanel | undefined;
 }
 
 /** Never throws, whatever TanStack Router hands `validateSearch`. */

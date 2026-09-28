@@ -9,8 +9,9 @@ import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-ch
 import { usePermission } from '@/features/auth/use-permission';
 import { todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { ContactDraftContext, useContactDrafts } from '../contact-drafts';
 import { contactsQuery } from '../contacts-api';
-import { FAILURE_VALUES, failureOf, fieldErrorsOf } from '../panels/form-server-errors';
+import { failureOf, failureText, fieldErrorsOf } from '../panels/form-server-errors';
 import {
   fromPatient,
   isEditDirty,
@@ -20,7 +21,9 @@ import {
 } from '../patient-form';
 import { PatientField, type PatientFieldName } from '../patient-form-fields';
 import { invalidatePatientData, patientQuery, updatePatient } from '../patients-api';
+import type { ContactActions } from '../use-contact-actions';
 import { usePatientForm } from '../use-patient-form';
+import { ContactsCard } from './contacts-card';
 import { parseRecordSearch } from './record-search';
 
 type Tenant = NonNullable<Session['tenant']>;
@@ -32,6 +35,10 @@ export const SAVED_SHOWN_MS = 5000;
 const leavesTab = (current: GuardLocation, next: GuardLocation) =>
   current.pathname !== next.pathname ||
   parseRecordSearch(current.search).tab !== parseRecordSearch(next.search).tab;
+
+/** Closing (or swapping) the record's right panel. */
+const leavesPanel = (current: GuardLocation, next: GuardLocation) =>
+  parseRecordSearch(current.search).panel !== parseRecordSearch(next.search).panel;
 
 type Phase = 'idle' | 'saving' | 'saved' | 'failed';
 
@@ -79,8 +86,29 @@ function CompletenessBadge({ patient, tenant }: { patient: Patient; tenant: Tena
  * refuse the save. One archived elsewhere while this form holds unsaved edits keeps the form and
  * the edits (as the edit panel does), with a warning and Save turned off — nothing typed is
  * silently replaced.
+ *
+ * Beneath the form, the Contacts & family card (design addendum "Record"), whose changes apply at
+ * once, apart from Save; its Add contact asks the record for its panel (`onAddContact`).
+ *
+ * One unsaved-changes guard covers the tab: the form's edits, a role editor's changes in the card
+ * and work in the Add contact panel (`panelDirty`). Leaving the tab asks once, whichever of them
+ * holds the work; closing the panel asks only for the panel's.
  */
-export function InformationTab({ patient, tenant }: { patient: Patient; tenant: Tenant }) {
+export function InformationTab({
+  patient,
+  tenant,
+  contactActions,
+  panelDirty,
+  onAddContact,
+}: {
+  patient: Patient;
+  tenant: Tenant;
+  /** The record's contact actions, shared with the Add contact panel. */
+  contactActions: ContactActions;
+  /** The Add contact panel holds a staged pick or a new contact being typed. */
+  panelDirty: boolean;
+  onAddContact: () => void;
+}) {
   const { t } = useTranslation(['patients', 'common']);
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -90,6 +118,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
   const form = usePatientForm(() => fromPatient(patient, tenant.country), tenant, formRef, 'edit');
   const { initial, values, country } = form;
   const [phase, setPhase] = useState<Phase>('idle');
+  const cardDrafts = useContactDrafts();
   const saving = useRef(false);
   const mounted = useRef(false);
   useEffect(() => {
@@ -167,7 +196,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
         return;
       }
       setPhase('failed');
-      toast(t('form.failed', { reason: t(`failures.${failure}`, FAILURE_VALUES) }), {
+      toast(t('form.failed', { reason: failureText(t, error) }), {
         tone: 'danger',
       });
     } finally {
@@ -180,77 +209,92 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
   );
 
   return (
-    <section
-      aria-labelledby={titleId}
-      className="max-w-[760px] rounded-xl border border-border bg-surface px-[22px] py-5"
-    >
-      {/* A save in flight is not held back: those edits are already on their way to the server. */}
-      <UnsavedChangesGuard when={dirty && phase !== 'saving'} isLeaving={leavesTab} />
-      <div className="mb-1.5 flex flex-wrap items-center gap-2.5">
-        <h2 id={titleId} className="m-0 text-[14px] leading-none font-semibold">
-          {t('record.form.title')}
-        </h2>
-        <CompletenessBadge patient={patient} tenant={tenant} />
-      </div>
-      <p className="mb-5 text-[12.5px] leading-normal text-ink-muted">{t('record.form.intro')}</p>
-      {archived && !dirty && (
-        <p
-          role="note"
-          className="mb-4 rounded-lg border border-border bg-faint px-3 py-2.5 text-[12.5px] leading-[1.45] text-ink-secondary"
-        >
-          {patient.mergedIntoId === null ? t('record.form.archived') : t('record.form.merged')}
-        </p>
-      )}
-      {keptEdits && (
-        <p
-          role="alert"
-          className="mb-4 rounded-lg border border-danger-border bg-danger-bg px-3 py-2.5 text-[12.5px] leading-[1.45] font-medium text-danger"
-        >
-          {t('form.archivedWhileEditing')}
-        </p>
-      )}
-      <form
-        ref={formRef}
-        noValidate
-        onSubmit={(event) => {
-          event.preventDefault();
-          void submit();
-        }}
+    <div className="flex max-w-[760px] flex-col gap-4">
+      <section
+        aria-labelledby={titleId}
+        className="rounded-xl border border-border bg-surface px-[22px] py-5"
       >
-        <fieldset disabled={readOnly} className="m-0 min-w-0 border-0 p-0">
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-x-[18px] gap-y-3.5">
-            {field('fullName')}
-            {field('phone')}
-            {field('dateOfBirth')}
-            {field('sex')}
-            {field('email')}
-            {field('dentist')}
-            {field('address', 'col-span-full')}
-            {field('insurance')}
-            {field('alerts', 'col-span-full')}
-            {field('notes', 'col-span-full')}
-          </div>
-        </fieldset>
-        {!readOnly && (
-          <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-row-divider pt-4">
-            {/* `aria-disabled`, not `disabled`: focus stays on the button through a save. */}
-            <Button
-              type="submit"
-              variant="primary"
-              aria-disabled={blocked}
-              className="aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
-            >
-              {t('common:save')}
-            </Button>
-            <SaveState
-              status={status}
-              onRetry={() => {
-                void submit();
-              }}
-            />
-          </div>
+        {/* A save in flight is not held back: those edits are already on their way to the server. */}
+        <UnsavedChangesGuard
+          when={(dirty && phase !== 'saving') || cardDrafts.dirty || panelDirty}
+          isLeaving={(current, next) =>
+            leavesTab(current, next) || (panelDirty && leavesPanel(current, next))
+          }
+        />
+        <div className="mb-1.5 flex flex-wrap items-center gap-2.5">
+          <h2 id={titleId} className="m-0 text-[14px] leading-none font-semibold">
+            {t('record.form.title')}
+          </h2>
+          <CompletenessBadge patient={patient} tenant={tenant} />
+        </div>
+        <p className="mb-5 text-[12.5px] leading-normal text-ink-muted">{t('record.form.intro')}</p>
+        {archived && !dirty && (
+          <p
+            role="note"
+            className="mb-4 rounded-lg border border-border bg-faint px-3 py-2.5 text-[12.5px] leading-[1.45] text-ink-secondary"
+          >
+            {patient.mergedIntoId === null ? t('record.form.archived') : t('record.form.merged')}
+          </p>
         )}
-      </form>
-    </section>
+        {keptEdits && (
+          <p
+            role="alert"
+            className="mb-4 rounded-lg border border-danger-border bg-danger-bg px-3 py-2.5 text-[12.5px] leading-[1.45] font-medium text-danger"
+          >
+            {t('form.archivedWhileEditing')}
+          </p>
+        )}
+        <form
+          ref={formRef}
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submit();
+          }}
+        >
+          <fieldset disabled={readOnly} className="m-0 min-w-0 border-0 p-0">
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-x-[18px] gap-y-3.5">
+              {field('fullName')}
+              {field('phone')}
+              {field('dateOfBirth')}
+              {field('sex')}
+              {field('email')}
+              {field('dentist')}
+              {field('address', 'col-span-full')}
+              {field('insurance')}
+              {field('alerts', 'col-span-full')}
+              {field('notes', 'col-span-full')}
+            </div>
+          </fieldset>
+          {!readOnly && (
+            <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-row-divider pt-4">
+              {/* `aria-disabled`, not `disabled`: focus stays on the button through a save. */}
+              <Button
+                type="submit"
+                variant="primary"
+                aria-disabled={blocked}
+                className="aria-disabled:cursor-not-allowed aria-disabled:opacity-45"
+              >
+                {t('common:save')}
+              </Button>
+              <SaveState
+                status={status}
+                onRetry={() => {
+                  void submit();
+                }}
+              />
+            </div>
+          )}
+        </form>
+      </section>
+      <ContactDraftContext value={cardDrafts.report}>
+        <ContactsCard
+          patient={patient}
+          tenant={tenant}
+          actions={contactActions}
+          onAdd={onAddContact}
+        />
+      </ContactDraftContext>
+    </div>
   );
 }

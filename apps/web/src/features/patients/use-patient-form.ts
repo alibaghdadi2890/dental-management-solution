@@ -115,9 +115,12 @@ export function usePatientForm(
     },
     /** The create panel's Guardian block shows while the DOB makes the patient a minor. */
     showGuardianBlock: showGuardianBlock(values, today),
-    /** Create only: a contact to link in the create's transaction (`addPendingContact`). */
-    addContact: (link: ContactLinkInput, display: ContactDisplay) => {
+    /** Create only: a contact to link in the create's transaction (`addPendingContact`); false
+     * when it is refused (already pending, the contact this patient becomes, or the cap reached). */
+    addContact: (link: ContactLinkInput, display: ContactDisplay): boolean => {
+      if (addPendingContact(values, link, display) === values) return false;
       changeContacts((current) => addPendingContact(current, link, display));
+      return true;
     },
     updateContact: (key: string, patch: Partial<Omit<ContactLinkInput, 'target'>>) => {
       changeContacts((current) => updatePendingContact(current, key, patch));

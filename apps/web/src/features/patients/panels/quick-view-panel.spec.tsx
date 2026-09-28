@@ -314,6 +314,23 @@ describe('QuickViewPanel — Contacts', () => {
     });
   });
 
+  it('marks a contact whose patient record is archived', async () => {
+    const archivedHusband = {
+      ...HUSBAND,
+      contact: {
+        ...HUSBAND.contact,
+        linkedPatient: { id: id(42), displayNumber: 'P-000042', archived: true },
+      },
+    };
+    mockApi({ patients: [RANA], contacts: { [RANA.id]: [archivedHusband] } });
+    renderPanels({ url: '/?panel=quick:' + RANA.id });
+    const aside = await quickView();
+    await waitFor(() => {
+      expect(rows(aside)).toHaveLength(1);
+    });
+    expect(within(rows(aside)[0] as HTMLElement).getByText('Archived')).toBeTruthy();
+  });
+
   it('says when no contact is recorded', async () => {
     mockApi({ patients: [RANA] });
     renderPanels({ url: `/?panel=quick:${RANA.id}` });

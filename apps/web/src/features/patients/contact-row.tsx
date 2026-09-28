@@ -82,7 +82,8 @@ function Phone({ phone, country }: { phone: string; country: string }) {
 
 /**
  * One contact line (design addendum "Frontend"): avatar · name · relationship, then the role
- * pills, the Mono phone (always left-to-right) and "Patient P-…" when the contact is a patient.
+ * pills, the Mono phone (always left-to-right) and "Patient P-…" when the contact is a patient
+ * ("Archived" beside it for an archived one).
  * `actions` sit at the row's end, `note` after the pills (the merge's "from P-…"); `children`
  * (an inline editor) and `error` go beneath.
  */
@@ -124,6 +125,11 @@ export function ContactRow({
             <RolePills roles={row.roles} primary={row.primary} />
             {row.phone !== null && <Phone phone={row.phone} country={country} />}
             {row.patient && <PatientBadge patient={row.patient} asLink={patientLink} />}
+            {row.patient?.archived && (
+              <span className={cn(pill, 'border-border bg-subtle text-ink-secondary')}>
+                {t('archivedBadge')}
+              </span>
+            )}
             {note}
           </div>
         </div>
@@ -164,7 +170,7 @@ export function ContactIdentity({
   );
 }
 
-/** A checkbox with its label (the role toggles). */
+/** A checkbox with its label (the role toggles); Enter never submits the form it sits in. */
 export function Toggle({
   label,
   checked,
@@ -185,6 +191,10 @@ export function Toggle({
     >
       <input
         type="checkbox"
+        // Enter on a checkbox would submit the patient form around it.
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.preventDefault();
+        }}
         checked={checked}
         disabled={disabled}
         onChange={(event) => {

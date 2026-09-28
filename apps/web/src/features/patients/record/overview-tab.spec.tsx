@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mockApi, patient, problem, renderRecord } from '../patients.test-utils';
+import { mockApi, patient, patientContact, problem, renderRecord } from '../patients.test-utils';
 
 const RANA = patient(1, 'Rana Haddad', {
   email: 'rana@example.com',
@@ -150,6 +150,11 @@ describe('OverviewTab', () => {
     mockApi({ patients: [RANA] });
     const { router } = renderRecord({ url: URL_ });
     const info = await card('Patient information');
+    await waitFor(() => {
+      expect(within(info).getByText('Contacts').nextElementSibling?.textContent).toBe(
+        'Not recorded',
+      );
+    });
     const rows = Object.fromEntries(
       within(info)
         .getAllByRole('term')
@@ -161,6 +166,7 @@ describe('OverviewTab', () => {
       Email: 'rana@example.com',
       Address: 'Not recorded',
       Insurance: 'Allianz — Gold',
+      Contacts: 'Not recorded',
     });
     fireEvent.click(within(info).getByRole('button', { name: 'Complete' }));
     await waitFor(() => {
@@ -169,5 +175,113 @@ describe('OverviewTab', () => {
     expect(
       await screen.findByRole('tab', { name: 'Patient information', selected: true }),
     ).toBeTruthy();
+  });
+
+  describe('Contacts row (design addendum "Record")', () => {
+    /** The Contacts row's value, once the contacts have loaded. */
+    const contactsRow = async () => {
+      const info = await card('Patient information');
+      const value = within(info).getByText('Contacts').nextElementSibling;
+      if (!(value instanceof HTMLElement)) throw new Error('No Contacts value');
+      await waitFor(() => {
+        expect(within(value).queryByRole('status')).toBeNull();
+      });
+      return value;
+    };
+    const billing = { isBillingContact: true, isPrimaryBilling: true };
+
+    it('names the primary guardian and the primary billing contact', async () => {
+      mockApi({
+        patients: [RANA],
+        contacts: {
+          [RANA.id]: [
+            patientContact(61, 'Sami Haddad', { isPrimaryGuardian: false }),
+            patientContact(60, 'Maria Haddad'),
+            patientContact(62, 'Karim Haddad', {
+              isGuardian: false,
+              isPrimaryGuardian: false,
+              ...billing,
+            }),
+          ],
+        },
+      });
+      renderRecord({ url: URL_ });
+      expect((await contactsRow()).textContent).toBe(
+        'Guardian: Maria Haddad · Billing: Karim Haddad',
+      );
+    });
+
+    it('announces the contacts loading', async () => {
+      mockApi({
+        patients: [RANA],
+        get: (path) =>
+          path.endsWith('/contacts') ? new Promise<Response>(() => undefined) : undefined,
+      });
+      renderRecord({ url: URL_ });
+      const info = await card('Patient information');
+      const value = within(info).getByText('Contacts').nextElementSibling as HTMLElement;
+      expect(within(value).getByRole('status', { name: 'Loading contacts' })).toBeTruthy();
+    });
+
+    it('names the first holder of a role when none is marked primary, as the header does', async () => {
+      mockApi({
+        patients: [RANA],
+        contacts: {
+          [RANA.id]: [
+            patientContact(61, 'Sami Haddad', { isPrimaryGuardian: false }),
+            patientContact(62, 'Nadia Haddad', { isPrimaryGuardian: false }),
+          ],
+        },
+      });
+      renderRecord({ url: URL_ });
+      expect((await contactsRow()).textContent).toBe('Guardian: Sami Haddad');
+    });
+
+    it('names one person once, with their roles, when they are both', async () => {
+      mockApi({
+        patients: [RANA],
+        contacts: { [RANA.id]: [patientContact(60, 'Maria Haddad', billing)] },
+      });
+      renderRecord({ url: URL_ });
+      expect((await contactsRow()).textContent).toBe('Maria Haddad (guardian, billing)');
+    });
+
+    it('names the primary emergency contact too, the row replacing Emergency', async () => {
+      mockApi({
+        patients: [RANA],
+        contacts: {
+          [RANA.id]: [
+            patientContact(60, 'Maria Haddad', billing),
+            patientContact(62, 'Nadia Haddad', {
+              isGuardian: false,
+              isPrimaryGuardian: false,
+              isEmergencyContact: true,
+              isPrimaryEmergency: true,
+            }),
+          ],
+        },
+      });
+      renderRecord({ url: URL_ });
+      expect((await contactsRow()).textContent).toBe(
+        'Maria Haddad (guardian, billing) · Emergency: Nadia Haddad',
+      );
+    });
+
+    it('reads "Not recorded" without contacts, in the muted tone', async () => {
+      mockApi({ patients: [RANA], contacts: { [RANA.id]: [] } });
+      renderRecord({ url: URL_ });
+      const value = await contactsRow();
+      expect(value.textContent).toBe('Not recorded');
+      expect(value.querySelector('span')?.className).toContain('text-ink-muted');
+    });
+
+    it('says so when the contacts fail to load', async () => {
+      mockApi({
+        patients: [RANA],
+        get: (path) => (path.endsWith('/contacts') ? problem(500, 'internal') : undefined),
+      });
+      renderRecord({ url: URL_ });
+      expect((await contactsRow()).textContent).toBe('Couldn’t load the contacts.');
+    });
   });
 });

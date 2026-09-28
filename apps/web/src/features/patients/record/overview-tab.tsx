@@ -1,11 +1,15 @@
-import type { Patient, Session } from '@dcm/contracts';
+import type { Patient, PatientContact, Session } from '@dcm/contracts';
+import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/card';
+import { SHIMMER } from '@/components/ui/list';
 import { usePermission } from '@/features/auth/use-permission';
 import { BalanceCard } from '@/features/billing/balance-card';
 import { formatCalendarDate, formatMoney, formatPhone } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { CONTACT_ROLES, type ContactRole, roleHolder } from '../contact-rows';
+import { contactsQuery } from '../contacts-api';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -65,6 +69,68 @@ function InfoRow({
   );
 }
 
+/** Each role's holder (its primary, else its first holder), one entry per person, in role order
+ * (guardian, billing, emergency). */
+function primaries(links: readonly PatientContact[]) {
+  const people: { name: string; roles: ContactRole[] }[] = [];
+  const byContact = new Map<string, { name: string; roles: ContactRole[] }>();
+  for (const role of CONTACT_ROLES) {
+    const link = roleHolder(links, role);
+    if (!link) continue;
+    const known = byContact.get(link.contact.id);
+    if (known) {
+      known.roles.push(role);
+      continue;
+    }
+    const person = { name: link.contact.fullName, roles: [role] };
+    byContact.set(link.contact.id, person);
+    people.push(person);
+  }
+  return people;
+}
+
+/**
+ * The Contacts row (design addendum "Record", in place of the base design's Emergency row): who
+ * the primary guardian, billing and emergency contacts are — "Guardian: Maria Haddad · Billing:
+ * Karim Haddad", one person holding several roles named once ("Maria Haddad (guardian, billing)")
+ * — or "Not recorded".
+ */
+function ContactsValue({ patient }: { patient: Patient }) {
+  const { t, i18n } = useTranslation('patients');
+  const contacts = useQuery(contactsQuery(patient.id));
+  if (contacts.isPending) {
+    return (
+      <span
+        role="status"
+        aria-label={t('contacts.current.loading')}
+        className={cn('inline-block h-2.5 w-40 align-middle', SHIMMER)}
+      />
+    );
+  }
+  if (contacts.isError) {
+    return <span className="text-ink-muted">{t('contacts.current.failed')}</span>;
+  }
+  const people = primaries(contacts.data);
+  if (people.length === 0) {
+    return <span className="text-ink-muted">{t('record.info.notRecorded')}</span>;
+  }
+  const list = new Intl.ListFormat(i18n.resolvedLanguage ?? 'en', {
+    style: 'short',
+    type: 'unit',
+  });
+  return people
+    .map(({ name, roles }) => {
+      const [only] = roles;
+      return roles.length === 1 && only
+        ? t('record.info.contactRole', { role: t(`contacts.roles.${only}`), name })
+        : t('record.info.contactRoles', {
+            name,
+            roles: list.format(roles.map((role) => t(`record.info.roleWords.${role}`))),
+          });
+    })
+    .join(' · ');
+}
+
 function PatientInfoCard({
   patient,
   tenant,
@@ -114,6 +180,7 @@ function PatientInfoCard({
         <InfoRow label={t('record.info.email')} value={patient.email} />
         <InfoRow label={t('record.info.address')} value={patient.address} />
         <InfoRow label={t('record.info.insurance')} value={patient.insurance} />
+        <InfoRow label={t('record.info.contacts')} value={<ContactsValue patient={patient} />} />
       </dl>
     </Card>
   );

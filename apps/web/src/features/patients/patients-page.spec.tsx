@@ -323,6 +323,35 @@ describe('PatientsPage', () => {
     expect(cells[3]?.textContent).toBe('—');
   });
 
+  it('shows a minor’s primary guardian phone "via" their first name (design addendum C7)', async () => {
+    const year = Number(todayIn('Asia/Beirut').slice(0, 4));
+    const minorDob = `${String(year - 8)}-01-01`;
+    const maria = {
+      contactId: id(60),
+      fullName: 'Maria  Haddad',
+      phone: '+9613987654',
+      relationship: 'parent',
+    } as const;
+    mockApi({
+      items: [
+        item(6, 'Kid Haddad', { phone: null, dateOfBirth: minorDob, primaryGuardian: maria }),
+        item(7, 'Teen Haddad', { dateOfBirth: minorDob }),
+        item(8, 'Grown Haddad', { primaryGuardian: maria }),
+      ],
+    });
+    renderPage();
+    const kid = within(await rowOf('Kid Haddad')).getAllByRole('cell')[3];
+    expect(kid?.querySelector('[dir="ltr"]')?.textContent).toBe('03 987 654');
+    expect(within(kid as HTMLElement).getByText('via Maria').className).toContain('text-[11.5px]');
+    // A minor without a guardian, and an adult (whose guardian, if any, is not who to call).
+    expect(within(await rowOf('Teen Haddad')).getAllByRole('cell')[3]?.textContent).toBe(
+      '03 123 456',
+    );
+    expect(within(await rowOf('Grown Haddad')).getAllByRole('cell')[3]?.textContent).toBe(
+      '03 123 456',
+    );
+  });
+
   it('names a deactivated dentist from the staff list', async () => {
     mockApi({
       items: [item(5, 'Omar Nassar', { primaryDentistId: profileId(INACTIVE_DENTIST_ID) })],

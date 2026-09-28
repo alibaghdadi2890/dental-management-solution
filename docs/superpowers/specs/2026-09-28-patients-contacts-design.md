@@ -1,6 +1,6 @@
 # Feature 3 — Patients: contacts & family, dentist profile ids — design addendum
 
-Date: 2026-09-28 · Status: draft for review · Amends
+Date: 2026-09-28 · Status: Implemented · Amends
 `docs/superpowers/specs/2026-09-27-patients-design.md` (the "base spec"), which stays the
 reference for everything not changed here.
 
@@ -76,13 +76,62 @@ phone country comes from the tenant `country` (base spec Q3); zero opening balan
     "Make primary" per held role, which applies at once. Pending rows can be edited too; removing a
     pending row needs no confirm, while unlinking a saved one does.
   - **Link offer.** The typed phone, once valid for the tenant country, is looked up by its E.164
-    digits (`GET /contacts/lookup`, debounced) and matched exactly against unlinked contacts. It
-    is never offered for a contact already pending on this patient, since a minor's phone is often
-    a parent's. The link holds while the phone stays that number, however it is typed.
-  - **Edit panel.** The adult disclosure opens by itself when the patient has contacts.
+    digits (`GET /contacts/lookup`, debounced) and matched exactly.
+    - An adult matching an unlinked contact is asked "Is this patient {name}? Link to their contact
+      record." (Yes, same person / No). Yes sets `linkContactId`, shown as a removable "Will link
+      to {name}" chip. The link holds while the phone stays that number, however it is typed.
+    - A minor never becomes a contact: their phone is most often a parent's. The match (a contact
+      or a patient) is offered as "This phone belongs to {name}. Add {name} as guardian?" instead,
+      which stages it in the Guardian block. A `linkContactId` made while the patient was an
+      adult is dropped when the date of birth makes them a minor.
+    - Nobody already added to this patient is offered, nor anyone answered No / Not now.
+  - **Unsaved work.** A staged pick, a role editor with changes, or a new contact being typed
+    counts as unsaved (the "Unsaved" badge and the leave guard), though Save has nothing to send
+    for it. Enter on a role checkbox never submits the patient form.
+  - **Edit panel.** The adult disclosure opens by itself once the patient has contacts, and stays
+    open when the last one is removed. One contact action runs at a time. A new guardian the server
+    refuses is staged again, keeping what was typed. After Apply, Cancel or Remove, focus returns
+    to the row's Edit button, or to the next row's, or to the picker.
   - **Merge.** "Contacts — will be kept" ORs the roles and keeps the kept record's relationship.
     It sets apart a contact that is one of the two records, since the merge removes that
     self-link.
+  - **Link offer, minors.** A contact is offered before a patient, and a patient who is a minor
+    (a sibling on the same phone) never is. While another guardian is being picked or typed,
+    "Add as guardian" is held back with "Finish or cancel the contact you're adding first", since
+    staging the offer would replace that work.
+- **List, palette and record (J3):**
+  - **List "via".** Only for a minor (DOB, tenant today) whose primary guardian has a phone; the
+    line reads "via {first word of the name}". Anyone else shows their own phone, or "—".
+  - **Contacts row.** Names each primary role's holder, one person once: "Guardian: Maria Haddad
+    · Billing: Karim Haddad", or "Maria Haddad (guardian, billing)". It also names the primary
+    emergency contact, since the row replaces the base design's Emergency row (confirmed by the
+    product owner: an emergency contact applies to patients of every age).
+  - **Guardian chip.** The primary guardian (else the first guardian, the policy the Contacts
+    row shares for each role); the phone is left out when the guardian has none.
+  - **Contacts & family card.** Below the form card on Patient information. The ⋯ menu holds Edit
+    roles (the panels' inline role editor, with Make primary), Remove (confirm, then unlink) and,
+    for a contact who is a patient, Open record. Focus returns to the row's ⋯, else the next
+    row's, else Add contact. Read-only without `patient:write` or for an archived record.
+  - **Add contact panel.** Held in the record's URL (`?panel=add-contact`). It opens only on
+    Patient information: on another tab the param is ignored. Opening and closing replace the
+    history entry, as tabs do, so the record stays one entry; switching tabs closes it. It uses
+    the "Contacts & family" linker. A minor's pick starts as Parent + Guardian, and also Billing
+    and Emergency when no guardian is recorded yet. Success closes the panel and focus returns
+    to Add contact.
+  - **One of everything.** The card and the panel share one set of contact actions, so one runs
+    at a time. The Patient information tab has one unsaved-changes guard covering the form, a
+    card role editor with changes, and the panel's staged pick or new contact. Leaving the tab
+    asks once; closing the panel asks only for the panel's work.
+  - **Link offer hold-back.** Only someone being added (a staged pick, a new contact being typed)
+    holds back "Add as guardian"; a pending row's role editor does not, since the offer would not
+    replace it.
+- **End to end (K1):** `e2e/patients.spec.ts` runs the Playwright flow below as one test in
+  steps, then carries on with the rest of the family: a brother registered with the same
+  guardian, found in the Guardian block by her phone digits (both children's Contacts & family
+  cards list her, one contact), and the mother registered as a patient through the adult link
+  offer ("Is this patient …?" → Yes), after which her daughter's card shows her "Patient P-…"
+  badge. `e2e/identity.spec.ts` has the front desk add a contact from the record's Add contact
+  panel (new contact, Spouse, Emergency contact), and still see no Activity in the quick view.
 
 ## Frontend
 
@@ -92,11 +141,13 @@ phone country comes from the tenant `country` (base spec Q3); zero opening balan
   name*, phone*, relationship select. Emits a `ContactLinkInput` target.
 - **Create panel**: the guardian and emergency text fields are gone. For a minor (DOB), a
   **Guardian block** appears above the optional fields: the picker, relationship, and two
-  checked-by-default toggles "Also billing contact", "Also emergency contact"; an amber "No
-  guardian recorded" note when none (never blocks). Phone loses its required mark for minors. For
-  adults the same control sits in a collapsed "Contacts & family (optional)" disclosure. When the
-  typed phone matches an unlinked contact, the panel offers "Link to {name}" (`linkContactId`).
-  Pending links are sent with the create.
+  checked-by-default toggles "Also billing contact", "Also emergency contact" (on for the first
+  guardian only; see Implementation notes, "Guardian toggles"); an amber "No guardian recorded"
+  note when none (never blocks). Phone loses its required mark for minors. For adults the same
+  control sits in a collapsed "Contacts & family (optional)" disclosure. When the typed phone
+  matches someone known, an adult is asked whether they are that contact (`linkContactId`) and a
+  minor is offered them as guardian (Implementation notes, "Link offer"). Pending links are sent
+  with the create.
 - **Edit panel**: the same blocks show current contacts; link/unlink/roles apply immediately
   through the C5 routes (toast + refetch), independent of Save.
 - **Quick view**: a Contacts block — name · relationship · role pills (Guardian / Billing /

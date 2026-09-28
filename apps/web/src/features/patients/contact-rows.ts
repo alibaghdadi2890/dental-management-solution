@@ -100,3 +100,28 @@ export function rowOfLink(link: PatientContact): ContactRowModel {
     },
   };
 }
+
+/** Who a saved patient's picker leaves out: its contacts, the patient itself (never its own
+ * contact), and the patients its contacts are. */
+export function linkExclusions(patientId: string, links: readonly PatientContact[]) {
+  return {
+    contactIds: links.map((link) => link.contact.id),
+    patientIds: [
+      patientId,
+      ...links.flatMap((link) =>
+        link.contact.linkedPatient ? [link.contact.linkedPatient.id] : [],
+      ),
+    ],
+  };
+}
+
+/** Who holds `role` for the patient: its primary, or — should none be marked — the first holder
+ * (the header's guardian chip and the Overview's Contacts row read it alike). */
+export function roleHolder(
+  links: readonly PatientContact[],
+  role: ContactRole,
+): PatientContact | undefined {
+  return (
+    links.find((link) => link[PRIMARY_FIELD[role]]) ?? links.find((link) => link[ROLE_FIELD[role]])
+  );
+}

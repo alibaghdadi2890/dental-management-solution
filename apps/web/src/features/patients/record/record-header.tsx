@@ -1,14 +1,17 @@
-import type { Patient, Session } from '@dcm/contracts';
+import type { Patient, PatientContact, Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/list';
 import { Tabs } from '@/components/ui/tabs';
 import { usePermission } from '@/features/auth/use-permission';
 import { formatAgeLine, formatPhone, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
+import { roleHolder } from '../contact-rows';
+import { contactsQuery } from '../contacts-api';
+import { minorOn } from '../patient-form';
 import { usePatientNavigation } from '../patient-navigation';
 import { patientQuery } from '../patients-api';
 import { useArchivePatients } from '../use-archive-patients';
@@ -66,6 +69,30 @@ function AlertIcon() {
   );
 }
 
+/**
+ * A minor's guardian chip (design addendum "Record"): "Guardian · {name} · {phone}" in the
+ * guardian indigo (`#eceef8` / `#c3c7ea`, 11.5px), the phone left-to-right. The amber "No
+ * guardian recorded" note lives in the Contacts & family card, not here.
+ */
+function GuardianChip({ guardian, country }: { guardian: PatientContact; country: string }) {
+  const { t } = useTranslation('patients');
+  const { fullName, phone } = guardian.contact;
+  return (
+    <p className="m-0 inline-block rounded-md border border-primary-tint-border bg-primary-tint px-[9px] py-[5px] text-[11.5px] leading-none font-medium text-primary">
+      {phone ? (
+        <Trans
+          t={t}
+          i18nKey="record.guardianWithPhone"
+          values={{ name: fullName, phone: formatPhone(phone, country) }}
+          components={{ phone: <span dir="ltr" className="font-mono tabular-nums" /> }}
+        />
+      ) : (
+        t('record.guardian', { name: fullName })
+      )}
+    </p>
+  );
+}
+
 /** "This record was merged into P-…", linking to the kept record (design Q11). */
 function MergedNotice({ keptId }: { keptId: string }) {
   const { t } = useTranslation('patients');
@@ -89,9 +116,9 @@ function MergedNotice({ keptId }: { keptId: string }) {
 /**
  * The patient record's header (workspace spec §Screen 3 header, design §Patient record): the
  * "All patients" back link, the avatar, name and metadata (number, age line, phone), the medical
- * alert chips, then Edit patient — or, for an archived record, the Archived badge and Restore
- * (never for a merged one: the server refuses it) — and the tabs. No Start visit or Add note until
- * visits exist.
+ * alert chips and — for a minor — the guardian chip, then Edit patient — or, for an archived
+ * record, the Archived badge and Restore (never for a merged one: the server refuses it) — and the
+ * tabs. No Start visit or Add note until visits exist.
  */
 export function RecordHeader({
   patient,
@@ -131,7 +158,12 @@ export function RecordHeader({
     actionsRef.current?.querySelector('button')?.focus();
   }, [archived]);
 
-  const ageLine = formatAgeLine(patient.dateOfBirth, todayIn(tenant.timeZone), { locale });
+  const today = todayIn(tenant.timeZone);
+  const ageLine = formatAgeLine(patient.dateOfBirth, today, { locale });
+  const minor = minorOn(patient.dateOfBirth, today);
+  // A minor's guardian (the chip); nothing while the contacts load or when there is none.
+  const contacts = useQuery({ ...contactsQuery(patient.id), enabled: minor });
+  const guardian = minor && contacts.data ? roleHolder(contacts.data, 'guardian') : undefined;
   const age =
     ageLine.kind === 'full'
       ? t('record.ageLine', { age: t('ageYears', { count: ageLine.age }), dob: ageLine.dob })
@@ -168,21 +200,26 @@ export function RecordHeader({
             )}
           </div>
         </div>
-        {patient.medicalAlerts.length > 0 && (
-          <ul
-            aria-label={t('record.alerts')}
-            className="m-0 flex list-none flex-wrap gap-[7px] p-0 pt-1"
-          >
-            {patient.medicalAlerts.map((alert) => (
-              <li
-                key={alert}
-                className="inline-flex items-center gap-[5px] rounded-md border border-warning-border bg-warning-bg px-[9px] py-[5px] text-[11.5px] leading-none font-medium text-warning"
+        {(patient.medicalAlerts.length > 0 || guardian) && (
+          <div data-record-chips className="flex flex-wrap items-center gap-[7px] pt-1">
+            {patient.medicalAlerts.length > 0 && (
+              <ul
+                aria-label={t('record.alerts')}
+                className="m-0 flex list-none flex-wrap gap-[7px] p-0"
               >
-                <AlertIcon />
-                {alert}
-              </li>
-            ))}
-          </ul>
+                {patient.medicalAlerts.map((alert) => (
+                  <li
+                    key={alert}
+                    className="inline-flex items-center gap-[5px] rounded-md border border-warning-border bg-warning-bg px-[9px] py-[5px] text-[11.5px] leading-none font-medium text-warning"
+                  >
+                    <AlertIcon />
+                    {alert}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {guardian && <GuardianChip guardian={guardian} country={tenant.country} />}
+          </div>
         )}
         {canWrite && merged === null && (
           <div ref={actionsRef} className="ms-auto flex gap-2 pt-1">

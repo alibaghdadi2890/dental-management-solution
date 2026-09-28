@@ -393,8 +393,8 @@ export function renderRecord({
   });
   function RecordRoute() {
     const { patientId } = recordRoute.useParams();
-    const { tab } = recordRoute.useSearch();
-    return <PatientRecordScreen patientId={patientId} tab={tab} />;
+    const { tab, panel } = recordRoute.useSearch();
+    return <PatientRecordScreen patientId={patientId} tab={tab} panel={panel} />;
   }
   const routeTree = rootRoute.addChildren([
     createRoute({

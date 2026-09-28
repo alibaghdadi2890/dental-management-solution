@@ -69,7 +69,8 @@ const contactRows = () =>
   );
 /** Searches the picker named `label` for `text` and picks the option named like `option`. */
 const pick = async (label: string, text: string, option: RegExp) => {
-  fireEvent.change(screen.getByRole('combobox', { name: label }), { target: { value: text } });
+  const search = await screen.findByRole('combobox', { name: label });
+  fireEvent.change(search, { target: { value: text } });
   fireEvent.click(await screen.findByRole('option', { name: option }));
 };
 const createButton = () => screen.getByRole('button', { name: 'Create patient' });
@@ -92,7 +93,7 @@ describe('PatientFormPanel — Guardian block (minors)', () => {
 
     type('Date of birth', dobYearsAgo(17));
     const heading = screen.getByRole('heading', { name: 'Guardian' });
-    const search = screen.getByRole<HTMLInputElement>('combobox', { name: 'Guardian' });
+    const search = screen.getByRole<HTMLInputElement>('combobox', { name: 'Search a guardian' });
     expect(search.placeholder).toBe('Search a parent by name or phone…');
     // Above "More details" (the optional fields).
     const more = screen.getByText('More details');
@@ -128,9 +129,9 @@ describe('PatientFormPanel — Guardian block (minors)', () => {
     await panel('Register a patient');
     type('Full name', 'Lina Aoun');
     type('Date of birth', dobYearsAgo(7));
-    await pick('Guardian', 'Maria', /Maria Haddad/);
+    await pick('Search a guardian', 'Maria', /Maria Haddad/);
 
-    const staged = screen.getByRole('group', { name: 'Maria Haddad' });
+    const staged = screen.getByRole('group', { name: 'Adding Maria Haddad' });
     fireEvent.change(within(staged).getByRole('combobox', { name: 'Relationship' }), {
       target: { value: 'caregiver' },
     });
@@ -203,7 +204,7 @@ describe('PatientFormPanel — Guardian block (minors)', () => {
     renderPanels({ url: '/?panel=new' });
     await panel('Register a patient');
     type('Date of birth', dobYearsAgo(7));
-    await pick('Guardian', 'Maria', /Maria Haddad/);
+    await pick('Search a guardian', 'Maria', /Maria Haddad/);
     fireEvent.click(screen.getByRole('button', { name: 'Add guardian' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove Maria Haddad' }));
     expect(screen.queryByRole('list', { name: 'Contacts' })).toBeNull();
@@ -225,7 +226,7 @@ describe('PatientFormPanel — Guardian block (minors)', () => {
     await panel('Register a patient');
     type('Full name', 'Lina Aoun');
     type('Date of birth', dobYearsAgo(7));
-    await pick('Guardian', 'Maria', /Maria Haddad/);
+    await pick('Search a guardian', 'Maria', /Maria Haddad/);
     fireEvent.click(screen.getByRole('button', { name: 'Add guardian' }));
     fireEvent.click(createButton());
     const [row] = contactRows();
@@ -254,7 +255,7 @@ describe('PatientFormPanel — Contacts & family (adults)', () => {
     expect(search.placeholder).toBe('Search a contact…');
     await pick('Contact', 'Maria', /Maria Haddad/);
 
-    const staged = screen.getByRole('group', { name: 'Maria Haddad' });
+    const staged = screen.getByRole('group', { name: 'Adding Maria Haddad' });
     const add = within(staged).getByRole('button', { name: 'Add contact' });
     const roles = within(staged).getByRole('group', { name: 'Roles' });
     expect(
@@ -341,21 +342,22 @@ describe('PatientFormPanel — Contacts & family (adults)', () => {
   });
 });
 
-describe('PatientFormPanel — link offer (linkContactId)', () => {
-  const offer = 'This phone belongs to contact Maria Haddad. Link this patient to Maria Haddad?';
+describe('PatientFormPanel — phone matches a contact', () => {
+  const identity = 'Is this patient Maria Haddad? Link to their contact record.';
+  const guardianOffer = 'This phone belongs to Maria Haddad. Add Maria Haddad as guardian?';
+  const lookedUp = (fetchMock: ReturnType<typeof mockApi>) =>
+    fetchMock.mock.calls.map(([url]) => url).filter((url) => url.includes('/contacts/lookup'));
 
-  it('offers the unlinked contact whose phone was typed; Link sends linkContactId', async () => {
+  it('asks an adult whether they are the unlinked contact; Yes sends linkContactId', async () => {
     const fetchMock = mockApi({ lookup: [OMAR, MARIA] });
     renderPanels({ url: '/?panel=new' });
     await panel('Register a patient');
     type('Full name', 'Maria Haddad');
     type('Phone', '03 987 654');
-    expect(await screen.findByText(offer)).toBeTruthy();
-    expect(
-      fetchMock.mock.calls.map(([url]) => url).filter((url) => url.includes('/contacts/lookup')),
-    ).toEqual(['/api/v1/contacts/lookup?q=9613987654']);
-    fireEvent.click(screen.getByRole('button', { name: 'Link' }));
-    expect(screen.queryByText(offer)).toBeNull();
+    expect(await screen.findByText(identity)).toBeTruthy();
+    expect(lookedUp(fetchMock)).toEqual(['/api/v1/contacts/lookup?q=9613987654']);
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, same person' }));
+    expect(screen.queryByText(identity)).toBeNull();
     expect(screen.getByText('Will link to Maria Haddad')).toBeTruthy();
 
     fireEvent.click(createButton());
@@ -363,13 +365,13 @@ describe('PatientFormPanel — link offer (linkContactId)', () => {
     expect(sent(fetchMock, 'POST', '/patients')).toMatchObject({ linkContactId: MARIA_ID });
   });
 
-  it('forgets the link when the phone changes, and Not now dismisses the offer', async () => {
+  it('forgets the link when the phone changes, and No dismisses the question', async () => {
     const fetchMock = mockApi({ lookup: [MARIA] });
     renderPanels({ url: '/?panel=new' });
     await panel('Register a patient');
     type('Full name', 'Maria Haddad');
     type('Phone', '03 987 654');
-    fireEvent.click(await screen.findByRole('button', { name: 'Link' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Yes, same person' }));
     // The same number typed another way is the same phone.
     type('Phone', '+961 3 987 654');
     expect(screen.getByText('Will link to Maria Haddad')).toBeTruthy();
@@ -377,8 +379,8 @@ describe('PatientFormPanel — link offer (linkContactId)', () => {
     expect(screen.queryByText('Will link to Maria Haddad')).toBeNull();
 
     type('Phone', '03 987 654');
-    fireEvent.click(await screen.findByRole('button', { name: 'Not now' }));
-    expect(screen.queryByText(offer)).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'No' }));
+    expect(screen.queryByText(identity)).toBeNull();
     fireEvent.click(createButton());
     await screen.findByText('Patient created');
     expect(sent(fetchMock, 'POST', '/patients')).not.toHaveProperty('linkContactId');
@@ -396,7 +398,7 @@ describe('PatientFormPanel — link offer (linkContactId)', () => {
     await panel('Register a patient');
     type('Full name', 'Maria Haddad');
     type('Phone', '03 987 654');
-    fireEvent.click(await screen.findByRole('button', { name: 'Link' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Yes, same person' }));
     fireEvent.click(createButton());
     expect(
       await screen.findByText(
@@ -404,6 +406,231 @@ describe('PatientFormPanel — link offer (linkContactId)', () => {
       ),
     ).toBeTruthy();
     expect(screen.getByText('Will link to Maria Haddad')).toBeTruthy();
+  });
+
+  it('offers a minor the contact as guardian, never as who the patient is', async () => {
+    const fetchMock = mockApi({ lookup: [MARIA] });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Lina Aoun');
+    type('Date of birth', dobYearsAgo(7));
+    type('Phone', '03 987 654');
+    expect(await screen.findByText(guardianOffer)).toBeTruthy();
+    expect(screen.queryByText(identity)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add as guardian' }));
+    expect(screen.queryByText(guardianOffer)).toBeNull();
+
+    const staged = screen.getByRole('group', { name: 'Adding Maria Haddad' });
+    expect(
+      within(staged).getByRole<HTMLSelectElement>('combobox', { name: 'Relationship' }).value,
+    ).toBe('parent');
+    fireEvent.click(within(staged).getByRole('button', { name: 'Add guardian' }));
+    fireEvent.click(createButton());
+    await screen.findByText('Patient created');
+    const body = sent(fetchMock, 'POST', '/patients');
+    expect(body).toMatchObject({
+      contacts: [
+        {
+          target: { contactId: MARIA_ID },
+          relationship: 'parent',
+          isGuardian: true,
+          isBillingContact: true,
+          isEmergencyContact: true,
+        },
+      ],
+    });
+    expect(body).not.toHaveProperty('linkContactId');
+  });
+
+  it('offers a minor a contact before a patient, and never a patient who is a minor', async () => {
+    const [y = '', m = '', d = ''] = TODAY.split('-');
+    const patientWith = (n: number, fullName: string, dateOfBirth: string): ContactLookupItem => ({
+      kind: 'patient',
+      patient: {
+        id: id(n),
+        displayNumber: `P-0000${String(n)}`,
+        fullName,
+        phone: '+9613987654',
+        dateOfBirth,
+      },
+    });
+    const sibling = patientWith(45, 'Lea Haddad', `${String(Number(y) - 12)}-${m}-${d}`);
+    const father = patientWith(46, 'Elias Haddad', '1980-01-01');
+    mockApi({ lookup: [sibling, father, MARIA] });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Lina Aoun');
+    type('Date of birth', dobYearsAgo(7));
+    type('Phone', '03 987 654');
+    expect(await screen.findByText(guardianOffer)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    // Maria answered: the adult patient is next; the minor sibling never is.
+    expect(
+      await screen.findByText('This phone belongs to Elias Haddad. Add Elias Haddad as guardian?'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByText(/This phone belongs to/)).toBeNull();
+  });
+
+  it('holds back "Add as guardian" while another guardian is being added, not discarding it', async () => {
+    mockApi({ lookup: [MARIA, SAMI] });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Lina Aoun');
+    type('Date of birth', dobYearsAgo(7));
+    await pick('Search a guardian', 'Sami', /Sami Haddad/);
+    type('Phone', '03 987 654');
+    expect(await screen.findByText(guardianOffer)).toBeTruthy();
+    const accept = screen.getByRole('button', { name: 'Add as guardian' });
+    expect(accept).toHaveProperty('disabled', true);
+    expect(screen.getByText('Finish or cancel the contact you’re adding first.')).toBeTruthy();
+    fireEvent.click(accept);
+    expect(screen.getByRole('group', { name: 'Adding Sami Haddad' })).toBeTruthy();
+
+    const staged = screen.getByRole('group', { name: 'Adding Sami Haddad' });
+    fireEvent.click(within(staged).getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('button', { name: 'Add as guardian' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(screen.queryByText('Finish or cancel the contact you’re adding first.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add as guardian' }));
+    expect(screen.getByRole('group', { name: 'Adding Maria Haddad' })).toBeTruthy();
+  });
+
+  it('lets "Add as guardian" through while only a pending row’s roles are being edited', async () => {
+    mockApi({ lookup: [MARIA, SAMI] });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Lina Aoun');
+    type('Date of birth', dobYearsAgo(7));
+    await pick('Search a guardian', 'Sami', /Sami Haddad/);
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Adding Sami Haddad' })).getByRole('button', {
+        name: 'Add guardian',
+      }),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Sami Haddad' }));
+    const editor = screen.getByRole('group', { name: 'Roles of Sami Haddad' });
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'Billing contact' }));
+    type('Phone', '03 987 654');
+    expect(await screen.findByText(guardianOffer)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add as guardian' })).toHaveProperty(
+      'disabled',
+      false,
+    );
+    expect(screen.queryByText('Finish or cancel the contact you’re adding first.')).toBeNull();
+  });
+
+  it('drops a link made for an adult once the date of birth makes the patient a minor', async () => {
+    const fetchMock = mockApi({ lookup: [MARIA] });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Lina Aoun');
+    type('Phone', '03 987 654');
+    fireEvent.click(await screen.findByRole('button', { name: 'Yes, same person' }));
+    expect(screen.getByText('Will link to Maria Haddad')).toBeTruthy();
+    type('Date of birth', dobYearsAgo(7));
+    expect(screen.queryByText('Will link to Maria Haddad')).toBeNull();
+    expect(await screen.findByText(guardianOffer)).toBeTruthy();
+    fireEvent.click(createButton());
+    await screen.findByText('Patient created');
+    expect(sent(fetchMock, 'POST', '/patients')).not.toHaveProperty('linkContactId');
+  });
+
+  it('never offers a contact already added to this patient', async () => {
+    const fetchMock = mockApi({ lookup: [MARIA] });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Rana Haddad');
+    fireEvent.click(screen.getByRole('button', { name: 'Contacts & family (optional)' }));
+    await pick('Contact', 'Maria', /Maria Haddad/);
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Billing contact' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }));
+    type('Phone', '03 987 654');
+    await waitFor(() => {
+      expect(lookedUp(fetchMock)).toContain('/api/v1/contacts/lookup?q=9613987654');
+    });
+    // Answered and settled: still nothing offered.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(screen.queryByText(identity)).toBeNull();
+    expect(screen.queryByText(guardianOffer)).toBeNull();
+  });
+});
+
+describe('PatientFormPanel — contact drafts', () => {
+  it('counts a staged pick as an unsaved change', async () => {
+    mockApi({ lookup: [MARIA] });
+    renderPanels({ url: '/?panel=new' });
+    const aside = await panel('Register a patient');
+    fireEvent.click(screen.getByRole('button', { name: 'Contacts & family (optional)' }));
+    expect(within(aside).queryByText('Unsaved')).toBeNull();
+    await pick('Contact', 'Maria', /Maria Haddad/);
+    expect(within(aside).getByText('Unsaved')).toBeTruthy();
+    const staged = screen.getByRole('group', { name: 'Adding Maria Haddad' });
+    fireEvent.click(within(staged).getByRole('button', { name: 'Cancel' }));
+    expect(within(aside).queryByText('Unsaved')).toBeNull();
+  });
+
+  it('never submits the patient form on Enter in a role checkbox', async () => {
+    mockApi({ lookup: [MARIA] });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Date of birth', dobYearsAgo(7));
+    expect(fireEvent.keyDown(checkbox('Also billing contact'), { key: 'Enter' })).toBe(false);
+    type('Date of birth', '');
+    fireEvent.click(screen.getByRole('button', { name: 'Contacts & family (optional)' }));
+    await pick('Contact', 'Maria', /Maria Haddad/);
+    expect(fireEvent.keyDown(checkbox('Billing contact'), { key: 'Enter' })).toBe(false);
+    fireEvent.click(checkbox('Billing contact'));
+    fireEvent.click(screen.getByRole('button', { name: 'Add contact' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Maria Haddad' }));
+    const editor = screen.getByRole('group', { name: 'Roles of Maria Haddad' });
+    expect(
+      fireEvent.keyDown(within(editor).getByRole('checkbox', { name: 'Guardian' }), {
+        key: 'Enter',
+      }),
+    ).toBe(false);
+  });
+
+  it('returns focus to the row after editing, and to the next row or the picker after removing', async () => {
+    mockApi({ lookup: [MARIA, SAMI] });
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    fireEvent.click(screen.getByRole('button', { name: 'Contacts & family (optional)' }));
+    for (const [name, pattern] of [
+      ['Maria', /Maria Haddad/],
+      ['Sami', /Sami Haddad/],
+    ] as const) {
+      await pick('Contact', name, pattern);
+      fireEvent.click(checkbox('Billing contact'));
+      fireEvent.click(screen.getByRole('button', { name: 'Add contact' }));
+      // Each add hands focus back to the search box.
+      await waitFor(() => {
+        expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Contact' }));
+      });
+    }
+    const edit = (name: string) => screen.getByRole('button', { name: `Edit ${name}` });
+    fireEvent.click(edit('Maria Haddad'));
+    const editor = screen.getByRole('group', { name: 'Roles of Maria Haddad' });
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(edit('Maria Haddad'));
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Maria Haddad' }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(edit('Sami Haddad'));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Sami Haddad' }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Contact' }));
+    });
+    // Opened by the person, the disclosure stays open with no contact left.
+    expect(screen.getByRole('button', { name: 'Contacts & family (optional)' }).ariaExpanded).toBe(
+      'true',
+    );
   });
 });
 
@@ -571,6 +798,88 @@ describe('PatientFormPanel — edit: contacts apply immediately', () => {
     await waitFor(() => {
       expect(contactRows()).toHaveLength(1);
     });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit Omar Haddad' }));
+    });
+  });
+
+  it('keeps the disclosure open and focuses the picker once the last contact is removed', async () => {
+    mockApi({ patients: [RANA], contacts: { [RANA.id]: [MARIA_LINK] } });
+    renderPanels({ url: `/?panel=edit:${RANA.id}` });
+    await panel('Rana Haddad');
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Maria Haddad' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }));
+    expect(await screen.findByText('Contact removed')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Contacts & family (optional)' }).ariaExpanded).toBe(
+      'true',
+    );
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Contact' }));
+    });
+  });
+
+  it('counts a changed role editor as unsaved without enabling Save', async () => {
+    mockApi({ patients: [RANA], contacts: { [RANA.id]: [MARIA_LINK] } });
+    renderPanels({ url: `/?panel=edit:${RANA.id}` });
+    const aside = await panel('Rana Haddad');
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Maria Haddad' }));
+    const editor = screen.getByRole('group', { name: 'Roles of Maria Haddad' });
+    expect(within(aside).queryByText('Unsaved')).toBeNull();
+    fireEvent.click(within(editor).getByRole('checkbox', { name: 'Guardian' }));
+    expect(within(aside).getByText('Unsaved')).toBeTruthy();
+    expect(within(aside).getByRole('button', { name: 'Save changes' })).toHaveProperty(
+      'disabled',
+      true,
+    );
+    fireEvent.click(within(editor).getByRole('button', { name: 'Cancel' }));
+    expect(within(aside).queryByText('Unsaved')).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Edit Maria Haddad' }),
+      );
+    });
+  });
+
+  it('keeps a new guardian typed in the picker when adding it fails, to try again', async () => {
+    const LINA = patient(3, 'Lina Aoun', { dateOfBirth: '2019-01-01', phone: null });
+    let attempts = 0;
+    const fetchMock = mockApi({
+      patients: [LINA],
+      mutation: (method, path) => {
+        if (method !== 'POST' || path !== `/patients/${LINA.id}/contacts`) return undefined;
+        attempts += 1;
+        return attempts === 1 ? problem(409, 'contact.conflict') : undefined;
+      },
+    });
+    renderPanels({ url: `/?panel=edit:${LINA.id}` });
+    await panel('Lina Aoun');
+    const addNew = await screen.findByRole('button', { name: 'Add new contact' });
+    await waitFor(() => {
+      expect(addNew).toHaveProperty('disabled', false);
+    });
+    fireEvent.click(addNew);
+    const form = screen.getByRole('group', { name: 'New contact' });
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Name' }), {
+      target: { value: 'Maria Haddad' },
+    });
+    fireEvent.change(within(form).getByRole('textbox', { name: 'Phone' }), {
+      target: { value: '03 987 654' },
+    });
+    fireEvent.click(within(form).getByRole('button', { name: 'Add contact' }));
+    expect(
+      await screen.findByText(
+        'Couldn’t update contacts: someone else changed these contacts — reload and try again',
+      ),
+    ).toBeTruthy();
+    const staged = await screen.findByRole('group', { name: 'Adding Maria Haddad' });
+    fireEvent.click(within(staged).getByRole('button', { name: 'Add guardian' }));
+    expect(await screen.findByText('Contact added')).toBeTruthy();
+    expect(sent(fetchMock, 'POST', `/patients/${LINA.id}/contacts`)).toMatchObject({
+      target: { newContact: { fullName: 'Maria Haddad', phone: '+9613987654' } },
+      relationship: 'parent',
+      isGuardian: true,
+    });
   });
 
   it('toasts a failed action in the person’s language', async () => {
@@ -593,11 +902,11 @@ describe('PatientFormPanel — edit: contacts apply immediately', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add contact' }));
     expect(
       await screen.findByText(
-        "Couldn't update contacts: this contact is already linked to the patient",
+        'Couldn’t update contacts: this contact is already linked to the patient',
       ),
     ).toBeTruthy();
     // The choice is kept, to try again.
-    expect(screen.getByRole('group', { name: 'Sami Haddad' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Adding Sami Haddad' })).toBeTruthy();
   });
 
   it('shows a minor’s guardian block with the current contacts and the amber note', async () => {
