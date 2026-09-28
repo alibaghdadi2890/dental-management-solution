@@ -45,6 +45,8 @@ export async function createTestApp(database: TestDatabase): Promise<TestApp> {
 
   const app = moduleRef.createNestApplication<NestExpressApplication>({ logger: false });
   configureApp(app);
-  await app.init();
+  // Listening once up front (loopback, a free port): supertest otherwise calls `listen(0)` on the
+  // same server for every request, and more than 10 concurrent ones trip MaxListenersExceeded.
+  await app.listen(0, '127.0.0.1');
   return { app, clock, close: () => app.close() };
 }
