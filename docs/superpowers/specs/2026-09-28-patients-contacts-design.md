@@ -53,6 +53,16 @@ phone country comes from the tenant `country` (base spec Q3); zero opening balan
 | C14 | **Export** adds "Guardian name" and "Guardian phone" (primary guardian, resolved; national format for tenant-country numbers).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | —    |
 | C15 | **Migration 0009 is rewritten** (patients, counters, contacts, patient_contacts, enums) and 0010/0011 regenerated after it. The local dev database is reset once for these three migrations (tenants are already empty): drop the patients/billing tables and enums and their three `__drizzle_migrations` rows, then `db:migrate`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | —    |
 
+### Implementation notes
+
+- **C14 column placement (I1):** Guardian name and Guardian phone sit right after Phone in the
+  export, not at the end. Both are "how to reach someone about this patient", so grouping them
+  with the patient's own phone reads better than splitting them across the sheet by the
+  visit/dentist/balance columns. Guardian phone reuses the same national/foreign formatting and
+  CSV injection guard as the patient's own phone column; a linked guardian who is themself a
+  patient resolves from that patient's own name and phone (`PatientsService.guardiansFor`, backed
+  by the same `listRowsByIds` resolution the Patients list uses for C7).
+
 ## Frontend
 
 - **Contact picker** (`features/patients/contact-picker.tsx`): the search-or-create control. 36px

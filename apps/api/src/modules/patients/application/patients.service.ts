@@ -12,6 +12,7 @@ import {
   type PatientPage,
   type PatientPatch,
   type PatientRestore,
+  type PrimaryGuardian,
   type Tenant,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -218,6 +219,18 @@ export class PatientsService {
   async getMany(ids: readonly string[]): Promise<Patient[]> {
     this.context.requirePermission('patient:read');
     return (await this.patients.findByIds(ids)).map(toPatient);
+  }
+
+  /**
+   * For `billing`'s export (design addendum C14): each id's resolved primary guardian, keyed by
+   * patient id. Ids without one (or invisible under RLS) are simply absent from the map.
+   */
+  async guardiansFor(ids: readonly string[]): Promise<Map<string, PrimaryGuardian>> {
+    this.context.requirePermission('patient:read');
+    const rows = await this.patients.listRowsByIds(ids);
+    return new Map(
+      rows.flatMap((row) => (row.primaryGuardian ? [[row.id, row.primaryGuardian] as const] : [])),
+    );
   }
 
   /**

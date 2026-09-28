@@ -5,6 +5,7 @@ import type {
   OpeningBalanceResult,
   Patient,
   PatientBalance,
+  PatientContact,
   ProblemDetails,
   Session,
   Tenant,
@@ -28,6 +29,9 @@ const TEMPORARY = 'temporary-pw-1';
 const NOON = '2026-06-10T09:00:00Z';
 const TODAY = '2026-06-10';
 
+/** A minor on any date this suite runs (the phone rule lets them go without a phone). */
+const CHILD_DOB = '2018-05-01';
+
 interface Clinic {
   tenant: Tenant;
   owner: TestAgent;
@@ -35,6 +39,18 @@ interface Clinic {
 }
 
 const firstPath = (body: unknown) => (body as ProblemDetails).errors?.[0]?.path;
+
+const problem = (body: unknown) => body as ProblemDetails;
+
+type Roles = Partial<Record<'isGuardian' | 'isBillingContact' | 'isEmergencyContact', boolean>>;
+
+const newContact = (fullName: string, phone: string) => ({ newContact: { fullName, phone } });
+
+const linkInput = (target: object, relationship: string, roles: Roles = { isGuardian: true }) => ({
+  target,
+  relationship,
+  ...roles,
+});
 
 describe('billing: ledger, opening balances and balances', () => {
   let database: TestDatabase;
@@ -88,6 +104,43 @@ describe('billing: ledger, opening balances and balances', () => {
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
+
+  const createPatientWith = async (agent: TestAgent, body: Record<string, unknown>) => {
+    const response = await agent.post('/api/v1/patients').send(body);
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    return response.body as Patient;
+  };
+
+  const contactsOf = async (agent: TestAgent, patientId: string) => {
+    const response = await agent.get(`/api/v1/patients/${patientId}/contacts`);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    return response.body as PatientContact[];
+  };
+
+  const counterOf = async (tenantId: string) =>
+    (
+      await database.ownerPool.query<{ last_value: number }>(
+        'select last_value::int from patient_counters where tenant_id = $1',
+        [tenantId],
+      )
+    ).rows[0]?.last_value ?? 0;
+
+  /** Counts of new rows a rolled-back opening balance with contacts must leave at zero. */
+  const contactsLeftovers = async (tenantId: string) =>
+    (
+      await database.ownerPool.query<{
+        patients: number;
+        contacts: number;
+        links: number;
+        entries: number;
+      }>(
+        `select (select count(*) from patients where tenant_id = $1)::int as patients,
+                (select count(*) from contacts where tenant_id = $1)::int as contacts,
+                (select count(*) from patient_contacts where tenant_id = $1)::int as links,
+                (select count(*) from ledger_entries where tenant_id = $1)::int as entries`,
+        [tenantId],
+      )
+    ).rows[0];
 
   const adjust = (agent: TestAgent, patientId: string, body: Record<string, unknown>) =>
     agent.post(`/api/v1/billing/patients/${patientId}/adjustments`).send(body);
@@ -272,6 +325,135 @@ describe('billing: ledger, opening balances and balances', () => {
         const response = await main.owner.post('/api/v1/billing/opening-balances').send(body);
         expect(response.status, JSON.stringify(body)).toBe(400);
       }
+    });
+  });
+
+  describe('create with an opening balance and contacts (design addendum C4, I1)', () => {
+    it('creates the patient, a new guardian and the opening entry in one transaction', async () => {
+      const clinic = await provision('Opening Contacts Clinic');
+      const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
+        patient: {
+          fullName: 'Karim Haddad',
+          dateOfBirth: CHILD_DOB,
+          contacts: [
+            linkInput(newContact('Rania Haddad', '71 600 001'), 'parent', {
+              isGuardian: true,
+              isBillingContact: true,
+            }),
+          ],
+        },
+        openingBalance: { amount: '75.00', asOf: TODAY },
+      });
+      expect(response.status, JSON.stringify(response.body)).toBe(201);
+      const { patient, balance } = response.body as OpeningBalanceResult;
+      expect(patient).toMatchObject({ fullName: 'Karim Haddad', phone: null });
+      expect(balance.balances).toEqual([{ amount: '75.00', currency: 'USD' }]);
+
+      const [guardian] = await contactsOf(clinic.owner, patient.id);
+      expect(guardian).toMatchObject({
+        contact: { fullName: 'Rania Haddad', phone: '+96171600001' },
+        relationship: 'parent',
+        isGuardian: true,
+        isBillingContact: true,
+        isPrimaryGuardian: true,
+        isPrimaryBilling: true,
+      });
+
+      const patientEntries = await auditOf(
+        clinic.owner,
+        `resourceType=patient&resourceId=${patient.id}`,
+      );
+      expect(patientEntries.map((entry) => entry.action).sort()).toEqual([
+        'contact.link',
+        'patient.create',
+      ]);
+      const [ledgerAudit] = await auditOf(clinic.owner, 'resourceType=ledger_entry');
+      expect(ledgerAudit).toMatchObject({
+        action: 'ledger_entry.create',
+        after: { patientId: patient.id, kind: 'opening_balance' },
+      });
+      const [linked] = await events(clinic.owner, 'ContactLinked');
+      expect(linked?.after).toEqual({ patientId: patient.id, contactId: guardian?.contact.id });
+    });
+
+    it('makes an existing unlinked contact the new patient via patient.linkContactId', async () => {
+      const clinic = await provision('LinkContactId Clinic');
+      const child = await createPatientWith(clinic.owner, {
+        fullName: 'Zein Fares',
+        dateOfBirth: CHILD_DOB,
+        contacts: [linkInput(newContact('Huda Fares', '71 700 001'), 'parent')],
+      });
+      const [before] = await contactsOf(clinic.owner, child.id);
+      const contactId = before?.contact.id;
+      if (!contactId) throw new Error('no guardian');
+
+      const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
+        patient: { fullName: 'Huda Fares', phone: '71 700 002', linkContactId: contactId },
+        openingBalance: { amount: '15.00', asOf: TODAY },
+      });
+      expect(response.status, JSON.stringify(response.body)).toBe(201);
+      const { patient } = response.body as OpeningBalanceResult;
+      expect(patient.fullName).toBe('Huda Fares');
+
+      const [after] = await contactsOf(clinic.owner, child.id);
+      expect(after?.contact.linkedPatient?.id).toBe(patient.id);
+    });
+
+    it('reports an unknown contact target under patient.contacts and creates nothing', async () => {
+      const clinic = await provision('Contacts Rollback Clinic');
+      const before = await counterOf(clinic.tenant.id);
+
+      const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
+        patient: {
+          fullName: 'Never Billed',
+          dateOfBirth: CHILD_DOB,
+          contacts: [linkInput({ contactId: newId() }, 'parent')],
+        },
+        openingBalance: { amount: '10.00', asOf: TODAY },
+      });
+      expect(response.status).toBe(422);
+      expect(problem(response.body)).toMatchObject({
+        code: 'validation_failed',
+        errors: [{ path: 'patient.contacts.0.target.contactId', code: 'not_found' }],
+      });
+
+      expect(await contactsLeftovers(clinic.tenant.id)).toEqual({
+        patients: 0,
+        contacts: 0,
+        links: 0,
+        entries: 0,
+      });
+      expect(await counterOf(clinic.tenant.id)).toBe(before);
+    });
+
+    it('rolls the patient and its just-linked contact back when the ledger insert fails', async () => {
+      const clinic = await provision('Contacts Ledger Rollback Clinic');
+      const before = await counterOf(clinic.tenant.id);
+      const insert = vi
+        .spyOn(testApp.app.get(LedgerEntriesRepository), 'insert')
+        .mockRejectedValueOnce(new Error('ledger unavailable'));
+      try {
+        const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
+          patient: {
+            fullName: 'Rolled Back Kid',
+            dateOfBirth: CHILD_DOB,
+            contacts: [linkInput(newContact('Rolled Guardian', '71 800 001'), 'parent')],
+          },
+          openingBalance: { amount: '10.00', asOf: TODAY },
+        });
+        expect(response.status).toBe(500);
+        expect(insert).toHaveBeenCalledOnce();
+      } finally {
+        insert.mockRestore();
+      }
+
+      expect(await contactsLeftovers(clinic.tenant.id)).toEqual({
+        patients: 0,
+        contacts: 0,
+        links: 0,
+        entries: 0,
+      });
+      expect(await counterOf(clinic.tenant.id)).toBe(before);
     });
   });
 

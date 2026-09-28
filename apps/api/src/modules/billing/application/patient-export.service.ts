@@ -4,6 +4,7 @@ import {
   type Patient,
   type PatientExportQuery,
   type PatientSex,
+  type PrimaryGuardian,
   type Tenant,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -19,7 +20,17 @@ import { LedgerEntriesRepository } from '../persistence/ledger-entries.repositor
 import { PatientViewsService } from './patient-views.service';
 
 type ColumnKey =
-  'patientId' | 'name' | 'age' | 'sex' | 'phone' | 'lastVisit' | 'dentist' | 'visits' | 'balance';
+  | 'patientId'
+  | 'name'
+  | 'age'
+  | 'sex'
+  | 'phone'
+  | 'guardianName'
+  | 'guardianPhone'
+  | 'lastVisit'
+  | 'dentist'
+  | 'visits'
+  | 'balance';
 
 /** The header row and the sex values, in the caller's language (`http/export-headers.ts`). */
 export type ExportLabels = Record<ColumnKey, string> & {
@@ -51,6 +62,8 @@ interface RowContext {
   labels: ExportLabels;
   balance: string | undefined;
   dentistName: string | undefined;
+  /** The patient's resolved primary guardian (design addendum C7), absent when none. */
+  guardian: PrimaryGuardian | undefined;
 }
 
 interface Column {
@@ -81,6 +94,15 @@ const COLUMNS: readonly Column[] = [
     // A minor may have no phone of their own (design addendum C3).
     value: ({ patient, tenant }) =>
       patient.phone === null ? '' : formatPhoneFor(patient.phone, tenant.country),
+  },
+  // The resolved primary guardian (design addendum C14), placed next to the patient's own phone;
+  // empty cells when the patient has none. The guardian's phone follows the same national/foreign
+  // formatting (and injection guard) as the patient's own.
+  { key: 'guardianName', value: ({ guardian }) => guardian?.fullName ?? '' },
+  {
+    key: 'guardianPhone',
+    value: ({ guardian, tenant }) =>
+      guardian?.phone == null ? '' : formatPhoneFor(guardian.phone, tenant.country),
   },
   // Last visit and Visits: empty until visits exist (feature 4).
   { key: 'lastVisit', value: () => '' },
@@ -153,6 +175,7 @@ export class PatientExportService {
       if (batch.length === 0) continue;
       const balances = await this.balancesIn(batch, shared.tenant.currency);
       await this.resolveDentists(batch, dentistNames);
+      const guardians = await this.patients.guardiansFor(batch.map((patient) => patient.id));
       const lines = batch.map((patient) => {
         const row: RowContext = {
           ...shared,
@@ -162,6 +185,7 @@ export class PatientExportService {
             patient.primaryDentistId === null
               ? undefined
               : dentistNames.get(patient.primaryDentistId),
+          guardian: guardians.get(patient.id),
         };
         return csvRow(
           COLUMNS.map((column) => column.value(row)),

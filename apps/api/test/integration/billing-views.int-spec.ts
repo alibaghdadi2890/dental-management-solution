@@ -347,6 +347,9 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         'Female',
         // The tenant country's (LB) numbers in national format, unguarded.
         '71 123 456',
+        // No primary guardian.
+        '',
+        '',
         '',
         'Dr. Export Dentist',
         '',
@@ -363,9 +366,11 @@ describe('billing: patient views, CSV export and merge re-point', () => {
       expect(response.headers['x-content-type-options']).toBe('nosniff');
       expect(response.headers['cache-control']).toBe('no-store');
       expect(csvLines(response.text)).toEqual([
-        'Patient ID,Name,Age,Sex,Phone,Last visit,Dentist,Visits,Balance (USD)',
+        'Patient ID,Name,Age,Sex,Phone,Guardian name,Guardian phone,Last visit,Dentist,Visits,Balance (USD)',
         ranaRow(),
-        [ranad.displayNumber, 'Ranad Plain', '', '', '03 123 456', '', '', '', '0.00'].join(','),
+        [ranad.displayNumber, 'Ranad Plain', '', '', '03 123 456', '', '', '', '', '', '0.00'].join(
+          ',',
+        ),
       ]);
     });
 
@@ -381,6 +386,8 @@ describe('billing: patient views, CSV export and merge re-point', () => {
           '',
           '',
           '',
+          '',
+          '',
           '-50.00',
         ].join(','),
       );
@@ -389,7 +396,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
     it('localises the header and the sex values from Accept-Language', async () => {
       const arabic = csvLines((await exportCsv(clinic.owner, 'q=rana', 'ar-LB,ar;q=0.9')).text);
       expect(arabic[0]).toBe(
-        'رقم المريض,الاسم,العمر,الجنس,الهاتف,آخر زيارة,الطبيب,الزيارات,الرصيد (USD)',
+        'رقم المريض,الاسم,العمر,الجنس,الهاتف,اسم ولي الأمر,هاتف ولي الأمر,آخر زيارة,الطبيب,الزيارات,الرصيد (USD)',
       );
       expect(arabic[1]?.split(',')[3]).toBe('أنثى');
       const french = csvLines((await exportCsv(clinic.owner, 'q=rana', 'fr')).text);
@@ -461,8 +468,117 @@ describe('billing: patient views, CSV export and merge re-point', () => {
 
       const lines = csvLines((await exportCsv(clinic.owner, `ids=${kid.id}`)).text);
       expect(lines[1]).toBe(
-        [kid.displayNumber, 'Kid Nophone', '8', '', '', '', 'Dr. Gone Since', '', '0.00'].join(','),
+        [
+          kid.displayNumber,
+          'Kid Nophone',
+          '8',
+          '',
+          '',
+          '',
+          '',
+          '',
+          'Dr. Gone Since',
+          '',
+          '0.00',
+        ].join(','),
       );
+    });
+
+    describe('guardian columns (design addendum C14)', () => {
+      it("shows a minor's primary guardian, name and phone in national format", async () => {
+        const kid = await createPatient(clinic.owner, {
+          fullName: 'Guarded Kid',
+          phone: null,
+          dateOfBirth: '2018-06-10',
+          contacts: [
+            {
+              target: { newContact: { fullName: 'Guardian Mom', phone: '71 900 001' } },
+              relationship: 'parent',
+              isGuardian: true,
+            },
+          ],
+        });
+        const lines = csvLines((await exportCsv(clinic.owner, `ids=${kid.id}`)).text);
+        expect(lines[1]).toBe(
+          [
+            kid.displayNumber,
+            'Guarded Kid',
+            '8',
+            '',
+            '',
+            'Guardian Mom',
+            '71 900 001',
+            '',
+            '',
+            '',
+            '0.00',
+          ].join(','),
+        );
+      });
+
+      it('resolves a guardian who is themself a patient from that patient record', async () => {
+        const mother = await createPatient(clinic.owner, {
+          fullName: 'Resolved Mother',
+          phone: '71 900 002',
+        });
+        const kid = await createPatient(clinic.owner, {
+          fullName: 'Resolved Kid',
+          phone: null,
+          dateOfBirth: '2018-06-10',
+          contacts: [
+            {
+              target: { patientId: mother.id },
+              relationship: 'parent',
+              isGuardian: true,
+            },
+          ],
+        });
+        const lines = csvLines((await exportCsv(clinic.owner, `ids=${kid.id}`)).text);
+        const cells = lines[1]?.split(',') ?? [];
+        expect(cells[5]).toBe('Resolved Mother');
+        expect(cells[6]).toBe('71 900 002');
+      });
+
+      it('guards a formula-looking guardian name with a leading quote', async () => {
+        const kid = await createPatient(clinic.owner, {
+          fullName: 'Evil Guardian Kid',
+          phone: null,
+          dateOfBirth: '2018-06-10',
+          contacts: [
+            {
+              target: {
+                newContact: {
+                  fullName: '=HYPERLINK("http://evil.example","Click")',
+                  phone: '71 900 003',
+                },
+              },
+              relationship: 'parent',
+              isGuardian: true,
+            },
+          ],
+        });
+        const lines = csvLines((await exportCsv(clinic.owner, `ids=${kid.id}`)).text);
+        expect(lines[1]).toContain('"\'=HYPERLINK(""http://evil.example"",""Click"")"');
+      });
+
+      it("never resolves another tenant's guardian into this export (isolation)", async () => {
+        const other = await provision('Other Guardian Tenant');
+        const otherKid = await createPatient(other.owner, {
+          fullName: 'Other Kid',
+          phone: null,
+          dateOfBirth: '2018-06-10',
+          contacts: [
+            {
+              target: { newContact: { fullName: 'Other Guardian', phone: '71 900 099' } },
+              relationship: 'parent',
+              isGuardian: true,
+            },
+          ],
+        });
+        const lines = csvLines((await exportCsv(clinic.owner, `ids=${otherKid.id}`)).text);
+        // Unknown under clinic's RLS: the row is simply absent, guardian included.
+        expect(lines).toHaveLength(1);
+      });
     });
 
     describe('1,200 patients', () => {

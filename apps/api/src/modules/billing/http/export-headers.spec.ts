@@ -34,6 +34,8 @@ describe('exportLabels', () => {
         labels.age,
         labels.sex,
         labels.phone,
+        labels.guardianName,
+        labels.guardianPhone,
         labels.lastVisit,
         labels.dentist,
         labels.visits,
