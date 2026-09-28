@@ -18,6 +18,10 @@ const KNOWN_ACTIONS = [
   'patient.restore',
   'patient.merge',
   'ledger_entry.repoint',
+  'contact.link',
+  'contact.unlink',
+  'contact.roles',
+  'contact.merge',
 ] as const;
 
 type KnownAction = (typeof KNOWN_ACTIONS)[number];

@@ -176,6 +176,12 @@
       "ledger_entry": {
         "repoint": "Solde transféré depuis un dossier fusionné"
       },
+      "contact": {
+        "link": "Contact ajouté",
+        "unlink": "Contact retiré",
+        "roles": "Rôles du contact modifiés",
+        "merge": "Contacts fusionnés"
+      },
       "other": "Dossier modifié"
     },
     "meta": "{{at}} · {{who}}",

@@ -35,18 +35,10 @@ person ever changes.
   - `StaffUser` (`GET /users`, `GET /users/:id`) carries `id` (the auth user id, unchanged — `:id`
     in the users routes) and the new `profileId` (`staff_profiles.id`).
   - `practitionersByProfileIds(profileIds)` looks staff up by profile id, including deactivated
-    staff, mirroring `practitionersByAuthUserIds(authUserIds)` (ADR-0016's lookup, by auth user
-    id — renamed from `practitionersByIds` so the name says which id it takes now that both exist).
-- Existing callers that still store the auth user id (`patients.primary_dentist_user_id`, and
-  `billing`'s CSV export, which reads it) keep using `listPractitioners()` and
-  `practitionersByAuthUserIds(authUserIds)` until they are migrated. The patients-contacts
-  addendum (task H1/H2) renames the column to `primary_dentist_id`, stores the profile id,
-  switches those callers to `practitionersByProfileIds`, and deletes
-  `practitionersByAuthUserIds` and the repository's `byAuthUserIds`. Both methods stay
-  undecorated (not `@deprecated`) in the interim: the project's ESLint config fails the build on
-  any use of a `@deprecated`-tagged member, which would break the very callers this ADR asks to
-  keep working until they are migrated; each method's doc comment says the same thing in prose
-  instead.
+    staff. ADR-0016's lookup by auth user id (`practitionersByAuthUserIds`, renamed from
+    `practitionersByIds`) and its repository counterpart (`byAuthUserIds`) are gone:
+    `patients.primary_dentist_id` and `billing`'s CSV export both resolve dentists through
+    `practitionersByProfileIds` now, so there is no caller left that needs an auth-user-id lookup.
 - `sortByDisplayName`'s tie-break (`practitioner-order.ts`) keeps comparing the auth user id, not
   the profile id. `(tenant_id, auth_user_id)` is unique on `staff_profiles`, so either id gives a
   valid, deterministic order; the auth user id is kept because it is the field the existing
@@ -63,12 +55,9 @@ person ever changes.
   acting user" to a staff reference — e.g. a dentist-scoped "my patients" or "own appointments"
   visibility rule in `authorization` — needs a user-id → profile-id mapping, which `users` must
   provide (a lookup alongside `practitionersByProfileIds`, not a workaround in the caller).
-- Until the patients-contacts refactor (H1/H2), `users` carries both the profile-id and user-id
-  lookups side by side; `patients` and `billing` still store and pass the auth user id. That task
-  is responsible for moving `patients.primary_dentist_user_id` to `primary_dentist_id` (storing
-  the profile id), switching `patients` and `billing` to `practitionersByProfileIds`, and deleting
-  `practitionersByAuthUserIds` / `byAuthUserIds`. Leaving that migration incomplete until then is
-  expected and tracked there, not a regression of this ADR.
-- The patients refactor (R1) completed the switch; the auth-user-id lookups are deleted.
+- All domain references to a dentist use `staff_profiles.id`: `patients.primary_dentist_id`
+  stores the profile id, and `patients` and `billing` both resolve names through
+  `practitionersByProfileIds`. The auth-user-id lookups (`practitionersByAuthUserIds`,
+  `byAuthUserIds`) were removed; nothing in the codebase still needs them.
 - Nothing about ADR-0016's module dependency (`patients` depends on `users`) or the "no foreign
   key, validated through `UsersService`" shape changes; only which id is stored and passed changes.

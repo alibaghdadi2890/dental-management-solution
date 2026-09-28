@@ -3,9 +3,10 @@ import type { CountryCode } from 'libphonenumber-js/max';
 import { toAsciiDigits } from './digits.js';
 
 /**
- * Phone parsing for `patients` (feature 3 Q3) — used for both the patient's own `phone` and
- * `guardianPhone`, which share this exact function so a fix here (e.g. rejecting extensions)
- * applies to both without a separate code path. Built on `libphonenumber-js/max`, the full
+ * Phone parsing for `patients` (feature 3 Q3) — used for the patient's own `phone` and every
+ * contact's `phone` (guardians, billing and emergency contacts), which share this exact function
+ * so a fix here (e.g. rejecting extensions) applies to all of them without a separate code path.
+ * Built on `libphonenumber-js/max`, the full
  * metadata build: validity (not just "looks like a number") matters here because balances,
  * reminders and SMS/WhatsApp delivery (feature 6+) depend on a dialable number. Pure; no I/O.
  */

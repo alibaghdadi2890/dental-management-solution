@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ageBand, ageBandBounds, ageOn, dentitionStage, isMinor } from './patient-age.js';
+import { ageBandBounds, ageOn, dentitionStage, isMinor } from './patient-age.js';
 
 describe('ageOn', () => {
   it('turns a year older the day before and on the birthday', () => {
@@ -42,29 +42,6 @@ describe('isMinor', () => {
 });
 
 describe('ageBandBounds', () => {
-  const today = '2026-09-27';
-
-  it('is consistent with ageOn/ageBand around the 18 and 65 boundaries, incl. Feb 29', () => {
-    const dobs = [
-      '2008-09-26',
-      '2008-09-27',
-      '2008-09-28',
-      '1961-09-26',
-      '1961-09-27',
-      '1961-09-28',
-      '2004-02-29', // dob on a leap day; today is not Feb 29
-      '1961-02-28',
-      '1961-03-01',
-    ];
-    for (const dob of dobs) {
-      const age = ageOn(dob, today);
-      const band = ageBand(age);
-      const bounds = ageBandBounds(band, today);
-      if (bounds.after !== undefined) expect(dob > bounds.after).toBe(true);
-      if (bounds.onOrBefore !== undefined) expect(dob <= bounds.onOrBefore).toBe(true);
-    }
-  });
-
   it('places a Feb-29 "today" boundary on Feb 28 of the non-leap threshold year', () => {
     const bounds = ageBandBounds('child', '2028-02-29');
     expect(bounds.after).toBe('2010-02-28');

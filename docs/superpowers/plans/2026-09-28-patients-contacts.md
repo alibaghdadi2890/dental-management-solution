@@ -316,7 +316,8 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
 - Specs for each.
 
 - [x] **Tests first**, for the addendum's list, palette and record items.
-- [ ] **Commit:** `feat(web): contacts on the list, palette and patient record`.
+- [x] **Commit:** `feat(web): contacts on the list, palette and patient record` (folded into
+      `36d436f`).
 
 ## Step (k) — end to end and docs
 
@@ -339,8 +340,9 @@ Take a `pg_dump -Fc` backup into the scratchpad first.
       completeness flips → ⌘K by the guardian's digits shows "via" → Enter opens the record.
 - [x] **Full gate + `pnpm --filter @dcm/web e2e`**, run against the user's dev servers after the
       dev DB reset.
-- [ ] **Commit:** `feat(web): contacts end-to-end flow and docs`.
-- [ ] **Final whole-branch review**, then `superpowers:finishing-a-development-branch`.
+- [x] **Commit:** `feat(web): contacts end-to-end flow and docs` (folded into `36d436f`).
+- [x] **Final whole-branch review**, then `superpowers:finishing-a-development-branch` (final
+      whole-branch review done 2026-09-28, ready to merge).
 
 ---
 

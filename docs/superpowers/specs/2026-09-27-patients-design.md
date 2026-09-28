@@ -413,10 +413,11 @@ ADR-0017/0018 have the detail):
   `detail`, which echo patient data, are dropped.
 - **Redis in the integration harness:** each test app gets its own `QUEUE_PREFIX`
   (`test-<id>`), so parallel suites never share BullMQ queues. `QUEUE_PREFIX` defaults to `bull`.
-- **Accepted trade-off: search terms in query strings.** The list's `q` and the duplicate check's
-  `fullName` and `dateOfBirth` travel in `GET` query strings, which are patient data. Our pino
-  request logs strip query strings; a reverse proxy in front of the API must not log them either
-  (or a later change moves the duplicate check to a `POST` body).
+- **Accepted trade-off: search terms in query strings.** The list's `q`, the duplicate check's
+  `fullName` and `dateOfBirth`, and the contacts lookup's `q` (`GET /contacts/lookup?q=`, which
+  also carries the link offer's E.164 phone digits) travel in `GET` query strings, which are
+  patient data. Our pino request logs strip query strings; a reverse proxy in front of the API
+  must not log them either (or a later change moves the duplicate check to a `POST` body).
 - **Patient information tab:** a refetch under unsaved edits does not move the form's base, so
   undoing the edits shows the latest server values.
 - **Primary dentist on a new clinic:** provisioning makes the owner a `dentist` unless the

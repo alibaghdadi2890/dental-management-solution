@@ -176,6 +176,12 @@
       "ledger_entry": {
         "repoint": "Balance moved from a merged record"
       },
+      "contact": {
+        "link": "Contact linked",
+        "unlink": "Contact removed",
+        "roles": "Contact roles changed",
+        "merge": "Contacts merged"
+      },
       "other": "Record changed"
     },
     "meta": "{{at}} · {{who}}",

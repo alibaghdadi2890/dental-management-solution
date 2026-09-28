@@ -201,6 +201,18 @@ describe('QuickViewPanel', () => {
     expect(items[1]?.textContent).toContain('· System');
   });
 
+  it('renders a contact.link audit entry with its label', async () => {
+    mockApi({
+      patients: [RANA],
+      audit: { [RANA.id]: [entry(3, { action: 'contact.link' })] },
+    });
+    renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    const activity = within(aside).getByRole('region', { name: 'Activity' });
+    const items = await within(activity).findAllByRole('listitem');
+    expect(items[0]?.firstElementChild?.nextSibling?.textContent).toBe('Contact linked');
+  });
+
   it('has no activity timeline without audit:read', async () => {
     const fetchMock = mockApi({ patients: [RANA], audit: AUDIT });
     renderPanels({

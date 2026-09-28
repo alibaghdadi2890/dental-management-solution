@@ -88,11 +88,12 @@ with an opening balance) are composed by `billing` on top of this module (design
 ## Public API (`index.ts`)
 
 `PatientsModule`, `PatientsService`, `ContactsService` (see [Contacts](#contacts)),
-`PatientSearchInternal`, `PatientRankKeys`, the domain errors (`PatientNotFoundError`,
-`PatientArchivedError`, `PatientMergedError`, `MergeSameError`, `UnknownDentistError`,
-`MergeAlertsOverflowError`, `ContactNotFoundError`, `ContactAlreadyLinkedError`,
-`ContactIsPatientError`, `ContactLinkedError`, `ContactConflictError`), and the event names and
-types (patient and contact events).
+`PatientSearchInternal`, `PatientRankKeys`, the domain errors (`MergeAlertsOverflowError`,
+`MergeSameError`, `PatientArchivedError`, `PatientMergedError`, `PatientNotFoundError`,
+`UnknownDentistError`, `ContactAlreadyLinkedError`, `ContactConflictError`,
+`ContactIsPatientError`, `ContactLinkedError`, `ContactNotFoundError`,
+`ContactPrimaryWithoutRoleError`, `ContactRoleRequiredError`), and the event names and types
+(patient and contact events).
 
 `PatientsService` (every input is the contract's Zod output; it returns the contract types):
 

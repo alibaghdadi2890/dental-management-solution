@@ -69,7 +69,7 @@ export class StaffRepository {
   }
 
   /**
-   * Active dentists, ordered by id for a deterministic DB-level order (for
+   * Active dentists, ordered by auth user id for a deterministic DB-level order (for
    * `UsersService.listPractitioners`, which re-sorts by display name in the tenant's locale — DB
    * byte-order is not locale-aware).
    */

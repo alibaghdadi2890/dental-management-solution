@@ -66,12 +66,6 @@ export function isMinor(dob: string, today: string): boolean {
 export const AGE_BANDS = ['child', 'adult', 'senior'] as const;
 export type AgeBand = (typeof AGE_BANDS)[number];
 
-export function ageBand(age: number): AgeBand {
-  if (age < ADULT_AGE) return 'child';
-  if (age < SENIOR_AGE) return 'adult';
-  return 'senior';
-}
-
 /** Subtracts whole years, clamping Feb 29 to Feb 28 when the target year is not a leap year. */
 function subtractYears(parts: DateParts, years: number): DateParts {
   const year = parts.year - years;
