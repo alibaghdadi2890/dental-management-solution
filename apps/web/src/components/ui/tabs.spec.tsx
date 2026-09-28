@@ -44,6 +44,7 @@ describe('Tabs', () => {
     expect(tab('Beta').tabIndex).toBe(-1);
     const panel = screen.getByRole('tabpanel', { name: 'Alpha' });
     expect(tab('Alpha').getAttribute('aria-controls')).toBe(panel.id);
+    expect(panel.tabIndex).toBe(0);
     expect(panel.textContent).toBe('Panel a');
   });
 

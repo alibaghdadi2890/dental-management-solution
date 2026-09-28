@@ -192,6 +192,31 @@ describe('InformationTab', () => {
     expect(await indicator()).toBe('Unsaved changes');
   });
 
+  it('shows the latest server values once edits made during a refetch are undone', async () => {
+    let current: Patient = RANA;
+    mockApi({ get: (path) => (path === `/patients/${RANA.id}` ? json(current) : undefined) });
+    const { client } = renderRecord({ url: URL_ });
+    await card();
+
+    type('Address', '12 Hamra St');
+    current = {
+      ...current,
+      fullName: 'Rana H. Haddad',
+      insurance: 'AXA',
+      updatedAt: '2026-09-28T09:05:00.000Z',
+    };
+    await client.refetchQueries({ queryKey: patientKeys.detail(null, RANA.id) });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Rana H. Haddad' })).toBeTruthy();
+    expect(field('Insurance').value).toBe('');
+
+    type('Address', '');
+    await waitFor(() => {
+      expect(field('Insurance').value).toBe('AXA');
+    });
+    expect(field(/Full name/).value).toBe('Rana H. Haddad');
+    expect(await indicator()).toBe('');
+  });
+
   it('does not validate eagerly again after a successful save', async () => {
     serverWith(RANA);
     renderRecord({ url: URL_ });

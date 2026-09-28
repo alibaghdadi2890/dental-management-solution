@@ -84,10 +84,11 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
   const blocked = readOnly || !dirty || archived || phase === 'saving';
 
   // The record changed underneath (a refetch, another tab's save): an untouched form follows it.
+  // A dirty one keeps its base until it is clean again, so undoing the edits shows the latest.
   const [basedOn, setBasedOn] = useState(patient.updatedAt);
-  if (patient.updatedAt !== basedOn && phase !== 'saving') {
+  if (patient.updatedAt !== basedOn && phase !== 'saving' && !dirty) {
     setBasedOn(patient.updatedAt);
-    if (!dirty) form.reset(fromPatient(patient, country));
+    form.reset(fromPatient(patient, country));
   }
   // A failure is about edits that are gone once the form is clean again.
   if (phase === 'failed' && !dirty) setPhase('idle');

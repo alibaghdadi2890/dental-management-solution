@@ -96,7 +96,7 @@ export function Tabs<TKey extends string>({
   );
 }
 
-/** The selected tab's panel, labelled by its tab. */
+/** The selected tab's panel, labelled by its tab, and a Tab stop of its own (WAI-ARIA tabs). */
 export function TabPanel({
   idBase,
   tabKey,
@@ -113,6 +113,7 @@ export function TabPanel({
       id={panelId(idBase, tabKey)}
       role="tabpanel"
       aria-labelledby={tabId(idBase, tabKey)}
+      tabIndex={0}
       className={className}
     >
       {children}
