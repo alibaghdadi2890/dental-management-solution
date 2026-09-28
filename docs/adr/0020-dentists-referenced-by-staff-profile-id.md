@@ -69,5 +69,6 @@ person ever changes.
   the profile id), switching `patients` and `billing` to `practitionersByProfileIds`, and deleting
   `practitionersByAuthUserIds` / `byAuthUserIds`. Leaving that migration incomplete until then is
   expected and tracked there, not a regression of this ADR.
+- The patients refactor (R1) completed the switch; the auth-user-id lookups are deleted.
 - Nothing about ADR-0016's module dependency (`patients` depends on `users`) or the "no foreign
   key, validated through `UsersService`" shape changes; only which id is stored and passed changes.

@@ -160,7 +160,7 @@ export class PatientsService {
    * Changes only the fields whose stored value differs; a patch that changes nothing writes,
    * audits and emits nothing. A dentist kept from before may be inactive; a newly chosen one must
    * be an active practitioner. The phone rule is re-checked when the patch touches the phone or
-   * the date of birth (`phoneRuleIssue`).
+   * the date of birth (`normalizeFields`).
    */
   async update(id: string, patch: PatientPatch): Promise<Patient> {
     this.context.requirePermission('patient:write');

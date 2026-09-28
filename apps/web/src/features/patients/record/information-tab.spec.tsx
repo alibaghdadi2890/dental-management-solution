@@ -79,6 +79,21 @@ describe('InformationTab', () => {
     expect(await indicator()).toBe('');
   });
 
+  it('saves a notes-only change for a phoneless patient who has come of age', async () => {
+    const agedOut = { ...RANA, phone: null, dateOfBirth: '2000-01-01' };
+    const fetchMock = serverWith(agedOut, (ok) => ok());
+    renderRecord({ url: URL_ });
+    await card();
+    type('Notes', 'Prefers mornings');
+    fireEvent.click(saveButton());
+    await waitFor(() => {
+      expect(sent(fetchMock, 'PATCH', `/patients/${agedOut.id}`)).toEqual({
+        notes: 'Prefers mornings',
+      });
+    });
+    expect(field(/Phone/).getAttribute('aria-invalid')).not.toBe('true');
+  });
+
   it('makes the phone optional for a minor, with no guardian text fields', async () => {
     mockApi({ patients: [RANA] });
     renderRecord({ url: URL_ });

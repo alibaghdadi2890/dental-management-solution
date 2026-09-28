@@ -63,7 +63,7 @@ export function InformationTab({ patient, tenant }: { patient: Patient; tenant: 
   const canWrite = usePermission('patient:write');
   const titleId = useId();
   const formRef = useRef<HTMLFormElement>(null);
-  const form = usePatientForm(() => fromPatient(patient, tenant.country), tenant, formRef);
+  const form = usePatientForm(() => fromPatient(patient, tenant.country), tenant, formRef, 'edit');
   const { initial, values, country } = form;
   const [phase, setPhase] = useState<Phase>('idle');
   const saving = useRef(false);

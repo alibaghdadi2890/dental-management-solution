@@ -40,9 +40,14 @@ export function fieldErrorsOf(error: unknown): FormErrors | null {
   if (!(error instanceof ApiError)) return null;
   if (error.code === 'patient.unknown_dentist') return { primaryDentistId: 'unknownDentist' };
   const errors: FormErrors = {};
-  for (const { path } of error.problem.errors ?? []) {
+  for (const { path, code } of error.problem.errors ?? []) {
     const field = fieldOfPath(path);
-    if (field) errors[field] = SERVER_ERROR_KEYS[field] ?? 'invalid';
+    if (!field) continue;
+    // The phone rule (a missing phone for an adult) reads "Required", not "invalid number".
+    errors[field] =
+      field === 'phone' && code === 'required'
+        ? 'required'
+        : (SERVER_ERROR_KEYS[field] ?? 'invalid');
   }
   return Object.keys(errors).length > 0 ? errors : null;
 }
@@ -52,6 +57,7 @@ export type PatientFailure =
   | 'merged'
   | 'alertsOverflow'
   | 'unknownDentist'
+  | 'phoneRequired'
   | 'notFound'
   | 'conflict'
   | 'forbidden'
@@ -67,12 +73,22 @@ const FAILURES: Record<string, PatientFailure> = {
 /**
  * A failed patient save or merge as an i18n key (`patients:failures.<key>`), so the person reads
  * a message in their language rather than the server's English problem title: the known
- * `patient.*` codes first, then the status (404, 409, 403), else `unexpected`.
+ * `patient.*` codes first, then the phone rule (422 `validation_failed` at `phone`, code
+ * `required` — e.g. a merge leaving an adult without a phone), then the status (404, 409, 403),
+ * else `unexpected`.
  */
 export function failureOf(error: unknown): PatientFailure {
   if (!(error instanceof ApiError)) return 'unexpected';
   const known = FAILURES[error.code];
   if (known) return known;
+  if (
+    error.code === 'validation_failed' &&
+    (error.problem.errors ?? []).some(
+      ({ path, code }) => fieldOfPath(path) === 'phone' && code === 'required',
+    )
+  ) {
+    return 'phoneRequired';
+  }
   if (error.status === 404) return 'notFound';
   if (error.status === 409) return 'conflict';
   if (error.status === 403) return 'forbidden';

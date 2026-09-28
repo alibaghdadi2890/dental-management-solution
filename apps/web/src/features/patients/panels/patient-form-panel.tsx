@@ -165,6 +165,7 @@ function PatientForm({
         : { ...emptyForm(prefill), openingBalanceAsOf: todayIn(tenant.timeZone) },
     tenant,
     formRef,
+    patient ? 'edit' : 'create',
   );
   const { initial, values, country, today } = form;
   const [amountText, setAmountText] = useState('');

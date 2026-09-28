@@ -16,11 +16,14 @@ export type TextField = Exclude<keyof PatientFormValues, 'sex'>;
  * show (client-side ones only once a save was attempted, plus whatever the server rejected), and
  * the tenant facts every field reads (country, today in the tenant's zone, DOB order). `formRef`
  * is the caller's `<form>`: each save attempt that shows errors focuses its first invalid field.
+ * In `edit` mode the phone rule only applies to an edit that touches the phone or the date of
+ * birth (`phoneOptional`), as on the server.
  */
 export function usePatientForm(
   start: () => PatientFormValues,
   tenant: Tenant,
   formRef: RefObject<HTMLFormElement | null>,
+  mode: 'create' | 'edit',
 ) {
   const { t } = useTranslation('patients');
   const { country } = tenant;
@@ -43,7 +46,9 @@ export function usePatientForm(
     formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
   }, [attempts, formRef]);
 
-  const clientErrors = (): FormErrors => validate(values, { country, today });
+  const baseline = mode === 'edit' ? initial : undefined;
+  const clientErrors = (): FormErrors =>
+    validate(values, { country, today, ...(baseline ? { initial: baseline } : {}) });
   const errors: FormErrors = { ...(attempts > 0 ? clientErrors() : {}), ...serverErrors };
 
   const set = (field: TextField) => (value: string) => {
@@ -75,7 +80,7 @@ export function usePatientForm(
     today,
     order,
     /** The phone is optional while the DOB makes the patient a minor (design addendum C3). */
-    phoneOptional: phoneOptional(values, today),
+    phoneOptional: phoneOptional(values, today, baseline),
     set,
     setSex: (sex: PatientSex) => {
       setValues((current) => ({ ...current, sex }));

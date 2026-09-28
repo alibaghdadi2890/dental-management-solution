@@ -92,6 +92,19 @@ describe('validate', () => {
     );
   });
 
+  it('in edit mode, requires the phone only when the edit touches the phone or date of birth', () => {
+    // A phoneless patient recorded as a minor who has since come of age.
+    const agedOut = fromPatient({ ...PATIENT, phone: null, dateOfBirth: '2000-01-01' }, 'LB');
+    const edit = { ...CTX, initial: agedOut };
+    expect(validate({ ...agedOut, notes: 'Follow up' }, edit).phone).toBeUndefined();
+    expect(validate({ ...agedOut, dateOfBirth: '1999-01-01' }, edit).phone).toBe('required');
+    // Clearing an adult's phone is still refused.
+    const adult = fromPatient(PATIENT, 'LB');
+    expect(validate({ ...adult, phone: '' }, { ...CTX, initial: adult }).phone).toBe('required');
+    // Create mode (no `initial`) always applies the rule.
+    expect(validate({ ...agedOut, notes: 'Follow up' }, CTX).phone).toBe('required');
+  });
+
   it('flags a full name over the contract limit (120 chars)', () => {
     const errors = validate({ ...base, fullName: 'x'.repeat(121), phone: '03123456' }, CTX);
     expect(errors.fullName).toBe('tooLong');
@@ -253,6 +266,14 @@ describe('validate', () => {
 });
 
 describe('phoneOptional', () => {
+  it('in edit mode, is true for an untouched phoneless adult, false once the DOB changes', () => {
+    const agedOut = fromPatient({ ...PATIENT, phone: null, dateOfBirth: '2000-01-01' }, 'LB');
+    expect(phoneOptional(agedOut, TODAY, agedOut)).toBe(true);
+    expect(phoneOptional({ ...agedOut, dateOfBirth: '1999-01-01' }, TODAY, agedOut)).toBe(false);
+    const adult = fromPatient(PATIENT, 'LB');
+    expect(phoneOptional(adult, TODAY, adult)).toBe(false);
+  });
+
   it('is false at exactly 18', () => {
     expect(phoneOptional({ ...emptyForm(), dateOfBirth: '2008-09-27' }, TODAY)).toBe(false);
   });

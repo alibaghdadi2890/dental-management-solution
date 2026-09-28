@@ -152,18 +152,35 @@ export interface ValidateContext {
   country: string;
   /** Today in the tenant's own timezone (`todayIn`), never the browser's. */
   today: string;
+  /**
+   * Edit mode only: the form's starting values. The phone rule then applies only when the edit
+   * touches the phone or the date of birth, as on the server (`phoneOptional`).
+   */
+  initial?: PatientFormValues;
 }
 
 /** True once a valid, not-in-the-future date of birth makes the patient under 18 on `today` (the
  * tenant's today) — then the phone is optional (design addendum C3, the server's own rule). An
  * unset, half-typed, or future-dated DOB never does: no date of birth means an adult, and
  * `isMinor`'s age arithmetic goes negative for a future date, which is not "a minor" by any
- * reading. */
-export function phoneOptional(values: PatientFormValues, today: string): boolean {
+ * reading. In edit mode (`initial` given) it is also optional for a patient stored without a
+ * phone while the edit leaves both the phone and the date of birth alone — a minor who has since
+ * come of age can still be edited, as the server allows. */
+export function phoneOptional(
+  values: PatientFormValues,
+  today: string,
+  initial?: PatientFormValues,
+): boolean {
+  const untouchedWithoutPhone =
+    initial !== undefined &&
+    initial.phone.trim() === '' &&
+    values.phone.trim() === '' &&
+    values.dateOfBirth === initial.dateOfBirth;
   return (
-    isoDateSchema.safeParse(values.dateOfBirth).success &&
-    values.dateOfBirth <= today &&
-    isMinor(values.dateOfBirth, today)
+    untouchedWithoutPhone ||
+    (isoDateSchema.safeParse(values.dateOfBirth).success &&
+      values.dateOfBirth <= today &&
+      isMinor(values.dateOfBirth, today))
   );
 }
 
@@ -193,7 +210,7 @@ function normalizeAmountText(text: string): string {
  * actually parse, so that whenever this returns `{}` those builders never throw. */
 export function validate(
   values: PatientFormValues,
-  { country, today }: ValidateContext,
+  { country, today, initial }: ValidateContext,
 ): FormErrors {
   const errors: FormErrors = {};
 
@@ -204,7 +221,7 @@ export function validate(
   }
 
   if (values.phone.trim() === '') {
-    if (!phoneOptional(values, today)) errors.phone = 'required';
+    if (!phoneOptional(values, today, initial)) errors.phone = 'required';
   } else if (!normalizePhone(values.phone, country as PhoneCountry)) {
     errors.phone = 'invalidPhone';
   }

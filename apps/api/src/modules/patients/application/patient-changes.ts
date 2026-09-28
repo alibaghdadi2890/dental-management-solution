@@ -45,7 +45,7 @@ function invalidPhone(): ValidationIssue {
  * the date of birth — clearing an adult's phone, or giving a phoneless minor an adult date of
  * birth — so a minor who has since come of age can still be edited without adding a phone first.
  */
-export function phoneRuleIssue(
+function phoneRuleIssue(
   change: TenantCheckedFields,
   before: PhoneRuleBaseline,
   today: string,

@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/lib/api';
 import { failureOf, fieldErrorsOf } from './form-server-errors';
 
-const apiError = (status: number, code: string, paths: string[] = []) =>
+const apiError = (status: number, code: string, paths: string[] = [], issueCode = 'custom') =>
   new ApiError({
     type: 'about:blank',
     title: 'English title from the server',
     status,
     code,
     ...(paths.length > 0
-      ? { errors: paths.map((path) => ({ path, code: 'custom', message: 'Invalid' })) }
+      ? { errors: paths.map((path) => ({ path, code: issueCode, message: 'Invalid' })) }
       : {}),
   });
 
@@ -24,6 +24,15 @@ describe('fieldErrorsOf', () => {
     expect(fieldErrorsOf(apiError(422, 'validation_failed', ['patient.medicalAlerts.3']))).toEqual({
       alerts: 'invalid',
     });
+  });
+
+  it("puts the phone rule's missing phone as Required, not as an invalid number", () => {
+    expect(fieldErrorsOf(apiError(422, 'validation_failed', ['phone'], 'required'))).toEqual({
+      phone: 'required',
+    });
+    expect(
+      fieldErrorsOf(apiError(422, 'validation_failed', ['patient.phone'], 'required')),
+    ).toEqual({ phone: 'required' });
   });
 
   it('maps opening-balance paths to the Account fields', () => {
@@ -56,6 +65,15 @@ describe('fieldErrorsOf', () => {
 });
 
 describe('failureOf', () => {
+  it('names the phone rule for a 422 on phone with code required', () => {
+    expect(failureOf(apiError(422, 'validation_failed', ['phone'], 'required'))).toBe(
+      'phoneRequired',
+    );
+    expect(failureOf(apiError(422, 'validation_failed', ['phone'], 'invalid_phone'))).toBe(
+      'unexpected',
+    );
+  });
+
   it('names the known patient failures', () => {
     expect(failureOf(apiError(409, 'patient.archived'))).toBe('archived');
     expect(failureOf(apiError(409, 'patient.merged'))).toBe('merged');
