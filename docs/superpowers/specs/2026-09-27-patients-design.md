@@ -429,7 +429,7 @@ ADR-0017/0018 have the detail):
   a negative amount is an error. As of and Note stay disabled while the amount is blank, zero or
   not a number, so nothing typed there is silently dropped, and `validate` skips them then.
 - **Date picker** (Q17): every `DateInput` (date of birth, the opening balance's As of) has a
-  "Choose date" button opening a react-day-picker calendar in a Radix popover. Years run from 1900
+  calendar button (named for its field) opening a react-day-picker calendar in a Radix popover. Years run from 1900
   (the DOB floor) to the tenant's today; days after today are disabled. It opens on the field's
   date, else on the current month (not a guessed "typical" birth year): the year dropdown is one
   pick away, and a guess would be wrong for every child. A picked day is built from its
