@@ -49,6 +49,8 @@ currency having sum(amount) > 0`).
   - Indexes: `tenant_id`, and `(tenant_id, patient_id)`.
   - Entries are never edited or deleted. The merge job is the only writer that updates a row,
     and it changes `patient_id` (and `updated_at`) only; `created_by` and the amount stay.
+    Enforced by grants (migration `0011_ledger_append_only`, like `audit_log`): the runtime roles
+    have no `DELETE` or `TRUNCATE`, and only `dcm_app` may `UPDATE`, on those two columns.
 
 ## Public API (`index.ts`)
 

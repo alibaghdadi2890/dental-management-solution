@@ -78,6 +78,13 @@
       "when": 1790536685057,
       "tag": "0010_billing",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790580220407,
+      "tag": "0011_ledger_append_only",
+      "breakpoints": true
     }
   ]
 }

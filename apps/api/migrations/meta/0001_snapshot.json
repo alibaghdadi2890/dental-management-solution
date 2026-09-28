@@ -168,9 +168,7 @@
           "name": "tenant_isolation",
           "as": "PERMISSIVE",
           "for": "ALL",
-          "to": [
-            "public"
-          ],
+          "to": ["public"],
           "using": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid",
           "withCheck": "tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid"
         }
@@ -183,12 +181,7 @@
     "public.actor_kind": {
       "name": "actor_kind",
       "schema": "public",
-      "values": [
-        "user",
-        "agent",
-        "system",
-        "job"
-      ]
+      "values": ["user", "agent", "system", "job"]
     }
   },
   "schemas": {},

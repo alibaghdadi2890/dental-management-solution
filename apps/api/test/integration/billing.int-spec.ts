@@ -509,6 +509,29 @@ describe('billing: ledger, opening balances and balances', () => {
     });
   });
 
+  describe('append-only entries (migration 0011)', () => {
+    it('cannot be deleted, truncated or have their amount rewritten by the runtime roles', async () => {
+      for (const pool of [database.appPool, database.adminPool]) {
+        await expect(pool.query('update ledger_entries set amount = 1')).rejects.toThrow(
+          /permission denied/,
+        );
+        await expect(pool.query('delete from ledger_entries')).rejects.toThrow(/permission denied/);
+        await expect(pool.query('truncate ledger_entries')).rejects.toThrow(/permission denied/);
+      }
+    });
+
+    it('lets only the app role move entries between patients (the merge re-point)', async () => {
+      await expect(
+        database.appPool.query(
+          'update ledger_entries set patient_id = patient_id, updated_at = now() where false',
+        ),
+      ).resolves.toMatchObject({ rowCount: 0 });
+      await expect(
+        database.adminPool.query('update ledger_entries set patient_id = patient_id where false'),
+      ).rejects.toThrow(/permission denied/);
+    });
+  });
+
   describe('patientIdsOwing', () => {
     it('requires payment:read', async () => {
       const service = testApp.app.get(BillingService);
