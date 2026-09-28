@@ -434,6 +434,9 @@ describe('pending contacts', () => {
     expect(values.pendingContacts).toHaveLength(2);
     const [first, second] = values.pendingContacts;
     expect(first?.key).not.toBe(second?.key);
+    expect(first?.key).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
 
     values = updatePendingContact(values, second?.key ?? '', {
       relationship: 'other',
@@ -534,6 +537,18 @@ describe('isDirty', () => {
   it('ignores leading/trailing whitespace only', () => {
     const initial = emptyForm({ fullName: 'Jane' });
     expect(isDirty(initial, { ...initial, fullName: '  Jane  ' })).toBe(false);
+  });
+
+  it('is dirty while any contact is pending, and clean again once none is', () => {
+    const initial = emptyForm({ fullName: 'Jane' });
+    const pending = addPendingContact(
+      initial,
+      guardianLink({ contactId: CONTACT_ID }, 'parent'),
+      display('Nadia'),
+    );
+    expect(isDirty(initial, pending)).toBe(true);
+    const key = pending.pendingContacts[0]?.key ?? '';
+    expect(isDirty(initial, removePendingContact(pending, key))).toBe(false);
   });
 });
 

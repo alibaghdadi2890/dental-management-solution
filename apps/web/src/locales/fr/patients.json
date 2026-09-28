@@ -257,7 +257,8 @@
       "contactNotFound": "Ce contact n’existe plus",
       "contactMerged": "Ce patient a été fusionné avec un autre dossier — recherchez à nouveau",
       "contactDuplicate": "Ce contact est déjà ajouté",
-      "contactIsPatient": "Ce contact est le patient en cours d’enregistrement"
+      "contactIsPatient": "Ce contact est le patient en cours d’enregistrement",
+      "contactAlreadyPatient": "Ce contact est déjà un patient — recherchez plutôt son dossier"
     },
     "archivedWhileEditing": "Ce patient a été archivé pendant votre modification. Vos changements restent ici, mais ne pourront être enregistrés qu’une fois le dossier restauré."
   },
@@ -307,13 +308,15 @@
     "unexpected": "une erreur s’est produite, réessayez dans un instant",
     "contactNotFound": "le contact n’existe plus",
     "contactAlreadyLinked": "ce contact est déjà lié au patient",
+    "contactAlreadyPatient": "ce contact est déjà un patient — recherchez plutôt son dossier",
     "contactLinked": "ce contact est un patient — modifiez plutôt son dossier",
     "contactConflict": "quelqu’un d’autre a modifié ces contacts — rechargez et réessayez",
     "contactIsPatient": "un patient ne peut pas être son propre contact",
     "contactRoleRequired": "un contact doit avoir au moins un rôle",
     "contactPrimaryWithoutRole": "un contact principal doit avoir ce rôle",
     "contactMerged": "ce patient a été fusionné avec un autre dossier",
-    "contactInvalidPhone": "le numéro de téléphone du contact n’est pas valide"
+    "contactInvalidPhone": "le numéro de téléphone du contact n’est pas valide",
+    "contactsTooMany": "un patient peut être enregistré avec 10 contacts au maximum"
   },
   "palette": {
     "title": "Rechercher un patient",

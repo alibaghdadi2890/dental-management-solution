@@ -272,8 +272,6 @@ function targetKey(target: ContactLinkTarget): string | undefined {
   return undefined;
 }
 
-let pendingKeys = 0;
-
 /**
  * Adds a contact to link on create. Unchanged (the same object) when it would be refused anyway:
  * the create already links 10, the contact or patient is already pending, or it is the contact
@@ -292,8 +290,7 @@ export function addPendingContact(
     }
     if (key === `contact:${values.linkContactId}`) return values;
   }
-  pendingKeys += 1;
-  const pending: PendingContact = { key: `pending-${String(pendingKeys)}`, link, display };
+  const pending: PendingContact = { key: crypto.randomUUID(), link, display };
   return { ...values, pendingContacts: [...values.pendingContacts, pending] };
 }
 
@@ -471,11 +468,8 @@ function contactLinkError(link: ContactLinkInput, country: string): FormErrorKey
  * (`openingBalance…`) a patch never touches, so it uses this simpler field-by-field check rather
  * than `isEditDirty`). */
 export function isDirty(initial: PatientFormValues, current: PatientFormValues): boolean {
-  if (initial.pendingContacts !== current.pendingContacts) {
-    if (JSON.stringify(initial.pendingContacts) !== JSON.stringify(current.pendingContacts)) {
-      return true;
-    }
-  }
+  // A create form starts with no pending contacts, so any pending one is a change.
+  if (current.pendingContacts.length > 0) return true;
   return (Object.keys(initial) as (keyof PatientFormValues)[]).some((key) => {
     if (key === 'pendingContacts') return false;
     return initial[key].trim() !== current[key].trim();

@@ -183,8 +183,9 @@ export interface MockApi {
     path: string,
     body: unknown,
   ) => Response | Promise<Response> | undefined;
-  /** Overrides a `GET` answer (full path, query string included). */
-  get?: (path: string) => Response | undefined;
+  /** Overrides a `GET` answer (full path, query string included); a pending promise keeps the
+   * read loading. */
+  get?: (path: string) => Response | Promise<Response> | undefined;
 }
 
 type FetchMock = ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Promise<Response>>>;

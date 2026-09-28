@@ -37,13 +37,14 @@ type Phase = 'idle' | 'saving' | 'saved' | 'failed';
 
 /**
  * Complete once email and address are recorded and, for a minor on the tenant's today, a guardian
- * is among the contacts (design addendum C10). A minor's badge waits for the contacts rather than
- * reading "Partly complete" before they have loaded.
+ * is among the contacts (design addendum C10); an adult's contacts are never read for it. A
+ * minor's guardian is unknown while the contacts load or when they cannot be read: then there is
+ * no badge, rather than a "Partly complete" that may be wrong.
  */
 function CompletenessBadge({ patient, tenant }: { patient: Patient; tenant: Tenant }) {
   const { t } = useTranslation('patients');
-  const contacts = useQuery(contactsQuery(patient.id));
   const minor = minorOn(patient.dateOfBirth, todayIn(tenant.timeZone));
+  const contacts = useQuery({ ...contactsQuery(patient.id), enabled: minor });
   const hasGuardian = contacts.data?.some((link) => link.isGuardian);
   if (minor && hasGuardian === undefined) return null;
   const complete =

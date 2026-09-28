@@ -91,7 +91,9 @@ export function unlinkContact(patientId: string, contactId: string) {
 }
 
 /** `PATCH /contacts/:id`: name, phone, e-mail of an *unlinked* contact (a linked one → 409
- * `contact.linked`: it is edited as its patient). */
+ * `contact.linked`: it is edited as its patient). Answers the `ContactView`, not a patient's
+ * list, and every patient linking the contact shows the change: callers follow it with
+ * `invalidatePatientData` (not `settleContacts`). */
 export function updateContact(contactId: string, patch: ContactPatch) {
   return apiFetch(`/contacts/${contactId}`, contactViewSchema, { method: 'PATCH', json: patch });
 }

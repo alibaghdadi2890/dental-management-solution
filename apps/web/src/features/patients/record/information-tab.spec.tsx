@@ -10,6 +10,7 @@ import {
   renderRecord,
   sent,
 } from '../patients.test-utils';
+import { todayIn } from '@/lib/format';
 import { patientKeys } from '../patients-api';
 import { SAVED_SHOWN_MS } from './information-tab';
 
@@ -89,9 +90,19 @@ describe('InformationTab', () => {
 
   describe('completeness (design addendum C10)', () => {
     const reachable = { email: 'k@example.com', address: '12 Hamra St' };
-    // 10 years old on the tenant's today, whatever the test's date.
-    const KARIM = patient(2, 'Karim Haddad', { ...reachable, dateOfBirth: '2016-01-01' });
+    // Born on 1 January 10 (or 30) years before the tenant's today: 9–10 years old (a minor),
+    // or 29–30 (an adult), whatever day the tests run.
+    const year = Number(todayIn('Asia/Beirut').slice(0, 4));
+    const bornYearsAgo = (years: number) => `${String(year - years)}-01-01`;
+    const KARIM = patient(2, 'Karim Haddad', { ...reachable, dateOfBirth: bornYearsAgo(10) });
     const badge = async (name: string) => within(await card()).findByText(name);
+    const noBadge = async () => {
+      const region = await card();
+      expect(within(region).queryByText('Partly complete')).toBeNull();
+      expect(within(region).queryByText('Complete')).toBeNull();
+    };
+    const contactReads = (fetchMock: ReturnType<typeof mockApi>) =>
+      fetchMock.mock.calls.filter(([url]) => url.endsWith('/contacts'));
 
     it('asks a minor for a guardian as well as email and address', async () => {
       mockApi({ patients: [KARIM], contacts: { [KARIM.id]: [] } });
@@ -118,11 +129,42 @@ describe('InformationTab', () => {
       expect(await badge('Complete')).toBeTruthy();
     });
 
-    it('never asks an adult for a guardian', async () => {
-      const adult = { ...KARIM, dateOfBirth: '1990-05-01' };
-      mockApi({ patients: [adult] });
+    it('never asks an adult for a guardian, nor reads their contacts for it', async () => {
+      const adult = { ...KARIM, dateOfBirth: bornYearsAgo(30) };
+      const fetchMock = mockApi({ patients: [adult] });
       renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
       expect(await badge('Complete')).toBeTruthy();
+      expect(contactReads(fetchMock)).toEqual([]);
+    });
+
+    it('shows no badge for a minor while the contacts load', async () => {
+      const fetchMock = mockApi({
+        patients: [KARIM],
+        get: (path) =>
+          path === `/patients/${KARIM.id}/contacts`
+            ? new Promise<Response>(() => undefined)
+            : undefined,
+      });
+      renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
+      await waitFor(() => {
+        expect(contactReads(fetchMock)).toHaveLength(1);
+      });
+      await noBadge();
+    });
+
+    it("shows no badge for a minor whose contacts can't be read", async () => {
+      const fetchMock = mockApi({
+        patients: [KARIM],
+        get: (path) =>
+          path === `/patients/${KARIM.id}/contacts` ? problem(500, 'internal') : undefined,
+      });
+      renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
+      await waitFor(() => {
+        expect(contactReads(fetchMock).length).toBeGreaterThan(0);
+      });
+      await noBadge();
+      // The form itself still works.
+      expect(field('Email')).toBeTruthy();
     });
   });
 

@@ -10,7 +10,8 @@ export type ErrorKey =
   | 'contactNotFound'
   | 'contactMerged'
   | 'contactDuplicate'
-  | 'contactIsPatient';
+  | 'contactIsPatient'
+  | 'contactAlreadyPatient';
 export type FormErrors = Partial<Record<ErrorField, ErrorKey>>;
 
 /** Problem `errors[].path` (`patient.`-prefixed on `POST /billing/opening-balances`) → field. */
@@ -85,11 +86,25 @@ function fieldErrorOf(path: string, code: string): [ErrorField, ErrorKey] | unde
   return [field, SERVER_ERROR_KEYS[field] ?? 'invalid'];
 }
 
+/**
+ * What the failed request sent that its error cannot say by itself: a 409
+ * `contact.already_linked` carries no path, and on a create that sent a `linkContactId` it is
+ * about that contact (already a patient), never about a link (a new patient has none yet).
+ */
+export interface SentContext {
+  linkContactId?: string | undefined;
+}
+
+function isAlreadyPatient(error: ApiError, sent: SentContext): boolean {
+  return error.code === 'contact.already_linked' && sent.linkContactId !== undefined;
+}
+
 /** The field errors a failed save maps onto the form (the first per field), or `null` when it
- * isn't about a field. */
-export function fieldErrorsOf(error: unknown): FormErrors | null {
+ * isn't about a field. `sent` is the create's payload (see `SentContext`). */
+export function fieldErrorsOf(error: unknown, sent: SentContext = {}): FormErrors | null {
   if (!(error instanceof ApiError)) return null;
   if (error.code === 'patient.unknown_dentist') return { primaryDentistId: 'unknownDentist' };
+  if (isAlreadyPatient(error, sent)) return { linkContactId: 'contactAlreadyPatient' };
   const errors: FormErrors = {};
   for (const { path, code } of error.problem.errors ?? []) {
     const mapped = fieldErrorOf(path, code);
@@ -112,13 +127,15 @@ export type PatientFailure =
   | 'unexpected'
   | 'contactNotFound'
   | 'contactAlreadyLinked'
+  | 'contactAlreadyPatient'
   | 'contactLinked'
   | 'contactConflict'
   | 'contactIsPatient'
   | 'contactRoleRequired'
   | 'contactPrimaryWithoutRole'
   | 'contactMerged'
-  | 'contactInvalidPhone';
+  | 'contactInvalidPhone'
+  | 'contactsTooMany';
 
 const FAILURES: Record<string, PatientFailure> = {
   'patient.archived': 'archived',
@@ -135,14 +152,25 @@ const FAILURES: Record<string, PatientFailure> = {
 };
 
 const LINK_TARGET = /^(?:contacts\.\d+\.)?target\.(contactId|patientId|newContact\.phone)$/;
+const LINK_ROLES = /^(?:contacts\.\d+\.)?(isGuardian|isPrimary(?:Guardian|Billing|Emergency))$/;
 
-/** A contact action's 422 about its target (`target.…`, or `contacts.<i>.target.…` on a create):
- * merged away, unknown, or a new contact's invalid phone. */
-function linkTargetFailure(
+/**
+ * A contact action's validation error (400 from the contract, 422 from the service): about its
+ * target (`target.…`, or `contacts.<i>.target.…` on a create: merged away, unknown, a new
+ * contact's invalid phone), its roles (no role — the contract's refine sits on `isGuardian` — or
+ * a primary without its role), or a create's `contacts` list itself (more than 10).
+ */
+function contactIssueFailure(
   issues: readonly { path: string; code: string }[],
 ): PatientFailure | undefined {
   for (const { path, code } of issues) {
-    const target = LINK_TARGET.exec(bareOf(path))?.[1];
+    const bare = bareOf(path);
+    if (bare === 'contacts') return 'contactsTooMany';
+    const role = LINK_ROLES.exec(bare)?.[1];
+    if (role !== undefined) {
+      return role === 'isGuardian' ? 'contactRoleRequired' : 'contactPrimaryWithoutRole';
+    }
+    const target = LINK_TARGET.exec(bare)?.[1];
     if (target === undefined) continue;
     if (target === 'newContact.phone') return 'contactInvalidPhone';
     if (code === 'merged') return 'contactMerged';
@@ -155,13 +183,15 @@ function linkTargetFailure(
  * A failed patient save, merge or contact action as an i18n key (`patients:failures.<key>`), so
  * the person reads a message in their language rather than the server's English problem title:
  * the known `patient.*` and `contact.*` codes first (the contact routes', patients module doc
- * "Contacts"), then the phone rule (422 `validation_failed` at `phone`, code `required` — e.g. a
- * merge leaving an adult without a phone), then a contact action's target (422 at `target.…`:
- * merged away, unknown, an invalid new phone), then the status (404, 409, 403), else
+ * "Contacts"; `contact.already_linked` after a create that sent a `linkContactId` is that contact
+ * being a patient already, see `SentContext`), then the phone rule (422 `validation_failed` at
+ * `phone`, code `required` — e.g. a merge leaving an adult without a phone), then a contact
+ * action's validation error (`contactIssueFailure`), then the status (404, 409, 403), else
  * `unexpected`.
  */
-export function failureOf(error: unknown): PatientFailure {
+export function failureOf(error: unknown, sent: SentContext = {}): PatientFailure {
   if (!(error instanceof ApiError)) return 'unexpected';
+  if (isAlreadyPatient(error, sent)) return 'contactAlreadyPatient';
   const known = FAILURES[error.code];
   if (known) return known;
   if (error.code === 'validation_failed') {
@@ -169,8 +199,8 @@ export function failureOf(error: unknown): PatientFailure {
     if (issues.some(({ path, code }) => fieldOfPath(path) === 'phone' && code === 'required')) {
       return 'phoneRequired';
     }
-    const target = linkTargetFailure(issues);
-    if (target) return target;
+    const contact = contactIssueFailure(issues);
+    if (contact) return contact;
   }
   if (error.status === 404) return 'notFound';
   if (error.status === 409) return 'conflict';

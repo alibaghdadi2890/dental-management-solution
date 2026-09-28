@@ -13,6 +13,8 @@ const apiError = (status: number, code: string, paths: string[] = [], issueCode 
       : {}),
   });
 
+const CONTACT_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70';
+
 describe('fieldErrorsOf', () => {
   it('maps patient paths, with or without the opening-balance route’s prefix', () => {
     expect(fieldErrorsOf(apiError(422, 'validation_failed', ['phone']))).toEqual({
@@ -108,6 +110,15 @@ describe('fieldErrorsOf', () => {
     });
   });
 
+  it('puts a 409 contact.already_linked on the link offer only for a create that sent one', () => {
+    const conflict = apiError(409, 'contact.already_linked');
+    expect(fieldErrorsOf(conflict, { linkContactId: CONTACT_ID })).toEqual({
+      linkContactId: 'contactAlreadyPatient',
+    });
+    expect(fieldErrorsOf(conflict)).toBeNull();
+    expect(fieldErrorsOf(conflict, { linkContactId: undefined })).toBeNull();
+  });
+
   it('keeps the first error of a field', () => {
     expect(
       fieldErrorsOf(
@@ -171,6 +182,37 @@ describe('failureOf', () => {
     expect(failureOf(apiError(422, 'validation_failed', ['target.newContact.phone']))).toBe(
       'contactInvalidPhone',
     );
+  });
+
+  it('tells the linkContactId conflict (already a patient) from an existing link', () => {
+    const conflict = apiError(409, 'contact.already_linked');
+    expect(failureOf(conflict)).toBe('contactAlreadyLinked');
+    expect(failureOf(conflict, { linkContactId: CONTACT_ID })).toBe('contactAlreadyPatient');
+    expect(failureOf(apiError(409, 'contact.conflict'), { linkContactId: CONTACT_ID })).toBe(
+      'contactConflict',
+    );
+  });
+
+  it('names a link without a role, or a primary without its role (400/422 at the roles)', () => {
+    expect(failureOf(apiError(400, 'validation_failed', ['isGuardian']))).toBe(
+      'contactRoleRequired',
+    );
+    expect(failureOf(apiError(422, 'validation_failed', ['contacts.2.isGuardian']))).toBe(
+      'contactRoleRequired',
+    );
+    expect(failureOf(apiError(400, 'validation_failed', ['isPrimaryBilling']))).toBe(
+      'contactPrimaryWithoutRole',
+    );
+  });
+
+  it('names a create with too many contacts (an error at contacts, no index)', () => {
+    expect(failureOf(apiError(400, 'validation_failed', ['contacts'], 'too_big'))).toBe(
+      'contactsTooMany',
+    );
+    expect(failureOf(apiError(422, 'validation_failed', ['patient.contacts'], 'too_big'))).toBe(
+      'contactsTooMany',
+    );
+    expect(fieldErrorsOf(apiError(400, 'validation_failed', ['contacts'], 'too_big'))).toBeNull();
   });
 
   it('falls back on the status, never the server’s English title', () => {

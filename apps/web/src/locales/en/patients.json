@@ -257,7 +257,8 @@
       "contactNotFound": "This contact no longer exists",
       "contactMerged": "This patient was merged into another record — search again",
       "contactDuplicate": "This contact is already added",
-      "contactIsPatient": "This contact is the patient being registered"
+      "contactIsPatient": "This contact is the patient being registered",
+      "contactAlreadyPatient": "This contact is already a patient — search for their record instead"
     },
     "archivedWhileEditing": "This patient was archived while you were editing. Your changes are kept here, but they can’t be saved until the record is restored."
   },
@@ -307,13 +308,15 @@
     "unexpected": "something went wrong, try again in a moment",
     "contactNotFound": "the contact no longer exists",
     "contactAlreadyLinked": "this contact is already linked to the patient",
+    "contactAlreadyPatient": "this contact is already a patient — search for their record instead",
     "contactLinked": "this contact is a patient — edit their patient record instead",
     "contactConflict": "someone else changed these contacts — reload and try again",
     "contactIsPatient": "a patient can’t be their own contact",
     "contactRoleRequired": "a contact needs at least one role",
     "contactPrimaryWithoutRole": "a primary contact must hold that role",
     "contactMerged": "that patient has been merged into another record",
-    "contactInvalidPhone": "the contact’s phone number isn’t valid"
+    "contactInvalidPhone": "the contact’s phone number isn’t valid",
+    "contactsTooMany": "a patient can be registered with at most 10 contacts"
   },
   "palette": {
     "title": "Find patient",

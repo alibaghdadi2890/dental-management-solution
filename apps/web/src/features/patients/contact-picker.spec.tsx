@@ -67,6 +67,13 @@ const type = (value: string) => {
   fireEvent.change(input(), { target: { value } });
 };
 const options = () => screen.queryAllByRole('option');
+/** The picker's live region (always rendered, so screen readers hear each change). */
+const status = () => screen.getByRole('status');
+const announced = async (text: string) => {
+  await waitFor(() => {
+    expect(status().textContent).toBe(text);
+  });
+};
 const lookups = (fetchMock: ReturnType<typeof mockApi>) =>
   fetchMock.mock.calls.map(([url]) => url).filter((url) => url.includes('/contacts/lookup'));
 
@@ -101,6 +108,16 @@ describe('ContactPicker', () => {
       expect(options()).toHaveLength(4);
     });
     expect(lookups(fetchMock)).toEqual(['/api/v1/contacts/lookup?q=Mar']);
+  });
+
+  it('announces searching, then the number of matches, in an always-present live region', async () => {
+    mockApi({ lookup: ALL });
+    renderPicker();
+    expect(status().textContent).toBe('');
+    expect(status().className).toContain('sr-only');
+    type('Haddad');
+    expect(status().textContent).toBe('Searching contacts');
+    await announced('4 matches');
   });
 
   it('shows avatar, name, phone and the patient badges', async () => {
@@ -201,11 +218,16 @@ describe('ContactPicker', () => {
     expect(options()).toHaveLength(0);
   });
 
-  it('says when nothing matches', async () => {
+  it('says when nothing matches, and announces it', async () => {
     mockApi({ lookup: [] });
     renderPicker();
     type('zz');
-    expect(await screen.findByText('No one matches “zz”')).toBeTruthy();
+    await announced('No one matches “zz”');
+    const visible = screen
+      .getAllByText('No one matches “zz”')
+      .filter((element) => !status().contains(element));
+    expect(visible).toHaveLength(1);
+    expect(visible[0]?.getAttribute('aria-hidden')).toBe('true');
     expect(options()).toHaveLength(0);
   });
 
@@ -222,9 +244,10 @@ describe('ContactPicker', () => {
       mockApi({ lookup: [] });
       renderPicker();
       type('Nadia');
-      await screen.findByText('No one matches “Nadia”');
+      await announced('No one matches “Nadia”');
       open();
       expect(field('Name').value).toBe('Nadia');
+      expect(document.activeElement).toBe(field('Name'));
       expect(field('Phone').value).toBe('');
       expect(field('Name').getAttribute('aria-required')).toBe('true');
       expect(field('Phone').getAttribute('aria-required')).toBe('true');
@@ -246,7 +269,7 @@ describe('ContactPicker', () => {
       mockApi({ lookup: [] });
       renderPicker();
       type('03 123 456');
-      await screen.findByText('No one matches “03 123 456”');
+      await announced('No one matches “03 123 456”');
       open();
       expect(field('Phone').value).toBe('03 123 456');
       expect(field('Name').value).toBe('');
@@ -266,7 +289,7 @@ describe('ContactPicker', () => {
       expect(onSelect).not.toHaveBeenCalled();
     });
 
-    it('emits a new contact with its relationship, and closes', () => {
+    it('emits a new contact with its relationship, closes, and returns to the search', async () => {
       mockApi();
       const onSelect = renderPicker();
       open();
@@ -287,6 +310,9 @@ describe('ContactPicker', () => {
         relationship: 'sibling',
       });
       expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
+      await waitFor(() => {
+        expect(document.activeElement).toBe(input());
+      });
     });
 
     it('confirms with Enter without submitting a surrounding form', () => {
@@ -318,13 +344,49 @@ describe('ContactPicker', () => {
       expect(submit).not.toHaveBeenCalled();
     });
 
-    it('goes back to the search with Cancel', () => {
+    it('goes back to the search with Cancel', async () => {
       mockApi();
       renderPicker();
       open();
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
       expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
-      expect(input()).toBeTruthy();
+      await waitFor(() => {
+        expect(document.activeElement).toBe(input());
+      });
+    });
+
+    it('goes back to the search with Escape, which never reaches the panel around it', async () => {
+      mockApi();
+      const onPanelKeyDown = vi.fn((event: KeyboardEvent) => event.defaultPrevented);
+      const client = new QueryClient();
+      render(
+        <QueryClientProvider client={client}>
+          <div
+            onKeyDown={(event) => {
+              onPanelKeyDown(event.nativeEvent);
+            }}
+          >
+            <ContactPicker label="Guardian" country="LB" onSelect={vi.fn()} />
+          </div>
+        </QueryClientProvider>,
+      );
+      open();
+      fireEvent.change(field('Name'), { target: { value: 'Nadia' } });
+      const escape = new KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true,
+        cancelable: true,
+      });
+      field('Name').dispatchEvent(escape);
+      expect(escape.defaultPrevented).toBe(true);
+      // The panel still hears the key, already handled (`RightPanel` then leaves it alone).
+      expect(onPanelKeyDown).toHaveReturnedWith(true);
+      await waitFor(() => {
+        expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
+      });
+      await waitFor(() => {
+        expect(document.activeElement).toBe(input());
+      });
     });
   });
 });
