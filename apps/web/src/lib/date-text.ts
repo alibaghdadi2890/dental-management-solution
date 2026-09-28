@@ -55,3 +55,20 @@ export function dateTextOf(value: string, order: DateInputOrder): string {
         : [day, month, year];
   return pieces.join('/');
 }
+
+/** An ISO calendar date as a local `Date` at noon, the form a date picker works in — built from
+ * its year/month/day, never `new Date(iso)` (UTC midnight, the day before west of Greenwich), and
+ * at noon so no DST change at midnight moves it; `undefined` for anything else. */
+export function calendarDateOf(value: string): Date | undefined {
+  if (!isoDateSchema.safeParse(value).success) return undefined;
+  const [year = 0, month = 1, day = 1] = value.split('-').map(Number);
+  const date = new Date(2000, month - 1, day, 12);
+  date.setFullYear(year, month - 1, day);
+  return date;
+}
+
+/** The ISO calendar date of a picked local `Date`: its own year/month/day, no timezone maths. */
+export function isoOfCalendarDate(date: Date): string {
+  const pad = (n: number, width: number) => String(n).padStart(width, '0');
+  return `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1, 2)}-${pad(date.getDate(), 2)}`;
+}

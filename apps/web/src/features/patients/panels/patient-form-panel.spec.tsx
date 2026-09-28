@@ -93,6 +93,29 @@ describe('PatientFormPanel — create', () => {
     });
   });
 
+  it('takes the date of birth from the calendar, written in the tenant order', async () => {
+    const fetchMock = mockApi();
+    renderPanels({ url: '/?panel=new' });
+    await panel('Register a patient');
+    type('Full name', 'Rana Haddad');
+    type('Phone', '03 123 456');
+    const dob = field('Date of birth').closest('div') ?? document.body;
+    fireEvent.click(within(dob).getByRole('button', { name: 'Choose date' }));
+    const calendar = await screen.findByRole('dialog', { name: 'Calendar' });
+    fireEvent.change(within(calendar).getByRole('combobox', { name: 'Choose the Year' }), {
+      target: { value: '1990' },
+    });
+    fireEvent.change(within(calendar).getByRole('combobox', { name: 'Choose the Month' }), {
+      target: { value: '4' },
+    });
+    fireEvent.click(within(calendar).getByRole('button', { name: /May 1st, 1990/ }));
+    expect(field('Date of birth').value).toBe('01/05/1990');
+    fireEvent.click(screen.getByRole('button', { name: 'Create patient' }));
+
+    await screen.findByText('Patient created');
+    expect(sent(fetchMock, 'POST', '/patients')).toMatchObject({ dateOfBirth: '1990-05-01' });
+  });
+
   it('records an opening balance through POST /billing/opening-balances', async () => {
     const fetchMock = mockApi();
     renderPanels({ url: '/?panel=new' });

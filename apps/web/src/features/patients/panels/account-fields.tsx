@@ -17,6 +17,7 @@ export function AccountFields({
   currency,
   locale,
   order,
+  today,
   onAmount,
   onAsOf,
   onNote,
@@ -29,6 +30,8 @@ export function AccountFields({
   currency: string;
   locale: string;
   order: DateInputOrder;
+  /** Today in the tenant's timezone: "As of" is never later. */
+  today: string;
   onAmount: (typed: string) => void;
   onAsOf: (value: string) => void;
   onNote: (value: string) => void;
@@ -54,7 +57,9 @@ export function AccountFields({
           )}
         </Field>
         <Field label={t('account.asOf')} hint={t(`common:dateFormat.${order}`)} error={errors.asOf}>
-          {(props) => <DateInput {...props} order={order} value={asOf} onChange={onAsOf} />}
+          {(props) => (
+            <DateInput {...props} order={order} today={today} value={asOf} onChange={onAsOf} />
+          )}
         </Field>
         <Field label={t('account.note')} error={errors.note} className="col-span-2">
           {(props) => (

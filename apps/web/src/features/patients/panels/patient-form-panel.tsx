@@ -363,6 +363,7 @@ function PatientForm({
             currency={tenant.currency}
             locale={locale}
             order={form.order}
+            today={form.today}
             onAmount={(typed) => {
               setAmountText(typed);
               form.set('openingBalanceAmount')(amountValue(typed, locale));

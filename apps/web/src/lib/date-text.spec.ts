@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateTextOf, parseDateText } from './date-text';
+import { calendarDateOf, dateTextOf, isoOfCalendarDate, parseDateText } from './date-text';
 
 describe('parseDateText', () => {
   it('reads day/month/year for a DMY tenant', () => {
@@ -33,5 +33,22 @@ describe('dateTextOf', () => {
     expect(dateTextOf('2019-03-07', 'YMD')).toBe('2019/03/07');
     expect(dateTextOf('07/03/20', 'DMY')).toBe('07/03/20');
     expect(dateTextOf('', 'DMY')).toBe('');
+  });
+});
+
+describe('calendarDateOf / isoOfCalendarDate', () => {
+  it('round-trips a calendar date through a local Date without shifting the day', () => {
+    const date = calendarDateOf('1990-05-01');
+    expect(date?.getFullYear()).toBe(1990);
+    expect(date?.getMonth()).toBe(4);
+    expect(date?.getDate()).toBe(1);
+    expect(date && isoOfCalendarDate(date)).toBe('1990-05-01');
+    expect(isoOfCalendarDate(new Date(1900, 0, 1, 23, 59))).toBe('1900-01-01');
+  });
+
+  it('gives nothing for text that is not an ISO date', () => {
+    expect(calendarDateOf('')).toBeUndefined();
+    expect(calendarDateOf('01/05/1990')).toBeUndefined();
+    expect(calendarDateOf('1990-02-30')).toBeUndefined();
   });
 });

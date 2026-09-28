@@ -6,7 +6,7 @@ import { Field, Select, TextInput } from '@/components/ui/field';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { ageOrNull } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { parseAlerts } from './patient-form';
+import { DATE_OF_BIRTH_FLOOR, parseAlerts } from './patient-form';
 import type { PatientForm, TextField } from './use-patient-form';
 
 export type PatientFieldName =
@@ -179,6 +179,8 @@ export function PatientField({
               <DateInput
                 {...props}
                 order={form.order}
+                today={form.today}
+                min={DATE_OF_BIRTH_FLOOR}
                 value={dob}
                 onChange={set('dateOfBirth')}
                 className={INPUT[tone]}

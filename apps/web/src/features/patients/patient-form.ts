@@ -133,8 +133,8 @@ export type FormErrors = Partial<Record<FormField, FormErrorKey>>;
 /** Mirrors `patients.ts`'s private `DATE_OF_BIRTH_FLOOR`, which the contract doesn't export (it's
  * folded into `dateOfBirthSchema`'s `.refine()`). Duplicated rather than widening that schema's
  * export surface for one constant; a drift here would only make the client warn a moment before
- * the server's own check rejects the same date. */
-const DATE_OF_BIRTH_FLOOR = '1900-01-01';
+ * the server's own check rejects the same date. Also the date picker's first selectable day. */
+export const DATE_OF_BIRTH_FLOOR = '1900-01-01';
 
 /** A country as `normalizePhone` (`@dcm/contracts`) wants it; kept as `string` at this module's
  * boundary so `apps/web` doesn't need its own `libphonenumber-js` dependency just for the type. */

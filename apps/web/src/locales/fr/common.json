@@ -22,6 +22,10 @@
     "MDY": "MM/JJ/AAAA",
     "YMD": "AAAA/MM/JJ"
   },
+  "datePicker": {
+    "open": "Choisir une date",
+    "calendar": "Calendrier"
+  },
   "saveState": {
     "unsaved": "Modifications non enregistrées",
     "saving": "Enregistrement…",
