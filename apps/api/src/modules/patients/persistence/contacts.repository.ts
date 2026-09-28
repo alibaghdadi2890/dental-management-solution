@@ -2,7 +2,9 @@ import { phoneDigits } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
+import { isUniqueViolation } from '../../../platform/db/unique-violation';
 import { newId } from '../../../platform/kernel/id';
+import { ContactConflictError } from '../domain/contact-errors';
 import type { DomainContact, LinkedPatientFacts } from '../domain/contacts';
 import { nameKey } from '../domain/name-key';
 import {
@@ -23,6 +25,23 @@ const DB_NOW = sql`now()`;
 
 /** A lookup by digits needs at least this many, like the patients search (addendum C5). */
 const MIN_PHONE_QUERY_DIGITS = 2;
+
+/**
+ * Runs `work`, turning a race on "one live contact per linked patient" into a 409
+ * (`contact.conflict`) instead of a 500.
+ */
+async function oneContactPerPatient<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (isUniqueViolation(error, 'contacts_linked_patient_unique')) {
+      throw new ContactConflictError('This patient already has a contact record', {
+        constraint: 'contacts_linked_patient_unique',
+      });
+    }
+    throw error;
+  }
+}
 
 export function toDomainContact(row: ContactRow): DomainContact {
   return {
@@ -99,17 +118,19 @@ export class ContactsRepository {
 
   /**
    * A contact that *is* patient `patientId` (the `{ patientId }` link target): no fields of its
-   * own. The partial unique index refuses a second live one for the same patient.
+   * own. A second live one for the same patient → `ContactConflictError` (partial unique index).
    */
   insertLinked(patientId: string): Promise<DomainContact> {
-    return this.db.run(async (tx) => {
-      const [row] = await tx
-        .insert(contacts)
-        .values({ id: newId(), linkedPatientId: patientId })
-        .returning();
-      if (!row) throw new Error('contact insert returned no row');
-      return toDomainContact(row);
-    });
+    return this.db.run((tx) =>
+      oneContactPerPatient(async () => {
+        const [row] = await tx
+          .insert(contacts)
+          .values({ id: newId(), linkedPatientId: patientId })
+          .returning();
+        if (!row) throw new Error('contact insert returned no row');
+        return toDomainContact(row);
+      }),
+    );
   }
 
   /** Changes a live, unlinked contact; undefined for a linked, deleted or invisible one. */
@@ -147,31 +168,76 @@ export class ContactsRepository {
    * Makes a live, unlinked contact patient `patientId` ("the mother becomes a patient", C4): sets
    * `linked_patient_id` and clears the own name, phone and e-mail in the same update, so the
    * contact reads them from the patient from now on. Undefined when the contact is linked
-   * already, deleted or invisible.
+   * already, deleted or invisible; `ContactConflictError` when the patient already has one.
    */
   linkToPatient(contactId: string, patientId: string): Promise<DomainContact | undefined> {
-    return this.db.run(async (tx) => {
-      const [row] = await tx
-        .update(contacts)
-        .set({
-          linkedPatientId: patientId,
-          fullName: null,
-          nameKey: null,
-          phone: null,
-          phoneSearch: null,
-          email: null,
-          updatedAt: DB_NOW,
-        })
-        .where(
-          and(
-            eq(contacts.id, contactId),
-            isNull(contacts.deletedAt),
-            isNull(contacts.linkedPatientId),
-          ),
-        )
-        .returning();
-      return row ? toDomainContact(row) : undefined;
-    });
+    return this.db.run((tx) =>
+      oneContactPerPatient(async () => {
+        const [row] = await tx
+          .update(contacts)
+          .set({
+            linkedPatientId: patientId,
+            fullName: null,
+            nameKey: null,
+            phone: null,
+            phoneSearch: null,
+            email: null,
+            updatedAt: DB_NOW,
+          })
+          .where(
+            and(
+              eq(contacts.id, contactId),
+              isNull(contacts.deletedAt),
+              isNull(contacts.linkedPatientId),
+            ),
+          )
+          .returning();
+        return row ? toDomainContact(row) : undefined;
+      }),
+    );
+  }
+
+  /**
+   * Reads the live contacts among `ids` `FOR UPDATE`, locked in id order (so two planners never
+   * deadlock), with their linked patients (not locked; the service locks patients itself). For
+   * planning a link to existing contacts. Must run inside an already-open transaction (throws
+   * otherwise, like `PatientsRepository.lockPair`). Ids invisible under RLS are absent.
+   */
+  async findByIdsForUpdate(ids: readonly string[]): Promise<ContactRecord[]> {
+    requireTransaction(this.db, 'findByIdsForUpdate');
+    if (ids.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({ contact: contacts, linkedPatient: linkedPatients })
+        .from(contacts)
+        .leftJoin(linkedPatients, eq(linkedPatients.id, contacts.linkedPatientId))
+        .where(and(idAmong(contacts.id, ids), isNull(contacts.deletedAt)))
+        .orderBy(contacts.id)
+        .for('update', { of: contacts }),
+    );
+    return rows.map((row) => ({
+      contact: toDomainContact(row.contact),
+      linkedPatient: toLinkedPatient(row.linkedPatient),
+    }));
+  }
+
+  /**
+   * The live contacts that are the patients `patientIds` (a merge's kept and dropped patients),
+   * locked `FOR UPDATE` in id order. Must run inside an already-open transaction (throws
+   * otherwise).
+   */
+  async linkedToPatientsForUpdate(patientIds: readonly string[]): Promise<DomainContact[]> {
+    requireTransaction(this.db, 'linkedToPatientsForUpdate');
+    if (patientIds.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx
+        .select()
+        .from(contacts)
+        .where(and(idAmong(contacts.linkedPatientId, patientIds), isNull(contacts.deletedAt)))
+        .orderBy(contacts.id)
+        .for('update'),
+    );
+    return rows.map(toDomainContact);
   }
 
   /** The live contact that is patient `patientId`, if any (at most one: unique index). */
@@ -207,14 +273,19 @@ export class ContactsRepository {
     return this.findWhere(sql`${resolvedPhone} = ${`+${e164Digits}`}`);
   }
 
-  /** Merge (C8): these contacts become the patient `patientId` (`linked_patient_id`). */
+  /**
+   * Merge (C8): these contacts become the patient `patientId` (`linked_patient_id`);
+   * `ContactConflictError` when that patient already has a live contact.
+   */
   async relink(contactIds: readonly string[], patientId: string): Promise<void> {
     if (contactIds.length === 0) return;
     await this.db.run((tx) =>
-      tx
-        .update(contacts)
-        .set({ linkedPatientId: patientId, updatedAt: DB_NOW })
-        .where(and(idAmong(contacts.id, contactIds), isNull(contacts.deletedAt))),
+      oneContactPerPatient(() =>
+        tx
+          .update(contacts)
+          .set({ linkedPatientId: patientId, updatedAt: DB_NOW })
+          .where(and(idAmong(contacts.id, contactIds), isNull(contacts.deletedAt))),
+      ),
     );
   }
 
@@ -245,4 +316,9 @@ export class ContactsRepository {
       linkedPatient: toLinkedPatient(row.linkedPatient),
     }));
   }
+}
+
+/** The `…ForUpdate` reads lock rows for the caller's transaction, so one must be open. */
+export function requireTransaction(db: TenantDb, method: string): void {
+  if (!db.currentTransaction()) throw new Error(`${method} must run inside a transaction`);
 }

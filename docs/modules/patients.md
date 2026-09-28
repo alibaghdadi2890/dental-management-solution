@@ -44,6 +44,10 @@ with an opening balance) are composed by `billing` on top of this module (design
   resolved phone of any of the patient's live contacts (addendum C7). A query shaped like a
   patient number (`P-000123`, `p000123`: `/^p-?\d+$/i`) matches display numbers only, as
   `P-<digits>`; its digits never search phones. Bare digits (`000123`) are still a phone query.
+  The alternatives are OR-ed over the whole `q`, not per word: a mixed query such as `Mona 0312`
+  matches a name containing "mona 0312" (rarely any) **or** any phone containing `0312` (the
+  digits of the whole query), so it finds everyone with those digits whatever their name. The
+  contacts lookup (`ContactsRepository.lookup`) behaves the same way.
 - **Archive** sets `deleted_at` (design Q11). The optional reason goes to the audit entry only.
   A merged-away record is archived and has `merged_into_id`; it can never be restored.
 - **Merge** (design Q8): each pickable field (`MERGE_FIELDS`: full name, phone, date of birth,
@@ -183,12 +187,23 @@ build on.
     `linkToPatient(contactId, patientId)` (sets the link and clears the own name, phone and
     e-mail in one update), `findByLinkedPatient`, `lookup(q, limit)` (resolved `name_key` or ≥ 2
     digits of the resolved phone digits), `findByPhoneDigits(e164Digits)` (exact resolved
-    E.164), `relink`, `softDelete`. Reads skip soft-deleted contacts.
+    E.164), `relink`, `softDelete`. Reads skip soft-deleted contacts. For planning:
+    `findByIdsForUpdate(ids)` (the existing contacts a change links) and
+    `linkedToPatientsForUpdate(patientIds)` (a merge's two linked contacts), both locked
+    `FOR UPDATE` in id order. A race on "one live contact per linked patient" (`insertLinked`,
+    `linkToPatient`, `relink`) → 409 `contact.conflict`.
   - `PatientContactsRepository`: `listForPatient` (resolved; primaries first, then oldest),
-    `linksOf`, `listForContact`, `patientsBilledBy`, `link`, `updateLink`, `unlink`, and
-    `applyLinkPlan`/`applyMergePlan`, which write a plan in one transaction in an order the
-    one-primary-per-role indexes accept: deletes, then the changed rows' primaries cleared, then
-    their full state, then inserts, moves and re-points.
+    `linksOf`, `listForContact`, `patientsBilledBy`; for planning, `linksOfForUpdate` and
+    `listForContactForUpdate` (rows locked `FOR UPDATE`). Production code writes links only
+    through plans: `applyLinkPlan`/`applyMergePlan` write one in one transaction, in an order the
+    one-primary-per-role indexes accept (deletes, then the changed rows' primaries cleared, then
+    their full state, then inserts, moves and re-points). A stale plan that still hits a primary
+    index → 409 `contact.conflict`; one inserting an existing link → 409
+    `contact.already_linked`. Inserted links take `created_at` from `clock_timestamp()`, so links
+    created in one transaction keep their order (promotion picks the oldest holder).
+  - Planning protocol (H2): open a transaction; lock the patient row(s)
+    (`PatientsRepository.findForUpdate`, or `lockPair` for a merge); read the plan's inputs with
+    the `…ForUpdate` methods (all of them throw outside a transaction); plan; apply.
 - **Search SQL** (`patient-search.sql.ts`, `contact-resolution.sql.ts`): the contact-phone match
   is `patients.id in (select patient_id … where resolved phone_search like …)`. It is
   uncorrelated, so Postgres evaluates it once as a hashed subplan, and a patient is counted once

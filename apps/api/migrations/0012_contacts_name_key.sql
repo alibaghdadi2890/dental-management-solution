@@ -1,2 +1,0 @@
-ALTER TABLE "contacts" ADD COLUMN "name_key" text;--> statement-breakpoint
-ALTER TABLE "contacts" ADD CONSTRAINT "contacts_name_key_with_name" CHECK (("contacts"."full_name" is null) = ("contacts"."name_key" is null));

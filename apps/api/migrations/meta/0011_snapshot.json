@@ -1516,6 +1516,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "name_key": {
+          "name": "name_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "phone": {
           "name": "phone",
           "type": "text",
@@ -1644,6 +1650,10 @@
         "contacts_linked_or_named": {
           "name": "contacts_linked_or_named",
           "value": "\"contacts\".\"linked_patient_id\" is not null or \"contacts\".\"full_name\" is not null"
+        },
+        "contacts_name_key_with_name": {
+          "name": "contacts_name_key_with_name",
+          "value": "(\"contacts\".\"full_name\" is null) = (\"contacts\".\"name_key\" is null)"
         }
       },
       "isRLSEnabled": false

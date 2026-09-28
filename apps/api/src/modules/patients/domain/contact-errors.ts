@@ -29,3 +29,12 @@ export class ContactIsPatientError extends DomainError {
   readonly code = 'contact.is_patient';
   readonly kind = 'invalid';
 }
+
+/**
+ * A concurrent change won a race on a unique index (one primary per role per patient, one live
+ * contact per linked patient): the caller re-reads and retries rather than seeing a 500.
+ */
+export class ContactConflictError extends DomainError {
+  readonly code = 'contact.conflict';
+  readonly kind = 'conflict';
+}

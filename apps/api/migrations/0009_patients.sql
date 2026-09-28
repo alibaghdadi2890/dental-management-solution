@@ -4,6 +4,7 @@ CREATE TABLE "contacts" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"tenant_id" uuid DEFAULT nullif(current_setting('app.tenant_id', true), '')::uuid NOT NULL,
 	"full_name" text,
+	"name_key" text,
 	"phone" text,
 	"phone_search" text,
 	"email" text,
@@ -12,7 +13,8 @@ CREATE TABLE "contacts" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "contacts_tenant_id_unique" UNIQUE("tenant_id","id"),
-	CONSTRAINT "contacts_linked_or_named" CHECK ("contacts"."linked_patient_id" is not null or "contacts"."full_name" is not null)
+	CONSTRAINT "contacts_linked_or_named" CHECK ("contacts"."linked_patient_id" is not null or "contacts"."full_name" is not null),
+	CONSTRAINT "contacts_name_key_with_name" CHECK (("contacts"."full_name" is null) = ("contacts"."name_key" is null))
 );
 --> statement-breakpoint
 ALTER TABLE "contacts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

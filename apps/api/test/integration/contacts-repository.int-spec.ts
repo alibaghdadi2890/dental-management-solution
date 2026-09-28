@@ -1,6 +1,10 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  ContactAlreadyLinkedError,
+  ContactConflictError,
+} from '../../src/modules/patients/domain/contact-errors';
+import {
   type LinkChange,
   type PatientLink,
   planContactMerge,
@@ -47,6 +51,25 @@ function newPatient(overrides: Partial<NewPatient> = {}): NewPatient {
     externalId: null,
     ...overrides,
   };
+}
+
+/** `lock_timeout` expired (SQLSTATE 55P03). */
+const LOCK_NOT_AVAILABLE = '55P03';
+
+/** The SQLSTATE a rejected query failed with (Drizzle wraps the pg error in `cause`). */
+async function sqlState(promise: Promise<unknown>): Promise<string | undefined> {
+  try {
+    await promise;
+    return undefined;
+  } catch (error) {
+    let current: unknown = error;
+    while (current && typeof current === 'object') {
+      const code = (current as { code?: unknown }).code;
+      if (typeof code === 'string') return code;
+      current = (current as { cause?: unknown }).cause;
+    }
+    return undefined;
+  }
 }
 
 const view = (record: ContactRecord | undefined) => {
@@ -216,11 +239,17 @@ describe('patients: contacts repositories', () => {
       const patient = await createPatient(tenant, { fullName: 'Karim Haddad' });
       const first = await inTenant(tenant, () => contactsRepo.insertLinked(patient.id));
       expect(first).toMatchObject({ linkedPatientId: patient.id, fullName: null, nameKey: null });
-      await expect(inTenant(tenant, () => contactsRepo.insertLinked(patient.id))).rejects.toThrow();
+      // A second live contact for the same patient is a conflict (409), never a 500.
+      await expect(
+        inTenant(tenant, () => contactsRepo.insertLinked(patient.id)),
+      ).rejects.toBeInstanceOf(ContactConflictError);
       const other = await createContact(tenant, 'Also Karim');
       await expect(
         inTenant(tenant, () => contactsRepo.linkToPatient(other.id, patient.id)),
-      ).rejects.toThrow();
+      ).rejects.toBeInstanceOf(ContactConflictError);
+      await expect(
+        inTenant(tenant, () => contactsRepo.relink([other.id], patient.id)),
+      ).rejects.toBeInstanceOf(ContactConflictError);
       await inTenant(tenant, () => contactsRepo.softDelete([first.id], new Date()));
       expect(
         await inTenant(tenant, () => contactsRepo.findByLinkedPatient(patient.id)),
@@ -385,31 +414,66 @@ describe('patients: contacts repositories', () => {
       ]);
     });
 
-    it('updateLink and unlink report whether the link existed', async () => {
+    it('maps a stale plan hitting a unique index to a domain conflict, not a 500', async () => {
       const tenant = newId();
-      const patient = await createPatient(tenant);
-      const contact = await createContact(tenant, 'Someone');
-      const state = {
-        patientId: patient.id,
-        contactId: contact.id,
-        relationship: 'other' as const,
-        isGuardian: false,
-        isBillingContact: false,
-        isEmergencyContact: true,
-        isPrimaryGuardian: false,
-        isPrimaryBilling: false,
-        isPrimaryEmergency: true,
-      };
-      expect(await inTenant(tenant, () => links.updateLink(state))).toBe(false);
-      await inTenant(tenant, () => links.link(state));
-      expect(
-        await inTenant(tenant, () => links.updateLink({ ...state, relationship: 'sibling' })),
-      ).toBe(true);
-      expect((await inTenant(tenant, () => links.linksOf(patient.id)))[0]?.relationship).toBe(
-        'sibling',
+      const child = await createPatient(tenant);
+      const mother = await createContact(tenant, 'Mother');
+      const father = await createContact(tenant, 'Father');
+      const guardian = { isGuardian: true, isBillingContact: false, isEmergencyContact: false };
+      // Both planned from the same (empty) state: each makes its contact the primary guardian.
+      const planMother = planLinkChange(child.id, [], {
+        kind: 'link',
+        contactId: mother.id,
+        relationship: 'parent',
+        roles: guardian,
+      });
+      const planFather = planLinkChange(child.id, [], {
+        kind: 'link',
+        contactId: father.id,
+        relationship: 'parent',
+        roles: guardian,
+      });
+      await inTenant(tenant, () => links.applyLinkPlan(planMother));
+      await expect(inTenant(tenant, () => links.applyLinkPlan(planFather))).rejects.toBeInstanceOf(
+        ContactConflictError,
       );
-      expect(await inTenant(tenant, () => links.unlink(state))).toBe(true);
-      expect(await inTenant(tenant, () => links.unlink(state))).toBe(false);
+      await expect(inTenant(tenant, () => links.applyLinkPlan(planMother))).rejects.toBeInstanceOf(
+        ContactAlreadyLinkedError,
+      );
+      expect(flagsOf(await inTenant(tenant, () => links.linksOf(child.id)))).toEqual({
+        [mother.id]: [true, true, false, false, false, false],
+      });
+    });
+
+    it('keeps payload order for links created in one transaction (promotion order)', async () => {
+      const tenant = newId();
+      const child = await createPatient(tenant);
+      // Created in reverse, so contact ids (uuid v7) sort opposite to the link order below.
+      const third = await createContact(tenant, 'Third');
+      const second = await createContact(tenant, 'Second');
+      const first = await createContact(tenant, 'First');
+      expect([first.id, second.id, third.id].sort()).toEqual([third.id, second.id, first.id]);
+      await inTenant(tenant, () =>
+        tenantDb.run(async () => {
+          for (const contactId of [first.id, second.id, third.id]) {
+            const plan = planLinkChange(child.id, await links.linksOf(child.id), {
+              kind: 'link',
+              contactId,
+              relationship: 'other',
+              roles: { isGuardian: true, isBillingContact: false, isEmergencyContact: false },
+            });
+            await links.applyLinkPlan(plan);
+          }
+        }),
+      );
+      expect(
+        (await inTenant(tenant, () => links.linksOf(child.id))).map((link) => link.contactId),
+      ).toEqual([first.id, second.id, third.id]);
+      await change(tenant, child.id, { kind: 'unlink', contactId: first.id });
+      expect(flagsOf(await inTenant(tenant, () => links.linksOf(child.id)))).toEqual({
+        [second.id]: [true, true, false, false, false, false],
+        [third.id]: [true, false, false, false, false, false],
+      });
     });
 
     it('applies a merge plan: moves, OR-ed duplicates, self-links removed, linked contact folded', async () => {
@@ -516,6 +580,212 @@ describe('patients: contacts repositories', () => {
       expect(
         (await inTenant(tenant, () => links.linksOf(child.id))).map((l) => l.contactId),
       ).toEqual([droppedSelf.id]);
+    });
+  });
+
+  describe('merge plans against the partial unique indexes', () => {
+    /** Plans and applies a merge in one transaction, as the service will (H2). */
+    const merge = (tenant: string, keptId: string, droppedId: string) =>
+      inTenant(tenant, () =>
+        tenantDb.run(async () => {
+          const [keptSelf] = await contactsRepo.linkedToPatientsForUpdate([keptId]);
+          const [droppedSelf] = await contactsRepo.linkedToPatientsForUpdate([droppedId]);
+          const withLinks = async (contactId: string) => ({
+            contactId,
+            links: await links.listForContactForUpdate(contactId),
+          });
+          const plan = planContactMerge({
+            keptId,
+            droppedId,
+            keptLinks: await links.linksOfForUpdate(keptId),
+            droppedLinks: await links.linksOfForUpdate(droppedId),
+            keptLinkedContact: keptSelf ? await withLinks(keptSelf.id) : null,
+            droppedLinkedContact: droppedSelf ? await withLinks(droppedSelf.id) : null,
+          });
+          await links.applyMergePlan(droppedId, plan);
+          await contactsRepo.relink(plan.relinks, keptId);
+          await contactsRepo.softDelete(
+            plan.folds.map((fold) => fold.fromContactId),
+            new Date(),
+          );
+        }),
+      );
+    /** Primaries per role on a patient, straight from the table (owner pool, no RLS). */
+    const primaries = async (patientId: string) => {
+      const result = await database.ownerPool.query<{
+        guardian: string[] | null;
+        billing: string[] | null;
+        emergency: string[] | null;
+      }>(
+        `select array_agg(contact_id::text) filter (where is_primary_guardian) as guardian,
+                array_agg(contact_id::text) filter (where is_primary_billing) as billing,
+                array_agg(contact_id::text) filter (where is_primary_emergency) as emergency
+         from patient_contacts where patient_id = $1`,
+        [patientId],
+      );
+      const row = result.rows[0];
+      return {
+        guardian: row?.guardian ?? [],
+        billing: row?.billing ?? [],
+        emergency: row?.emergency ?? [],
+      };
+    };
+
+    it('promotes the oldest kept holder after deleting a primary self-link', async () => {
+      const tenant = newId();
+      const kept = await createPatient(tenant, { fullName: 'Kept' });
+      const dropped = await createPatient(tenant, { fullName: 'Dropped' });
+      const droppedSelf = await inTenant(tenant, () => contactsRepo.insertLinked(dropped.id));
+      const grandma = await createContact(tenant, 'Grandma');
+      const aunt = await createContact(tenant, 'Aunt');
+      // The kept record listed the dropped one as its primary guardian.
+      await linkAs(tenant, kept.id, droppedSelf.id, { isGuardian: true }, 'sibling');
+      await linkAs(tenant, kept.id, grandma.id, { isGuardian: true });
+      await linkAs(tenant, kept.id, aunt.id, { isGuardian: true }, 'other');
+      expect((await primaries(kept.id)).guardian).toEqual([droppedSelf.id]);
+
+      await merge(tenant, kept.id, dropped.id);
+
+      expect(await primaries(kept.id)).toEqual({
+        guardian: [grandma.id],
+        billing: [],
+        emergency: [],
+      });
+      expect(
+        (await inTenant(tenant, () => links.linksOf(kept.id))).map((link) => link.contactId),
+      ).toEqual([grandma.id, aunt.id]);
+    });
+
+    it('gives a moved row a primary while the kept primaries win elsewhere', async () => {
+      const tenant = newId();
+      const kept = await createPatient(tenant, { fullName: 'Kept' });
+      const dropped = await createPatient(tenant, { fullName: 'Dropped' });
+      const keptSelf = await inTenant(tenant, () => contactsRepo.insertLinked(kept.id));
+      const uncle = await createContact(tenant, 'Uncle');
+      const payer = await createContact(tenant, 'Payer');
+      const other = await createContact(tenant, 'Other Payer');
+      // Kept: the payer is its primary billing contact.
+      await linkAs(tenant, kept.id, payer.id, { isBillingContact: true }, 'spouse');
+      // Dropped: its primary guardian is the kept patient (a self-link after the merge), the
+      // uncle a second guardian; its primary billing contact is another payer, the payer second.
+      await linkAs(tenant, dropped.id, keptSelf.id, { isGuardian: true }, 'sibling');
+      await linkAs(tenant, dropped.id, uncle.id, { isGuardian: true }, 'other');
+      await linkAs(tenant, dropped.id, other.id, { isBillingContact: true }, 'other');
+      await linkAs(tenant, dropped.id, payer.id, { isBillingContact: true }, 'spouse');
+      expect(await primaries(dropped.id)).toEqual({
+        guardian: [keptSelf.id],
+        billing: [other.id],
+        emergency: [],
+      });
+
+      await merge(tenant, kept.id, dropped.id);
+
+      expect(await primaries(dropped.id)).toEqual({ guardian: [], billing: [], emergency: [] });
+      // The moved uncle becomes the primary guardian; the kept payer stays primary billing.
+      expect(await primaries(kept.id)).toEqual({
+        guardian: [uncle.id],
+        billing: [payer.id],
+        emergency: [],
+      });
+      expect(flagsOf(await inTenant(tenant, () => links.linksOf(kept.id)))).toEqual({
+        [payer.id]: [false, false, true, true, false, false],
+        [uncle.id]: [true, true, false, false, false, false],
+        [other.id]: [false, false, true, false, false, false],
+      });
+    });
+  });
+
+  describe('locking reads (for planning)', () => {
+    it('require an open transaction', async () => {
+      const tenant = newId();
+      const id = newId();
+      await expect(inTenant(tenant, () => contactsRepo.findByIdsForUpdate([id]))).rejects.toThrow(
+        /inside a transaction/,
+      );
+      await expect(
+        inTenant(tenant, () => contactsRepo.linkedToPatientsForUpdate([id])),
+      ).rejects.toThrow(/inside a transaction/);
+      await expect(inTenant(tenant, () => links.linksOfForUpdate(id))).rejects.toThrow(
+        /inside a transaction/,
+      );
+      await expect(inTenant(tenant, () => links.listForContactForUpdate(id))).rejects.toThrow(
+        /inside a transaction/,
+      );
+    });
+
+    it('read the rows (contacts in id order, links oldest first), none of another tenant', async () => {
+      const tenant = newId();
+      const child = await createPatient(tenant);
+      const father = await createPatient(tenant, { fullName: 'Father' });
+      const b = await createContact(tenant, 'B');
+      const a = await createContact(tenant, 'A');
+      const fatherSelf = await inTenant(tenant, () => contactsRepo.insertLinked(father.id));
+      await linkAs(tenant, child.id, b.id, { isGuardian: true });
+      await linkAs(tenant, child.id, a.id, { isEmergencyContact: true });
+      const inTx = <T>(tenantId: string, fn: () => Promise<T>) =>
+        inTenant(tenantId, () => tenantDb.run(fn));
+
+      const locked = await inTx(tenant, () => contactsRepo.findByIdsForUpdate([b.id, a.id]));
+      expect(locked.map((record) => record.contact.id)).toEqual([b.id, a.id].sort());
+      expect(
+        (
+          await inTx(tenant, () => contactsRepo.linkedToPatientsForUpdate([father.id, child.id]))
+        ).map((contact) => contact.id),
+      ).toEqual([fatherSelf.id]);
+      expect(
+        (await inTx(tenant, () => links.linksOfForUpdate(child.id))).map((link) => link.contactId),
+      ).toEqual([b.id, a.id]);
+      expect(
+        (await inTx(tenant, () => links.listForContactForUpdate(b.id))).map(
+          (link) => link.patientId,
+        ),
+      ).toEqual([child.id]);
+
+      const other = newId();
+      expect(await inTx(other, () => contactsRepo.findByIdsForUpdate([a.id, b.id]))).toEqual([]);
+      expect(await inTx(other, () => links.linksOfForUpdate(child.id))).toEqual([]);
+    });
+
+    it('hold the row locks until the transaction ends', async () => {
+      const tenant = newId();
+      const child = await createPatient(tenant);
+      const contact = await createContact(tenant, 'Locked');
+      await linkAs(tenant, child.id, contact.id, { isGuardian: true });
+      let release: () => void = () => undefined;
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let signalLocked: () => void = () => undefined;
+      const isLocked = new Promise<void>((resolve) => {
+        signalLocked = resolve;
+      });
+      const holder = inTenant(tenant, () =>
+        tenantDb.run(async () => {
+          await contactsRepo.findByIdsForUpdate([contact.id]);
+          await links.linksOfForUpdate(child.id);
+          signalLocked();
+          await released;
+        }),
+      );
+      await isLocked;
+      const attempt = (work: () => Promise<unknown>) =>
+        inTenant(tenant, () =>
+          tenantDb.run(async (tx) => {
+            await tx.execute(sql`set local lock_timeout = '200ms'`);
+            return work();
+          }),
+        );
+      expect(await sqlState(attempt(() => contactsRepo.findByIdsForUpdate([contact.id])))).toBe(
+        LOCK_NOT_AVAILABLE,
+      );
+      expect(await sqlState(attempt(() => links.listForContactForUpdate(contact.id)))).toBe(
+        LOCK_NOT_AVAILABLE,
+      );
+      release();
+      await holder;
+      await expect(
+        attempt(() => contactsRepo.findByIdsForUpdate([contact.id])),
+      ).resolves.toHaveLength(1);
     });
   });
 
@@ -667,8 +937,12 @@ describe('patients: contacts repositories', () => {
       expect(
         await inB(() => contactsRepo.update(mother.id, { fullName: 'Hijacked' })),
       ).toBeUndefined();
-      expect(await inB(() => links.unlink({ patientId: child.id, contactId: mother.id }))).toBe(
-        false,
+      await inB(() =>
+        links.applyLinkPlan({
+          deletes: [{ patientId: child.id, contactId: mother.id }],
+          updates: [],
+          inserts: [],
+        }),
       );
       await inB(() => contactsRepo.softDelete([mother.id], new Date()));
       expect(view(await inTenant(tenantA, () => contactsRepo.findById(mother.id))).fullName).toBe(
