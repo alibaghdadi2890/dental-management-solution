@@ -10,6 +10,7 @@ import { PatientNotFoundError } from '../domain/patient-errors';
 import type { DomainPatient, DomainPatientListRow, GuardianSummary } from '../domain/patient';
 import { linkedPatients, resolvedFullName, resolvedPhone } from './contact-resolution.sql';
 import {
+  byNameKey,
   idAmong,
   lookupMatch,
   matchedContactColumn,
@@ -514,7 +515,8 @@ export class PatientsRepository {
   /**
    * The patient half of the search-or-create lookup (addendum C5): active patients matching `q` by
    * name or phone digits (`lookupMatch`, own columns only) who are nobody's contact yet (no live
-   * contact is linked to them; those appear as that contact). Ordered by name, then id.
+   * contact is linked to them; those appear as that contact). Ordered by name key (collation "C",
+   * `byNameKey`), then id.
    */
   async lookupUnlinked(q: string, limit: number): Promise<DomainPatient[]> {
     const rows = await this.db.run((tx) =>
@@ -528,7 +530,7 @@ export class PatientsRepository {
             sql`not exists (select 1 from ${contacts} where ${contacts.linkedPatientId} = ${patients.id} and ${contacts.deletedAt} is null)`,
           ),
         )
-        .orderBy(patients.nameKey, patients.id)
+        .orderBy(byNameKey(patients.nameKey), patients.id)
         .limit(limit),
     );
     return rows.map(toDomain);

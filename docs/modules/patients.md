@@ -190,15 +190,17 @@ are aggregates over `is_billing_contact` (`patientsBilledBy`).
     `assertNotOwnContact` (`contact.is_patient`: a patient is never their own contact).
 - **Repositories** (every query through `TenantDb`, RLS only, no tenant parameters):
   - `ContactsRepository`: `insert` (derives `name_key`/`phone_search`), `insertLinked(patientId)`,
-    `update` (live unlinked contacts only), `findById(s)` (with the linked patient),
+    `update` (live unlinked contacts only), `findById` (with the linked patient),
     `linkToPatient(contactId, patientId)` (sets the link and clears the own name, phone and
     e-mail in one update), `findByLinkedPatient`, `lookup(q, limit)` (resolved `name_key` or ≥ 2
-    digits of the resolved phone digits), `findByPhoneDigits(e164Digits)` (exact resolved
-    E.164), `relink`, `softDelete`. Reads skip soft-deleted contacts. For planning:
-    `findByIdsForUpdate(ids)` (the existing contacts a change links) and
-    `linkedToPatientsForUpdate(patientIds)` (a merge's two linked contacts), both locked
-    `FOR UPDATE` in id order. A race on "one live contact per linked patient" (`insertLinked`,
-    `linkToPatient`, `relink`) → 409 `contact.conflict`.
+    digits of the resolved phone digits), `findByPhone(e164)` (exact resolved E.164),
+    `relink`, `softDelete`. Reads skip soft-deleted contacts; `lookup` and `findByPhone` order
+    by name key in the "C" collation (`byNameKey`), then id. For planning, locked `FOR UPDATE`
+    in id order: `lockForLinking(ids, linkedPatientIds)` (a link's existing contacts and the
+    contacts that are its `{ patientId }` targets, one statement),
+    `linkedToPatientsForUpdate(patientIds)` (a merge's two linked contacts) and
+    `findByIdsForUpdate(ids)` (only `updateContact`'s contact). A race on "one live contact per
+    linked patient" (`insertLinked`, `linkToPatient`, `relink`) → 409 `contact.conflict`.
   - `PatientContactsRepository`: `listForPatient` (resolved; primaries first, then oldest),
     `linksOf`, `listForContact`, `patientsBilledBy`; for planning, `linksOfForUpdate` and
     `listForContactForUpdate` (rows locked `FOR UPDATE`). Production code writes links only
@@ -251,16 +253,16 @@ after commit. A write on an archived patient → 409 `patient.archived`, on a me
 `patient.merged` (checked under the patient lock). Archive itself leaves links in place, and a
 contact linked to an archived patient still resolves, with `linkedPatient.archived: true` (C9).
 
-| Method                                    | Access          | Notes                                                                                                                                                                                                                                                                                                                                 |
-| ----------------------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contactsOf(patientId)`                   | `patient:read`  | `PatientContact[]`, resolved, primaries first then oldest link; archived and merged-away patients too. Unknown → 404 `patient.not_found`.                                                                                                                                                                                             |
-| `patientsBilledBy(contactId)`             | `patient:read`  | `PatientListItem[]` of the patients linking the contact with `is_billing_contact`, archived included, by name. Unknown or deleted contact → 404 `contact.not_found`.                                                                                                                                                                  |
-| `findContactsByPhone(phone)`              | `patient:read`  | `ContactView[]` whose resolved phone is `phone` normalised with the tenant country; an unparseable phone matches nobody (`[]`).                                                                                                                                                                                                       |
-| `lookup({ q })`                           | `patient:read`  | Search-or-create (C5): contacts (resolved), and active patients who are nobody's contact yet, whose name key contains `q` or whose phone digits contain its digits (≥ 2). A patient with a linked contact appears once, as that contact. At most 10, by name key, contacts before patients on a tie, then id.                         |
-| `link(patientId, input)`                  | `patient:write` | A `ContactLinkInput` (see [Linking](#linking)). Returns the patient's contacts.                                                                                                                                                                                                                                                       |
-| `updateLink(patientId, contactId, patch)` | `patient:write` | Relationship, roles, primaries (`isPrimary…: true` moves the primary). Not linked → 404 `contact.not_found`; no role left → 422 `contact.role_required`. A patch that changes nothing writes and audits nothing. Audits `contact.roles`. Returns the patient's contacts.                                                              |
-| `unlink(patientId, contactId)`            | `patient:write` | Hard-deletes the link; a primary is replaced by the oldest remaining holder. The contact stays (the lookup still finds it). Not linked → 404. Audits `contact.unlink`, emits `ContactUnlinked`. Returns the remaining contacts.                                                                                                       |
-| `updateContact(contactId, patch)`         | `patient:write` | Name, phone (normalised; invalid → 422 at `phone`) and e-mail of an **unlinked** contact. Linked → 409 `contact.linked` (edit the patient record); unknown → 404. Only changed fields are written; audits `contact.update` (resource `contact`, before/after name, phone, e-mail), emits `ContactUpdated`. Returns the `ContactView`. |
+| Method                                    | Access          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contactsOf(patientId)`                   | `patient:read`  | `PatientContact[]`, resolved, primaries first then oldest link; archived and merged-away patients too. Unknown → 404 `patient.not_found`.                                                                                                                                                                                                                                                                                                                  |
+| `patientsBilledBy(contactId)`             | `patient:read`  | `PatientListItem[]` of the patients linking the contact with `is_billing_contact`, archived included, by name. Unknown or deleted contact → 404 `contact.not_found`.                                                                                                                                                                                                                                                                                       |
+| `findContactsByPhone(phone)`              | `patient:read`  | `ContactView[]` whose resolved phone is `phone` normalised with the tenant country; an unparseable phone matches nobody (`[]`).                                                                                                                                                                                                                                                                                                                            |
+| `lookup({ q })`                           | `patient:read`  | Search-or-create (C5): contacts (resolved), and active patients who are nobody's contact yet, whose name key contains `q` or whose phone digits contain its digits (≥ 2). A patient with a linked contact appears once, as that contact. Both halves are read in one transaction, each cut at 10 in SQL by name key in the "C" collation; the merged list keeps that order (code points), contacts before patients on equal keys, then id, and at most 10. |
+| `link(patientId, input)`                  | `patient:write` | A `ContactLinkInput` (see [Linking](#linking)). Returns the patient's contacts.                                                                                                                                                                                                                                                                                                                                                                            |
+| `updateLink(patientId, contactId, patch)` | `patient:write` | Relationship, roles, primaries (`isPrimary…: true` moves the primary). Not linked → 404 `contact.not_found`; no role left → 422 `contact.role_required`. A patch that changes nothing writes and audits nothing. Audits `contact.roles`. Returns the patient's contacts.                                                                                                                                                                                   |
+| `unlink(patientId, contactId)`            | `patient:write` | Hard-deletes the link; a primary is replaced by the oldest remaining holder. The contact stays (the lookup still finds it). Not linked → 404. Audits `contact.unlink`, emits `ContactUnlinked`. Returns the remaining contacts.                                                                                                                                                                                                                            |
+| `updateContact(contactId, patch)`         | `patient:write` | Name, phone (normalised; invalid → 422 at `phone`) and e-mail of an **unlinked** contact. Linked → 409 `contact.linked` (edit the patient record); unknown → 404. Only changed fields are written; audits `contact.update` (resource `contact`, before/after name, phone, e-mail), emits `ContactUpdated`. Returns the `ContactView`.                                                                                                                      |
 
 ### Linking
 
@@ -317,8 +319,11 @@ them together with the pair. If a link made meanwhile would touch a patient it d
 merge answers 409 `contact.conflict` and changes nothing.
 
 When anything changed, one `contact.merge` audit entry on the kept patient summarises it:
-`{ droppedId, movedLinks, updatedLinks, removedLinks, relinkedContactId, foldedContactId }`. There
-are no contact events for a merge: consumers follow `PatientsMerged`.
+`{ droppedId, movedLinks, updatedLinks, removedLinks, relinkedContactId, foldedContactId,
+foldedIntoContactId }`. The re-pointed contact and the folded one each get `ContactUpdated`; link
+moves emit nothing more (consumers follow `PatientsMerged`). A folded contact id maps to the kept
+patient's linked contact (`foldedIntoContactId`): the folded contact is soft-deleted, and every
+link it had now points at that contact.
 
 ## HTTP
 
@@ -358,9 +363,10 @@ an unknown id inside a body is a 422 at its path.
     patient's ledger entries to the kept one through a BullMQ job (design Q9, ADR-0017).
   - `ContactLinked { patientId, contactId }`: a link was made (a contact route, or a create).
   - `ContactUnlinked { patientId, contactId }`.
-  - `ContactUpdated { contactId }`: an unlinked contact's own fields changed, or it became a
-    patient (`linkContactId`).
-  - Role and relationship changes and a merge's contact moves are audited, not announced.
+  - `ContactUpdated { contactId }`: an unlinked contact's own fields changed; it became a
+    patient (`linkContactId`); or a merge re-pointed it to the kept patient or folded it into the
+    kept patient's linked contact (its successor).
+  - Role and relationship changes and a merge's link moves are audited, not announced.
 - Consumes: —
 
 ## Depends on

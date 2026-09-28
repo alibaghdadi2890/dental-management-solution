@@ -8,7 +8,6 @@ import {
   normalizePhone,
   type PatientContact,
   type PatientListItem,
-  phoneDigits,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../platform/cls/request-context';
@@ -115,25 +114,30 @@ export class ContactsService {
     const { country } = await this.tenancy.currentTenant();
     const normalized = normalizePhone(phone, country);
     if (!normalized) return [];
-    const records = await this.contacts.findByPhoneDigits(phoneDigits(normalized.e164));
+    const records = await this.contacts.findByPhone(normalized.e164);
     return records.map((record) => resolveContact(record.contact, record.linkedPatient));
   }
 
   /**
    * Search-or-create (addendum C5): contacts, and active patients who are nobody's contact yet,
    * whose name contains `q` or whose phone digits contain its digits (at least 2). A patient
-   * with a linked contact appears once, as that contact. At most 10, by name (diacritics-
-   * insensitive), contacts before patients on a tie, then id.
+   * with a linked contact appears once, as that contact. At most 10, by name key (diacritics-
+   * insensitive) in code-point order, contacts before patients on a tie, then id. Each half is
+   * cut at 10 in SQL in the same order (`byNameKey`), so merging them here keeps the first 10.
    */
   async lookup(query: ContactLookupQuery): Promise<ContactLookupItem[]> {
     this.context.requirePermission('patient:read');
-    const contacts = await this.contacts.lookup(query.q, LOOKUP_LIMIT);
-    const patients = await this.patients.lookupUnlinked(query.q, LOOKUP_LIMIT);
+    const { contacts, patients } = await this.tenantDb.run(async () => ({
+      contacts: await this.contacts.lookup(query.q, LOOKUP_LIMIT),
+      patients: await this.patients.lookupUnlinked(query.q, LOOKUP_LIMIT),
+    }));
     const rows: { key: string; rank: number; id: string; item: ContactLookupItem }[] = [
       ...contacts.map((record) => {
         const contact = resolveContact(record.contact, record.linkedPatient);
         const item: ContactLookupItem = { kind: 'contact', contact };
-        return { key: nameKey(contact.fullName), rank: 0, id: contact.id, item };
+        // A linked contact's key is its patient's (`name_key` is derived from the name alike).
+        const key = record.contact.nameKey ?? nameKey(contact.fullName);
+        return { key, rank: 0, id: contact.id, item };
       }),
       ...patients.map((patient) => {
         const item: ContactLookupItem = {
@@ -149,7 +153,7 @@ export class ContactsService {
         return { key: patient.nameKey, rank: 1, id: patient.id, item };
       }),
     ];
-    rows.sort((a, b) => compare(a.key, b.key) || a.rank - b.rank || compare(a.id, b.id));
+    rows.sort((a, b) => byteOrder(a.key, b.key) || a.rank - b.rank || byteOrder(a.id, b.id));
     return rows.slice(0, LOOKUP_LIMIT).map((row) => row.item);
   }
 
@@ -343,7 +347,7 @@ function ownFields(contact: {
   return { fullName: contact.fullName, phone: contact.phone, email: contact.email };
 }
 
-function compare(a: string, b: string): number {
-  if (a === b) return 0;
-  return a < b ? -1 : 1;
+/** The "C" collation's order: UTF-8 bytes (`byNameKey`; uuids sort the same way as text). */
+function byteOrder(a: string, b: string): number {
+  return Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
 }

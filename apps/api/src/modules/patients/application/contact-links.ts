@@ -222,7 +222,8 @@ export class ContactLinks {
    * the links of both patients and, for a fold, the dropped contact's links; plans
    * (`planContactMerge`) and applies. A fold that would now rewrite links of a patient the merge
    * did not lock (a link made meanwhile) → 409 `contact.conflict`, and the merge rolls back.
-   * Audits one `contact.merge` summary on the kept patient when anything changed.
+   * Audits one `contact.merge` summary on the kept patient when anything changed, and emits
+   * `ContactUpdated` for the re-pointed and the folded contact.
    */
   async mergeContacts(
     keptId: string,
@@ -268,6 +269,7 @@ export class ContactLinks {
       plan.deletes.length + plan.updates.length + plan.moves.length + plan.relinks.length > 0 ||
       folded.length > 0;
     if (!changed) return;
+    const foldPlan = plan.folds.at(0);
     await this.audit.record({
       action: 'contact.merge',
       resourceType: 'patient',
@@ -278,9 +280,16 @@ export class ContactLinks {
         updatedLinks: plan.updates.length,
         removedLinks: plan.deletes.length,
         relinkedContactId: plan.relinks.at(0) ?? null,
-        foldedContactId: folded.at(0) ?? null,
+        foldedContactId: foldPlan?.fromContactId ?? null,
+        foldedIntoContactId: foldPlan?.intoContactId ?? null,
       },
     });
+    // The contacts that now read as the kept patient (re-pointed), or are gone into its contact
+    // (folded: the successor is the kept patient's linked contact).
+    for (const contactId of [...plan.relinks, ...folded]) {
+      const event: ContactUpdated = this.events.create(CONTACT_UPDATED, { contactId });
+      await this.events.publish(event);
+    }
   }
 
   /** Target patients must be visible and not merged away; returns the valid ids. */

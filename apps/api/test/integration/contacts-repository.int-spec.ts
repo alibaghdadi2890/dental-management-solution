@@ -282,7 +282,7 @@ describe('patients: contacts repositories', () => {
       ).toEqual([]);
     });
 
-    describe('lookup and findByPhoneDigits', () => {
+    describe('lookup and findByPhone', () => {
       const tenant = newId();
       let jose: string;
       let linkedMother: string;
@@ -324,15 +324,15 @@ describe('patients: contacts repositories', () => {
         expect(await lookup('jos', 1)).toEqual([jose]);
       });
 
-      it('finds contacts by the exact E.164 digits of their resolved phone', async () => {
-        const byDigits = (digits: string) =>
-          inTenant(tenant, () => contactsRepo.findByPhoneDigits(digits)).then((rows) =>
+      it('finds contacts by the exact E.164 number of their resolved phone', async () => {
+        const byPhone = (e164: string) =>
+          inTenant(tenant, () => contactsRepo.findByPhone(e164)).then((rows) =>
             rows.map((row) => row.contact.id),
           );
-        expect(await byDigits('9613123456')).toEqual([jose]);
-        expect(await byDigits('9617654321')).toEqual([linkedMother]);
-        expect(await byDigits('961312345')).toEqual([]);
-        expect(await byDigits('9613123457')).toEqual([]);
+        expect(await byPhone('+9613123456')).toEqual([jose]);
+        expect(await byPhone('+9617654321')).toEqual([linkedMother]);
+        expect(await byPhone('+961312345')).toEqual([]);
+        expect(await byPhone('+9613123457')).toEqual([]);
       });
     });
   });
@@ -924,10 +924,10 @@ describe('patients: contacts repositories', () => {
 
       const inB = <T>(fn: () => Promise<T>) => inTenant(tenantB, fn);
       expect(await inB(() => contactsRepo.findById(mother.id))).toBeUndefined();
-      expect(await inB(() => contactsRepo.findByIds([mother.id, linkedA.id]))).toEqual([]);
+      expect(await inB(() => contactsRepo.findById(linkedA.id))).toBeUndefined();
       expect(await inB(() => contactsRepo.lookup('mother', 10))).toEqual([]);
       expect(await inB(() => contactsRepo.lookup('03123', 10))).toEqual([]);
-      expect(await inB(() => contactsRepo.findByPhoneDigits('9613123456'))).toEqual([]);
+      expect(await inB(() => contactsRepo.findByPhone('+9613123456'))).toEqual([]);
       expect(await inB(() => contactsRepo.findByLinkedPatient(child.id))).toBeUndefined();
       expect(await inB(() => links.listForPatient(child.id))).toEqual([]);
       expect(await inB(() => links.linksOf(child.id))).toEqual([]);

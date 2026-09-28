@@ -677,6 +677,66 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
     });
   });
 
+  describe('merged-away patients', () => {
+    it('refuses contact writes on them (409 patient.merged) and them as link targets (422)', async () => {
+      const kept = await createPatient(main.owner, { fullName: 'Gone Kept', phone: '71 550 001' });
+      const gone = await createPatient(main.owner, {
+        fullName: 'Gone Dropped',
+        phone: '71 550 002',
+      });
+      const [sister] = await linked(
+        main.owner,
+        gone.id,
+        linkInput(newContact('Gone Sister', '71 550 003'), 'sibling', { isEmergencyContact: true }),
+      );
+      const merged = await main.owner
+        .post('/api/v1/patients/merge')
+        .send({ keepId: kept.id, dropId: gone.id, reason: 'Same person' });
+      expect(merged.status).toBe(200);
+      const contactId = sister?.contact.id;
+
+      const writes = await Promise.all([
+        link(
+          main.owner,
+          gone.id,
+          linkInput(newContact('Late', '71 550 004'), 'other', { isEmergencyContact: true }),
+        ),
+        main.owner
+          .patch(`/api/v1/patients/${gone.id}/contacts/${contactId}`)
+          .send({ isBillingContact: true }),
+        main.owner.delete(`/api/v1/patients/${gone.id}/contacts/${contactId}`),
+      ]);
+      for (const response of writes) {
+        expect(response.status).toBe(409);
+        expect(response.body).toMatchObject({ code: 'patient.merged' });
+      }
+
+      const other = await createPatient(main.owner, {
+        fullName: 'Gone Other',
+        phone: '71 550 005',
+      });
+      const asTarget = await link(
+        main.owner,
+        other.id,
+        linkInput({ patientId: gone.id }, 'sibling', { isEmergencyContact: true }),
+      );
+      expect(asTarget.status).toBe(422);
+      expect(problem(asTarget.body).errors).toEqual([
+        expect.objectContaining({ path: 'target.patientId', code: 'merged' }),
+      ]);
+      const onCreate = await main.owner.post('/api/v1/patients').send({
+        fullName: 'Gone Child',
+        dateOfBirth: CHILD_DOB,
+        contacts: [linkInput({ patientId: gone.id }, 'parent')],
+      });
+      expect(onCreate.status).toBe(422);
+      expect(problem(onCreate.body).errors).toEqual([
+        expect.objectContaining({ path: 'contacts.0.target.patientId', code: 'merged' }),
+      ]);
+      expect(await contactsOf(main.owner, other.id)).toEqual([]);
+    });
+  });
+
   describe('editing a contact (PATCH /contacts/:id)', () => {
     it('edits an unlinked contact, and refuses a linked one', async () => {
       const child = await createPatient(main.owner, {
@@ -730,6 +790,93 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
       const unknown = await main.owner.patch(`/api/v1/contacts/${newId()}`).send({ fullName: 'X' });
       expect(unknown.status).toBe(404);
       expect(unknown.body).toMatchObject({ code: 'contact.not_found' });
+    });
+  });
+
+  describe('editing a contact without a change', () => {
+    it('writes, audits and emits nothing', async () => {
+      const child = await createPatient(main.owner, {
+        fullName: 'Same Child',
+        dateOfBirth: CHILD_DOB,
+        contacts: [linkInput(newContact('Same Uncle', '71 610 001'), 'caregiver')],
+      });
+      const contactId = (await contactsOf(main.owner, child.id))[0]?.contact.id;
+      const stamp = async () =>
+        (
+          await database.ownerPool.query<{ updated_at: Date }>(
+            'select updated_at from contacts where id = $1',
+            [contactId],
+          )
+        ).rows[0]?.updated_at.toISOString();
+      const before = await stamp();
+      const eventsBefore = (await events(main.owner, 'ContactUpdated')).length;
+
+      const same = await main.owner
+        .patch(`/api/v1/contacts/${contactId}`)
+        .send({ fullName: 'Same Uncle', phone: '+961 71 610 001', email: '' });
+      expect(same.status).toBe(200);
+      expect(same.body).toMatchObject({
+        fullName: 'Same Uncle',
+        phone: '+96171610001',
+        email: null,
+      });
+      expect(await stamp()).toBe(before);
+      expect(await auditOf(main.owner, `resourceType=contact&resourceId=${contactId}`)).toEqual([]);
+      expect((await events(main.owner, 'ContactUpdated')).length).toBe(eventsBefore);
+    });
+  });
+
+  describe('the lookup (C5)', () => {
+    it('merges both halves by name, contacts first on a tie, at most 10, no archived patient', async () => {
+      await createPatient(main.owner, {
+        fullName: 'Holder Of Many',
+        phone: '71 620 001',
+        contacts: ['A1', 'A2', 'A3', 'A4', 'A5', 'A6'].map((suffix, index) =>
+          linkInput(newContact(`Lkq ${suffix}`, `71 620 1${String(index)}0`), 'other', {
+            isEmergencyContact: true,
+          }),
+        ),
+      });
+      const patient = (fullName: string, index: number) =>
+        createPatient(main.owner, { fullName, phone: `71 620 2${String(index)}0` });
+      await patient('Lkq A1', 0);
+      for (const [index, suffix] of ['B1', 'B2', 'B3', 'B4', 'B5'].entries()) {
+        await patient(`Lkq ${suffix}`, index + 1);
+      }
+      const archived = await patient('Lkq A0', 6);
+      await main.owner.post('/api/v1/patients/archive').send({ ids: [archived.id] });
+      // A patient who is someone's contact: offered once, as that contact.
+      const asContact = await patient('Lkq C1', 7);
+      await linked(
+        main.owner,
+        (await patient('Other Holder', 8)).id,
+        linkInput({ patientId: asContact.id }, 'sibling', { isEmergencyContact: true }),
+      );
+
+      const rows = (await lookup(main.owner, 'Lkq')).map((item) =>
+        item.kind === 'contact'
+          ? `contact ${item.contact.fullName}`
+          : `patient ${item.patient.fullName}`,
+      );
+      expect(rows).toEqual([
+        'contact Lkq A1',
+        'patient Lkq A1',
+        'contact Lkq A2',
+        'contact Lkq A3',
+        'contact Lkq A4',
+        'contact Lkq A5',
+        'contact Lkq A6',
+        'patient Lkq B1',
+        'patient Lkq B2',
+        'patient Lkq B3',
+      ]);
+      const once = await lookup(main.owner, 'Lkq C1');
+      expect(once.map((item) => item.kind)).toEqual(['contact']);
+      const [only] = once;
+      expect(only?.kind === 'contact' ? only.contact.linkedPatient?.id : undefined).toBe(
+        asContact.id,
+      );
+      expect(await lookup(main.owner, 'Lkq A0')).toEqual([]);
     });
   });
 
@@ -850,8 +997,12 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
         droppedId: dropped.id,
         movedLinks: 1,
         foldedContactId: droppedContactId,
+        foldedIntoContactId: keptContactId,
         relinkedContactId: null,
       });
+      const updated = (await events(main.owner, 'ContactUpdated')).map((entry) => entry.after);
+      expect(updated).toContainEqual({ contactId: droppedContactId });
+      expect(updated).not.toContainEqual({ contactId: keptContactId });
     });
 
     it("re-points the dropped record's contact when the kept one has none", async () => {
@@ -882,8 +1033,14 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
       const [entry] = await auditOf(main.owner, `resourceType=patient&resourceId=${kept.id}`);
       expect(entry).toMatchObject({
         action: 'contact.merge',
-        after: { relinkedContactId: before?.contact.id, foldedContactId: null },
+        after: {
+          relinkedContactId: before?.contact.id,
+          foldedContactId: null,
+          foldedIntoContactId: null,
+        },
       });
+      const [event] = await events(main.owner, 'ContactUpdated');
+      expect(event?.after).toEqual({ contactId: before?.contact.id });
     });
 
     it('audits no contact.merge when neither record has contacts', async () => {

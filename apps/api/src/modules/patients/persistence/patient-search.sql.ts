@@ -78,6 +78,15 @@ export function escapeLike(value: string): string {
 const MIN_PHONE_QUERY_DIGITS = 2;
 
 /**
+ * A name-key order in the "C" collation (code-point order of the UTF-8 bytes), so an order made in
+ * SQL can be continued in the application byte for byte (the lookup merges its contact and patient
+ * halves, `ContactsService.lookup`), whatever the database's default collation.
+ */
+export function byNameKey(nameKeyColumn: AnyColumn | SQL): SQL {
+  return sql`(${nameKeyColumn}) collate "C"`;
+}
+
+/**
  * The search-or-create lookup's match (addendum C5), over any pair of name-key and phone-search
  * expressions (a patient's own columns, or a contact's resolved ones): a diacritics-insensitive
  * name substring, or, when `q` has at least 2 digits, a phone-digits substring.

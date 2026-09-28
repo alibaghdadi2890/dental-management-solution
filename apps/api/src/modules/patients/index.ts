@@ -17,6 +17,8 @@ export {
   ContactIsPatientError,
   ContactLinkedError,
   ContactNotFoundError,
+  ContactPrimaryWithoutRoleError,
+  ContactRoleRequiredError,
 } from './domain/contact-errors';
 export {
   PATIENT_ARCHIVED,

@@ -42,8 +42,9 @@ Text fields cannot answer any of these without string matching across rows.
   `patientsBilledBy(contactId)`, `findContactsByPhone(phone)` (normalised with the tenant
   country), all `patient:read`; events `ContactLinked`, `ContactUnlinked`, `ContactUpdated`.
 - Contacts stay in `patients`, not a module of their own: they have no meaning without the
-  patients they relate to, every write locks a patient row first, and merge must move them in
-  the patient merge's transaction.
+  patients they relate to, every link write locks the patient whose links change first (editing
+  a contact's own fields locks only the contact), and merge must move them in the patient
+  merge's transaction.
 
 ## Alternatives considered
 

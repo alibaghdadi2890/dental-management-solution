@@ -12,7 +12,7 @@ import {
   resolvedPhone,
   resolvedPhoneSearch,
 } from './contact-resolution.sql';
-import { idAmong, lookupMatch } from './patient-search.sql';
+import { byNameKey, idAmong, lookupMatch } from './patient-search.sql';
 import { type NormalizedPhoneInput, phoneColumns } from './patients.repository';
 import { contacts } from './schema';
 
@@ -155,11 +155,6 @@ export class ContactsRepository {
     return record;
   }
 
-  findByIds(ids: readonly string[]): Promise<ContactRecord[]> {
-    if (ids.length === 0) return Promise.resolve([]);
-    return this.findWhere(idAmong(contacts.id, ids));
-  }
-
   /**
    * Makes a live, unlinked contact patient `patientId` ("the mother becomes a patient", C4): sets
    * `linked_patient_id` and clears the own name, phone and e-mail in the same update, so the
@@ -290,11 +285,11 @@ export class ContactsRepository {
   }
 
   /**
-   * Live contacts whose resolved phone is exactly the E.164 number with these digits (e.g. the
-   * digits of a number normalised with the tenant's country, C12).
+   * Live contacts whose resolved phone is exactly `e164` (e.g. a number normalised with the
+   * tenant's country, C12).
    */
-  findByPhoneDigits(e164Digits: string): Promise<ContactRecord[]> {
-    return this.findWhere(sql`${resolvedPhone} = ${`+${e164Digits}`}`);
+  findByPhone(e164: string): Promise<ContactRecord[]> {
+    return this.findWhere(sql`${resolvedPhone} = ${e164}`);
   }
 
   /**
@@ -331,7 +326,7 @@ export class ContactsRepository {
         .from(contacts)
         .leftJoin(linkedPatients, eq(linkedPatients.id, contacts.linkedPatientId))
         .where(and(isNull(contacts.deletedAt), condition))
-        .orderBy(resolvedNameKey, contacts.id)
+        .orderBy(byNameKey(resolvedNameKey), contacts.id)
         .$dynamic();
       return limit === undefined ? query : query.limit(limit);
     });

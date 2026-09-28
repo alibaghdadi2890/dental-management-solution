@@ -31,8 +31,10 @@ export const openingBalanceInputSchema = z.object({
 });
 export type OpeningBalanceInput = z.infer<typeof openingBalanceInputSchema>;
 
-/** `POST /billing/opening-balances`: one transaction, `PatientsService.create` then the entry. */
-/** The patient is a full create (addendum C4): its contacts are linked in the same transaction. */
+/**
+ * `POST /billing/opening-balances`: one transaction, `PatientsService.create` then the entry. The
+ * patient is a full create (addendum C4): its contacts are linked in the same transaction.
+ */
 export const createWithOpeningBalanceSchema = z.object({
   patient: patientCreateSchema,
   openingBalance: openingBalanceInputSchema,
