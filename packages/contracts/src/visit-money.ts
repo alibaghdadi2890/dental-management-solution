@@ -27,11 +27,6 @@ export interface VisitMoney {
   capped: boolean;
 }
 
-/** One service line's charged amount: `base − discount`. */
-export function lineFinal(line: MoneyLine): string {
-  return fromCents(toCents(line.base) - toCents(line.discount));
-}
-
 /** Parses and validates one line: `0 ≤ discount ≤ base` (the same invariant `visit_services`
  * enforces in the database), `base ≥ 0`. */
 function parseLine(line: MoneyLine): { base: bigint; discount: bigint } {
@@ -42,6 +37,14 @@ function parseLine(line: MoneyLine): { base: bigint; discount: bigint } {
     throw new RangeError(`Line discount must be between 0 and the base: "${line.discount}"`);
   }
   return { base, discount };
+}
+
+/** One service line's charged amount: `base − discount`, via the same `parseLine` validation
+ * `visitMoney` applies to every line, so an impossible line (e.g. a discount over its base)
+ * throws here too instead of silently returning a negative final price. */
+export function lineFinal(line: MoneyLine): string {
+  const { base, discount } = parseLine(line);
+  return fromCents(base - discount);
 }
 
 const PERCENT_SCALE = 100n; // a percent value (e.g. "12.50") → hundredths of a percent (1250)

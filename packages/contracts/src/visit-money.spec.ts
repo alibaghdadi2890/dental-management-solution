@@ -6,6 +6,14 @@ describe('lineFinal', () => {
     expect(lineFinal({ base: '50.00', discount: '0.00' })).toBe('50.00');
     expect(lineFinal({ base: '100.00', discount: '20.00' })).toBe('80.00');
   });
+
+  it('throws RangeError on a discount above the base, like visitMoney would', () => {
+    expect(() => lineFinal({ base: '10', discount: '20' })).toThrow(RangeError);
+  });
+
+  it('throws RangeError on a negative base, like visitMoney would', () => {
+    expect(() => lineFinal({ base: '-5', discount: '0' })).toThrow(RangeError);
+  });
 });
 
 const TWO_LINES: MoneyLine[] = [
