@@ -45,30 +45,87 @@ export const surfacesSchema = z
 // Canonical codes
 // ---------------------------------------------------------------------------------------------
 
-/** The canonical stored value: FDI two-digit text, e.g. `'16'`, `'55'`. */
-export type ToothCode = string;
+/** A permanent FDI code: quadrant 1–4, position 1–8 (e.g. `'16'`). */
+export type PermanentToothCode = `${1 | 2 | 3 | 4}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}`;
+/** A primary (deciduous) FDI code: quadrant 5–8, position 1–5 (e.g. `'55'`). */
+export type PrimaryToothCode = `${5 | 6 | 7 | 8}${1 | 2 | 3 | 4 | 5}`;
+/** The canonical stored value: FDI two-digit text, e.g. `'16'`, `'55'` — exactly the 52 codes
+ * `PERMANENT_CODES`/`PRIMARY_CODES` enumerate, enforced at compile time by the template-literal
+ * union and at runtime by `isToothCode`/`toothCodeSchema`. */
+export type ToothCode = PermanentToothCode | PrimaryToothCode;
 
-function codesForQuadrants(bases: readonly number[], maxPosition: number): ToothCode[] {
-  const codes: ToothCode[] = [];
-  for (const base of bases) {
-    for (let pos = 1; pos <= maxPosition; pos++) {
-      codes.push(`${base}${pos}`);
-    }
-  }
-  return codes;
+/** 11–18, 21–28, 31–38, 41–48, in that order (quadrant-major, position-ascending — `archColumns`
+ * slices this array rather than rebuilding codes). */
+export const PERMANENT_CODES: readonly PermanentToothCode[] = [
+  '11',
+  '12',
+  '13',
+  '14',
+  '15',
+  '16',
+  '17',
+  '18',
+  '21',
+  '22',
+  '23',
+  '24',
+  '25',
+  '26',
+  '27',
+  '28',
+  '31',
+  '32',
+  '33',
+  '34',
+  '35',
+  '36',
+  '37',
+  '38',
+  '41',
+  '42',
+  '43',
+  '44',
+  '45',
+  '46',
+  '47',
+  '48',
+];
+/** 51–55, 61–65, 71–75, 81–85. */
+export const PRIMARY_CODES: readonly PrimaryToothCode[] = [
+  '51',
+  '52',
+  '53',
+  '54',
+  '55',
+  '61',
+  '62',
+  '63',
+  '64',
+  '65',
+  '71',
+  '72',
+  '73',
+  '74',
+  '75',
+  '81',
+  '82',
+  '83',
+  '84',
+  '85',
+];
+
+const ALL_CODES: ReadonlySet<string> = new Set<string>([...PERMANENT_CODES, ...PRIMARY_CODES]);
+
+/** Runtime check + compile-time narrowing for `ToothCode`; the one place persistence boundaries
+ * (and everything else in this file) should validate untrusted tooth text. */
+export function isToothCode(value: string): value is ToothCode {
+  return ALL_CODES.has(value);
 }
 
-/** 11–18, 21–28, 31–38, 41–48. */
-export const PERMANENT_CODES: readonly ToothCode[] = codesForQuadrants([1, 2, 3, 4], 8);
-/** 51–55, 61–65, 71–75, 81–85. */
-export const PRIMARY_CODES: readonly ToothCode[] = codesForQuadrants([5, 6, 7, 8], 5);
-
-const ALL_CODES = new Set<ToothCode>([...PERMANENT_CODES, ...PRIMARY_CODES]);
-
 /** Exactly the 52 canonical FDI codes — nothing else parses as a tooth. */
-export const toothCodeSchema: z.ZodType<ToothCode> = z
-  .string()
-  .refine((value) => ALL_CODES.has(value), { message: 'Not a canonical FDI tooth code' });
+export const toothCodeSchema = z.string().refine(isToothCode, {
+  message: 'Not a canonical FDI tooth code',
+});
 
 // ---------------------------------------------------------------------------------------------
 // Core facts about a code
@@ -136,23 +193,21 @@ export function toUniversal(code: ToothCode): string {
   }
 }
 
-/** Inverse of the permanent half of `toUniversal`: universal number 1–32 → FDI code, or `null`. */
+/** Inverse of the permanent half of `toUniversal`: universal number 1–32 → FDI code, or `null`.
+ * The `isToothCode` check both narrows the type and guards the arithmetic (defence in depth —
+ * the range check above already makes it unreachable, but this never returns a bogus code). */
 function fdiFromUniversalPermanent(n: number): ToothCode | null {
-  if (n >= 1 && n <= 8) return `1${9 - n}`;
-  if (n >= 9 && n <= 16) return `2${n - 8}`;
-  if (n >= 17 && n <= 24) return `3${25 - n}`;
-  if (n >= 25 && n <= 32) return `4${n - 24}`;
-  return null;
+  if (n < 1 || n > 32) return null;
+  const code = n <= 8 ? `1${9 - n}` : n <= 16 ? `2${n - 8}` : n <= 24 ? `3${25 - n}` : `4${n - 24}`;
+  return isToothCode(code) ? code : null;
 }
 
 /** Inverse of the primary half of `toUniversal`: universal letter A–T → FDI code, or `null`. */
 function fdiFromUniversalPrimary(letter: string): ToothCode | null {
   const c = letter.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
   if (c < 0 || c > 19) return null;
-  if (c <= 4) return `5${5 - c}`;
-  if (c <= 9) return `6${c - 4}`;
-  if (c <= 14) return `7${15 - c}`;
-  return `8${c - 14}`;
+  const code = c <= 4 ? `5${5 - c}` : c <= 9 ? `6${c - 4}` : c <= 14 ? `7${15 - c}` : `8${c - 14}`;
+  return isToothCode(code) ? code : null;
 }
 
 /**
@@ -165,7 +220,7 @@ export function parseTooth(text: string, notation: ToothNotation): ToothCode | n
   if (stripped.length === 0) return null;
 
   if (notation === 'fdi') {
-    return toothCodeSchema.safeParse(stripped).success ? stripped : null;
+    return isToothCode(stripped) ? stripped : null;
   }
 
   if (/^\d+$/.test(stripped)) {
@@ -190,7 +245,9 @@ export function toothLabel(code: ToothCode, notation: ToothNotation): string {
 
 /** A primary tooth's permanent successor (positions 1–5 only; e.g. `54` → `14`). */
 export function successorOf(primaryCode: ToothCode): ToothCode {
-  return `${quadrant(primaryCode)}${position(primaryCode)}`;
+  const code = `${quadrant(primaryCode)}${position(primaryCode)}`;
+  if (!isToothCode(code)) throw new Error(`Invalid primary tooth code: ${primaryCode}`);
+  return code;
 }
 
 /** A permanent tooth's primary predecessor, or `null` for molars (positions 6–8), e.g. `14` →
@@ -198,7 +255,8 @@ export function successorOf(primaryCode: ToothCode): ToothCode {
 export function predecessorOf(permanentCode: ToothCode): ToothCode | null {
   const p = position(permanentCode);
   if (p > 5) return null;
-  return `${quadrant(permanentCode) + 4}${p}`;
+  const code = `${quadrant(permanentCode) + 4}${p}`;
+  return isToothCode(code) ? code : null;
 }
 
 /** The permanent code of the chart column a tooth belongs to: itself if already permanent, its
@@ -211,9 +269,15 @@ export function positionKey(code: ToothCode): ToothCode {
 // Orientation-aware layout
 // ---------------------------------------------------------------------------------------------
 
-function quadrantColumn(base: number, order: 'desc' | 'asc'): ToothCode[] {
-  const positions = order === 'desc' ? [8, 7, 6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6, 7, 8];
-  return positions.map((p) => `${base}${p}`);
+/** `PERMANENT_CODES` is quadrant-major, position-ascending, 8 per quadrant — slice it instead of
+ * rebuilding codes, so this can never construct a code `isToothCode` wouldn't already vouch for. */
+function quadrantSlice(base: 1 | 2 | 3 | 4): PermanentToothCode[] {
+  return PERMANENT_CODES.slice((base - 1) * 8, base * 8);
+}
+
+function quadrantColumn(base: 1 | 2 | 3 | 4, order: 'desc' | 'asc'): PermanentToothCode[] {
+  const ascending = quadrantSlice(base);
+  return order === 'desc' ? ascending.reverse() : ascending;
 }
 
 /**
@@ -293,7 +357,10 @@ const PERMANENT_TOOTH_NAME_KEYS = [
   'thirdMolar',
 ] as const;
 
-const PRIMARY_TOOTH_NAME_KEYS = [
+/** Primary teeth have no premolars and stop at the second molar (positions 4–5). Every element
+ * here also appears in `PERMANENT_TOOTH_NAME_KEYS`, which is why `ToothNameKey` is derived from
+ * that (wider) table alone. */
+const PRIMARY_TOOTH_NAME_KEYS: readonly ToothNameKey[] = [
   'centralIncisor',
   'lateralIncisor',
   'canine',
@@ -308,10 +375,15 @@ const QUADRANT_NAME_KEYS = {
   4: 'lowerRight',
 } as const;
 
+/** `'upperRight' | 'upperLeft' | 'lowerLeft' | 'lowerRight'`, derived from `QUADRANT_NAME_KEYS`. */
+export type QuadrantNameKey = (typeof QUADRANT_NAME_KEYS)[keyof typeof QUADRANT_NAME_KEYS];
+/** The tooth-name i18n keys used by `anatomicalName`, derived from `PERMANENT_TOOTH_NAME_KEYS`. */
+export type ToothNameKey = (typeof PERMANENT_TOOTH_NAME_KEYS)[number];
+
 /** An i18n key plus params — never English text (CLAUDE.md §13 i18n readiness). */
 export function anatomicalName(code: ToothCode): {
   key: 'tooth.name' | 'tooth.primaryName';
-  params: { quadrant: string; tooth: string };
+  params: { quadrant: QuadrantNameKey; tooth: ToothNameKey };
 } {
   const q = quadrant(code);
   const p = position(code);

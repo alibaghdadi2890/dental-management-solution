@@ -5,6 +5,7 @@ import {
   effectiveDentition,
   isAnterior,
   isPrimary,
+  isToothCode,
   isUpper,
   keyboardOrder,
   parseTooth,
@@ -791,6 +792,34 @@ describe('presentTooth', () => {
 
   it('resolves the primary tooth for the primary stage', () => {
     expect(presentTooth('44', 'primary')).toEqual({ code: '84', notErupted: false });
+  });
+});
+
+describe('isToothCode', () => {
+  it('accepts every one of the 52 canonical codes and rejects others', () => {
+    for (const row of TOOTH_TABLE) expect(isToothCode(row.code)).toBe(true);
+    expect(isToothCode('99')).toBe(false);
+    expect(isToothCode('56')).toBe(false);
+    expect(isToothCode('')).toBe(false);
+  });
+
+  it('narrows to ToothCode at compile time (see the type-level test below)', () => {
+    const value: string = '16';
+    if (isToothCode(value)) {
+      const narrowed: ToothCode = value;
+      expect(narrowed).toBe('16');
+    } else {
+      throw new Error('expected 16 to be a canonical tooth code');
+    }
+  });
+});
+
+describe('ToothCode (compile time)', () => {
+  it('rejects an out-of-range literal at compile time, not just at runtime', () => {
+    // @ts-expect-error '99' is not a member of the ToothCode template-literal union.
+    quadrant('99');
+    // @ts-expect-error '56' is out of range for the primary quadrant (only 81-85, 71-75, ... exist).
+    quadrant('56');
   });
 });
 
