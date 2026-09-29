@@ -1,12 +1,13 @@
 import type { AuditPage, Branch, Room, Session, Tenant } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { RolesService } from '../../src/modules/roles';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
-import { asPlatformAdminIn, createBareTenant } from '../support/tenants';
+import { createBareTenant } from '../support/tenants';
+
+const TEMPORARY = 'temporary-pw-1';
 
 describe('tenancy: tenant settings, branches and rooms', () => {
   let database: TestDatabase;
@@ -24,6 +25,22 @@ describe('tenancy: tenant settings, branches and rooms', () => {
   };
   const auditOf = async (resourceId: string) =>
     ((await api.get(`/audit?resourceId=${resourceId}`)).body as AuditPage).items;
+
+  /** A real, fully provisioned clinic (its own owner, its own session) — not the platform admin
+   * acting through `X-Tenant-Id`. Mirrors `catalog.int-spec.ts`'s `provision`. */
+  const provision = async (name: string) => {
+    const ownerEmail = uniqueEmail('owner');
+    const response = await admin.post('/api/v1/platform/tenants').send({
+      clinic: { name, slug: `tny-${newId().slice(-12)}` },
+      firstBranch: { name: `${name} Main` },
+      owner: { displayName: `${name} Owner`, email: ownerEmail, temporaryPassword: TEMPORARY },
+    });
+    expect(response.status).toBe(201);
+    const owner = await signInAndSetPassword(testApp.app, ownerEmail, TEMPORARY);
+    const [branch] = (await owner.get('/api/v1/branches')).body as Branch[];
+    if (!branch) throw new Error('provisioning created no branch');
+    return { tenant: response.body as Tenant, owner, branch };
+  };
 
   beforeAll(async () => {
     database = connectTestDatabase();
@@ -131,34 +148,47 @@ describe('tenancy: tenant settings, branches and rooms', () => {
       });
     });
 
-    it('refuses a dentist writing chart settings (owner-only, D5)', async () => {
-      const other = await createBareTenant(testApp.app, 'Dentist-only Clinic');
-      await asPlatformAdminIn(testApp.app, other.id, () =>
-        testApp.app.get(RolesService).seedSystemRoles(),
-      );
-      const branch = (
-        await admin.post('/api/v1/branches').set('X-Tenant-Id', other.id).send({ name: 'Main St' })
-      ).body as Branch;
-      const email = uniqueEmail('dentist');
-      const created = await admin
-        .post('/api/v1/users')
-        .set('X-Tenant-Id', other.id)
-        .send({
+    describe('as a real clinic (not the platform admin)', () => {
+      let clinic: Awaited<ReturnType<typeof provision>>;
+
+      beforeAll(async () => {
+        clinic = await provision('Chart Settings Clinic');
+      });
+
+      it('lets the owner write chart settings in their own session, audited as their own action', async () => {
+        const response = await clinic.owner
+          .patch('/api/v1/tenant')
+          .send({ toothNotation: 'universal', chartMode: 'simple' });
+        expect(response.status).toBe(200);
+        expect(response.body).toMatchObject({ toothNotation: 'universal', chartMode: 'simple' });
+
+        const audit = await clinic.owner.get(`/api/v1/audit?resourceId=${clinic.tenant.id}`);
+        const [entry] = (audit.body as AuditPage).items;
+        expect(entry).toMatchObject({
+          action: 'tenant.update',
+          actorPlatformAdmin: false,
+          before: { toothNotation: 'fdi', chartMode: 'surface' },
+          after: { toothNotation: 'universal', chartMode: 'simple' },
+        });
+      });
+
+      it('refuses a dentist writing chart settings (owner-only, D5)', async () => {
+        const email = uniqueEmail('dentist');
+        const created = await clinic.owner.post('/api/v1/users').send({
           displayName: 'Dr. Dentist',
           email,
           practitionerType: 'dentist',
           roleKeys: ['dentist'],
-          branchIds: [branch.id],
-          temporaryPassword: 'temporary-pw-1',
+          branchIds: [clinic.branch.id],
+          temporaryPassword: TEMPORARY,
         });
-      expect(created.status).toBe(201);
+        expect(created.status).toBe(201);
 
-      const dentist = await signInAndSetPassword(testApp.app, email, 'temporary-pw-1');
-      const response = await dentist
-        .patch('/api/v1/tenant')
-        .set('X-Tenant-Id', other.id)
-        .send({ toothNotation: 'universal' });
-      expect(response.status).toBe(403);
+        const dentist = await signInAndSetPassword(testApp.app, email, TEMPORARY);
+        const response = await dentist.patch('/api/v1/tenant').send({ toothNotation: 'universal' });
+        expect(response.status).toBe(403);
+        expect(response.body).toMatchObject({ code: 'forbidden' });
+      });
     });
   });
 
