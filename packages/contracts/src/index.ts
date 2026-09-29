@@ -12,4 +12,5 @@ export * from './phone.js';
 export * from './roles.js';
 export * from './session.js';
 export * from './tenancy.js';
+export * from './tooth.js';
 export * from './users.js';
