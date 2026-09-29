@@ -26,6 +26,9 @@ export function toTenant(row: TenantRow): Tenant {
     currency: row.currency,
     locale: row.locale as Tenant['locale'],
     country: row.country as Tenant['country'],
+    chartMode: row.chartMode,
+    toothNotation: row.toothNotation,
+    chartOrientation: row.chartOrientation,
     createdAt: row.createdAt.toISOString(),
   };
 }

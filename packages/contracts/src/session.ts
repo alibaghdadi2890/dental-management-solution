@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { countrySchema, currencySchema, idSchema, localeSchema, timeZoneSchema } from './common.js';
 import { permissionSchema } from './permissions.js';
+import { chartModeSchema, chartOrientationSchema, toothNotationSchema } from './tooth.js';
 
 export const branchRefSchema = z.object({ id: idSchema, name: z.string() });
 export type BranchRef = z.infer<typeof branchRefSchema>;
@@ -26,6 +27,9 @@ export const sessionSchema = z.object({
       currency: currencySchema,
       locale: localeSchema,
       country: countrySchema,
+      chartMode: chartModeSchema,
+      toothNotation: toothNotationSchema,
+      chartOrientation: chartOrientationSchema,
     })
     .nullable(),
   /** Active branch; the sidebar shows a switcher when `branches` has more than one entry. */

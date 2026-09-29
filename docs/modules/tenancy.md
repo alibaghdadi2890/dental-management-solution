@@ -7,7 +7,12 @@
 Clinics (tenants), their settings (IANA time zone, currency, locale, country; defaults
 `Asia/Beirut`, `USD`, `en`, `LB`), their branches, and each branch's rooms. Country is ISO 3166-1
 alpha-2, limited to the countries the phone metadata knows (`countrySchema`), and drives phone
-parsing (`patients`, feature 3 Q3) and the date input order (feature 3 Q17). A room
+parsing (`patients`, feature 3 Q3) and the date input order (feature 3 Q17). Tenants also carry
+three chart display settings for `clinical`'s dental chart (feature 4a): `chartMode`
+(`surface`/`simple`, default `surface`), `toothNotation` (`fdi`/`universal`, default `fdi`) and
+`chartOrientation` (`patient_right_on_right`/`patient_right_on_left`, default
+`patient_right_on_right`). All three only change how the chart renders; the stored tooth code is
+always canonical FDI (ADR-0021). A room
 is the physical unit a visit happens in and the unit `scheduling` will later book as a resource
 (ADR-0007); there is no chair concept. Tenants are created and listed only by platform admins
 through `withoutTenant()`; everything else runs inside the current tenant under RLS. End-to-end
@@ -17,8 +22,10 @@ provisioning (first branch, owner, roles) is orchestrated by `provisioning`.
 
 - `tenants` — `id, name, slug (unique), status (active|suspended), time_zone, currency, locale`,
   plus `country` (`char(2)`, default `'LB'`, `CHECK (country ~ '^[A-Z]{2}$')` as a second line of
-  defence under `countrySchema`). No `tenant_id`; RLS policy `tenant_self` (`id` = the
-  transaction's tenant) lets members read their own row.
+  defence under `countrySchema`), and `chart_mode`, `tooth_notation`, `chart_orientation`
+  (Postgres enums built from the same consts as `packages/contracts/src/tooth.ts`, not null,
+  defaulted — ADR-0021). No `tenant_id`; RLS policy `tenant_self` (`id` = the transaction's
+  tenant) lets members read their own row.
 - `branches` — tenant RLS; `name` and `code` unique per tenant, case-insensitive; `active`.
 - `rooms` — tenant RLS; composite FK `(tenant_id, branch_id)` → `branches` so a room can never
   point at another tenant's branch (FK checks bypass RLS); `name` and `code` unique per branch.

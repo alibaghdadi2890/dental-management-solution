@@ -6,6 +6,7 @@ import {
   type ProvisionTenantRequestInput,
   roomBatchSchema,
   slugSchema,
+  TENANT_DEFAULTS,
   tenantSettingsPatchSchema,
 } from './tenancy.js';
 
@@ -111,5 +112,23 @@ describe('branches and rooms', () => {
   it('accepts a country change and rejects an unsupported code', () => {
     expect(tenantSettingsPatchSchema.safeParse({ country: 'FR' }).success).toBe(true);
     expect(tenantSettingsPatchSchema.safeParse({ country: 'zz' }).success).toBe(false);
+  });
+
+  it('defaults chart settings to surface, FDI and patient-right-on-right (ADR-0021)', () => {
+    expect(TENANT_DEFAULTS).toMatchObject({
+      chartMode: 'surface',
+      toothNotation: 'fdi',
+      chartOrientation: 'patient_right_on_right',
+    });
+  });
+
+  it('accepts a chart settings change and rejects an unknown value', () => {
+    expect(tenantSettingsPatchSchema.safeParse({ toothNotation: 'universal' }).success).toBe(true);
+    expect(tenantSettingsPatchSchema.safeParse({ toothNotation: 'palmer' }).success).toBe(false);
+    expect(
+      tenantSettingsPatchSchema.safeParse({ chartOrientation: 'patient_right_on_left' }).success,
+    ).toBe(true);
+    expect(tenantSettingsPatchSchema.safeParse({ chartMode: 'simple' }).success).toBe(true);
+    expect(tenantSettingsPatchSchema.safeParse({ chartMode: 'detailed' }).success).toBe(false);
   });
 });

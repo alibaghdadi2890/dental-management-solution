@@ -85,6 +85,13 @@
       "when": 1790594803100,
       "tag": "0011_ledger_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790718641151,
+      "tag": "0012_tenant_chart_settings",
+      "breakpoints": true
     }
   ]
 }

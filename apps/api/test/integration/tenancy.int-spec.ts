@@ -1,11 +1,12 @@
 import type { AuditPage, Branch, Room, Session, Tenant } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { RolesService } from '../../src/modules/roles';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
-import { createPlatformAdmin, signIn } from '../support/session';
+import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
-import { createBareTenant } from '../support/tenants';
+import { asPlatformAdminIn, createBareTenant } from '../support/tenants';
 
 describe('tenancy: tenant settings, branches and rooms', () => {
   let database: TestDatabase;
@@ -93,6 +94,71 @@ describe('tenancy: tenant settings, branches and rooms', () => {
           tenant.id,
         ]),
       ).rejects.toThrow(/tenants_country_format/);
+    });
+
+    it('defaults chart settings, and round-trips a change through settings and the session', async () => {
+      expect((await api.get('/tenant')).body).toMatchObject({
+        chartMode: 'surface',
+        toothNotation: 'fdi',
+        chartOrientation: 'patient_right_on_right',
+      });
+      expect((await api.patch('/tenant', { toothNotation: 'palmer' })).status).toBe(400);
+
+      const response = await api.patch('/tenant', {
+        toothNotation: 'universal',
+        chartOrientation: 'patient_right_on_left',
+        chartMode: 'simple',
+      });
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        toothNotation: 'universal',
+        chartOrientation: 'patient_right_on_left',
+        chartMode: 'simple',
+      });
+
+      const [entry] = await auditOf(tenant.id);
+      expect(entry).toMatchObject({
+        action: 'tenant.update',
+        before: { toothNotation: 'fdi', chartOrientation: 'patient_right_on_right' },
+        after: { toothNotation: 'universal', chartOrientation: 'patient_right_on_left' },
+      });
+
+      const session = (await api.get('/session')).body as Session;
+      expect(session.tenant).toMatchObject({
+        toothNotation: 'universal',
+        chartOrientation: 'patient_right_on_left',
+        chartMode: 'simple',
+      });
+    });
+
+    it('refuses a dentist writing chart settings (owner-only, D5)', async () => {
+      const other = await createBareTenant(testApp.app, 'Dentist-only Clinic');
+      await asPlatformAdminIn(testApp.app, other.id, () =>
+        testApp.app.get(RolesService).seedSystemRoles(),
+      );
+      const branch = (
+        await admin.post('/api/v1/branches').set('X-Tenant-Id', other.id).send({ name: 'Main St' })
+      ).body as Branch;
+      const email = uniqueEmail('dentist');
+      const created = await admin
+        .post('/api/v1/users')
+        .set('X-Tenant-Id', other.id)
+        .send({
+          displayName: 'Dr. Dentist',
+          email,
+          practitionerType: 'dentist',
+          roleKeys: ['dentist'],
+          branchIds: [branch.id],
+          temporaryPassword: 'temporary-pw-1',
+        });
+      expect(created.status).toBe(201);
+
+      const dentist = await signInAndSetPassword(testApp.app, email, 'temporary-pw-1');
+      const response = await dentist
+        .patch('/api/v1/tenant')
+        .set('X-Tenant-Id', other.id)
+        .send({ toothNotation: 'universal' });
+      expect(response.status).toBe(403);
     });
   });
 

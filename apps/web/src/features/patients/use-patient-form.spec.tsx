@@ -16,6 +16,9 @@ const TENANT: Tenant = {
   currency: 'USD',
   locale: 'en',
   country: 'LB',
+  chartMode: 'surface',
+  toothNotation: 'fdi',
+  chartOrientation: 'patient_right_on_right',
 };
 
 const CONTACT_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70';

@@ -72,6 +72,9 @@ export class SessionService {
         currency: tenant.currency,
         locale: tenant.locale,
         country: tenant.country,
+        chartMode: tenant.chartMode,
+        toothNotation: tenant.toothNotation,
+        chartOrientation: tenant.chartOrientation,
       },
       branches,
     };

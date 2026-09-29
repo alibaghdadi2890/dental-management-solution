@@ -11,14 +11,20 @@ import {
   timeZoneSchema,
 } from './common.js';
 import { reasonSchema } from './audit.js';
+import { chartModeSchema, chartOrientationSchema, toothNotationSchema } from './tooth.js';
 import { practitionerTypeSchema } from './users.js';
 
-/** Tenant defaults (D8); all editable per tenant. Country default LB (feature 3 Q3). */
+/** Tenant defaults (D8); all editable per tenant. Country default LB (feature 3 Q3). Chart
+ * settings default to the POC's own defaults (surface detail, FDI, patient's right on the
+ * screen's right — ADR-0021). */
 export const TENANT_DEFAULTS = {
   timeZone: 'Asia/Beirut',
   currency: 'USD',
   locale: 'en',
   country: 'LB',
+  chartMode: 'surface',
+  toothNotation: 'fdi',
+  chartOrientation: 'patient_right_on_right',
 } as const;
 
 export const SLUG_MAX_LENGTH = 48;
@@ -54,6 +60,12 @@ export const tenantSchema = z.object({
   locale: localeSchema,
   /** ISO 3166-1 alpha-2; drives phone parsing (`phone.ts`) and date order (feature 3 Q3/Q17). */
   country: countrySchema,
+  /** Chart detail level; rendering only, never mutates chart data (spec, ADR-0021). */
+  chartMode: chartModeSchema,
+  /** Display notation for tooth labels; the stored code is always FDI (ADR-0021). */
+  toothNotation: toothNotationSchema,
+  /** Which side renders on the screen's right; the chart itself is never mirrored (ADR-0021). */
+  chartOrientation: chartOrientationSchema,
   createdAt: isoDateTimeSchema,
 });
 export type Tenant = z.infer<typeof tenantSchema>;
@@ -65,6 +77,9 @@ export const tenantSettingsPatchSchema = z
     currency: currencySchema.optional(),
     locale: localeSchema.optional(),
     country: countrySchema.optional(),
+    chartMode: chartModeSchema.optional(),
+    toothNotation: toothNotationSchema.optional(),
+    chartOrientation: chartOrientationSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, {
     message: 'Change at least one setting',

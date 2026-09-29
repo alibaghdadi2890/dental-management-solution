@@ -1,3 +1,4 @@
+import { CHART_MODES, CHART_ORIENTATIONS, TENANT_DEFAULTS, TOOTH_NOTATIONS } from '@dcm/contracts';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -22,6 +23,12 @@ import {
 } from '../../../platform/db/columns';
 
 export const tenantStatus = pgEnum('tenant_status', ['active', 'suspended']);
+/** Chart detail level (spec, ADR-0021): rendering only, never changes stored chart data. */
+export const chartMode = pgEnum('chart_mode', CHART_MODES);
+/** Display notation for tooth labels; the stored code is always canonical FDI (ADR-0021). */
+export const toothNotation = pgEnum('tooth_notation', TOOTH_NOTATIONS);
+/** Which side renders on the screen's right; the chart is never mirrored (ADR-0021, W17). */
+export const chartOrientation = pgEnum('chart_orientation', CHART_ORIENTATIONS);
 
 /**
  * Clinics. Not tenant-owned (no tenant_id): created and listed by platform admins through
@@ -39,6 +46,9 @@ export const tenants = pgTable(
     locale: text().notNull(),
     /** ISO 3166-1 alpha-2; drives phone parsing and date order (feature 3 Q3/Q17). */
     country: char({ length: 2 }).notNull().default('LB'),
+    chartMode: chartMode().notNull().default(TENANT_DEFAULTS.chartMode),
+    toothNotation: toothNotation().notNull().default(TENANT_DEFAULTS.toothNotation),
+    chartOrientation: chartOrientation().notNull().default(TENANT_DEFAULTS.chartOrientation),
     ...timestamps(),
   },
   (table) => [

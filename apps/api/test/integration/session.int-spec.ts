@@ -142,7 +142,14 @@ describe('session: role-based permissions, branch switch and password change', (
         platformAdmin: false,
         roleNames: ['Front desk'],
         user: { displayName: 'Jamie Ortiz', email },
-        tenant: { id: tenant.id, name: 'Session Clinic', country: 'LB' },
+        tenant: {
+          id: tenant.id,
+          name: 'Session Clinic',
+          country: 'LB',
+          chartMode: 'surface',
+          toothNotation: 'fdi',
+          chartOrientation: 'patient_right_on_right',
+        },
       });
 
       expect((await agent.get('/api/v1/branches')).status).toBe(200);
