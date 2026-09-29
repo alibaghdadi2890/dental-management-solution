@@ -82,30 +82,35 @@ export const CHART_ORIENTATIONS = ['patient_right_on_right', 'patient_right_on_l
 export const CHART_MODES = ['surface', 'simple'] as const;
 export const SURFACES = ['M', 'D', 'B', 'L', 'O', 'I'] as const;
 export const PERMANENT_CODES: readonly ToothCode[]; // 11–18, 21–28, 31–38, 41–48
-export const PRIMARY_CODES: readonly ToothCode[];   // 51–55, 61–65, 71–75, 81–85
+export const PRIMARY_CODES: readonly ToothCode[]; // 51–55, 61–65, 71–75, 81–85
 export const toothCodeSchema: z.ZodType<ToothCode>; // exactly the 52 codes
-export const surfacesSchema;                        // array of SURFACES, no duplicates, max 5
-export function quadrant(code): 1 | 2 | 3 | 4;      // primary 5–8 → 1–4
-export function position(code): number;             // second digit
+export const surfacesSchema; // array of SURFACES, no duplicates, max 5
+export function quadrant(code): 1 | 2 | 3 | 4; // primary 5–8 → 1–4
+export function position(code): number; // second digit
 export function isPrimary(code): boolean;
 export function isUpper(code): boolean;
-export function isAnterior(code): boolean;          // position ≤ 3
-export function toUniversal(code): string;          // '3', 'A'
+export function isAnterior(code): boolean; // position ≤ 3
+export function toUniversal(code): string; // '3', 'A'
 export function parseTooth(text, notation): ToothCode | null;
 export function toothLabel(code, notation): string; // FDI '#16' '#55'; Universal '#3' 'A'
-export function successorOf(primary): ToothCode;    // 54 → 14
+export function successorOf(primary): ToothCode; // 54 → 14
 export function predecessorOf(permanent): ToothCode | null; // 14 → 54; 16 → null
-export function positionKey(code): ToothCode;       // the permanent code of the column
-export function archColumns(o): { upper: ToothCode[]; lower: ToothCode[] };  // permanent codes, screen left → right
-export function keyboardOrder(o): ToothCode[];      // upper L→R, then lower L→R
+export function positionKey(code): ToothCode; // the permanent code of the column
+export function archColumns(o): { upper: ToothCode[]; lower: ToothCode[] }; // permanent codes, screen left → right
+export function keyboardOrder(o): ToothCode[]; // upper L→R, then lower L→R
 export function surfaceCells(code, o): [SurfaceKey, 'B', SurfaceKey, 'O' | 'I', 'L'];
 export function validSurfaces(code, surfaces): boolean; // no I on posterior, no O on anterior
 export function anatomicalName(code): { key: string; params: { quadrant: string; tooth: string } };
 export function slotFor(stage, position): 'permanent' | 'primary' | 'not_erupted';
-export function effectiveDentition(ageYears: number | null, override: DentitionStage | null):
-  { stage: DentitionStage; source: 'auto' | 'override' };
-export function presentTooth(column: ToothCode, stage, presence?: 'primary' | 'permanent'):
-  { code: ToothCode; notErupted: boolean };
+export function effectiveDentition(
+  ageYears: number | null,
+  override: DentitionStage | null,
+): { stage: DentitionStage; source: 'auto' | 'override' };
+export function presentTooth(
+  column: ToothCode,
+  stage,
+  presence?: 'primary' | 'permanent',
+): { code: ToothCode; notErupted: boolean };
 ```
 
 **Mappings (pin them in tests):**
@@ -161,9 +166,17 @@ export function presentTooth(column: ToothCode, stage, presence?: 'primary' | 'p
 
 ```ts
 export type DiscountMode = 'percent' | 'amount';
-export interface MoneyLine { base: string; discount: string }   // decimal strings
-export interface VisitMoney { subtotal: string; discount: string; total: string; capped: boolean }
-export function lineFinal(line: MoneyLine): string;             // base − discount
+export interface MoneyLine {
+  base: string;
+  discount: string;
+} // decimal strings
+export interface VisitMoney {
+  subtotal: string;
+  discount: string;
+  total: string;
+  capped: boolean;
+}
+export function lineFinal(line: MoneyLine): string; // base − discount
 export function visitMoney(lines: MoneyLine[], mode: DiscountMode, value: string): VisitMoney;
 ```
 
@@ -229,15 +242,20 @@ export function visitMoney(lines: MoneyLine[], mode: DiscountMode, value: string
 ```ts
 export type ToothVisualState = 'treated_today' | 'treated' | 'planned' | 'none';
 export interface ToothState {
-  code: ToothCode; state: ToothVisualState;
+  code: ToothCode;
+  state: ToothVisualState;
   surfaces: Partial<Record<SurfaceKey, 'treated_today' | 'treated' | 'planned'>>;
   wholeTooth: 'treated_today' | 'treated' | null;
-  hasActiveDiagnosis: boolean; openPlanIds: string[]; historyCount: number;
+  hasActiveDiagnosis: boolean;
+  openPlanIds: string[];
+  historyCount: number;
   titleParts: { diagnoses: string[]; plans: string[]; historyCount: number };
 }
 export function deriveChart(input: {
-  diagnoses: DiagnosisRecord[]; plans: TreatmentPlan[];
-  history: HistoryService[]; liveServices: VisitService[];
+  diagnoses: DiagnosisRecord[];
+  plans: TreatmentPlan[];
+  history: HistoryService[];
+  liveServices: VisitService[];
 }): Map<ToothCode, ToothState>;
 ```
 
@@ -374,6 +392,7 @@ export function deriveChart(input: {
   - `tooth_status_position_unique` on `(tenant_id, patient_id, position)`;
   - the checks on paused/completed fields, `0 ≤ discount ≤ base`, `tooth_code` iff
     `per_tooth`, and `surfaces <@ '{M,D,B,L,O,I}'`.
+
 - `modules/clinical/domain/`, new files (each with a spec):
   - `visit-lifecycle.ts`: `transition(status, action)` → the next status, or throws
     `IllegalVisitTransitionError`.
@@ -516,6 +535,7 @@ if (live) return { visit: await this.load(live.id), resumed: true };
 
   Each returns the updated `Visit` (services and money) plus, for record routes, the affected
   record: `{ visit, record }`.
+
 - Tests: `apps/api/test/integration/visit-records.int-spec.ts`, new.
 
 **Rules per method (every one):**
@@ -860,6 +880,7 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   - `history` (15 px, read-only).
 
   Primary teeth render at `max(6, round(size × 0.78))` inside a constant-height box.
+
 - `chart/dental-chart.tsx`:
   - Props: `teeth: Map<ToothCode, ToothState>`, `dentition`, `toothStatus`, `size`,
     `selected?`, `onToothClick`.
@@ -1028,6 +1049,7 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 
   It uses `components/ui/right-panel.tsx` styled to 428 px, and the catalog queries from
   `features/clinical/catalog/catalog-api.ts` (active rows only).
+
 - Perform now → a toast with Undo (→ `DELETE` the created service, which restores the plan).
 - Specs: `tooth-panel.spec.tsx`, `catalog-drawer.spec.tsx`, `drawer-list.spec.ts`.
 
@@ -1130,6 +1152,7 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 
   Complete → `POST /visits/:id/complete` ("Recording…") → navigate to the patient record
   Overview (W16) → open the post-visit dialog with `visitId` in router state.
+
 - `post-visit-summary-dialog.tsx`:
   - `GET /billing/visits/:id/summary`;
   - the header with a ✓, date · duration · n services, and a status pill (Unpaid when
@@ -1162,13 +1185,14 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
     **Start a visit** (the popover).
 
   It opens from the Overview chart, the plan board tooth links and "Full tooth history →".
+
 - `features/patients/record/overview-tab.tsx`:
   - the **Dental status** card (a compact 8 px `DentalChart`, not selectable; a click opens the
     history);
   - the **Last visit** card (`GET /clinical/patients/:id/last-visit`: four facts, service chips
     `"<name> · <tooth label>"`, the note quote; "All visits →" is omitted until 4b);
-  - the **Treatment summary** filled from `GET /clinical/patients/:id/summary` plus *Lifetime
-    billed* from `balanceOf(...).charged` (W8).
+  - the **Treatment summary** filled from `GET /clinical/patients/:id/summary` plus _Lifetime
+    billed_ from `balanceOf(...).charged` (W8).
 - `locales/*/patients.json`, `clinical.json`.
 - Specs: `tooth-history-dialog.spec.tsx`, extend `overview-tab.spec.tsx`.
 
@@ -1220,28 +1244,28 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 
 ## Coverage check
 
-| Spec item | Task |
-| --------- | ---- |
-| V1 canonical FDI, notation setting | A1, A4, F1, F2 |
-| V2 dentition by age, per-patient override | A1, B1, D2, G2 |
-| V2/W5 per-position presence, succession row | A1, D1, G3 |
-| V3/W7 start popover, dentist and room | B2, C2, G5 |
-| V4/W1/W24 concurrency, lock order | C1, C2, E2, E3 |
-| V5/W9–W11/W13 records on the tooth | C1, D1, D2 |
-| V6/W6 server persistence, autosave, refetch, timer | C2, G1, G4 |
-| V7/W2/W20/W21 money, charge, summary | A2, E1, E2, H1 |
-| V8/W18 permissions, read-only frontdesk | C2, D1, G2, G5 |
-| V9/W3/W17 settings, orientation, LTR chart | A1, A4, F1, F2 |
-| V10 events, merge re-point | C2, D1, E2, E3 |
-| V11 `isInUse` | D2 |
-| W4 discard | C1, C2, G2 |
-| W8 treatment summary | D2, E2, H2 |
-| W10 actor columns = auth user id | C2, D1, E2, I1 |
-| W12 one currency per visit | C1, D1 |
-| W14 dentition permission | B1 |
-| W16 after-complete navigation | H1 |
-| W19 duration | A2, E2 |
-| W22 lock rename | B1 |
-| W23 in-transaction handlers | E1 |
-| Tooth history, Overview cards | D2, H2 |
+| Spec item                                          | Task               |
+| -------------------------------------------------- | ------------------ |
+| V1 canonical FDI, notation setting                 | A1, A4, F1, F2     |
+| V2 dentition by age, per-patient override          | A1, B1, D2, G2     |
+| V2/W5 per-position presence, succession row        | A1, D1, G3         |
+| V3/W7 start popover, dentist and room              | B2, C2, G5         |
+| V4/W1/W24 concurrency, lock order                  | C1, C2, E2, E3     |
+| V5/W9–W11/W13 records on the tooth                 | C1, D1, D2         |
+| V6/W6 server persistence, autosave, refetch, timer | C2, G1, G4         |
+| V7/W2/W20/W21 money, charge, summary               | A2, E1, E2, H1     |
+| V8/W18 permissions, read-only frontdesk            | C2, D1, G2, G5     |
+| V9/W3/W17 settings, orientation, LTR chart         | A1, A4, F1, F2     |
+| V10 events, merge re-point                         | C2, D1, E2, E3     |
+| V11 `isInUse`                                      | D2                 |
+| W4 discard                                         | C1, C2, G2         |
+| W8 treatment summary                               | D2, E2, H2         |
+| W10 actor columns = auth user id                   | C2, D1, E2, I1     |
+| W12 one currency per visit                         | C1, D1             |
+| W14 dentition permission                           | B1                 |
+| W16 after-complete navigation                      | H1                 |
+| W19 duration                                       | A2, E2             |
+| W22 lock rename                                    | B1                 |
+| W23 in-transaction handlers                        | E1                 |
+| Tooth history, Overview cards                      | D2, H2             |
 | Tenant isolation, Playwright, docs, ADRs 0021–0024 | A4, C2, D2, E2, I1 |
