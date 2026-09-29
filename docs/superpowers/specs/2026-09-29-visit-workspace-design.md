@@ -118,6 +118,7 @@ app (so the compact chart and the workspace render from one function):
   (the union of history and the live visit, live winning; a service with no surfaces counts as
   the whole tooth). Also `hasActiveDiagnosis`, `openPlans`, `historyCount`, and the hover/aria
   title parts.
+- Open plans show only through `state === 'planned'` (never as surface marks). `cellMark(tooth, surface)` gives the colour of one cell: the stronger of its own service mark and the whole-tooth mark, else the planned wash, else none.
 - Simple mode changes only the rendering, never the derived data (spec: "never mutates data").
 
 ## Data model

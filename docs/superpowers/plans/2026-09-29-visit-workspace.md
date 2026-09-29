@@ -244,7 +244,7 @@ export type ToothVisualState = 'treated_today' | 'treated' | 'planned' | 'none';
 export interface ToothState {
   code: ToothCode;
   state: ToothVisualState;
-  surfaces: Partial<Record<SurfaceKey, 'treated_today' | 'treated' | 'planned'>>;
+  surfaces: Partial<Record<SurfaceKey, 'treated_today' | 'treated'>>;
   wholeTooth: 'treated_today' | 'treated' | null;
   hasActiveDiagnosis: boolean;
   openPlanIds: string[];
