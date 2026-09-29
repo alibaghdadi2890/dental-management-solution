@@ -10,7 +10,7 @@ import {
 } from './tooth.js';
 
 /**
- * `clinical`'s charting records (feature 4a, spec §Data model / §Backend — clinical): diagnoses,
+ * `clinical`'s charting records (spec §Data model / §Backend — clinical): diagnoses,
  * treatment plans, tooth presence, the patient chart and its supporting reads. `visits.ts` has
  * the visit lifecycle and money shapes; `visit-money.ts` the pure arithmetic.
  */
@@ -134,27 +134,28 @@ export const historyServiceSchema = z.object({
 });
 export type HistoryService = z.infer<typeof historyServiceSchema>;
 
-const TOOTH_MARKS = ['treated_today', 'treated', 'planned'] as const;
-const toothMarkSchema = z.enum(TOOTH_MARKS);
+const SERVICE_MARKS = ['treated_today', 'treated'] as const;
+const serviceMarkSchema = z.enum(SERVICE_MARKS);
 
-export const TOOTH_VISUAL_STATES = [...TOOTH_MARKS, 'none'] as const;
+export const TOOTH_VISUAL_STATES = [...SERVICE_MARKS, 'planned', 'none'] as const;
 export type ToothVisualState = (typeof TOOTH_VISUAL_STATES)[number];
 const toothVisualStateSchema = z.enum(TOOTH_VISUAL_STATES);
 
 /**
- * One tooth's derived chart state (Task A3 computes these from the raw records; the shape is
- * defined here so `chart.ts` can import `ToothState` before it exists). `state` is the glyph's
- * overall precedence (`'none'` when nothing applies); `surfaces` and `wholeTooth` are the
- * finer-grained marks a per-surface or whole-tooth *service* leaves — `wholeTooth` only ever
- * carries a treated mark ('treated_today'/'treated'), never 'planned' (a plan is reflected in
- * `state`/`openPlanIds`, not as a whole-tooth mark). A diagnosis alone never marks a surface or
- * the whole tooth; it only sets `hasActiveDiagnosis`. `titleParts` feeds the tooltip.
+ * One tooth's derived chart state (`chart.ts`'s `deriveChart`; spec §Chart state / §Derived
+ * values). `state` is the glyph's overall precedence (`'none'` when nothing applies); `surfaces`
+ * and `wholeTooth` carry only the marks a per-surface or whole-tooth *service* (completed or
+ * live) leaves — never 'planned'. An open plan shows only through `state === 'planned'` and
+ * `openPlanIds`; the renderer washes the cells that carry no service mark itself once it sees a
+ * planned state (`chart.ts`'s `cellMark`), the same way the POC's `toothCells` falls back to a
+ * planned wash for cells with no service mark. A diagnosis alone never marks a surface or the
+ * whole tooth; it only sets `hasActiveDiagnosis`. `titleParts` feeds the tooltip.
  */
 export const toothStateSchema = z.object({
   code: toothCodeSchema,
   state: toothVisualStateSchema,
-  surfaces: z.partialRecord(surfaceKeySchema, toothMarkSchema),
-  wholeTooth: toothMarkSchema.exclude(['planned']).nullable(),
+  surfaces: z.partialRecord(surfaceKeySchema, serviceMarkSchema),
+  wholeTooth: serviceMarkSchema.nullable(),
   hasActiveDiagnosis: z.boolean(),
   openPlanIds: z.array(idSchema),
   historyCount: z.number().int().nonnegative(),
@@ -179,7 +180,7 @@ export const patientChartSchema = z.object({
   /** Completed services, most recent first. */
   history: z.array(historyServiceSchema),
   liveVisitId: idSchema.nullable(),
-  /** Derived per-tooth state (Task A3), one entry per code that has any. */
+  /** Derived per-tooth state (`chart.ts`'s `deriveChart`), one entry per code that has any. */
   teeth: z.array(toothStateSchema),
 });
 export type PatientChart = z.infer<typeof patientChartSchema>;

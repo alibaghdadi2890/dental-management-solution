@@ -98,13 +98,18 @@ describe('toothStateSchema', () => {
     const result = toothStateSchema.safeParse({
       ...base,
       state: 'treated',
-      surfaces: { M: 'treated', O: 'planned' },
+      surfaces: { M: 'treated', O: 'treated_today' },
     });
     expect(result.success).toBe(true);
   });
 
   it('rejects an unknown surface mark', () => {
     const result = toothStateSchema.safeParse({ ...base, surfaces: { M: 'bogus' } });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects planned as a surface mark — a plan only ever shows through state', () => {
+    const result = toothStateSchema.safeParse({ ...base, surfaces: { M: 'planned' } });
     expect(result.success).toBe(false);
   });
 

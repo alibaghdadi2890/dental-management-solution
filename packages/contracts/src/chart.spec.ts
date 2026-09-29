@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { deriveChart } from './chart.js';
+import { cellMark, deriveChart } from './chart.js';
 import type { DiagnosisRecord, HistoryService, TreatmentPlan } from './clinical-records.js';
 import type { ToothCode } from './tooth.js';
 import type { VisitService } from './visits.js';
 
 const ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
+const ID_2 = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d71';
+const ID_3 = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d72';
+const ID_4 = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d73';
 const VISIT_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
 const DENTIST_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70';
 const MONEY = { amount: '80.00', currency: 'USD' };
@@ -171,18 +174,6 @@ describe('deriveChart', () => {
     expect(chart.has('25')).toBe(false);
   });
 
-  it('whole-tooth service tints wholeTooth, not the surfaces map', () => {
-    const chart = deriveChart({
-      diagnoses: [],
-      plans: [],
-      history: [history({ toothCode: '16', surfaces: [] })],
-      liveServices: [],
-    });
-    const tooth = chart.get('16');
-    expect(tooth?.wholeTooth).toBe('treated');
-    expect(tooth?.surfaces).toEqual({});
-  });
-
   it('a surface-scoped service marks only that surface, leaving wholeTooth null', () => {
     const chart = deriveChart({
       diagnoses: [],
@@ -299,23 +290,131 @@ describe('deriveChart', () => {
     expect(tooth?.titleParts.historyCount).toBe(2);
   });
 
-  it('a surface-scoped open plan marks that surface as planned', () => {
+  it('a surface-scoped plan leaves surfaces empty and sets state planned', () => {
     const chart = deriveChart({
       diagnoses: [],
       plans: [plan({ toothCode: '16', surfaces: ['O'] })],
       history: [],
       liveServices: [],
     });
-    expect(chart.get('16')?.surfaces).toEqual({ O: 'planned' });
+    const tooth = chart.get('16');
+    expect(tooth?.state).toBe('planned');
+    expect(tooth?.surfaces).toEqual({});
+    expect(tooth?.wholeTooth).toBeNull();
   });
 
-  it('a treated surface outranks a planned mark on the same surface', () => {
+  it('treated_today (live service) outranks planned (open plan)', () => {
+    const chart = deriveChart({
+      diagnoses: [],
+      plans: [plan({ toothCode: '16' })],
+      history: [],
+      liveServices: [liveService({ toothCode: '16', surfaces: [] })],
+    });
+    expect(chart.get('16')?.state).toBe('treated_today');
+  });
+
+  it(
+    'a whole-tooth history service plus a live surface service: state treated_today, ' +
+      'wholeTooth treated, the live surface treated_today',
+    () => {
+      const chart = deriveChart({
+        diagnoses: [],
+        plans: [],
+        history: [history({ toothCode: '16', surfaces: [] })],
+        liveServices: [liveService({ toothCode: '16', surfaces: ['M'] })],
+      });
+      expect(chart.get('16')).toMatchObject({
+        state: 'treated_today',
+        wholeTooth: 'treated',
+        surfaces: { M: 'treated_today' },
+      });
+    },
+  );
+
+  it(
+    'a whole-tooth open plan on a tooth with treated surfaces: state stays treated, the plan ' +
+      'still counts as open',
+    () => {
+      const chart = deriveChart({
+        diagnoses: [],
+        plans: [plan({ toothCode: '16', surfaces: [] })],
+        history: [history({ toothCode: '16', surfaces: ['O'] })],
+        liveServices: [],
+      });
+      const tooth = chart.get('16');
+      expect(tooth?.state).toBe('treated');
+      expect(tooth?.openPlanIds).toEqual([ID]);
+      expect(tooth?.surfaces).toEqual({ O: 'treated' });
+      expect(tooth?.wholeTooth).toBeNull();
+    },
+  );
+
+  it('multiple open plans and active diagnoses on one tooth are each kept, in order', () => {
+    const chart = deriveChart({
+      diagnoses: [
+        diagnosis({ toothCode: '16', id: ID, diagnosisId: ID, name: 'Dental caries' }),
+        diagnosis({ toothCode: '16', id: ID_2, diagnosisId: ID_2, name: 'Cracked tooth' }),
+      ],
+      plans: [
+        plan({ toothCode: '16', id: ID_3, name: 'Composite Filling' }),
+        plan({ toothCode: '16', id: ID_4, name: 'Zircon Crown' }),
+      ],
+      history: [],
+      liveServices: [],
+    });
+    const tooth = chart.get('16');
+    expect(tooth?.openPlanIds).toEqual([ID_3, ID_4]);
+    expect(tooth?.titleParts.plans).toEqual(['Composite Filling', 'Zircon Crown']);
+    expect(tooth?.titleParts.diagnoses).toEqual(['Dental caries', 'Cracked tooth']);
+  });
+});
+
+describe('cellMark', () => {
+  it('is none for a tooth absent from the chart', () => {
+    expect(cellMark(undefined, 'M')).toBe('none');
+  });
+
+  it('is none for a recorded tooth with no mark on that surface and no whole-tooth mark', () => {
+    const chart = deriveChart({
+      diagnoses: [diagnosis({ toothCode: '16' })],
+      plans: [],
+      history: [],
+      liveServices: [],
+    });
+    expect(cellMark(chart.get('16'), 'M')).toBe('none');
+  });
+
+  it('falls back to the whole-tooth mark when the surface has none of its own', () => {
+    const chart = deriveChart({
+      diagnoses: [],
+      plans: [],
+      history: [history({ toothCode: '16', surfaces: [] })],
+      liveServices: [],
+    });
+    expect(cellMark(chart.get('16'), 'M')).toBe('treated');
+  });
+
+  it('prefers a surface mark over the whole-tooth mark', () => {
+    const chart = deriveChart({
+      diagnoses: [],
+      plans: [],
+      history: [history({ toothCode: '16', surfaces: [] })],
+      liveServices: [liveService({ toothCode: '16', surfaces: ['M'] })],
+    });
+    // The live surface service outranks the whole-tooth history mark on M; every other surface
+    // still falls back to the whole-tooth 'treated' mark.
+    expect(cellMark(chart.get('16'), 'M')).toBe('treated_today');
+    expect(cellMark(chart.get('16'), 'D')).toBe('treated');
+  });
+
+  it('washes a cell planned when the tooth state is planned and the cell has no service mark', () => {
     const chart = deriveChart({
       diagnoses: [],
       plans: [plan({ toothCode: '16', surfaces: ['O'] })],
-      history: [history({ toothCode: '16', surfaces: ['O'] })],
+      history: [],
       liveServices: [],
     });
-    expect(chart.get('16')?.surfaces).toEqual({ O: 'treated' });
+    expect(cellMark(chart.get('16'), 'O')).toBe('planned');
+    expect(cellMark(chart.get('16'), 'M')).toBe('planned');
   });
 });
