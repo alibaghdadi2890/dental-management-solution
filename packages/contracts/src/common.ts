@@ -119,6 +119,16 @@ export const moneySchema = z.object({
 });
 export type Money = z.infer<typeof moneySchema>;
 
+/**
+ * An aggregate amount: a sum or a server-computed total (a ledger balance, `visitMoney`'s
+ * subtotal/discount/total), always formatted with exactly 2 decimals — unlike
+ * `decimalAmountSchema`, which also accepts 0 or 1 decimal and is for a single input bounded by
+ * one `numeric(12,2)` column. A sum can exceed 10 integer digits, so this allows more.
+ */
+export const aggregateAmountSchema = z
+  .string()
+  .regex(/^-?\d{1,18}\.\d{2}$/, 'Expected a decimal amount with exactly 2 decimals');
+
 export const cursorPageQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),

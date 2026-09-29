@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { chargeUnitSchema } from './catalog.js';
 import { idSchema, isoDateSchema, isoDateTimeSchema, moneySchema, optionalText } from './common.js';
 import { DENTITION_STAGES } from './patient-age.js';
-import { surfaceKeySchema, surfacesSchema, toothCodeSchema } from './tooth.js';
+import {
+  successionPositionSchema,
+  surfaceKeySchema,
+  surfacesSchema,
+  toothCodeSchema,
+} from './tooth.js';
 
 /**
  * `clinical`'s charting records (feature 4a, spec §Data model / §Backend — clinical): diagnoses,
@@ -10,7 +15,7 @@ import { surfaceKeySchema, surfacesSchema, toothCodeSchema } from './tooth.js';
  * the visit lifecycle and money shapes; `visit-money.ts` the pure arithmetic.
  */
 
-const dentitionStageSchema = z.enum(DENTITION_STAGES);
+export const dentitionStageSchema = z.enum(DENTITION_STAGES);
 
 /** A free-text note on a diagnosis or plan record — short, unlike a patient's own notes field
  * (`patients.ts`'s `optionalText(2000)`). */
@@ -82,14 +87,13 @@ export const treatmentPlanSchema = z.object({
 });
 export type TreatmentPlan = z.infer<typeof treatmentPlanSchema>;
 
-const TOOTH_PRESENCE_VALUES = ['primary', 'permanent'] as const;
+export const TOOTH_PRESENCE_VALUES = ['primary', 'permanent'] as const;
 export type ToothPresenceValue = (typeof TOOTH_PRESENCE_VALUES)[number];
-const toothPresenceValueSchema = z.enum(TOOTH_PRESENCE_VALUES);
+export const toothPresenceValueSchema = z.enum(TOOTH_PRESENCE_VALUES);
 
 /** One `tooth_status` row: an explicit override of what occupies a chart column (spec W5/W15). */
 export const toothPresenceSchema = z.object({
-  /** A permanent FDI code, position 1–5 — the only chart columns with a primary predecessor. */
-  position: toothCodeSchema,
+  position: successionPositionSchema,
   present: toothPresenceValueSchema,
 });
 export type ToothPresence = z.infer<typeof toothPresenceSchema>;
@@ -133,18 +137,24 @@ export type HistoryService = z.infer<typeof historyServiceSchema>;
 const TOOTH_MARKS = ['treated_today', 'treated', 'planned'] as const;
 const toothMarkSchema = z.enum(TOOTH_MARKS);
 
+export const TOOTH_VISUAL_STATES = [...TOOTH_MARKS, 'none'] as const;
+export type ToothVisualState = (typeof TOOTH_VISUAL_STATES)[number];
+const toothVisualStateSchema = z.enum(TOOTH_VISUAL_STATES);
+
 /**
  * One tooth's derived chart state (Task A3 computes these from the raw records; the shape is
  * defined here so `chart.ts` can import `ToothState` before it exists). `state` is the glyph's
  * overall precedence (`'none'` when nothing applies); `surfaces` and `wholeTooth` are the
- * finer-grained marks a per-surface or whole-tooth service/plan/diagnosis leaves; `titleParts`
- * feeds the tooltip.
+ * finer-grained marks a per-surface or whole-tooth *service* leaves — `wholeTooth` only ever
+ * carries a treated mark ('treated_today'/'treated'), never 'planned' (a plan is reflected in
+ * `state`/`openPlanIds`, not as a whole-tooth mark). A diagnosis alone never marks a surface or
+ * the whole tooth; it only sets `hasActiveDiagnosis`. `titleParts` feeds the tooltip.
  */
 export const toothStateSchema = z.object({
   code: toothCodeSchema,
-  state: z.enum([...TOOTH_MARKS, 'none']),
+  state: toothVisualStateSchema,
   surfaces: z.partialRecord(surfaceKeySchema, toothMarkSchema),
-  wholeTooth: toothMarkSchema.nullable(),
+  wholeTooth: toothMarkSchema.exclude(['planned']).nullable(),
   hasActiveDiagnosis: z.boolean(),
   openPlanIds: z.array(idSchema),
   historyCount: z.number().int().nonnegative(),

@@ -1,28 +1,12 @@
-import type { BalanceMoney } from '@dcm/contracts';
+import { fromCents, toCents, type BalanceMoney } from '@dcm/contracts';
 
 /**
  * Balance rules (design Q13): a balance is Σ amount per currency — never converted between
  * currencies. ("Owing" — any currency's sum is positive — is evaluated in SQL by the repository.)
  * Amounts are decimal strings (`numeric(12,2)` per entry, CLAUDE.md §7; sums can be wider);
- * arithmetic runs on integer cents as `bigint`, never on floats.
+ * arithmetic runs on integer cents as `bigint`, never on floats, via `cents.ts` (shared with
+ * `visit-money.ts`).
  */
-
-const AMOUNT = /^(-)?(\d+)(?:\.(\d{1,2}))?$/;
-
-function toCents(amount: string): bigint {
-  const match = AMOUNT.exec(amount);
-  if (!match) throw new RangeError(`Not a decimal amount with at most 2 decimals: "${amount}"`);
-  const [, minus, units = '0', fraction = ''] = match;
-  const cents = BigInt(units) * 100n + BigInt(fraction.padEnd(2, '0'));
-  return minus ? -cents : cents;
-}
-
-function fromCents(cents: bigint): string {
-  const sign = cents < 0n ? '-' : '';
-  const magnitude = cents < 0n ? -cents : cents;
-  const fraction = (magnitude % 100n).toString().padStart(2, '0');
-  return `${sign}${(magnitude / 100n).toString()}.${fraction}`;
-}
 
 /**
  * Sums `entries` per currency. Currencies that net to zero are dropped (a settled balance is no

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { nonNegativeAmountSchema, chargeUnitSchema } from './catalog.js';
 import {
+  aggregateAmountSchema,
   blankToUndefined,
   currencySchema,
   idSchema,
@@ -25,12 +26,6 @@ export const visitStatusSchema = z.enum(VISIT_STATUSES);
 /** Same values as `DiscountMode` (`visit-money.ts`); the schema lives here with the rest of the
  * visit request/response shapes. */
 export const discountModeSchema = z.enum(DISCOUNT_MODES);
-
-/** A computed money amount, as `visitMoney()` formats it: always exactly 2 decimals — unlike
- * `decimalAmountSchema`, which also accepts 0 or 1 decimal on input. */
-const computedAmountSchema = z
-  .string()
-  .regex(/^-?\d{1,12}\.\d{2}$/, 'Expected a decimal amount with exactly 2 decimals');
 
 const VISIT_NOTES_MAX = 20000;
 
@@ -82,9 +77,9 @@ export const visitSchema = z.object({
   currency: currencySchema,
   services: z.array(visitServiceSchema),
   money: z.object({
-    subtotal: computedAmountSchema,
-    discount: computedAmountSchema,
-    total: computedAmountSchema,
+    subtotal: aggregateAmountSchema,
+    discount: aggregateAmountSchema,
+    total: aggregateAmountSchema,
     capped: z.boolean(),
   }),
   /** So the client can render the timer from an offset instead of trusting its own clock. */

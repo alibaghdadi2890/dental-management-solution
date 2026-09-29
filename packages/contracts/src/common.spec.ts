@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import {
+  aggregateAmountSchema,
   blankToUndefined,
   countrySchema,
   cursorPageQuerySchema,
@@ -39,6 +40,20 @@ describe('moneySchema', () => {
 
   it('rejects amounts that overflow numeric(12,2)', () => {
     expect(moneySchema.safeParse({ amount: '12345678901', currency: 'USD' }).success).toBe(false);
+  });
+});
+
+describe('aggregateAmountSchema', () => {
+  it('accepts wide sums with exactly 2 decimals', () => {
+    expect(aggregateAmountSchema.safeParse('123456789012345.67').success).toBe(true);
+    expect(aggregateAmountSchema.safeParse('-30.50').success).toBe(true);
+    expect(aggregateAmountSchema.safeParse('0.00').success).toBe(true);
+  });
+
+  it('rejects anything but exactly 2 decimals', () => {
+    expect(aggregateAmountSchema.safeParse('30').success).toBe(false);
+    expect(aggregateAmountSchema.safeParse('30.5').success).toBe(false);
+    expect(aggregateAmountSchema.safeParse('30.500').success).toBe(false);
   });
 });
 

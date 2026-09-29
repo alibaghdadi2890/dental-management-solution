@@ -133,6 +133,17 @@ export function position(code: ToothCode): number {
   return Number(code[1]);
 }
 
+/** The 20 permanent codes at positions 1–5 — the only chart columns with a primary predecessor,
+ * i.e. the valid targets of `PUT /visits/:id/teeth/:position` (`setToothPresence`, spec W5/W15). */
+export const SUCCESSION_POSITIONS: readonly PermanentToothCode[] = PERMANENT_CODES.filter(
+  (code) => position(code) <= 5,
+);
+
+/** `SUCCESSION_POSITIONS` as a `z.enum`, for the path param schema. */
+export const successionPositionSchema = z.enum(
+  SUCCESSION_POSITIONS as [PermanentToothCode, ...PermanentToothCode[]],
+);
+
 /** A code is primary iff its first digit is 5–8. */
 export function isPrimary(code: ToothCode): code is PrimaryToothCode {
   return Number(code[0]) >= 5;

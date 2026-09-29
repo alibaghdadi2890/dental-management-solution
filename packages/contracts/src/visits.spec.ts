@@ -5,7 +5,11 @@ import {
   updateServiceSchema,
   visitDiscountSchema,
   visitNotesSchema,
+  visitSchema,
 } from './visits.js';
+
+const ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
+const ID_2 = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
 
 describe('addServiceSchema', () => {
   it('accepts a per-tooth service with surfaces', () => {
@@ -90,5 +94,52 @@ describe('liveVisitQuerySchema', () => {
   it('parses mine=true and mine=false', () => {
     expect(liveVisitQuerySchema.parse({ mine: 'true' }).mine).toBe(true);
     expect(liveVisitQuerySchema.parse({ mine: 'false' }).mine).toBe(false);
+  });
+});
+
+describe('visitSchema', () => {
+  it('round-trips a representative live visit', () => {
+    const visit = {
+      id: ID,
+      patientId: ID,
+      branchId: ID,
+      roomId: ID_2,
+      dentistId: ID,
+      startedBy: ID,
+      status: 'in_progress',
+      localDate: '2026-09-29',
+      startedAt: '2026-09-29T10:00:00Z',
+      pausedAt: null,
+      pausedSeconds: 0,
+      completedAt: null,
+      durationMinutes: null,
+      notes: 'Patient reports sensitivity on #16.',
+      discountMode: 'percent',
+      discountValue: '10',
+      currency: 'USD',
+      services: [
+        {
+          id: ID,
+          procedureId: ID,
+          code: 'CMP',
+          name: 'Composite filling',
+          category: 'Restorative',
+          chargeUnit: 'per_tooth',
+          toothCode: '16',
+          surfaces: ['O'],
+          base: { amount: '45.00', currency: 'USD' },
+          discount: { amount: '0.00', currency: 'USD' },
+          final: { amount: '45.00', currency: 'USD' },
+          planId: null,
+          recordedBy: ID,
+          createdAt: '2026-09-29T10:05:00Z',
+        },
+      ],
+      money: { subtotal: '45.00', discount: '4.50', total: '40.50', capped: false },
+      serverNow: '2026-09-29T10:10:00Z',
+    };
+    const result = visitSchema.safeParse(visit);
+    expect(result.success).toBe(true);
+    expect(result.success && result.data).toEqual(visit);
   });
 });

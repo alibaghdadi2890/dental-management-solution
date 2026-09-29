@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  aggregateAmountSchema,
   blankToUndefined,
   currencySchema,
   decimalAmountSchema,
@@ -52,14 +53,9 @@ export const adjustmentInputSchema = z.object({
 });
 export type AdjustmentInput = z.infer<typeof adjustmentInputSchema>;
 
-/**
- * An aggregate amount (a sum of ledger entries). `decimalAmountSchema` is bounded by one
- * `numeric(12,2)` column and is for inputs; a sum can exceed 10 integer digits. Always exactly
- * two decimals, as the server formats it.
- */
-export const balanceAmountSchema = z
-  .string()
-  .regex(/^-?\d{1,18}\.\d{2}$/, 'Expected a decimal amount with exactly 2 decimals');
+/** A ledger balance's amount: a sum of ledger entries, so `common.ts`'s `aggregateAmountSchema`
+ * (not `decimalAmountSchema`, which is for one input bounded by a `numeric(12,2)` column). */
+export const balanceAmountSchema = aggregateAmountSchema;
 
 /** One currency's balance; `moneySchema` is for single amounts (inputs, prices). */
 export const balanceMoneySchema = z.object({

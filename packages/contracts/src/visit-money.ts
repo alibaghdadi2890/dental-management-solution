@@ -2,29 +2,11 @@
  * Visit money (feature 4a, spec V7): the discount/total arithmetic for a live visit, shared
  * verbatim between the server (`clinical/domain`, which imports it from here) and the SPA's live
  * preview, so both round exactly the same way. Pure — no Nest, no Zod, no I/O (CLAUDE.md §4
- * domain purity) — everything is computed on integer cents (`bigint`), never floats, the same
- * approach as `apps/api/src/modules/billing/domain/balances.ts`.
+ * domain purity) — everything is computed on integer cents (`bigint`), never floats, via
+ * `cents.ts` (also shared by `apps/api/src/modules/billing/domain/balances.ts`).
  */
 
-const DECIMAL = /^(-)?(\d+)(?:\.(\d{1,2}))?$/;
-
-/** Parses a decimal string (at most 2 decimals) into integer cents. Callers only ever pass values
- * already validated by a Zod decimal-amount schema, so a mismatch here is a bug, not user input. */
-function toCents(amount: string): bigint {
-  const match = DECIMAL.exec(amount);
-  if (!match) throw new RangeError(`Not a decimal amount with at most 2 decimals: "${amount}"`);
-  const [, minus, units = '0', fraction = ''] = match;
-  const cents = BigInt(units) * 100n + BigInt(fraction.padEnd(2, '0'));
-  return minus ? -cents : cents;
-}
-
-/** Formats integer cents back into a decimal string with exactly 2 decimals. */
-function fromCents(cents: bigint): string {
-  const sign = cents < 0n ? '-' : '';
-  const magnitude = cents < 0n ? -cents : cents;
-  const fraction = (magnitude % 100n).toString().padStart(2, '0');
-  return `${sign}${(magnitude / 100n).toString()}.${fraction}`;
-}
+import { fromCents, toCents } from './cents.js';
 
 export const DISCOUNT_MODES = ['percent', 'amount'] as const;
 export type DiscountMode = (typeof DISCOUNT_MODES)[number];
@@ -50,6 +32,18 @@ export function lineFinal(line: MoneyLine): string {
   return fromCents(toCents(line.base) - toCents(line.discount));
 }
 
+/** Parses and validates one line: `0 ≤ discount ≤ base` (the same invariant `visit_services`
+ * enforces in the database), `base ≥ 0`. */
+function parseLine(line: MoneyLine): { base: bigint; discount: bigint } {
+  const base = toCents(line.base);
+  const discount = toCents(line.discount);
+  if (base < 0n) throw new RangeError(`Line base must not be negative: "${line.base}"`);
+  if (discount < 0n || discount > base) {
+    throw new RangeError(`Line discount must be between 0 and the base: "${line.discount}"`);
+  }
+  return { base, discount };
+}
+
 const PERCENT_SCALE = 100n; // a percent value (e.g. "12.50") → hundredths of a percent (1250)
 const PERCENT_CAP = 100n * PERCENT_SCALE; // 100.00%, in hundredths of a percent
 const HALF_PERCENT_CAP = PERCENT_CAP / 2n; // added before dividing, for round-half-up
@@ -65,13 +59,19 @@ const HALF_PERCENT_CAP = PERCENT_CAP / 2n; // added before dividing, for round-h
  *
  * `capped` reports whether the *raw* entry (before capping) exceeded its cap, so the caller can
  * warn without recomputing.
+ *
+ * Throws `RangeError` on an impossible input: a negative discount `value`, a negative line base,
+ * or a line discount that exceeds its base — none of these can happen through the Zod schemas
+ * and DB constraints that produce these values, so a throw here means a caller bug.
  */
 export function visitMoney(lines: MoneyLine[], mode: DiscountMode, value: string): VisitMoney {
-  const subtotalCents = lines.reduce(
-    (sum, line) => sum + (toCents(line.base) - toCents(line.discount)),
-    0n,
-  );
   const rawValueCents = toCents(value);
+  if (rawValueCents < 0n) throw new RangeError(`Discount value must not be negative: "${value}"`);
+
+  const subtotalCents = lines.reduce((sum, line) => {
+    const { base, discount } = parseLine(line);
+    return sum + (base - discount);
+  }, 0n);
 
   let discountCents: bigint;
   let capped: boolean;
