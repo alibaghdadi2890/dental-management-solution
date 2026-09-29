@@ -8,6 +8,7 @@ import {
   isToothCode,
   isUpper,
   keyboardOrder,
+  mesialLeft,
   parseTooth,
   position,
   positionKey,
@@ -22,512 +23,99 @@ import {
   toothLabel,
   toUniversal,
   validSurfaces,
-  type ToothCode,
+  type PermanentToothCode,
+  type PrimaryToothCode,
 } from './tooth.js';
 
 /**
  * Every one of the 52 canonical FDI codes, pinned by hand from the mapping formulas in the
- * design spec (never derived by calling the functions under test).
+ * design spec (never derived by calling the functions under test): code, quadrant, position,
+ * isAnterior, isUpper, universal, primary.
  */
-const TOOTH_TABLE: Array<{
-  code: ToothCode;
-  quadrant: 1 | 2 | 3 | 4;
-  position: number;
-  isAnterior: boolean;
-  isUpper: boolean;
-  universal: string;
-  primary: boolean;
-}> = [
-  {
-    code: '11',
-    quadrant: 1,
-    position: 1,
-    isAnterior: true,
-    isUpper: true,
-    universal: '8',
-    primary: false,
-  },
-  {
-    code: '12',
-    quadrant: 1,
-    position: 2,
-    isAnterior: true,
-    isUpper: true,
-    universal: '7',
-    primary: false,
-  },
-  {
-    code: '13',
-    quadrant: 1,
-    position: 3,
-    isAnterior: true,
-    isUpper: true,
-    universal: '6',
-    primary: false,
-  },
-  {
-    code: '14',
-    quadrant: 1,
-    position: 4,
-    isAnterior: false,
-    isUpper: true,
-    universal: '5',
-    primary: false,
-  },
-  {
-    code: '15',
-    quadrant: 1,
-    position: 5,
-    isAnterior: false,
-    isUpper: true,
-    universal: '4',
-    primary: false,
-  },
-  {
-    code: '16',
-    quadrant: 1,
-    position: 6,
-    isAnterior: false,
-    isUpper: true,
-    universal: '3',
-    primary: false,
-  },
-  {
-    code: '17',
-    quadrant: 1,
-    position: 7,
-    isAnterior: false,
-    isUpper: true,
-    universal: '2',
-    primary: false,
-  },
-  {
-    code: '18',
-    quadrant: 1,
-    position: 8,
-    isAnterior: false,
-    isUpper: true,
-    universal: '1',
-    primary: false,
-  },
-  {
-    code: '21',
-    quadrant: 2,
-    position: 1,
-    isAnterior: true,
-    isUpper: true,
-    universal: '9',
-    primary: false,
-  },
-  {
-    code: '22',
-    quadrant: 2,
-    position: 2,
-    isAnterior: true,
-    isUpper: true,
-    universal: '10',
-    primary: false,
-  },
-  {
-    code: '23',
-    quadrant: 2,
-    position: 3,
-    isAnterior: true,
-    isUpper: true,
-    universal: '11',
-    primary: false,
-  },
-  {
-    code: '24',
-    quadrant: 2,
-    position: 4,
-    isAnterior: false,
-    isUpper: true,
-    universal: '12',
-    primary: false,
-  },
-  {
-    code: '25',
-    quadrant: 2,
-    position: 5,
-    isAnterior: false,
-    isUpper: true,
-    universal: '13',
-    primary: false,
-  },
-  {
-    code: '26',
-    quadrant: 2,
-    position: 6,
-    isAnterior: false,
-    isUpper: true,
-    universal: '14',
-    primary: false,
-  },
-  {
-    code: '27',
-    quadrant: 2,
-    position: 7,
-    isAnterior: false,
-    isUpper: true,
-    universal: '15',
-    primary: false,
-  },
-  {
-    code: '28',
-    quadrant: 2,
-    position: 8,
-    isAnterior: false,
-    isUpper: true,
-    universal: '16',
-    primary: false,
-  },
-  {
-    code: '31',
-    quadrant: 3,
-    position: 1,
-    isAnterior: true,
-    isUpper: false,
-    universal: '24',
-    primary: false,
-  },
-  {
-    code: '32',
-    quadrant: 3,
-    position: 2,
-    isAnterior: true,
-    isUpper: false,
-    universal: '23',
-    primary: false,
-  },
-  {
-    code: '33',
-    quadrant: 3,
-    position: 3,
-    isAnterior: true,
-    isUpper: false,
-    universal: '22',
-    primary: false,
-  },
-  {
-    code: '34',
-    quadrant: 3,
-    position: 4,
-    isAnterior: false,
-    isUpper: false,
-    universal: '21',
-    primary: false,
-  },
-  {
-    code: '35',
-    quadrant: 3,
-    position: 5,
-    isAnterior: false,
-    isUpper: false,
-    universal: '20',
-    primary: false,
-  },
-  {
-    code: '36',
-    quadrant: 3,
-    position: 6,
-    isAnterior: false,
-    isUpper: false,
-    universal: '19',
-    primary: false,
-  },
-  {
-    code: '37',
-    quadrant: 3,
-    position: 7,
-    isAnterior: false,
-    isUpper: false,
-    universal: '18',
-    primary: false,
-  },
-  {
-    code: '38',
-    quadrant: 3,
-    position: 8,
-    isAnterior: false,
-    isUpper: false,
-    universal: '17',
-    primary: false,
-  },
-  {
-    code: '41',
-    quadrant: 4,
-    position: 1,
-    isAnterior: true,
-    isUpper: false,
-    universal: '25',
-    primary: false,
-  },
-  {
-    code: '42',
-    quadrant: 4,
-    position: 2,
-    isAnterior: true,
-    isUpper: false,
-    universal: '26',
-    primary: false,
-  },
-  {
-    code: '43',
-    quadrant: 4,
-    position: 3,
-    isAnterior: true,
-    isUpper: false,
-    universal: '27',
-    primary: false,
-  },
-  {
-    code: '44',
-    quadrant: 4,
-    position: 4,
-    isAnterior: false,
-    isUpper: false,
-    universal: '28',
-    primary: false,
-  },
-  {
-    code: '45',
-    quadrant: 4,
-    position: 5,
-    isAnterior: false,
-    isUpper: false,
-    universal: '29',
-    primary: false,
-  },
-  {
-    code: '46',
-    quadrant: 4,
-    position: 6,
-    isAnterior: false,
-    isUpper: false,
-    universal: '30',
-    primary: false,
-  },
-  {
-    code: '47',
-    quadrant: 4,
-    position: 7,
-    isAnterior: false,
-    isUpper: false,
-    universal: '31',
-    primary: false,
-  },
-  {
-    code: '48',
-    quadrant: 4,
-    position: 8,
-    isAnterior: false,
-    isUpper: false,
-    universal: '32',
-    primary: false,
-  },
-  {
-    code: '51',
-    quadrant: 1,
-    position: 1,
-    isAnterior: true,
-    isUpper: true,
-    universal: 'E',
-    primary: true,
-  },
-  {
-    code: '52',
-    quadrant: 1,
-    position: 2,
-    isAnterior: true,
-    isUpper: true,
-    universal: 'D',
-    primary: true,
-  },
-  {
-    code: '53',
-    quadrant: 1,
-    position: 3,
-    isAnterior: true,
-    isUpper: true,
-    universal: 'C',
-    primary: true,
-  },
-  {
-    code: '54',
-    quadrant: 1,
-    position: 4,
-    isAnterior: false,
-    isUpper: true,
-    universal: 'B',
-    primary: true,
-  },
-  {
-    code: '55',
-    quadrant: 1,
-    position: 5,
-    isAnterior: false,
-    isUpper: true,
-    universal: 'A',
-    primary: true,
-  },
-  {
-    code: '61',
-    quadrant: 2,
-    position: 1,
-    isAnterior: true,
-    isUpper: true,
-    universal: 'F',
-    primary: true,
-  },
-  {
-    code: '62',
-    quadrant: 2,
-    position: 2,
-    isAnterior: true,
-    isUpper: true,
-    universal: 'G',
-    primary: true,
-  },
-  {
-    code: '63',
-    quadrant: 2,
-    position: 3,
-    isAnterior: true,
-    isUpper: true,
-    universal: 'H',
-    primary: true,
-  },
-  {
-    code: '64',
-    quadrant: 2,
-    position: 4,
-    isAnterior: false,
-    isUpper: true,
-    universal: 'I',
-    primary: true,
-  },
-  {
-    code: '65',
-    quadrant: 2,
-    position: 5,
-    isAnterior: false,
-    isUpper: true,
-    universal: 'J',
-    primary: true,
-  },
-  {
-    code: '71',
-    quadrant: 3,
-    position: 1,
-    isAnterior: true,
-    isUpper: false,
-    universal: 'O',
-    primary: true,
-  },
-  {
-    code: '72',
-    quadrant: 3,
-    position: 2,
-    isAnterior: true,
-    isUpper: false,
-    universal: 'N',
-    primary: true,
-  },
-  {
-    code: '73',
-    quadrant: 3,
-    position: 3,
-    isAnterior: true,
-    isUpper: false,
-    universal: 'M',
-    primary: true,
-  },
-  {
-    code: '74',
-    quadrant: 3,
-    position: 4,
-    isAnterior: false,
-    isUpper: false,
-    universal: 'L',
-    primary: true,
-  },
-  {
-    code: '75',
-    quadrant: 3,
-    position: 5,
-    isAnterior: false,
-    isUpper: false,
-    universal: 'K',
-    primary: true,
-  },
-  {
-    code: '81',
-    quadrant: 4,
-    position: 1,
-    isAnterior: true,
-    isUpper: false,
-    universal: 'P',
-    primary: true,
-  },
-  {
-    code: '82',
-    quadrant: 4,
-    position: 2,
-    isAnterior: true,
-    isUpper: false,
-    universal: 'Q',
-    primary: true,
-  },
-  {
-    code: '83',
-    quadrant: 4,
-    position: 3,
-    isAnterior: true,
-    isUpper: false,
-    universal: 'R',
-    primary: true,
-  },
-  {
-    code: '84',
-    quadrant: 4,
-    position: 4,
-    isAnterior: false,
-    isUpper: false,
-    universal: 'S',
-    primary: true,
-  },
-  {
-    code: '85',
-    quadrant: 4,
-    position: 5,
-    isAnterior: false,
-    isUpper: false,
-    universal: 'T',
-    primary: true,
-  },
-];
+const TOOTH_TABLE = [
+  ['11', 1, 1, true, true, '8', false],
+  ['12', 1, 2, true, true, '7', false],
+  ['13', 1, 3, true, true, '6', false],
+  ['14', 1, 4, false, true, '5', false],
+  ['15', 1, 5, false, true, '4', false],
+  ['16', 1, 6, false, true, '3', false],
+  ['17', 1, 7, false, true, '2', false],
+  ['18', 1, 8, false, true, '1', false],
+  ['21', 2, 1, true, true, '9', false],
+  ['22', 2, 2, true, true, '10', false],
+  ['23', 2, 3, true, true, '11', false],
+  ['24', 2, 4, false, true, '12', false],
+  ['25', 2, 5, false, true, '13', false],
+  ['26', 2, 6, false, true, '14', false],
+  ['27', 2, 7, false, true, '15', false],
+  ['28', 2, 8, false, true, '16', false],
+  ['31', 3, 1, true, false, '24', false],
+  ['32', 3, 2, true, false, '23', false],
+  ['33', 3, 3, true, false, '22', false],
+  ['34', 3, 4, false, false, '21', false],
+  ['35', 3, 5, false, false, '20', false],
+  ['36', 3, 6, false, false, '19', false],
+  ['37', 3, 7, false, false, '18', false],
+  ['38', 3, 8, false, false, '17', false],
+  ['41', 4, 1, true, false, '25', false],
+  ['42', 4, 2, true, false, '26', false],
+  ['43', 4, 3, true, false, '27', false],
+  ['44', 4, 4, false, false, '28', false],
+  ['45', 4, 5, false, false, '29', false],
+  ['46', 4, 6, false, false, '30', false],
+  ['47', 4, 7, false, false, '31', false],
+  ['48', 4, 8, false, false, '32', false],
+  ['51', 1, 1, true, true, 'E', true],
+  ['52', 1, 2, true, true, 'D', true],
+  ['53', 1, 3, true, true, 'C', true],
+  ['54', 1, 4, false, true, 'B', true],
+  ['55', 1, 5, false, true, 'A', true],
+  ['61', 2, 1, true, true, 'F', true],
+  ['62', 2, 2, true, true, 'G', true],
+  ['63', 2, 3, true, true, 'H', true],
+  ['64', 2, 4, false, true, 'I', true],
+  ['65', 2, 5, false, true, 'J', true],
+  ['71', 3, 1, true, false, 'O', true],
+  ['72', 3, 2, true, false, 'N', true],
+  ['73', 3, 3, true, false, 'M', true],
+  ['74', 3, 4, false, false, 'L', true],
+  ['75', 3, 5, false, false, 'K', true],
+  ['81', 4, 1, true, false, 'P', true],
+  ['82', 4, 2, true, false, 'Q', true],
+  ['83', 4, 3, true, false, 'R', true],
+  ['84', 4, 4, false, false, 'S', true],
+  ['85', 4, 5, false, false, 'T', true],
+] as const;
 
 describe('the 52-code table', () => {
   it.each(TOOTH_TABLE)(
-    '$code: quadrant/position/isAnterior/isUpper and the universal round trip',
-    (row) => {
-      expect(quadrant(row.code)).toBe(row.quadrant);
-      expect(position(row.code)).toBe(row.position);
-      expect(isAnterior(row.code)).toBe(row.isAnterior);
-      expect(isUpper(row.code)).toBe(row.isUpper);
-      expect(isPrimary(row.code)).toBe(row.primary);
-      expect(toUniversal(row.code)).toBe(row.universal);
-      expect(parseTooth(row.universal, 'universal')).toBe(row.code);
-      expect(parseTooth(`#${row.universal}`, 'universal')).toBe(row.code);
-      expect(parseTooth(row.code, 'fdi')).toBe(row.code);
-      expect(parseTooth(`#${row.code}`, 'fdi')).toBe(row.code);
+    '%s: quadrant/position/isAnterior/isUpper and the universal round trip',
+    (
+      code,
+      expectedQuadrant,
+      expectedPosition,
+      expectedAnterior,
+      expectedUpper,
+      universal,
+      primary,
+    ) => {
+      expect(quadrant(code)).toBe(expectedQuadrant);
+      expect(position(code)).toBe(expectedPosition);
+      expect(isAnterior(code)).toBe(expectedAnterior);
+      expect(isUpper(code)).toBe(expectedUpper);
+      expect(isPrimary(code)).toBe(primary);
+      expect(toUniversal(code)).toBe(universal);
+      expect(parseTooth(universal, 'universal')).toBe(code);
+      expect(parseTooth(`#${universal}`, 'universal')).toBe(code);
+      expect(parseTooth(code, 'fdi')).toBe(code);
+      expect(parseTooth(`#${code}`, 'fdi')).toBe(code);
+      expect(isToothCode(code)).toBe(true);
     },
   );
 
   it('covers exactly the 52 codes, no more, no fewer', () => {
     expect(TOOTH_TABLE).toHaveLength(52);
-    expect(new Set(TOOTH_TABLE.map((r) => r.code)).size).toBe(52);
+    expect(new Set(TOOTH_TABLE.map((row) => row[0])).size).toBe(52);
   });
 });
 
@@ -544,7 +132,7 @@ describe('toothLabel', () => {
 });
 
 describe('successorOf / predecessorOf', () => {
-  const pairs: Array<[ToothCode, ToothCode]> = [
+  const pairs: ReadonlyArray<readonly [PrimaryToothCode, PermanentToothCode]> = [
     ['51', '11'],
     ['52', '12'],
     ['53', '13'],
@@ -590,111 +178,62 @@ describe('positionKey', () => {
 });
 
 describe('archColumns', () => {
-  it("lays out patient_right_on_left (textbook) with the patient's right on screen-left", () => {
+  it("patient_right_on_left (textbook): patient's right on screen-left", () => {
     const { upper, lower } = archColumns('patient_right_on_left');
-    expect(upper).toEqual([
-      '18',
-      '17',
-      '16',
-      '15',
-      '14',
-      '13',
-      '12',
-      '11',
-      '21',
-      '22',
-      '23',
-      '24',
-      '25',
-      '26',
-      '27',
-      '28',
-    ]);
-    expect(lower).toEqual([
-      '48',
-      '47',
-      '46',
-      '45',
-      '44',
-      '43',
-      '42',
-      '41',
-      '31',
-      '32',
-      '33',
-      '34',
-      '35',
-      '36',
-      '37',
-      '38',
-    ]);
+    expect(upper).toEqual('18 17 16 15 14 13 12 11 21 22 23 24 25 26 27 28'.split(' '));
+    expect(lower).toEqual('48 47 46 45 44 43 42 41 31 32 33 34 35 36 37 38'.split(' '));
   });
 
-  it('reverses each row for patient_right_on_right', () => {
+  it('patient_right_on_right: each row reversed', () => {
     const { upper, lower } = archColumns('patient_right_on_right');
-    expect(upper).toEqual([
-      '28',
-      '27',
-      '26',
-      '25',
-      '24',
-      '23',
-      '22',
-      '21',
-      '11',
-      '12',
-      '13',
-      '14',
-      '15',
-      '16',
-      '17',
-      '18',
-    ]);
-    expect(lower).toEqual([
-      '38',
-      '37',
-      '36',
-      '35',
-      '34',
-      '33',
-      '32',
-      '31',
-      '41',
-      '42',
-      '43',
-      '44',
-      '45',
-      '46',
-      '47',
-      '48',
-    ]);
+    expect(upper).toEqual('28 27 26 25 24 23 22 21 11 12 13 14 15 16 17 18'.split(' '));
+    expect(lower).toEqual('38 37 36 35 34 33 32 31 41 42 43 44 45 46 47 48'.split(' '));
   });
 });
 
 describe('keyboardOrder', () => {
-  it('is upper row then lower row, 32 unique permanent codes', () => {
-    for (const orientation of ['patient_right_on_left', 'patient_right_on_right'] as const) {
-      const order = keyboardOrder(orientation);
-      const { upper, lower } = archColumns(orientation);
-      expect(order).toEqual([...upper, ...lower]);
-      expect(order).toHaveLength(32);
-      expect(new Set(order).size).toBe(32);
-    }
+  it("is upper row then lower row, 32 unique codes; wrapping past either end is the caller's job", () => {
+    const order = keyboardOrder('patient_right_on_left');
+    expect(order).toHaveLength(32);
+    expect(new Set(order).size).toBe(32);
+    expect(order[0]).toBe('18');
+    expect(order[15]).toBe('28');
+    expect(order[16]).toBe('48');
+    expect(order[31]).toBe('38');
+  });
+});
+
+describe('mesialLeft', () => {
+  it.each([
+    ['16', 'patient_right_on_left', false],
+    ['16', 'patient_right_on_right', true],
+    ['26', 'patient_right_on_left', true],
+    ['26', 'patient_right_on_right', false],
+    ['36', 'patient_right_on_left', true],
+    ['36', 'patient_right_on_right', false],
+    ['46', 'patient_right_on_left', false],
+    ['46', 'patient_right_on_right', true],
+  ] as const)('%s, %s -> %s', (code, orientation, expected) => {
+    expect(mesialLeft(code, orientation)).toBe(expected);
   });
 });
 
 describe('surfaceCells', () => {
-  it('posterior upper-right, textbook orientation: distal on the left', () => {
-    expect(surfaceCells('16', 'patient_right_on_left')).toEqual(['D', 'B', 'M', 'O', 'L']);
-  });
-
-  it('anterior upper-left, textbook orientation: mesial on the left, incisal centre', () => {
-    expect(surfaceCells('21', 'patient_right_on_left')).toEqual(['M', 'B', 'D', 'I', 'L']);
-  });
-
-  it('flips left/right for patient_right_on_right but keeps the centre surface', () => {
-    expect(surfaceCells('16', 'patient_right_on_right')).toEqual(['M', 'B', 'D', 'O', 'L']);
-    expect(surfaceCells('21', 'patient_right_on_right')).toEqual(['D', 'B', 'M', 'I', 'L']);
+  it.each([
+    ['16', 'patient_right_on_left', ['D', 'B', 'M', 'O', 'L']],
+    ['16', 'patient_right_on_right', ['M', 'B', 'D', 'O', 'L']],
+    ['26', 'patient_right_on_left', ['M', 'B', 'D', 'O', 'L']],
+    ['26', 'patient_right_on_right', ['D', 'B', 'M', 'O', 'L']],
+    ['36', 'patient_right_on_left', ['M', 'B', 'D', 'O', 'L']],
+    ['36', 'patient_right_on_right', ['D', 'B', 'M', 'O', 'L']],
+    ['46', 'patient_right_on_left', ['D', 'B', 'M', 'O', 'L']],
+    ['46', 'patient_right_on_right', ['M', 'B', 'D', 'O', 'L']],
+    ['21', 'patient_right_on_left', ['M', 'B', 'D', 'I', 'L']],
+    ['21', 'patient_right_on_right', ['D', 'B', 'M', 'I', 'L']],
+    ['31', 'patient_right_on_left', ['M', 'B', 'D', 'I', 'L']],
+    ['31', 'patient_right_on_right', ['D', 'B', 'M', 'I', 'L']],
+  ] as const)('%s, %s -> %s', (code, orientation, expected) => {
+    expect(surfaceCells(code, orientation)).toEqual(expected);
   });
 });
 
@@ -793,40 +332,20 @@ describe('presentTooth', () => {
   it('resolves the primary tooth for the primary stage', () => {
     expect(presentTooth('44', 'primary')).toEqual({ code: '84', notErupted: false });
   });
-});
 
-describe('isToothCode', () => {
-  it('accepts every one of the 52 canonical codes and rejects others', () => {
-    for (const row of TOOTH_TABLE) expect(isToothCode(row.code)).toBe(true);
-    expect(isToothCode('99')).toBe(false);
-    expect(isToothCode('56')).toBe(false);
-    expect(isToothCode('')).toBe(false);
+  it('a presence override beyond position 5 has no effect (molars have no primary slot)', () => {
+    expect(presentTooth('16', 'permanent', 'primary')).toEqual({ code: '16', notErupted: false });
   });
 
-  it('narrows to ToothCode at compile time (see the type-level test below)', () => {
-    const value: string = '16';
-    if (isToothCode(value)) {
-      const narrowed: ToothCode = value;
-      expect(narrowed).toBe('16');
-    } else {
-      throw new Error('expected 16 to be a canonical tooth code');
-    }
-  });
-});
-
-describe('ToothCode (compile time)', () => {
-  it('rejects an out-of-range literal at compile time, not just at runtime', () => {
-    // @ts-expect-error '99' is not a member of the ToothCode template-literal union.
-    quadrant('99');
-    // @ts-expect-error '56' is out of range for the primary quadrant (only 81-85, 71-75, ... exist).
-    quadrant('56');
+  it('a presence override still applies within positions 1-5 in the permanent stage', () => {
+    expect(presentTooth('14', 'permanent', 'primary')).toEqual({ code: '54', notErupted: false });
   });
 });
 
 describe('toothCodeSchema', () => {
   it('accepts every one of the 52 canonical codes', () => {
     for (const row of TOOTH_TABLE) {
-      expect(toothCodeSchema.safeParse(row.code).success).toBe(true);
+      expect(toothCodeSchema.safeParse(row[0]).success).toBe(true);
     }
   });
 
@@ -836,6 +355,15 @@ describe('toothCodeSchema', () => {
     expect(toothCodeSchema.safeParse('09').success).toBe(false);
     expect(toothCodeSchema.safeParse('00').success).toBe(false);
     expect(toothCodeSchema.safeParse('').success).toBe(false);
+  });
+});
+
+describe('isToothCode', () => {
+  it('accepts every one of the 52 canonical codes and rejects others', () => {
+    for (const row of TOOTH_TABLE) expect(isToothCode(row[0])).toBe(true);
+    expect(isToothCode('99')).toBe(false);
+    expect(isToothCode('56')).toBe(false);
+    expect(isToothCode('')).toBe(false);
   });
 });
 
@@ -868,4 +396,23 @@ describe('parseTooth', () => {
   it('accepts a lower-case primary universal letter', () => {
     expect(parseTooth('a', 'universal')).toBe('55');
   });
+
+  it('rejects out-of-range and non-tooth universal input', () => {
+    expect(parseTooth('0', 'universal')).toBeNull();
+    expect(parseTooth('33', 'universal')).toBeNull();
+    expect(parseTooth('U', 'universal')).toBeNull();
+    expect(parseTooth('#', 'universal')).toBeNull();
+  });
 });
+
+/**
+ * Type-level only, never executed: pins `ToothCode` as a closed template-literal union rather
+ * than `string`. If it ever widens back to `string`, these `@ts-expect-error` lines stop
+ * erroring and `tsc` fails the build.
+ */
+function _toothCodeIsNotJustAString(): void {
+  // @ts-expect-error '99': the first digit is out of range (quadrants only go 1-4, 5-8).
+  quadrant('99');
+  // @ts-expect-error '56': the second digit is out of range for a primary quadrant (only 1-5).
+  quadrant('56');
+}

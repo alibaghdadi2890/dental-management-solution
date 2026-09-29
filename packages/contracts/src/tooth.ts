@@ -2,19 +2,16 @@
  * The canonical tooth model for charting (feature 4a). Pure — no I/O, no Nest, no Drizzle — so it
  * runs unmodified in the API, the SPA and the agent tools (CLAUDE.md §4, §11).
  *
- * The canonical stored value is FDI two-digit text (`ToothCode`, e.g. `'16'`, `'55'`). Universal
- * notation, labels and orientation-aware layout are all derived from it; nothing else is stored.
- * Positions are counted outward from the midline (1 central incisor … 8 third molar; primary only
- * goes to 5), which is what lets a primary tooth and its permanent successor share one chart
- * column (`positionKey`).
+ * The canonical stored value is FDI two-digit text (`ToothCode`). Universal notation, labels and
+ * orientation-aware layout are all derived from it; nothing else is stored. Positions are counted
+ * outward from the midline (1 central incisor … 8 third molar; primary only goes to 5), which is
+ * what lets a primary tooth and its permanent successor share one chart column (`positionKey`).
  */
 
 import { z } from 'zod';
 import { dentitionStage, type DentitionStage } from './patient-age.js';
 
-// ---------------------------------------------------------------------------------------------
-// Tenant-facing chart preferences (also used by tenant settings and visit contracts, later tasks)
-// ---------------------------------------------------------------------------------------------
+// Tenant-facing chart preferences (also used by tenant settings and visit contracts, later tasks).
 
 export const TOOTH_NOTATIONS = ['fdi', 'universal'] as const;
 export type ToothNotation = (typeof TOOTH_NOTATIONS)[number];
@@ -32,8 +29,8 @@ export const SURFACES = ['M', 'D', 'B', 'L', 'O', 'I'] as const;
 export type SurfaceKey = (typeof SURFACES)[number];
 export const surfaceKeySchema = z.enum(SURFACES);
 
-/** A surface set for one tooth: no duplicates, and never more than the 5 surfaces one tooth has
- * (M, D, B, L, and one of O/I — see `surfaceCells`). */
+/** A surface set for one tooth: no duplicates, at most the 5 surfaces one tooth has (M, D, B, L,
+ * and one of O/I — see `surfaceCells`). */
 export const surfacesSchema = z
   .array(surfaceKeySchema)
   .max(5)
@@ -41,21 +38,17 @@ export const surfacesSchema = z
     message: 'Duplicate surface',
   });
 
-// ---------------------------------------------------------------------------------------------
-// Canonical codes
-// ---------------------------------------------------------------------------------------------
+// Canonical codes.
 
 /** A permanent FDI code: quadrant 1–4, position 1–8 (e.g. `'16'`). */
 export type PermanentToothCode = `${1 | 2 | 3 | 4}${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8}`;
 /** A primary (deciduous) FDI code: quadrant 5–8, position 1–5 (e.g. `'55'`). */
 export type PrimaryToothCode = `${5 | 6 | 7 | 8}${1 | 2 | 3 | 4 | 5}`;
-/** The canonical stored value: FDI two-digit text, e.g. `'16'`, `'55'` — exactly the 52 codes
- * `PERMANENT_CODES`/`PRIMARY_CODES` enumerate, enforced at compile time by the template-literal
- * union and at runtime by `isToothCode`/`toothCodeSchema`. */
+/** The canonical stored value: FDI two-digit text, exactly the 52 codes `PERMANENT_CODES`/
+ * `PRIMARY_CODES` enumerate. */
 export type ToothCode = PermanentToothCode | PrimaryToothCode;
 
-/** 11–18, 21–28, 31–38, 41–48, in that order (quadrant-major, position-ascending — `archColumns`
- * slices this array rather than rebuilding codes). */
+/** 11–18, 21–28, 31–38, 41–48, quadrant-major and position-ascending. */
 export const PERMANENT_CODES: readonly PermanentToothCode[] = [
   '11',
   '12',
@@ -116,23 +109,20 @@ export const PRIMARY_CODES: readonly PrimaryToothCode[] = [
 
 const ALL_CODES: ReadonlySet<string> = new Set<string>([...PERMANENT_CODES, ...PRIMARY_CODES]);
 
-/** Runtime check + compile-time narrowing for `ToothCode`; the one place persistence boundaries
- * (and everything else in this file) should validate untrusted tooth text. */
+/** Runtime check + compile-time narrowing for `ToothCode`; use at persistence boundaries. */
 export function isToothCode(value: string): value is ToothCode {
   return ALL_CODES.has(value);
 }
 
-/** Exactly the 52 canonical FDI codes — nothing else parses as a tooth. */
-export const toothCodeSchema = z.string().refine(isToothCode, {
-  message: 'Not a canonical FDI tooth code',
-});
+/** Exactly the 52 canonical FDI codes, as a `z.enum` (not `.refine`) so OpenAPI and agent tool
+ * schemas keep the 52 values instead of widening to `string`. */
+export const toothCodeSchema = z.enum([...PERMANENT_CODES, ...PRIMARY_CODES]);
 
-// ---------------------------------------------------------------------------------------------
-// Core facts about a code
-// ---------------------------------------------------------------------------------------------
+// Core facts about a code.
 
 /** 1 upper-right, 2 upper-left, 3 lower-left, 4 lower-right. Primary quadrants 5–8 map onto the
- * same 1–4 (first-digit mod 4), which is the whole trick behind sharing a chart column. */
+ * same 1–4 (first-digit mod 4), which is what lets a primary tooth and its permanent successor
+ * share one chart column. */
 export function quadrant(code: ToothCode): 1 | 2 | 3 | 4 {
   const first = Number(code[0]);
   return (((first - 1) % 4) + 1) as 1 | 2 | 3 | 4;
@@ -144,7 +134,7 @@ export function position(code: ToothCode): number {
 }
 
 /** A code is primary iff its first digit is 5–8. */
-export function isPrimary(code: ToothCode): boolean {
+export function isPrimary(code: ToothCode): code is PrimaryToothCode {
   return Number(code[0]) >= 5;
 }
 
@@ -193,22 +183,11 @@ export function toUniversal(code: ToothCode): string {
   }
 }
 
-/** Inverse of the permanent half of `toUniversal`: universal number 1–32 → FDI code, or `null`.
- * The `isToothCode` check both narrows the type and guards the arithmetic (defence in depth —
- * the range check above already makes it unreachable, but this never returns a bogus code). */
-function fdiFromUniversalPermanent(n: number): ToothCode | null {
-  if (n < 1 || n > 32) return null;
-  const code = n <= 8 ? `1${9 - n}` : n <= 16 ? `2${n - 8}` : n <= 24 ? `3${25 - n}` : `4${n - 24}`;
-  return isToothCode(code) ? code : null;
-}
-
-/** Inverse of the primary half of `toUniversal`: universal letter A–T → FDI code, or `null`. */
-function fdiFromUniversalPrimary(letter: string): ToothCode | null {
-  const c = letter.toUpperCase().charCodeAt(0) - 'A'.charCodeAt(0);
-  if (c < 0 || c > 19) return null;
-  const code = c <= 4 ? `5${5 - c}` : c <= 9 ? `6${c - 4}` : c <= 14 ? `7${15 - c}` : `8${c - 14}`;
-  return isToothCode(code) ? code : null;
-}
+/** The inverse of `toUniversal`, built once from it over all 52 codes rather than re-deriving the
+ * arithmetic. */
+const FDI_BY_UNIVERSAL: ReadonlyMap<string, ToothCode> = new Map(
+  [...PERMANENT_CODES, ...PRIMARY_CODES].map((code) => [toUniversal(code), code]),
+);
 
 /**
  * Parses user-entered tooth text into the canonical FDI code, or `null` if it doesn't parse.
@@ -222,12 +201,11 @@ export function parseTooth(text: string, notation: ToothNotation): ToothCode | n
   if (notation === 'fdi') {
     return isToothCode(stripped) ? stripped : null;
   }
-
   if (/^\d+$/.test(stripped)) {
-    return fdiFromUniversalPermanent(Number(stripped));
+    return FDI_BY_UNIVERSAL.get(String(Number(stripped))) ?? null;
   }
   if (/^[A-Za-z]$/.test(stripped)) {
-    return fdiFromUniversalPrimary(stripped);
+    return FDI_BY_UNIVERSAL.get(stripped.toUpperCase()) ?? null;
   }
   return null;
 }
@@ -239,24 +217,27 @@ export function toothLabel(code: ToothCode, notation: ToothNotation): string {
   return isPrimary(code) ? universal : `#${universal}`;
 }
 
-// ---------------------------------------------------------------------------------------------
-// Primary ⇄ permanent column mapping
-// ---------------------------------------------------------------------------------------------
+// Primary ⇄ permanent column mapping.
 
-/** A primary tooth's permanent successor (positions 1–5 only; e.g. `54` → `14`). */
-export function successorOf(primaryCode: ToothCode): ToothCode {
-  const code = `${quadrant(primaryCode)}${position(primaryCode)}`;
-  if (!isToothCode(code)) throw new Error(`Invalid primary tooth code: ${primaryCode}`);
-  return code;
+/** Primary → permanent successor, built once (quadrant maps 5–8 onto 1–4, position unchanged). */
+const SUCCESSOR_OF: Record<PrimaryToothCode, PermanentToothCode> = Object.fromEntries(
+  PRIMARY_CODES.map((code) => [code, `${quadrant(code)}${position(code)}` as PermanentToothCode]),
+) as Record<PrimaryToothCode, PermanentToothCode>;
+
+/** Inverse of `SUCCESSOR_OF`; only the 20 permanent codes at positions 1–5 have an entry. */
+const PREDECESSOR_OF: Partial<Record<PermanentToothCode, PrimaryToothCode>> = Object.fromEntries(
+  PRIMARY_CODES.map((code) => [SUCCESSOR_OF[code], code]),
+);
+
+/** A primary tooth's permanent successor (e.g. `54` → `14`). */
+export function successorOf(primaryCode: PrimaryToothCode): PermanentToothCode {
+  return SUCCESSOR_OF[primaryCode];
 }
 
 /** A permanent tooth's primary predecessor, or `null` for molars (positions 6–8), e.g. `14` →
  * `54`, `16` → `null`. */
-export function predecessorOf(permanentCode: ToothCode): ToothCode | null {
-  const p = position(permanentCode);
-  if (p > 5) return null;
-  const code = `${quadrant(permanentCode) + 4}${p}`;
-  return isToothCode(code) ? code : null;
+export function predecessorOf(permanentCode: PermanentToothCode): PrimaryToothCode | null {
+  return PREDECESSOR_OF[permanentCode] ?? null;
 }
 
 /** The permanent code of the chart column a tooth belongs to: itself if already permanent, its
@@ -265,18 +246,12 @@ export function positionKey(code: ToothCode): ToothCode {
   return isPrimary(code) ? successorOf(code) : code;
 }
 
-// ---------------------------------------------------------------------------------------------
-// Orientation-aware layout
-// ---------------------------------------------------------------------------------------------
+// Orientation-aware layout.
 
-/** `PERMANENT_CODES` is quadrant-major, position-ascending, 8 per quadrant — slice it instead of
- * rebuilding codes, so this can never construct a code `isToothCode` wouldn't already vouch for. */
-function quadrantSlice(base: 1 | 2 | 3 | 4): PermanentToothCode[] {
-  return PERMANENT_CODES.slice((base - 1) * 8, base * 8);
-}
-
+/** `PERMANENT_CODES` is quadrant-major, position-ascending, 8 per quadrant — slice it rather than
+ * rebuild codes. */
 function quadrantColumn(base: 1 | 2 | 3 | 4, order: 'desc' | 'asc'): PermanentToothCode[] {
-  const ascending = quadrantSlice(base);
+  const ascending = PERMANENT_CODES.slice((base - 1) * 8, base * 8);
   return order === 'desc' ? ascending.reverse() : ascending;
 }
 
@@ -286,8 +261,8 @@ function quadrantColumn(base: 1 | 2 | 3 | 4, order: 'desc' | 'asc'): PermanentTo
  * `48…41, 31…38`. `patient_right_on_right`: each row reversed.
  */
 export function archColumns(orientation: ChartOrientation): {
-  upper: ToothCode[];
-  lower: ToothCode[];
+  upper: PermanentToothCode[];
+  lower: PermanentToothCode[];
 } {
   if (orientation === 'patient_right_on_left') {
     return {
@@ -302,8 +277,8 @@ export function archColumns(orientation: ChartOrientation): {
 }
 
 /** Upper row left to right, then lower row left to right: 32 unique permanent codes. Wrapping
- * past the ends (e.g. arrow-key navigation) is the caller's concern. */
-export function keyboardOrder(orientation: ChartOrientation): ToothCode[] {
+ * past either end (e.g. arrow-key navigation) is the caller's job. */
+export function keyboardOrder(orientation: ChartOrientation): PermanentToothCode[] {
   const { upper, lower } = archColumns(orientation);
   return [...upper, ...lower];
 }
@@ -342,9 +317,7 @@ export function validSurfaces(code: ToothCode, surfaces: readonly SurfaceKey[]):
   });
 }
 
-// ---------------------------------------------------------------------------------------------
-// Anatomical names (i18n keys, never English text)
-// ---------------------------------------------------------------------------------------------
+// Anatomical names (i18n keys, never English text).
 
 const PERMANENT_TOOTH_NAME_KEYS = [
   'centralIncisor',
@@ -357,17 +330,6 @@ const PERMANENT_TOOTH_NAME_KEYS = [
   'thirdMolar',
 ] as const;
 
-/** Primary teeth have no premolars and stop at the second molar (positions 4–5). Every element
- * here also appears in `PERMANENT_TOOTH_NAME_KEYS`, which is why `ToothNameKey` is derived from
- * that (wider) table alone. */
-const PRIMARY_TOOTH_NAME_KEYS: readonly ToothNameKey[] = [
-  'centralIncisor',
-  'lateralIncisor',
-  'canine',
-  'firstMolar',
-  'secondMolar',
-] as const;
-
 const QUADRANT_NAME_KEYS = {
   1: 'upperRight',
   2: 'upperLeft',
@@ -375,10 +337,19 @@ const QUADRANT_NAME_KEYS = {
   4: 'lowerRight',
 } as const;
 
-/** `'upperRight' | 'upperLeft' | 'lowerLeft' | 'lowerRight'`, derived from `QUADRANT_NAME_KEYS`. */
+/** `'upperRight' | 'upperLeft' | 'lowerLeft' | 'lowerRight'`. */
 export type QuadrantNameKey = (typeof QUADRANT_NAME_KEYS)[keyof typeof QUADRANT_NAME_KEYS];
-/** The tooth-name i18n keys used by `anatomicalName`, derived from `PERMANENT_TOOTH_NAME_KEYS`. */
+/** The tooth-name i18n keys used by `anatomicalName`. */
 export type ToothNameKey = (typeof PERMANENT_TOOTH_NAME_KEYS)[number];
+
+/** Primary teeth have no premolars and stop at the second molar (positions 4–5). */
+const PRIMARY_TOOTH_NAME_KEYS = [
+  'centralIncisor',
+  'lateralIncisor',
+  'canine',
+  'firstMolar',
+  'secondMolar',
+] as const satisfies readonly ToothNameKey[];
 
 /** An i18n key plus params — never English text (CLAUDE.md §13 i18n readiness). */
 export function anatomicalName(code: ToothCode): {
@@ -397,9 +368,7 @@ export function anatomicalName(code: ToothCode): {
   };
 }
 
-// ---------------------------------------------------------------------------------------------
-// Dentition and what actually occupies a chart column
-// ---------------------------------------------------------------------------------------------
+// Dentition and what actually occupies a chart column.
 
 /** Which dentition occupies a chart column at a position, for a given stage (POC `slotFor`).
  * `permanent`: every position is permanent. `primary`: 1–5 primary, 6–8 not erupted. `mixed`:
@@ -434,13 +403,16 @@ export function effectiveDentition(
  * otherwise the permanent code itself.
  */
 export function presentTooth(
-  column: ToothCode,
+  column: PermanentToothCode,
   stage: DentitionStage,
   presence?: 'primary' | 'permanent',
 ): { code: ToothCode; notErupted: boolean } {
   const p = position(column);
   const slot = presence && p <= 5 ? presence : slotFor(stage, p);
   if (slot === 'primary') {
+    // `predecessorOf` is total for positions 1–5, which is the only way `slot` can be 'primary'
+    // (see `slotFor`) — but that invariant spans two functions, so the type stays nullable and
+    // this fallback stays as the (unreachable in practice) type-safe default.
     return { code: predecessorOf(column) ?? column, notErupted: false };
   }
   return { code: column, notErupted: slot === 'not_erupted' };
