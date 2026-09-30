@@ -133,5 +133,25 @@
     "setDone": "Dentition set to {{stage}}",
     "backToAutoDone": "Dentition back to automatic",
     "failed": "Couldn't change the dentition: {{reason}}"
+  },
+  "startVisit": {
+    "title": "Start visit",
+    "dentist": "Dentist",
+    "room": "Room",
+    "choose": "Choose…",
+    "submit": "Start visit",
+    "loading": "Loading…",
+    "loadFailed": "Couldn't load the dentists and rooms. Close this and try again.",
+    "noBranch": "Visits start in a branch, and none is selected. Pick one in the sidebar, or ask the clinic owner to assign you to one.",
+    "noDentist": "No dentist works in {{branch}} yet, so a visit can't start here.",
+    "errors": {
+      "dentistRequired": "Choose a dentist",
+      "roomRequired": "Choose a room",
+      "roomBusy": "Another live visit is using this room",
+      "roomInvalid": "This room is no longer available",
+      "dentistInvalid": "This dentist no longer works in this branch",
+      "archived": "This patient is archived. Restore the record to start a visit.",
+      "failed": "Couldn't start the visit: {{reason}}"
+    }
   }
 }

@@ -1,12 +1,14 @@
-import type { Patient, PatientContact, Session } from '@dcm/contracts';
+import type { LiveVisitRef, Patient, PatientContact, Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useRouter } from '@tanstack/react-router';
+import { Link, useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/list';
 import { Tabs } from '@/components/ui/tabs';
 import { usePermission } from '@/features/auth/use-permission';
+import { StartVisitPopover } from '@/features/clinical/start-visit-popover';
+import { liveVisitsQuery } from '@/features/clinical/visits-api';
 import { formatAgeLine, formatPhone, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { roleHolder } from '../contact-rows';
@@ -114,11 +116,49 @@ function MergedNotice({ keptId }: { keptId: string }) {
 }
 
 /**
+ * **Resume visit** — the patient's most recently started live visit (a merge can leave two, W1) —
+ * or **Start visit**, which opens the start popover (spec §Record). An archived patient can't start
+ * one but can still resume theirs. Both need `visit:write`: the front desk sees neither (W18).
+ */
+function VisitAction({ patientId, archived }: { patientId: string; archived: boolean }) {
+  const { t } = useTranslation('patients');
+  const navigate = useNavigate();
+  const live = useQuery(liveVisitsQuery({ patientId }));
+  if (live.isPending) return null;
+  // Should the list fail, Start still gets there: starting resumes a live visit.
+  const latest = (live.data ?? []).reduce<LiveVisitRef | undefined>(
+    (found, visit) => (found && found.startedAt >= visit.startedAt ? found : visit),
+    undefined,
+  );
+  if (latest) {
+    return (
+      <Button
+        variant="primary"
+        className="font-semibold"
+        onClick={() => {
+          void navigate({ to: '/visits/$visitId', params: { visitId: latest.id } });
+        }}
+      >
+        {t('record.resumeVisit')}
+      </Button>
+    );
+  }
+  if (archived) return null;
+  return (
+    <StartVisitPopover patientId={patientId}>
+      <Button variant="primary" className="font-semibold">
+        {t('record.startVisit')}
+      </Button>
+    </StartVisitPopover>
+  );
+}
+
+/**
  * The patient record's header (workspace spec §Screen 3 header, design §Patient record): the
  * "All patients" back link, the avatar, name and metadata (number, age line, phone), the medical
  * alert chips and — for a minor — the guardian chip, then Edit patient — or, for an archived
- * record, the Archived badge and Restore (never for a merged one: the server refuses it) — and the
- * tabs. No Start visit or Add note until visits exist.
+ * record, the Archived badge and Restore (never for a merged one: the server refuses it) — and
+ * Start visit / Resume visit, and the tabs. No Add note yet.
  */
 export function RecordHeader({
   patient,
@@ -138,6 +178,7 @@ export function RecordHeader({
 }) {
   const { t } = useTranslation('patients');
   const canWrite = usePermission('patient:write');
+  const canVisit = usePermission('visit:write');
   const { editPatient } = usePatientNavigation();
   const archived = patient.archivedAt !== null;
   const merged = patient.mergedIntoId;
@@ -221,26 +262,28 @@ export function RecordHeader({
             {guardian && <GuardianChip guardian={guardian} country={tenant.country} />}
           </div>
         )}
-        {canWrite && merged === null && (
+        {(canWrite || canVisit) && merged === null && (
           <div ref={actionsRef} className="ms-auto flex gap-2 pt-1">
-            {archived ? (
-              <Button
-                busy={restoring.busy}
-                onClick={() => {
-                  restoring.restore([patient]);
-                }}
-              >
-                {t('record.restore')}
-              </Button>
-            ) : (
-              <Button
-                onClick={() => {
-                  editPatient(patient.id);
-                }}
-              >
-                {t('record.edit')}
-              </Button>
-            )}
+            {canWrite &&
+              (archived ? (
+                <Button
+                  busy={restoring.busy}
+                  onClick={() => {
+                    restoring.restore([patient]);
+                  }}
+                >
+                  {t('record.restore')}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => {
+                    editPatient(patient.id);
+                  }}
+                >
+                  {t('record.edit')}
+                </Button>
+              ))}
+            {canVisit && <VisitAction patientId={patient.id} archived={archived} />}
           </div>
         )}
       </div>

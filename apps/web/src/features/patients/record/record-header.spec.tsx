@@ -1,8 +1,10 @@
-import { ageOn, type Patient } from '@dcm/contracts';
+import { ageOn, type Patient, type Permission } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { BRANCH, liveRef } from '@/features/clinical/start-visit.test-utils';
 import { todayIn } from '@/lib/format';
 import {
+  ALL_PERMISSIONS,
   json,
   mockApi,
   patient,
@@ -10,6 +12,7 @@ import {
   problem,
   renderRecord,
   sent,
+  sessionWith,
 } from '../patients.test-utils';
 
 const RANA = patient(1, 'Rana Haddad', {
@@ -260,5 +263,82 @@ describe('RecordHeader', () => {
       expect(router.state.location.pathname).toBe('/patients');
     });
     expect(await screen.findByRole('heading', { name: 'Patients' })).toBeTruthy();
+  });
+
+  describe('Start visit / Resume visit', () => {
+    const DENTIST: Permission[] = [...ALL_PERMISSIONS, 'visit:read', 'visit:write'];
+    const FRONT_DESK: Permission[] = [...ALL_PERMISSIONS, 'visit:read'];
+    const liveOf = (p: Patient) => `/visits/live?patientId=${p.id}`;
+    const liveCalls = (fetchMock: ReturnType<typeof mockApi>) =>
+      fetchMock.mock.calls.filter(([url]) => url.startsWith('/api/v1/visits/live'));
+
+    it('resumes the most recently started live visit (a merge can leave two, W1)', async () => {
+      const older = liveRef(60, RANA.fullName, { startedAt: '2026-09-04T08:00:00.000Z' });
+      const newer = liveRef(61, RANA.fullName, { startedAt: '2026-09-04T09:00:00.000Z' });
+      mockApi({
+        patients: [RANA],
+        get: (path) => (path === liveOf(RANA) ? json([older, newer]) : undefined),
+      });
+      const { router } = renderRecord({ url: recordOf(RANA), permissions: DENTIST });
+      const banner = await header();
+      fireEvent.click(await within(banner).findByRole('button', { name: 'Resume visit' }));
+      await screen.findByText(`Workspace ${newer.id}`);
+      expect(router.state.location.pathname).toBe(`/visits/${newer.id}`);
+    });
+
+    it('opens the start popover when the patient has no live visit', async () => {
+      mockApi({
+        patients: [RANA],
+        get: (path) => (path === liveOf(RANA) ? json([]) : undefined),
+      });
+      renderRecord({
+        url: recordOf(RANA),
+        session: { ...sessionWith(DENTIST), branch: BRANCH },
+      });
+      const banner = await header();
+      const start = await within(banner).findByRole('button', { name: 'Start visit' });
+      expect(within(banner).queryByRole('button', { name: 'Resume visit' })).toBeNull();
+      fireEvent.click(start);
+      expect(await screen.findByRole('dialog', { name: 'Start visit' })).toBeTruthy();
+    });
+
+    it('offers Resume but not Start on an archived record', async () => {
+      const archived: Patient = { ...RANA, archivedAt: '2026-09-01T10:00:00.000Z' };
+      mockApi({
+        patients: [archived],
+        get: (path) => (path === liveOf(RANA) ? json([liveRef(60, RANA.fullName)]) : undefined),
+      });
+      renderRecord({ url: recordOf(archived), permissions: DENTIST });
+      const banner = await header();
+      expect(await within(banner).findByRole('button', { name: 'Resume visit' })).toBeTruthy();
+      expect(within(banner).getByRole('button', { name: 'Restore' })).toBeTruthy();
+
+      cleanup();
+      const fetchMock = mockApi({
+        patients: [archived],
+        get: (path) => (path === liveOf(RANA) ? json([]) : undefined),
+      });
+      renderRecord({ url: recordOf(archived), permissions: DENTIST });
+      const again = await header();
+      await within(again).findByRole('button', { name: 'Restore' });
+      await waitFor(() => {
+        expect(liveCalls(fetchMock)).toHaveLength(1);
+      });
+      expect(within(again).queryByRole('button', { name: 'Start visit' })).toBeNull();
+      expect(within(again).queryByRole('button', { name: 'Resume visit' })).toBeNull();
+    });
+
+    it('shows neither to the front desk (W18)', async () => {
+      const fetchMock = mockApi({
+        patients: [RANA],
+        get: (path) => (path === liveOf(RANA) ? json([liveRef(60, RANA.fullName)]) : undefined),
+      });
+      renderRecord({ url: recordOf(RANA), permissions: FRONT_DESK });
+      const banner = await header();
+      await within(banner).findByRole('button', { name: 'Edit patient' });
+      expect(within(banner).queryByRole('button', { name: 'Start visit' })).toBeNull();
+      expect(within(banner).queryByRole('button', { name: 'Resume visit' })).toBeNull();
+      expect(liveCalls(fetchMock)).toHaveLength(0);
+    });
   });
 });

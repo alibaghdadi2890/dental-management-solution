@@ -355,6 +355,8 @@
     "via": "via {{name}} · {{relationship}}"
   },
   "record": {
+    "startVisit": "Start visit",
+    "resumeVisit": "Resume visit",
     "back": "All patients",
     "ageLine": "{{age}} · {{dob}}",
     "ageUnknown": "Age not recorded",

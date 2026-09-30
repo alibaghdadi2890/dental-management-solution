@@ -3,6 +3,7 @@ import { useMatches } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { SearchIcon } from '@/components/ui/search-icon';
+import { LiveVisitPill } from '@/features/clinical/live-visit-pill';
 import { usePatientNavigation } from '@/features/patients/patient-navigation';
 import { patientActions } from './nav-items';
 
@@ -40,6 +41,7 @@ export function AppHeader({
           </>
         )}
       </nav>
+      {session?.tenant && <LiveVisitPill />}
       {(actions.find || actions.create) && (
         <div className="ms-auto flex min-w-0 items-center gap-2">
           {actions.find && (

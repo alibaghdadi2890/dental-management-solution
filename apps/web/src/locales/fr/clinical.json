@@ -133,5 +133,25 @@
     "setDone": "Denture définie : {{stage}}",
     "backToAutoDone": "Denture de nouveau automatique",
     "failed": "Impossible de modifier la denture : {{reason}}"
+  },
+  "startVisit": {
+    "title": "Démarrer une visite",
+    "dentist": "Dentiste",
+    "room": "Salle",
+    "choose": "Choisir…",
+    "submit": "Démarrer la visite",
+    "loading": "Chargement…",
+    "loadFailed": "Impossible de charger les dentistes et les salles. Fermez et réessayez.",
+    "noBranch": "Une visite démarre dans un site, et aucun n'est sélectionné. Choisissez-en un dans la barre latérale, ou demandez au responsable de la clinique de vous y affecter.",
+    "noDentist": "Aucun dentiste ne travaille encore à {{branch}} : impossible d'y démarrer une visite.",
+    "errors": {
+      "dentistRequired": "Choisissez un dentiste",
+      "roomRequired": "Choisissez une salle",
+      "roomBusy": "Une autre visite en cours occupe cette salle",
+      "roomInvalid": "Cette salle n'est plus disponible",
+      "dentistInvalid": "Ce dentiste ne travaille plus dans ce site",
+      "archived": "Ce patient est archivé. Restaurez le dossier pour démarrer une visite.",
+      "failed": "Impossible de démarrer la visite : {{reason}}"
+    }
   }
 }

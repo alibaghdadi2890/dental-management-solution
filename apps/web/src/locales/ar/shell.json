@@ -45,5 +45,17 @@
     "body": "لا يوجد نشاط منذ {{count}} دقيقة. تُخفى سجلات المرضى عند انتهاء الجلسة.",
     "signOut": "تسجيل الخروج الآن",
     "stay": "البقاء متصلًا"
+  },
+  "livePill": {
+    "inProgress": "زيارة جارية · {{name}}",
+    "paused": "زيارة متوقفة مؤقتًا · {{name}}",
+    "several_zero": "لا زيارات جارية",
+    "several_one": "زيارة جارية واحدة",
+    "several_two": "زيارتان جاريتان",
+    "several_few": "{{count, number}} زيارات جارية",
+    "several_many": "{{count, number}} زيارة جارية",
+    "several_other": "{{count, number}} زيارة جارية",
+    "running": "جارية",
+    "pausedShort": "متوقفة مؤقتًا"
   }
 }

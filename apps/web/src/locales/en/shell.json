@@ -45,5 +45,13 @@
     "body": "No activity for {{count}} minutes. Patient records are hidden when the session ends.",
     "signOut": "Sign out now",
     "stay": "Stay signed in"
+  },
+  "livePill": {
+    "inProgress": "Visit in progress · {{name}}",
+    "paused": "Visit paused · {{name}}",
+    "several_one": "{{count, number}} visit in progress",
+    "several_other": "{{count, number}} visits in progress",
+    "running": "In progress",
+    "pausedShort": "Paused"
   }
 }

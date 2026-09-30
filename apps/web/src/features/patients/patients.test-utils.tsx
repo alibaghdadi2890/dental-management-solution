@@ -17,6 +17,7 @@ import {
   Outlet,
   RouterProvider,
   useNavigate,
+  useParams,
   useSearch,
 } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
@@ -365,22 +366,25 @@ export function renderPanels({
 /**
  * Renders the patient record at `url` (after `before`, earlier history entries) with the real
  * `/patients` list beside it, both wired as their routes are (`PatientRecordScreen`,
- * `PatientsScreen`), plus a stand-in `/visits`. Returns
+ * `PatientsScreen`), plus stand-ins for `/visits` and a visit's workspace. Returns
  * the router and the query client.
  */
 export function renderRecord({
   url,
   before = [],
   permissions = ALL_PERMISSIONS,
+  session = sessionWith(permissions),
 }: {
   url: string;
   before?: string[];
   permissions?: Permission[];
+  /** The whole session, when the permissions alone aren't enough (a branch). */
+  session?: Session;
 }) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
-  client.setQueryData(sessionQueryOptions().queryKey, sessionWith(permissions));
+  client.setQueryData(sessionQueryOptions().queryKey, session);
   const rootRoute = createRootRoute({ component: Outlet });
   function ListRoute() {
     const search = parsePatientsSearch(useSearch({ strict: false }));
@@ -405,6 +409,15 @@ export function renderRecord({
     const { tab, panel } = recordRoute.useSearch();
     return <PatientRecordScreen patientId={patientId} tab={tab} panel={panel} />;
   }
+  const workspaceRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/visits/$visitId',
+    component: WorkspaceRoute,
+  });
+  function WorkspaceRoute() {
+    const { visitId } = useParams({ strict: false });
+    return <p>{`Workspace ${visitId ?? ''}`}</p>;
+  }
   const routeTree = rootRoute.addChildren([
     createRoute({
       getParentRoute: () => rootRoute,
@@ -418,6 +431,7 @@ export function renderRecord({
       path: '/visits',
       component: () => <p>{'Visits screen'}</p>,
     }),
+    workspaceRoute,
   ]);
   const router = createRouter({
     routeTree,

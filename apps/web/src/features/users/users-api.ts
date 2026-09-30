@@ -11,6 +11,8 @@ import { apiFetch } from '@/lib/api';
  */
 export const userKeys = {
   practitioners: (tenantId: string | null) => ['users', tenantId, 'practitioners'] as const,
+  branchPractitioners: (tenantId: string | null, branchId: string) =>
+    [...userKeys.practitioners(tenantId), branchId] as const,
   staff: (tenantId: string | null) => ['users', tenantId, 'staff'] as const,
 };
 
@@ -23,6 +25,20 @@ export function practitionersQuery(tenantId?: string) {
   return queryOptions({
     queryKey: userKeys.practitioners(tenantId ?? actingTenantId()),
     queryFn: () => apiFetch('/users/practitioners', z.array(practitionerSchema), scope(tenantId)),
+  });
+}
+
+/** `GET /users/practitioners?branchId=`: the active dentists assigned to one branch (the start
+ * visit popover's Dentist select, spec V3). */
+export function branchPractitionersQuery(branchId: string, tenantId?: string) {
+  return queryOptions({
+    queryKey: userKeys.branchPractitioners(tenantId ?? actingTenantId(), branchId),
+    queryFn: () =>
+      apiFetch(
+        `/users/practitioners?${new URLSearchParams({ branchId }).toString()}`,
+        z.array(practitionerSchema),
+        scope(tenantId),
+      ),
   });
 }
 

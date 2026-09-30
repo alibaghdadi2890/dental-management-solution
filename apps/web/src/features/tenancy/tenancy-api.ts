@@ -1,6 +1,33 @@
-import type { TenantSettingsPatch } from '@dcm/contracts';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { roomSchema, type TenantSettingsPatch } from '@dcm/contracts';
+import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
+import { z } from 'zod';
 import { updateTenantSettings } from '@/features/platform/platform-api';
+import { actingTenantId } from '@/features/platform/acting-tenant';
+import { apiFetch } from '@/lib/api';
+
+/** Keys scoped under the acting tenant, like `userKeys`, so a platform admin switching clinics
+ * never sees another clinic's rooms. */
+export const tenancyKeys = {
+  rooms: (tenantId: string | null, branchId: string) =>
+    ['tenancy', tenantId, 'rooms', branchId] as const,
+};
+
+/** Omitted entirely when the caller relies on the ambient acting tenant (`apiFetch`'s default). */
+const scope = (tenantId?: string) => (tenantId === undefined ? {} : { tenantId });
+
+/** `GET /rooms?branchId=`: one branch's rooms, inactive ones included (the start visit popover's
+ * Room select keeps the active ones, W7). */
+export function branchRoomsQuery(branchId: string, tenantId?: string) {
+  return queryOptions({
+    queryKey: tenancyKeys.rooms(tenantId ?? actingTenantId(), branchId),
+    queryFn: () =>
+      apiFetch(
+        `/rooms?${new URLSearchParams({ branchId }).toString()}`,
+        z.array(roomSchema),
+        scope(tenantId),
+      ),
+  });
+}
 
 /**
  * The signed-in staff member's own clinic settings (`PATCH /tenant`, `tenant:write`). Reuses

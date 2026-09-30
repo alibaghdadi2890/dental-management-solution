@@ -7,6 +7,7 @@ import {
   createRouter,
   RouterProvider,
   useNavigate,
+  useParams,
   useSearch,
 } from '@tanstack/react-router';
 import { render } from '@testing-library/react';
@@ -19,7 +20,7 @@ import { PatientsScreen } from '@/features/patients/patients-screen';
 import { AppShell } from './app-shell';
 
 /** Test-only: the real `AppShell` on a memory router with the real `/patients` screen and
- * stand-ins for the patient record and `/visits`, and `session` already loaded (as the `_app` guard would have it). */
+ * stand-ins for the patient record, `/visits` and a visit's workspace, and `session` already loaded (as the `_app` guard would have it). */
 export function renderShell({ url, session }: { url: string; session: Session }) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
@@ -55,8 +56,17 @@ export function renderShell({ url, session }: { url: string; session: Session })
     path: '/visits',
     component: () => <p>{'Visits screen'}</p>,
   });
+  const workspaceRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/visits/$visitId',
+    component: WorkspaceRoute,
+  });
+  function WorkspaceRoute() {
+    const { visitId } = useParams({ strict: false });
+    return <p>{`Workspace ${visitId ?? ''}`}</p>;
+  }
   const router = createRouter({
-    routeTree: rootRoute.addChildren([patientsRoute, recordRoute, visitsRoute]),
+    routeTree: rootRoute.addChildren([patientsRoute, recordRoute, visitsRoute, workspaceRoute]),
     history: createMemoryHistory({ initialEntries: [url] }),
   });
   render(

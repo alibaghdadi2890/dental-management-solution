@@ -395,6 +395,8 @@
     "via": "عبر {{name}} · {{relationship}}"
   },
   "record": {
+    "startVisit": "بدء زيارة",
+    "resumeVisit": "استئناف الزيارة",
     "back": "كل المرضى",
     "ageLine": "{{age}} · {{dob}}",
     "ageUnknown": "العمر غير مسجّل",
