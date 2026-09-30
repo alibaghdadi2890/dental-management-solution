@@ -25,6 +25,22 @@ export class VisitNotLiveError extends IllegalVisitTransitionError {
   override readonly code = 'visit.not_live';
 }
 
+/**
+ * Defensive guard in `lockPatientThenVisit` (ADR-0023, W24): after locking the visit's patient,
+ * the visit's own row locked a different patient than that. It should be unreachable — a merge
+ * re-points a visit inside the same transaction that locks the visit's old patient `FOR UPDATE`
+ * (E3, `feat(clinical): re-point visits and records in the merge transaction`), so either our
+ * `FOR SHARE` lock blocks that merge until we are done, or the merge already committed and
+ * `lockForDependentWrite` throws `PatientMergedError` first — never both locks succeeding on a
+ * stale pairing. Kept so a caller that somehow hits it gets a clean 409 to retry instead of the
+ * service recursing while it still holds the visit's `FOR UPDATE` lock, which would lock a new
+ * patient after the visit — the reverse of the ADR-0023 order.
+ */
+export class VisitMovedError extends DomainError {
+  readonly code = 'visit.moved';
+  readonly kind = 'conflict';
+}
+
 /** Another live visit already holds the room (`visits_room_live_unique`, spec W1). */
 export class RoomBusyError extends DomainError {
   readonly code = 'visit.room_busy';

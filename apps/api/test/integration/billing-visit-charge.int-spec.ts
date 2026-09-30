@@ -15,8 +15,11 @@ import type {
   VisitFinancialSummary,
   VisitResult,
 } from '@dcm/contracts';
+import { getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { BILLING_QUEUE } from '../../src/modules/billing/application/merge-ledger.worker';
 import { LedgerEntriesRepository } from '../../src/modules/billing/persistence/ledger-entries.repository';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
@@ -176,6 +179,33 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
         [visitId],
       )
     ).rows[0];
+
+  const merge = async (keepId: string, dropId: string) => {
+    const response = await owner
+      .post('/api/v1/patients/merge')
+      .send({ keepId, dropId, reason: 'Same person' });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+  };
+
+  /** `ledger_entry.create` audit rows for `visitId`'s charge, wherever the entry now lives. */
+  const ledgerCreateAuditFor = async (visitId: string) =>
+    (
+      await database.ownerPool.query<{ id: string }>(
+        `select id from audit_log
+         where action = 'ledger_entry.create' and after ->> 'visitId' = $1`,
+        [visitId],
+      )
+    ).rows;
+
+  /** Audit rows of a dispatched domain event of `name` carrying `visitId` in its payload. */
+  const eventAuditFor = async (name: string, visitId: string) =>
+    (
+      await database.ownerPool.query<{ id: string }>(
+        `select id from audit_log
+         where action = $1 and resource_type = 'event' and after ->> 'visitId' = $2`,
+        [name, visitId],
+      )
+    ).rows;
 
   beforeAll(async () => {
     database = connectTestDatabase();
@@ -381,12 +411,18 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
 
     const failed = await complete(dentist.agent, visit.id);
     expect(failed.status).toBe(500);
+    expect(problem(failed.body).code).toBe('internal_error');
     expect(await statusOf(visit.id)).toEqual({ status: 'in_progress', completed_at: null });
     expect(await chargesOf(visit.id)).toEqual([]);
     const actions = (await auditOf(`resourceType=visit&resourceId=${visit.id}`)).map(
       (entry) => entry.action,
     );
     expect(actions).not.toContain('visit.complete');
+    // The whole completion transaction rolled back: no half-written ledger audit row for this
+    // visit (the insert that would have written it never even ran), and `VisitCompleted` was
+    // never dispatched (it publishes inside that same transaction, before commit).
+    expect(await ledgerCreateAuditFor(visit.id)).toEqual([]);
+    expect(await eventAuditFor('VisitCompleted', visit.id)).toEqual([]);
 
     await completed(dentist.agent, visit.id);
     expect(await chargesOf(visit.id)).toHaveLength(1);
@@ -420,6 +456,115 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
       expect.objectContaining({ patient_id: kept.id, amount: '117.00' }),
     ]);
     expect((await summary(visit.id)).totalOutstanding).toBe('117.00');
+  });
+
+  it('sums both patients while a charge posted before the merge still awaits the merge-ledger job', async () => {
+    // The reverse order from the test above: the visit completes (and charges) before the
+    // merge, so `clinical`'s in-transaction re-point moves the *visit* to the kept patient
+    // immediately, but the *charge* stays on the dropped patient until the async
+    // `merge-ledger` job re-points the ledger entry (design Q9). Pausing the queue holds that
+    // job so the test can read the summary inside the window.
+    const kept = await createPatient('Charge Window Kept');
+    const dropped = await patientOwing('Charge Window Dropped', '40');
+    const visit = await chargeableVisit(dropped);
+    await completed(dentist.agent, visit.id);
+    expect(await chargesOf(visit.id)).toEqual([
+      expect.objectContaining({ patient_id: dropped.id, amount: '117.00' }),
+    ]);
+
+    const queue = testApp.app.get<Queue>(getQueueToken(BILLING_QUEUE));
+    await queue.pause();
+    try {
+      await merge(kept.id, dropped.id);
+      // The visit itself was re-pointed to the kept patient in the merge transaction (E3); its
+      // charge is still on the dropped patient because the job hasn't run.
+      expect(await chargesOf(visit.id)).toEqual([
+        expect.objectContaining({ patient_id: dropped.id, amount: '117.00' }),
+      ]);
+      expect(await summary(visit.id)).toEqual({
+        visitId: visit.id,
+        currency: 'USD',
+        visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
+        previous: '40.00',
+        totalOutstanding: '157.00',
+      });
+    } finally {
+      await queue.resume();
+    }
+
+    // Once the job has moved the charge onto the kept patient, the figures are unchanged.
+    await expect
+      .poll(async () => await chargesOf(visit.id))
+      .toEqual([expect.objectContaining({ patient_id: kept.id, amount: '117.00' })]);
+    expect(await summary(visit.id)).toEqual({
+      visitId: visit.id,
+      currency: 'USD',
+      visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
+      previous: '40.00',
+      totalOutstanding: '157.00',
+    });
+  });
+
+  it('charges a line-level discount and drops a removed service from the charge', async () => {
+    const patient = await createPatient('Charge Line Discount');
+    const visit = await startVisit(patient);
+    const fill = await addService(dentist.agent, visit.id, {
+      procedureId: service.fill.id,
+      toothCode: '16',
+    });
+    const crown = await addService(dentist.agent, visit.id, {
+      procedureId: service.crown.id,
+      toothCode: '21',
+    });
+    const discounted = await dentist.agent
+      .patch(`/api/v1/visits/${visit.id}/services/${fill.record.id}`)
+      .send({ discountAmount: '10' });
+    expect(discounted.status, JSON.stringify(discounted.body)).toBe(200);
+    const removed = await dentist.agent.delete(
+      `/api/v1/visits/${visit.id}/services/${crown.record.id}`,
+    );
+    expect(removed.status, JSON.stringify(removed.body)).toBe(200);
+
+    const done = await completed(dentist.agent, visit.id);
+    expect(done.money).toEqual({
+      subtotal: '40.00',
+      discount: '0.00',
+      total: '40.00',
+      capped: false,
+    });
+
+    const [charge, ...others] = await chargesOf(visit.id);
+    expect(others).toEqual([]);
+    if (!charge) throw new Error('no charge');
+    expect(charge.amount).toBe('40.00');
+    // The fill's line is base (50) − its own line discount (10); the removed crown has no line.
+    expect(await linesOf(charge.id)).toEqual([
+      {
+        position: 1,
+        code: 'ZFILL',
+        name: 'Test filling',
+        tooth_code: '16',
+        surfaces: [],
+        amount: '40.00',
+        currency: 'USD',
+      },
+    ]);
+  });
+
+  it('keeps the charge on the day the visit started, even if it crosses local midnight before completing', async () => {
+    const patient = await createPatient('Charge Midnight');
+    // Beirut is UTC+3: 20:45 UTC on 06-09 is still 06-09 there; 21:15 UTC is already 06-10.
+    testApp.clock.set(new Date('2026-06-09T20:45:00Z'));
+    const visit = await startVisit(patient);
+    expect(visit.localDate).toBe('2026-06-09');
+    await addService(dentist.agent, visit.id, { procedureId: service.fill.id, toothCode: '16' });
+    testApp.clock.set(new Date('2026-06-09T21:15:00Z'));
+
+    const done = await completed(dentist.agent, visit.id);
+    expect(done.localDate).toBe('2026-06-09');
+
+    const [charge] = await chargesOf(visit.id);
+    expect(charge).toMatchObject({ amount: '50.00', effective_date: '2026-06-09' });
   });
 
   it('times the visit without its pauses: 61 s of work is 2 minutes', async () => {

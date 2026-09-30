@@ -30,6 +30,7 @@ import {
   DentistInvalidError,
   RoomInvalidError,
   RoomRequiredError,
+  VisitMovedError,
   VisitNotEmptyError,
   VisitNotFoundError,
 } from '../domain/visit-errors';
@@ -510,8 +511,8 @@ export class VisitsService {
    * The ADR-0023 lock order for a mutation that involves the patient: the visit's patient
    * `FOR SHARE` (`lockForDependentWrite`, so a merge waits), then the visit `FOR UPDATE` and
    * live (`lockLive`). A merge that committed between the unlocked read and the patient lock has
-   * re-pointed the visit (W24): the patient read first is merged away, or no longer the visit's,
-   * and the visit is read again, once.
+   * re-pointed the visit (W24): the patient read first is merged away, and the visit is read
+   * again, once.
    */
   private async lockPatientThenVisit(id: string, retried = false): Promise<StoredVisit> {
     const snapshot = await this.visits.findById(id);
@@ -523,9 +524,16 @@ export class VisitsService {
       return this.lockPatientThenVisit(id, true);
     }
     const visit = await this.visits.lockLive(id);
-    if (visit.patientId === snapshot.patientId) return visit;
-    if (retried) throw new Error(`visit ${id} changed patient twice while it was being locked`);
-    return this.lockPatientThenVisit(id, true);
+    // Defensive only: should be unreachable since E3 re-points a visit inside the same
+    // transaction that locks its old patient `FOR UPDATE`, which our `FOR SHARE` lock above
+    // either blocks until we commit, or — if that merge already committed — makes
+    // `lockForDependentWrite` throw `PatientMergedError` first (the branch above). If this still
+    // fires, retry by throwing instead of recursing: recursing here would lock a new patient
+    // while still holding this visit's `FOR UPDATE` lock, inverting the ADR-0023 lock order.
+    if (visit.patientId !== snapshot.patientId) {
+      throw new VisitMovedError('The visit moved to another patient; retry');
+    }
+    return visit;
   }
 
   /**

@@ -162,7 +162,15 @@ export class BillingService {
    * `visit_charge` (0 when none: a zero total, W20), nothing paid yet; _Previous_ = the balance
    * less the charge; the total = the balance. Needs `payment:read`, and `visit:read` for
    * `VisitsService.visitMoney`: unknown or discarded → 404 `visit.not_found`; a live visit →
-   * 409 `visit.not_live` (it has no charge yet). Balances in other currencies are left out.
+   * 409 `visit.not_live` (it has no charge yet). Balances in other currencies are left out —
+   * known gap, `docs/modules/billing.md`.
+   *
+   * The charge's own `patientId` can differ from `visit.patientId` for a while: a merge
+   * re-points the visit in its own transaction, but a charge posted before that merge still sits
+   * on the dropped patient until the async `merge-ledger` job moves it (design Q9, ADR-0024's
+   * "Consequences"). While that window is open the balance is summed over both patient ids (same
+   * currency) so _this visit_ / _previous_ / the total stay consistent; once the job has run,
+   * `charge.patientId === visit.patientId` and this is the same single-patient sum as before.
    */
   async visitSummary(visitId: string): Promise<VisitFinancialSummary> {
     this.context.requirePermission('payment:read');
@@ -172,11 +180,15 @@ export class BillingService {
         throw new VisitNotLiveError('The visit is still live; its summary follows completion');
       }
       const charge = await this.entries.findVisitCharge(visitId);
-      const [sum] = (await this.entries.sumsByPatient([visit.patientId])).filter(
-        ({ currency }) => currency === visit.currency,
-      );
+      const patientIds =
+        charge && charge.patientId !== visit.patientId
+          ? [visit.patientId, charge.patientId]
+          : [visit.patientId];
+      const sums = await this.entries.sumsByPatient(patientIds);
       const chargeCents = charge ? toCents(charge.amount) : 0n;
-      const balanceCents = sum ? toCents(sum.amount) : 0n;
+      const balanceCents = sums
+        .filter(({ currency }) => currency === visit.currency)
+        .reduce((total, sum) => total + toCents(sum.amount), 0n);
       return {
         visitId,
         currency: visit.currency,

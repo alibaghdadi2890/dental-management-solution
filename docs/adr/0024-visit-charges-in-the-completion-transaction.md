@@ -61,13 +61,21 @@ no entry is written, and the summary shows 0 for _This visit_.
 **The write is internal to `billing` and not gated by `payment:write`.** The trigger is
 `complete`, which requires `visit:write`, and the assistant who completes a visit must not be
 refused. `billing` does not export the write: the handler posts through its internal
-`LedgerWriter`, the one write path every entry uses.
+`LedgerWriter`, the one write path every entry uses. It is, however, gated on `visit:read` and
+`patient:read`: `VisitChargeSubscriber` calls `VisitsService.chargeFacts` and
+`PatientsService.lockForDependentWrite` inside `complete`'s own transaction, and each re-checks
+its permission (CLAUDE.md §6). A completer without either would fail the whole completion, not
+just the charge. Every system role holding `visit:write` also holds both
+(`docs/modules/roles.md`), so this is a standing requirement on any future custom role, not
+something the four seeded roles can hit.
 
 **The summary reads the ledger alone.** `GET /billing/visits/:visitId/summary` (`payment:read`,
 and `visit:read` through `VisitsService.visitMoney`): _This visit_ = the visit's charge (0 if
 none), _Previous_ = the patient's balance in the visit currency less the charge, _Total
 outstanding_ = the balance. The charge is already there when `complete` returns, so the summary
-never waits for anything. A live visit → 409 `visit.not_live`.
+never waits for anything. A live visit → 409 `visit.not_live`. It reports the visit's currency
+only: a balance the patient carries in another currency (e.g. after a tenant currency change,
+ADR-0015) is left out of every figure, not converted — a known gap, `docs/modules/billing.md`.
 
 **The `billing` → `clinical` edge arrives in 4a (W21),** not in feature 5 as CLAUDE.md §4
 planned. `billing` reads `VisitsService.chargeFacts` and `visitMoney` and consumes
@@ -109,6 +117,10 @@ use of new value"). The check that ties `visit_id` to the kind therefore compare
   billed_ (W8).
 - A visit completed after a merge charges the kept patient: the merge re-points visits in its own
   transaction and completion locks the patient first (W24, ADR-0023). Ledger entries written
-  before the merge still move through the `merge-ledger` job (ADR-0017), lines with their entry;
-  until it has run, the summary of a visit completed before the merge reads the kept patient's
-  balance without that charge.
+  before the merge — including a charge posted for a visit that only later got merged onto another
+  patient — still move through the `merge-ledger` job (ADR-0017), lines with their entry, so there
+  is a window between the merge commit and that job where the visit already points at the kept
+  patient but its charge still sits on the dropped one. `visitSummary` covers it: when the charge's
+  own patient differs from the visit's, it sums both patients' balances (same currency) instead of
+  just the visit's, so _this visit_ / _previous_ / the total stay correct throughout the window and
+  collapse back to the ordinary single-patient sum once the job has moved the entry.

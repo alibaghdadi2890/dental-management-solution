@@ -272,6 +272,12 @@ pipe a `Readable`: stream callbacks run outside the request's async context, whe
 - No `Idempotency-Key` on the money mutations yet (CLAUDE.md §12: mutations clients may retry,
   such as payments, accept one). A retried `POST /billing/opening-balances` or adjustment
   records twice. This is platform infrastructure, to be added with payments (feature 5).
+- `visitSummary` and `balanceOf`/`balancesFor` only ever report the visit's (or the tenant's)
+  current currency. A patient who also carries a balance in a currency the tenant used to bill in
+  (before a tenant currency change, ADR-0015) has that balance left out of every figure here —
+  `previous`, `totalOutstanding`, `balances` all silently omit it rather than converting it. The
+  Patients list and Record show it separately (each non-zero currency, ADR-0018), so it is visible
+  elsewhere; it just never rolls into a single number.
 
 ## Events
 
@@ -311,3 +317,10 @@ None of them imports `billing` (ADR-0017, ADR-0024).
 - `payment:read`: owner, dentist, assistant, front desk.
 - `payment:write`: owner, dentist, front desk. The assistant does not have it.
 - A platform admin acting in the tenant holds both.
+- Completing a visit needs no `payment:*` permission (ADR-0024), but it does need `visit:read` and
+  `patient:read` on top of `visit:write`: `VisitChargeSubscriber` calls `VisitsService.chargeFacts`
+  (`visit:read`) and `PatientsService.lockForDependentWrite` (`patient:read`) inside `complete`'s
+  own transaction, so a completer missing either would fail the completion partway through, not
+  just the charge. Every system role that holds `visit:write` (owner, dentist, assistant) also
+  holds both (`docs/modules/roles.md`'s matrix), so this never surfaces in practice; it matters
+  only if a future custom role grants `visit:write` without them.
