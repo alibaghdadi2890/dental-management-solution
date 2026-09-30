@@ -10,6 +10,7 @@ import type {
   ToothHistory,
   TreatmentPlan,
   Visit,
+  VisitFinancialSummary,
   VisitService,
 } from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -36,6 +37,8 @@ import {
   profileId,
   sessionWith,
 } from '@/features/patients/patients.test-utils';
+import { PatientRecordScreen } from '@/features/patients/record/patient-record-page';
+import { parseRecordSearch } from '@/features/patients/record/record-search';
 import { VisitWorkspaceScreen } from './visit-workspace-page';
 import { parseWorkspaceSearch } from './workspace-search';
 
@@ -256,6 +259,8 @@ export interface WorkspaceApi {
   diagnoses?: DiagnosisItem[];
   /** `GET …/teeth/:code/history` answers; an empty history for any other tooth. */
   toothHistories?: ToothHistory[];
+  /** `GET /billing/visits/:id/summary` (the post-visit summary); 404 without one. */
+  visitSummary?: VisitFinancialSummary;
   /** Overrides a mutation's answer; `undefined` falls back to the default. */
   mutation?: (method: string, path: string, body: unknown) => Answer;
 }
@@ -273,6 +278,7 @@ export function mockWorkspace({
   services = [],
   diagnoses = [],
   toothHistories = [],
+  visitSummary,
   mutation,
 }: WorkspaceApi = {}): FetchMock {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -315,6 +321,9 @@ export function mockWorkspace({
         json(history ?? { toothCode, diagnoses: [], plans: [], services: [] }),
       );
     }
+    if (visitSummary && path === `/billing/visits/${visitSummary.visitId}/summary`) {
+      return Promise.resolve(json(visitSummary));
+    }
     if (path === '/catalog/services') return Promise.resolve(json(services));
     if (path === '/catalog/diagnoses') return Promise.resolve(json(diagnoses));
     if (path === '/users/practitioners') {
@@ -347,11 +356,13 @@ export function sent(fetchMock: FetchMock, method: string, path: string): unknow
 }
 
 /** Renders `/visits/<id>` (plus `search`, e.g. `?tooth=16`) as the route does
- * (`VisitWorkspaceScreen`), plus a stand-in record. */
+ * (`VisitWorkspaceScreen`), plus a stand-in record — or, with `realRecord`, the record as its
+ * route renders it (`PatientRecordScreen`). */
 export function renderWorkspace({
   permissions = DENTIST_WRITE,
   search = '',
-}: { permissions?: Permission[]; search?: string } = {}) {
+  realRecord = false,
+}: { permissions?: Permission[]; search?: string; realRecord?: boolean } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
@@ -371,10 +382,13 @@ export function renderWorkspace({
   const recordRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/patients/$patientId',
+    validateSearch: (raw: Record<string, unknown>) => parseRecordSearch(raw),
     component: RecordRoute,
   });
   function RecordRoute() {
     const { patientId } = recordRoute.useParams();
+    const { tab, panel } = recordRoute.useSearch();
+    if (realRecord) return <PatientRecordScreen patientId={patientId} tab={tab} panel={panel} />;
     return (
       <p>
         {'Record '}

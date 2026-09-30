@@ -6,7 +6,7 @@ vi.mock('@/lib/api', () => ({
   apiFetch: (...args: unknown[]): Promise<unknown> => apiFetchMock(...args) as Promise<unknown>,
 }));
 
-const { balanceQuery, balancesQuery, billingKeys, createWithOpeningBalance } =
+const { balanceQuery, balancesQuery, billingKeys, createWithOpeningBalance, visitSummaryQuery } =
   await import('./billing-api');
 
 afterEach(() => {
@@ -19,6 +19,7 @@ describe('billingKeys', () => {
     expect(billingKeys.all('t1')).not.toEqual(billingKeys.all('t2'));
     expect(billingKeys.balances('t1', ['a'])).not.toEqual(billingKeys.balances('t2', ['a']));
     expect(billingKeys.balance('t1', 'a')).not.toEqual(billingKeys.balance('t2', 'a'));
+    expect(billingKeys.visitSummary('t1', 'v')).not.toEqual(billingKeys.visitSummary('t2', 'v'));
   });
 
   it('sorts ids so the same selection in a different order shares a cache entry', () => {
@@ -66,6 +67,17 @@ describe('balanceQuery', () => {
     apiFetchMock.mockResolvedValueOnce({ patientId: 'a', balances: [], charged: [] });
     await (balanceQuery('a').queryFn as () => Promise<unknown>)();
     expect(apiFetchMock).toHaveBeenCalledWith('/billing/patients/a/balance', expect.anything(), {});
+  });
+});
+
+describe('visitSummaryQuery', () => {
+  it("requests a completed visit's summary, keyed under the tenant", async () => {
+    const options = visitSummaryQuery('v', 'tenant-2');
+    expect(options.queryKey).toEqual(billingKeys.visitSummary('tenant-2', 'v'));
+    await (options.queryFn as () => Promise<unknown>)();
+    expect(apiFetchMock).toHaveBeenCalledWith('/billing/visits/v/summary', expect.anything(), {
+      tenantId: 'tenant-2',
+    });
   });
 });
 

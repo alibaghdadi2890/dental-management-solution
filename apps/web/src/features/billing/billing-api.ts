@@ -2,9 +2,10 @@ import {
   openingBalanceResultSchema,
   patientBalanceSchema,
   patientBalancesSchema,
+  visitFinancialSummarySchema,
   type CreateWithOpeningBalanceInput,
 } from '@dcm/contracts';
-import { queryOptions } from '@tanstack/react-query';
+import { queryOptions, useQuery } from '@tanstack/react-query';
 import { actingTenantId } from '@/features/platform/acting-tenant';
 import { apiFetch } from '@/lib/api';
 
@@ -23,6 +24,8 @@ export const billingKeys = {
     [...billingKeys.all(tenantId), 'balances', [...ids].sort()] as const,
   balance: (tenantId: string | null, id: string) =>
     [...billingKeys.all(tenantId), 'balance', id] as const,
+  visitSummary: (tenantId: string | null, visitId: string) =>
+    [...billingKeys.all(tenantId), 'visit-summary', visitId] as const,
 };
 
 /** Omitted entirely (rather than sent as `{}`) when `tenantId` is left to the caller's ambient
@@ -55,6 +58,21 @@ export function balanceQuery(id: string, tenantId?: string) {
     queryFn: () =>
       apiFetch(`/billing/patients/${id}/balance`, patientBalanceSchema, scope(tenantId)),
   });
+}
+
+/** `GET /billing/visits/:visitId/summary`: a completed visit's figures from the ledger (spec
+ * W2): this visit, the earlier visits and the total outstanding, in the visit's currency. */
+export function visitSummaryQuery(visitId: string, tenantId?: string) {
+  return queryOptions({
+    queryKey: billingKeys.visitSummary(tenantId ?? actingTenantId(), visitId),
+    queryFn: () =>
+      apiFetch(`/billing/visits/${visitId}/summary`, visitFinancialSummarySchema, scope(tenantId)),
+  });
+}
+
+/** The post-visit summary's figures (`visitSummaryQuery`) for the acting tenant. */
+export function useVisitSummary(visitId: string) {
+  return useQuery(visitSummaryQuery(visitId));
 }
 
 /** `POST /billing/opening-balances` (design Q1): one transaction, `PatientsService.create` then

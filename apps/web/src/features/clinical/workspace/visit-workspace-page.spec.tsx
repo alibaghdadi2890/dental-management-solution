@@ -1,6 +1,5 @@
-import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { json } from '@/features/patients/patients.test-utils';
 import {
   chart,
   FRONT_DESK,
@@ -44,22 +43,12 @@ describe('VisitWorkspacePage', () => {
     expect(screen.getByRole('contentinfo', { name: 'Visit money' })).toBeTruthy();
   });
 
-  it('Review & complete sends unsaved edits at once', async () => {
-    const fetchMock = mockWorkspace({
-      mutation: (method, path, body) =>
-        method === 'PATCH' && path === `/visits/${VISIT_ID}/notes`
-          ? json({ visit: visit(body as { notes: string }) })
-          : undefined,
-    });
+  it('Review & complete opens the visit summary over the workspace', async () => {
+    mockWorkspace();
     renderWorkspace();
     await chartCard();
-    fireEvent.change(screen.getByRole('textbox', { name: 'Clinical notes' }), {
-      target: { value: 'Sealed 16.' },
-    });
     fireEvent.click(screen.getByRole('button', { name: 'Review & complete' }));
-    // Well before the 700 ms debounce would have sent it.
-    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
-    expect(sent(fetchMock, 'PATCH', `/visits/${VISIT_ID}/notes`)).toEqual({ notes: 'Sealed 16.' });
+    expect(await screen.findByRole('dialog', { name: 'Complete visit' })).toBeTruthy();
   });
 
   it('selects a tooth on click, walks with the arrows and deselects with Esc', async () => {
@@ -265,6 +254,23 @@ describe('VisitWorkspacePage', () => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });
     expect(await screen.findByText(`Record ${RANA.id}`)).toBeTruthy();
+    // Not completed here: no post-visit summary.
+    expect(router.state.location.state.postVisit).toBeUndefined();
+  });
+
+  it('lands on the record with the post-visit summary when the open visit completes', async () => {
+    let current = visit();
+    mockWorkspace({ visit: () => current });
+    const { router, client } = renderWorkspace();
+    await chartCard();
+
+    // Completed elsewhere, picked up by the refetch.
+    current = visit({ status: 'completed', completedAt: current.serverNow, durationMinutes: 13 });
+    await client.refetchQueries({ queryKey: ['visits'] });
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
+    });
+    expect(router.state.location.state.postVisit).toBe(VISIT_ID);
   });
 
   it('leaves for the patient record when the open visit turns 404 (discarded elsewhere)', async () => {
@@ -278,6 +284,7 @@ describe('VisitWorkspacePage', () => {
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });
+    expect(router.state.location.state.postVisit).toBeUndefined();
   });
 
   it('says the visit was not found', async () => {

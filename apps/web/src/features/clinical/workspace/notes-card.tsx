@@ -9,8 +9,8 @@ import { useVisitMutations } from '../visit-mutations';
 
 const NOTES_MAX = visitNotesSchema.shape.notes.maxLength ?? undefined;
 
-/** The save group key of the visit's clinical notes (V6). */
-const NOTES_KEY = 'notes';
+/** The save group key of the visit's clinical notes (V6); the summary dialog reads it too. */
+export const NOTES_KEY = 'notes';
 
 /**
  * The Clinical notes card (spec §Visit Workspace → Body 3): "Clinical notes" · "Belongs to this

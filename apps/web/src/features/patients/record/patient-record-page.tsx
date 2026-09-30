@@ -1,6 +1,6 @@
 import type { Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardSkeleton } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { EmptyState, ErrorState } from '@/components/ui/list';
 import { TabPanel } from '@/components/ui/tabs';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
+import { PostVisitSummaryDialog } from '@/features/clinical/dialogs/post-visit-summary-dialog';
 import { ApiError } from '@/lib/api';
 import { useContactDrafts } from '../contact-drafts';
 import { patientQuery } from '../patients-api';
@@ -36,26 +37,46 @@ interface RecordNavigation {
  * The `/patients/$patientId` route's wiring, shared with the tests so they drive exactly what
  * ships: a fresh record per patient id, and tab and panel changes that replace the history entry
  * — the record is one entry however many tabs or panels were opened, so Back (and "All patients")
- * leaves it. Switching tabs closes a panel.
+ * leaves it. Switching tabs closes a panel. A visit just completed in the workspace
+ * (`HistoryState.postVisit`, W16) opens its post-visit summary over the record, for those with
+ * `payment:read`; closing it clears the state, so a refresh doesn't open it again.
  */
 export function PatientRecordScreen({ patientId, tab, panel }: RecordProps) {
   const navigate = useNavigate();
+  const postVisit = useLocation({ select: (location) => location.state.postVisit });
+  const canPay = usePermission('payment:read');
   const go = (search: { tab: RecordTab; panel?: RecordPanel | undefined }) => {
     void navigate({ to: '/patients/$patientId', params: { patientId }, search, replace: true });
   };
   return (
-    <PatientRecordPage
-      key={patientId}
-      patientId={patientId}
-      tab={tab}
-      panel={panel}
-      onTab={(next) => {
-        go({ tab: next });
-      }}
-      onPanel={(next) => {
-        go({ tab, panel: next });
-      }}
-    />
+    <>
+      <PatientRecordPage
+        key={patientId}
+        patientId={patientId}
+        tab={tab}
+        panel={panel}
+        onTab={(next) => {
+          go({ tab: next });
+        }}
+        onPanel={(next) => {
+          go({ tab, panel: next });
+        }}
+      />
+      {postVisit !== undefined && canPay && (
+        <PostVisitSummaryDialog
+          visitId={postVisit}
+          onClose={() => {
+            void navigate({
+              to: '/patients/$patientId',
+              params: { patientId },
+              search: true,
+              replace: true,
+              state: (state) => ({ ...state, postVisit: undefined }),
+            });
+          }}
+        />
+      )}
+    </>
   );
 }
 

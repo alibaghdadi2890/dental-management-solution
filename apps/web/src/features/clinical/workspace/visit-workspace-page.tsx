@@ -19,7 +19,7 @@ import { patientQuery } from '@/features/patients/patients-api';
 import { ApiError } from '@/lib/api';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
-import { useFlushSaveGroups } from '../save-groups-context';
+import { VisitSummaryDialog } from '../dialogs/visit-summary-dialog';
 import { SaveGroupsProvider } from '../save-groups-provider';
 import { useVisit } from '../use-visit';
 import { chartQuery } from '../visits-api';
@@ -67,11 +67,17 @@ export function VisitWorkspaceScreen({
  * (404) reads "Visit not found", any other failure offers Try again. A visit that is no longer
  * live — completed, or discarded from this page — goes to the patient's record, and so does one
  * that turns 404 on a refetch (discarded elsewhere, W6): nothing is charted into a dead visit.
+ * A visit that completes while open here (the summary dialog's Complete, or elsewhere) lands on
+ * the record with its post-visit summary (W16, `HistoryState.postVisit`); this redirect is the
+ * only navigation after Complete. One opened already completed just shows the record.
  */
 function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothCode | undefined }) {
   const { t } = useTranslation(['clinical', 'common']);
   const { data: session } = useSession();
   const visit = useVisit(visitId);
+  const [seenLive, setSeenLive] = useState(false);
+  const live = visit.data?.status === 'in_progress' || visit.data?.status === 'paused';
+  if (live && !seenLive) setSeenLive(true);
 
   if (!session?.tenant) return null;
   const notFound = visit.error instanceof ApiError && visit.error.status === 404;
@@ -79,8 +85,14 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
     visit.data &&
     (notFound || visit.data.status === 'completed' || visit.data.status === 'discarded')
   ) {
+    const completedHere = seenLive && !notFound && visit.data.status === 'completed';
     return (
-      <Navigate to="/patients/$patientId" params={{ patientId: visit.data.patientId }} replace />
+      <Navigate
+        to="/patients/$patientId"
+        params={{ patientId: visit.data.patientId }}
+        replace
+        {...(completedHere ? { state: { postVisit: visit.data.id } } : {})}
+      />
     );
   }
   if (!visit.data) {
@@ -130,7 +142,8 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
  * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
  * the chart, the tooth panel and the drawer; the drawer opens over a scrim. `?tooth=` selects
  * its tooth (the tooth history's "Chart it in this visit"), then leaves the URL. The tooth
- * panel's "Full tooth history →" opens the tooth history dialog.
+ * panel's "Full tooth history →" opens the tooth history dialog, and the financial bar's
+ * **Review & complete** the visit summary.
  */
 function Workspace({
   visit,
@@ -152,13 +165,15 @@ function Workspace({
     setDrawer(null);
   }, []);
   const [historyTooth, setHistoryTooth] = useState<ToothCode | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const review = useCallback(() => {
+    setReviewing(true);
+  }, []);
+  const closeReview = useCallback(() => {
+    setReviewing(false);
+  }, []);
   const actions = useChartingActionsState({ visit, selection, openDrawer: setDrawer });
   const teeth = useVisitTeeth(chart.data, visit);
-  // Review & complete sends every unsaved edit first; the summary dialog opens from here (H1).
-  const flush = useFlushSaveGroups();
-  const review = useCallback(() => {
-    void flush();
-  }, [flush]);
 
   // The patient's own override answers at once after a change; the chart's age stays the
   // server's (the tenant's date), so the stage never waits for the chart refetch.
@@ -183,7 +198,8 @@ function Workspace({
     toothStatus: chart.data?.toothStatus ?? NO_STATUS,
     selected: selection.tooth,
     onSelect: selection.select,
-    onEscape: drawer === null ? undefined : closeDrawer,
+    // The summary dialog handles its own keys; while it is open the chart takes none.
+    onEscape: drawer !== null ? closeDrawer : reviewing ? closeReview : undefined,
   });
 
   return (
@@ -248,6 +264,12 @@ function Workspace({
             </aside>
           </div>
           <FinancialBar visit={visit} canWrite={canWrite} onReview={review} />
+          <VisitSummaryDialog
+            visit={visit}
+            chart={chart.data}
+            open={reviewing && canWrite}
+            onClose={closeReview}
+          />
           {drawer !== null && canWrite && (
             <>
               <div
