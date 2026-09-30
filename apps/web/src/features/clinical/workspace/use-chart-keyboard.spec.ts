@@ -8,6 +8,7 @@ interface Setup {
   orientation?: ChartOrientation;
   dentition?: DentitionStage;
   toothStatus?: ToothPresence[];
+  onEscape?: () => void;
 }
 
 function setup({
@@ -15,10 +16,11 @@ function setup({
   orientation = 'patient_right_on_right',
   dentition = 'permanent',
   toothStatus = [],
+  onEscape,
 }: Setup) {
   const onSelect = vi.fn<(code: ToothCode | null) => void>();
   renderHook(() => {
-    useChartKeyboard({ orientation, dentition, toothStatus, selected, onSelect });
+    useChartKeyboard({ orientation, dentition, toothStatus, selected, onSelect, onEscape });
   });
   return onSelect;
 }
@@ -120,6 +122,26 @@ describe('useChartKeyboard', () => {
     const none = setup({ selected: null });
     press('Escape');
     expect(none).not.toHaveBeenCalled();
+  });
+
+  it('closes an open layer (the drawer) with Esc before deselecting', () => {
+    const onEscape = vi.fn();
+    const onSelect = setup({ selected: '16', onEscape });
+    press('Escape');
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
+    // The arrows still walk the chart while the drawer is open.
+    press('ArrowRight');
+    expect(onSelect).toHaveBeenLastCalledWith('17');
+  });
+
+  it('closes an open layer with Esc even without a selection', () => {
+    const onEscape = vi.fn();
+    const onSelect = setup({ selected: null, onEscape });
+    press('Escape');
+    press('ArrowRight');
+    expect(onEscape).toHaveBeenCalledTimes(1);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('leaves Esc to a layer that already handled it (the topmost closes first)', () => {

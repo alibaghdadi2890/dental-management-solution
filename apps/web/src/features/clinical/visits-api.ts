@@ -135,10 +135,15 @@ export const clinicalSummaryQuery = (patientId: string, tenantId?: string) =>
   });
 
 // Writes: each answers with the updated visit (`{ visit }`), plus the affected `record` for the
-// service and charting routes.
+// service and charting routes. Each takes the tenant its cache keys are scoped by
+// (`visit-mutations.ts`), so the request and the cache always name the same clinic.
 
-export function startVisit(input: StartVisitInput) {
-  return apiFetch('/visits', startVisitResultSchema, { method: 'POST', json: input });
+export function startVisit(input: StartVisitInput, tenantId?: string) {
+  return apiFetch('/visits', startVisitResultSchema, {
+    method: 'POST',
+    json: input,
+    ...scope(tenantId),
+  });
 }
 
 function visitCall<TSchema extends z.ZodType>(
@@ -146,50 +151,73 @@ function visitCall<TSchema extends z.ZodType>(
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   visitId: string,
   path: string,
-  json?: unknown,
+  { json, tenantId }: { json?: unknown; tenantId?: string | undefined } = {},
 ) {
   const url = `/visits/${visitId}/${path}`;
-  return apiFetch(url, schema, json === undefined ? { method } : { method, json });
+  return apiFetch(url, schema, {
+    method,
+    ...(json === undefined ? {} : { json }),
+    ...scope(tenantId),
+  });
 }
 
-export const pauseVisit = (visitId: string) =>
-  visitCall(visitResultSchema, 'POST', visitId, 'pause');
-export const resumeVisit = (visitId: string) =>
-  visitCall(visitResultSchema, 'POST', visitId, 'resume');
-export const discardVisit = (visitId: string) =>
-  visitCall(visitResultSchema, 'POST', visitId, 'discard');
-export const completeVisit = (visitId: string) =>
-  visitCall(visitResultSchema, 'POST', visitId, 'complete');
+export const pauseVisit = (visitId: string, tenantId?: string) =>
+  visitCall(visitResultSchema, 'POST', visitId, 'pause', { tenantId });
+export const resumeVisit = (visitId: string, tenantId?: string) =>
+  visitCall(visitResultSchema, 'POST', visitId, 'resume', { tenantId });
+export const discardVisit = (visitId: string, tenantId?: string) =>
+  visitCall(visitResultSchema, 'POST', visitId, 'discard', { tenantId });
+export const completeVisit = (visitId: string, tenantId?: string) =>
+  visitCall(visitResultSchema, 'POST', visitId, 'complete', { tenantId });
 
-export const updateVisitNotes = (visitId: string, input: VisitNotesInput) =>
-  visitCall(visitResultSchema, 'PATCH', visitId, 'notes', input);
-export const setVisitDiscount = (visitId: string, input: VisitDiscountInput) =>
-  visitCall(visitResultSchema, 'PATCH', visitId, 'discount', input);
+export const updateVisitNotes = (visitId: string, input: VisitNotesInput, tenantId?: string) =>
+  visitCall(visitResultSchema, 'PATCH', visitId, 'notes', { json: input, tenantId });
+export const setVisitDiscount = (visitId: string, input: VisitDiscountInput, tenantId?: string) =>
+  visitCall(visitResultSchema, 'PATCH', visitId, 'discount', { json: input, tenantId });
 
-export const addService = (visitId: string, input: AddServiceInput) =>
-  visitCall(serviceResultSchema, 'POST', visitId, 'services', input);
-export const updateService = (visitId: string, serviceId: string, patch: UpdateServiceInput) =>
-  visitCall(serviceResultSchema, 'PATCH', visitId, `services/${serviceId}`, patch);
-export const removeService = (visitId: string, serviceId: string) =>
-  visitCall(serviceResultSchema, 'DELETE', visitId, `services/${serviceId}`);
+export const addService = (visitId: string, input: AddServiceInput, tenantId?: string) =>
+  visitCall(serviceResultSchema, 'POST', visitId, 'services', { json: input, tenantId });
+export const updateService = (
+  visitId: string,
+  serviceId: string,
+  patch: UpdateServiceInput,
+  tenantId?: string,
+) =>
+  visitCall(serviceResultSchema, 'PATCH', visitId, `services/${serviceId}`, {
+    json: patch,
+    tenantId,
+  });
+export const removeService = (visitId: string, serviceId: string, tenantId?: string) =>
+  visitCall(serviceResultSchema, 'DELETE', visitId, `services/${serviceId}`, { tenantId });
 
-export const recordDiagnosis = (visitId: string, input: RecordDiagnosisInput) =>
-  visitCall(diagnosisResultSchema, 'POST', visitId, 'diagnoses', input);
-export const resolveDiagnosis = (visitId: string, recordId: string) =>
-  visitCall(diagnosisResultSchema, 'POST', visitId, `diagnoses/${recordId}/resolve`);
-export const reopenDiagnosis = (visitId: string, recordId: string) =>
-  visitCall(diagnosisResultSchema, 'POST', visitId, `diagnoses/${recordId}/reopen`);
-export const removeDiagnosis = (visitId: string, recordId: string) =>
-  visitCall(diagnosisResultSchema, 'DELETE', visitId, `diagnoses/${recordId}`);
+export const recordDiagnosis = (visitId: string, input: RecordDiagnosisInput, tenantId?: string) =>
+  visitCall(diagnosisResultSchema, 'POST', visitId, 'diagnoses', { json: input, tenantId });
+export const resolveDiagnosis = (visitId: string, recordId: string, tenantId?: string) =>
+  visitCall(diagnosisResultSchema, 'POST', visitId, `diagnoses/${recordId}/resolve`, {
+    tenantId,
+  });
+export const reopenDiagnosis = (visitId: string, recordId: string, tenantId?: string) =>
+  visitCall(diagnosisResultSchema, 'POST', visitId, `diagnoses/${recordId}/reopen`, {
+    tenantId,
+  });
+export const removeDiagnosis = (visitId: string, recordId: string, tenantId?: string) =>
+  visitCall(diagnosisResultSchema, 'DELETE', visitId, `diagnoses/${recordId}`, { tenantId });
 
-export const planTreatment = (visitId: string, input: PlanTreatmentInput) =>
-  visitCall(planResultSchema, 'POST', visitId, 'plans', input);
-export const performPlan = (visitId: string, planId: string) =>
-  visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/perform`);
-export const cancelPlan = (visitId: string, planId: string) =>
-  visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/cancel`);
-export const removePlan = (visitId: string, planId: string) =>
-  visitCall(planResultSchema, 'DELETE', visitId, `plans/${planId}`);
+export const planTreatment = (visitId: string, input: PlanTreatmentInput, tenantId?: string) =>
+  visitCall(planResultSchema, 'POST', visitId, 'plans', { json: input, tenantId });
+export const performPlan = (visitId: string, planId: string, tenantId?: string) =>
+  visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/perform`, { tenantId });
+export const cancelPlan = (visitId: string, planId: string, tenantId?: string) =>
+  visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/cancel`, { tenantId });
+export const removePlan = (visitId: string, planId: string, tenantId?: string) =>
+  visitCall(planResultSchema, 'DELETE', visitId, `plans/${planId}`, { tenantId });
 
-export const setToothPresence = (visitId: string, { position, present }: ToothPresence) =>
-  visitCall(toothPresenceResultSchema, 'PUT', visitId, `teeth/${position}`, { present });
+export const setToothPresence = (
+  visitId: string,
+  { position, present }: ToothPresence,
+  tenantId?: string,
+) =>
+  visitCall(toothPresenceResultSchema, 'PUT', visitId, `teeth/${position}`, {
+    json: { present },
+    tenantId,
+  });

@@ -229,3 +229,36 @@ describe('writes', () => {
     },
   );
 });
+
+describe('writes — tenant', () => {
+  it('forwards an explicit tenant with the request', async () => {
+    apiFetchMock.mockResolvedValue({});
+    await api.addService(VISIT_ID, { procedureId: RECORD_ID, surfaces: [] }, 'tenant-2');
+    await api.pauseVisit(VISIT_ID, 'tenant-2');
+    await api.startVisit({ patientId: PATIENT_ID, dentistId: RECORD_ID }, 'tenant-2');
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      `/visits/${VISIT_ID}/services`,
+      expect.anything(),
+      {
+        method: 'POST',
+        json: { procedureId: RECORD_ID, surfaces: [] },
+        tenantId: 'tenant-2',
+      },
+    );
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      2,
+      `/visits/${VISIT_ID}/pause`,
+      expect.anything(),
+      {
+        method: 'POST',
+        tenantId: 'tenant-2',
+      },
+    );
+    expect(apiFetchMock).toHaveBeenNthCalledWith(3, '/visits', expect.anything(), {
+      method: 'POST',
+      json: { patientId: PATIENT_ID, dentistId: RECORD_ID },
+      tenantId: 'tenant-2',
+    });
+  });
+});

@@ -17,6 +17,9 @@ export interface ChartKeyboardOptions {
   selected: ToothCode | null;
   /** The next tooth, or `null` to deselect. */
   onSelect: (code: ToothCode | null) => void;
+  /** Set while a layer that isn't a dialog is open over the workspace (the catalog drawer, an
+   * `aside`): `Esc` closes it (this callback) before it would deselect. */
+  onEscape?: (() => void) | undefined;
 }
 
 /** Keys typed here belong to the field or the layer, never to the chart. */
@@ -47,9 +50,10 @@ function step(
 /**
  * The workspace chart's keyboard (spec §Dental Chart → Interactions, W3): with a tooth selected,
  * ← and → walk the arch in the clinic's orientation, wrapping — the chart is never mirrored
- * (W17), so the arrows follow the screen even in an RTL layout. `Esc` deselects, unless a layer
- * above (a dialog, a menu, the drawer) already took it: the topmost layer closes first. Keys are
- * left alone while focus is in a field or inside a dialog or menu, and with a modifier held.
+ * (W17), so the arrows follow the screen even in an RTL layout. `Esc` closes the topmost layer
+ * first: a dialog or menu (or the drawer, with focus inside it) handles it itself, the drawer
+ * otherwise through `onEscape`; only then does it deselect. Keys are left alone while focus is in
+ * a field or inside a dialog or menu, and with a modifier held.
  */
 export function useChartKeyboard({
   orientation,
@@ -57,16 +61,19 @@ export function useChartKeyboard({
   toothStatus,
   selected,
   onSelect,
+  onEscape,
 }: ChartKeyboardOptions): void {
   useEffect(() => {
-    if (selected === null) return;
+    if (selected === null && !onEscape) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
       if (ignoredTarget(event.target)) return;
       if (event.key === 'Escape') {
-        onSelect(null);
+        if (onEscape) onEscape();
+        else onSelect(null);
         return;
       }
+      if (selected === null) return;
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       event.preventDefault();
       const direction = event.key === 'ArrowRight' ? 1 : -1;
@@ -76,5 +83,5 @@ export function useChartKeyboard({
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [orientation, dentition, toothStatus, selected, onSelect]);
+  }, [orientation, dentition, toothStatus, selected, onSelect, onEscape]);
 }

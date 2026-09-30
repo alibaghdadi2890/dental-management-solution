@@ -30,3 +30,9 @@ export function useAnyGroupDirty(): boolean {
 export function useFlushSaveGroups(): () => Promise<boolean> {
   return useSaveGroupsStore().flushAll;
 }
+
+/** Forgets one group before its record is deleted (see `SaveGroupsStore.drop`): call it with
+ * `service:<id>` right before every service DELETE. */
+export function useDropSaveGroup(): (key: string) => void {
+  return useSaveGroupsStore().drop;
+}

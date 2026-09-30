@@ -2,13 +2,14 @@ import type {
   AddServiceInput,
   PlanTreatmentInput,
   RecordDiagnosisInput,
+  StartVisitInput,
   ToothPresence,
   UpdateServiceInput,
   Visit,
   VisitDiscountInput,
   VisitNotesInput,
 } from '@dcm/contracts';
-import { mutationOptions, type QueryClient, useQueryClient } from '@tanstack/react-query';
+import { hashKey, mutationOptions, type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { invalidatePatientData } from '@/features/patients/patients-api';
 import { actingTenantId, useActingTenantId } from '@/features/platform/acting-tenant';
@@ -39,19 +40,48 @@ import {
 type Tenant = string | null;
 type Keys = readonly (readonly unknown[])[];
 
+/** Per client, the visits whose refetch a newer write may have cancelled (see `writeVisit`). */
+const refetchAfterWrite = new WeakMap<QueryClient, Set<string>>();
+
+function pendingRefetches(queryClient: QueryClient): Set<string> {
+  let pending = refetchAfterWrite.get(queryClient);
+  if (!pending) {
+    pending = new Set();
+    refetchAfterWrite.set(queryClient, pending);
+  }
+  return pending;
+}
+
+/**
+ * Refetches the visit instead of trusting the cache: after a failed write (the server may have
+ * moved on), and after a write answered while another write of the same visit was in flight.
+ * In the second case the refetch may be cancelled by the other write's own `writeVisit`, so the
+ * visit is marked to be refetched once more after the burst's last write.
+ */
+function refetchVisit(queryClient: QueryClient, queryKey: readonly unknown[]): Promise<void> {
+  if (queryClient.isMutating({ mutationKey: queryKey }) > 1) {
+    pendingRefetches(queryClient).add(hashKey(queryKey));
+  }
+  return queryClient.invalidateQueries({ queryKey });
+}
+
 /**
  * Writes a mutation's returned visit into its cache without a refetch (spec §HTTP). A refetch
  * already in flight may have read the visit before this change, so it is cancelled first, or it
  * would land afterwards and put the old visit back. While another mutation of the same visit is
- * still in flight, this answer may already be outdated, so the visit is refetched instead (the
- * last mutation to finish writes its own answer, cancelling that refetch).
+ * still in flight, this answer may already be outdated, so the visit is refetched instead. The
+ * last mutation of such a burst writes its own answer (cancelling that refetch), then refetches
+ * once more: the server may have applied the burst in another order than it answered.
  */
 function writeVisit(queryClient: QueryClient, tenantId: Tenant, visit: Visit): Promise<void> {
   const queryKey = visitKeys.detail(tenantId, visit.id);
   return queryClient.cancelQueries({ queryKey }).then(() => {
-    if (queryClient.isMutating({ mutationKey: queryKey }) <= 1) {
-      queryClient.setQueryData(queryKey, visit);
-    } else {
+    if (queryClient.isMutating({ mutationKey: queryKey }) > 1) {
+      void refetchVisit(queryClient, queryKey);
+      return;
+    }
+    queryClient.setQueryData(queryKey, visit);
+    if (pendingRefetches(queryClient).delete(hashKey(queryKey))) {
       void queryClient.invalidateQueries({ queryKey });
     }
   });
@@ -74,7 +104,7 @@ const chartingKeys = (tenantId: Tenant, patientId: string) => [
  * live-visit lists and the chart's `liveVisitId`). */
 export function startVisitMutation(queryClient: QueryClient, tenantId: Tenant = actingTenantId()) {
   return mutationOptions({
-    mutationFn: startVisit,
+    mutationFn: (input: StartVisitInput) => startVisit(input, tenantId ?? undefined),
     onSuccess: async ({ visit }) => {
       await writeVisit(queryClient, tenantId, visit);
       await invalidate(queryClient, [
@@ -97,9 +127,12 @@ export function visitMutations(
   tenantId: Tenant = actingTenantId(),
 ) {
   const mutationKey = visitKeys.detail(tenantId, visitId);
+  /** The requests go to the tenant the keys are scoped by. */
+  const tenant = tenantId ?? undefined;
   const base = {
     mutationKey,
     onMutate: () => queryClient.cancelQueries({ queryKey: mutationKey }),
+    onError: () => refetchVisit(queryClient, mutationKey),
   };
   const then =
     (stale: (visit: Visit) => Keys) =>
@@ -115,12 +148,12 @@ export function visitMutations(
   return {
     pause: mutationOptions({
       ...base,
-      mutationFn: () => pauseVisit(visitId),
+      mutationFn: () => pauseVisit(visitId, tenant),
       onSuccess: liveStatus,
     }),
     resume: mutationOptions({
       ...base,
-      mutationFn: () => resumeVisit(visitId),
+      mutationFn: () => resumeVisit(visitId, tenant),
       onSuccess: liveStatus,
     }),
     /** A discarded visit is gone (`GET` answers 404), so it is never refetched: the returned
@@ -129,7 +162,7 @@ export function visitMutations(
      * flash "not found" first. */
     discard: mutationOptions({
       ...base,
-      mutationFn: () => discardVisit(visitId),
+      mutationFn: () => discardVisit(visitId, tenant),
       onSuccess: then((visit) => [
         visitKeys.allLive(tenantId),
         clinicalKeys.chart(tenantId, visit.patientId),
@@ -138,7 +171,7 @@ export function visitMutations(
     /** The charge is posted in the same transaction (W2): the balances are stale too. */
     complete: mutationOptions({
       ...base,
-      mutationFn: () => completeVisit(visitId),
+      mutationFn: () => completeVisit(visitId, tenant),
       onSuccess: async ({ visit }) => {
         await writeVisit(queryClient, tenantId, visit);
         await Promise.all([
@@ -153,76 +186,76 @@ export function visitMutations(
     }),
     updateNotes: mutationOptions({
       ...base,
-      mutationFn: (input: VisitNotesInput) => updateVisitNotes(visitId, input),
+      mutationFn: (input: VisitNotesInput) => updateVisitNotes(visitId, input, tenant),
       onSuccess: visitOnly,
     }),
     setDiscount: mutationOptions({
       ...base,
-      mutationFn: (input: VisitDiscountInput) => setVisitDiscount(visitId, input),
+      mutationFn: (input: VisitDiscountInput) => setVisitDiscount(visitId, input, tenant),
       onSuccess: visitOnly,
     }),
     /** A new service can mark its tooth treated today. */
     addService: mutationOptions({
       ...base,
-      mutationFn: (input: AddServiceInput) => addService(visitId, input),
+      mutationFn: (input: AddServiceInput) => addService(visitId, input, tenant),
       onSuccess: charting,
     }),
     /** A price edit changes only the visit's money, never the chart. */
     updateService: mutationOptions({
       ...base,
       mutationFn: ({ serviceId, patch }: { serviceId: string; patch: UpdateServiceInput }) =>
-        updateService(visitId, serviceId, patch),
+        updateService(visitId, serviceId, patch, tenant),
       onSuccess: visitOnly,
     }),
     /** Removing a performed plan's service also reopens the plan (the Undo of Perform). */
     removeService: mutationOptions({
       ...base,
-      mutationFn: (serviceId: string) => removeService(visitId, serviceId),
+      mutationFn: (serviceId: string) => removeService(visitId, serviceId, tenant),
       onSuccess: charting,
     }),
     recordDiagnosis: mutationOptions({
       ...base,
-      mutationFn: (input: RecordDiagnosisInput) => recordDiagnosis(visitId, input),
+      mutationFn: (input: RecordDiagnosisInput) => recordDiagnosis(visitId, input, tenant),
       onSuccess: charting,
     }),
     resolveDiagnosis: mutationOptions({
       ...base,
-      mutationFn: (recordId: string) => resolveDiagnosis(visitId, recordId),
+      mutationFn: (recordId: string) => resolveDiagnosis(visitId, recordId, tenant),
       onSuccess: charting,
     }),
     reopenDiagnosis: mutationOptions({
       ...base,
-      mutationFn: (recordId: string) => reopenDiagnosis(visitId, recordId),
+      mutationFn: (recordId: string) => reopenDiagnosis(visitId, recordId, tenant),
       onSuccess: charting,
     }),
     removeDiagnosis: mutationOptions({
       ...base,
-      mutationFn: (recordId: string) => removeDiagnosis(visitId, recordId),
+      mutationFn: (recordId: string) => removeDiagnosis(visitId, recordId, tenant),
       onSuccess: charting,
     }),
     planTreatment: mutationOptions({
       ...base,
-      mutationFn: (input: PlanTreatmentInput) => planTreatment(visitId, input),
+      mutationFn: (input: PlanTreatmentInput) => planTreatment(visitId, input, tenant),
       onSuccess: charting,
     }),
     performPlan: mutationOptions({
       ...base,
-      mutationFn: (planId: string) => performPlan(visitId, planId),
+      mutationFn: (planId: string) => performPlan(visitId, planId, tenant),
       onSuccess: charting,
     }),
     cancelPlan: mutationOptions({
       ...base,
-      mutationFn: (planId: string) => cancelPlan(visitId, planId),
+      mutationFn: (planId: string) => cancelPlan(visitId, planId, tenant),
       onSuccess: charting,
     }),
     removePlan: mutationOptions({
       ...base,
-      mutationFn: (planId: string) => removePlan(visitId, planId),
+      mutationFn: (planId: string) => removePlan(visitId, planId, tenant),
       onSuccess: charting,
     }),
     setToothPresence: mutationOptions({
       ...base,
-      mutationFn: (input: ToothPresence) => setToothPresence(visitId, input),
+      mutationFn: (input: ToothPresence) => setToothPresence(visitId, input, tenant),
       onSuccess: charting,
     }),
   };

@@ -123,6 +123,18 @@ export class SaveGroupEntry<T> {
     else if (this.snapshot.state === 'saved') this.update({ ...this.snapshot, state: 'idle' });
   }
 
+  /**
+   * Forgets the group's unsaved value because its record is going away (a removed service): the
+   * debounced edit is never sent, a queued send is skipped and one in flight settles as a no-op.
+   */
+  discard(): void {
+    clearTimeout(this.timer);
+    this.timer = undefined;
+    this.attempt++;
+    this.lastSend = Promise.resolve('saved');
+    this.update({ ...this.snapshot, state: 'idle' });
+  }
+
   /** Sends whatever is unsaved now and waits until the group settles (before Complete). */
   async flush(): Promise<SaveOutcome> {
     if (this.timer !== undefined || this.snapshot.state === 'failed') void this.send(this.latest);
@@ -192,6 +204,19 @@ export class SaveGroupsStore {
 
   /** True while any group has unsaved local edits (W6 pauses the visit refetch). */
   readonly isAnyDirty = (): boolean => this.anyDirty;
+
+  /**
+   * Removes a group before its record is deleted (`service:<id>` before the service's DELETE),
+   * so a pending or failed price edit neither reaches the deleted row nor keeps the workspace
+   * dirty. A consumer still mounted gets a fresh group from the server value on its next render.
+   */
+  readonly drop = (key: string): void => {
+    const entry = this.entries.get(key);
+    if (!entry) return;
+    this.entries.delete(key);
+    entry.discard();
+    this.refreshDirty();
+  };
 
   /** Flushes every group; true when all of them saved. */
   readonly flushAll = async (): Promise<boolean> => {

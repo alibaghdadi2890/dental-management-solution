@@ -1,7 +1,7 @@
 import { act, cleanup, render, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useAnyGroupDirty, useFlushSaveGroups } from './save-groups-context';
+import { useAnyGroupDirty, useDropSaveGroup, useFlushSaveGroups } from './save-groups-context';
 import { SaveGroupsProvider } from './save-groups-provider';
 import { SAVE_DEBOUNCE_MS } from './save-groups-store';
 import { type SaveGroup, useSaveGroup } from './use-save-group';
@@ -19,6 +19,7 @@ function renderGroup(save: Save, serverValue = 'first') {
       group: useSaveGroup({ key: 'notes', serverValue: server, save }),
       anyDirty: useAnyGroupDirty(),
       flush: useFlushSaveGroups(),
+      drop: useDropSaveGroup(),
     }),
     { wrapper, initialProps: { server: serverValue } },
   );
@@ -432,5 +433,63 @@ describe('useFlushSaveGroups', () => {
     });
     expect(saved).toBe(true);
     expect(save).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('useDropSaveGroup', () => {
+  it('forgets a pending edit: nothing is sent and the workspace is clean', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderGroup(save);
+    act(() => {
+      result.current.group.setValue('edited price');
+    });
+    expect(result.current.anyDirty).toBe(true);
+
+    act(() => {
+      result.current.drop('notes');
+    });
+    expect(result.current.anyDirty).toBe(false);
+
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.flush();
+    });
+    await settle();
+    expect(saved).toBe(true);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('lets a save already in flight settle as a no-op', async () => {
+    const { save, calls } = controlledSave();
+    const { result } = renderGroup(save);
+    act(() => {
+      result.current.group.setValue('edited price');
+    });
+    await settle();
+    expect(save).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.drop('notes');
+    });
+    expect(result.current.anyDirty).toBe(false);
+    await act(async () => {
+      calls[0]?.reject();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.anyDirty).toBe(false);
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.flush();
+    });
+    expect(saved).toBe(true);
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores an unknown key', () => {
+    const { result } = renderGroup(vi.fn());
+    act(() => {
+      result.current.drop('service:unknown');
+    });
+    expect(result.current.anyDirty).toBe(false);
   });
 });

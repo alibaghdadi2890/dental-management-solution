@@ -203,6 +203,45 @@ describe('visitMutations — stale refetches', () => {
     second.resolve({ visit: visit({ notes: 'first', status: 'paused' }) });
     await pause;
     expect(cached()).toMatchObject({ notes: 'first', status: 'paused' });
+    // The server may have applied the two in either order: the last answer is refetched once
+    // more after it is written.
+    expect(stale(detailKey)).toBe(true);
+  });
+
+  it('refetches the visit when a mutation fails', async () => {
+    const { client, stale, cached } = seededClient();
+    apiFetchMock.mockRejectedValueOnce(new Error('conflict'));
+    await expect(
+      run(client, visitMutations(client, VISIT_ID).updateNotes, { notes: 'lost' }),
+    ).rejects.toThrow('conflict');
+    expect(cached()?.notes).toBe('');
+    expect(stale(detailKey)).toBe(true);
+  });
+});
+
+describe('visitMutations — tenant', () => {
+  it('sends each write to the tenant its keys are scoped by', async () => {
+    const client = new QueryClient();
+    apiFetchMock.mockResolvedValue({ visit: visit(), record: {} });
+    const mutations = visitMutations(client, VISIT_ID, 'tenant-2');
+    await run(client, mutations.updateNotes, { notes: 'x' });
+    await run(client, mutations.removeService, RECORD_ID);
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      1,
+      `/visits/${VISIT_ID}/notes`,
+      expect.anything(),
+      {
+        method: 'PATCH',
+        json: { notes: 'x' },
+        tenantId: 'tenant-2',
+      },
+    );
+    expect(apiFetchMock).toHaveBeenNthCalledWith(
+      2,
+      `/visits/${VISIT_ID}/services/${RECORD_ID}`,
+      expect.anything(),
+      { method: 'DELETE', tenantId: 'tenant-2' },
+    );
   });
 });
 
