@@ -38,7 +38,32 @@ Tooth numbering is Universal (1–32, A–T), per the POC. This module was renam
   `frequent`, `active`, `deleted_at?`. Unique `(tenant_id, lower(code)) where deleted_at is null`.
 - `diagnoses`: the diagnosis catalog. Tenant RLS. `code`, `name`, `category?`, `frequent`,
   `active`, `deleted_at?`. Same unique rule.
-- Planned: `visits`, `visit_services`, `treatment_plans`, `planned_procedures`.
+
+Feature 4a (migration `0014_visits`; spec `2026-09-29-visit-workspace-design.md` §Data model).
+All tenant RLS. Patient, branch, room and dentist ids carry no foreign key (other modules' tables);
+foreign keys inside `clinical` are composite with `tenant_id`, so each target has a unique
+`(tenant_id, id)` (`procedures` and `diagnoses` too). `*_by` columns are auth user ids (W10),
+`dentist_id` a staff profile id (ADR-0020). Tooth codes are canonical FDI text (CHECK on the 52
+codes), `surfaces text[]` is a subset of `M D B L O I`.
+
+- `visits`: `status` (enum `in_progress | paused | completed | discarded`), `local_date`, timer
+  fields (`started_at`, `paused_at?`, `paused_seconds`), `notes`, `discount_mode` (enum
+  `percent | amount`) + raw `discount_value ≥ 0`, `currency`, and at completion `completed_at`,
+  `completed_by`, `duration_minutes`, `subtotal`, `discount_amount`, `total`; `discarded_at`,
+  `discarded_by`. Checks: `paused_at` set iff paused; completed/discarded ⇒ their fields.
+  `visits_room_live_unique`: one live visit per room (W1).
+- `visit_services`: catalog snapshot, `tooth_code` iff `per_tooth`, `base_amount`,
+  `discount_amount` (`0 ≤ discount ≤ base`), `plan_id?`, soft delete. `visit_services_plan_unique`:
+  a plan is performed by at most one live service row.
+- `patient_diagnoses`: diagnosis records on a tooth (the catalog is `diagnoses`), `active |
+resolved`, recorded/resolved in a visit, soft delete.
+- `treatment_plans`: one planned procedure per row with its price snapshot, `planned | performed |
+cancelled` with the matching visit/timestamp pair, optional `diagnosis_record_id`, soft delete.
+- `tooth_status`: `primary | permanent` per succession position (W5), changed in a visit;
+  `tooth_status_position_unique` on `(tenant_id, patient_id, position)`.
+
+The pure rules are in `domain/`: `visit-lifecycle.ts` (state machine), `visit-timer.ts`,
+`discard-rule.ts`, `record-rules.ts` (tooth/surface/charge-unit/currency) and `visit-errors.ts`.
 
 ## Public API (`index.ts`)
 
