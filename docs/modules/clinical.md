@@ -35,7 +35,8 @@ module was renamed from `treatments` (ADR-0001) and owns the catalogs (ADR-0002)
 - A row that a record refers to cannot be deleted, only deactivated (409 `catalog.in_use`,
   V11): a service or a plan that isn't removed (services) or a diagnosis record that isn't
   removed (diagnoses). Each catalog's store answers it with one `exists` query (`isInUse`).
-  Other rows are soft-deleted.
+  Other rows are soft-deleted. The delete locks the row `FOR UPDATE` before that check, and a
+  record write reads the row `FOR KEY SHARE`, so the two serialise (CLAUDE.md §7).
 
 ## Owns
 
@@ -139,8 +140,9 @@ performed or cancelled them (ADR-0022).
 
 `ChartService` reads a patient's record for the chart, the Tooth History modal, the Last visit
 card and the treatment summary (spec §ChartService). All need `visit:read`, so front desk reads
-them too. The patient comes from `PatientsService.get`: an unknown one, another tenant's
-included, is 404 `patient.not_found`. Removed records never appear. History is the services of
+them too. The patient comes from `PatientsService.get`, which also requires `patient:read`
+(every clinic role holds both): an unknown one, another tenant's included, is 404
+`patient.not_found`. Removed records never appear. History is the services of
 completed visits; a patient's records are bounded, so nothing is paginated. Dentist names come
 from one `practitionersByProfileIds` call per read.
 
@@ -167,15 +169,15 @@ from one `practitionersByProfileIds` call per read.
 
 `CatalogService`:
 
-| Method                                              | Access          | Notes                                                                                           |
-| --------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------- |
-| `listServices()` / `listDiagnoses()`                | `catalog:read`  | Live rows, active and inactive, oldest first.                                                   |
-| `saveServices(batch)` / `saveDiagnoses(batch)`      | `catalog:write` | One transaction. Duplicate code → 422 `validation_failed` (`items.<i>.code`); unknown id → 404. |
-| `deleteService(id)` / `deleteDiagnosis(id)`         | `catalog:write` | Used by a record that isn't removed → 409 `catalog.in_use`; otherwise soft delete.              |
-| `deactivateService(id)` / `deactivateDiagnosis(id)` | `catalog:write` | "Mark inactive".                                                                                |
-| `seedDefaultCatalog()`                              | `catalog:write` | `{ services, diagnoses }` rows created; `{0, 0}` when a catalog exists.                         |
-| `listActiveServices()` / `listActiveDiagnoses()`    | caller guards   | For the visit drawer (feature 4) and pricing (feature 6).                                       |
-| `getService(id)` / `getDiagnosis(id)`               | caller guards   | A live row, active or not; else 404 `catalog.not_found`.                                        |
+| Method                                                  | Access          | Notes                                                                                                           |
+| ------------------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------- |
+| `listServices()` / `listDiagnoses()`                    | `catalog:read`  | Live rows, active and inactive, oldest first.                                                                   |
+| `saveServices(batch)` / `saveDiagnoses(batch)`          | `catalog:write` | One transaction. Duplicate code → 422 `validation_failed` (`items.<i>.code`); unknown id → 404.                 |
+| `deleteService(id)` / `deleteDiagnosis(id)`             | `catalog:write` | Used by a record that isn't removed → 409 `catalog.in_use`; otherwise soft delete.                              |
+| `deactivateService(id)` / `deactivateDiagnosis(id)`     | `catalog:write` | "Mark inactive".                                                                                                |
+| `seedDefaultCatalog()`                                  | `catalog:write` | `{ services, diagnoses }` rows created; `{0, 0}` when a catalog exists.                                         |
+| `listActiveServices()` / `listActiveDiagnoses()`        | caller guards   | For the visit drawer (feature 4) and pricing (feature 6).                                                       |
+| `getServiceForRecord(id)` / `getDiagnosisForRecord(id)` | caller guards   | A live row, active or not, read `FOR KEY SHARE` in the caller's open transaction; else 404 `catalog.not_found`. |
 
 Every write is audited per row with before/after (`catalog.service.create|update|delete|deactivate`,
 `catalog.diagnosis.*`; resource types `procedure` and `diagnosis`).

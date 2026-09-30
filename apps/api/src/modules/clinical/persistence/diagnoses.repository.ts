@@ -2,7 +2,12 @@ import type { DiagnosisItem } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import { type CatalogStore, exists, rethrowCodeRace, swappingCode } from './catalog-store';
+import {
+  type CatalogRowLock,
+  type CatalogStore,
+  rethrowCodeRace,
+  swappingCode,
+} from './catalog-store';
 import { diagnoses, patientDiagnoses } from './schema';
 
 type DiagnosisRow = typeof diagnoses.$inferSelect;
@@ -47,12 +52,13 @@ export class DiagnosesRepository implements CatalogStore<DiagnosisItem> {
     );
   }
 
-  byId(id: string): Promise<DiagnosisItem | undefined> {
+  byId(id: string, lock?: CatalogRowLock): Promise<DiagnosisItem | undefined> {
     return this.db.run(async (tx) => {
-      const [row] = await tx
+      const query = tx
         .select()
         .from(diagnoses)
         .where(and(eq(diagnoses.id, id), live));
+      const [row] = await (lock === undefined ? query : query.for(lock));
       return row && toDiagnosis(row);
     });
   }
@@ -123,15 +129,12 @@ export class DiagnosesRepository implements CatalogStore<DiagnosisItem> {
 
   /** A diagnosis record that isn't removed names the diagnosis; one `exists` query. */
   async isInUse(id: string): Promise<boolean> {
-    const [row] = await this.db.run((tx) =>
-      tx
-        .select({
-          used: sql<boolean>`${exists(
-            sql`select 1 from ${patientDiagnoses} where ${patientDiagnoses.diagnosisId} = ${diagnoses.id} and ${isNull(patientDiagnoses.deletedAt)}`,
-          )}`,
-        })
-        .from(diagnoses)
-        .where(eq(diagnoses.id, id)),
+    const {
+      rows: [row],
+    } = await this.db.run((tx) =>
+      tx.execute<{ used: boolean }>(
+        sql`select exists (select 1 from ${patientDiagnoses} where ${patientDiagnoses.diagnosisId} = ${id} and ${isNull(patientDiagnoses.deletedAt)}) as used`,
+      ),
     );
     return row?.used ?? false;
   }

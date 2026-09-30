@@ -248,8 +248,9 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
   // Tests that move the clock or re-price the crown in the shared catalog put them back.
   afterEach(async () => {
     testApp.clock.set(new Date(NOON));
-    await database.ownerPool.query('update procedures set price_amount = 120 where id = $1', [
+    await database.ownerPool.query('update procedures set price_amount = $2 where id = $1', [
       service.crown.id,
+      service.crown.price.amount,
     ]);
   });
 

@@ -1,4 +1,3 @@
-import { type SQL, sql } from 'drizzle-orm';
 import { isUniqueViolation } from '../../../platform/db/unique-violation';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 
@@ -8,8 +7,8 @@ export interface CatalogStore<
 > {
   /** Live (not deleted) rows, oldest first: seeded rows keep the template order. */
   list(): Promise<TItem[]>;
-  /** A live row. */
-  byId(id: string): Promise<TItem | undefined>;
+  /** A live row, locked in the caller's transaction when `lock` is given. */
+  byId(id: string, lock?: CatalogRowLock): Promise<TItem | undefined>;
   /** Inserts or updates by id inside the caller's transaction; a batch may swap codes. */
   save(items: readonly TItem[], existingIds: ReadonlySet<string>): Promise<void>;
   /** Inserts the rows whose code is free; returns those inserted. */
@@ -22,11 +21,13 @@ export interface CatalogStore<
 }
 
 /**
- * `exists (subquery)` as its own chunk, for a selected field: Drizzle writes the columns placed
- * directly in a selected field without their table, which inside a correlated subquery would
- * bind them to the subquery's own table; a nested chunk keeps them qualified.
+ * How a catalog row is locked against the in-use race (CLAUDE.md §7): a delete takes it
+ * `FOR UPDATE` before checking `isInUse`, and a record about to refer to it reads it
+ * `FOR KEY SHARE`. The two conflict, so either the delete waits for the record's commit and then
+ * sees the row in use, or the record's read waits for the delete and then finds no live row.
+ * Catalog edits change no key column, so their `FOR NO KEY UPDATE` never waits for a record.
  */
-export const exists = (subquery: SQL) => sql`exists (${subquery})`;
+export type CatalogRowLock = 'update' | 'key share';
 
 /** Placeholder a row's code moves to while a batch rewrites codes (indexes check per statement). */
 export const swappingCode = (id: string) => `~swapping~${id}`;

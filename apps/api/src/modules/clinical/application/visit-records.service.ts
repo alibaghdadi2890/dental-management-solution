@@ -132,7 +132,7 @@ export class VisitRecordsService {
   /** A catalog service at its catalog price, no line discount (W11, W12). */
   addService(visitId: string, input: AddServiceInput): Promise<ServiceResult> {
     return this.inVisit(visitId, async ({ visit, userId }) => {
-      const item = await this.catalog.getService(input.procedureId);
+      const item = await this.catalog.getServiceForRecord(input.procedureId);
       if (!item.active) throw new CatalogItemInactiveError(`${item.name} is inactive`);
       assertTarget(item.chargeUnit, input.toothCode, input.surfaces);
       assertCurrency(visit.currency, item.price.currency);
@@ -218,7 +218,7 @@ export class VisitRecordsService {
   /** On a tooth always (W11); `DiagnosisRecorded`. */
   recordDiagnosis(visitId: string, input: RecordDiagnosisInput): Promise<DiagnosisResult> {
     return this.inVisit(visitId, async ({ visit, userId, now }) => {
-      const item = await this.catalog.getDiagnosis(input.diagnosisId);
+      const item = await this.catalog.getDiagnosisForRecord(input.diagnosisId);
       if (!item.active) throw new CatalogItemInactiveError(`${item.name} is inactive`);
       assertTarget('per_tooth', input.toothCode, input.surfaces);
       const record = await this.diagnoses.insert({
@@ -311,7 +311,7 @@ export class VisitRecordsService {
    */
   planTreatment(visitId: string, input: PlanTreatmentInput): Promise<PlanResult> {
     return this.inVisit(visitId, async ({ visit, userId, now }) => {
-      const item = await this.catalog.getService(input.procedureId);
+      const item = await this.catalog.getServiceForRecord(input.procedureId);
       if (!item.active) throw new CatalogItemInactiveError(`${item.name} is inactive`);
       assertTarget(item.chargeUnit, input.toothCode, input.surfaces);
       const toothCode = input.toothCode ?? null;

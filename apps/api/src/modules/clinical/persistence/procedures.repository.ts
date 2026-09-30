@@ -2,7 +2,12 @@ import type { ServiceItem } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import { type CatalogStore, exists, rethrowCodeRace, swappingCode } from './catalog-store';
+import {
+  type CatalogRowLock,
+  type CatalogStore,
+  rethrowCodeRace,
+  swappingCode,
+} from './catalog-store';
 import { procedures, treatmentPlans, visitServices } from './schema';
 
 type ProcedureRow = typeof procedures.$inferSelect;
@@ -52,12 +57,13 @@ export class ProceduresRepository implements CatalogStore<ServiceItem> {
     );
   }
 
-  byId(id: string): Promise<ServiceItem | undefined> {
+  byId(id: string, lock?: CatalogRowLock): Promise<ServiceItem | undefined> {
     return this.db.run(async (tx) => {
-      const [row] = await tx
+      const query = tx
         .select()
         .from(procedures)
         .where(and(eq(procedures.id, id), live));
+      const [row] = await (lock === undefined ? query : query.for(lock));
       return row && toService(row);
     });
   }
@@ -128,17 +134,13 @@ export class ProceduresRepository implements CatalogStore<ServiceItem> {
 
   /** A service or a plan that isn't removed names the procedure; one query of two `exists`. */
   async isInUse(id: string): Promise<boolean> {
-    const [row] = await this.db.run((tx) =>
-      tx
-        .select({
-          used: sql<boolean>`${exists(
-            sql`select 1 from ${visitServices} where ${visitServices.procedureId} = ${procedures.id} and ${isNull(visitServices.deletedAt)}`,
-          )} or ${exists(
-            sql`select 1 from ${treatmentPlans} where ${treatmentPlans.procedureId} = ${procedures.id} and ${isNull(treatmentPlans.deletedAt)}`,
-          )}`,
-        })
-        .from(procedures)
-        .where(eq(procedures.id, id)),
+    const {
+      rows: [row],
+    } = await this.db.run((tx) =>
+      tx.execute<{ used: boolean }>(
+        sql`select exists (select 1 from ${visitServices} where ${visitServices.procedureId} = ${id} and ${isNull(visitServices.deletedAt)})
+             or exists (select 1 from ${treatmentPlans} where ${treatmentPlans.procedureId} = ${id} and ${isNull(treatmentPlans.deletedAt)}) as used`,
+      ),
     );
     return row?.used ?? false;
   }

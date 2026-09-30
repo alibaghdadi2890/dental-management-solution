@@ -19,7 +19,7 @@ import { assertUniqueCodes } from '../domain/catalog-batch';
 import { CatalogItemInUseError, CatalogItemNotFoundError } from '../domain/catalog-errors';
 import { DEFAULT_DIAGNOSES, DEFAULT_SERVICES } from '../domain/default-catalog';
 import { CATALOG_CHANGED, type CatalogChanged } from '../events/catalog-changed';
-import type { CatalogStore } from '../persistence/catalog-store';
+import type { CatalogRowLock, CatalogStore } from '../persistence/catalog-store';
 import { DiagnosesRepository } from '../persistence/diagnoses.repository';
 import { ProceduresRepository } from '../persistence/procedures.repository';
 
@@ -175,13 +175,17 @@ export class CatalogService {
     return (await this.diagnoses.store.list()).filter((item) => item.active);
   }
 
-  /** A live row, active or not. */
-  getService(id: string): Promise<ServiceItem> {
-    return this.require(this.services, id);
+  /**
+   * A live row, active or not, for a record about to refer to it: read `FOR KEY SHARE` in the
+   * caller's open transaction (throws when none is open), so a concurrent delete can't pass its
+   * in-use check before the record commits (`CatalogRowLock`).
+   */
+  getServiceForRecord(id: string): Promise<ServiceItem> {
+    return this.requireForRecord(this.services, id);
   }
 
-  getDiagnosis(id: string): Promise<DiagnosisItem> {
-    return this.require(this.diagnoses, id);
+  getDiagnosisForRecord(id: string): Promise<DiagnosisItem> {
+    return this.requireForRecord(this.diagnoses, id);
   }
 
   // --- Shared rules ---
@@ -226,7 +230,8 @@ export class CatalogService {
   ): Promise<void> {
     this.context.requirePermission('catalog:write');
     await this.tenantDb.run(async () => {
-      const before = await this.require(catalog, id);
+      // Locked first, so no record can start referring to it before the check (`CatalogRowLock`).
+      const before = await this.require(catalog, id, 'update');
       // A row a record refers to stays for that record (C5, V11); it can only be deactivated.
       if (await catalog.store.isInUse(id)) {
         throw new CatalogItemInUseError(
@@ -267,12 +272,23 @@ export class CatalogService {
   private async require<TItem extends CatalogItem>(
     catalog: Catalog<TItem>,
     id: string,
+    lock?: CatalogRowLock,
   ): Promise<TItem> {
-    const item = await catalog.store.byId(id);
+    const item = await catalog.store.byId(id, lock);
     if (!item) {
       throw new CatalogItemNotFoundError('Catalog row not found');
     }
     return item;
+  }
+
+  private requireForRecord<TItem extends CatalogItem>(
+    catalog: Catalog<TItem>,
+    id: string,
+  ): Promise<TItem> {
+    if (!this.tenantDb.currentTransaction()) {
+      throw new Error('a catalog row for a record is read inside the record transaction');
+    }
+    return this.require(catalog, id, 'key share');
   }
 
   /** One audit entry per created or updated row, then `CatalogChanged` for them all. */

@@ -306,6 +306,27 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       });
     });
 
+    it("counts the age on the tenant's date, not the UTC one", async () => {
+      // 22:00 UTC on 06-09 is already 06-10 in Beirut: the patient's sixth birthday.
+      testApp.clock.set(new Date('2026-06-09T22:00:00Z'));
+      const child = await createPatient('Chart Sixth Birthday', '2020-06-10');
+      expect((await chartOf(child)).dentition).toEqual({
+        stage: 'mixed',
+        source: 'auto',
+        ageYears: 6,
+      });
+    });
+
+    it("reads a date of birth on the tenant's tomorrow as a newborn", async () => {
+      const newborn = await createPatient('Chart Newborn', TODAY);
+      testApp.clock.set(new Date('2026-06-09T09:00:00Z'));
+      expect((await chartOf(newborn)).dentition).toEqual({
+        stage: 'primary',
+        source: 'auto',
+        ageYears: 0,
+      });
+    });
+
     it('treats a patient without a date of birth as permanent', async () => {
       const adult = await createPatient('Chart No Birth Date');
       expect((await chartOf(adult)).dentition).toEqual({
@@ -423,6 +444,33 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       expect(tooth('36')).toMatchObject({ state: 'none', hasActiveDiagnosis: true });
       expect(tooth('17')).toBeUndefined();
       expect(tooth('27')).toBeUndefined();
+    });
+
+    it('lists the history across completed visits, the most recent visit first', async () => {
+      const patient = await createPatient('Chart Two Visits');
+      const addService = async (visit: Visit, toothCode: string) =>
+        (
+          await created<ServiceResult>(
+            dentist.agent
+              .post(visitPath(visit.id, 'services'))
+              .send({ procedureId: service.fill.id, toothCode }),
+          )
+        ).record;
+      let recent: ServiceResult['record'] | undefined;
+      let older: ServiceResult['record'] | undefined;
+      // The more recent visit is completed first, so only the completion time orders them.
+      const recentVisit = await completedOn(patient, EARLIER, async (visit) => {
+        recent = await addService(visit, '16');
+      });
+      const olderVisit = await completedOn(patient, EARLIEST, async (visit) => {
+        older = await addService(visit, '26');
+      });
+
+      const { history } = await chartOf(patient);
+      expect(history.map((line) => [line.id, line.visitId, line.visitDate])).toEqual([
+        [recent?.id, recentVisit.id, EARLIER],
+        [older?.id, olderVisit.id, EARLIEST],
+      ]);
     });
   });
 
@@ -548,10 +596,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         const response = await dentist.agent.patch(visitPath(visit.id, 'notes')).send({ notes });
         expect(response.status, JSON.stringify(response.body)).toBe(200);
       };
-      await completedOn(patient, EARLIEST, async (visit) => {
-        await addService(visit, { procedureId: service.clean.id });
-        await writeNotes(visit, 'First');
-      });
+      // The most recent visit is completed first.
       const latest = await completedOn(
         patient,
         EARLIER,
@@ -576,6 +621,11 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         },
         42,
       );
+      // Completed after the latest one, so the order can only come from the completion time.
+      await completedOn(patient, EARLIEST, async (visit) => {
+        await addService(visit, { procedureId: service.clean.id });
+        await writeNotes(visit, 'First');
+      });
       await startVisit(patient);
 
       expect(await read<LastVisit>(patientPath(patient.id, 'last-visit'))).toEqual({
