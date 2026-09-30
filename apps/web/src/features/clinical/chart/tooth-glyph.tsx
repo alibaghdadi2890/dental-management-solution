@@ -10,7 +10,16 @@ import {
   type ToothVisualState,
 } from '@dcm/contracts';
 import { cn } from '@/lib/utils';
-import { CELL_MAP, cellClass, gridStyle, PLANNED_SHADOW, SELECTED_SHADOW } from './glyph-style';
+import {
+  CELL_MAP,
+  CHART_GLYPH_GAP,
+  CHART_GLYPH_PADDING,
+  cellClass,
+  gridStyle,
+  PLANNED_SHADOW,
+  SELECTED_SHADOW,
+  simpleBox,
+} from './glyph-style';
 import { PanelGlyph, type PanelGlyphProps } from './panel-glyph';
 
 interface GlyphBase {
@@ -48,14 +57,6 @@ const RING = {
 /** Primary teeth draw at 0.78× (never under 6 px) so the dentition reads at a glance. */
 function chartCellSize(code: ToothCode, size: number): number {
   return isPrimary(code) ? Math.max(6, Math.round(size * 0.78)) : size;
-}
-
-function simpleBox(size: number): { width: number; height: number; radius: number } {
-  return {
-    width: Math.round(size * 2.2),
-    height: Math.round(size * 2.7),
-    radius: Math.round(size * 0.34),
-  };
 }
 
 interface Paint {
@@ -125,8 +126,8 @@ function ChartGlyph({
     <GlyphGrid
       {...rest}
       cell={chartCellSize(rest.code, size)}
-      gap={1}
-      padding={1}
+      gap={CHART_GLYPH_GAP}
+      padding={CHART_GLYPH_PADDING}
       ring={ring}
       paint={paint}
     />

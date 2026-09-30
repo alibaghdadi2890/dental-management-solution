@@ -197,6 +197,44 @@ describe('DentalChart', () => {
     );
   });
 
+  it('keeps a diagnosed number centred over its tooth: the dot sits outside the flow', () => {
+    const teeth = teethOf(tooth({ code: '36', hasActiveDiagnosis: true }));
+    renderWith(<DentalChart {...chart({ teeth })} />);
+
+    const dot = numberOf('36')?.querySelector<HTMLElement>('[data-diagnosis-dot]');
+    expect(numberOf('36')?.className).toContain('relative');
+    expect(dot?.className).toContain('absolute');
+    expect(dot?.className).toContain('start-full');
+    expect(column('36').style.width).toBe(column('37').style.width);
+  });
+
+  it.each([
+    ['surface', 12, '40px'],
+    ['surface', 8, '28px'],
+    ['simple', 12, '28px'],
+    ['simple', 8, '20px'],
+  ] as const)(
+    'gives every %s column at %ipx cells the glyph box’s fixed width (%s)',
+    (mode, size, width) => {
+      const teeth = teethOf(tooth({ code: '11', hasActiveDiagnosis: true }));
+      renderWith(<DentalChart {...chart({ teeth, size })} />, { mode });
+
+      const widths = new Set(
+        [...document.querySelectorAll<HTMLElement>('[data-column]')].map(
+          (element) => element.style.width,
+        ),
+      );
+      expect([...widths]).toEqual([width]);
+      const glyph = column('16').querySelector<HTMLElement>('[data-glyph]');
+      const padding = Number.parseFloat(glyph?.style.padding ?? '');
+      const inner =
+        mode === 'simple'
+          ? Number.parseFloat(glyph?.style.gridTemplateColumns ?? '')
+          : size * 3 + Number.parseFloat(glyph?.style.gap ?? '') * 2;
+      expect(`${String(inner + padding * 2)}px`).toBe(width);
+    },
+  );
+
   it('exposes each tooth as a labelled toggle and reports clicks', () => {
     const onToothClick = vi.fn();
     renderWith(<DentalChart {...chart({ selected: '11', onToothClick })} />);
@@ -292,6 +330,30 @@ describe('ChartLegend', () => {
       'Planned',
       'Selected',
     ]);
+  });
+
+  it('draws compact rings on the planned and selected swatches, clear of their labels', () => {
+    renderWith(<ChartLegend dentition="permanent" />);
+    const swatchOf = (label: string) =>
+      [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].find(
+        (item) => item.textContent === label,
+      )?.firstElementChild?.className ?? '';
+
+    expect(swatchOf('Selected')).toContain('shadow-[0_0_0_2px_var(--color-primary)]');
+    expect(swatchOf('Selected')).toContain('m-[2px]');
+    expect(swatchOf('Selected')).not.toContain('5px');
+    expect(swatchOf('Planned')).toContain('shadow-[0_0_0_1.5px_var(--color-planned-border)]');
+    expect(swatchOf('Planned')).toContain('m-[1.5px]');
+  });
+
+  it('gives every legend item the same height, so both groups line up', () => {
+    renderWith(<ChartLegend dentition="mixed" />);
+    const heights = new Set(
+      [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].map((item) =>
+        item.className.split(' ').find((name) => name.startsWith('h-')),
+      ),
+    );
+    expect([...heights]).toEqual(['h-[15px]']);
   });
 
   it('adds the primary and not-erupted markers for a child’s dentition', () => {

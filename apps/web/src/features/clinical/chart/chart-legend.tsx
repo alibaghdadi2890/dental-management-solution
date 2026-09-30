@@ -2,7 +2,7 @@ import { type DentitionStage, toothLabel } from '@dcm/contracts';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { PLANNED_SHADOW, SELECTED_SHADOW } from './glyph-style';
+import { PLANNED_SHADOW } from './glyph-style';
 import { useChartSettings } from './use-chart-settings';
 
 interface LegendItem {
@@ -11,6 +11,11 @@ interface LegendItem {
 }
 
 const square = 'size-[11px] flex-none rounded-[2px] border';
+
+/** The swatches' rings: the chart's planned ring, and the selected ring without its halo, each
+ * with a margin as wide as the ring so it never draws over the label or the next item. */
+const PLANNED_RING = cn(PLANNED_SHADOW, 'm-[1.5px]');
+const SELECTED_RING = 'm-[2px] shadow-[0_0_0_2px_var(--color-primary)]';
 
 /** A 3×3 mini glyph (5 cells) for the surface legend: `filled` picks which cells are tinted. */
 function MiniGlyph({ filled }: { filled: 'centre' | 'all' }) {
@@ -39,7 +44,8 @@ function MiniGlyph({ filled }: { filled: 'centre' | 'all' }) {
  * The chart legend (spec §Interactions → Legend), in two labelled groups: what the tooth's fill
  * says (its treatment), then the markers layered on top, each in precedence order. Simple mode
  * collapses "Treated surface" and "Whole tooth" into "Treated". A child's dentition adds the
- * primary and not-erupted markers. Wraps and aligns to the inline end.
+ * primary and not-erupted markers. Every item is one fixed height, so both groups are too. Wraps
+ * and aligns to the inline end.
  */
 export function ChartLegend({ dentition }: { dentition: DentitionStage }) {
   const { t } = useTranslation('clinical');
@@ -79,13 +85,11 @@ export function ChartLegend({ dentition }: { dentition: DentitionStage }) {
     },
     {
       label: t('legend.planned'),
-      swatch: (
-        <span className={cn(square, 'border-planned-border bg-planned-bg', PLANNED_SHADOW)} />
-      ),
+      swatch: <span className={cn(square, 'border-planned-border bg-planned-bg', PLANNED_RING)} />,
     },
     {
       label: t('legend.selected'),
-      swatch: <span className={cn(square, 'border-border-control bg-surface', SELECTED_SHADOW)} />,
+      swatch: <span className={cn(square, 'border-border-control bg-surface', SELECTED_RING)} />,
     },
   ];
   if (dentition !== 'permanent') {
@@ -114,7 +118,7 @@ export function ChartLegend({ dentition }: { dentition: DentitionStage }) {
         <span
           key={item.label}
           data-legend-item
-          className="inline-flex items-center gap-[5px] text-[12.5px] leading-none whitespace-nowrap text-ink-secondary"
+          className="inline-flex h-[15px] items-center gap-[5px] text-[12.5px] leading-none whitespace-nowrap text-ink-secondary"
         >
           {item.swatch}
           {item.label}

@@ -11,6 +11,7 @@ import {
 } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
+import { chartGlyphBox } from './glyph-style';
 import { ToothGlyph } from './tooth-glyph';
 import { toothTitle } from './tooth-title';
 import { useChartSettings, useToothName } from './use-chart-settings';
@@ -58,10 +59,9 @@ export function DentalChart({
   const full = size === 12;
 
   // Primary glyphs are smaller, so each sits in a constant-height box aligned to the occlusal
-  // plane, and every column keeps the full glyph's width: number rows, the midline and the
-  // upper/lower columns all stay straight.
-  const glyphHeight = mode === 'surface' ? size * 3 + 4 : Math.round(size * 2.7) + 2;
-  const columnWidth = mode === 'surface' ? size * 3 + 4 : Math.round(size * 2.2) + 2;
+  // plane, and every column is exactly the full glyph's width (never wider, whatever its number
+  // row holds): number rows, the midline and the upper/lower columns all stay straight.
+  const { width: columnWidth, height: glyphHeight } = chartGlyphBox(mode, size);
 
   const renderTooth = (column: PermanentToothCode, arch: Arch) => {
     const { code, notErupted } = presentTooth(column, dentition, presence.get(column));
@@ -76,13 +76,14 @@ export function DentalChart({
       tooth,
     });
 
-    // The number stays LTR so the diagnosis dot always follows it.
+    // The number stays LTR so the diagnosis dot always follows it. The dot hangs off the number's
+    // end, out of the flow, so the number itself stays centred over its glyph.
     const number = (
       <span
         data-number
         dir="ltr"
         className={cn(
-          'flex items-center justify-center gap-[3px] font-mono leading-none tabular-nums',
+          'relative font-mono leading-none tabular-nums',
           full ? 'text-[12.5px]' : 'text-[11.5px]',
           isSelected ? 'font-semibold text-primary' : 'font-medium text-ink-muted',
           notErupted && 'italic',
@@ -92,7 +93,10 @@ export function DentalChart({
         {tooth?.hasActiveDiagnosis && (
           <span
             data-diagnosis-dot
-            className={cn('flex-none rounded-full bg-danger', full ? 'size-1' : 'size-[3px]')}
+            className={cn(
+              'absolute start-full top-1/2 -translate-y-1/2 rounded-full bg-danger',
+              full ? 'ms-[3px] size-1' : 'ms-[2px] size-[3px]',
+            )}
           />
         )}
       </span>
@@ -116,7 +120,10 @@ export function DentalChart({
       </span>
     );
 
-    const columnClass = cn('flex flex-col items-center', full ? 'gap-[5px]' : 'gap-[3px]');
+    const columnClass = cn(
+      'flex flex-none flex-col items-center',
+      full ? 'gap-[5px]' : 'gap-[3px]',
+    );
     const content = (
       <>
         {arch === 'upper' ? number : glyph}
@@ -134,7 +141,7 @@ export function DentalChart({
           title={title}
           aria-label={title}
           className={columnClass}
-          style={{ minWidth: columnWidth }}
+          style={{ width: columnWidth }}
         >
           {content}
         </div>
@@ -153,7 +160,7 @@ export function DentalChart({
           onToothClick(code);
         }}
         className={cn(columnClass, 'cursor-pointer border-0 bg-transparent p-0')}
-        style={{ minWidth: columnWidth }}
+        style={{ width: columnWidth }}
       >
         {content}
       </button>
@@ -175,7 +182,7 @@ export function DentalChart({
       aria-hidden
       dir={textDir}
       title={t(side === 'right' ? 'chart.rightTitle' : 'chart.leftTitle')}
-      className="min-w-[14px] text-center font-mono text-[11.5px] leading-none font-medium tracking-[.1em] text-ink-muted [&:lang(ar)]:tracking-normal"
+      className="min-w-[14px] text-center font-mono text-[11.5px] leading-none font-medium text-ink-muted"
     >
       {t(side === 'right' ? 'chart.right' : 'chart.left')}
     </span>
