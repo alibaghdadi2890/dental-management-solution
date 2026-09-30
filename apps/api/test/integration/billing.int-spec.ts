@@ -491,12 +491,12 @@ describe('billing: ledger, opening balances and balances', () => {
     });
   });
 
-  describe('PatientsService.lockForLedger', () => {
+  describe('PatientsService.lockForDependentWrite', () => {
     it('refuses to run outside the caller transaction (the lock would be released at once)', async () => {
       const { patient } = await openWithBalance(main.owner, 'Lock Outside', '1.00');
       await expect(
         asPlatformAdminIn(testApp.app, main.tenant.id, () =>
-          testApp.app.get(PatientsService).lockForLedger(patient.id),
+          testApp.app.get(PatientsService).lockForDependentWrite(patient.id),
         ),
       ).rejects.toThrow(/inside a transaction/);
     });

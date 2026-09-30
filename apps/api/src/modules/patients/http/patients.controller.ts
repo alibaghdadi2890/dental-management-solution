@@ -1,6 +1,7 @@
 import {
   contactLinkInputSchema,
   contactLinkPatchSchema,
+  dentitionOverrideSchema,
   duplicateCheckQuerySchema,
   duplicateGroupSchema,
   idSchema,
@@ -26,6 +27,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
@@ -51,6 +53,7 @@ const patientsRouteQuerySchema = patientListQuerySchema
 class PatientDto extends createZodDto(patientSchema) {}
 class PatientCreateDto extends createZodDto(patientCreateSchema) {}
 class PatientPatchDto extends createZodDto(patientPatchSchema) {}
+class DentitionOverrideDto extends createZodDto(dentitionOverrideSchema) {}
 class PatientListItemDto extends createZodDto(patientListItemSchema) {}
 class PatientsQueryDto extends createZodDto(patientsRouteQuerySchema) {}
 class PatientPageDto extends createZodDto(patientPageSchema) {}
@@ -152,6 +155,14 @@ export class PatientsController {
   @ZodResponse({ type: PatientDto })
   update(@Param() params: PatientParamsDto, @Body() body: PatientPatchDto) {
     return this.patients.update(params.id, body);
+  }
+
+  /** Set from the workspace's chart card header only (spec W14): `visit:write`, not `patient:write`. */
+  @Put(':id/dentition')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: PatientDto })
+  setDentition(@Param() params: PatientParamsDto, @Body() body: DentitionOverrideDto) {
+    return this.patients.setDentition(params.id, body);
   }
 
   @Get(':id/contacts')

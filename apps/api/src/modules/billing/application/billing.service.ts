@@ -31,9 +31,9 @@ type EntryFields = Pick<LedgerEntry, 'amount' | 'effectiveDate' | 'note' | 'reas
  * The patient ledger of the current tenant (docs/modules/billing.md): opening balances,
  * adjustments and balances (design Q1, Q12, Q13). Entries are stamped with the tenant currency;
  * every write re-checks `payment:write`, holds the patient row `FOR SHARE`
- * (`PatientsService.lockForLedger`, so a concurrent merge waits for it), is audited in the same
- * transaction and emits `LedgerEntryRecorded` after commit. Patient existence always comes from
- * `PatientsService`, which requires `patient:read` — every system role holds it.
+ * (`PatientsService.lockForDependentWrite`, so a concurrent merge waits for it), is audited in
+ * the same transaction and emits `LedgerEntryRecorded` after commit. Patient existence always
+ * comes from `PatientsService`, which requires `patient:read` — every system role holds it.
  */
 @Injectable()
 export class BillingService {
@@ -82,7 +82,7 @@ export class BillingService {
     return this.tenantDb.run(async () => {
       const tenant = await this.tenancy.currentTenant();
       this.assertNotAfterToday(input.asOf, tenant, 'asOf');
-      await this.patients.lockForLedger(patientId);
+      await this.patients.lockForDependentWrite(patientId);
       await this.appendOpeningBalance(patientId, input, tenant);
       return this.balanceIn(patientId);
     });
@@ -98,7 +98,7 @@ export class BillingService {
     return this.tenantDb.run(async () => {
       const tenant = await this.tenancy.currentTenant();
       this.assertNotAfterToday(input.effectiveDate, tenant, 'effectiveDate');
-      await this.patients.lockForLedger(patientId);
+      await this.patients.lockForDependentWrite(patientId);
       await this.append(patientId, 'adjustment', tenant, {
         amount: input.amount,
         effectiveDate: input.effectiveDate,

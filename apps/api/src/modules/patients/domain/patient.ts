@@ -1,4 +1,4 @@
-import type { ContactRelationship, PatientSex } from '@dcm/contracts';
+import type { ContactRelationship, DentitionStage, PatientSex } from '@dcm/contracts';
 
 /**
  * The domain shape of a patient row: mirrors the contract `Patient` plus two internal fields the
@@ -27,6 +27,8 @@ export interface DomainPatient {
   medicalAlerts: string[];
   /** `staff_profiles.id` (ADR-0020). */
   primaryDentistId: string | null;
+  /** Null means "auto": the chart derives the stage from age (spec W14). */
+  dentitionOverride: DentitionStage | null;
   externalId: string | null;
   mergedIntoId: string | null;
   deletedAt: Date | null;

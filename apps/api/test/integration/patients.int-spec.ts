@@ -893,6 +893,106 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     });
   });
 
+  describe('dentition override (spec W14)', () => {
+    const setDentition = (agent: TestAgent, id: string, override: string | null) =>
+      agent.put(`/api/v1/patients/${id}/dentition`).send({ override });
+
+    it("needs visit:write (a dentist), sets and clears the patient's override, and audits it", async () => {
+      const patient = await createPatient(main.owner, {
+        fullName: 'Dentition Set',
+        phone: '71000050',
+      });
+      const dentist = await createStaff(main, { displayName: 'Dr. Denti' });
+      const agent = await signInAndSetPassword(testApp.app, dentist.email, TEMPORARY);
+
+      const set = await setDentition(agent, patient.id, 'mixed');
+      expect(set.status, JSON.stringify(set.body)).toBe(200);
+      expect(set.body).toMatchObject({ id: patient.id, dentitionOverride: 'mixed' });
+      expect((await getPatient(main.owner, patient.id)).dentitionOverride).toBe('mixed');
+
+      const [entry] = await auditOf(main.owner, `resourceId=${patient.id}`);
+      expect(entry).toMatchObject({
+        action: 'patient.dentition',
+        before: { dentitionOverride: null },
+        after: { dentitionOverride: 'mixed' },
+      });
+
+      // Back to auto.
+      const cleared = await setDentition(agent, patient.id, null);
+      expect(cleared.status).toBe(200);
+      expect(cleared.body).toMatchObject({ dentitionOverride: null });
+      expect((await getPatient(main.owner, patient.id)).dentitionOverride).toBeNull();
+
+      // Setting it to its current value writes, audits and emits nothing.
+      const entriesBefore = await auditOf(main.owner, `resourceId=${patient.id}`);
+      const noop = await setDentition(agent, patient.id, null);
+      expect(noop.status).toBe(200);
+      const entriesAfter = await auditOf(main.owner, `resourceId=${patient.id}`);
+      expect(entriesAfter).toHaveLength(entriesBefore.length);
+    });
+
+    it('refuses front desk: visit:write, not patient:write', async () => {
+      const patient = await createPatient(main.owner, {
+        fullName: 'Dentition Desk',
+        phone: '71000051',
+      });
+      const staff = await createStaff(main, {
+        displayName: 'Desk Only',
+        practitionerType: 'frontdesk',
+        roleKeys: ['frontdesk'],
+      });
+      const frontdesk = await signInAndSetPassword(testApp.app, staff.email, TEMPORARY);
+      expect((await setDentition(frontdesk, patient.id, 'primary')).status).toBe(403);
+    });
+
+    it('refuses an archived patient', async () => {
+      const patient = await createPatient(main.owner, {
+        fullName: 'Dentition Archived',
+        phone: '71000052',
+      });
+      await main.owner.post('/api/v1/patients/archive').send({ ids: [patient.id] });
+      const response = await setDentition(main.owner, patient.id, 'mixed');
+      expect(response.status).toBe(409);
+      expect(response.body).toMatchObject({ code: 'patient.archived' });
+    });
+
+    it('refuses a merged-away patient (checked before the plain-archived case)', async () => {
+      const kept = await createPatient(main.owner, {
+        fullName: 'Dentition Kept',
+        phone: '71000053',
+      });
+      const dropped = await createPatient(main.owner, {
+        fullName: 'Dentition Dropped',
+        phone: '71000054',
+      });
+      await main.owner
+        .post('/api/v1/patients/merge')
+        .send({ keepId: kept.id, dropId: dropped.id, reason: 'Duplicate' });
+      const response = await setDentition(main.owner, dropped.id, 'mixed');
+      expect(response.status).toBe(409);
+      expect(response.body).toMatchObject({ code: 'patient.merged' });
+    });
+
+    it('re-checks the permission in the service, not only at the route', async () => {
+      const patient = await createPatient(main.owner, {
+        fullName: 'Dentition Recheck',
+        phone: '71000055',
+      });
+      const service = testApp.app.get(PatientsService);
+      const context = testApp.app.get(RequestContext);
+      await expect(
+        context.run(
+          { requestId: newId(), actorKind: 'user', tenantId: main.tenant.id, userId: newId() },
+          () => {
+            context.setPermissions(['patient:write']);
+            return service.setDentition(patient.id, { override: 'mixed' });
+          },
+        ),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+      expect((await getPatient(main.owner, patient.id)).dentitionOverride).toBeNull();
+    });
+  });
+
   describe('merge', () => {
     const merge = (agent: TestAgent, body: Record<string, unknown>) =>
       agent.post('/api/v1/patients/merge').send(body);

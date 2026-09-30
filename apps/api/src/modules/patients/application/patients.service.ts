@@ -1,5 +1,6 @@
 import {
   ageBandBounds,
+  type DentitionOverride,
   type DuplicateCheckQuery,
   type DuplicateGroup,
   type Patient,
@@ -202,6 +203,39 @@ export class PatientsService {
     });
   }
 
+  /**
+   * Sets or clears the chart's dentition override (spec W14), from the workspace's chart card
+   * header only — needs `visit:write`, not `patient:write`. Locks the row `FOR UPDATE`, like
+   * `update`; archived → 409 `patient.archived` (merged away → 409 `patient.merged`, checked
+   * first since a merged record is always archived too). A no-op override changes nothing and
+   * audits nothing, like `update`. Audits `patient.dentition` with before/after.
+   */
+  async setDentition(id: string, input: DentitionOverride): Promise<Patient> {
+    this.context.requirePermission('visit:write');
+    return this.tenantDb.run(async () => {
+      const before = await this.patients.findForUpdate(id);
+      if (!before) throw new PatientNotFoundError(NOT_FOUND);
+      if (before.deletedAt !== null) {
+        throw before.mergedIntoId !== null
+          ? new PatientMergedError('This record was merged into another one; use the kept record')
+          : new PatientArchivedError('Archived patients cannot be edited; restore them first');
+      }
+      if (before.dentitionOverride === input.override) return toPatient(before);
+
+      const updated = await this.patients.update(id, { dentitionOverride: input.override });
+      if (!updated) throw new PatientNotFoundError(NOT_FOUND);
+      const after = toPatient(updated);
+      await this.audit.record({
+        action: 'patient.dentition',
+        resourceType: 'patient',
+        resourceId: id,
+        before: { dentitionOverride: before.dentitionOverride },
+        after: { dentitionOverride: after.dentitionOverride },
+      });
+      return after;
+    });
+  }
+
   /** Archived and merged-away records included. */
   async get(id: string): Promise<Patient> {
     this.context.requirePermission('patient:read');
@@ -233,16 +267,17 @@ export class PatientsService {
   }
 
   /**
-   * For `billing`'s ledger writes: reads the patient `FOR SHARE` inside the caller's open
-   * transaction, so a merge (which locks `FOR UPDATE`) waits until the entry is committed and its
-   * re-point job then finds it. Unknown → 404; merged away → 409 `patient.merged` (the entry
-   * belongs on the kept record). Archived-but-not-merged is allowed (e.g. writing off a debt).
-   * Throws when no transaction is open: the lock would be released before the caller's write.
+   * For a dependent module's write on this patient (`billing`'s ledger writes; `clinical`'s
+   * visit start, W22): reads the patient `FOR SHARE` inside the caller's open transaction, so a
+   * merge (which locks `FOR UPDATE`) waits until the write is committed and its re-point job then
+   * finds it. Unknown → 404; merged away → 409 `patient.merged` (the write belongs on the kept
+   * record). Archived-but-not-merged is allowed (e.g. writing off a debt). Throws when no
+   * transaction is open: the lock would be released before the caller's write.
    */
-  async lockForLedger(id: string): Promise<Patient> {
+  async lockForDependentWrite(id: string): Promise<Patient> {
     this.context.requirePermission('patient:read');
     if (!this.tenantDb.currentTransaction()) {
-      throw new Error('lockForLedger must run inside a transaction');
+      throw new Error('lockForDependentWrite must run inside a transaction');
     }
     const patient = await this.patients.findForShare(id);
     if (!patient) throw new PatientNotFoundError(NOT_FOUND);

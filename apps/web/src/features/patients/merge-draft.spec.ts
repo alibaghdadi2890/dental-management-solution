@@ -29,6 +29,7 @@ function patient(overrides: Partial<Patient>): Patient {
     medicalAlerts: [],
     primaryDentistId: null,
     notes: null,
+    dentitionOverride: null,
     externalId: null,
     archivedAt: null,
     mergedIntoId: null,

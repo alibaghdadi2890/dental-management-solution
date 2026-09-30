@@ -70,6 +70,7 @@ const full = (patient: PatientListItem, archivedAt: string | null): Patient => (
   address: null,
   insurance: null,
   notes: null,
+  dentitionOverride: null,
   externalId: null,
   archivedAt,
   mergedIntoId: null,

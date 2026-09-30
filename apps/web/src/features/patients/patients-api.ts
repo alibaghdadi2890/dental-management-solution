@@ -7,6 +7,7 @@ import {
   patientPageSchema,
   patientSchema,
   type AuditPage,
+  type DentitionOverride,
   type DuplicateCheckQuery,
   type ExportLanguage,
   type PatientArchive,
@@ -144,6 +145,15 @@ export function createPatient(input: PatientCreateInput) {
 
 export function updatePatient(id: string, patch: PatientPatch) {
   return apiFetch(`/patients/${id}`, patientSchema, { method: 'PATCH', json: patch });
+}
+
+/**
+ * `PUT /patients/:id/dentition` (spec W14): sets or clears the chart's dentition override, from
+ * the workspace's chart card header. Needs `visit:write`, not `patient:write`. No UI yet — the
+ * chart card (feature 4a Task G2) calls this.
+ */
+export function setDentition(id: string, input: DentitionOverride) {
+  return apiFetch(`/patients/${id}/dentition`, patientSchema, { method: 'PUT', json: input });
 }
 
 /** Returns every affected patient (design "all-or-nothing"). */

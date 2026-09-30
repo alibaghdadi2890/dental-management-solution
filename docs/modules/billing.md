@@ -31,8 +31,9 @@ currency having sum(amount) > 0`).
 - **Opening balance only on create** is enforced by the route (`POST /billing/opening-balances`
   creates the patient). The schema does not enforce it: a merge moves both records' opening
   balances onto the kept patient (design Q12).
-- **Locking against merges:** every ledger write first calls `PatientsService.lockForLedger`,
-  which reads the patient `FOR SHARE` in the same transaction as the insert. A merge locks both
+- **Locking against merges:** every ledger write first calls
+  `PatientsService.lockForDependentWrite`, which reads the patient `FOR SHARE` in the same
+  transaction as the insert. A merge locks both
   records `FOR UPDATE`, so it waits for in-flight ledger writes, and the re-point job then finds
   their entries. A merged-away patient refuses new entries: 409 `patient.merged` (the entry
   belongs on the kept record). An archived patient that was not merged accepts them, for
@@ -45,7 +46,7 @@ currency having sum(amount) > 0`).
   `currency char(3)`, `effective_date date`, `note?`, `reason?`, `created_by` (the actor's auth
   user id), timestamps.
   - `patient_id` has no foreign key, because `patients` owns that table. Existence is always
-    checked through `PatientsService`: `lockForLedger` for writes, `getMany` for reads.
+    checked through `PatientsService`: `lockForDependentWrite` for writes, `getMany` for reads.
   - Indexes: `tenant_id`, and `(tenant_id, patient_id)`.
   - Entries are never edited or deleted. The merge job is the only writer that updates a row,
     and it changes `patient_id` (and `updated_at`) only; `created_by` and the amount stay.
@@ -73,7 +74,7 @@ Every write records the entry and audits `ledger_entry.create` (resource type `l
 after = the entry, reason for adjustments) in the same transaction. It emits
 `LedgerEntryRecorded` after commit.
 
-Patient existence comes from `PatientsService` (`getMany`, `lockForLedger`), which requires
+Patient existence comes from `PatientsService` (`getMany`, `lockForDependentWrite`), which requires
 `patient:read`. In
 practice, reads and writes here need `patient:read` as well as the `payment:*` permission. Every
 system role holds it.
@@ -249,9 +250,9 @@ pipe a `Readable`: stream callbacks run outside the request's async context, whe
 
 - `patients`: existence checks (`getMany`), the export's rows and guardian columns
   (`listItemsByIds`, design addendum C14, resolved per C7), the ledger-write lock
-  (`lockForLedger`), `create` for the opening-balance create (contacts and `linkContactId`
-  included), `search` and `searchIds` with their internal options for the patient views and the
-  export, `survivorOf` for the merge re-point; the `PatientsMerged` event.
+  (`lockForDependentWrite`), `create` for the opening-balance create (contacts and
+  `linkContactId` included), `search` and `searchIds` with their internal options for the patient
+  views and the export, `survivorOf` for the merge re-point; the `PatientsMerged` event.
 - `tenancy`: currency, time zone and country (`currentTenant`).
 - `users`: dentist display names in the export (`practitionersByProfileIds`, by staff profile
   id).

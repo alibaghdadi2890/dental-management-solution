@@ -16,6 +16,7 @@ export function toPatient(patient: DomainPatient): Patient {
     medicalAlerts: patient.medicalAlerts,
     primaryDentistId: patient.primaryDentistId,
     notes: patient.notes,
+    dentitionOverride: patient.dentitionOverride,
     externalId: patient.externalId,
     archivedAt: patient.deletedAt?.toISOString() ?? null,
     mergedIntoId: patient.mergedIntoId,

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { optionalEmailSchema } from './auth.js';
+import { reasonSchema } from './audit.js';
+import { dentitionStageSchema } from './clinical-records.js';
 import {
   blankToUndefined,
   displayNumberSchema,
@@ -11,7 +13,6 @@ import {
   optionalDate,
   optionalText,
 } from './common.js';
-import { reasonSchema } from './audit.js';
 import { contactLinkInputSchema, matchedContactSchema, primaryGuardianSchema } from './contacts.js';
 import { AGE_BANDS } from './patient-age.js';
 
@@ -161,7 +162,11 @@ export const patientPatchSchema = z
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Change at least one field' });
 export type PatientPatch = z.infer<typeof patientPatchSchema>;
 
-/** The full record (`GET /patients/:id`). Age and dentition stage are derived, never stored. */
+/**
+ * The full record (`GET /patients/:id`). Age is derived, never stored. `dentitionOverride` is the
+ * one stored override of the chart's otherwise age-derived dentition stage (spec W14); `null`
+ * means "auto" (`effectiveDentition` in `@dcm/contracts` `tooth.ts` resolves it against age).
+ */
 export const patientSchema = z.object({
   id: idSchema,
   displayNumber: displayNumberSchema,
@@ -176,6 +181,7 @@ export const patientSchema = z.object({
   medicalAlerts: z.array(z.string()),
   primaryDentistId: idSchema.nullable(),
   notes: z.string().nullable(),
+  dentitionOverride: dentitionStageSchema.nullable(),
   /** The import key (feature 6); read-only here, null for records not imported. */
   externalId: z.string().nullable(),
   archivedAt: isoDateTimeSchema.nullable(),
@@ -184,6 +190,14 @@ export const patientSchema = z.object({
   updatedAt: isoDateTimeSchema,
 });
 export type Patient = z.infer<typeof patientSchema>;
+
+/**
+ * `PUT /patients/:id/dentition` (spec W14): sets or clears the chart's dentition override. Set
+ * from the workspace's chart card header only, so it needs `visit:write`, not `patient:write`
+ * (`PatientsService.setDentition`).
+ */
+export const dentitionOverrideSchema = z.object({ override: dentitionStageSchema.nullable() });
+export type DentitionOverride = z.infer<typeof dentitionOverrideSchema>;
 
 /**
  * The list/palette columns (README §Patients, §App shell), plus (addendum C7) the resolved primary

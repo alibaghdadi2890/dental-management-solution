@@ -1,4 +1,4 @@
-import type { PatientSex } from '@dcm/contracts';
+import type { DentitionStage, PatientSex } from '@dcm/contracts';
 import { phoneDigits } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, eq, getTableColumns, isNotNull, isNull, ne, sql } from 'drizzle-orm';
@@ -56,6 +56,7 @@ function toDomain(row: PatientRow): DomainPatient {
     notes: row.notes,
     medicalAlerts: row.medicalAlerts,
     primaryDentistId: row.primaryDentistId,
+    dentitionOverride: row.dentitionOverride,
     externalId: row.externalId,
     mergedIntoId: row.mergedIntoId,
     deletedAt: row.deletedAt,
@@ -182,6 +183,7 @@ export interface PatientPatch {
   notes?: string | null;
   medicalAlerts?: string[];
   primaryDentistId?: string | null;
+  dentitionOverride?: DentitionStage | null;
 }
 
 export interface PatientSearchResult {
@@ -239,6 +241,7 @@ export class PatientsRepository {
     if (patch.notes !== undefined) set.notes = patch.notes;
     if (patch.medicalAlerts !== undefined) set.medicalAlerts = patch.medicalAlerts;
     if (patch.primaryDentistId !== undefined) set.primaryDentistId = patch.primaryDentistId;
+    if (patch.dentitionOverride !== undefined) set.dentitionOverride = patch.dentitionOverride;
 
     return this.db.run(async (tx) => {
       const [row] = await tx

@@ -22,6 +22,7 @@ function patient(overrides: Partial<DomainPatient> = {}): DomainPatient {
     notes: null,
     medicalAlerts: ['Penicillin'],
     primaryDentistId: DENTIST,
+    dentitionOverride: null,
     externalId: null,
     mergedIntoId: null,
     deletedAt: null,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  dentitionOverrideSchema,
   MERGE_FIELDS,
   medicalAlertsSchema,
   patientArchiveSchema,
@@ -9,6 +10,7 @@ import {
   patientMergeSchema,
   patientPageSchema,
   patientPatchSchema,
+  patientSchema,
   profileCompleteness,
 } from './patients.js';
 
@@ -450,5 +452,53 @@ describe('patientArchiveSchema', () => {
   it('treats a blank reason as null and rejects duplicate ids', () => {
     expect(patientArchiveSchema.parse({ ids: [ID_A], reason: '  ' }).reason).toBeNull();
     expect(patientArchiveSchema.safeParse({ ids: [ID_A, ID_A] }).success).toBe(false);
+  });
+});
+
+describe('patientSchema', () => {
+  const record = {
+    id: ID_A,
+    displayNumber: 'P-000001',
+    fullName: 'Jane Doe',
+    phone: '+9613123456',
+    dateOfBirth: null,
+    sex: 'unknown',
+    email: null,
+    address: null,
+    insurance: null,
+    medicalAlerts: [],
+    primaryDentistId: null,
+    notes: null,
+    dentitionOverride: null,
+    externalId: null,
+    archivedAt: null,
+    mergedIntoId: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('requires dentitionOverride (spec W14), accepting a stage or null', () => {
+    expect(patientSchema.parse(record).dentitionOverride).toBeNull();
+    expect(patientSchema.parse({ ...record, dentitionOverride: 'mixed' }).dentitionOverride).toBe(
+      'mixed',
+    );
+    const { dentitionOverride: _omitted, ...withoutOverride } = record;
+    expect(patientSchema.safeParse(withoutOverride).success).toBe(false);
+  });
+
+  it('rejects an unknown dentition stage', () => {
+    expect(patientSchema.safeParse({ ...record, dentitionOverride: 'baby' }).success).toBe(false);
+  });
+});
+
+describe('dentitionOverrideSchema', () => {
+  it('accepts each dentition stage and null (back to auto)', () => {
+    expect(dentitionOverrideSchema.parse({ override: 'mixed' }).override).toBe('mixed');
+    expect(dentitionOverrideSchema.parse({ override: null }).override).toBeNull();
+  });
+
+  it('rejects an unknown stage and a missing override', () => {
+    expect(dentitionOverrideSchema.safeParse({ override: 'baby' }).success).toBe(false);
+    expect(dentitionOverrideSchema.safeParse({}).success).toBe(false);
   });
 });

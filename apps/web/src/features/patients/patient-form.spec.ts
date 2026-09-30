@@ -40,6 +40,7 @@ const PATIENT: Patient = {
   medicalAlerts: ['Penicillin'],
   primaryDentistId: null,
   notes: null,
+  dentitionOverride: null,
   externalId: null,
   archivedAt: null,
   mergedIntoId: null,

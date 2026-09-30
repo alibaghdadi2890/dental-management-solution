@@ -1,3 +1,4 @@
+import { DENTITION_STAGES } from '@dcm/contracts';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -24,6 +25,9 @@ import {
 
 /** Stable, not tenant-extendable (CLAUDE.md §7). */
 export const patientSex = pgEnum('patient_sex', ['female', 'male', 'other', 'unknown']);
+
+/** The chart's dentition-stage override (spec W14): `primary`, `mixed` or `permanent`. */
+export const dentition = pgEnum('dentition', DENTITION_STAGES);
 
 /** The contact's relation *to the patient* (design addendum C2); stable, not tenant-extendable. */
 export const contactRelationship = pgEnum('contact_relationship', [
@@ -70,6 +74,8 @@ export const patients = pgTable(
       .default(sql`'{}'::text[]`),
     /** `staff_profiles.id` (ADR-0020); no cross-module foreign key (CLAUDE.md §4 rule 1). */
     primaryDentistId: uuid(),
+    /** Null means "auto": the chart derives the stage from age (spec W14, `effectiveDentition`). */
+    dentitionOverride: dentition(),
     /**
      * Feature 6 import. Unique across every row for the tenant, including archived and merged-away
      * ones (`patients_external_id_unique` carries no `deleted_at` filter) — a re-import must clear

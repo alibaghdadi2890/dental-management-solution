@@ -55,6 +55,7 @@ export function patient(n: number, fullName: string, extra: Partial<Patient> = {
     medicalAlerts: [],
     primaryDentistId: null,
     notes: null,
+    dentitionOverride: null,
     externalId: null,
     archivedAt: null,
     mergedIntoId: null,
