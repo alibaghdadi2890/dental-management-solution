@@ -2,12 +2,13 @@ import {
   anatomicalName,
   type ChartMode,
   type ChartOrientation,
+  type SurfaceKey,
   TENANT_DEFAULTS,
   type ToothCode,
   type ToothNotation,
   toothLabel,
 } from '@dcm/contracts';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '@/features/auth/session';
 
@@ -50,4 +51,29 @@ export function useToothName(): (code: ToothCode) => string {
     },
     [t],
   );
+}
+
+export interface SurfaceLabel {
+  /** The letter shown for a surface, e.g. `B` (`V` in French). */
+  short: (surface: SurfaceKey) => string;
+  /** The full name, e.g. `Buccal / facial`. */
+  name: (surface: SurfaceKey) => string;
+  /** The letters joined with the POC separator, e.g. `O · D`; `''` for no surfaces. */
+  format: (surfaces: readonly SurfaceKey[]) => string;
+}
+
+const SURFACE_SEPARATOR = ' · ';
+
+/** The only way surface text is rendered (W25): surfaces are stored as M/D/B/L/O/I and displayed
+ * per locale — French shows V (vestibulaire) for buccal, Arabic keeps the Latin letters. */
+export function useSurfaceLabel(): SurfaceLabel {
+  const { t } = useTranslation('clinical');
+  return useMemo(() => {
+    const short = (surface: SurfaceKey) => t(`surfaceShort.${surface}`);
+    return {
+      short,
+      name: (surface: SurfaceKey) => t(`surface.${surface}`),
+      format: (surfaces: readonly SurfaceKey[]) => surfaces.map(short).join(SURFACE_SEPARATOR),
+    };
+  }, [t]);
 }

@@ -26,6 +26,7 @@ export interface DentalChartProps {
   /** The selected tooth. Passing it (even `null`) makes each tooth a toggle with `aria-pressed`;
    * a chart without selection (the compact one) leaves it out. */
   selected?: ToothCode | null;
+  /** Without it the teeth are not interactive: each column is a labelled image, not a button. */
   onToothClick?: (code: ToothCode) => void;
 }
 
@@ -47,7 +48,9 @@ export function DentalChart({
   selected,
   onToothClick,
 }: DentalChartProps) {
-  const { t } = useTranslation('clinical');
+  const { t, i18n } = useTranslation('clinical');
+  // The chart is LTR, but its text (titles, markers) reads in the locale's direction.
+  const textDir = i18n.dir();
   const { mode, notation, orientation } = useChartSettings();
   const toothName = useToothName();
   const presence = new Map(toothStatus.map((record) => [record.position, record.present]));
@@ -73,9 +76,11 @@ export function DentalChart({
       tooth,
     });
 
+    // The number stays LTR so the diagnosis dot always follows it.
     const number = (
       <span
         data-number
+        dir="ltr"
         className={cn(
           'flex items-center justify-center gap-[3px] font-mono leading-none tabular-nums',
           full ? 'text-[12.5px]' : 'text-[11.5px]',
@@ -94,6 +99,7 @@ export function DentalChart({
     );
     const glyph = (
       <span
+        dir="ltr"
         className={cn('flex justify-center', arch === 'upper' ? 'items-end' : 'items-start')}
         style={{ height: glyphHeight }}
       >
@@ -110,24 +116,46 @@ export function DentalChart({
       </span>
     );
 
+    const columnClass = cn('flex flex-col items-center', full ? 'gap-[5px]' : 'gap-[3px]');
+    const content = (
+      <>
+        {arch === 'upper' ? number : glyph}
+        {arch === 'upper' ? glyph : number}
+      </>
+    );
+
+    if (!onToothClick) {
+      return (
+        <div
+          key={column}
+          role="img"
+          dir={textDir}
+          data-column={column}
+          title={title}
+          aria-label={title}
+          className={columnClass}
+          style={{ minWidth: columnWidth }}
+        >
+          {content}
+        </div>
+      );
+    }
     return (
       <button
         key={column}
         type="button"
+        dir={textDir}
         data-column={column}
         title={title}
         aria-label={title}
         aria-pressed={selected === undefined ? undefined : isSelected}
-        onClick={() => onToothClick?.(code)}
-        className={cn(
-          'flex flex-col items-center border-0 bg-transparent p-0',
-          full ? 'gap-[5px]' : 'gap-[3px]',
-          onToothClick && 'cursor-pointer',
-        )}
+        onClick={() => {
+          onToothClick(code);
+        }}
+        className={cn(columnClass, 'cursor-pointer border-0 bg-transparent p-0')}
         style={{ minWidth: columnWidth }}
       >
-        {arch === 'upper' ? number : glyph}
-        {arch === 'upper' ? glyph : number}
+        {content}
       </button>
     );
   };
@@ -145,8 +173,9 @@ export function DentalChart({
   const marker = (side: 'right' | 'left') => (
     <span
       aria-hidden
+      dir={textDir}
       title={t(side === 'right' ? 'chart.rightTitle' : 'chart.leftTitle')}
-      className="min-w-[14px] text-center font-mono text-[11.5px] leading-none font-medium tracking-[.1em] text-ink-muted"
+      className="min-w-[14px] text-center font-mono text-[11.5px] leading-none font-medium tracking-[.1em] text-ink-muted [&:lang(ar)]:tracking-normal"
     >
       {t(side === 'right' ? 'chart.right' : 'chart.left')}
     </span>

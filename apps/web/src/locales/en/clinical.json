@@ -36,9 +36,13 @@
     "I": "I"
   },
   "glyph": {
-    "surfaceTreated": "{{name}} · treated"
+    "surfaces": "Tooth surfaces",
+    "surfaceName": "{{name}} ({{short}})",
+    "surfaceTreated": "{{name}} · treated",
+    "surfaceWholeTooth": "{{name}} · whole tooth treated"
   },
   "title": {
+    "listSeparator": ", ",
     "primary": "primary tooth",
     "notErupted": "not yet erupted",
     "planned": "planned: {{names}}",

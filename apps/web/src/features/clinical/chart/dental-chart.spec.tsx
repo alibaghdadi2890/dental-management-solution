@@ -8,10 +8,10 @@ import type {
   ToothState,
 } from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '@/lib/i18n';
+import i18n from '@/lib/i18n';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { ChartLegend } from './chart-legend';
 import { DentalChart } from './dental-chart';
@@ -96,9 +96,11 @@ const numberOf = (code: string) => column(code).querySelector<HTMLElement>('[dat
 const ringOf = (code: string) =>
   column(code).querySelector<HTMLElement>('[data-glyph]')?.dataset.ring;
 const columnsOf = (arch: string) =>
-  within(screen.getByRole('group', { name: arch }))
-    .getAllByRole('button')
-    .map((button) => button.dataset.column);
+  [...screen.getByRole('group', { name: arch }).querySelectorAll<HTMLElement>('[data-column]')].map(
+    (element) => element.dataset.column,
+  );
+const legendItems = () =>
+  [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].map((item) => item.textContent);
 
 describe('DentalChart', () => {
   afterEach(cleanup);
@@ -216,6 +218,22 @@ describe('DentalChart', () => {
     expect(column('11').hasAttribute('aria-pressed')).toBe(false);
   });
 
+  it('renders a chart without click handling as labelled images, not buttons', () => {
+    renderWith(<DentalChart {...chart({ size: 8 })} />);
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(
+      screen.getByRole('img', {
+        name: '#11 · Upper right central incisor · no recorded treatment',
+      }),
+    ).toBe(column('11'));
+  });
+
+  it('shows the R/L markers on the full chart only', () => {
+    renderWith(<DentalChart {...chart({ size: 8 })} />);
+    expect(screen.queryByTitle("Patient's right")).toBeNull();
+    expect(screen.queryByTitle("Patient's left")).toBeNull();
+  });
+
   it('renders one cell per tooth in simple mode', () => {
     renderWith(<DentalChart {...chart()} />, { mode: 'simple' });
     expect(column('16').querySelectorAll('[data-mark]')).toHaveLength(1);
@@ -232,6 +250,20 @@ describe('DentalChart', () => {
     expect(root?.getAttribute('dir')).toBe('ltr');
     expect(root?.contains(column('11'))).toBe(true);
   });
+
+  it('reads titles in the locale’s direction but keeps numbers and glyphs left-to-right', async () => {
+    await i18n.changeLanguage('ar');
+    try {
+      renderWith(<DentalChart {...chart({ onToothClick: () => undefined })} />);
+      const tooth = column('16');
+      expect(tooth.getAttribute('dir')).toBe('rtl');
+      expect(numberOf('16')?.getAttribute('dir')).toBe('ltr');
+      expect(tooth.querySelector('[data-glyph]')?.parentElement?.getAttribute('dir')).toBe('ltr');
+      expect(screen.getByTitle('يمين المريض').getAttribute('dir')).toBe('rtl');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
 });
 
 describe('ChartLegend', () => {
@@ -239,27 +271,31 @@ describe('ChartLegend', () => {
 
   it('lists the surface legend in precedence order', () => {
     renderWith(<ChartLegend dentition="permanent" />);
-    expect(screen.getByText('No treatment')).toBeTruthy();
-    expect(screen.getByText('Treated surface')).toBeTruthy();
-    expect(screen.getByText('Whole tooth')).toBeTruthy();
-    expect(screen.getByText('Treated today')).toBeTruthy();
-    expect(screen.getByText('Diagnosis')).toBeTruthy();
-    expect(screen.getByText('Planned')).toBeTruthy();
-    expect(screen.getByText('Selected')).toBeTruthy();
-    expect(screen.queryByText('Primary')).toBeNull();
+    expect(legendItems()).toEqual([
+      'No treatment',
+      'Treated surface',
+      'Whole tooth',
+      'Treated today',
+      'Diagnosis',
+      'Planned',
+      'Selected',
+    ]);
   });
 
   it('collapses the fill items in simple mode', () => {
     renderWith(<ChartLegend dentition="permanent" />, { mode: 'simple' });
-    expect(screen.getByText('No treatment')).toBeTruthy();
-    expect(screen.getByText('Treated')).toBeTruthy();
-    expect(screen.queryByText('Treated surface')).toBeNull();
-    expect(screen.queryByText('Whole tooth')).toBeNull();
+    expect(legendItems()).toEqual([
+      'No treatment',
+      'Treated',
+      'Treated today',
+      'Diagnosis',
+      'Planned',
+      'Selected',
+    ]);
   });
 
   it('adds the primary and not-erupted markers for a child’s dentition', () => {
     renderWith(<ChartLegend dentition="mixed" />, { notation: 'universal' });
-    expect(screen.getByText('Primary')).toBeTruthy();
-    expect(screen.getByText('Not erupted')).toBeTruthy();
+    expect(legendItems().slice(-2)).toEqual(['APrimary', 'Not erupted']);
   });
 });

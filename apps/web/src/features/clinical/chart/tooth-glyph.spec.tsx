@@ -1,5 +1,5 @@
 import type { ToothState } from '@dcm/contracts';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@/lib/i18n';
 import { ToothGlyph } from './tooth-glyph';
@@ -194,6 +194,59 @@ describe('ToothGlyph', () => {
     for (const cell of cells) expect(cell.className).toContain('border-dashed');
   });
 
+  it('draws a not-yet-erupted position as one dashed cell in simple mode', () => {
+    const { container } = render(
+      <ToothGlyph
+        variant="chart"
+        code="17"
+        tooth={undefined}
+        mode="simple"
+        orientation="patient_right_on_right"
+        size={12}
+        notErupted
+      />,
+    );
+
+    const cells = container.querySelectorAll<HTMLElement>('[data-mark]');
+    expect(cells).toHaveLength(1);
+    expect(cells[0]?.className).toContain('border-dashed');
+  });
+
+  it('edges a selected tooth’s untreated cells in the accent, keeping treated edges', () => {
+    const { container } = render(
+      <ToothGlyph
+        variant="chart"
+        code="16"
+        tooth={tooth({ code: '16', state: 'treated', surfaces: { O: 'treated' }, historyCount: 1 })}
+        mode="surface"
+        orientation="patient_right_on_right"
+        size={12}
+        selected
+      />,
+    );
+
+    const cell = (surface: string) =>
+      container.querySelector<HTMLElement>(`[data-surface="${surface}"]`)?.classList;
+    expect(cell('M')?.contains('border-primary')).toBe(true);
+    expect(cell('O')?.contains('border-primary')).toBe(false);
+    expect(cell('O')?.contains('border-primary-tint-strong')).toBe(true);
+    expect(glyphBox(container).dataset.ring).toBe('selected');
+  });
+
+  it('accepts any cell size for previews', () => {
+    const { container } = render(
+      <ToothGlyph
+        variant="chart"
+        code="16"
+        tooth={undefined}
+        mode="surface"
+        orientation="patient_right_on_right"
+        size={9}
+      />,
+    );
+    expect(glyphBox(container).style.gridTemplateColumns).toBe('repeat(3, 9px)');
+  });
+
   it('makes the enlarged panel surfaces toggle buttons with their full names', () => {
     const onSurfaceClick = vi.fn();
     render(
@@ -208,17 +261,57 @@ describe('ToothGlyph', () => {
       />,
     );
 
-    const occlusal = screen.getByRole('button', { name: 'Occlusal · treated' });
+    const group = screen.getByRole('group', { name: 'Tooth surfaces' });
+    const occlusal = within(group).getByRole('button', { name: 'Occlusal (O) · treated' });
     expect(occlusal.textContent).toBe('O');
-    expect(occlusal.getAttribute('title')).toBe('Occlusal · treated');
+    expect(occlusal.getAttribute('title')).toBe('Occlusal (O) · treated');
     expect(occlusal.getAttribute('aria-pressed')).toBe('false');
-    expect(screen.getByRole('button', { name: 'Mesial' }).getAttribute('aria-pressed')).toBe(
+    expect(screen.getByRole('button', { name: 'Mesial (M)' }).getAttribute('aria-pressed')).toBe(
       'true',
     );
     expect(screen.getAllByRole('button')).toHaveLength(5);
 
     fireEvent.click(occlusal);
     expect(onSurfaceClick).toHaveBeenCalledWith('O');
+  });
+
+  it('says a surface was treated as part of the whole tooth', () => {
+    render(
+      <ToothGlyph
+        variant="panel"
+        code="16"
+        tooth={tooth({
+          code: '16',
+          state: 'treated',
+          wholeTooth: 'treated',
+          surfaces: { O: 'treated_today' },
+          historyCount: 1,
+        })}
+        mode="surface"
+        orientation="patient_right_on_right"
+        onSurfaceClick={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Distal (D) · whole tooth treated' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Occlusal (O) · treated' })).toBeTruthy();
+  });
+
+  it('renders read-only panel surfaces without buttons', () => {
+    render(
+      <ToothGlyph
+        variant="panel"
+        code="16"
+        tooth={undefined}
+        mode="surface"
+        orientation="patient_right_on_right"
+      />,
+    );
+
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    const group = screen.getByRole('group', { name: 'Tooth surfaces' });
+    expect(within(group).getAllByRole('img')).toHaveLength(5);
+    expect(within(group).getByRole('img', { name: 'Buccal / facial (B)' }).textContent).toBe('B');
   });
 
   it('shows the panel glyph as one plain cell in simple mode', () => {

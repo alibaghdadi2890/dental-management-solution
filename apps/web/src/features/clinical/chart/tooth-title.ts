@@ -26,11 +26,14 @@ export function toothTitle(t: TFunction<'clinical'>, input: ToothTitleInput): st
   const historyCount = input.tooth?.titleParts.historyCount ?? 0;
   const treatedToday = input.tooth?.state === 'treated_today';
 
+  // A plain list in the locale's own comma (`، ` in Arabic), never "a and b".
+  const list = (names: readonly string[]) => names.join(t('title.listSeparator'));
+
   const bits: string[] = [];
   if (input.primary) bits.push(t('title.primary'));
   if (input.notErupted) bits.push(t('title.notErupted'));
-  if (diagnoses.length > 0) bits.push(diagnoses.join(', '));
-  if (plans.length > 0) bits.push(t('title.planned', { names: plans.join(', ') }));
+  if (diagnoses.length > 0) bits.push(list(diagnoses));
+  if (plans.length > 0) bits.push(t('title.planned', { names: list(plans) }));
   if (historyCount > 0) bits.push(t('title.recordedServices', { count: historyCount }));
   if (treatedToday) bits.push(t('title.treatedToday'));
   if (diagnoses.length === 0 && plans.length === 0 && historyCount === 0 && !treatedToday) {

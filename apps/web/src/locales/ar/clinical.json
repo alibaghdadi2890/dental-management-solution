@@ -36,9 +36,13 @@
     "I": "I"
   },
   "glyph": {
-    "surfaceTreated": "{{name}} · معالَج"
+    "surfaces": "أسطح السن",
+    "surfaceName": "{{name}} ({{short}})",
+    "surfaceTreated": "{{name}} · معالَج",
+    "surfaceWholeTooth": "{{name}} · عولجت السن كاملة"
   },
   "title": {
+    "listSeparator": "، ",
     "primary": "سن لبنية",
     "notErupted": "لم تبزغ بعد",
     "planned": "مخطط: {{names}}",

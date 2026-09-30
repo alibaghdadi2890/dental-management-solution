@@ -36,9 +36,13 @@
     "I": "I"
   },
   "glyph": {
-    "surfaceTreated": "{{name}} · traitée"
+    "surfaces": "Faces de la dent",
+    "surfaceName": "{{name}} ({{short}})",
+    "surfaceTreated": "{{name}} · traitée",
+    "surfaceWholeTooth": "{{name}} · dent entière traitée"
   },
   "title": {
+    "listSeparator": ", ",
     "primary": "dent temporaire",
     "notErupted": "pas encore sortie",
     "planned": "prévu : {{names}}",

@@ -2,6 +2,7 @@ import { type DentitionStage, toothLabel } from '@dcm/contracts';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
+import { PLANNED_SHADOW, SELECTED_SHADOW } from './glyph-style';
 import { useChartSettings } from './use-chart-settings';
 
 interface LegendItem {
@@ -79,24 +80,12 @@ export function ChartLegend({ dentition }: { dentition: DentitionStage }) {
     {
       label: t('legend.planned'),
       swatch: (
-        <span
-          className={cn(
-            square,
-            'border-planned-border bg-planned-bg shadow-[0_0_0_1.5px_var(--color-planned-border)]',
-          )}
-        />
+        <span className={cn(square, 'border-planned-border bg-planned-bg', PLANNED_SHADOW)} />
       ),
     },
     {
       label: t('legend.selected'),
-      swatch: (
-        <span
-          className={cn(
-            square,
-            'border-border-control bg-surface shadow-[0_0_0_2px_var(--color-primary),0_0_0_5px_rgba(59,63,143,.16)]',
-          )}
-        />
-      ),
+      swatch: <span className={cn(square, 'border-border-control bg-surface', SELECTED_SHADOW)} />,
     },
   ];
   if (dentition !== 'permanent') {
@@ -124,6 +113,7 @@ export function ChartLegend({ dentition }: { dentition: DentitionStage }) {
       {items.map((item) => (
         <span
           key={item.label}
+          data-legend-item
           className="inline-flex items-center gap-[5px] text-[12.5px] leading-none whitespace-nowrap text-ink-secondary"
         >
           {item.swatch}
