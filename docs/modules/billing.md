@@ -24,8 +24,8 @@ ADR-0017).
 - **Currency:** each entry gets the tenant currency at write time. Changing the tenant currency
   converts nothing (ADR-0015). A patient can therefore have balances in several currencies:
   `balances` lists each non-zero one, ordered by currency code, and `[]` when there are none.
-- **Owing:** any currency's balance is positive. It is evaluated in SQL (`group by patient_id,
-currency having sum(amount) > 0`).
+- **Owing:** any currency's balance is positive. It is evaluated in SQL
+  (`group by patient_id, currency having sum(amount) > 0`).
 - **Dates:** `asOf` (opening balance) and `effectiveDate` (adjustment) must not be after the
   tenant's today, computed from the injected clock in the tenant time zone. The contract only
   rejects dates that are obviously in the future. The service is the source of truth: a later
@@ -34,10 +34,10 @@ currency having sum(amount) > 0`).
   creates the patient). The schema does not enforce it: a merge moves both records' opening
   balances onto the kept patient (design Q12).
 - **Locking against merges:** every ledger write first calls
-  `PatientsService.lockForDependentWrite`, which reads the patient `FOR SHARE` in the same
-  transaction as the insert. A merge locks both
-  records `FOR UPDATE`, so it waits for in-flight ledger writes, and the re-point job then finds
-  their entries. A merged-away patient refuses new entries: 409 `patient.merged` (the entry
+  `PatientsService.lockForDependentWrite` (named `lockForLedger` before feature 4a, W22), which
+  reads the patient `FOR SHARE` in the same transaction as the insert. A merge locks both records
+  `FOR UPDATE`, so it waits for in-flight ledger writes, and the re-point job then finds their
+  entries. A merged-away patient refuses new entries: 409 `patient.merged` (the entry
   belongs on the kept record). An archived patient that was not merged accepts them, for
   example to write off a debt.
 
@@ -84,7 +84,7 @@ currency having sum(amount) > 0`).
 | `balanceOf(patientId)`                                               | `payment:read`                    | `{ patientId, balances, charged }`; `charged` is Σ `visit_charge` per currency (_Lifetime billed_, W8), non-zero currencies only. Unknown patient → 404.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `balancesFor(patientIds)`                                            | `payment:read`                    | Returned in input order, de-duplicated, each with `balances` and `charged`. Ids the tenant can't see are omitted. Patients without entries get `balances: []` and `charged: []`. One aggregate query for all ids.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `patientIdsOwing()`                                                  | `payment:read`                    | Ids of the patients owing in any currency, archived ones included, in id order. One SQL aggregate. A building block for `billing`'s patient views.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `visitSummary(visitId)`                                              | `payment:read`                    | A completed visit's figures, in the visit currency, from the ledger alone (spec W2): `{ visitId, currency, visit: { total, paid, outstanding }, previous, totalOutstanding }`. _This visit_ = its `visit_charge` (0 when none, W20), `paid` 0 until payments (feature 5); `previous` = the balance − the charge; `totalOutstanding` = the balance. `VisitsService.visitMoney` also requires `visit:read`: unknown or discarded visit → 404 `visit.not_found`; a live one → 409 `visit.not_live`. Balances in other currencies are left out.                                                                                                                                                                                                                                                                                                             |
+| `visitSummary(visitId)`                                              | `payment:read`                    | A completed visit's figures, in the visit currency, from the ledger alone (spec W2): `{ visitId, currency, visit: { total, paid, outstanding }, previous, totalOutstanding }`. _This visit_ = its `visit_charge` (0 when none, W20), `paid` 0 until payments (feature 5); `previous` = the balance − the charge; `totalOutstanding` = the balance. `VisitsService.visitMoney` also requires `visit:read`: unknown or discarded visit → 404 `visit.not_found`; a live one → 409 `visit.not_live`. Balances in other currencies are left out. While a charge posted before a merge still sits on the dropped patient (until the `merge-ledger` job moves it), the balance is summed over both the visit's patient and the charge's.                                                                                                                       |
 | `repointMergedEntries(keptId, droppedId)`                            | none (job only)                   | The merge re-point, run by `MergeLedgerWorker` (see below): moves the dropped patient's entries to the kept patient's survivor. Refuses to run outside a job or system task. Returns the number of entries moved.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 Every write goes through the internal `LedgerWriter`: it records the entry (and a visit charge's
@@ -110,10 +110,9 @@ request context, before commit (spec W2).
 - A failure rolls the completion back: the visit stays live. A unique violation on `visit_id`
   (a second charge for one visit) can only be a bug; it is raised, not ignored.
 
-Patient existence comes from `PatientsService` (`getMany`, `lockForDependentWrite`), which requires
-`patient:read`. In
-practice, reads and writes here need `patient:read` as well as the `payment:*` permission. Every
-system role holds it.
+Patient existence comes from `PatientsService` (`getMany`, `lockForDependentWrite`), which
+requires `patient:read`. In practice, reads and writes here need `patient:read` as well as the
+`payment:*` permission. Every system role holds it.
 
 ### Patient views (`application/patient-views.service.ts`)
 

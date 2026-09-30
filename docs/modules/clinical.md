@@ -1,9 +1,10 @@
 # `clinical` module
 
-**Status:** partly implemented. The service and diagnosis catalogs are done (feature 2). Of
-feature 4a, the visit lifecycle (start, resume, pause, notes, discount, discard, complete, live
-visits), charting in a visit (services, diagnoses, plans, tooth presence), the patient's chart
-reads (chart, tooth history, last visit, summary) and the merge re-point are done.
+**Status:** implemented for features 2 and 4a. The service and diagnosis catalogs (feature 2);
+the visit lifecycle (start, resume, pause, notes, discount, discard, complete, live visits),
+charting in a visit (services, diagnoses, plans, tooth presence), the patient's chart reads
+(chart, tooth history, last visit, summary), the merge re-point and the SPA's visit workspace
+(feature 4a). Amend and void of a completed visit and the visits list are feature 4b.
 
 ## Purpose
 
@@ -34,7 +35,8 @@ module was renamed from `treatments` (ADR-0001) and owns the catalogs (ADR-0002)
 - Categories are free text; the Catalog screen's filter pills are the distinct values.
 - A row that a record refers to cannot be deleted, only deactivated (409 `catalog.in_use`,
   V11): a service or a plan that isn't removed (services) or a diagnosis record that isn't
-  removed (diagnoses). Each catalog's store answers it with one `exists` query (`isInUse`).
+  removed (diagnoses). Each catalog's repository answers it with one `exists` query (`isInUse`,
+  part of the `CatalogStore` interface the service works through).
   Other rows are soft-deleted. The delete locks the row `FOR UPDATE` before that check, and a
   record write reads the row `FOR KEY SHARE`, so the two serialise (CLAUDE.md §7).
 
@@ -61,11 +63,12 @@ codes), `surfaces text[]` is a subset of `M D B L O I`.
   `visits_room_live_unique`: one live visit per room (W1).
 - `visit_services`: catalog snapshot, `tooth_code` iff `per_tooth`, `base_amount`,
   `discount_amount` (`0 ≤ discount ≤ base`), `plan_id?`, soft delete. `visit_services_plan_unique`:
-  a plan is performed by at most one live service row.
-- `patient_diagnoses`: diagnosis records on a tooth (the catalog is `diagnoses`), `active |
-resolved`, recorded/resolved in a visit, soft delete.
-- `treatment_plans`: one planned procedure per row with its price snapshot, `planned | performed |
-cancelled` with the matching visit/timestamp pair, optional `diagnosis_record_id`, soft delete.
+  a plan is performed by at most one non-deleted service row.
+- `patient_diagnoses`: diagnosis records on a tooth (the catalog is `diagnoses`),
+  `active | resolved`, recorded/resolved in a visit, soft delete.
+- `treatment_plans`: one planned procedure per row with its price snapshot,
+  `planned | performed | cancelled` with the matching visit/timestamp pair, optional
+  `diagnosis_record_id`, soft delete.
 - `tooth_status`: `primary | permanent` per succession position (W5), changed in a visit;
   `tooth_status_position_unique` on `(tenant_id, patient_id, position)`.
 
@@ -209,8 +212,8 @@ Every write is audited per row with before/after (`catalog.service.create|update
 
 `VisitsService` (spec §VisitsService). Mutations re-check `visit:write`, run in one transaction,
 lock the visit `FOR UPDATE` (409 `visit.not_live` unless live), are audited with before/after
-(resource type `visit`) and publish their event after commit. They return `{ visit }` with the
-updated `Visit`.
+(resource type `visit`) and publish their event after commit (`complete` publishes inside its
+transaction). They return `{ visit }` with the updated `Visit`.
 
 | Method                                     | Access        | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ------------------------------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -219,7 +222,7 @@ updated `Visit`.
 | `pause(id)` / `resume(id)`                 | `visit:write` | Idempotent (already paused/running → unchanged, no audit). Resume adds the pause to `pausedSeconds`. Audit `visit.pause` / `visit.resume`; `VisitPaused` / `VisitResumed`.                                                                                                                                                                                                                                                                                                                                                                |
 | `updateNotes(id, { notes })`               | `visit:write` | ≤ 20,000 characters. Audit `visit.update` with `{ notes }` (no-op when unchanged).                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `setDiscount(id, { mode, value })`         | `visit:write` | The raw entry. Audit `visit.update` with `{ discountMode, discountValue }` (no-op when unchanged).                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| `complete(id)`                             | `visit:write` | See [Visits](#visits). Unknown or discarded → 404; not live → 409 `visit.not_live`; merged patient → 409 `patient.merged` (after one re-read, W24). Audit `visit.complete` (before/after: status, timer, completion fields, money); `VisitCompleted { visitId, patientId, currency, total, localDate }`, published in the transaction. Answers with the completed visit.                                                                                                                                                                  |
+| `complete(id)`                             | `visit:write` | See [Visits](#visits). Unknown or discarded → 404; not live → 409 `visit.not_live`; merged patient → 409 `patient.merged` (after one re-read, W24); a visit re-pointed between its reads → 409 `visit.moved` (defensive, retry). Audit `visit.complete` (before/after: status, timer, completion fields, money); `VisitCompleted { visitId, patientId, currency, total, localDate }`, published in the transaction. Answers with the completed visit.                                                                                     |
 | `discard(id)`                              | `visit:write` | Not empty → 409 `visit.not_empty`. Audit `visit.discard`; `VisitDiscarded`. Answers with the discarded visit.                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `get(id)`                                  | `visit:read`  | The `Visit`: services, money, timer fields and `serverNow`. Unknown or discarded → 404 `visit.not_found`.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `chargeFacts(visitId)`                     | `visit:read`  | For `billing`'s in-transaction `VisitCompleted` handler (ADR-0024): `{ patientId, currency, total, localDate, lines }` of a completed visit, the lines being its services that aren't removed, in order (`code`, `name`, `toothCode`, `surfaces`, `amount` = base − line discount). Reads through the open transaction. A visit that isn't completed throws (a caller bug).                                                                                                                                                               |

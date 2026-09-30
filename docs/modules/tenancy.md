@@ -1,6 +1,7 @@
 # `tenancy` module
 
-**Status:** implemented — tenants, settings, branches, rooms.
+**Status:** implemented — tenants, settings (with the chart display settings, feature 4a),
+branches, rooms.
 
 ## Purpose
 
@@ -12,8 +13,9 @@ three chart display settings for `clinical`'s dental chart (feature 4a): `chartM
 (`surface`/`simple`, default `surface`), `toothNotation` (`fdi`/`universal`, default `fdi`) and
 `chartOrientation` (`patient_right_on_right`/`patient_right_on_left`, default
 `patient_right_on_right`). All three only change how the chart renders; the stored tooth code is
-always canonical FDI (ADR-0021). A room
-is the physical unit a visit happens in and the unit `scheduling` will later book as a resource
+always canonical FDI (ADR-0021). The session carries them (`session.tenant`), and
+`PATCH /tenant` changes them with the other settings (Settings → Dental chart). A room is the
+physical unit a visit happens in and the unit `scheduling` will later book as a resource
 (ADR-0007); there is no chair concept. Tenants are created and listed only by platform admins
 through `withoutTenant()`; everything else runs inside the current tenant under RLS. End-to-end
 provisioning (first branch, owner, roles) is orchestrated by `provisioning`.
@@ -39,12 +41,12 @@ Branches and rooms are deactivated, never deleted. Rooms never move between bran
 - Platform (`platform:admin`, cross-tenant): `createTenant`, `discardTenant` (provisioning
   compensation), `listTenants` (with branch counts).
 - Current tenant: `currentTenant`, `currentTenantStatus` (session guard), `updateSettings`
-  (`tenant:write`), `setStatus` (`platform:admin`, with reason).
+  (`tenant:write`; the chart settings included; audited `tenant.update` with before/after),
+  `setStatus` (`platform:admin`, with reason).
 - Branches: `listBranches`, `createBranch`, `updateBranch` (`tenant:write`), `activeBranches(ids)`,
-  `branchesByIds(ids)` (any status, for staff records),
-  `allActiveBranches()`.
-- Rooms: `listRooms(branchId?)` (for later features: visits pick a room), `saveRooms(batch)`
-  (`tenant:write`, atomic, names may be swapped within a batch).
+  `branchesByIds(ids)` (any status, for staff records), `allActiveBranches()`.
+- Rooms: `listRooms(branchId?)` (`clinical` checks a visit's room against it, feature 4a),
+  `saveRooms(batch)` (`tenant:write`, atomic, names may be swapped within a batch).
 
 Errors: `TenantNotFoundError`, `TenantSuspendedError` (exported); `branch.*`, `room.*` codes.
 

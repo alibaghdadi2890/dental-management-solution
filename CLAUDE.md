@@ -104,15 +104,15 @@ modules/<name>/
 
 | Module          | Owns                                                                 | Depends on            |
 |-----------------|----------------------------------------------------------------------|-----------------------|
-| `tenancy`       | tenants (clinics), branches, rooms (the physical unit a visit happens in; the future bookable resource), tenant settings, timezone | audit |
+| `tenancy`       | tenants (clinics), branches, rooms (the physical unit a visit happens in; the future bookable resource), tenant settings (timezone, currency, locale, country; the chart display settings: detail, tooth notation, orientation — ADR-0021) | audit |
 | `auth`          | better-auth integration (identity-plane `auth_*` tables), sessions, sign-in/out, lockout, idle timeout, org/team membership mirror, tenant + branch resolution into request context | tenancy |
 | `users`         | app-level user/staff profile (name, title, practitioner type, contact), branch assignments, staff user creation, `GET /session` | auth, tenancy, roles |
 | `roles`         | role definitions per tenant, system roles, role → permission assignments, user → role assignments (keyed by auth user id) | tenancy |
 | `authorization` | resolves the caller's permissions into CLS, `can(actor, permission, resource)`, global session + permission guards, agent tool guard | auth, roles |
 | `audit`         | append-only audit log (who/what/when/tenant/before/after), query API | — (consumes events from all) |
-| `patients`      | `patients` (records: demographics, phone (optional for minors), insurance text, medical alerts/allergies, primary dentist by staff profile id, notes, the chart's dentition override; archive = soft delete; merge), `patient_counters` (the per-tenant display-number sequence), `contacts` and `patient_contacts` (guardians, billing and emergency contacts, who may themselves be patients; ADR-0019); odontogram later | tenancy (country, time zone), users (practitioners, ADR-0016, ADR-0020) |
+| `patients`      | `patients` (records: demographics, phone (optional for minors), insurance text, medical alerts/allergies, primary dentist by staff profile id, notes, the chart's dentition override; archive = soft delete; merge), `patient_counters` (the per-tenant display-number sequence), `contacts` and `patient_contacts` (guardians, billing and emergency contacts, who may themselves be patients; ADR-0019) | tenancy (country, time zone), users (practitioners, ADR-0016, ADR-0020) |
 | `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
-| `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`), visits (`visits`, `visit_services`: encounters with patient, dentist, room, timer, services performed, notes, discount, status), the clinical record on the teeth (`patient_diagnoses`, `treatment_plans`, `tooth_status`) | patients, users, tenancy (tenant currency, ADR-0015); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
+| `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`), visits (`visits`, `visit_services`: encounters with patient, dentist, room, timer, services performed, notes, discount, status), the clinical record on the teeth (`patient_diagnoses`, `treatment_plans`, `tooth_status`) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
 | `billing`       | patient ledger (`ledger_entries`: opening balances, adjustments, visit charges; `ledger_entry_lines`), balances, the visit summary, the patient views that need them; later invoices, payments, price lists | patients, tenancy (currency, time zone), users (dentist names in the export); clinical from 4a (reacts to `VisitCompleted` in the transaction, ADR-0024); reacts to `PatientsMerged` (ADR-0017) |
 | `files`         | S3 object metadata, upload/download signed URLs, attachment links   | tenancy               |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
@@ -208,6 +208,9 @@ Rules:
 - No ORM in `domain/`. Repositories map rows to domain types at the persistence boundary.
 - A domain model refers to a staff member in a clinical role (e.g. a patient's primary dentist) by
   `staff_profiles.id`, never the auth user id (ADR-0020).
+- Every `*_by` actor column (`created_by`, `started_by`, `completed_by`, `recorded_by`, …) holds
+  the auth user id of whoever made the change (`RequestContext.requireUserId()`), whatever their
+  role, platform admins included (feature 4a, W10).
 
 ## 8. Scheduling module — specific invariants
 

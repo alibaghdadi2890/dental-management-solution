@@ -1,6 +1,6 @@
 # Feature 4a — Visit lifecycle and clinical workspace — design
 
-Date: 2026-09-29 · Status: draft for review
+Date: 2026-09-29 · Status: Implemented (2026-09-30)
 
 ## Goal
 
@@ -468,3 +468,56 @@ Each step keeps lint, typecheck and tests green, and ships its docs and ADR.
   for a design.
 - The feature-3 "Patient created" toast keeps its **Open record** action; Start visit from the
   toast needs a global popover host (later).
+
+## Implementation notes
+
+Decisions taken while building feature 4a (branch `feat/visit-workspace`), where the code
+refines the text above. The module pages (`docs/modules/clinical.md`, `billing.md`) are the
+reference for the shipped behaviour.
+
+- **Response envelopes:** lifecycle mutations answer `{ visit }` and record mutations
+  `{ visit, record }` (the updated `Visit` plus the record created or changed, a removed one
+  included), rather than a bare `Visit`. `POST /visits` answers `{ visit, resumed }` (201 new,
+  200 resumed).
+- **Error codes added:** 409 `plan.not_cancellable` (only a plan from an earlier visit is
+  cancelled; one from this visit is removed); 409 `visit.moved`, a defensive guard in
+  `complete`'s patient-then-visit locking for a visit re-pointed between its reads (unreachable
+  since the merge re-points in its own transaction; it replaces a retry that would have inverted
+  the ADR-0023 lock order). An invalid `:position` or `:toothCode` path parameter is 400
+  `validation_failed` from the DTO, not a 422.
+- **`UsersService.profileIdOf(userId)`:** a lean, not permission-gated lookup of the caller's
+  staff profile id, used by `live({ mine: true })` (W18) instead of `get` (which needs
+  `user:read`).
+- **`lockForDependentWrite`** (W22) is taken by `start` and by `complete`
+  (`lockPatientThenVisit`); `billing`'s visit charge calls it again inside the completion, where
+  the lock is already held. `start` looks up the patient's live visit before refusing an archived
+  patient, so an archived patient's live visit still resumes.
+- **Catalog in use (V11):** `isInUse` is a repository check (one `exists` query per catalog,
+  behind the `CatalogStore` interface), not a `CatalogService` method. The delete locks the row
+  `FOR UPDATE`; a record write reads it `FOR KEY SHARE` (`getServiceForRecord` /
+  `getDiagnosisForRecord`), so a delete can't pass its check while a record is being written.
+- **In-transaction handlers (W23):** the handlers of one event run sequentially, in registration
+  order; the first throw stops the rest and rolls the transaction back. After-commit dispatch
+  follows the commit.
+- **Visit summary:** while a charge posted before a merge still sits on the dropped patient
+  (until the `merge-ledger` job moves it), `visitSummary` sums the balance over both patients so
+  the three figures stay consistent.
+- **Migrations:** `0012_tenant_chart_settings`, `0013_patient_dentition`, `0014_visits`,
+  `0015_visits_started_by_index` (the start defaults' "last room today"),
+  `0016_ledger_visit_charge_kind` (the enum value on its own), `0017_ledger_visit_charges`
+  (`visit_id`, its checks and `ledger_entry_lines`), `0018_ledger_lines_append_only`.
+  `db:generate` now builds `@dcm/contracts` first.
+- **W25 surface letters:** stored as M/D/B/L/O/I; every label goes through `useSurfaceLabel`
+  (French V for buccal; Arabic keeps the Latin letters); the tooth panel's surface buttons are
+  named e.g. "Occlusal (O)".
+- **Workspace UI:** the catalog drawer is modal (a `dialog` that keeps Tab inside it), so the
+  chart's arrow keys can't move the selection under a one-click commit. The plan board's tooth
+  links select the tooth in the workspace; the tooth history opens from the Overview chart and
+  "Full tooth history →", and "Chart it in this visit" is offered only for the tooth the chart
+  shows at that position. Save groups keep what was typed when the server echoes the same value
+  (`10.` vs `10.00`), and a group is dropped before its record is deleted. The discount's `% / $`
+  control is a radio group. A price edit equal in cents writes and audits nothing.
+- **Tests:** tenant isolation covers `VisitsService.get`/`live`, `ChartService`, the record
+  routes and the billing visit summary; Playwright (`apps/web/e2e/visit.spec.ts`) covers the full visit
+  with its post-visit figures, resuming from a second browser with the timer carried on, and the
+  Universal notation plus a dentition override, in a clinic it provisions itself.

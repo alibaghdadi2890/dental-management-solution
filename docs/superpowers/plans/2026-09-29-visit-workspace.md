@@ -131,7 +131,7 @@ export function presentTooth(
 - **Anatomical names** are i18n keys (`tooth.name`, with `quadrant` and `tooth` keys such as
   `upperRight` and `firstMolar`, and `tooth.primaryName`), so the SPA translates them.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - A table test over all 52 codes: `toUniversal` → `parseTooth` round trip in both notations,
     `quadrant`, `position`, `isAnterior` and `isUpper` against a literal table.
   - `toothLabel('16','universal') === '#3'`; `toothLabel('55','universal') === 'A'`;
@@ -146,8 +146,8 @@ export function presentTooth(
     `effectiveDentition(8,'permanent')` is permanent/override.
   - `presentTooth('14','mixed')` → `54`; with presence `permanent` → `14`; `'17'` in mixed →
     `notErupted`.
-- [ ] **Implement**, then run `pnpm --filter @dcm/contracts test`.
-- [ ] **Commit:** `feat(contracts): canonical FDI tooth model with notation and orientation`.
+- [x] **Implement**, then run `pnpm --filter @dcm/contracts test`.
+- [x] **Commit:** `feat(contracts): canonical FDI tooth model with notation and orientation`.
 
 ### Task A2: Visit and record contracts, visit money
 
@@ -221,7 +221,7 @@ export function visitMoney(lines: MoneyLine[], mode: DiscountMode, value: string
 - `lastVisitSchema` (nullable) `{ id, date, dentistName, durationMinutes, total, services: { name, toothCode }[], notes }`.
 - `clinicalSummarySchema` `{ visits, activeDiagnoses, plannedProcedures, teethTreated, servicesPerformed }`.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - `visitMoney`:
     - 2 lines (100 − 20, 50) at 10 % → subtotal 130.00, discount 13.00, total 117.00;
     - 12.5 % of 0.10 → 0.01 (half up);
@@ -232,8 +232,8 @@ export function visitMoney(lines: MoneyLine[], mode: DiscountMode, value: string
   - `durationMinutes(0) === 1`, `(61) === 2`.
   - The schemas reject unknown tooth codes and duplicate surfaces, and require at least one field
     in `updateServiceSchema`.
-- [ ] **Implement**, then run `pnpm --filter @dcm/contracts test`.
-- [ ] **Commit:** `feat(contracts): visit, clinical record and visit money contracts`.
+- [x] **Implement**, then run `pnpm --filter @dcm/contracts test`.
+- [x] **Commit:** `feat(contracts): visit, clinical record and visit money contracts`.
 
 ### Task A3: Chart derivation
 
@@ -267,15 +267,15 @@ export function deriveChart(input: {
 - Open plans only (`planned`). Active diagnoses only.
 - Removed (deleted) rows never reach this function.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - Each precedence pair.
   - Whole-tooth vs surface services.
   - A live service overrides a historic one on the same surface.
   - A performed plan doesn't count as planned.
   - A resolved diagnosis doesn't set `hasActiveDiagnosis`.
   - Jaw-level services (`toothCode` null) touch no tooth.
-- [ ] **Implement**, then run the tests.
-- [ ] **Commit:** `feat(contracts): derived per-tooth chart state`.
+- [x] **Implement**, then run the tests.
+- [x] **Commit:** `feat(contracts): derived per-tooth chart state`.
 
 ### Task A4: Tenancy chart settings
 
@@ -302,14 +302,14 @@ export function deriveChart(input: {
   - `docs/adr/0021-canonical-fdi-tooth-codes.md`, new (W3, W17, V1) and the ADR index
     (`docs/adr/README.md`).
 
-- [ ] **Integration tests first:**
+- [x] **Integration tests first:**
   - A new tenant has the defaults.
   - `PATCH /tenant { toothNotation: 'universal' }` as the owner → 200 and audited.
   - As a dentist → 403.
   - An unknown value → 400.
   - `GET /session` carries the three fields.
-- [ ] **Implement, generate and migrate the dev DB.**
-- [ ] **Commit:** `feat(tenancy): chart detail, tooth notation and orientation settings`.
+- [x] **Implement, generate and migrate the dev DB.**
+- [x] **Commit:** `feat(tenancy): chart detail, tooth notation and orientation settings`.
 
 ---
 
@@ -341,14 +341,14 @@ export function deriveChart(input: {
 - Docs: `docs/modules/patients.md` (the field, the method, the rename) and `billing.md` (the
   rename).
 
-- [ ] **Integration tests first:**
+- [x] **Integration tests first:**
   - A dentist sets `mixed` → 200, audited.
   - `null` → back to auto.
   - Frontdesk → 403.
   - An archived patient → 409 `patient.archived`.
   - `lockForDependentWrite` keeps `lockForLedger`'s tests (renamed).
-- [ ] **Implement, generate and migrate.**
-- [ ] **Commit:** `feat(patients): dentition override; lockForDependentWrite`.
+- [x] **Implement, generate and migrate.**
+- [x] **Commit:** `feat(patients): dentition override; lockForDependentWrite`.
 
 ### Task B2: Practitioners by branch
 
@@ -361,12 +361,12 @@ export function deriveChart(input: {
 - `apps/api/test/integration/users.int-spec.ts`.
 - `docs/modules/users.md`.
 
-- [ ] **Integration tests first:**
+- [x] **Integration tests first:**
   - Two dentists in different branches: the filter returns one; no filter returns both;
     inactive staff are excluded.
   - An unknown branch → `[]`.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(users): list practitioners by branch`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(users): list practitioners by branch`.
 
 ---
 
@@ -416,7 +416,7 @@ export function deriveChart(input: {
 - `apps/api/test/integration/tenant-isolation.int-spec.ts`: it auto-discovers tables; confirm
   all five are covered, and extend it if the discovery needs a seed row per table.
 
-- [ ] **Unit tests first:**
+- [x] **Unit tests first:**
   - Lifecycle:
     - every legal transition;
     - `completed → pause` and `discarded → complete` throw.
@@ -427,8 +427,8 @@ export function deriveChart(input: {
     - completed.
   - Discard rule: empty → true; each fact alone → false; a discount alone → true.
   - Record rules: each 422 case.
-- [ ] **Migration review and dev DB migrate.**
-- [ ] **Commit:** `feat(clinical): visits and clinical record tables, visit domain rules`.
+- [x] **Migration review and dev DB migrate.**
+- [x] **Commit:** `feat(clinical): visits and clinical record tables, visit domain rules`.
 
 ### Task C2: `VisitsService` lifecycle, routes and concurrency
 
@@ -488,7 +488,7 @@ if (live) return { visit: await this.load(live.id), resumed: true };
 - `get` returns `serverNow = clock.now()` and the money from `visitMoney(...)` (contracts)
   while the visit is live.
 
-- [ ] **Integration tests first (`visits.int-spec.ts`):**
+- [x] **Integration tests first (`visits.int-spec.ts`):**
   - A dentist starts a visit → 201; the same patient again → 200 `resumed: true` with the same
     id.
   - **Two parallel starts** for one patient (`Promise.all`) → one visit, one `resumed`.
@@ -505,8 +505,8 @@ if (live) return { visit: await this.load(live.id), resumed: true };
   - `live?mine=true` for the dentist and for the assistant who started the visit; not for
     another dentist.
   - `startedBy`/`discardedBy` equal the auth user id.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(clinical): start, resume, pause, discard and live visits`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(clinical): start, resume, pause, discard and live visits`.
 
 ---
 
@@ -524,7 +524,7 @@ if (live) return { visit: await this.load(live.id), resumed: true };
 - `modules/clinical/events/record-events.ts`: `DiagnosisRecorded`, `DiagnosisResolved`,
   `DiagnosisReopened`, `TreatmentPlanned`, `TreatmentPerformed`, `TreatmentCancelled`,
   `ToothStatusChanged`.
-- `modules/clinical/http/visits.controller.ts`, the record routes:
+- `modules/clinical/http/visit-records.controller.ts`, new, the record routes:
   - `POST /visits/:id/services`, `PATCH /visits/:id/services/:serviceId`,
     `DELETE /visits/:id/services/:serviceId`;
   - `POST /visits/:id/diagnoses`, `POST /visits/:id/diagnoses/:recordId/{resolve,reopen}`,
@@ -543,8 +543,9 @@ if (live) return { visit: await this.load(live.id), resumed: true };
 1. Re-check `visit:write`.
 2. `visits.lockLive(visitId)`.
 3. The patient is `visit.patientId`, never a request field.
-4. The catalog row comes from `CatalogService.getService/getDiagnosis`; `active=false` → 422
-   `catalog.inactive` (add the error to `catalog-errors.ts`).
+4. The catalog row comes from `CatalogService.getServiceForRecord/getDiagnosisForRecord` (read
+   `FOR KEY SHARE`); `active=false` → 422 `catalog.inactive` (add the error to
+   `catalog-errors.ts`).
 5. The snapshot fields are copied.
 6. `recorded_by`/`changed_by` = `requireUserId()`; `dentist_id` = `visit.dentistId`.
 7. Audit with before/after.
@@ -568,11 +569,11 @@ if (live) return { visit: await this.load(live.id), resumed: true };
 - `removePlan`: only if recorded in this visit and `planned`. `cancelPlan`: only for plans
   recorded in an earlier visit and `planned`.
 - `setToothPresence`:
-  - `position` must be a permanent code with position 1–5 (else 422
-    `visit.position_invalid`);
+  - `position` must be a permanent code with position 1–5 (else 400 `validation_failed`,
+    from the route's DTO like every other path parameter);
   - upsert on `(tenant, patient, position)`.
 
-- [ ] **Integration tests first:**
+- [x] **Integration tests first:**
   - Service:
     - add a per-tooth service with surfaces;
     - a per-tooth service with no tooth → 422;
@@ -593,11 +594,11 @@ if (live) return { visit: await this.load(live.id), resumed: true };
     - remove a this-visit plan.
   - Cross-visit behaviour (a plan from visit 1 performed in visit 2) needs `complete` and is
     tested in E2.
-  - Tooth presence: an upsert, and an invalid position → 422.
+  - Tooth presence: an upsert, and an invalid position → 400.
   - Frontdesk → 403 on every route. A completed or discarded visit → 409 `visit.not_live`.
   - Audit actions and `recorded_by` = the auth user id.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(clinical): chart services, diagnoses, plans and tooth presence in a visit`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(clinical): chart services, diagnoses, plans and tooth presence in a visit`.
 
 ### Task D2: `ChartService`, patient reads, `isInUse`
 
@@ -608,8 +609,10 @@ if (live) return { visit: await this.load(live.id), resumed: true };
 - `modules/clinical/http/clinical-patients.controller.ts`, new:
   `GET /clinical/patients/:id/{chart,summary,last-visit}` and
   `GET /clinical/patients/:id/teeth/:toothCode/history`.
-- `modules/clinical/application/catalog.service.ts`: `isInUse(id)` checks `visit_services`,
-  `treatment_plans` and `patient_diagnoses` (non-deleted) with one `exists` query per catalog.
+- `modules/clinical/persistence/procedures.repository.ts` and `diagnoses.repository.ts`:
+  `isInUse(id)` (part of the `CatalogStore` interface `CatalogService` deletes through) checks
+  `visit_services`, `treatment_plans` and `patient_diagnoses` (non-deleted) with one `exists`
+  query per catalog.
 - `modules/clinical/index.ts`: export `ChartService`.
 - Tests: `apps/api/test/integration/clinical-chart.int-spec.ts`, new;
   `catalog.int-spec.ts` (in use).
@@ -638,7 +641,7 @@ if (live) return { visit: await this.load(live.id), resumed: true };
   - `teethTreated` = distinct `tooth_code` of completed services;
   - `servicesPerformed`.
 
-- [ ] **Integration tests first:**
+- [x] **Integration tests first:**
   - Chart:
     - an 8-year-old → `mixed`/auto;
     - an override → the override;
@@ -651,8 +654,8 @@ if (live) return { visit: await this.load(live.id), resumed: true };
     row → 409 `catalog.in_use`.
   - Frontdesk may read.
   - Another tenant's patient → 404.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(clinical): patient chart, tooth history, last visit and summary reads`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(clinical): patient chart, tooth history, last visit and summary reads`.
 
 ---
 
@@ -693,19 +696,19 @@ async publish(event: DomainEvent): Promise<void> {
   transaction through `TenantDb.run` (the nested call returns the same `tx`), and they see the
   publisher's CLS (tenant, user, permissions).
 
-- [ ] **Unit tests first (`event-bus.spec.ts`, with a fake `TenantDb`):**
+- [x] **Unit tests first (`event-bus.spec.ts`, with a fake `TenantDb`):**
   - An in-transaction handler runs before the after-commit hook.
   - A throw rejects `publish`, and the after-commit dispatch never runs.
   - Publishing with in-transaction listeners and no open transaction throws.
   - Events without in-transaction listeners behave exactly as before.
-- [ ] **Integration test** (`test/integration/event-bus.int-spec.ts`, new): a test module with an
+- [x] **Integration test** (`test/integration/event-bus.int-spec.ts`, new): a test module with an
       in-transaction handler that inserts into a scratch table in the same transaction. The
       publisher's transaction rolls back when the handler throws, and neither row exists.
       The generic audit subscriber still records the event only after a commit.
-- [ ] **Implement.** Amend CLAUDE.md §9 in the same commit: "Reactions that must be atomic with
+- [x] **Implement.** Amend CLAUDE.md §9 in the same commit: "Reactions that must be atomic with
       the change subscribe with `@OnDomainEventInTransaction` (database work only, own tables,
       fast); slow or external reactions enqueue a job."
-- [ ] **Commit:** `feat(platform): in-transaction domain event handlers`.
+- [x] **Commit:** `feat(platform): in-transaction domain event handlers`.
 
 ### Task E2: Complete, the visit charge, the summary
 
@@ -803,7 +806,7 @@ async onVisitCompleted(event: VisitCompleted): Promise<void> {
 - `visit = { total: charge, paid: 0, outstanding: charge }`; `previous = balance − charge`;
   `totalOutstanding = balance`.
 
-- [ ] **Integration tests first (`billing-visit-charge.int-spec.ts`):**
+- [x] **Integration tests first (`billing-visit-charge.int-spec.ts`):**
   - An examination-only visit completes with total 0 and no ledger entry; the summary is
     `0 / previous / previous`.
   - Two services and 10 % → one `visit_charge` equal to the total, 2 lines,
@@ -820,8 +823,8 @@ async onVisitCompleted(event: VisitCompleted): Promise<void> {
   - Across visits: a plan recorded in visit 1 (completed) is performed in visit 2. The service
     carries `planId`, the plan has `performedInVisitId`, and the tooth history lists
     diagnosis → plan → service with both visit dates.
-- [ ] **Implement, generate the three migrations, review, migrate the dev DB.**
-- [ ] **Commit:** `feat(billing): post the visit charge in the completion transaction; visit summary`.
+- [x] **Implement, generate the three migrations, review, migrate the dev DB.**
+- [x] **Commit:** `feat(billing): post the visit charge in the completion transaction; visit summary`.
 
 ### Task E3: Clinical merge re-point
 
@@ -849,7 +852,7 @@ async onVisitCompleted(event: VisitCompleted): Promise<void> {
 
 It isn't permission-gated (the merge needs `patient:write`; front desk may merge).
 
-- [ ] **Integration tests first:**
+- [x] **Integration tests first:**
   - Merging moves the visits, diagnoses, plans and tooth status; the kept patient's tooth
     status wins on a clash.
   - **Both patients have a live visit** → the kept patient has two live visits, both complete,
@@ -858,8 +861,8 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   - A merge by front desk succeeds.
   - A merge chain (A into B, B into C) → everything on C.
   - `billing`'s existing merge-ledger tests still pass.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(clinical): re-point visits and records in the merge transaction`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(clinical): re-point visits and records in the merge transaction`.
 
 ---
 
@@ -897,7 +900,7 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   in `lib/i18n.ts`.
 - Specs: `chart/dental-chart.spec.tsx`, `tooth-glyph.spec.tsx`, `tooth-title.spec.ts`.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - FDI vs Universal labels (`#16` ↔ `#3`, `55` ↔ `A`).
   - An 8-year-old renders `55` in column `15` and `16` in column `16`.
   - Orientation flips the column order and the R/L markers.
@@ -907,8 +910,8 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   - Simple mode renders one cell and the collapsed legend.
   - `aria-pressed` and the labels.
   - The container is `dir="ltr"` inside an RTL document.
-- [ ] **Implement** (POC tokens from the existing Tailwind theme; no new palette).
-- [ ] **Commit:** `feat(web): dental chart, tooth glyph and legend`.
+- [x] **Implement** (POC tokens from the existing Tailwind theme; no new palette).
+- [x] **Commit:** `feat(web): dental chart, tooth glyph and legend`.
 
 ### Task F2: Settings — dental chart section
 
@@ -928,13 +931,13 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 - `locales/{en,ar,fr}/settings.json`.
 - `chart-settings-section.spec.tsx`.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - The owner switches the notation → PATCH is sent, the session is refetched, and the toast
     appears.
   - A dentist sees the cards disabled with the note.
   - The previews reflect each option.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(web): dental chart settings`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(web): dental chart settings`.
 
 ---
 
@@ -961,14 +964,14 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   while `in_progress`, and formats `mm:ss` → `hh:mm:ss`.
 - Specs for each.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - The save group debounces three edits into one call.
   - A failure shows `failed`, and retry re-sends the same value.
   - A refetch doesn't clobber a dirty field.
   - The timer freezes while paused and uses the server offset.
   - The refetch interval stops while a group is dirty.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(web): visit queries, autosave groups and timer`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(web): visit queries, autosave groups and timer`.
 
 ### Task G2: Workspace route, header, chart card, keyboard
 
@@ -1007,14 +1010,14 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 - Specs: `visit-workspace-page.spec.tsx`, `use-chart-keyboard.spec.ts`,
   `visit-header.spec.tsx`.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - Keyboard walk and wrap in both orientations; ignored in a textarea; `Esc` deselects.
   - Pause/Resume calls and the chip styles.
   - Discard is shown only when empty; confirm → navigation.
   - Frontdesk sees no edit controls.
   - The dentition select raises the toast.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(web): visit workspace shell, header and chart card`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(web): visit workspace shell, header and chart card`.
 
 ### Task G3: Tooth panel and drawer
 
@@ -1053,7 +1056,7 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 - Perform now → a toast with Undo (→ `DELETE` the created service, which restores the plan).
 - Specs: `tooth-panel.spec.tsx`, `catalog-drawer.spec.tsx`, `drawer-list.spec.ts`.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - Surface toggles build the pending scope, and adding clears it.
   - The collapsed summaries match the spec table.
   - Remove is only on this-visit records.
@@ -1063,8 +1066,8 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   - Per-jaw rows are allowed without a tooth; per-tooth rows are disabled.
   - The diagnosis toast's action reopens in plan mode.
   - The succession row flips presence.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(web): tooth panel and catalog drawer`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(web): tooth panel and catalog drawer`.
 
 ### Task G4: Plan board, notes, financial bar
 
@@ -1087,15 +1090,15 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
     matches the server exactly.
 - Specs for each.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - The board groups and orders (jaw last), and Perform calls the route.
   - Notes autosave and the failed/retry path.
   - A 500 % or $500 discount shows the warning on its own line, keeps the typed value, and
     caps the total.
   - Non-numeric input is stripped.
   - Save draft shows its toast.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(web): plan board, clinical notes and financial bar`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(web): plan board, clinical notes and financial bar`.
 
 ### Task G5: Start popover, live-visit pill, record header
 
@@ -1122,15 +1125,15 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 - Specs: `start-visit-popover.spec.tsx`, `live-visit-pill.spec.tsx`, `record-header.spec.tsx`
   (extend).
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - The popover defaults: a dentist user is pre-selected; an assistant must pick; the room is
     hidden with no rooms.
   - A resumed start navigates without a toast.
   - `room_busy` shows the inline error.
   - The pill with one or two visits; hidden for frontdesk.
   - The header shows Resume when a live visit exists; frontdesk sees neither button.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(web): start visit popover, live visit pill and record header action`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(web): start visit popover, live visit pill and record header action`.
 
 ---
 
@@ -1164,14 +1167,14 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 - `features/billing/billing-api.ts`: `useVisitSummary`.
 - Specs for both dialogs.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - The discount edited in the dialog updates the footer's value (the same save group).
   - "Recorded for later" appears only with new records.
   - Complete navigates and opens the post-visit dialog.
   - The three figures render from the API, in `danger` or `success` by amount.
   - Done replaces Pay later when nothing is owed.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(web): visit summary and post-visit financial summary`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(web): visit summary and post-visit financial summary`.
 
 ### Task H2: Tooth history and Overview cards
 
@@ -1184,7 +1187,8 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   - the empty state with **Chart it in this visit** (when a visit is live for this patient) or
     **Start a visit** (the popover).
 
-  It opens from the Overview chart, the plan board tooth links and "Full tooth history →".
+  It opens from the Overview chart and the tooth panel's "Full tooth history →"; the plan
+  board's tooth links select the tooth in the workspace instead (G4).
 
 - `features/patients/record/overview-tab.tsx`:
   - the **Dental status** card (a compact 8 px `DentalChart`, not selectable; a click opens the
@@ -1196,13 +1200,13 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 - `locales/*/patients.json`, `clinical.json`.
 - Specs: `tooth-history-dialog.spec.tsx`, extend `overview-tab.spec.tsx`.
 
-- [ ] **Tests first:**
+- [x] **Tests first:**
   - The history orders diagnosis → plan → service with dates.
   - The empty-state action depends on a live visit.
   - The Overview shows the compact chart, the last visit and the counts; the last visit empty
     state.
-- [ ] **Implement.**
-- [ ] **Commit:** `feat(web): tooth history and overview chart, last visit and summary cards`.
+- [x] **Implement.**
+- [x] **Commit:** `feat(web): tooth history and overview chart, last visit and summary cards`.
 
 ---
 
@@ -1222,7 +1226,7 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   - the ADR index;
   - this plan (tick the boxes) and the spec's status line → "Implemented".
 
-- [ ] **E2E flow:**
+- [x] **E2E flow:**
   1. The owner creates a patient with an opening balance of 40.
   2. **Start visit** (dentist and room) → select `#16` → add a diagnosis → take the toast's
      Plan treatment → perform now.
@@ -1230,13 +1234,14 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
   4. Type a note → "Saved".
   5. Set a 10 % discount → Review & complete → Complete.
   6. The post-visit figures equal This visit / 40 / sum.
-- [ ] **E2E resume:** start a visit, open a new browser context signed in as the same user, go
+- [x] **E2E resume:** start a visit, open a new browser context signed in as the same user, go
       to the record → **Resume visit** → the timer continues (within 2 s of the first context).
-- [ ] **E2E notation:** switch Settings to Universal → the Overview chart labels `16` as `#3`;
+- [x] **E2E notation:** switch Settings to Universal → the Overview chart labels `16` as `#3`;
       an 8-year-old shows `A` for `55`; overriding to Permanent changes the chart, not the
       records.
 - [ ] **Full gate + `pnpm --filter @dcm/web e2e`** against the user's dev servers.
-- [ ] **Commit:** `test(e2e): visit workspace flow; docs sweep`.
+- [x] **Commits:** `test(api): clinical and billing tenant isolation`,
+      `test(e2e): visit workspace flow` and `docs: feature 4a sweep`.
 - [ ] **Final whole-branch review** (`superpowers:requesting-code-review`), then
       `superpowers:finishing-a-development-branch`.
 
@@ -1269,3 +1274,29 @@ It isn't permission-gated (the merge needs `patient:write`; front desk may merge
 | W23 in-transaction handlers                        | E1                 |
 | Tooth history, Overview cards                      | D2, H2             |
 | Tenant isolation, Playwright, docs, ADRs 0021–0024 | A4, C2, D2, E2, I1 |
+
+## Implementation notes
+
+Where the build legitimately differs from the task text above (the spec's "Implementation
+notes" has the design-level list):
+
+- **D1:** the record routes live in their own `visit-records.controller.ts`; an invalid
+  `:position` is 400 `validation_failed` by the DTO convention (no `visit.position_invalid`);
+  catalog rows are read with `getServiceForRecord` / `getDiagnosisForRecord` (`FOR KEY SHARE`).
+  `cancelPlan` on a plan made in this visit is 409 `plan.not_cancellable`.
+- **C2:** `live({ mine })` resolves the caller's staff profile with the new
+  `UsersService.profileIdOf`; migration `0015_visits_started_by_index` backs the start defaults.
+- **D2:** `isInUse` became a repository check behind `CatalogStore`, and the catalog delete locks
+  the row `FOR UPDATE` against record writes' `FOR KEY SHARE`.
+- **E1:** in-transaction handlers run sequentially (`fix(platform): sequential in-transaction
+handlers`).
+- **E2:** the visit charge needed two migrations (`0016` adds the enum value, `0017` the column,
+  checks and `ledger_entry_lines`), plus `0018_ledger_lines_append_only`. `complete` answers 409
+  `visit.moved` in a defensive, unreachable branch rather than retrying under the visit lock.
+  `visitSummary` sums both patients while a pre-merge charge waits for the `merge-ledger` job.
+- **G3:** the catalog drawer is modal (`RightPanel`'s `modal`).
+- **H2:** the plan board's tooth links select the tooth in the workspace (G4); the tooth history
+  opens from the Overview chart and "Full tooth history →".
+- **I1:** the Playwright flows provision their own clinic (with two rooms, since the resume flow
+  leaves a visit live) and restore FDI notation at the end. Commits: `test(api): clinical and
+billing tenant isolation`, `test(e2e): visit workspace flow`, `docs: feature 4a sweep`.
