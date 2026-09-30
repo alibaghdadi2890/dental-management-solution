@@ -8,6 +8,7 @@ import {
   surfacesSchema,
   toothCodeSchema,
 } from './tooth.js';
+import { visitSchema } from './visits.js';
 
 /**
  * `clinical`'s charting records (spec §Data model / §Backend — clinical): diagnoses,
@@ -118,6 +119,22 @@ export const setToothPresenceSchema = z.object({
   present: toothPresenceValueSchema,
 });
 export type SetToothPresenceInput = z.infer<typeof setToothPresenceSchema>;
+
+/** The charting routes answer with the updated visit plus the affected record (spec §HTTP). */
+export const diagnosisResultSchema = z.object({
+  visit: visitSchema,
+  record: diagnosisRecordSchema,
+});
+export type DiagnosisResult = z.infer<typeof diagnosisResultSchema>;
+
+export const planResultSchema = z.object({ visit: visitSchema, record: treatmentPlanSchema });
+export type PlanResult = z.infer<typeof planResultSchema>;
+
+export const toothPresenceResultSchema = z.object({
+  visit: visitSchema,
+  record: toothPresenceSchema,
+});
+export type ToothPresenceResult = z.infer<typeof toothPresenceResultSchema>;
 
 /** One completed service in a patient's tooth or visit history: `visit_services` joined back to
  * its visit and dentist. */

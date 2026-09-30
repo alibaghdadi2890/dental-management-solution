@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -61,7 +61,10 @@ describe('useVisit', () => {
         }),
     );
     const { result } = renderHook(
-      () => ({ visit: useVisit(VISIT_ID), notes: useSaveGroup({ serverValue: '', save }) }),
+      () => ({
+        visit: useVisit(VISIT_ID),
+        notes: useSaveGroup({ key: 'notes', serverValue: '', save }),
+      }),
       { wrapper },
     );
     await advance(0);
@@ -84,5 +87,31 @@ describe('useVisit', () => {
     expect(result.current.notes.dirty).toBe(false);
     await advance(VISIT_REFETCH_MS);
     expect(visitFetches()).toBe(3);
+  });
+
+  it('refetches on window focus even while a group is dirty', async () => {
+    const save = vi.fn(() => new Promise<void>(() => undefined));
+    const { result } = renderHook(
+      () => ({
+        visit: useVisit(VISIT_ID),
+        notes: useSaveGroup({ key: 'notes', serverValue: '', save }),
+      }),
+      { wrapper },
+    );
+    await advance(0);
+    act(() => {
+      result.current.notes.setValue('typing');
+    });
+    await advance(0);
+    expect(visitFetches()).toBe(1);
+
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(visitFetches()).toBe(2);
+    expect(result.current.notes.value).toBe('typing');
+    focusManager.setFocused(undefined);
   });
 });

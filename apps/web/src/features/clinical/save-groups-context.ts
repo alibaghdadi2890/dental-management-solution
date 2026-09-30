@@ -1,20 +1,32 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useSyncExternalStore } from 'react';
+import type { SaveGroupsStore } from './save-groups-store';
 
-/** How a save group tells the workspace it has (or no longer has) unsaved local edits. */
-export type ReportDirty = (groupId: string, dirty: boolean) => void;
+export const SaveGroupsContext = createContext<SaveGroupsStore | null>(null);
 
-const ignore: ReportDirty = () => undefined;
-
-/** Split in two so reporting never re-renders the groups, only the readers of `anyDirty`. */
-export const ReportDirtyContext = createContext<ReportDirty>(ignore);
-export const AnyGroupDirtyContext = createContext(false);
-
-/** A group outside a `SaveGroupsProvider` reports to nobody. */
-export function useReportDirty(): ReportDirty {
-  return useContext(ReportDirtyContext);
+export function useSaveGroupsStore(): SaveGroupsStore {
+  const store = useContext(SaveGroupsContext);
+  if (!store) {
+    throw new Error('useSaveGroup must be used inside <SaveGroupsProvider>');
+  }
+  return store;
 }
 
-/** True while any save group in the workspace has unsaved local edits (W6 pauses the refetch). */
+const neverDirty = () => false;
+const noSubscription = () => () => undefined;
+
+/** True while any save group in the workspace has unsaved local edits (W6 pauses the refetch).
+ * False outside a `SaveGroupsProvider`, where there are no groups. */
 export function useAnyGroupDirty(): boolean {
-  return useContext(AnyGroupDirtyContext);
+  const store = useContext(SaveGroupsContext);
+  return useSyncExternalStore(
+    store?.subscribe ?? noSubscription,
+    store?.isAnyDirty ?? neverDirty,
+    neverDirty,
+  );
+}
+
+/** Sends every group's unsaved value and resolves to whether all saved (Complete runs it first,
+ * so the frozen money and notes include the last edits). */
+export function useFlushSaveGroups(): () => Promise<boolean> {
+  return useSaveGroupsStore().flushAll;
 }

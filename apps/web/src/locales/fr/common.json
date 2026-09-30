@@ -26,6 +26,7 @@
     "calendar": "Calendrier"
   },
   "saveState": {
+    "idle": "Enregistrement automatique pendant la saisie",
     "unsaved": "Modifications non enregistrées",
     "saving": "Enregistrement…",
     "saved": "Enregistré à l’instant",

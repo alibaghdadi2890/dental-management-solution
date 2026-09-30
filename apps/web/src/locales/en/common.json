@@ -26,6 +26,7 @@
     "calendar": "Calendar"
   },
   "saveState": {
+    "idle": "Autosaves as you type",
     "unsaved": "Unsaved changes",
     "saving": "Saving…",
     "saved": "Saved just now",

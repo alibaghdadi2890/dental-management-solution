@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   addServiceSchema,
   liveVisitQuerySchema,
+  liveVisitRefSchema,
+  serviceResultSchema,
   updateServiceSchema,
   visitDiscountSchema,
   visitNotesSchema,
+  visitResultSchema,
   visitSchema,
 } from './visits.js';
 
@@ -97,49 +100,84 @@ describe('liveVisitQuerySchema', () => {
   });
 });
 
+const VISIT = {
+  id: ID,
+  patientId: ID,
+  branchId: ID,
+  roomId: ID_2,
+  dentistId: ID,
+  startedBy: ID,
+  status: 'in_progress',
+  localDate: '2026-09-29',
+  startedAt: '2026-09-29T10:00:00Z',
+  pausedAt: null,
+  pausedSeconds: 0,
+  completedAt: null,
+  durationMinutes: null,
+  notes: 'Patient reports sensitivity on #16.',
+  discountMode: 'percent',
+  discountValue: '10',
+  currency: 'USD',
+  services: [
+    {
+      id: ID,
+      procedureId: ID,
+      code: 'CMP',
+      name: 'Composite filling',
+      category: 'Restorative',
+      chargeUnit: 'per_tooth',
+      toothCode: '16',
+      surfaces: ['O'],
+      base: { amount: '45.00', currency: 'USD' },
+      discount: { amount: '0.00', currency: 'USD' },
+      final: { amount: '45.00', currency: 'USD' },
+      planId: null,
+      recordedBy: ID,
+      createdAt: '2026-09-29T10:05:00Z',
+    },
+  ],
+  money: { subtotal: '45.00', discount: '4.50', total: '40.50', capped: false },
+  serverNow: '2026-09-29T10:10:00Z',
+};
+
+const [SERVICE] = VISIT.services;
+
 describe('visitSchema', () => {
   it('round-trips a representative live visit', () => {
-    const visit = {
-      id: ID,
-      patientId: ID,
-      branchId: ID,
-      roomId: ID_2,
-      dentistId: ID,
-      startedBy: ID,
-      status: 'in_progress',
-      localDate: '2026-09-29',
-      startedAt: '2026-09-29T10:00:00Z',
-      pausedAt: null,
-      pausedSeconds: 0,
-      completedAt: null,
-      durationMinutes: null,
-      notes: 'Patient reports sensitivity on #16.',
-      discountMode: 'percent',
-      discountValue: '10',
-      currency: 'USD',
-      services: [
-        {
-          id: ID,
-          procedureId: ID,
-          code: 'CMP',
-          name: 'Composite filling',
-          category: 'Restorative',
-          chargeUnit: 'per_tooth',
-          toothCode: '16',
-          surfaces: ['O'],
-          base: { amount: '45.00', currency: 'USD' },
-          discount: { amount: '0.00', currency: 'USD' },
-          final: { amount: '45.00', currency: 'USD' },
-          planId: null,
-          recordedBy: ID,
-          createdAt: '2026-09-29T10:05:00Z',
-        },
-      ],
-      money: { subtotal: '45.00', discount: '4.50', total: '40.50', capped: false },
-      serverNow: '2026-09-29T10:10:00Z',
-    };
-    const result = visitSchema.safeParse(visit);
+    const result = visitSchema.safeParse(VISIT);
     expect(result.success).toBe(true);
-    expect(result.success && result.data).toEqual(visit);
+    expect(result.success && result.data).toEqual(VISIT);
+  });
+});
+
+describe('visit route results', () => {
+  it('wraps the visit, and the service for the service routes', () => {
+    expect(visitResultSchema.safeParse({ visit: VISIT }).success).toBe(true);
+    expect(serviceResultSchema.safeParse({ visit: VISIT, record: SERVICE }).success).toBe(true);
+  });
+
+  it('rejects a bare visit and a service result without its record', () => {
+    expect(visitResultSchema.safeParse(VISIT).success).toBe(false);
+    expect(serviceResultSchema.safeParse({ visit: VISIT }).success).toBe(false);
+  });
+});
+
+describe('liveVisitRefSchema', () => {
+  const ref = {
+    id: ID,
+    patientId: ID_2,
+    patientName: 'Nadia Haddad',
+    dentistName: 'Dr. Ana Reyes',
+    status: 'paused',
+    startedAt: '2026-09-29T10:00:00Z',
+    pausedAt: '2026-09-29T10:20:00Z',
+    pausedSeconds: 30,
+    serverNow: '2026-09-29T10:25:00Z',
+  };
+
+  it('carries serverNow so the pill can run its timer', () => {
+    expect(liveVisitRefSchema.safeParse(ref).success).toBe(true);
+    const { serverNow: _omitted, ...withoutServerNow } = ref;
+    expect(liveVisitRefSchema.safeParse(withoutServerNow).success).toBe(false);
   });
 });

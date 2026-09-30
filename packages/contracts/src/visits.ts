@@ -122,6 +122,16 @@ export const updateServiceSchema = z
   });
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
 
+/** What every route that changes a visit answers with (spec §HTTP), so the client replaces its
+ * cached visit without a refetch: pause, resume, discard, complete, notes and discount. */
+export const visitResultSchema = z.object({ visit: visitSchema });
+export type VisitResult = z.infer<typeof visitResultSchema>;
+
+/** The service routes (add, price edit, remove): the updated visit plus the service itself, so
+ * an Undo after an add has the new service's id. */
+export const serviceResultSchema = z.object({ visit: visitSchema, record: visitServiceSchema });
+export type ServiceResult = z.infer<typeof serviceResultSchema>;
+
 export const startVisitResultSchema = z.object({
   visit: visitSchema,
   resumed: z.boolean(),
@@ -139,6 +149,8 @@ export const liveVisitRefSchema = z.object({
   startedAt: isoDateTimeSchema,
   pausedAt: isoDateTimeSchema.nullable(),
   pausedSeconds: z.number().int().nonnegative(),
+  /** So the pill can run the timer from an offset, like `Visit.serverNow`. */
+  serverNow: isoDateTimeSchema,
 });
 export type LiveVisitRef = z.infer<typeof liveVisitRefSchema>;
 

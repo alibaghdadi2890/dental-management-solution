@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  diagnosisResultSchema,
   patientChartSchema,
+  planResultSchema,
   planTreatmentSchema,
   recordDiagnosisSchema,
   setToothPresenceSchema,
+  toothPresenceResultSchema,
   toothPresenceSchema,
   toothStateSchema,
 } from './clinical-records.js';
@@ -124,88 +127,130 @@ describe('toothStateSchema', () => {
   });
 });
 
+const CHART = {
+  dentition: { stage: 'permanent', source: 'auto', ageYears: 34 },
+  toothStatus: [{ position: '14', present: 'primary' }],
+  diagnoses: [
+    {
+      id: ID,
+      patientId: ID,
+      toothCode: '16',
+      surfaces: ['M', 'O'],
+      diagnosisId: ID,
+      code: 'DX-CAR',
+      name: 'Dental caries',
+      category: 'Caries',
+      status: 'active',
+      note: null,
+      dentistId: ID,
+      dentistName: 'Dr. Amal Karim',
+      recordedBy: ID,
+      recordedInVisitId: ID_2,
+      recordedInVisitDate: '2026-09-29',
+      recordedAt: '2026-09-29T10:00:00Z',
+      resolvedInVisitId: null,
+      resolvedAt: null,
+    },
+  ],
+  plans: [
+    {
+      id: ID,
+      patientId: ID,
+      toothCode: '16',
+      surfaces: [],
+      procedureId: ID,
+      code: 'EXT',
+      name: 'Extraction',
+      category: 'Surgical',
+      chargeUnit: 'per_tooth',
+      price: { amount: '30.00', currency: 'USD' },
+      diagnosisRecordId: ID,
+      status: 'planned',
+      note: null,
+      dentistId: ID,
+      dentistName: 'Dr. Amal Karim',
+      recordedBy: ID,
+      recordedInVisitId: ID_2,
+      recordedAt: '2026-09-29T10:05:00Z',
+      performedInVisitId: null,
+      performedAt: null,
+      cancelledInVisitId: null,
+      cancelledAt: null,
+    },
+  ],
+  history: [
+    {
+      id: ID,
+      visitId: ID_2,
+      visitDate: '2026-09-29',
+      dentistName: 'Dr. Amal Karim',
+      code: 'CMP',
+      name: 'Composite filling',
+      toothCode: '16',
+      surfaces: ['O'],
+      final: { amount: '45.00', currency: 'USD' },
+    },
+  ],
+  liveVisitId: ID_2,
+  teeth: [
+    {
+      code: '16',
+      state: 'treated_today',
+      surfaces: { O: 'treated_today' },
+      wholeTooth: null,
+      hasActiveDiagnosis: true,
+      openPlanIds: [ID],
+      historyCount: 1,
+      titleParts: { diagnoses: ['Dental caries'], plans: ['Extraction'], historyCount: 1 },
+    },
+  ],
+};
+
 describe('patientChartSchema', () => {
   it('round-trips a representative chart', () => {
-    const chart = {
-      dentition: { stage: 'permanent', source: 'auto', ageYears: 34 },
-      toothStatus: [{ position: '14', present: 'primary' }],
-      diagnoses: [
-        {
-          id: ID,
-          patientId: ID,
-          toothCode: '16',
-          surfaces: ['M', 'O'],
-          diagnosisId: ID,
-          code: 'DX-CAR',
-          name: 'Dental caries',
-          category: 'Caries',
-          status: 'active',
-          note: null,
-          dentistId: ID,
-          dentistName: 'Dr. Amal Karim',
-          recordedBy: ID,
-          recordedInVisitId: ID_2,
-          recordedInVisitDate: '2026-09-29',
-          recordedAt: '2026-09-29T10:00:00Z',
-          resolvedInVisitId: null,
-          resolvedAt: null,
-        },
-      ],
-      plans: [
-        {
-          id: ID,
-          patientId: ID,
-          toothCode: '16',
-          surfaces: [],
-          procedureId: ID,
-          code: 'EXT',
-          name: 'Extraction',
-          category: 'Surgical',
-          chargeUnit: 'per_tooth',
-          price: { amount: '30.00', currency: 'USD' },
-          diagnosisRecordId: ID,
-          status: 'planned',
-          note: null,
-          dentistId: ID,
-          dentistName: 'Dr. Amal Karim',
-          recordedBy: ID,
-          recordedInVisitId: ID_2,
-          recordedAt: '2026-09-29T10:05:00Z',
-          performedInVisitId: null,
-          performedAt: null,
-          cancelledInVisitId: null,
-          cancelledAt: null,
-        },
-      ],
-      history: [
-        {
-          id: ID,
-          visitId: ID_2,
-          visitDate: '2026-09-29',
-          dentistName: 'Dr. Amal Karim',
-          code: 'CMP',
-          name: 'Composite filling',
-          toothCode: '16',
-          surfaces: ['O'],
-          final: { amount: '45.00', currency: 'USD' },
-        },
-      ],
-      liveVisitId: ID_2,
-      teeth: [
-        {
-          code: '16',
-          state: 'treated_today',
-          surfaces: { O: 'treated_today' },
-          wholeTooth: null,
-          hasActiveDiagnosis: true,
-          openPlanIds: [ID],
-          historyCount: 1,
-          titleParts: { diagnoses: ['Dental caries'], plans: ['Extraction'], historyCount: 1 },
-        },
-      ],
-    };
-    const result = patientChartSchema.safeParse(chart);
+    const result = patientChartSchema.safeParse(CHART);
     expect(result.success).toBe(true);
-    expect(result.success && result.data).toEqual(chart);
+    expect(result.success && result.data).toEqual(CHART);
+  });
+});
+
+describe('charting route results', () => {
+  const visit = {
+    id: ID_2,
+    patientId: ID,
+    branchId: ID,
+    roomId: null,
+    dentistId: ID,
+    startedBy: ID,
+    status: 'in_progress',
+    localDate: '2026-09-29',
+    startedAt: '2026-09-29T10:00:00Z',
+    pausedAt: null,
+    pausedSeconds: 0,
+    completedAt: null,
+    durationMinutes: null,
+    notes: '',
+    discountMode: 'amount',
+    discountValue: '0',
+    currency: 'USD',
+    services: [],
+    money: { subtotal: '0.00', discount: '0.00', total: '0.00', capped: false },
+    serverNow: '2026-09-29T10:10:00Z',
+  };
+  const [diagnosis] = CHART.diagnoses;
+  const [plan] = CHART.plans;
+
+  it('wraps the updated visit with the affected record', () => {
+    expect(diagnosisResultSchema.safeParse({ visit, record: diagnosis }).success).toBe(true);
+    expect(planResultSchema.safeParse({ visit, record: plan }).success).toBe(true);
+    expect(
+      toothPresenceResultSchema.safeParse({ visit, record: { position: '14', present: 'primary' } })
+        .success,
+    ).toBe(true);
+  });
+
+  it('rejects a record of the wrong kind', () => {
+    expect(diagnosisResultSchema.safeParse({ visit, record: plan }).success).toBe(false);
+    expect(planResultSchema.safeParse({ visit, record: diagnosis }).success).toBe(false);
   });
 });

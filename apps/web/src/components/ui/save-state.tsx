@@ -5,9 +5,10 @@ import { cn } from '@/lib/utils';
  * Where an explicitly saved form stands (patients design Q16): `clean` shows nothing, `dirty`
  * "Unsaved changes", `saving` "Saving…" with the POC's 11px spinner, `saved` "✓ Saved just now"
  * (the tick is decoration, hidden from screen readers), `failed` "Failed to save — retry", which
- * retries when clicked.
+ * retries when clicked. An autosaved field group (the visit workspace) starts at `idle`,
+ * "Autosaves as you type".
  */
-export type SaveStatus = 'clean' | 'dirty' | 'saving' | 'saved' | 'failed';
+export type SaveStatus = 'idle' | 'clean' | 'dirty' | 'saving' | 'saved' | 'failed';
 
 const TEXT = 'inline-flex items-center gap-1.5 text-[11.5px] leading-none font-medium';
 
@@ -17,6 +18,9 @@ export function SaveState({ status, onRetry }: { status: SaveStatus; onRetry: ()
   const { t } = useTranslation('common');
   return (
     <span role="status" className="inline-flex min-h-[18px] items-center">
+      {status === 'idle' && (
+        <span className={cn(TEXT, 'text-ink-muted')}>{t('saveState.idle')}</span>
+      )}
       {status === 'dirty' && (
         <span className={cn(TEXT, 'text-ink-muted')}>{t('saveState.unsaved')}</span>
       )}

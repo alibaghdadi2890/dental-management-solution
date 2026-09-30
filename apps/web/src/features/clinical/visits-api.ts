@@ -1,14 +1,16 @@
 import {
   clinicalSummarySchema,
-  diagnosisRecordSchema,
+  diagnosisResultSchema,
   lastVisitSchema,
   liveVisitRefSchema,
   patientChartSchema,
+  planResultSchema,
+  serviceResultSchema,
   startDefaultsSchema,
   startVisitResultSchema,
   toothHistorySchema,
-  toothPresenceSchema,
-  treatmentPlanSchema,
+  toothPresenceResultSchema,
+  visitResultSchema,
   visitSchema,
   type AddServiceInput,
   type LiveVisitQuery,
@@ -18,45 +20,50 @@ import {
   type ToothCode,
   type ToothPresence,
   type UpdateServiceInput,
-  type Visit,
   type VisitDiscountInput,
   type VisitNotesInput,
 } from '@dcm/contracts';
-import { mutationOptions, type QueryClient, queryOptions } from '@tanstack/react-query';
+import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
-import { billingKeys } from '@/features/billing/billing-api';
 import { actingTenantId } from '@/features/platform/acting-tenant';
 import { apiFetch } from '@/lib/api';
 
 /**
  * The live visit and the patient's clinical reads (feature 4a, spec §HTTP): `clinical`'s
- * `/visits` and `/clinical/patients` routes.
+ * `/visits` and `/clinical/patients` routes. `visit-mutations.ts` has the cache effects of the
+ * writes.
  *
- * Every mutation that changes a visit answers with the updated `Visit` (`{ visit }`, plus the
- * affected `record` for the charting routes), which replaces the `['visit', id]` cache without a
- * refetch. A change to what is charted also invalidates the patient's chart, tooth histories and
- * treatment summary; a lifecycle change invalidates the live-visit lists (the header pill).
+ * Every key is scoped under the acting tenant (`patientKeys`'s pattern,
+ * `features/patients/patients-api.ts`), so a platform admin switching clinics never sees a stale
+ * visit or chart from the clinic they left.
  */
 export const visitKeys = {
-  detail: (id: string) => ['visit', id] as const,
-  allLive: ['visits', 'live'] as const,
-  live: (filter: LiveVisitQuery) => [...visitKeys.allLive, filter] as const,
-  startDefaults: ['visits', 'start-defaults'] as const,
+  all: (tenantId: string | null) => ['visits', tenantId] as const,
+  detail: (tenantId: string | null, id: string) =>
+    [...visitKeys.all(tenantId), 'detail', id] as const,
+  allLive: (tenantId: string | null) => [...visitKeys.all(tenantId), 'live'] as const,
+  live: (tenantId: string | null, filter: LiveVisitQuery) =>
+    [...visitKeys.allLive(tenantId), filter] as const,
+  startDefaults: (tenantId: string | null) =>
+    [...visitKeys.all(tenantId), 'start-defaults'] as const,
 };
 
 export const clinicalKeys = {
-  chart: (patientId: string) => ['clinical', 'chart', patientId] as const,
-  toothHistories: (patientId: string) => ['clinical', 'tooth-history', patientId] as const,
-  toothHistory: (patientId: string, toothCode: ToothCode) =>
-    [...clinicalKeys.toothHistories(patientId), toothCode] as const,
-  summary: (patientId: string) => ['clinical', 'summary', patientId] as const,
-  lastVisit: (patientId: string) => ['clinical', 'last-visit', patientId] as const,
+  all: (tenantId: string | null) => ['clinical', tenantId] as const,
+  chart: (tenantId: string | null, patientId: string) =>
+    [...clinicalKeys.all(tenantId), 'chart', patientId] as const,
+  toothHistories: (tenantId: string | null, patientId: string) =>
+    [...clinicalKeys.all(tenantId), 'tooth-history', patientId] as const,
+  toothHistory: (tenantId: string | null, patientId: string, toothCode: ToothCode) =>
+    [...clinicalKeys.toothHistories(tenantId, patientId), toothCode] as const,
+  summary: (tenantId: string | null, patientId: string) =>
+    [...clinicalKeys.all(tenantId), 'summary', patientId] as const,
+  lastVisit: (tenantId: string | null, patientId: string) =>
+    [...clinicalKeys.all(tenantId), 'last-visit', patientId] as const,
 };
 
-const visitResultSchema = z.object({ visit: visitSchema });
-const diagnosisResultSchema = z.object({ visit: visitSchema, record: diagnosisRecordSchema });
-const planResultSchema = z.object({ visit: visitSchema, record: treatmentPlanSchema });
-const toothResultSchema = z.object({ visit: visitSchema, record: toothPresenceSchema });
+/** Omitted entirely when `tenantId` is left to the ambient acting tenant (`billing-api.ts`). */
+const scope = (tenantId?: string) => (tenantId === undefined ? {} : { tenantId });
 
 function liveQueryString({ patientId, mine }: LiveVisitQuery): string {
   const search = new URLSearchParams();
@@ -68,241 +75,121 @@ function liveQueryString({ patientId, mine }: LiveVisitQuery): string {
 
 // Reads.
 
-export const visitQuery = (id: string) =>
+export const visitQuery = (id: string, tenantId?: string) =>
   queryOptions({
-    queryKey: visitKeys.detail(id),
-    queryFn: () => apiFetch(`/visits/${id}`, visitSchema),
+    queryKey: visitKeys.detail(tenantId ?? actingTenantId(), id),
+    queryFn: () => apiFetch(`/visits/${id}`, visitSchema, scope(tenantId)),
   });
 
 /** `GET /visits/live`: `mine` is the header pill's filter (W18), `patientId` the record's. */
-export const liveVisitsQuery = (filter: LiveVisitQuery) =>
+export const liveVisitsQuery = (filter: LiveVisitQuery, tenantId?: string) =>
   queryOptions({
-    queryKey: visitKeys.live(filter),
-    queryFn: () => apiFetch(`/visits/live${liveQueryString(filter)}`, z.array(liveVisitRefSchema)),
+    queryKey: visitKeys.live(tenantId ?? actingTenantId(), filter),
+    queryFn: () =>
+      apiFetch(
+        `/visits/live${liveQueryString(filter)}`,
+        z.array(liveVisitRefSchema),
+        scope(tenantId),
+      ),
   });
 
 /** The start popover's defaults (V3). Always refetched when the popover opens: the room it
  * suggests must still be free. */
-export const startDefaultsQuery = () =>
+export const startDefaultsQuery = (tenantId?: string) =>
   queryOptions({
-    queryKey: visitKeys.startDefaults,
-    queryFn: () => apiFetch('/visits/start-defaults', startDefaultsSchema),
+    queryKey: visitKeys.startDefaults(tenantId ?? actingTenantId()),
+    queryFn: () => apiFetch('/visits/start-defaults', startDefaultsSchema, scope(tenantId)),
     staleTime: 0,
   });
 
-export const chartQuery = (patientId: string) =>
+export const chartQuery = (patientId: string, tenantId?: string) =>
   queryOptions({
-    queryKey: clinicalKeys.chart(patientId),
-    queryFn: () => apiFetch(`/clinical/patients/${patientId}/chart`, patientChartSchema),
-  });
-
-export const toothHistoryQuery = (patientId: string, toothCode: ToothCode) =>
-  queryOptions({
-    queryKey: clinicalKeys.toothHistory(patientId, toothCode),
+    queryKey: clinicalKeys.chart(tenantId ?? actingTenantId(), patientId),
     queryFn: () =>
-      apiFetch(`/clinical/patients/${patientId}/teeth/${toothCode}/history`, toothHistorySchema),
+      apiFetch(`/clinical/patients/${patientId}/chart`, patientChartSchema, scope(tenantId)),
   });
 
-export const lastVisitQuery = (patientId: string) =>
+export const toothHistoryQuery = (patientId: string, toothCode: ToothCode, tenantId?: string) =>
   queryOptions({
-    queryKey: clinicalKeys.lastVisit(patientId),
-    queryFn: () => apiFetch(`/clinical/patients/${patientId}/last-visit`, lastVisitSchema),
+    queryKey: clinicalKeys.toothHistory(tenantId ?? actingTenantId(), patientId, toothCode),
+    queryFn: () =>
+      apiFetch(
+        `/clinical/patients/${patientId}/teeth/${toothCode}/history`,
+        toothHistorySchema,
+        scope(tenantId),
+      ),
   });
 
-export const clinicalSummaryQuery = (patientId: string) =>
+export const lastVisitQuery = (patientId: string, tenantId?: string) =>
   queryOptions({
-    queryKey: clinicalKeys.summary(patientId),
-    queryFn: () => apiFetch(`/clinical/patients/${patientId}/summary`, clinicalSummarySchema),
+    queryKey: clinicalKeys.lastVisit(tenantId ?? actingTenantId(), patientId),
+    queryFn: () =>
+      apiFetch(`/clinical/patients/${patientId}/last-visit`, lastVisitSchema, scope(tenantId)),
   });
 
-// Writes.
+export const clinicalSummaryQuery = (patientId: string, tenantId?: string) =>
+  queryOptions({
+    queryKey: clinicalKeys.summary(tenantId ?? actingTenantId(), patientId),
+    queryFn: () =>
+      apiFetch(`/clinical/patients/${patientId}/summary`, clinicalSummarySchema, scope(tenantId)),
+  });
+
+// Writes: each answers with the updated visit (`{ visit }`), plus the affected `record` for the
+// service and charting routes.
 
 export function startVisit(input: StartVisitInput) {
   return apiFetch('/visits', startVisitResultSchema, { method: 'POST', json: input });
 }
 
-const visitPath = (visitId: string, rest: string) => `/visits/${visitId}/${rest}`;
-
 function visitCall<TSchema extends z.ZodType>(
   schema: TSchema,
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  visitId: string,
   path: string,
   json?: unknown,
 ) {
-  return apiFetch(path, schema, json === undefined ? { method } : { method, json });
+  const url = `/visits/${visitId}/${path}`;
+  return apiFetch(url, schema, json === undefined ? { method } : { method, json });
 }
 
 export const pauseVisit = (visitId: string) =>
-  visitCall(visitResultSchema, 'POST', visitPath(visitId, 'pause'));
+  visitCall(visitResultSchema, 'POST', visitId, 'pause');
 export const resumeVisit = (visitId: string) =>
-  visitCall(visitResultSchema, 'POST', visitPath(visitId, 'resume'));
+  visitCall(visitResultSchema, 'POST', visitId, 'resume');
 export const discardVisit = (visitId: string) =>
-  visitCall(visitResultSchema, 'POST', visitPath(visitId, 'discard'));
+  visitCall(visitResultSchema, 'POST', visitId, 'discard');
 export const completeVisit = (visitId: string) =>
-  visitCall(visitResultSchema, 'POST', visitPath(visitId, 'complete'));
+  visitCall(visitResultSchema, 'POST', visitId, 'complete');
 
 export const updateVisitNotes = (visitId: string, input: VisitNotesInput) =>
-  visitCall(visitResultSchema, 'PATCH', visitPath(visitId, 'notes'), input);
+  visitCall(visitResultSchema, 'PATCH', visitId, 'notes', input);
 export const setVisitDiscount = (visitId: string, input: VisitDiscountInput) =>
-  visitCall(visitResultSchema, 'PATCH', visitPath(visitId, 'discount'), input);
+  visitCall(visitResultSchema, 'PATCH', visitId, 'discount', input);
 
 export const addService = (visitId: string, input: AddServiceInput) =>
-  visitCall(visitResultSchema, 'POST', visitPath(visitId, 'services'), input);
+  visitCall(serviceResultSchema, 'POST', visitId, 'services', input);
 export const updateService = (visitId: string, serviceId: string, patch: UpdateServiceInput) =>
-  visitCall(visitResultSchema, 'PATCH', visitPath(visitId, `services/${serviceId}`), patch);
+  visitCall(serviceResultSchema, 'PATCH', visitId, `services/${serviceId}`, patch);
 export const removeService = (visitId: string, serviceId: string) =>
-  visitCall(visitResultSchema, 'DELETE', visitPath(visitId, `services/${serviceId}`));
+  visitCall(serviceResultSchema, 'DELETE', visitId, `services/${serviceId}`);
 
 export const recordDiagnosis = (visitId: string, input: RecordDiagnosisInput) =>
-  visitCall(diagnosisResultSchema, 'POST', visitPath(visitId, 'diagnoses'), input);
+  visitCall(diagnosisResultSchema, 'POST', visitId, 'diagnoses', input);
 export const resolveDiagnosis = (visitId: string, recordId: string) =>
-  visitCall(diagnosisResultSchema, 'POST', visitPath(visitId, `diagnoses/${recordId}/resolve`));
+  visitCall(diagnosisResultSchema, 'POST', visitId, `diagnoses/${recordId}/resolve`);
 export const reopenDiagnosis = (visitId: string, recordId: string) =>
-  visitCall(diagnosisResultSchema, 'POST', visitPath(visitId, `diagnoses/${recordId}/reopen`));
+  visitCall(diagnosisResultSchema, 'POST', visitId, `diagnoses/${recordId}/reopen`);
 export const removeDiagnosis = (visitId: string, recordId: string) =>
-  visitCall(diagnosisResultSchema, 'DELETE', visitPath(visitId, `diagnoses/${recordId}`));
+  visitCall(diagnosisResultSchema, 'DELETE', visitId, `diagnoses/${recordId}`);
 
 export const planTreatment = (visitId: string, input: PlanTreatmentInput) =>
-  visitCall(planResultSchema, 'POST', visitPath(visitId, 'plans'), input);
+  visitCall(planResultSchema, 'POST', visitId, 'plans', input);
 export const performPlan = (visitId: string, planId: string) =>
-  visitCall(planResultSchema, 'POST', visitPath(visitId, `plans/${planId}/perform`));
+  visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/perform`);
 export const cancelPlan = (visitId: string, planId: string) =>
-  visitCall(planResultSchema, 'POST', visitPath(visitId, `plans/${planId}/cancel`));
+  visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/cancel`);
 export const removePlan = (visitId: string, planId: string) =>
-  visitCall(planResultSchema, 'DELETE', visitPath(visitId, `plans/${planId}`));
+  visitCall(planResultSchema, 'DELETE', visitId, `plans/${planId}`);
 
 export const setToothPresence = (visitId: string, { position, present }: ToothPresence) =>
-  visitCall(toothResultSchema, 'PUT', visitPath(visitId, `teeth/${position}`), { present });
-
-// Cache effects.
-
-function writeVisit(queryClient: QueryClient, visit: Visit): void {
-  queryClient.setQueryData(visitKeys.detail(visit.id), visit);
-}
-
-function invalidate(queryClient: QueryClient, keys: readonly (readonly unknown[])[]) {
-  return Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey }))).then(
-    () => undefined,
-  );
-}
-
-/** What the chart card, tooth history and Overview's treatment summary derive from. */
-const chartingKeys = (patientId: string) => [
-  clinicalKeys.chart(patientId),
-  clinicalKeys.toothHistories(patientId),
-  clinicalKeys.summary(patientId),
-];
-
-/** A visit started or ended: the live-visit lists and the chart's `liveVisitId` are stale. */
-function afterLiveChange(queryClient: QueryClient, visit: Visit) {
-  writeVisit(queryClient, visit);
-  return invalidate(queryClient, [visitKeys.allLive, clinicalKeys.chart(visit.patientId)]);
-}
-
-/** `POST /visits`: a new or resumed visit; either way the patient now has a live visit. */
-export function startVisitMutation(queryClient: QueryClient) {
-  return mutationOptions({
-    mutationFn: startVisit,
-    onSuccess: ({ visit }) => afterLiveChange(queryClient, visit),
-  });
-}
-
-/**
- * The workspace's mutations for one visit, for `useMutation`. Each writes the returned visit
- * into its cache; the rest of each `onSuccess` is what that change makes stale elsewhere.
- */
-export function visitMutations(queryClient: QueryClient, visitId: string) {
-  const visitOnly = ({ visit }: { visit: Visit }) => {
-    writeVisit(queryClient, visit);
-  };
-  const charting = ({ visit }: { visit: Visit }) => {
-    writeVisit(queryClient, visit);
-    return invalidate(queryClient, chartingKeys(visit.patientId));
-  };
-  /** Pause and resume change only what the live-visit pill shows. */
-  const liveStatus = ({ visit }: { visit: Visit }) => {
-    writeVisit(queryClient, visit);
-    return invalidate(queryClient, [visitKeys.allLive]);
-  };
-
-  return {
-    pause: mutationOptions({ mutationFn: () => pauseVisit(visitId), onSuccess: liveStatus }),
-    resume: mutationOptions({ mutationFn: () => resumeVisit(visitId), onSuccess: liveStatus }),
-    discard: mutationOptions({
-      mutationFn: () => discardVisit(visitId),
-      onSuccess: ({ visit }) => afterLiveChange(queryClient, visit),
-    }),
-    /** The charge is posted in the same transaction (W2), so the balances are stale too. */
-    complete: mutationOptions({
-      mutationFn: () => completeVisit(visitId),
-      onSuccess: ({ visit }) => {
-        writeVisit(queryClient, visit);
-        return invalidate(queryClient, [
-          visitKeys.allLive,
-          ...chartingKeys(visit.patientId),
-          clinicalKeys.lastVisit(visit.patientId),
-          billingKeys.all(actingTenantId()),
-        ]);
-      },
-    }),
-    updateNotes: mutationOptions({
-      mutationFn: (input: VisitNotesInput) => updateVisitNotes(visitId, input),
-      onSuccess: visitOnly,
-    }),
-    setDiscount: mutationOptions({
-      mutationFn: (input: VisitDiscountInput) => setVisitDiscount(visitId, input),
-      onSuccess: visitOnly,
-    }),
-    addService: mutationOptions({
-      mutationFn: (input: AddServiceInput) => addService(visitId, input),
-      onSuccess: charting,
-    }),
-    /** A price edit changes only the visit's money, never the chart. */
-    updateService: mutationOptions({
-      mutationFn: ({ serviceId, patch }: { serviceId: string; patch: UpdateServiceInput }) =>
-        updateService(visitId, serviceId, patch),
-      onSuccess: visitOnly,
-    }),
-    /** Removing a performed plan's service also reopens the plan (the Undo of Perform). */
-    removeService: mutationOptions({
-      mutationFn: (serviceId: string) => removeService(visitId, serviceId),
-      onSuccess: charting,
-    }),
-    recordDiagnosis: mutationOptions({
-      mutationFn: (input: RecordDiagnosisInput) => recordDiagnosis(visitId, input),
-      onSuccess: charting,
-    }),
-    resolveDiagnosis: mutationOptions({
-      mutationFn: (recordId: string) => resolveDiagnosis(visitId, recordId),
-      onSuccess: charting,
-    }),
-    reopenDiagnosis: mutationOptions({
-      mutationFn: (recordId: string) => reopenDiagnosis(visitId, recordId),
-      onSuccess: charting,
-    }),
-    removeDiagnosis: mutationOptions({
-      mutationFn: (recordId: string) => removeDiagnosis(visitId, recordId),
-      onSuccess: charting,
-    }),
-    planTreatment: mutationOptions({
-      mutationFn: (input: PlanTreatmentInput) => planTreatment(visitId, input),
-      onSuccess: charting,
-    }),
-    performPlan: mutationOptions({
-      mutationFn: (planId: string) => performPlan(visitId, planId),
-      onSuccess: charting,
-    }),
-    cancelPlan: mutationOptions({
-      mutationFn: (planId: string) => cancelPlan(visitId, planId),
-      onSuccess: charting,
-    }),
-    removePlan: mutationOptions({
-      mutationFn: (planId: string) => removePlan(visitId, planId),
-      onSuccess: charting,
-    }),
-    setToothPresence: mutationOptions({
-      mutationFn: (input: ToothPresence) => setToothPresence(visitId, input),
-      onSuccess: charting,
-    }),
-  };
-}
+  visitCall(toothPresenceResultSchema, 'PUT', visitId, `teeth/${position}`, { present });
