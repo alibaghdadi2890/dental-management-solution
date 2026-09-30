@@ -14,10 +14,11 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
-import { Route as AppVisitsRouteImport } from './routes/_app/visits'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
 import { Route as AppPatientsPatientIdRouteImport } from './routes/_app/patients/$patientId'
+import { Route as AppVisitsIndexRouteImport } from './routes/_app/visits/index'
+import { Route as AppVisitsVisitIdRouteImport } from './routes/_app/visits/$visitId'
 import { Route as AppAdminTenantsIndexRouteImport } from './routes/_app/admin/tenants/index'
 import { Route as AppAdminTenantsTenantIdRouteImport } from './routes/_app/admin/tenants/$tenantId'
 
@@ -45,11 +46,6 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AppRoute,
 } as any)
-const AppVisitsRoute = AppVisitsRouteImport.update({
-  id: '/visits',
-  path: '/visits',
-  getParentRoute: () => AppRoute,
-} as any)
 const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
@@ -63,6 +59,16 @@ const AppPatientsIndexRoute = AppPatientsIndexRouteImport.update({
 const AppPatientsPatientIdRoute = AppPatientsPatientIdRouteImport.update({
   id: '/patients/$patientId',
   path: '/patients/$patientId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppVisitsIndexRoute = AppVisitsIndexRouteImport.update({
+  id: '/visits/',
+  path: '/visits/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppVisitsVisitIdRoute = AppVisitsVisitIdRouteImport.update({
+  id: '/visits/$visitId',
+  path: '/visits/$visitId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminTenantsIndexRoute = AppAdminTenantsIndexRouteImport.update({
@@ -81,10 +87,11 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
-  '/visits': typeof AppVisitsRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
+  '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/admin/': typeof AppAdminIndexRoute
   '/patients/': typeof AppPatientsIndexRoute
+  '/visits/': typeof AppVisitsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/admin/tenants/': typeof AppAdminTenantsIndexRoute
 }
@@ -92,11 +99,12 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
-  '/visits': typeof AppVisitsRoute
   '/': typeof AppIndexRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
+  '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/admin': typeof AppAdminIndexRoute
   '/patients': typeof AppPatientsIndexRoute
+  '/visits': typeof AppVisitsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/admin/tenants': typeof AppAdminTenantsIndexRoute
 }
@@ -106,11 +114,12 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/_app/catalog': typeof AppCatalogRoute
   '/_app/settings': typeof AppSettingsRoute
-  '/_app/visits': typeof AppVisitsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/patients/$patientId': typeof AppPatientsPatientIdRoute
+  '/_app/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/patients/': typeof AppPatientsIndexRoute
+  '/_app/visits/': typeof AppVisitsIndexRoute
   '/_app/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/_app/admin/tenants/': typeof AppAdminTenantsIndexRoute
 }
@@ -121,10 +130,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/catalog'
     | '/settings'
-    | '/visits'
     | '/patients/$patientId'
+    | '/visits/$visitId'
     | '/admin/'
     | '/patients/'
+    | '/visits/'
     | '/admin/tenants/$tenantId'
     | '/admin/tenants/'
   fileRoutesByTo: FileRoutesByTo
@@ -132,11 +142,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/catalog'
     | '/settings'
-    | '/visits'
     | '/'
     | '/patients/$patientId'
+    | '/visits/$visitId'
     | '/admin'
     | '/patients'
+    | '/visits'
     | '/admin/tenants/$tenantId'
     | '/admin/tenants'
   id:
@@ -145,11 +156,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/_app/catalog'
     | '/_app/settings'
-    | '/_app/visits'
     | '/_app/'
     | '/_app/patients/$patientId'
+    | '/_app/visits/$visitId'
     | '/_app/admin/'
     | '/_app/patients/'
+    | '/_app/visits/'
     | '/_app/admin/tenants/$tenantId'
     | '/_app/admin/tenants/'
   fileRoutesById: FileRoutesById
@@ -196,13 +208,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/visits': {
-      id: '/_app/visits'
-      path: '/visits'
-      fullPath: '/visits'
-      preLoaderRoute: typeof AppVisitsRouteImport
-      parentRoute: typeof AppRoute
-    }
     '/_app/admin/': {
       id: '/_app/admin/'
       path: '/admin'
@@ -222,6 +227,20 @@ declare module '@tanstack/react-router' {
       path: '/patients/$patientId'
       fullPath: '/patients/$patientId'
       preLoaderRoute: typeof AppPatientsPatientIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/visits/': {
+      id: '/_app/visits/'
+      path: '/visits'
+      fullPath: '/visits/'
+      preLoaderRoute: typeof AppVisitsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/visits/$visitId': {
+      id: '/_app/visits/$visitId'
+      path: '/visits/$visitId'
+      fullPath: '/visits/$visitId'
+      preLoaderRoute: typeof AppVisitsVisitIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin/tenants/': {
@@ -244,11 +263,12 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppCatalogRoute: typeof AppCatalogRoute
   AppSettingsRoute: typeof AppSettingsRoute
-  AppVisitsRoute: typeof AppVisitsRoute
   AppIndexRoute: typeof AppIndexRoute
   AppPatientsPatientIdRoute: typeof AppPatientsPatientIdRoute
+  AppVisitsVisitIdRoute: typeof AppVisitsVisitIdRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppPatientsIndexRoute: typeof AppPatientsIndexRoute
+  AppVisitsIndexRoute: typeof AppVisitsIndexRoute
   AppAdminTenantsTenantIdRoute: typeof AppAdminTenantsTenantIdRoute
   AppAdminTenantsIndexRoute: typeof AppAdminTenantsIndexRoute
 }
@@ -256,11 +276,12 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppCatalogRoute: AppCatalogRoute,
   AppSettingsRoute: AppSettingsRoute,
-  AppVisitsRoute: AppVisitsRoute,
   AppIndexRoute: AppIndexRoute,
   AppPatientsPatientIdRoute: AppPatientsPatientIdRoute,
+  AppVisitsVisitIdRoute: AppVisitsVisitIdRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppPatientsIndexRoute: AppPatientsIndexRoute,
+  AppVisitsIndexRoute: AppVisitsIndexRoute,
   AppAdminTenantsTenantIdRoute: AppAdminTenantsTenantIdRoute,
   AppAdminTenantsIndexRoute: AppAdminTenantsIndexRoute,
 }

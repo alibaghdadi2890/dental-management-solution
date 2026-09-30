@@ -149,8 +149,8 @@ export function updatePatient(id: string, patch: PatientPatch) {
 
 /**
  * `PUT /patients/:id/dentition` (spec W14): sets or clears the chart's dentition override, from
- * the workspace's chart card header. Needs `visit:write`, not `patient:write`. No UI yet — the
- * chart card (feature 4a Task G2) calls this.
+ * the workspace's chart card header (`DentitionSelect`). Needs `visit:write`, not
+ * `patient:write`.
  */
 export function setDentition(id: string, input: DentitionOverride) {
   return apiFetch(`/patients/${id}/dentition`, patientSchema, { method: 'PUT', json: input });

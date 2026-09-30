@@ -72,5 +72,66 @@
     "selected": "Sélectionnée",
     "primary": "Temporaire",
     "notErupted": "Pas sortie"
+  },
+  "workspace": {
+    "loading": "Chargement de la visite…",
+    "notFoundTitle": "Visite introuvable",
+    "notFoundBody": "Cette visite n’existe pas dans ce cabinet, a été abandonnée, ou le lien n’est plus à jour.",
+    "failedTitle": "Impossible de charger cette visite",
+    "failedBody": "Une erreur est survenue pendant le chargement de la visite.",
+    "toPatients": "Tous les patients",
+    "patientLine": "{{number}} · {{age}}",
+    "alerts": "Alertes médicales",
+    "status": {
+      "inProgress": "En cours",
+      "paused": "En pause"
+    },
+    "dateDentist": "{{date}} · {{dentist}}",
+    "timer": "Durée de la visite",
+    "pause": "Pause",
+    "resume": "Reprendre",
+    "pauseFailed": "Impossible de mettre la visite en pause : {{reason}}",
+    "resumeFailed": "Impossible de reprendre la visite : {{reason}}",
+    "viewOnly": "Lecture seule",
+    "actions": "Actions de la visite",
+    "discard": {
+      "action": "Abandonner la visite",
+      "title": "Abandonner cette visite ?",
+      "body": "Rien n’y a été enregistré. L’abandonner la supprime entièrement : elle n’apparaîtra ni dans l’historique du patient ni dans son solde.",
+      "confirm": "Abandonner la visite",
+      "notEmpty": "Des éléments ont été enregistrés dans cette visite : elle ne peut pas être abandonnée. Terminez-la plutôt.",
+      "done": "Visite abandonnée"
+    },
+    "chartFailed": "Impossible de charger le schéma dentaire.",
+    "toothPanel": "Dent sélectionnée",
+    "noTooth": "Sélectionnez une dent sur le schéma pour l’examiner.",
+    "toothLine": "{{label}} · {{name}}",
+    "money": "Montants de la visite",
+    "services_one": "{{count}} acte",
+    "services_other": "{{count}} actes",
+    "total": "Total de la visite"
+  },
+  "chartCard": {
+    "title": "Schéma dentaire",
+    "hint": "Cliquez sur une dent pour l’examiner · ← → pour vous déplacer, Échap pour désélectionner",
+    "mode": {
+      "surface": "5 faces par dent",
+      "simple": "Dent entière"
+    }
+  },
+  "dentition": {
+    "label": "Denture : {{value}}",
+    "stage": {
+      "primary": "Temporaire",
+      "mixed": "Mixte",
+      "permanent": "Permanente"
+    },
+    "auto": "Auto · {{stage}}",
+    "autoAge": "Auto · {{stage}} ({{age}} ans)",
+    "manual": "{{stage}} · définie manuellement",
+    "backToAuto": "Revenir en auto",
+    "setDone": "Denture définie : {{stage}}",
+    "backToAutoDone": "Denture de nouveau automatique",
+    "failed": "Impossible de modifier la denture : {{reason}}"
   }
 }

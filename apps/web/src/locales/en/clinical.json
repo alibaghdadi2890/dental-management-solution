@@ -72,5 +72,66 @@
     "selected": "Selected",
     "primary": "Primary",
     "notErupted": "Not erupted"
+  },
+  "workspace": {
+    "loading": "Loading visit…",
+    "notFoundTitle": "Visit not found",
+    "notFoundBody": "This visit doesn't exist in this clinic, was discarded, or the link is out of date.",
+    "failedTitle": "Couldn't load this visit",
+    "failedBody": "Something went wrong while loading the visit.",
+    "toPatients": "All patients",
+    "patientLine": "{{number}} · {{age}}",
+    "alerts": "Medical alerts",
+    "status": {
+      "inProgress": "In progress",
+      "paused": "Paused"
+    },
+    "dateDentist": "{{date}} · {{dentist}}",
+    "timer": "Visit time",
+    "pause": "Pause",
+    "resume": "Resume",
+    "pauseFailed": "Couldn't pause the visit: {{reason}}",
+    "resumeFailed": "Couldn't resume the visit: {{reason}}",
+    "viewOnly": "View only",
+    "actions": "Visit actions",
+    "discard": {
+      "action": "Discard visit",
+      "title": "Discard this visit?",
+      "body": "Nothing has been recorded in it. Discarding removes it completely: it won't appear in the patient's history or balance.",
+      "confirm": "Discard visit",
+      "notEmpty": "Something was recorded in this visit, so it can't be discarded. Complete it instead.",
+      "done": "Visit discarded"
+    },
+    "chartFailed": "Couldn't load the chart.",
+    "toothPanel": "Selected tooth",
+    "noTooth": "Select a tooth on the chart to examine it.",
+    "toothLine": "{{label}} · {{name}}",
+    "money": "Visit money",
+    "services_one": "{{count}} service",
+    "services_other": "{{count}} services",
+    "total": "Visit total"
+  },
+  "chartCard": {
+    "title": "Dental chart",
+    "hint": "Click a tooth to examine it · ← → to move, Esc to deselect",
+    "mode": {
+      "surface": "5 surfaces per tooth",
+      "simple": "Whole-tooth charting"
+    }
+  },
+  "dentition": {
+    "label": "Dentition: {{value}}",
+    "stage": {
+      "primary": "Primary",
+      "mixed": "Mixed",
+      "permanent": "Permanent"
+    },
+    "auto": "Auto · {{stage}}",
+    "autoAge": "Auto · {{stage}} (age {{age}})",
+    "manual": "{{stage}} · set manually",
+    "backToAuto": "Back to auto",
+    "setDone": "Dentition set to {{stage}}",
+    "backToAutoDone": "Dentition back to automatic",
+    "failed": "Couldn't change the dentition: {{reason}}"
   }
 }

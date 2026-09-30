@@ -76,5 +76,70 @@
     "selected": "محددة",
     "primary": "لبنية",
     "notErupted": "لم تبزغ"
+  },
+  "workspace": {
+    "loading": "جارٍ تحميل الزيارة…",
+    "notFoundTitle": "الزيارة غير موجودة",
+    "notFoundBody": "هذه الزيارة غير موجودة في هذه العيادة، أو أُلغيت، أو أن الرابط قديم.",
+    "failedTitle": "تعذّر تحميل هذه الزيارة",
+    "failedBody": "حدث خطأ أثناء تحميل الزيارة.",
+    "toPatients": "كل المرضى",
+    "patientLine": "{{number}} · {{age}}",
+    "alerts": "تنبيهات طبية",
+    "status": {
+      "inProgress": "جارية",
+      "paused": "متوقفة مؤقتًا"
+    },
+    "dateDentist": "{{date}} · {{dentist}}",
+    "timer": "مدة الزيارة",
+    "pause": "إيقاف مؤقت",
+    "resume": "استئناف",
+    "pauseFailed": "تعذّر إيقاف الزيارة مؤقتًا: {{reason}}",
+    "resumeFailed": "تعذّر استئناف الزيارة: {{reason}}",
+    "viewOnly": "عرض فقط",
+    "actions": "إجراءات الزيارة",
+    "discard": {
+      "action": "إلغاء الزيارة",
+      "title": "إلغاء هذه الزيارة؟",
+      "body": "لم يُسجَّل فيها شيء. إلغاؤها يحذفها نهائيًا: لن تظهر في سجل المريض ولا في رصيده.",
+      "confirm": "إلغاء الزيارة",
+      "notEmpty": "سُجّل شيء في هذه الزيارة، لذا لا يمكن إلغاؤها. أكملها بدلًا من ذلك.",
+      "done": "أُلغيت الزيارة"
+    },
+    "chartFailed": "تعذّر تحميل مخطط الأسنان.",
+    "toothPanel": "السن المحددة",
+    "noTooth": "اختر سنًّا من المخطط لفحصها.",
+    "toothLine": "{{label}} · {{name}}",
+    "money": "مبالغ الزيارة",
+    "services_zero": "لا خدمات",
+    "services_one": "خدمة واحدة",
+    "services_two": "خدمتان",
+    "services_few": "{{count}} خدمات",
+    "services_many": "{{count}} خدمة",
+    "services_other": "{{count}} خدمة",
+    "total": "إجمالي الزيارة"
+  },
+  "chartCard": {
+    "title": "مخطط الأسنان",
+    "hint": "انقر على سن لفحصها · ← → للتنقل، Esc لإلغاء التحديد",
+    "mode": {
+      "surface": "5 أسطح لكل سن",
+      "simple": "تسجيل على مستوى السن كاملة"
+    }
+  },
+  "dentition": {
+    "label": "التسنين: {{value}}",
+    "stage": {
+      "primary": "لبني",
+      "mixed": "مختلط",
+      "permanent": "دائم"
+    },
+    "auto": "تلقائي · {{stage}}",
+    "autoAge": "تلقائي · {{stage}} (العمر {{age}})",
+    "manual": "{{stage}} · محدد يدويًا",
+    "backToAuto": "العودة إلى التلقائي",
+    "setDone": "تم ضبط التسنين على: {{stage}}",
+    "backToAutoDone": "عاد التسنين إلى الوضع التلقائي",
+    "failed": "تعذّر تغيير التسنين: {{reason}}"
   }
 }

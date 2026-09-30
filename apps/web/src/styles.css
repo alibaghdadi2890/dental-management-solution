@@ -151,6 +151,18 @@
     }
   }
 
+  /* A running visit's timer dot (POC `pulsedot`). */
+  --animate-pulsedot: pulsedot 1.8s ease-in-out infinite;
+  @keyframes pulsedot {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+
   --animate-shimmer: shimmer 1.2s linear infinite;
   @keyframes shimmer {
     0% {

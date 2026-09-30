@@ -115,11 +115,12 @@ describe('visitMutations — cache effects', () => {
     expect(stale(keys.chart)).toBe(false);
   });
 
-  it('discarding drops the visit from the cache', async () => {
-    const { client, keys, stale } = seededClient();
+  it('discarding caches the discarded visit, never refetching it (it would answer 404)', async () => {
+    const { client, keys, stale, cached } = seededClient();
     apiFetchMock.mockResolvedValueOnce({ visit: visit({ status: 'discarded' }) });
     await run(client, visitMutations(client, VISIT_ID).discard, undefined);
-    expect(client.getQueryState(detailKey)).toBeUndefined();
+    expect(cached()?.status).toBe('discarded');
+    expect(stale(detailKey)).toBe(false);
     expect(stale(keys.live)).toBe(true);
     expect(stale(keys.chart)).toBe(true);
   });

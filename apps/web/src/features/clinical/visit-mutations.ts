@@ -123,17 +123,17 @@ export function visitMutations(
       mutationFn: () => resumeVisit(visitId),
       onSuccess: liveStatus,
     }),
-    /** A discarded visit is gone (`GET` answers 404), so its cache entry is dropped. */
+    /** A discarded visit is gone (`GET` answers 404), so it is never refetched: the returned
+     * visit stays cached with its `discarded` status, which the open workspace reads to leave
+     * for the patient record. Dropping the entry instead would make that workspace refetch it and
+     * flash "not found" first. */
     discard: mutationOptions({
       ...base,
       mutationFn: () => discardVisit(visitId),
-      onSuccess: ({ visit }) => {
-        queryClient.removeQueries({ queryKey: mutationKey });
-        return invalidate(queryClient, [
-          visitKeys.allLive(tenantId),
-          clinicalKeys.chart(tenantId, visit.patientId),
-        ]);
-      },
+      onSuccess: then((visit) => [
+        visitKeys.allLive(tenantId),
+        clinicalKeys.chart(tenantId, visit.patientId),
+      ]),
     }),
     /** The charge is posted in the same transaction (W2): the balances are stale too. */
     complete: mutationOptions({
