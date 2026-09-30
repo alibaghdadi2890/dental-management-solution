@@ -17,8 +17,9 @@ export interface ChartKeyboardOptions {
   selected: ToothCode | null;
   /** The next tooth, or `null` to deselect. */
   onSelect: (code: ToothCode | null) => void;
-  /** Set while a layer that isn't a dialog is open over the workspace (the catalog drawer, an
-   * `aside`): `Esc` closes it (this callback) before it would deselect. */
+  /** Set while a layer is open over the workspace (the catalog drawer): `Esc` closes it (this
+   * callback) instead of deselecting, even with focus outside it, and the arrows do nothing, so
+   * the selection can't move under the layer. */
   onEscape?: (() => void) | undefined;
 }
 
@@ -51,9 +52,10 @@ function step(
  * The workspace chart's keyboard (spec §Dental Chart → Interactions, W3): with a tooth selected,
  * ← and → walk the arch in the clinic's orientation, wrapping — the chart is never mirrored
  * (W17), so the arrows follow the screen even in an RTL layout. `Esc` closes the topmost layer
- * first: a dialog or menu (or the drawer, with focus inside it) handles it itself, the drawer
- * otherwise through `onEscape`; only then does it deselect. Keys are left alone while focus is in
- * a field or inside a dialog or menu, and with a modifier held.
+ * first: a dialog or menu (the drawer included) handles it itself while focus is inside it, the
+ * drawer otherwise through `onEscape`; only then does it deselect. Keys are left alone while
+ * focus is in a field or inside a dialog or menu, with a modifier held, and — the arrows — while
+ * a layer is open.
  */
 export function useChartKeyboard({
   orientation,
@@ -73,7 +75,7 @@ export function useChartKeyboard({
         else onSelect(null);
         return;
       }
-      if (selected === null) return;
+      if (selected === null || onEscape) return;
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       event.preventDefault();
       const direction = event.key === 'ArrowRight' ? 1 : -1;

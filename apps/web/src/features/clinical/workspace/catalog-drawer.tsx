@@ -35,7 +35,8 @@ const isService = (row: Row): row is ServiceItem => 'chargeUnit' in row;
  * and the category chips; the list shows the active catalog rows, grouped by `drawerGroups`. A
  * per-tooth row (and every diagnosis, W11) needs a tooth, so without one it is disabled. One
  * click commits and closes; the toast (with its Undo or Plan treatment) comes from
- * `ChartingActions`.
+ * `ChartingActions`. It is modal (a `dialog` that keeps Tab inside it), so the chart's arrow keys
+ * can't move the selection under a pending one-click commit.
  */
 export function CatalogDrawer({ mode, onClose }: { mode: DrawerMode; onClose: () => void }) {
   const { t, i18n } = useTranslation('clinical');
@@ -155,6 +156,7 @@ export function CatalogDrawer({ mode, onClose }: { mode: DrawerMode; onClose: ()
       dirty={false}
       onClose={onClose}
       initialFocus="field"
+      modal
       className="absolute inset-y-0 end-0 z-30 w-[428px] max-w-full shadow-[-14px_0_40px_rgba(27,26,31,.14)] rtl:shadow-[14px_0_40px_rgba(27,26,31,.14)]"
       bodyClassName="gap-0 px-0 pt-1.5 pb-3"
       footer={

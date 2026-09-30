@@ -124,15 +124,16 @@ describe('useChartKeyboard', () => {
     expect(none).not.toHaveBeenCalled();
   });
 
-  it('closes an open layer (the drawer) with Esc before deselecting', () => {
+  it('with a layer open, Esc closes it instead of deselecting and the arrows do nothing', () => {
     const onEscape = vi.fn();
     const onSelect = setup({ selected: '16', onEscape });
     press('Escape');
     expect(onEscape).toHaveBeenCalledTimes(1);
     expect(onSelect).not.toHaveBeenCalled();
-    // The arrows still walk the chart while the drawer is open.
+    // The selection can't move under the open drawer.
     press('ArrowRight');
-    expect(onSelect).toHaveBeenLastCalledWith('17');
+    press('ArrowLeft');
+    expect(onSelect).not.toHaveBeenCalled();
   });
 
   it('closes an open layer with Esc even without a selection', () => {

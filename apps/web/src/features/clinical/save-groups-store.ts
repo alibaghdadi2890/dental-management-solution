@@ -209,6 +209,8 @@ export class SaveGroupsStore {
    * Removes a group before its record is deleted (`service:<id>` before the service's DELETE),
    * so a pending or failed price edit neither reaches the deleted row nor keeps the workspace
    * dirty. A consumer still mounted gets a fresh group from the server value on its next render.
+   * If the DELETE then fails, the record stays but its unsaved edit is lost: the field shows the
+   * server value again.
    */
   readonly drop = (key: string): void => {
     const entry = this.entries.get(key);

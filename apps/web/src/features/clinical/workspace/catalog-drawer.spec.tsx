@@ -112,7 +112,7 @@ describe('CatalogDrawer', () => {
     '%s mode: its title, autofocused search and footer',
     (mode, title, placeholder, footer) => {
       renderDrawer(mode, { tooth: '16' });
-      expect(screen.getByRole('complementary', { name: title })).toBeTruthy();
+      expect(screen.getByRole('dialog', { name: title })).toBeTruthy();
       expect(document.activeElement).toBe(screen.getByPlaceholderText(placeholder));
       expect(screen.getByText(footer)).toBeTruthy();
     },
@@ -260,7 +260,7 @@ describe('CatalogDrawer — in the workspace', () => {
     expect(screen.getByText('Tooth #16 · add a planned treatment next')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Plan treatment' }));
-    const planDrawer = await screen.findByRole('complementary', { name: 'Add planned treatment' });
+    const planDrawer = await screen.findByRole('dialog', { name: 'Add planned treatment' });
     expect(within(planDrawer).getByText('Tooth #16 · Upper right first molar')).toBeTruthy();
     fireEvent.click(within(planDrawer).getByRole('button', { name: 'Close' }));
 
@@ -272,5 +272,78 @@ describe('CatalogDrawer — in the workspace', () => {
     await waitFor(() => {
       expect(sent(fetchMock, 'DELETE', `/visits/${VISIT_ID}/services/${added.id}`)).toBeNull();
     });
+  });
+
+  it('is modal: the arrows can’t move the selection under it, and Tab stays inside', async () => {
+    mockWorkspace({ services: SERVICES });
+    renderWorkspace();
+    await openFor(/^#16 · /, 'Add completed service');
+    const drawer = await screen.findByRole('dialog', { name: 'Add completed service' });
+    const chip = await within(drawer).findByRole('button', { name: 'Periodontal' });
+    chip.focus();
+    fireEvent.keyDown(chip, { key: 'ArrowLeft' });
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    const card = screen.getByRole('region', { name: 'Dental chart' });
+    expect(
+      within(card)
+        .getByRole('button', { name: /^#16 · / })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(within(drawer).getByText('Tooth #16 · Upper right first molar')).toBeTruthy();
+
+    const rows = within(drawer).getAllByRole('button', { name: /Scaling/ });
+    const last = rows.at(-1)!;
+    last.focus();
+    fireEvent.keyDown(last, { key: 'Tab' });
+    expect(drawer.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(within(drawer).getByRole('button', { name: 'Close' }));
+  });
+
+  it('Plan treatment plans on the diagnosed tooth, even after the selection moved', async () => {
+    const current = visit();
+    const record = {
+      id: id(46),
+      patientId: current.patientId,
+      toothCode: '16',
+      surfaces: [],
+      diagnosisId: id(44),
+      code: 'DENT',
+      name: 'Dental caries',
+      category: 'Caries',
+      status: 'active',
+      note: null,
+      dentistId: current.dentistId,
+      dentistName: 'Dr. Ana Reyes',
+      recordedBy: current.startedBy,
+      recordedInVisitId: VISIT_ID,
+      recordedInVisitDate: '2026-09-04',
+      recordedAt: '2026-09-04T09:05:00.000Z',
+      resolvedInVisitId: null,
+      resolvedAt: null,
+    };
+    mockWorkspace({
+      visit: current,
+      diagnoses: DIAGNOSES,
+      services: SERVICES,
+      mutation: (method, path) =>
+        method === 'POST' && path.endsWith('/diagnoses')
+          ? json({ visit: current, record })
+          : undefined,
+    });
+    renderWorkspace();
+    await openFor(/^#16 · /, 'Add diagnosis');
+    fireEvent.click((await screen.findAllByRole('button', { name: /^Dental caries/ }))[0]!);
+    expect(await screen.findByText('Dental caries recorded')).toBeTruthy();
+
+    const card = screen.getByRole('region', { name: 'Dental chart' });
+    fireEvent.click(within(card).getByRole('button', { name: /^#17 · / }));
+    fireEvent.click(screen.getByRole('button', { name: 'Plan treatment' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Add planned treatment' });
+    expect(within(drawer).getByText('Tooth #16 · Upper right first molar')).toBeTruthy();
+    expect(
+      within(card)
+        .getByRole('button', { name: /^#16 · / })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
   });
 });

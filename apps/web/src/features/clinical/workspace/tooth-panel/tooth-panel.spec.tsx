@@ -155,7 +155,7 @@ describe('ToothPanel', () => {
     ).toBe('true');
 
     fireEvent.click(within(aside()).getByRole('button', { name: 'Add completed service' }));
-    const drawer = await screen.findByRole('complementary', { name: 'Add completed service' });
+    const drawer = await screen.findByRole('dialog', { name: 'Add completed service' });
     expect(within(drawer).getByText('Tooth #16 · Upper right first molar · O · D')).toBeTruthy();
     const frequent = await within(drawer).findByRole('region', { name: 'Frequently used' });
     fireEvent.click(within(frequent).getByRole('button', { name: /Composite filling.*#16/ }));
@@ -203,12 +203,16 @@ describe('ToothPanel', () => {
     expect(within(section('Completed')).getByText('nothing recorded')).toBeTruthy();
   });
 
-  it('summarises all resolved and all performed', async () => {
+  it('summarises all resolved and all performed (in this visit, as the note says)', async () => {
     fakeClinic({
       chart: chart({
         diagnoses: [diagnosisRecord(10, 'Dental caries', '16', { status: 'resolved' })],
         plans: [
           treatmentPlan(20, 'Zircon crown', '16', {
+            status: 'performed',
+            performedInVisitId: VISIT_ID,
+          }),
+          treatmentPlan(22, 'Root canal', '17', {
             status: 'performed',
             performedInVisitId: OLDER_VISIT_ID,
           }),
@@ -217,10 +221,19 @@ describe('ToothPanel', () => {
     });
     renderWorkspace();
     await selectTooth(/^#16 · /);
+    expect(
+      within(section('Treatment plan')).getByText('One planned treatment performed — see below.'),
+    ).toBeTruthy();
     collapse('Diagnosis');
     collapse('Treatment plan');
     expect(within(section('Diagnosis')).getByText('all resolved')).toBeTruthy();
     expect(within(section('Treatment plan')).getByText('all performed')).toBeTruthy();
+
+    // Performed in an earlier visit: the body shows the empty block, so the summary agrees.
+    await selectTooth(/^#17 · /);
+    expect(within(section('Treatment plan')).getByText('nothing planned')).toBeTruthy();
+    fireEvent.click(within(section('Treatment plan')).getByRole('button', { expanded: false }));
+    expect(within(section('Treatment plan')).getByText('No planned treatment for this tooth'));
   });
 
   it('offers Remove only on records of this visit; older ones are resolved or cancelled', async () => {
@@ -321,6 +334,25 @@ describe('ToothPanel', () => {
     });
     expect(sent(fetchMock, 'PATCH', `/visits/${VISIT_ID}/services/${id(30)}`)).toBeUndefined();
     expect(within(section('Completed')).getByText('No treatment recorded for this tooth'));
+  });
+
+  it('removes a service once, and a service already gone is no error', async () => {
+    const { state, fetchMock } = fakeClinic({
+      visit: visit({ services: [visitService(30, 'Composite filling', '16')] }),
+    });
+    renderWorkspace();
+    await selectTooth(/^#16 · /);
+    // Someone else removed it already: the server answers 404.
+    state.visit = { ...state.visit, services: [] };
+    const remove = within(aside()).getByRole('button', { name: 'Remove Composite filling' });
+    fireEvent.click(remove);
+    fireEvent.click(remove);
+    await waitFor(() => {
+      expect(within(section('Completed')).getByText('No treatment recorded for this tooth'));
+    });
+    const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE');
+    expect(deletes).toHaveLength(1);
+    expect(screen.queryByText(/^Couldn’t save the change|^Couldn't save the change/)).toBeNull();
   });
 
   it('lists earlier services under Previously, without the empty block', async () => {

@@ -16,9 +16,10 @@ import {
   type QueryClient,
   useQueryClient,
 } from '@tanstack/react-query';
-import { createContext, useContext, useMemo, useState } from 'react';
+import { createContext, useContext, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/toast-context';
+import { ApiError } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
 import { useToothLabel } from '../chart/use-chart-settings';
 import { useDropSaveGroup } from '../save-groups-context';
@@ -103,6 +104,9 @@ export function useChartingActionsState({
   const drop = useDropSaveGroup();
   const toothLabel = useToothLabel();
   const [removing, setRemoving] = useState<ReadonlySet<string>>(() => new Set());
+  // The same set, read synchronously: a second Remove (the card's, then a toast's Undo) of a
+  // service whose DELETE is in flight is skipped.
+  const removingRef = useRef(new Set<string>());
   const { select, ensureSelected } = selection;
 
   return useMemo(() => {
@@ -121,11 +125,17 @@ export function useChartingActionsState({
       code === null ? t('actions.jawLevel') : t('actions.tooth', { label: toothLabel(code) });
 
     const removeService = (serviceId: string) => {
+      if (removingRef.current.has(serviceId)) return;
+      removingRef.current.add(serviceId);
       drop(servicePriceKey(serviceId));
       setRemoving((current) => new Set(current).add(serviceId));
       run(mutations.removeService, serviceId)
-        .catch(failed)
+        .catch((error: unknown) => {
+          // Already gone (removed here a moment ago, or by someone else): the goal is met.
+          if (!(error instanceof ApiError && error.status === 404)) failed(error);
+        })
         .finally(() => {
+          removingRef.current.delete(serviceId);
           setRemoving((current) => {
             const next = new Set(current);
             next.delete(serviceId);

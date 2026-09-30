@@ -1,10 +1,28 @@
-import { type ReactNode, useEffect, useRef } from 'react';
+import { type KeyboardEvent, type ReactNode, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { IconButton } from './button';
 
 const FIELDS =
   'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])';
+const TABBABLE = `${FIELDS}, button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])`;
+
+/** Keeps Tab inside a modal panel: from the last stop it wraps to the first, and back. */
+function trapTab(event: KeyboardEvent<HTMLElement>): void {
+  const stops = [...event.currentTarget.querySelectorAll<HTMLElement>(TABBABLE)];
+  const first = stops[0];
+  const last = stops.at(-1);
+  if (!first || !last) return;
+  const current = document.activeElement;
+  const inside = stops.some((stop) => stop === current);
+  if (event.shiftKey && (current === first || !inside)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (current === last || !inside)) {
+    event.preventDefault();
+    first.focus();
+  }
+}
 
 /**
  * POC right panel: 440px, pushes the content (it sits in the page's flex row), slides in.
@@ -19,7 +37,9 @@ const FIELDS =
  *
  * The visit workspace's catalog drawer restyles it (spec §Add Service / Plan Treatment /
  * Diagnosis Drawer): no eyebrow, a `subtitle` under the title, a `toolbar` (search and chips)
- * at the foot of the header, and its own width, body and footer classes.
+ * at the foot of the header, and its own width, body and footer classes. It is also `modal`:
+ * a `dialog` (`aria-modal`) that keeps Tab inside it, so nothing behind it — the chart's arrow
+ * keys included — acts while it is open. Without `modal` the panel is a plain `aside`.
  */
 export function RightPanel({
   eyebrow,
@@ -34,6 +54,7 @@ export function RightPanel({
   className,
   bodyClassName,
   footerClassName,
+  modal = false,
   children,
 }: {
   eyebrow?: string;
@@ -48,10 +69,12 @@ export function RightPanel({
   className?: string;
   bodyClassName?: string;
   footerClassName?: string;
+  modal?: boolean;
   children: ReactNode;
 }) {
   const { t } = useTranslation('common');
-  const panelRef = useRef<HTMLElement>(null);
+  // A `div` when modal, else an `aside`: only `contains` and `querySelector` are used on it.
+  const panelRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
@@ -67,11 +90,17 @@ export function RightPanel({
     };
   }, [initialFocus]);
 
+  const Root = modal ? 'div' : 'aside';
   return (
-    <aside
+    <Root
       ref={panelRef}
       aria-label={title}
+      {...(modal && { role: 'dialog', 'aria-modal': true })}
       onKeyDown={(event) => {
+        if (modal && event.key === 'Tab') {
+          trapTab(event);
+          return;
+        }
         if (event.key !== 'Escape' || closeDisabled || event.defaultPrevented) return;
         // Keys from a dialog portalled out of the panel bubble here through React, not the DOM.
         if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
@@ -133,6 +162,6 @@ export function RightPanel({
           {footer}
         </div>
       ) : null}
-    </aside>
+    </Root>
   );
 }

@@ -43,7 +43,7 @@ export function PanelSection({
         <button
           type="button"
           aria-expanded={open}
-          aria-controls={bodyId}
+          aria-controls={open ? bodyId : undefined}
           onClick={onToggle}
           className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-start select-none"
         >

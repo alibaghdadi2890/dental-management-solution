@@ -42,12 +42,15 @@ export function PlanSection({
     (plan) => plan.status === 'performed' && plan.performedInVisitId === visitId,
   );
   const total = plansTotal(openPlans);
+  // Collapsed, it says what the open body shows: "all performed" goes with the note (plans
+  // performed in this visit); a plan performed earlier lives under Previously, so it reads as
+  // nothing planned, like the empty block.
   const summary = total
     ? t('panel.plan.summary', {
         names: openPlans.map((plan) => plan.name).join(t('title.listSeparator')),
         total: formatMoney(total, locale),
       })
-    : plans.some((plan) => plan.status === 'performed')
+    : performedHere.length > 0
       ? t('panel.plan.allPerformed')
       : t('panel.plan.none');
 
