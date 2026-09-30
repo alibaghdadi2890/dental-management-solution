@@ -1,6 +1,7 @@
 // Public API of the clinical module. Other modules import from this file only (CLAUDE.md §4).
 export { ClinicalModule } from './clinical.module';
 export { CatalogService } from './application/catalog.service';
+export { ChartService } from './application/chart.service';
 export { VisitRecordsService } from './application/visit-records.service';
 export { VisitsService } from './application/visits.service';
 export {

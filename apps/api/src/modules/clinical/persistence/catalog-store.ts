@@ -1,3 +1,4 @@
+import { type SQL, sql } from 'drizzle-orm';
 import { isUniqueViolation } from '../../../platform/db/unique-violation';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 
@@ -16,7 +17,16 @@ export interface CatalogStore<
   softDelete(id: string): Promise<void>;
   deactivate(id: string): Promise<TItem>;
   countLive(): Promise<number>;
+  /** A record that isn't removed refers to the row (V11): it can only be deactivated. */
+  isInUse(id: string): Promise<boolean>;
 }
+
+/**
+ * `exists (subquery)` as its own chunk, for a selected field: Drizzle writes the columns placed
+ * directly in a selected field without their table, which inside a correlated subquery would
+ * bind them to the subquery's own table; a nested chunk keeps them qualified.
+ */
+export const exists = (subquery: SQL) => sql`exists (${subquery})`;
 
 /** Placeholder a row's code moves to while a batch rewrites codes (indexes check per statement). */
 export const swappingCode = (id: string) => `~swapping~${id}`;

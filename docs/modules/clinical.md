@@ -1,9 +1,9 @@
 # `clinical` module
 
 **Status:** partly implemented. The service and diagnosis catalogs are done (feature 2). Of
-feature 4a, the visit lifecycle (start, resume, pause, notes, discount, discard, live visits) and
-charting in a visit (services, diagnoses, plans, tooth presence) are done; the chart reads and
-completion are in progress.
+feature 4a, the visit lifecycle (start, resume, pause, notes, discount, discard, live visits),
+charting in a visit (services, diagnoses, plans, tooth presence) and the patient's chart reads
+(chart, tooth history, last visit, summary) are done; completion is in progress.
 
 ## Purpose
 
@@ -16,8 +16,9 @@ Clinical work on a patient:
 - **The clinical record**: diagnoses and treatment plans on the patient's teeth, dated by the
   visit that recorded them, and which tooth is present at each succession position (feature 4a).
 
-Tooth numbering is Universal (1–32, A–T), per the POC. This module was renamed from `treatments`
-(ADR-0001) and owns the catalogs (ADR-0002).
+Teeth are stored as canonical FDI codes (`11`–`48`, primary `51`–`85`); FDI or Universal
+notation, the orientation and the chart detail are tenant display settings (ADR-0021). This
+module was renamed from `treatments` (ADR-0001) and owns the catalogs (ADR-0002).
 
 ### Catalogs
 
@@ -31,8 +32,10 @@ Tooth numbering is Universal (1–32, A–T), per the POC. This module was renam
   the batch, so rows may swap codes.
 - Service prices are money in the tenant currency at the time they were set (ADR-0015).
 - Categories are free text; the Catalog screen's filter pills are the distinct values.
-- A row that a visit refers to cannot be deleted, only deactivated (`isInUse`, which returns
-  false until visits exist). Other rows are soft-deleted.
+- A row that a record refers to cannot be deleted, only deactivated (409 `catalog.in_use`,
+  V11): a service or a plan that isn't removed (services) or a diagnosis record that isn't
+  removed (diagnoses). Each catalog's store answers it with one `exists` query (`isInUse`).
+  Other rows are soft-deleted.
 
 ## Owns
 
@@ -92,6 +95,8 @@ The pure rules are in `domain/`: `visit-lifecycle.ts` (state machine), `visit-ti
 ### Records in a visit
 
 Charting happens only inside a live visit (`VisitRecordsService`, spec §VisitRecordsService).
+Records live on the patient's tooth and are dated by the visits that recorded, resolved,
+performed or cancelled them (ADR-0022).
 
 - **The patient is the visit's**, never a request field. Records are looked up by id _and_ the
   visit's patient (services by id and visit), so another patient's record reads as 404
@@ -122,9 +127,30 @@ Charting happens only inside a live visit (`VisitRecordsService`, spec §VisitRe
   code at position 1–5), upserted on `(tenant_id, patient_id, position)` and stamped with the
   visit that changed it. Setting the value it already has changes nothing.
 
+### Reads
+
+`ChartService` reads a patient's record for the chart, the Tooth History modal, the Last visit
+card and the treatment summary (spec §ChartService). All need `visit:read`, so front desk reads
+them too. The patient comes from `PatientsService.get`: an unknown one, another tenant's
+included, is 404 `patient.not_found`. Removed records never appear. History is the services of
+completed visits; a patient's records are bounded, so nothing is paginated. Dentist names come
+from one `practitionersByProfileIds` call per read.
+
+- **Chart**: the dentition (`effectiveDentition`: the patient's override, else the stage for
+  `ageOn(date of birth, tenant's today)`, else `permanent` without a date of birth), the
+  `tooth_status` rows, every diagnosis and plan, the history (most recent visit first, with the
+  visit date and dentist), the patient's most recent live visit, and `teeth`: the entries of
+  `deriveChart`, which counts that live visit's services as treated today.
+- **Tooth history**: one code's diagnoses and plans in the order recorded, then its completed
+  services, most recent first. Only that code; the modal links the predecessor or successor.
+- **Last visit**: the most recently completed visit (`completed_at`): its local date, dentist,
+  duration, frozen total, services as `{ name, toothCode }` chips, and notes; `null` without one.
+- **Summary** (W8): completed visits, active diagnoses, `planned` plans, distinct teeth and the
+  number of services over completed visits' services, in one query.
+
 ## Public API (`index.ts`)
 
-`ClinicalModule`, `CatalogService`, `VisitsService`, `VisitRecordsService`,
+`ClinicalModule`, `CatalogService`, `VisitsService`, `VisitRecordsService`, `ChartService`,
 `CatalogItemNotFoundError`, `CatalogItemInUseError`, `CatalogItemInactiveError`, and the events
 `CatalogChanged`, `VisitStarted`, `VisitPaused`, `VisitResumed`, `VisitDiscarded`,
 `VisitCompleted` (published from step 5 of feature 4a), `DiagnosisRecorded`,
@@ -137,12 +163,11 @@ Charting happens only inside a live visit (`VisitRecordsService`, spec §VisitRe
 | --------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------- |
 | `listServices()` / `listDiagnoses()`                | `catalog:read`  | Live rows, active and inactive, oldest first.                                                   |
 | `saveServices(batch)` / `saveDiagnoses(batch)`      | `catalog:write` | One transaction. Duplicate code → 422 `validation_failed` (`items.<i>.code`); unknown id → 404. |
-| `deleteService(id)` / `deleteDiagnosis(id)`         | `catalog:write` | In use → 409 `catalog.in_use`; otherwise soft delete.                                           |
+| `deleteService(id)` / `deleteDiagnosis(id)`         | `catalog:write` | Used by a record that isn't removed → 409 `catalog.in_use`; otherwise soft delete.              |
 | `deactivateService(id)` / `deactivateDiagnosis(id)` | `catalog:write` | "Mark inactive".                                                                                |
 | `seedDefaultCatalog()`                              | `catalog:write` | `{ services, diagnoses }` rows created; `{0, 0}` when a catalog exists.                         |
 | `listActiveServices()` / `listActiveDiagnoses()`    | caller guards   | For the visit drawer (feature 4) and pricing (feature 6).                                       |
 | `getService(id)` / `getDiagnosis(id)`               | caller guards   | A live row, active or not; else 404 `catalog.not_found`.                                        |
-| `isInUse(id)`                                       | —               | Always false until feature 4.                                                                   |
 
 Every write is audited per row with before/after (`catalog.service.create|update|delete|deactivate`,
 `catalog.diagnosis.*`; resource types `procedure` and `diagnosis`).
@@ -183,6 +208,16 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 | `removePlan(visitId, planId)`                                           | `treatment_plan.delete`                                                      | Made in this visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`). Soft delete. No event.                                        |
 | `setToothPresence(visitId, position, { present })`                      | `tooth_status.set` (`tooth_status`)                                          | Upsert; no-op when unchanged. `ToothStatusChanged`.                                                                                                |
 
+`ChartService` (see [Reads](#reads)). Every method needs `visit:read`; an unknown patient → 404
+`patient.not_found`.
+
+| Method                          | Answers                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `chart(patientId)`              | `PatientChart`: dentition, tooth status, diagnoses, plans, history, `liveVisitId`, `teeth`.           |
+| `toothHistory(patientId, code)` | `ToothHistory`: `{ toothCode, diagnoses, plans, services }`.                                          |
+| `lastVisit(patientId)`          | `LastVisit`, or `null` without a completed visit.                                                     |
+| `summary(patientId)`            | `ClinicalSummary`: `{ visits, activeDiagnoses, plannedProcedures, teethTreated, servicesPerformed }`. |
+
 ## HTTP
 
 | Route                                                                                                                                                                        | Access          |
@@ -202,6 +237,9 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 | `POST /visits/:id/diagnoses` → 201, `POST /visits/:id/diagnoses/:recordId/{resolve,reopen}`, `DELETE /visits/:id/diagnoses/:recordId` → `{ visit, record: DiagnosisRecord }` | `visit:write`   |
 | `POST /visits/:id/plans` → 201, `POST /visits/:id/plans/:planId/{perform,cancel}`, `DELETE /visits/:id/plans/:planId` → `{ visit, record: TreatmentPlan }`                   | `visit:write`   |
 | `PUT /visits/:id/teeth/:position` `{ present }` → `{ visit, record: { position, present } }`; a position that is not a succession position → 400 `validation_failed`         | `visit:write`   |
+| `GET /clinical/patients/:id/chart` → `PatientChart`, `GET /clinical/patients/:id/summary` → `ClinicalSummary`                                                                | `visit:read`    |
+| `GET /clinical/patients/:id/last-visit` → `LastVisit` or JSON `null`                                                                                                         | `visit:read`    |
+| `GET /clinical/patients/:id/teeth/:toothCode/history` → `ToothHistory`; a code that is not one of the 52 FDI codes → 400 `validation_failed`                                 | `visit:read`    |
 
 ## Events
 
@@ -226,9 +264,10 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 
 ## Depends on
 
-- `tenancy`: the tenant currency (ADR-0015) and time zone, the branch's rooms (ADR-0007).
+- `tenancy`: the tenant currency (ADR-0015) and time zone (the local date, the age for the
+  chart), the branch's rooms (ADR-0007).
 - `patients`: existence and the dependent-write lock (`lockForDependentWrite`, W22), names for
-  the live visits.
+  the live visits, the date of birth and dentition override for the chart (`get`).
 - `users`: the branch's dentists (`listPractitioners`), dentist names
   (`practitionersByProfileIds`, also on diagnosis and plan records), the caller's staff profile
   (`profileIdOf`).

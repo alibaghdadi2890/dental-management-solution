@@ -1,11 +1,14 @@
 import {
   type DiagnosisRecord,
+  type HistoryService,
+  lineFinal,
   surfacesSchema,
   toothCodeSchema,
   type TreatmentPlan,
 } from '@dcm/contracts';
 import type { StoredDiagnosisRecord } from '../persistence/patient-diagnoses.repository';
 import type { StoredTreatmentPlan } from '../persistence/treatment-plans.repository';
+import type { CompletedService } from '../persistence/visit-services.repository';
 
 // The tables' CHECKs admit exactly the contract's tooth codes and surface keys.
 
@@ -62,5 +65,26 @@ export function toTreatmentPlan(plan: StoredTreatmentPlan, dentistName: string):
     performedAt: plan.performedAt?.toISOString() ?? null,
     cancelledInVisitId: plan.cancelledInVisitId,
     cancelledAt: plan.cancelledAt?.toISOString() ?? null,
+  };
+}
+
+/** A service of a completed visit as a history line: its final price in the visit currency. */
+export function toHistoryService(
+  { service, visitDate, currency }: CompletedService,
+  dentistName: string,
+): HistoryService {
+  return {
+    id: service.id,
+    visitId: service.visitId,
+    visitDate,
+    dentistName,
+    code: service.code,
+    name: service.name,
+    toothCode: service.toothCode === null ? null : toothCodeSchema.parse(service.toothCode),
+    surfaces: surfacesSchema.parse(service.surfaces),
+    final: {
+      amount: lineFinal({ base: service.baseAmount, discount: service.discountAmount }),
+      currency,
+    },
   };
 }

@@ -1,6 +1,6 @@
 import type { ToothPresenceValue } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { toothStatus } from './schema';
 
@@ -25,6 +25,19 @@ function toStored({ tenantId: _tenantId, ...status }: ToothStatusRow): StoredToo
 @Injectable()
 export class ToothStatusRepository {
   constructor(private readonly db: TenantDb) {}
+
+  /** The patient's rows, by position. */
+  listForPatient(patientId: string): Promise<StoredToothStatus[]> {
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(toothStatus)
+          .where(eq(toothStatus.patientId, patientId))
+          .orderBy(asc(toothStatus.position))
+      ).map(toStored),
+    );
+  }
 
   /** The patient's row at `position` `FOR UPDATE`, or undefined when the stage still decides. */
   lockAt(patientId: string, position: string): Promise<StoredToothStatus | undefined> {

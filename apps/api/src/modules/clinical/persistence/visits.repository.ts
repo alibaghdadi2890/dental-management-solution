@@ -1,3 +1,4 @@
+import type { ClinicalSummary } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql, type SQL } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -198,6 +199,47 @@ export class VisitsRepository {
           .orderBy(asc(visits.startedAt), asc(visits.id))
       ).map(toStored),
     );
+  }
+
+  /** The patient's most recently completed visit, or undefined when none is. */
+  async latestCompleted(patientId: string): Promise<StoredVisit | undefined> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select()
+        .from(visits)
+        .where(and(eq(visits.patientId, patientId), eq(visits.status, 'completed')))
+        .orderBy(desc(visits.completedAt), desc(visits.id))
+        .limit(1),
+    );
+    return row && toStored(row);
+  }
+
+  /**
+   * The Record overview's treatment counts (W8) in one query of scalar subqueries: completed
+   * visits; active diagnoses and `planned` plans that aren't removed; and, over the services of
+   * completed visits that aren't removed, the distinct teeth and the number of services.
+   */
+  async clinicalSummary(patientId: string): Promise<ClinicalSummary> {
+    const completedServices = sql`from ${visitServices} join ${visits} on ${visits.id} = ${visitServices.visitId} where ${visits.patientId} = ${patientId} and ${visits.status} = 'completed' and ${isNull(visitServices.deletedAt)}`;
+    const counts = {
+      visits: sql`select count(*) from ${visits} where ${visits.patientId} = ${patientId} and ${visits.status} = 'completed'`,
+      activeDiagnoses: sql`select count(*) from ${patientDiagnoses} where ${patientDiagnoses.patientId} = ${patientId} and ${patientDiagnoses.status} = 'active' and ${isNull(patientDiagnoses.deletedAt)}`,
+      plannedProcedures: sql`select count(*) from ${treatmentPlans} where ${treatmentPlans.patientId} = ${patientId} and ${treatmentPlans.status} = 'planned' and ${isNull(treatmentPlans.deletedAt)}`,
+      // count(distinct …) skips null tooth codes: jaw-level services treat no tooth.
+      teethTreated: sql`select count(distinct ${visitServices.toothCode}) ${completedServices}`,
+      servicesPerformed: sql`select count(*) ${completedServices}`,
+    } satisfies Record<keyof ClinicalSummary, SQL>;
+    const columns = sql.join(
+      Object.entries(counts).map(
+        ([name, subquery]) => sql`(${subquery})::int as ${sql.identifier(name)}`,
+      ),
+      sql`, `,
+    );
+    const {
+      rows: [row],
+    } = await this.db.run((tx) => tx.execute<ClinicalSummary>(sql`select ${columns}`));
+    if (!row) throw new Error('clinical summary returned no row');
+    return row;
   }
 
   /**

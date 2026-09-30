@@ -184,14 +184,6 @@ export class CatalogService {
     return this.require(this.diagnoses, id);
   }
 
-  /**
-   * Whether a visit refers to the row, in which case it can only be deactivated (C5). There are
-   * no visits yet; feature 4 answers this from the performed services.
-   */
-  isInUse(_id: string): Promise<boolean> {
-    return Promise.resolve(false);
-  }
-
   // --- Shared rules ---
 
   private async saveBatch<TItem extends CatalogItem, TInput extends { id?: string | undefined }>(
@@ -235,8 +227,11 @@ export class CatalogService {
     this.context.requirePermission('catalog:write');
     await this.tenantDb.run(async () => {
       const before = await this.require(catalog, id);
-      if (await this.isInUse(id)) {
-        throw new CatalogItemInUseError(`${before.name} is used on visits; mark it inactive`);
+      // A row a record refers to stays for that record (C5, V11); it can only be deactivated.
+      if (await catalog.store.isInUse(id)) {
+        throw new CatalogItemInUseError(
+          `${before.name} is used on patient records; mark it inactive`,
+        );
       }
       await catalog.store.softDelete(id);
       await this.audit.record({

@@ -2,8 +2,8 @@ import type { DiagnosisItem } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import { type CatalogStore, rethrowCodeRace, swappingCode } from './catalog-store';
-import { diagnoses } from './schema';
+import { type CatalogStore, exists, rethrowCodeRace, swappingCode } from './catalog-store';
+import { diagnoses, patientDiagnoses } from './schema';
 
 type DiagnosisRow = typeof diagnoses.$inferSelect;
 
@@ -119,5 +119,20 @@ export class DiagnosesRepository implements CatalogStore<DiagnosisItem> {
   async countLive(): Promise<number> {
     const [row] = await this.db.run((tx) => tx.select({ n: count() }).from(diagnoses).where(live));
     return row?.n ?? 0;
+  }
+
+  /** A diagnosis record that isn't removed names the diagnosis; one `exists` query. */
+  async isInUse(id: string): Promise<boolean> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select({
+          used: sql<boolean>`${exists(
+            sql`select 1 from ${patientDiagnoses} where ${patientDiagnoses.diagnosisId} = ${diagnoses.id} and ${isNull(patientDiagnoses.deletedAt)}`,
+          )}`,
+        })
+        .from(diagnoses)
+        .where(eq(diagnoses.id, id)),
+    );
+    return row?.used ?? false;
   }
 }

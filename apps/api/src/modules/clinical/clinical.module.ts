@@ -5,9 +5,11 @@ import { TenancyModule } from '../tenancy';
 import { UsersModule } from '../users';
 import { CatalogSeedingSubscriber } from './application/catalog-seeding.subscriber';
 import { CatalogService } from './application/catalog.service';
+import { ChartService } from './application/chart.service';
 import { VisitRecordsService } from './application/visit-records.service';
 import { VisitsService } from './application/visits.service';
 import { CatalogController } from './http/catalog.controller';
+import { ClinicalPatientsController } from './http/clinical-patients.controller';
 import { VisitRecordsController } from './http/visit-records.controller';
 import { VisitsController } from './http/visits.controller';
 import { DiagnosesRepository } from './persistence/diagnoses.repository';
@@ -19,14 +21,20 @@ import { VisitServicesRepository } from './persistence/visit-services.repository
 import { VisitsRepository } from './persistence/visits.repository';
 
 /**
- * See docs/modules/clinical.md. The service and diagnosis catalogs (feature 2) and the visit
- * lifecycle and charting in a visit (feature 4a). Depends on `patients` (existence, the dependent-write lock, names),
- * `users` (branch dentists, dentist names) and `tenancy` (currency, time zone, rooms); none of
- * them imports `clinical`.
+ * See docs/modules/clinical.md. The service and diagnosis catalogs (feature 2), and the visit
+ * lifecycle, charting in a visit and the patient's chart reads (feature 4a). Depends on
+ * `patients` (existence, the dependent-write lock, names, date of birth and dentition), `users`
+ * (branch dentists, dentist names) and `tenancy` (currency, time zone, rooms); none of them
+ * imports `clinical`.
  */
 @Module({
   imports: [AuditModule, PatientsModule, TenancyModule, UsersModule],
-  controllers: [CatalogController, VisitsController, VisitRecordsController],
+  controllers: [
+    CatalogController,
+    VisitsController,
+    VisitRecordsController,
+    ClinicalPatientsController,
+  ],
   providers: [
     CatalogService,
     CatalogSeedingSubscriber,
@@ -39,7 +47,8 @@ import { VisitsRepository } from './persistence/visits.repository';
     PatientDiagnosesRepository,
     TreatmentPlansRepository,
     ToothStatusRepository,
+    ChartService,
   ],
-  exports: [CatalogService, VisitsService, VisitRecordsService],
+  exports: [CatalogService, VisitsService, VisitRecordsService, ChartService],
 })
 export class ClinicalModule {}

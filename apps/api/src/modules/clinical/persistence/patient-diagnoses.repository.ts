@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { RecordNotFoundError } from '../domain/visit-errors';
 import { patientDiagnoses, visits } from './schema';
@@ -75,6 +75,32 @@ export class PatientDiagnosesRepository {
       if (!row) throw new RecordNotFoundError('Diagnosis not found for this patient');
       const { recordedInVisitDate, ...record } = row;
       return { record, recordedInVisitDate };
+    });
+  }
+
+  /**
+   * The patient's diagnoses that aren't removed, active and resolved, in the order they were
+   * recorded, each with the local date of the visit that recorded it; only one tooth's when
+   * `toothCode` is given.
+   */
+  listForPatient(
+    patientId: string,
+    toothCode?: string,
+  ): Promise<{ record: StoredDiagnosisRecord; recordedInVisitDate: string }[]> {
+    return this.db.run(async (tx) => {
+      const rows = await tx
+        .select({ ...diagnosisColumns, recordedInVisitDate: visits.localDate })
+        .from(patientDiagnoses)
+        .innerJoin(visits, eq(visits.id, patientDiagnoses.recordedInVisitId))
+        .where(
+          and(
+            eq(patientDiagnoses.patientId, patientId),
+            toothCode === undefined ? undefined : eq(patientDiagnoses.toothCode, toothCode),
+            isNull(patientDiagnoses.deletedAt),
+          ),
+        )
+        .orderBy(asc(patientDiagnoses.recordedAt), asc(patientDiagnoses.id));
+      return rows.map(({ recordedInVisitDate, ...record }) => ({ record, recordedInVisitDate }));
     });
   }
 

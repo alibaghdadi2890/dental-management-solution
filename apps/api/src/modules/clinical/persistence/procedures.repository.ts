@@ -2,8 +2,8 @@ import type { ServiceItem } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import { type CatalogStore, rethrowCodeRace, swappingCode } from './catalog-store';
-import { procedures } from './schema';
+import { type CatalogStore, exists, rethrowCodeRace, swappingCode } from './catalog-store';
+import { procedures, treatmentPlans, visitServices } from './schema';
 
 type ProcedureRow = typeof procedures.$inferSelect;
 
@@ -124,5 +124,22 @@ export class ProceduresRepository implements CatalogStore<ServiceItem> {
   async countLive(): Promise<number> {
     const [row] = await this.db.run((tx) => tx.select({ n: count() }).from(procedures).where(live));
     return row?.n ?? 0;
+  }
+
+  /** A service or a plan that isn't removed names the procedure; one query of two `exists`. */
+  async isInUse(id: string): Promise<boolean> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select({
+          used: sql<boolean>`${exists(
+            sql`select 1 from ${visitServices} where ${visitServices.procedureId} = ${procedures.id} and ${isNull(visitServices.deletedAt)}`,
+          )} or ${exists(
+            sql`select 1 from ${treatmentPlans} where ${treatmentPlans.procedureId} = ${procedures.id} and ${isNull(treatmentPlans.deletedAt)}`,
+          )}`,
+        })
+        .from(procedures)
+        .where(eq(procedures.id, id)),
+    );
+    return row?.used ?? false;
   }
 }

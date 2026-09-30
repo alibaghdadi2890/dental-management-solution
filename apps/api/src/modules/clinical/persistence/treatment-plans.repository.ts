@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { RecordNotFoundError } from '../domain/visit-errors';
 import { treatmentPlans } from './schema';
@@ -78,6 +78,28 @@ export class TreatmentPlansRepository {
       if (!row) throw new RecordNotFoundError('Plan not found for this patient');
       return toStored(row);
     });
+  }
+
+  /**
+   * The patient's plans that aren't removed, whatever their status, in the order they were
+   * recorded; only one tooth's when `toothCode` is given.
+   */
+  listForPatient(patientId: string, toothCode?: string): Promise<StoredTreatmentPlan[]> {
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(treatmentPlans)
+          .where(
+            and(
+              eq(treatmentPlans.patientId, patientId),
+              toothCode === undefined ? undefined : eq(treatmentPlans.toothCode, toothCode),
+              isNull(treatmentPlans.deletedAt),
+            ),
+          )
+          .orderBy(asc(treatmentPlans.recordedAt), asc(treatmentPlans.id))
+      ).map(toStored),
+    );
   }
 
   async update(id: string, patch: TreatmentPlanPatch): Promise<StoredTreatmentPlan> {

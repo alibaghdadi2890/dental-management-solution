@@ -8,8 +8,7 @@ import type {
   Tenant,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { CatalogService } from '../../src/modules/clinical';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
@@ -86,10 +85,6 @@ describe('clinical: service and diagnosis catalogs', () => {
     });
     expect(created.status).toBe(201);
     frontdesk = await signInAndSetPassword(testApp.app, email, TEMPORARY);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
   });
 
   afterAll(async () => {
@@ -312,15 +307,70 @@ describe('clinical: service and diagnosis catalogs', () => {
       expect((await api.delete(`/catalog/services/${clt.id}`)).status).toBe(404);
     });
 
-    it('refuses to delete a row visits use (409 catalog.in_use) and keeps it', async () => {
-      const isInUse = vi.spyOn(testApp.app.get(CatalogService), 'isInUse').mockResolvedValue(true);
+    it('refuses to delete a row a record uses (409 catalog.in_use) and keeps it', async () => {
+      // Records written directly: a live visit with a service, a plan and a diagnosis record.
+      const visitId = newId();
+      const patientId = newId();
+      await database.ownerPool.query(
+        `insert into visits (id, tenant_id, patient_id, branch_id, dentist_id, started_by, status,
+                             local_date, started_at, currency)
+         values ($1, $2, $3, $4, $5, $6, 'in_progress', '2026-06-10', now(), 'USD')`,
+        [visitId, tenant.id, patientId, newId(), newId(), newId()],
+      );
       const paro = await service('PARO');
+      const mcc = await service('MCC');
+      const zir = await service('ZIR');
+      const pulp = (await diagnoses()).find((item) => item.code === 'DX-PULP');
+      if (!pulp) throw new Error('no diagnosis DX-PULP');
+      const recordedBy = newId();
+      const serviceRow = (item: ServiceItem, deleted: boolean) =>
+        database.ownerPool.query(
+          `insert into visit_services (id, tenant_id, visit_id, procedure_id, code, name,
+                                       charge_unit, tooth_code, base_amount, recorded_by, deleted_at)
+           values ($1, $2, $3, $4, $5, $6, 'per_tooth', '16', 30, $7, case when $8 then now() end)`,
+          [newId(), tenant.id, visitId, item.id, item.code, item.name, recordedBy, deleted],
+        );
+      await serviceRow(paro, false);
+      await serviceRow(zir, true);
+      await database.ownerPool.query(
+        `insert into treatment_plans (id, tenant_id, patient_id, tooth_code, procedure_id, code, name,
+                                      charge_unit, price_amount, price_currency, dentist_id,
+                                      recorded_by, recorded_in_visit_id, recorded_at)
+         values ($1, $2, $3, '16', $4, $5, $6, 'per_tooth', 250, 'USD', $7, $8, $9, now())`,
+        [newId(), tenant.id, patientId, mcc.id, mcc.code, mcc.name, newId(), recordedBy, visitId],
+      );
+      await database.ownerPool.query(
+        `insert into patient_diagnoses (id, tenant_id, patient_id, tooth_code, diagnosis_id, code,
+                                        name, dentist_id, recorded_by, recorded_in_visit_id,
+                                        recorded_at)
+         values ($1, $2, $3, '16', $4, $5, $6, $7, $8, $9, now())`,
+        [
+          newId(),
+          tenant.id,
+          patientId,
+          pulp.id,
+          pulp.code,
+          pulp.name,
+          newId(),
+          recordedBy,
+          visitId,
+        ],
+      );
 
-      const response = await api.delete(`/catalog/services/${paro.id}`);
-      expect(response.status).toBe(409);
-      expect(response.body).toMatchObject({ code: 'catalog.in_use' });
-      expect(isInUse).toHaveBeenCalledWith(paro.id);
+      for (const path of [
+        `/catalog/services/${paro.id}`,
+        `/catalog/services/${mcc.id}`,
+        `/catalog/diagnoses/${pulp.id}`,
+      ]) {
+        const response = await api.delete(path);
+        expect(response.status, path).toBe(409);
+        expect(response.body, path).toMatchObject({ code: 'catalog.in_use' });
+      }
       expect((await service('PARO')).id).toBe(paro.id);
+      expect((await service('MCC')).id).toBe(mcc.id);
+      expect((await diagnoses()).some((item) => item.id === pulp.id)).toBe(true);
+      // Only a removed service names ZIR: nothing keeps it.
+      expect((await api.delete(`/catalog/services/${zir.id}`)).status).toBe(204);
     });
 
     it('marks a row inactive', async () => {
