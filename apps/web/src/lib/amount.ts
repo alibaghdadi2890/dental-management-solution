@@ -24,8 +24,12 @@ function decimalSeparatorFor(locale: string): string {
   return part?.value ?? '.';
 }
 
-/** Keeps digits and a single `.`, at most two decimals after it — the shared core every caller's
- * own sanitizer builds on. */
+/** The most whole digits a stored amount holds (`numeric(12,2)`, CLAUDE.md §7): a longer entry
+ * could never save. */
+const MAX_WHOLE_DIGITS = 10;
+
+/** Keeps digits and a single `.`, at most ten whole digits before it and two decimals after it —
+ * the shared core every caller's own sanitizer builds on. */
 export function sanitizeAmountInput(text: string, locale: string): string {
   const separator = decimalSeparatorFor(locale);
   let normalized = toAsciiDigits(text).replaceAll(ARABIC_DECIMAL_SEPARATOR, '.');
@@ -34,12 +38,12 @@ export function sanitizeAmountInput(text: string, locale: string): string {
   }
   const cleaned = normalized.replace(/[^0-9.]/g, '');
   const dot = cleaned.indexOf('.');
-  if (dot === -1) return cleaned;
+  if (dot === -1) return cleaned.slice(0, MAX_WHOLE_DIGITS);
   const decimals = cleaned
     .slice(dot + 1)
     .replace(/\./g, '')
     .slice(0, 2);
-  return `${cleaned.slice(0, dot)}.${decimals}`;
+  return `${cleaned.slice(0, Math.min(dot, MAX_WHOLE_DIGITS))}.${decimals}`;
 }
 
 function groupSeparatorFor(locale: string): string {

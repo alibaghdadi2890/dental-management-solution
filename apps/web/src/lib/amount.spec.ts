@@ -29,6 +29,11 @@ describe('sanitizeAmountInput', () => {
   it('collapses repeated dots into the decimal part', () => {
     expect(sanitizeAmountInput('1.2.3', 'en')).toBe('1.23');
   });
+
+  it('keeps at most 10 whole digits, the most a stored amount holds (numeric(12,2))', () => {
+    expect(sanitizeAmountInput('123456789012', 'en')).toBe('1234567890');
+    expect(sanitizeAmountInput('123456789012.55', 'en')).toBe('1234567890.55');
+  });
 });
 
 describe('parseAmount', () => {

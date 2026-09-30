@@ -4,6 +4,7 @@ import {
   type EqualsFn,
   isDirty,
   type SaveFn,
+  type SameValueFn,
   type SaveGroupState,
   sameJson,
 } from './save-groups-store';
@@ -31,6 +32,10 @@ export interface SaveGroupOptions<T> {
   save: SaveFn<T>;
   /** Whether two server values are the same; structural by default. */
   equals?: EqualsFn<T>;
+  /** Whether the shown (local) value and a server value mean the same, however each is written:
+   * then a server value arriving while the group is clean leaves what is shown alone. Structural
+   * by default. */
+  sameValue?: SameValueFn<T>;
 }
 
 /** One autosaved field group of the live visit (spec V6); the behaviour is `SaveGroupEntry`'s. */
@@ -39,13 +44,14 @@ export function useSaveGroup<T>({
   serverValue,
   save,
   equals = sameJson,
+  sameValue = sameJson,
 }: SaveGroupOptions<T>): SaveGroup<T> {
   const entry = useSaveGroupsStore().entry(key, serverValue, save, equals);
   const { value, state } = useSyncExternalStore(entry.subscribe, entry.getSnapshot);
   const consumerId = useId();
 
   useLayoutEffect(() => {
-    entry.offer(consumerId, save, equals);
+    entry.offer(consumerId, save, equals, sameValue);
     entry.receiveServerValue(serverValue);
   });
 

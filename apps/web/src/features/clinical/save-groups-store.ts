@@ -18,6 +18,9 @@ export interface SaveGroupSnapshot<T> {
 
 export type SaveFn<T> = (value: T) => Promise<unknown>;
 export type EqualsFn<T> = (a: T, b: T) => boolean;
+/** Whether a local value and a server value mean the same, however each is written (`10.` typed,
+ * `10.00` stored). */
+export type SameValueFn<T> = (local: T, server: T) => boolean;
 
 /** Structural, so an object rebuilt on every render doesn't count as a new server value. */
 export const sameJson = (a: unknown, b: unknown): boolean =>
@@ -34,9 +37,12 @@ export const isDirty = (state: SaveGroupState): boolean => state === 'saving' ||
  *   can't land after a newer one.
  * - A failure keeps the local value; `retry()` re-sends the latest one.
  * - Last write wins per group (W6): a new server value replaces the local one only while the group
- *   is clean, never while it is dirty or saving.
- * - The first consumer to register owns the `save` function (and `equals`); when it unmounts, the
- *   next consumer takes over. Every consumer of one key must therefore save the same way.
+ *   is clean, never while it is dirty or saving — and not when it means the same as what is shown
+ *   (`sameValue`), so the refetch after a save never rewrites what is being typed (`10.` stays
+ *   `10.`, not the stored `10.00` read back as `10`).
+ * - The first consumer to register owns the `save` function (and `equals`, `sameValue`); when
+ *   it unmounts, the next consumer takes over. Every consumer of one key must therefore save the
+ *   same way.
  * - When the last consumer leaves with an edit still waiting for its debounce, the edit is sent
  *   anyway; if that fails, the group stays `failed` (and dirty) for whoever mounts it next.
  */
@@ -51,6 +57,7 @@ export class SaveGroupEntry<T> {
   private owner: string | undefined;
   private readonly consumers = new Set<string>();
   private readonly listeners = new Set<() => void>();
+  private sameValue: SameValueFn<T> = sameJson;
 
   constructor(
     serverValue: T,
@@ -95,17 +102,19 @@ export class SaveGroupEntry<T> {
   receiveServerValue(serverValue: T): void {
     if (this.equals(this.seenServerValue, serverValue)) return;
     this.seenServerValue = serverValue;
-    if (this.dirty) return;
+    if (this.dirty || this.sameValue(this.snapshot.value, serverValue)) return;
     this.latest = serverValue;
     this.update({ ...this.snapshot, value: serverValue });
   }
 
-  /** Called on every render of a consumer: the owner keeps its latest `save`/`equals`. */
-  offer(consumerId: string, save: SaveFn<T>, equals: EqualsFn<T>): void {
+  /** Called on every render of a consumer: the owner keeps its latest `save`, `equals` and
+   * `sameValue`. */
+  offer(consumerId: string, save: SaveFn<T>, equals: EqualsFn<T>, sameValue: SameValueFn<T>): void {
     this.owner ??= consumerId;
     if (this.owner !== consumerId) return;
     this.save = save;
     this.equals = equals;
+    this.sameValue = sameValue;
   }
 
   acquire(consumerId: string): void {
@@ -208,7 +217,7 @@ export class SaveGroupsStore {
   readonly isAnyDirty = (): boolean => this.anyDirty;
 
   /** Listens to every change of any group's value or state, for a preview computed over several
-   * groups (the financial bar's money, `useUnsavedValues`). */
+   * groups (the financial bar's money, `useLocalValues`). */
   readonly subscribeValues = (listener: () => void): (() => void) => {
     this.valueListeners.add(listener);
     return () => {
@@ -219,11 +228,15 @@ export class SaveGroupsStore {
   /** Bumped on every change `subscribeValues` reports. */
   readonly valuesVersion = (): number => this.version;
 
-  /** The group's local value while it has unsaved edits; `undefined` when it has none (or there is
-   * no such group), so the server value is the current one. Reading never creates a group. */
-  readonly unsavedValue = (key: string): unknown => {
-    const entry = this.entries.get(key);
-    return entry?.dirty ? entry.getSnapshot().value : undefined;
+  /**
+   * The group's local value unless it is `idle`: being edited, failed, or just `saved` — a saved
+   * group has a consumer mounted that keeps it in step with the server (`receiveServerValue`),
+   * and it may be ahead of a cache that hasn't caught up yet. `undefined` for an idle group (or
+   * none): the server value is the current one. Reading never creates a group.
+   */
+  readonly localValue = (key: string): unknown => {
+    const snapshot = this.entries.get(key)?.getSnapshot();
+    return snapshot && snapshot.state !== 'idle' ? snapshot.value : undefined;
   };
 
   /**

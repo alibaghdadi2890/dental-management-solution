@@ -27,6 +27,15 @@ export function amountOf(typed: string): string {
   return fraction ? `${units}.${fraction}` : units;
 }
 
+/** Two typed amounts that are the same money (`10.`, `10` and `10.00`). */
+export const sameAmount = (a: string, b: string): boolean =>
+  toCents(amountOf(a)) === toCents(amountOf(b));
+
+/** Whether a draft as typed and one read back from the server are the same price, so the refetch
+ * after a save leaves the typed text alone (`useSaveGroup`'s `sameValue`). */
+export const samePrice = (local: PriceDraft, server: PriceDraft): boolean =>
+  sameAmount(local.base, server.base) && sameAmount(local.discount, server.discount);
+
 /** A draft as the line `visitMoney` sums: the discount is capped at the base (the POC's
  * `min(disc, base)`, the same invariant `visit_services` enforces), so the typed value is kept
  * while typing and the cap applies to what is sent and counted. */
@@ -53,5 +62,6 @@ export function useServicePrice(service: VisitService): SaveGroup<PriceDraft> {
     key: servicePriceKey(service.id),
     serverValue: priceDraftOf(service),
     save: (draft) => saveServicePrice(service.id, priceOf(draft).patch),
+    sameValue: samePrice,
   });
 }

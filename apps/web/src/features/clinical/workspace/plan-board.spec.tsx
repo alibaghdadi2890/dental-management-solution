@@ -1,9 +1,11 @@
-import type { PatientChart, Visit } from '@dcm/contracts';
+import type { PatientChart, ToothCode, Visit } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { id, json } from '@/features/patients/patients.test-utils';
+import { sessionQueryOptions } from '@/features/auth/session';
+import { id, json, sessionWith } from '@/features/patients/patients.test-utils';
 import {
   chart,
+  DENTIST_WRITE,
   diagnosisRecord,
   FRONT_DESK,
   mockWorkspace,
@@ -104,6 +106,38 @@ describe('PlanBoard', () => {
     expect(within(card).queryByText('Veneer')).toBeNull();
     expect(within(card).getByText('Plan estimate')).toBeTruthy();
     expect(within(card).getByText('$1,000')).toBeTruthy();
+  });
+
+  it('orders by the Universal numbers when the clinic uses them', async () => {
+    fakeClinic(
+      chart({
+        plans: (['11', '16', '31', '38', '51', '55', null] as (ToothCode | null)[]).map(
+          (tooth, index) => treatmentPlan(60 + index * 2, `Plan ${String(index)}`, tooth),
+        ),
+      }),
+    );
+    const { client } = renderWorkspace();
+    const session = sessionWith(DENTIST_WRITE);
+    if (!session.tenant) throw new Error('no tenant');
+    client.setQueryData(sessionQueryOptions().queryKey, {
+      ...session,
+      tenant: { ...session.tenant, toothNotation: 'universal' },
+    });
+    const card = await board();
+    await waitFor(() => {
+      expect(within(card).getByRole('button', { name: '#3' })).toBeTruthy();
+    });
+    const groups = [...card.querySelectorAll<HTMLElement>('[data-tooth]')];
+    // #3 (16), #8 (11), #17 (38), #24 (31), then primary A (55), E (51), then the jaw.
+    expect(groups.map((group) => group.dataset.tooth)).toEqual([
+      '16',
+      '11',
+      '38',
+      '31',
+      '55',
+      '51',
+      'jaw',
+    ]);
   });
 
   it('selects a tooth from its column', async () => {

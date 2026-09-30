@@ -6,11 +6,17 @@ import {
   visitMoney,
 } from '@dcm/contracts';
 import { MutationObserver, useQueryClient } from '@tanstack/react-query';
-import { useUnsavedValues } from '../save-groups-context';
+import { useLocalValues } from '../save-groups-context';
 import { type SaveGroup, useSaveGroup } from '../use-save-group';
 import { useVisitMutations } from '../visit-mutations';
 import { servicePriceKey } from './charting-actions';
-import { amountOf, moneyLineOf, type PriceDraft, priceDraftOf } from './tooth-panel/service-price';
+import {
+  amountOf,
+  moneyLineOf,
+  type PriceDraft,
+  priceDraftOf,
+  sameAmount,
+} from './tooth-panel/service-price';
 
 /** The save group key of the visit discount (V6): the financial bar's control and the summary
  * dialog's edit one value, with one save queue. */
@@ -40,6 +46,11 @@ export const discountInputOf = (draft: DiscountDraft): VisitDiscountInput => ({
   value: amountOf(draft.value),
 });
 
+/** Whether a discount as typed and one read back from the server are the same entry (`10.` and
+ * `10`), so the refetch after a save leaves the typed text alone. */
+export const sameDiscount = (local: DiscountDraft, server: DiscountDraft): boolean =>
+  local.mode === server.mode && sameAmount(local.value, server.value);
+
 /** The visit discount as one autosaved group (V6), keyed `discount`. */
 export function useVisitDiscount(visit: Visit): SaveGroup<DiscountDraft> {
   const queryClient = useQueryClient();
@@ -49,17 +60,19 @@ export function useVisitDiscount(visit: Visit): SaveGroup<DiscountDraft> {
     serverValue: discountDraftOf(visit),
     // Outlives the component, like every save group's save (the group may flush after unmount).
     save: (draft) => new MutationObserver(queryClient, setDiscount).mutate(discountInputOf(draft)),
+    sameValue: sameDiscount,
   });
 }
 
 /**
  * The visit's money as the workspace shows it now: `visitMoney` (the server's own arithmetic)
- * over each service's price as typed while its `service:<id>` group has unsaved edits, and over
+ * over each service's price as its `service:<id>` group shows it unless idle (typed, failed, or
+ * saved ahead of the cache), and over
  * `discount` (the discount group's current value), so the preview matches what the server will
  * compute once everything is saved.
  */
 export function useLiveMoney(visit: Visit, discount: DiscountDraft): VisitMoney {
-  const typed = useUnsavedValues<PriceDraft>(
+  const typed = useLocalValues<PriceDraft>(
     visit.services.map((service) => servicePriceKey(service.id)),
   );
   const lines = visit.services.map((service, index) =>

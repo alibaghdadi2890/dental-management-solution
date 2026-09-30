@@ -5,7 +5,7 @@ import {
   useAnyGroupDirty,
   useDropSaveGroup,
   useFlushSaveGroups,
-  useUnsavedValues,
+  useLocalValues,
 } from './save-groups-context';
 import { SaveGroupsProvider } from './save-groups-provider';
 import { SAVE_DEBOUNCE_MS } from './save-groups-store';
@@ -499,30 +499,66 @@ describe('useDropSaveGroup', () => {
   });
 });
 
-describe('useUnsavedValues', () => {
-  it('reads each group’s value only while it has unsaved edits, re-rendering as it changes', async () => {
-    const { save, calls } = controlledSave();
-    const { result } = renderHook(
-      () => ({
-        group: useSaveGroup({ key: 'service:1', serverValue: '10', save }),
-        unsaved: useUnsavedValues<string>(['service:1', 'service:2']),
-      }),
-      { wrapper },
+describe('useSaveGroup — sameValue', () => {
+  /** `10.`, `10` and `10.00` are the same amount. */
+  const sameAmount = (a: string, b: string) => Number(a) === Number(b);
+
+  it('keeps what was typed when the server writes the same value another way', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const { result, rerender } = renderHook(
+      ({ server }: { server: string }) =>
+        useSaveGroup({ key: 'discount', serverValue: server, save, sameValue: sameAmount }),
+      { wrapper, initialProps: { server: '0' } },
     );
-    expect(result.current.unsaved).toEqual([undefined, undefined]);
+    act(() => {
+      result.current.setValue('10.');
+    });
+    await settle();
+    rerender({ server: '10.00' });
+    expect(result.current).toMatchObject({ value: '10.', state: 'saved' });
+
+    rerender({ server: '12.00' });
+    expect(result.current.value).toBe('12.00');
+  });
+});
+
+describe('useLocalValues', () => {
+  it('reads a group’s value unless it is idle, re-rendering as it changes', async () => {
+    const { save, calls } = controlledSave();
+    let group: SaveGroup<string> | undefined;
+    let local: (string | undefined)[] = [];
+    function Field() {
+      group = useSaveGroup({ key: 'service:1', serverValue: '10', save });
+      return null;
+    }
+    function Preview() {
+      local = useLocalValues<string>(['service:1', 'service:2']);
+      return null;
+    }
+    const view = (mounted: boolean) => (
+      <SaveGroupsProvider>
+        {mounted && <Field />}
+        <Preview />
+      </SaveGroupsProvider>
+    );
+    const { rerender } = render(view(true));
+    expect(local).toEqual([undefined, undefined]);
 
     act(() => {
-      result.current.group.setValue('12');
+      group?.setValue('12');
     });
-    expect(result.current.unsaved).toEqual(['12', undefined]);
+    expect(local).toEqual(['12', undefined]);
     await settle();
-    expect(result.current.unsaved).toEqual(['12', undefined]);
-
     await act(async () => {
       calls[0]?.resolve();
       await vi.advanceTimersByTimeAsync(0);
     });
-    expect(result.current.group.state).toBe('saved');
-    expect(result.current.unsaved).toEqual([undefined, undefined]);
+    // Saved, but the server value may not have caught up yet: the local value still counts.
+    expect(group?.state).toBe('saved');
+    expect(local).toEqual(['12', undefined]);
+
+    // Without a consumer the group goes idle: the server value is the current one.
+    rerender(view(false));
+    expect(local).toEqual([undefined, undefined]);
   });
 });
