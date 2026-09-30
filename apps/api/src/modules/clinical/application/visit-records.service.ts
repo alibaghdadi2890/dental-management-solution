@@ -1,15 +1,16 @@
-import type {
-  AddServiceInput,
-  DiagnosisResult,
-  PermanentToothCode,
-  PlanResult,
-  PlanTreatmentInput,
-  RecordDiagnosisInput,
-  ServiceResult,
-  SetToothPresenceInput,
-  ToothPresenceResult,
-  UpdateServiceInput,
-  Visit,
+import {
+  type AddServiceInput,
+  type DiagnosisResult,
+  type PermanentToothCode,
+  type PlanResult,
+  type PlanTreatmentInput,
+  type RecordDiagnosisInput,
+  type ServiceResult,
+  type SetToothPresenceInput,
+  toCents,
+  type ToothPresenceResult,
+  type UpdateServiceInput,
+  type Visit,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
@@ -174,16 +175,20 @@ export class VisitRecordsService {
         discountAmount: input.discountAmount ?? before.discountAmount,
       };
       assertLinePrice(price, input.discountAmount === undefined ? 'baseAmount' : 'discountAmount');
-      const after = await this.services.update(serviceId, price);
-      if (JSON.stringify(priceOf(before)) !== JSON.stringify(priceOf(after))) {
-        await this.audit.record({
-          action: `${SERVICE}.update`,
-          resourceType: SERVICE,
-          resourceId: serviceId,
-          before: priceOf(before),
-          after: priceOf(after),
-        });
+      if (
+        toCents(price.baseAmount) === toCents(before.baseAmount) &&
+        toCents(price.discountAmount) === toCents(before.discountAmount)
+      ) {
+        return toVisitService(before, visit.currency);
       }
+      const after = await this.services.update(serviceId, price);
+      await this.audit.record({
+        action: `${SERVICE}.update`,
+        resourceType: SERVICE,
+        resourceId: serviceId,
+        before: priceOf(before),
+        after: priceOf(after),
+      });
       return toVisitService(after, visit.currency);
     });
   }
@@ -569,10 +574,15 @@ export class VisitRecordsService {
   /**
    * The undo of perform: the plan the removed service came from goes back to `planned` and its
    * `performed_*` pair is cleared. The partial unique index no longer counts the removed service,
-   * so the plan can be performed again.
+   * so the plan can be performed again. A service with a `plan_id` exists only while its plan is
+   * performed in the service's visit (perform writes both, and only this undo reverts them), so
+   * anything else is a broken invariant, not a user error.
    */
   private async unperform(planId: string, visit: StoredVisit): Promise<void> {
     const before = await this.plans.lockForPatient(planId, visit.patientId);
+    if (before.status !== 'performed' || before.performedInVisitId !== visit.id) {
+      throw new Error(`plan ${planId} of a removed service is not performed in visit ${visit.id}`);
+    }
     const after = await this.plans.update(planId, {
       status: 'planned',
       performedInVisitId: null,

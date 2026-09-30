@@ -18,7 +18,7 @@ import type {
   VisitResult,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
@@ -299,6 +299,14 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
     frontdesk = await createStaff('frontdesk');
   });
 
+  // Tests that move the clock or re-price the crown in the shared catalog put them back.
+  afterEach(async () => {
+    testApp.clock.set(new Date(NOON));
+    await database.ownerPool.query('update procedures set price_amount = 120 where id = $1', [
+      service.crown.id,
+    ]);
+  });
+
   afterAll(async () => {
     await testApp.close();
     await database.close();
@@ -409,10 +417,16 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
       );
       expect(belowDiscount.errors?.[0]?.path).toBe('baseAmount');
 
+      const unchanged = await ok<ServiceResult>(
+        dentist.agent.patch(url).send({ baseAmount: '60', discountAmount: '10.00' }),
+      );
+      expect(unchanged.record).toEqual(edited.record);
+
       const audit = await auditOf(`resourceType=visit_service&resourceId=${record.id}`);
-      const update = audit.find((entry) => entry.action === 'visit_service.update');
-      expect(update?.before).toEqual({ baseAmount: '50.00', discountAmount: '0.00' });
-      expect(update?.after).toEqual({ baseAmount: '60.00', discountAmount: '10.00' });
+      const updates = audit.filter((entry) => entry.action === 'visit_service.update');
+      expect(updates).toHaveLength(1);
+      expect(updates[0]?.before).toEqual({ baseAmount: '50.00', discountAmount: '0.00' });
+      expect(updates[0]?.after).toEqual({ baseAmount: '60.00', discountAmount: '10.00' });
 
       await expectProblem(
         dentist.agent.patch(path(visit.id, `services/${newId()}`)).send({ baseAmount: '1' }),
@@ -506,6 +520,35 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         recorded_by: assistant.user.id,
         dentist_id: dentist.user.profileId,
       });
+      expect(await actionsOn('diagnosis_record', record.id)).toEqual([
+        'diagnosis_record.create',
+        'diagnosis_record.reopen',
+        'diagnosis_record.resolve',
+      ]);
+      await eventsFor('recordId', record.id, [
+        'DiagnosisRecorded',
+        'DiagnosisResolved',
+        'DiagnosisReopened',
+      ]);
+    });
+
+    it('resolves and reopens idempotently: a repeat changes, audits and publishes nothing', async () => {
+      const patient = await createPatient('Diagnosis Idempotent');
+      const visit = await startVisit(patient);
+      const { record } = await recorded(dentist.agent, visit.id, {
+        diagnosisId: diagnosis.caries.id,
+        toothCode: '25',
+      });
+      const resolve = () => dentist.agent.post(path(visit.id, `diagnoses/${record.id}/resolve`));
+      const reopen = () => dentist.agent.post(path(visit.id, `diagnoses/${record.id}/reopen`));
+
+      const first = await ok<DiagnosisResult>(resolve());
+      testApp.clock.advance({ seconds: 30 });
+      const second = await ok<DiagnosisResult>(resolve());
+      expect(second.record).toEqual(first.record);
+      await ok(reopen());
+      await ok(reopen());
+
       expect(await actionsOn('diagnosis_record', record.id)).toEqual([
         'diagnosis_record.create',
         'diagnosis_record.reopen',
@@ -671,6 +714,11 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         'visit.tooth_not_allowed',
       );
       await expectProblem(
+        dentist.agent.post(path(visit.id, 'plans')).send({ procedureId: service.crown.id }),
+        422,
+        'visit.tooth_required',
+      );
+      await expectProblem(
         dentist.agent
           .post(path(visit.id, 'plans'))
           .send({ procedureId: service.retired.id, toothCode: '46' }),
@@ -682,7 +730,6 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         'treatment_plan.create',
       ]);
       await eventsFor('planId', linked.record.id, ['TreatmentPlanned']);
-      testApp.clock.set(new Date(NOON));
     });
 
     it('performs a plan into a service at its price; removing the service is the undo', async () => {
@@ -757,14 +804,44 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         'treatment_plan.perform',
         'treatment_plan.unperform',
       ]);
+      const serviceAudit = await auditOf(`resourceType=visit_service&resourceId=${created.id}`);
+      expect(serviceAudit.map((entry) => entry.action).sort()).toEqual([
+        'visit_service.create',
+        'visit_service.delete',
+      ]);
+      expect(
+        serviceAudit.find((entry) => entry.action === 'visit_service.create')?.after,
+      ).toMatchObject({
+        planId: plan.record.id,
+        baseAmount: '120.00',
+        recordedBy: dentist.user.id,
+      });
       await eventsFor('planId', plan.record.id, [
         'TreatmentPlanned',
         'TreatmentPerformed',
         'TreatmentPerformed',
       ]);
-      await database.ownerPool.query('update procedures set price_amount = 120 where id = $1', [
-        service.crown.id,
-      ]);
+    });
+
+    it('refuses to perform a plan priced in another currency (422 visit.currency_mismatch)', async () => {
+      const patient = await createPatient('Plan Currency');
+      const visit = await startVisit(patient);
+      const plan = await planned(dentist.agent, visit.id, {
+        procedureId: service.fill.id,
+        toothCode: '24',
+      });
+      await database.ownerPool.query(
+        "update treatment_plans set price_currency = 'EUR' where id = $1",
+        [plan.record.id],
+      );
+      await expectProblem(
+        dentist.agent.post(path(visit.id, `plans/${plan.record.id}/perform`)),
+        422,
+        'visit.currency_mismatch',
+      );
+      const read = (await dentist.agent.get(`/api/v1/visits/${visit.id}`)).body as Visit;
+      expect(read.services).toEqual([]);
+      expect(await actionsOn('treatment_plan', plan.record.id)).toEqual(['treatment_plan.create']);
     });
 
     it('cancels an older plan; removes only a plan made in this visit', async () => {
@@ -866,6 +943,26 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
       );
       expect(audit.every((entry) => entry.action === 'tooth_status.set')).toBe(true);
       await eventsFor('visitId', visit.id, ['ToothStatusChanged', 'ToothStatusChanged']);
+    });
+
+    it('changes, audits and publishes nothing when the tooth already has that value', async () => {
+      const patient = await createPatient('Tooth Unchanged');
+      const visit = await startVisit(patient);
+      const set = () =>
+        ok<ToothPresenceResult>(
+          dentist.agent.put(path(visit.id, 'teeth/24')).send({ present: 'primary' }),
+        );
+      expect((await set()).record).toEqual({ position: '24', present: 'primary' });
+      expect((await set()).record).toEqual({ position: '24', present: 'primary' });
+
+      const rows = await database.ownerPool.query<{ id: string }>(
+        'select id from tooth_status where patient_id = $1',
+        [patient.id],
+      );
+      const [row] = rows.rows;
+      if (!row) throw new Error('no tooth_status row');
+      expect(await actionsOn('tooth_status', row.id)).toEqual(['tooth_status.set']);
+      await eventsFor('visitId', visit.id, ['ToothStatusChanged']);
     });
 
     it('refuses a position that is not a permanent position 1–5 (400 validation_failed)', async () => {
