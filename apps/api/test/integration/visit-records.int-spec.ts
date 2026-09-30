@@ -83,76 +83,22 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
   };
 
   /**
-   * A completed visit of `patient` on `EARLIER`, written directly: `complete` arrives with step 5,
-   * and records "from an earlier visit" need one to point at.
+   * A visit of `patient` on `EARLIER`, completed through the API with `work` done while it was
+   * live: records "from an earlier visit" point at it. The clock then returns to `NOON` (going
+   * back in time never idles a session).
    */
-  const pastVisit = async (patient: Patient): Promise<string> => {
-    const id = newId();
-    await database.ownerPool.query(
-      `insert into visits (id, tenant_id, patient_id, branch_id, dentist_id, started_by, status,
-                           local_date, started_at, completed_at, completed_by, duration_minutes,
-                           currency, subtotal, discount_amount, total)
-       values ($1, $2, $3, $4, $5, $6, 'completed', $7, $8, $9, $6, 30, 'USD', 0, 0, 0)`,
-      [
-        id,
-        tenant.id,
-        patient.id,
-        branch.id,
-        dentist.user.profileId,
-        dentist.user.id,
-        EARLIER,
-        `${EARLIER}T09:00:00Z`,
-        `${EARLIER}T09:30:00Z`,
-      ],
-    );
-    return id;
-  };
-
-  const olderDiagnosis = async (patient: Patient, visitId: string, toothCode: string) => {
-    const id = newId();
-    await database.ownerPool.query(
-      `insert into patient_diagnoses (id, tenant_id, patient_id, tooth_code, diagnosis_id, code, name,
-                                      dentist_id, recorded_by, recorded_in_visit_id, recorded_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [
-        id,
-        tenant.id,
-        patient.id,
-        toothCode,
-        diagnosis.caries.id,
-        diagnosis.caries.code,
-        diagnosis.caries.name,
-        dentist.user.profileId,
-        dentist.user.id,
-        visitId,
-        `${EARLIER}T09:10:00Z`,
-      ],
-    );
-    return id;
-  };
-
-  const olderPlan = async (patient: Patient, visitId: string, toothCode: string) => {
-    const id = newId();
-    await database.ownerPool.query(
-      `insert into treatment_plans (id, tenant_id, patient_id, tooth_code, procedure_id, code, name,
-                                    charge_unit, price_amount, price_currency, dentist_id,
-                                    recorded_by, recorded_in_visit_id, recorded_at)
-       values ($1, $2, $3, $4, $5, $6, $7, 'per_tooth', 80, 'USD', $8, $9, $10, $11)`,
-      [
-        id,
-        tenant.id,
-        patient.id,
-        toothCode,
-        service.crown.id,
-        service.crown.code,
-        service.crown.name,
-        dentist.user.profileId,
-        dentist.user.id,
-        visitId,
-        `${EARLIER}T09:20:00Z`,
-      ],
-    );
-    return id;
+  const pastVisit = async (
+    patient: Patient,
+    work: (visitId: string) => Promise<void> = () => Promise.resolve(),
+  ): Promise<string> => {
+    testApp.clock.set(new Date(`${EARLIER}T09:00:00Z`));
+    const visit = await startVisit(patient);
+    await work(visit.id);
+    testApp.clock.advance({ minutes: 30 });
+    const response = await dentist.agent.post(path(visit.id, 'complete'));
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    testApp.clock.set(new Date(NOON));
+    return visit.id;
   };
 
   const path = (visitId: string, rest: string) => `/api/v1/visits/${visitId}/${rest}`;
@@ -582,8 +528,14 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
 
     it("resolves an older diagnosis but removes only this visit's own (409 record.not_removable)", async () => {
       const patient = await createPatient('Diagnosis Older');
-      const earlier = await pastVisit(patient);
-      const older = await olderDiagnosis(patient, earlier, '36');
+      let older = '';
+      const earlier = await pastVisit(patient, async (visitId) => {
+        const { record } = await recorded(dentist.agent, visitId, {
+          diagnosisId: diagnosis.caries.id,
+          toothCode: '36',
+        });
+        older = record.id;
+      });
       const visit = await startVisit(patient);
 
       await expectProblem(
@@ -846,8 +798,14 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
 
     it('cancels an older plan; removes only a plan made in this visit', async () => {
       const patient = await createPatient('Plan Cancel');
-      const earlier = await pastVisit(patient);
-      const older = await olderPlan(patient, earlier, '15');
+      let older = '';
+      const earlier = await pastVisit(patient, async (visitId) => {
+        const { record } = await planned(dentist.agent, visitId, {
+          procedureId: service.crown.id,
+          toothCode: '15',
+        });
+        older = record.id;
+      });
       const visit = await startVisit(patient);
       const fresh = await planned(dentist.agent, visit.id, {
         procedureId: service.fill.id,
@@ -895,7 +853,10 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         [fresh.record.id],
       );
       expect(row.rows[0]?.deleted_at).not.toBeNull();
-      expect(await actionsOn('treatment_plan', older)).toEqual(['treatment_plan.cancel']);
+      expect(await actionsOn('treatment_plan', older)).toEqual([
+        'treatment_plan.cancel',
+        'treatment_plan.create',
+      ]);
       expect(await actionsOn('treatment_plan', fresh.record.id)).toEqual([
         'treatment_plan.create',
         'treatment_plan.delete',

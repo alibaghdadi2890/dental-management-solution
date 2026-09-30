@@ -205,6 +205,7 @@ describe('billing: ledger, opening balances and balances', () => {
       expect(balance).toEqual({
         patientId: patient.id,
         balances: [{ amount: '250.00', currency: 'USD' }],
+        charged: [],
       });
 
       const session = (await clinic.owner.get('/api/v1/session')).body as Session;
@@ -508,10 +509,15 @@ describe('billing: ledger, opening balances and balances', () => {
       expect(await balanceOf(main.owner, patient.id)).toEqual({
         patientId: patient.id,
         balances: [{ amount: '250.00', currency: 'USD' }],
+        charged: [],
       });
 
       const plain = await createPatient(main.owner, 'No Entries');
-      expect(await balanceOf(main.owner, plain.id)).toEqual({ patientId: plain.id, balances: [] });
+      expect(await balanceOf(main.owner, plain.id)).toEqual({
+        patientId: plain.id,
+        balances: [],
+        charged: [],
+      });
 
       const unknown = await main.owner.get(`/api/v1/billing/patients/${newId()}/balance`);
       expect(unknown.status).toBe(404);
@@ -527,8 +533,12 @@ describe('billing: ledger, opening balances and balances', () => {
       );
       expect(response.status).toBe(200);
       expect(response.body).toEqual([
-        { patientId: plain.id, balances: [] },
-        { patientId: owing.id, balances: [{ amount: '12.50', currency: 'USD' }] },
+        { patientId: plain.id, balances: [], charged: [] },
+        {
+          patientId: owing.id,
+          balances: [{ amount: '12.50', currency: 'USD' }],
+          charged: [],
+        },
       ]);
 
       expect((await main.owner.get('/api/v1/billing/balances')).status).toBe(400);
@@ -553,6 +563,7 @@ describe('billing: ledger, opening balances and balances', () => {
       expect(response.body).toEqual({
         patientId: patient.id,
         balances: [{ amount: '200.00', currency: 'USD' }],
+        charged: [],
       });
 
       const entries = await auditOf(main.owner, 'resourceType=ledger_entry');
@@ -602,6 +613,7 @@ describe('billing: ledger, opening balances and balances', () => {
       expect(unknown.body).toMatchObject({ code: 'patient.not_found' });
       expect(await balanceOf(main.owner, patient.id)).toMatchObject({
         balances: [{ amount: '10.00', currency: 'USD' }],
+        charged: [],
       });
     });
 
@@ -648,6 +660,7 @@ describe('billing: ledger, opening balances and balances', () => {
         async () => {
           expect(await balanceOf(main.owner, kept.id)).toMatchObject({
             balances: [{ amount: '80.00', currency: 'USD' }],
+            charged: [],
           });
         },
         { timeout: 15_000, interval: 100 },
@@ -664,7 +677,7 @@ describe('billing: ledger, opening balances and balances', () => {
         reason: 'bad debt write-off',
       });
       expect(writeOff.status).toBe(201);
-      expect(writeOff.body).toEqual({ patientId: archived.id, balances: [] });
+      expect(writeOff.body).toEqual({ patientId: archived.id, balances: [], charged: [] });
     });
 
     it('returns sums wider than one numeric(12,2) amount', async () => {
@@ -680,7 +693,7 @@ describe('billing: ledger, opening balances and balances', () => {
       expect((await balanceOf(main.owner, patient.id)).balances).toEqual(wide);
       const many = await main.owner.get(`/api/v1/billing/balances?patientIds=${patient.id}`);
       expect(many.status).toBe(200);
-      expect(many.body).toEqual([{ patientId: patient.id, balances: wide }]);
+      expect(many.body).toEqual([{ patientId: patient.id, balances: wide, charged: [] }]);
     });
 
     it('records a platform admin acting in the tenant as the creator, flagged in the audit', async () => {

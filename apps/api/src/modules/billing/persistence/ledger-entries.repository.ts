@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import type { LedgerEntry, PatientCurrencySum } from '../domain/ledger-entry';
-import { ledgerEntries } from './schema';
+import type { LedgerEntry, LedgerEntryLine, PatientCurrencySum } from '../domain/ledger-entry';
+import { ledgerEntries, ledgerEntryLines } from './schema';
 
 type LedgerEntryRow = typeof ledgerEntries.$inferSelect;
 
@@ -19,6 +19,7 @@ function toDomain(row: LedgerEntryRow): LedgerEntry {
     note: row.note,
     reason: row.reason,
     createdBy: row.createdBy,
+    visitId: row.visitId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -39,10 +40,27 @@ export class LedgerEntriesRepository {
     return toDomain(row);
   }
 
+  /** The lines of a `visit_charge` entry just inserted in this transaction (spec V7). */
+  async insertLines(entryId: string, lines: readonly LedgerEntryLine[]): Promise<void> {
+    if (lines.length === 0) return;
+    await this.db.run((tx) =>
+      tx.insert(ledgerEntryLines).values(lines.map((line) => ({ entryId, ...line }))),
+    );
+  }
+
+  /** The `visit_charge` of `visitId`, or undefined when none was posted (a zero total, W20). */
+  async findVisitCharge(visitId: string): Promise<LedgerEntry | undefined> {
+    const [row] = await this.db.run((tx) =>
+      tx.select().from(ledgerEntries).where(eq(ledgerEntries.visitId, visitId)),
+    );
+    return row && toDomain(row);
+  }
+
   /**
-   * Σ amount per patient and currency, summed by Postgres on `numeric` (exact), as 2-decimal
-   * strings, for the patients among `patientIds`. Patients without entries are absent; zero sums
-   * are included. Ordered by patient, then currency.
+   * Σ amount per patient and currency, summed by Postgres on `numeric` (exact), as decimal
+   * strings, for the patients among `patientIds`, with `charged` = Σ amount over the
+   * `visit_charge` entries alone (`0` when there is none). Patients without entries are absent;
+   * zero sums are included. Ordered by patient, then currency.
    */
   async sumsByPatient(patientIds: readonly string[]): Promise<PatientCurrencySum[]> {
     if (patientIds.length === 0) return [];
@@ -53,6 +71,7 @@ export class LedgerEntriesRepository {
           patientId: ledgerEntries.patientId,
           currency: ledgerEntries.currency,
           amount: sql<string>`sum(${ledgerEntries.amount})::text`,
+          charged: sql<string>`coalesce(sum(${ledgerEntries.amount}) filter (where ${ledgerEntries.kind} = 'visit_charge'), 0)::text`,
         })
         .from(ledgerEntries)
         .where(among)

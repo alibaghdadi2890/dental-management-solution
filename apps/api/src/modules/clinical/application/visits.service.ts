@@ -1,4 +1,6 @@
 import {
+  durationMinutes,
+  lineFinal,
   type LiveVisitQuery,
   type LiveVisitRef,
   type StartDefaults,
@@ -9,6 +11,7 @@ import {
   type VisitDiscountInput,
   type VisitNotesInput,
   type VisitResult,
+  type VisitStatus,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
@@ -18,7 +21,7 @@ import { EventBus } from '../../../platform/events/event-bus';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
 import { AuditService } from '../../audit';
-import { PatientArchivedError, PatientsService } from '../../patients';
+import { PatientArchivedError, PatientMergedError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
 import { isDiscardable } from '../domain/discard-rule';
@@ -31,12 +34,14 @@ import {
   VisitNotFoundError,
 } from '../domain/visit-errors';
 import { transition } from '../domain/visit-lifecycle';
-import { resumePausedSeconds } from '../domain/visit-timer';
+import { elapsedSeconds, resumePausedSeconds } from '../domain/visit-timer';
 import {
+  VISIT_COMPLETED,
   VISIT_DISCARDED,
   VISIT_PAUSED,
   VISIT_RESUMED,
   VISIT_STARTED,
+  type VisitCompleted,
   type VisitDiscarded,
   type VisitPaused,
   type VisitResumed,
@@ -44,7 +49,7 @@ import {
 } from '../events/visit-events';
 import { VisitServicesRepository } from '../persistence/visit-services.repository';
 import { type StoredVisit, VisitsRepository } from '../persistence/visits.repository';
-import { toVisit } from './visit-mapping';
+import { computedMoney, moneyOf, toVisit } from './visit-mapping';
 
 /** The timer fields a pause or resume changes, for the audit's before/after. */
 const timerOf = ({ status, pausedAt, pausedSeconds }: StoredVisit) => ({
@@ -53,9 +58,41 @@ const timerOf = ({ status, pausedAt, pausedSeconds }: StoredVisit) => ({
   pausedSeconds,
 });
 
+/** What `billing` charges for a completed visit (`chargeFacts`, ADR-0024), in the visit currency. */
+export interface VisitChargeFacts {
+  patientId: string;
+  currency: string;
+  /** The frozen total, after the visit-level discount. */
+  total: string;
+  /** The visit's tenant-local date: the charge's effective date. */
+  localDate: string;
+  /** The services that weren't removed, in the order they were added; `amount` = base − line discount. */
+  lines: {
+    code: string;
+    name: string;
+    toothCode: string | null;
+    surfaces: string[];
+    amount: string;
+  }[];
+}
+
+/** A visit's money and timing, for `billing`'s visit summary (`visitMoney`). */
+export interface VisitMoneyFacts {
+  visitId: string;
+  patientId: string;
+  status: VisitStatus;
+  currency: string;
+  subtotal: string;
+  discount: string;
+  total: string;
+  completedAt: string | null;
+  durationMinutes: number | null;
+  serviceCount: number;
+}
+
 /**
  * The visit lifecycle (docs/modules/clinical.md, spec §VisitsService): start (or resume the
- * patient's live visit), pause, resume, notes, discount and discard, plus the reads. Every
+ * patient's live visit), pause, resume, notes, discount, discard and complete, plus the reads. Every
  * mutation re-checks `visit:write`, runs in one `TenantDb` transaction, locks the visit
  * `FOR UPDATE` and refuses unless it is live (409 `visit.not_live`), is audited in that
  * transaction and publishes its event after commit. Actor columns hold the auth user id (W10).
@@ -297,6 +334,70 @@ export class VisitsService {
     });
   }
 
+  /**
+   * Completes a live visit (spec §VisitsService, W2, W19). Locks the patient, then the visit
+   * (`lockPatientThenVisit`, ADR-0023), and freezes the money computed from its services, the
+   * duration (paused time left out; an open pause ends now), `completed_at` and `completed_by`
+   * (W10). `VisitCompleted` is published inside the transaction, so `billing`'s in-transaction
+   * handler posts the charge before commit: both commit or neither does (ADR-0024). A second call
+   * → 409 `visit.not_live`, so a retry can't charge twice. An archived patient's live visit still
+   * completes; only a new visit is refused.
+   */
+  async complete(id: string): Promise<VisitResult> {
+    this.context.requirePermission('visit:write');
+    return this.tenantDb.run(async () => {
+      const before = await this.lockPatientThenVisit(id);
+      const status = transition(before.status, 'complete');
+      const now = this.clock.now();
+      const services = await this.services.listForVisit(id);
+      const money = computedMoney(before, services);
+      const { pausedAt, startedAt } = before;
+      const pausedSeconds =
+        pausedAt === null
+          ? before.pausedSeconds
+          : resumePausedSeconds({ pausedAt, pausedSeconds: before.pausedSeconds }, now);
+      const elapsed = elapsedSeconds(
+        { startedAt, pausedAt: null, pausedSeconds, completedAt: now },
+        now,
+      );
+      const after = await this.visits.update(id, {
+        status,
+        pausedAt: null,
+        pausedSeconds,
+        completedAt: now,
+        completedBy: this.context.requireUserId(),
+        durationMinutes: durationMinutes(elapsed),
+        subtotal: money.subtotal,
+        discountAmount: money.discount,
+        total: money.total,
+      });
+      await this.audit.record({
+        action: 'visit.complete',
+        resourceType: 'visit',
+        resourceId: id,
+        before: timerOf(before),
+        after: {
+          ...timerOf(after),
+          completedAt: after.completedAt,
+          completedBy: after.completedBy,
+          durationMinutes: after.durationMinutes,
+          subtotal: after.subtotal,
+          discountAmount: after.discountAmount,
+          total: after.total,
+        },
+      });
+      const event: VisitCompleted = this.events.create(VISIT_COMPLETED, {
+        visitId: id,
+        patientId: after.patientId,
+        currency: after.currency,
+        total: money.total,
+        localDate: after.localDate,
+      });
+      await this.events.publish(event);
+      return { visit: toVisit(after, services, now) };
+    });
+  }
+
   /** A discarded visit → 404 `visit.not_found`, like an unknown one (W4). */
   async get(id: string): Promise<Visit> {
     this.context.requirePermission('visit:read');
@@ -347,7 +448,85 @@ export class VisitsService {
     });
   }
 
+  /**
+   * For `billing`'s in-transaction `VisitCompleted` handler (ADR-0024): what to charge for a
+   * completed visit. It reads through the open transaction, so it sees the completion that
+   * published the event. A visit that isn't completed is a caller bug and throws.
+   */
+  async chargeFacts(visitId: string): Promise<VisitChargeFacts> {
+    this.context.requirePermission('visit:read');
+    return this.tenantDb.run(async () => {
+      const visit = await this.visits.findById(visitId);
+      if (!visit) throw new VisitNotFoundError('Visit not found');
+      if (visit.status !== 'completed' || visit.total === null) {
+        throw new Error(`visit ${visitId} is not completed`);
+      }
+      const services = await this.services.listForVisit(visitId);
+      return {
+        patientId: visit.patientId,
+        currency: visit.currency,
+        total: visit.total,
+        localDate: visit.localDate,
+        lines: services.map((service) => ({
+          code: service.code,
+          name: service.name,
+          toothCode: service.toothCode,
+          surfaces: service.surfaces,
+          amount: lineFinal({ base: service.baseAmount, discount: service.discountAmount }),
+        })),
+      };
+    });
+  }
+
+  /**
+   * A visit's money (computed while live, frozen once completed) and timing, for `billing`'s
+   * visit summary. Unknown or discarded → 404 `visit.not_found`.
+   */
+  async visitMoney(visitId: string): Promise<VisitMoneyFacts> {
+    this.context.requirePermission('visit:read');
+    return this.tenantDb.run(async () => {
+      const visit = await this.visits.findById(visitId);
+      if (!visit) throw new VisitNotFoundError('Visit not found');
+      const services = await this.services.listForVisit(visitId);
+      const { subtotal, discount, total } = moneyOf(visit, services);
+      return {
+        visitId,
+        patientId: visit.patientId,
+        status: visit.status,
+        currency: visit.currency,
+        subtotal,
+        discount,
+        total,
+        completedAt: visit.completedAt?.toISOString() ?? null,
+        durationMinutes: visit.durationMinutes,
+        serviceCount: services.length,
+      };
+    });
+  }
+
   // --- Shared rules ---
+
+  /**
+   * The ADR-0023 lock order for a mutation that involves the patient: the visit's patient
+   * `FOR SHARE` (`lockForDependentWrite`, so a merge waits), then the visit `FOR UPDATE` and
+   * live (`lockLive`). A merge that committed between the unlocked read and the patient lock has
+   * re-pointed the visit (W24): the patient read first is merged away, or no longer the visit's,
+   * and the visit is read again, once.
+   */
+  private async lockPatientThenVisit(id: string, retried = false): Promise<StoredVisit> {
+    const snapshot = await this.visits.findById(id);
+    if (!snapshot) throw new VisitNotFoundError('Visit not found');
+    try {
+      await this.patients.lockForDependentWrite(snapshot.patientId);
+    } catch (error) {
+      if (retried || !(error instanceof PatientMergedError)) throw error;
+      return this.lockPatientThenVisit(id, true);
+    }
+    const visit = await this.visits.lockLive(id);
+    if (visit.patientId === snapshot.patientId) return visit;
+    if (retried) throw new Error(`visit ${id} changed patient twice while it was being locked`);
+    return this.lockPatientThenVisit(id, true);
+  }
 
   /**
    * One lifecycle mutation: `visit:write`, one transaction, the visit locked `FOR UPDATE` and

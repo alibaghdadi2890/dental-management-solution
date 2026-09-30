@@ -15,6 +15,7 @@ import type {
   Tenant,
   ToothHistory,
   Visit,
+  VisitResult,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -27,7 +28,11 @@ const TEMPORARY = 'temporary-pw-1';
 
 /** Beirut is UTC+3 in June: the tenant's today is 2026-06-10 all day at this instant. */
 const NOON = '2026-06-10T09:00:00Z';
-/** The dates of the completed visits the fixtures write (`complete` arrives with step 5). */
+const TODAY = '2026-06-10';
+/**
+ * The dates of the earlier completed visits: made through the API by `completedOn` where the
+ * test is about what a completion leaves behind, else written directly as fixtures.
+ */
 const EARLIER = '2026-06-01';
 const EARLIEST = '2026-05-01';
 
@@ -95,6 +100,27 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       .send({ patientId: patient.id, dentistId: dentist.user.profileId });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as StartVisitResult).visit;
+  };
+
+  /**
+   * A visit of `patient` started at 09:00 UTC on `date` (noon in Beirut) and completed through the
+   * API `minutes` later, with `work` done while it is live; the clock then returns to `NOON`. Going
+   * back in time never idles a session, so the agents stay signed in.
+   */
+  const completedOn = async (
+    patient: Patient,
+    date: string,
+    work: (visit: Visit) => Promise<void>,
+    minutes = 30,
+  ): Promise<Visit> => {
+    testApp.clock.set(new Date(`${date}T09:00:00Z`));
+    const visit = await startVisit(patient);
+    await work(visit);
+    testApp.clock.advance({ minutes });
+    const response = await dentist.agent.post(visitPath(visit.id, 'complete'));
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    testApp.clock.set(new Date(NOON));
+    return (response.body as VisitResult).visit;
   };
 
   /** A completed visit written directly, completed at 10:00 UTC on its local date. */
@@ -403,9 +429,17 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
   describe('tooth history', () => {
     it("lists one tooth's diagnoses, then plans, then completed services", async () => {
       const patient = await createPatient('Tooth History');
-      const earlier = await completedVisit(patient, { localDate: EARLIER, total: '50' });
-      const done = await completedService(earlier, { item: service.fill, toothCode: '46' });
-      await completedService(earlier, { item: service.fill, toothCode: '45' });
+      const fill = (visit: Visit, toothCode: string) =>
+        created<ServiceResult>(
+          dentist.agent
+            .post(visitPath(visit.id, 'services'))
+            .send({ procedureId: service.fill.id, toothCode }),
+        );
+      let done: ServiceResult | undefined;
+      const earlier = await completedOn(patient, EARLIER, async (visit) => {
+        done = await fill(visit, '46');
+        await fill(visit, '45');
+      });
       const visit = await startVisit(patient);
       const finding = await created<DiagnosisResult>(
         dentist.agent
@@ -429,7 +463,9 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       expect(history.diagnoses.map((record) => record.id)).toEqual([finding.record.id]);
       expect(history.plans).toEqual([plan.record]);
       expect(history.plans[0]?.diagnosisRecordId).toBe(finding.record.id);
-      expect(history.services.map((line) => line.id)).toEqual([done]);
+      expect(history.services.map((line) => [line.id, line.visitId, line.visitDate])).toEqual([
+        [done?.record.id, earlier.id, EARLIER],
+      ]);
 
       for (const code of ['19', '59', 'x']) {
         const response = await dentist.agent.get(patientPath(patient.id, `teeth/${code}/history`));
@@ -437,30 +473,113 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         expect(problem(response.body).errors?.[0]?.path).toBe('toothCode');
       }
     });
+
+    it('follows a plan recorded in one completed visit and performed in the next', async () => {
+      const patient = await createPatient('Tooth Across Visits');
+      let finding: DiagnosisResult | undefined;
+      let plan: PlanResult | undefined;
+      const first = await completedOn(patient, EARLIER, async (visit) => {
+        finding = await created<DiagnosisResult>(
+          dentist.agent
+            .post(visitPath(visit.id, 'diagnoses'))
+            .send({ diagnosisId: diagnosis.caries.id, toothCode: '36', surfaces: ['O'] }),
+        );
+        plan = await created<PlanResult>(
+          dentist.agent
+            .post(visitPath(visit.id, 'plans'))
+            .send({ procedureId: service.crown.id, toothCode: '36' }),
+        );
+      });
+      if (!finding || !plan) throw new Error('visit 1 recorded nothing');
+      const planId = plan.record.id;
+
+      const second = await startVisit(patient);
+      const performed = await dentist.agent.post(visitPath(second.id, `plans/${planId}/perform`));
+      expect(performed.status, JSON.stringify(performed.body)).toBe(200);
+      const [line] = (performed.body as PlanResult).visit.services;
+      expect(line).toMatchObject({ planId, toothCode: '36', final: { amount: '120.00' } });
+      const done = await dentist.agent.post(visitPath(second.id, 'complete'));
+      expect(done.status, JSON.stringify(done.body)).toBe(200);
+
+      const history = await read<ToothHistory>(patientPath(patient.id, 'teeth/36/history'));
+      expect(history.diagnoses).toEqual([
+        expect.objectContaining({
+          id: finding.record.id,
+          recordedInVisitId: first.id,
+          recordedInVisitDate: EARLIER,
+        }),
+      ]);
+      expect(history.plans).toEqual([
+        expect.objectContaining({
+          id: planId,
+          status: 'performed',
+          diagnosisRecordId: finding.record.id,
+          recordedInVisitId: first.id,
+          performedInVisitId: second.id,
+          performedAt: new Date(NOON).toISOString(),
+        }),
+      ]);
+      expect(history.services).toEqual([
+        expect.objectContaining({ id: line?.id, visitId: second.id, visitDate: TODAY }),
+      ]);
+      expect(await read<LastVisit>(patientPath(patient.id, 'last-visit'))).toMatchObject({
+        id: second.id,
+        date: TODAY,
+        total: { amount: '120.00', currency: 'USD' },
+      });
+    });
   });
 
   describe('last visit', () => {
     it('is null without a completed visit, then the most recently completed one', async () => {
       const patient = await createPatient('Last Visit');
-      await startVisit(patient);
       const none = await dentist.agent.get(patientPath(patient.id, 'last-visit'));
       expect(none.status).toBe(200);
       expect(none.type).toBe('application/json');
       expect(none.body).toBeNull();
 
-      await completedVisit(patient, { localDate: EARLIEST, total: '20', notes: 'First' });
-      const latest = await completedVisit(patient, {
-        localDate: EARLIER,
-        total: '75',
-        durationMinutes: 42,
-        notes: 'Check again in six months',
+      const addService = async (visit: Visit, body: Record<string, unknown>) =>
+        (
+          await created<ServiceResult>(
+            dentist.agent.post(visitPath(visit.id, 'services')).send(body),
+          )
+        ).record;
+      const writeNotes = async (visit: Visit, notes: string) => {
+        const response = await dentist.agent.patch(visitPath(visit.id, 'notes')).send({ notes });
+        expect(response.status, JSON.stringify(response.body)).toBe(200);
+      };
+      await completedOn(patient, EARLIEST, async (visit) => {
+        await addService(visit, { procedureId: service.clean.id });
+        await writeNotes(visit, 'First');
       });
-      await completedService(latest, { item: service.fill, toothCode: '16', surfaces: ['O'] });
-      await completedService(latest, { item: service.fill, toothCode: '17', removed: true });
-      await completedService(latest, { item: service.clean, base: '25' });
+      const latest = await completedOn(
+        patient,
+        EARLIER,
+        async (visit) => {
+          await addService(visit, {
+            procedureId: service.fill.id,
+            toothCode: '16',
+            surfaces: ['O'],
+          });
+          const removed = await addService(visit, {
+            procedureId: service.fill.id,
+            toothCode: '17',
+          });
+          const removal = await dentist.agent.delete(visitPath(visit.id, `services/${removed.id}`));
+          expect(removal.status, JSON.stringify(removal.body)).toBe(200);
+          const clean = await addService(visit, { procedureId: service.clean.id });
+          const repriced = await dentist.agent
+            .patch(visitPath(visit.id, `services/${clean.id}`))
+            .send({ baseAmount: '25' });
+          expect(repriced.status, JSON.stringify(repriced.body)).toBe(200);
+          await writeNotes(visit, 'Check again in six months');
+        },
+        42,
+      );
+      await startVisit(patient);
 
       expect(await read<LastVisit>(patientPath(patient.id, 'last-visit'))).toEqual({
-        id: latest,
+        id: latest.id,
         date: EARLIER,
         dentistName: dentist.user.displayName,
         durationMinutes: 42,

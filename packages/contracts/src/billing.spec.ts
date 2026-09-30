@@ -4,10 +4,12 @@ import {
   balancesQuerySchema,
   createWithOpeningBalanceSchema,
   balanceAmountSchema,
+  ledgerEntryKindSchema,
   openingBalanceInputSchema,
   patientBalanceSchema,
   owingCountSchema,
   patientExportQuerySchema,
+  visitFinancialSummarySchema,
 } from './billing.js';
 
 const ID_A = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
@@ -75,13 +77,53 @@ describe('balanceAmountSchema', () => {
     }
   });
 
-  it('is what a patient balance carries', () => {
+  it('is what a patient balance and its visit charges carry', () => {
     expect(
       patientBalanceSchema.safeParse({
         patientId: ID_A,
         balances: [{ amount: '19999999999.98', currency: 'USD' }],
+        charged: [{ amount: '19999999999.98', currency: 'USD' }],
       }).success,
     ).toBe(true);
+  });
+
+  it('requires the charged sums', () => {
+    expect(patientBalanceSchema.safeParse({ patientId: ID_A, balances: [] }).success).toBe(false);
+  });
+});
+
+describe('ledgerEntryKindSchema', () => {
+  it('includes the visit charge', () => {
+    expect(ledgerEntryKindSchema.options).toEqual([
+      'opening_balance',
+      'adjustment',
+      'visit_charge',
+    ]);
+  });
+});
+
+describe('visitFinancialSummarySchema', () => {
+  const summary = {
+    visitId: ID_A,
+    currency: 'USD',
+    visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
+    previous: '40.00',
+    totalOutstanding: '157.00',
+  };
+
+  it('carries the visit, previous and total amounts in the visit currency', () => {
+    expect(visitFinancialSummarySchema.parse(summary)).toEqual(summary);
+  });
+
+  it('allows a credit as previous, and only two-decimal aggregates', () => {
+    const credit = { ...summary, previous: '-10.00', totalOutstanding: '107.00' };
+    expect(visitFinancialSummarySchema.safeParse(credit).success).toBe(true);
+    expect(visitFinancialSummarySchema.safeParse({ ...summary, previous: '40' }).success).toBe(
+      false,
+    );
+    expect(visitFinancialSummarySchema.safeParse({ ...summary, currency: 'usd' }).success).toBe(
+      false,
+    );
   });
 });
 

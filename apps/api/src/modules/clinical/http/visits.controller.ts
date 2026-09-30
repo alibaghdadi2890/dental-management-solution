@@ -108,6 +108,15 @@ export class VisitsController {
     return this.visits.discard(params.id);
   }
 
+  /** `{ visit }` with the completed visit; `billing` has posted its charge in the same transaction. */
+  @Post(':id/complete')
+  @RequirePermission('visit:write')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: VisitResultDto })
+  complete(@Param() params: VisitParamsDto) {
+    return this.visits.complete(params.id);
+  }
+
   @Patch(':id/notes')
   @RequirePermission('visit:write')
   @ZodResponse({ type: VisitResultDto })

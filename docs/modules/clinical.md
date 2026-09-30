@@ -1,9 +1,9 @@
 # `clinical` module
 
 **Status:** partly implemented. The service and diagnosis catalogs are done (feature 2). Of
-feature 4a, the visit lifecycle (start, resume, pause, notes, discount, discard, live visits),
-charting in a visit (services, diagnoses, plans, tooth presence) and the patient's chart reads
-(chart, tooth history, last visit, summary) are done; completion is in progress.
+feature 4a, the visit lifecycle (start, resume, pause, notes, discount, discard, complete, live
+visits), charting in a visit (services, diagnoses, plans, tooth presence) and the patient's chart
+reads (chart, tooth history, last visit, summary) are done; the merge re-point is in progress.
 
 ## Purpose
 
@@ -90,6 +90,14 @@ The pure rules are in `domain/`: `visit-lifecycle.ts` (state machine), `visit-ti
   from the services while the visit is live.
 - **Discard** (W4): only an empty visit (`domain/discard-rule.ts`). It becomes `discarded`,
   frees its room, clears `paused_at`, and reads as not found everywhere.
+- **Complete** (W2, W19, ADR-0024): locks the patient (`lockForDependentWrite`), then the visit
+  (ADR-0023). An open pause ends and is added to `paused_seconds`. The money computed from the
+  services that aren't removed is frozen in `subtotal`, `discount_amount` and `total`, with
+  `duration_minutes` = `ceil((completed_at − started_at − paused_seconds) / 60)`, at least 1,
+  `completed_at` and `completed_by`. The room is free again. `VisitCompleted` is published
+  inside the transaction, so `billing` posts the visit charge before commit: a failed charge
+  rolls the completion back and the visit stays live. A second completion → 409
+  `visit.not_live`. An archived patient's live visit still completes.
 - Every actor column (`started_by`, `discarded_by`, …) is the auth user id (W10).
 
 ### Records in a visit
@@ -150,12 +158,12 @@ from one `practitionersByProfileIds` call per read.
 
 ## Public API (`index.ts`)
 
-`ClinicalModule`, `CatalogService`, `VisitsService`, `VisitRecordsService`, `ChartService`,
-`CatalogItemNotFoundError`, `CatalogItemInUseError`, `CatalogItemInactiveError`, and the events
+`ClinicalModule`, `CatalogService`, `VisitsService` (with the `VisitChargeFacts` and
+`VisitMoneyFacts` types), `VisitRecordsService`, `ChartService`, `CatalogItemNotFoundError`,
+`CatalogItemInUseError`, `CatalogItemInactiveError`, `VisitNotLiveError`, and the events
 `CatalogChanged`, `VisitStarted`, `VisitPaused`, `VisitResumed`, `VisitDiscarded`,
-`VisitCompleted` (published from step 5 of feature 4a), `DiagnosisRecorded`,
-`DiagnosisResolved`, `DiagnosisReopened`, `TreatmentPlanned`, `TreatmentPerformed`,
-`TreatmentCancelled` and `ToothStatusChanged`.
+`VisitCompleted`, `DiagnosisRecorded`, `DiagnosisResolved`, `DiagnosisReopened`,
+`TreatmentPlanned`, `TreatmentPerformed`, `TreatmentCancelled` and `ToothStatusChanged`.
 
 `CatalogService`:
 
@@ -184,8 +192,11 @@ updated `Visit`.
 | `pause(id)` / `resume(id)`                 | `visit:write` | Idempotent (already paused/running → unchanged, no audit). Resume adds the pause to `pausedSeconds`. Audit `visit.pause` / `visit.resume`; `VisitPaused` / `VisitResumed`.                                                                                                                                                                                                                                                                                                                                                                |
 | `updateNotes(id, { notes })`               | `visit:write` | ≤ 20,000 characters. Audit `visit.update` with `{ notes }` (no-op when unchanged).                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `setDiscount(id, { mode, value })`         | `visit:write` | The raw entry. Audit `visit.update` with `{ discountMode, discountValue }` (no-op when unchanged).                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `complete(id)`                             | `visit:write` | See [Visits](#visits). Unknown or discarded → 404; not live → 409 `visit.not_live`; merged patient → 409 `patient.merged` (after one re-read, W24). Audit `visit.complete` (before/after: status, timer, completion fields, money); `VisitCompleted { visitId, patientId, currency, total, localDate }`, published in the transaction. Answers with the completed visit.                                                                                                                                                                  |
 | `discard(id)`                              | `visit:write` | Not empty → 409 `visit.not_empty`. Audit `visit.discard`; `VisitDiscarded`. Answers with the discarded visit.                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `get(id)`                                  | `visit:read`  | The `Visit`: services, money, timer fields and `serverNow`. Unknown or discarded → 404 `visit.not_found`.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `chargeFacts(visitId)`                     | `visit:read`  | For `billing`'s in-transaction `VisitCompleted` handler (ADR-0024): `{ patientId, currency, total, localDate, lines }` of a completed visit, the lines being its services that aren't removed, in order (`code`, `name`, `toothCode`, `surfaces`, `amount` = base − line discount). Reads through the open transaction. A visit that isn't completed throws (a caller bug).                                                                                                                                                               |
+| `visitMoney(visitId)`                      | `visit:read`  | For `billing`'s visit summary: `{ visitId, patientId, status, currency, subtotal, discount, total, completedAt, durationMinutes, serviceCount }`, the money computed while live and frozen once completed. Unknown or discarded → 404.                                                                                                                                                                                                                                                                                                    |
 | `live({ patientId?, mine? })`              | `visit:read`  | `LiveVisitRef[]`, oldest first, with the patient's and dentist's names and `serverNow`. `mine` (W18): the caller's staff profile (`UsersService.profileIdOf`) is the dentist, or the caller started it; a platform admin (no staff profile) matches only their own starts.                                                                                                                                                                                                                                                                |
 
 `VisitRecordsService` (see [Records in a visit](#records-in-a-visit)). Every method needs
@@ -231,7 +242,7 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 | `GET /visits/start-defaults` → `{ dentistId, roomId }`                                                                                                                       | `visit:write`   |
 | `GET /visits/live?patientId=&mine=` → `LiveVisitRef[]`                                                                                                                       | `visit:read`    |
 | `GET /visits/:id` → `Visit`                                                                                                                                                  | `visit:read`    |
-| `POST /visits/:id/{pause,resume,discard}` → `{ visit }`                                                                                                                      | `visit:write`   |
+| `POST /visits/:id/{pause,resume,discard,complete}` → `{ visit }`                                                                                                             | `visit:write`   |
 | `PATCH /visits/:id/notes`, `PATCH /visits/:id/discount` → `{ visit }`                                                                                                        | `visit:write`   |
 | `POST /visits/:id/services` → 201, `PATCH` / `DELETE /visits/:id/services/:serviceId` → `{ visit, record: VisitService }`                                                    | `visit:write`   |
 | `POST /visits/:id/diagnoses` → 201, `POST /visits/:id/diagnoses/:recordId/{resolve,reopen}`, `DELETE /visits/:id/diagnoses/:recordId` → `{ visit, record: DiagnosisRecord }` | `visit:write`   |
@@ -248,8 +259,9 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
   - `VisitStarted { visitId, patientId, dentistId, roomId }`.
   - `VisitPaused { visitId, patientId }`, `VisitResumed { visitId, patientId }`.
   - `VisitDiscarded { visitId, patientId, roomId }`.
-  - `VisitCompleted { visitId, patientId, currency, total, localDate }`: the type exists; it is
-    published by `complete` (feature 4a step 5).
+  - `VisitCompleted { visitId, patientId, currency, total, localDate }`, published by
+    `complete` inside its transaction: `billing`'s in-transaction handler posts the visit charge
+    before commit (ADR-0024); after-commit subscribers (the audit) hear it once committed.
   - `DiagnosisRecorded { recordId, visitId, patientId, toothCode, diagnosisId }`,
     `DiagnosisResolved` / `DiagnosisReopened { recordId, visitId, patientId, toothCode }`.
   - `TreatmentPlanned { planId, visitId, patientId, toothCode, procedureId }`,
@@ -273,7 +285,8 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
   (`profileIdOf`).
 - `audit`.
 
-None of them imports `clinical`.
+None of them imports `clinical`. `billing` imports `clinical` (`chargeFacts`, `visitMoney`,
+`VisitNotLiveError`, `VisitCompleted`; ADR-0024); `clinical` never imports `billing`.
 
 ## Permissions
 

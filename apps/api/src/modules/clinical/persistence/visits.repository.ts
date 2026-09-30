@@ -25,7 +25,7 @@ export type NewVisit = Pick<
   | 'currency'
 >;
 
-/** The fields the lifecycle, notes and discount change (`complete`'s arrive in E2). */
+/** The fields the lifecycle, notes and discount change. */
 export type VisitPatch = Partial<
   Pick<
     StoredVisit,
@@ -37,6 +37,12 @@ export type VisitPatch = Partial<
     | 'discountValue'
     | 'discardedAt'
     | 'discardedBy'
+    | 'completedAt'
+    | 'completedBy'
+    | 'durationMinutes'
+    | 'subtotal'
+    | 'discountAmount'
+    | 'total'
   >
 >;
 

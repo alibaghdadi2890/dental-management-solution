@@ -1,4 +1,4 @@
-import { fromCents, toCents, type BalanceMoney } from '@dcm/contracts';
+import { type BalanceMoney, fromCents, type PatientBalance, toCents } from '@dcm/contracts';
 
 /**
  * Balance rules (design Q13): a balance is Σ amount per currency — never converted between
@@ -21,6 +21,22 @@ export function sumBalances(entries: readonly BalanceMoney[]): BalanceMoney[] {
     .filter(([, cents]) => cents !== 0n)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([currency, cents]) => ({ amount: fromCents(cents), currency }));
+}
+
+/**
+ * A patient's `balances` and `charged` (Σ of the `visit_charge` entries, spec W8) from their
+ * per-currency sums as the repository aggregates them (`amount` over every entry, `charged` over
+ * the visit charges), each by `sumBalances`' rules.
+ */
+export function patientBalance(
+  patientId: string,
+  sums: readonly { currency: string; amount: string; charged: string }[],
+): PatientBalance {
+  return {
+    patientId,
+    balances: sumBalances(sums.map(({ currency, amount }) => ({ currency, amount }))),
+    charged: sumBalances(sums.map(({ currency, charged }) => ({ currency, amount: charged }))),
+  };
 }
 
 /**

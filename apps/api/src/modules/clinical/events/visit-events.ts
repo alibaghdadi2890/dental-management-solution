@@ -28,7 +28,10 @@ export type VisitDiscarded = DomainEvent<
   { visitId: string; patientId: string; roomId: string | null }
 >;
 
-/** Published by `complete` (E2); `billing` posts the visit charge from it (W2). */
+/**
+ * Published by `complete` inside its transaction: `billing`'s in-transaction handler posts the
+ * visit charge before commit (W2, ADR-0024); everyone else hears it after commit.
+ */
 export const VISIT_COMPLETED = 'VisitCompleted';
 export type VisitCompleted = DomainEvent<
   typeof VISIT_COMPLETED,

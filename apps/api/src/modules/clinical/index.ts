@@ -3,12 +3,17 @@ export { ClinicalModule } from './clinical.module';
 export { CatalogService } from './application/catalog.service';
 export { ChartService } from './application/chart.service';
 export { VisitRecordsService } from './application/visit-records.service';
-export { VisitsService } from './application/visits.service';
+export {
+  type VisitChargeFacts,
+  type VisitMoneyFacts,
+  VisitsService,
+} from './application/visits.service';
 export {
   CatalogItemInactiveError,
   CatalogItemInUseError,
   CatalogItemNotFoundError,
 } from './domain/catalog-errors';
+export { VisitNotLiveError } from './domain/visit-errors';
 export { CATALOG_CHANGED, type CatalogChanged } from './events/catalog-changed';
 export {
   DIAGNOSIS_RECORDED,

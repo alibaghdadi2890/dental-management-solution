@@ -220,7 +220,10 @@ export function mockApi({
       if (bare === '/billing/opening-balances') {
         const created = patient(50, 'Created Patient');
         return Promise.resolve(
-          json({ patient: created, balance: { patientId: created.id, balances: [] } }, 201),
+          json(
+            { patient: created, balance: { patientId: created.id, balances: [], charged: [] } },
+            201,
+          ),
         );
       }
       if (bare === '/patients/merge') {
@@ -286,7 +289,9 @@ export function mockApi({
     }
     const balanceOf = /^\/billing\/patients\/([^/]+)\/balance$/.exec(bare)?.[1];
     if (balanceOf) {
-      return Promise.resolve(json({ patientId: balanceOf, balances: balances[balanceOf] ?? [] }));
+      return Promise.resolve(
+        json({ patientId: balanceOf, balances: balances[balanceOf] ?? [], charged: [] }),
+      );
     }
     const detail = /^\/patients\/([^/]+)$/.exec(bare)?.[1];
     const found = patients.find((p) => p.id === detail);

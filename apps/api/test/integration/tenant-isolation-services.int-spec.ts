@@ -351,7 +351,7 @@ describe('tenant isolation through the public services', () => {
         `/api/v1/billing/balances?patientIds=${a.patient.id},${id}`,
       );
       expect(balances.status).toBe(200);
-      expect(balances.body).toEqual([{ patientId: a.patient.id, balances: [] }]);
+      expect(balances.body).toEqual([{ patientId: a.patient.id, balances: [], charged: [] }]);
 
       // B's patient owes; A's owing list (the building block of A's patient views) never has it.
       const owingInA = await asPlatformAdminIn(testApp.app, a.tenant.id, () =>
@@ -369,6 +369,50 @@ describe('tenant isolation through the public services', () => {
         [a.tenant.id],
       );
       expect(aLedger.rows).toEqual([{ n: 0 }]);
+    });
+
+    it("visits: B's completed visit, its charge and its summary are not found for A", async () => {
+      const ownerB = await signInAndSetPassword(testApp.app, b.ownerEmail, TEMPORARY);
+      const session = (await ownerB.get('/api/v1/session')).body as Session;
+      const profile = ((await ownerB.get('/api/v1/users')).body as StaffUser[]).find(
+        (user) => user.id === session.user.id,
+      );
+      const item = ((await ownerB.get('/api/v1/catalog/services')).body as ServiceItem[]).find(
+        (service) => service.active && service.chargeUnit === 'per_jaw',
+      );
+      if (!profile || !item) throw new Error("B's owner profile or catalog is missing");
+      const started = await ownerB.post('/api/v1/visits').send({
+        patientId: b.patient.id,
+        dentistId: profile.profileId,
+        roomId: b.room.id,
+      });
+      expect(started.status, JSON.stringify(started.body)).toBe(201);
+      const visitId = (started.body as { visit: { id: string } }).visit.id;
+      const added = await ownerB.post(`/api/v1/visits/${visitId}/services`).send({
+        procedureId: item.id,
+      });
+      expect(added.status, JSON.stringify(added.body)).toBe(201);
+      expect((await ownerB.post(`/api/v1/visits/${visitId}/complete`)).status).toBe(200);
+      const bCharges = () =>
+        database.ownerPool.query(
+          'select id, amount::text from ledger_entries where tenant_id = $1 and visit_id = $2',
+          [b.tenant.id, visitId],
+        );
+      const before = (await bCharges()).rows;
+      expect(before).toHaveLength(1);
+
+      const attempts = [
+        ownerA.get(`/api/v1/billing/visits/${visitId}/summary`),
+        ownerA.get(`/api/v1/visits/${visitId}`),
+        ownerA.post(`/api/v1/visits/${visitId}/complete`),
+      ];
+      for (const response of await Promise.all(attempts)) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'visit.not_found' });
+      }
+      expect((await bCharges()).rows).toEqual(before);
+      const balance = await ownerB.get(`/api/v1/billing/visits/${visitId}/summary`);
+      expect(balance.status).toBe(200);
     });
 
     it("billing views, export and the merge job never reach B's patients or ledger", async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rankByBalance, sumBalances } from './balances';
+import { patientBalance, rankByBalance, sumBalances } from './balances';
 
 const usd = (amount: string) => ({ amount, currency: 'USD' });
 const eur = (amount: string) => ({ amount, currency: 'EUR' });
@@ -41,6 +41,28 @@ describe('sumBalances', () => {
     expect(() => sumBalances([usd('1.234')])).toThrow(RangeError);
     expect(() => sumBalances([usd('1e3')])).toThrow(RangeError);
     expect(() => sumBalances([usd('')])).toThrow(RangeError);
+  });
+});
+
+describe('patientBalance', () => {
+  const sums = (currency: string, amount: string, charged: string) => ({
+    currency,
+    amount,
+    charged,
+  });
+
+  it('sums the balances and the visit charges per currency, dropping zeros', () => {
+    expect(
+      patientBalance('p1', [sums('USD', '157.00', '117.00'), sums('EUR', '0.00', '20.00')]),
+    ).toEqual({
+      patientId: 'p1',
+      balances: [usd('157.00')],
+      charged: [eur('20.00'), usd('117.00')],
+    });
+  });
+
+  it('answers empty lists for a patient without entries', () => {
+    expect(patientBalance('p1', [])).toEqual({ patientId: 'p1', balances: [], charged: [] });
   });
 });
 

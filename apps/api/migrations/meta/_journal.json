@@ -113,6 +113,27 @@
       "when": 1790758790319,
       "tag": "0015_visits_started_by_index",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790761554323,
+      "tag": "0016_ledger_visit_charge_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790761576731,
+      "tag": "0017_ledger_visit_charges",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790761593552,
+      "tag": "0018_ledger_lines_append_only",
+      "breakpoints": true
     }
   ]
 }

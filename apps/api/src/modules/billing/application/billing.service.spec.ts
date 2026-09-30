@@ -28,6 +28,7 @@ function service(survivors: Record<string, string> = {}) {
     patients as unknown as PatientsService,
     entries as unknown as LedgerEntriesRepository,
     unused,
+    unused,
   );
   return { billing, tenantDb, entries, audit };
 }

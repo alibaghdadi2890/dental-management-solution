@@ -63,7 +63,7 @@ describe('balancesQuery', () => {
 
 describe('balanceQuery', () => {
   it('requests the single patient balance', async () => {
-    apiFetchMock.mockResolvedValueOnce({ patientId: 'a', balances: [] });
+    apiFetchMock.mockResolvedValueOnce({ patientId: 'a', balances: [], charged: [] });
     await (balanceQuery('a').queryFn as () => Promise<unknown>)();
     expect(apiFetchMock).toHaveBeenCalledWith('/billing/patients/a/balance', expect.anything(), {});
   });

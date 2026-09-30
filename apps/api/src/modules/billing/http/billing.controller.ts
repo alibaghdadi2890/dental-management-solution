@@ -5,6 +5,7 @@ import {
   idSchema,
   openingBalanceResultSchema,
   patientBalanceSchema,
+  visitFinancialSummarySchema,
 } from '@dcm/contracts';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
@@ -18,11 +19,14 @@ class AdjustmentInputDto extends createZodDto(adjustmentInputSchema) {}
 class PatientBalanceDto extends createZodDto(patientBalanceSchema) {}
 class BalancesQueryDto extends createZodDto(balancesQuerySchema) {}
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
+class VisitParamsDto extends createZodDto(z.object({ visitId: idSchema })) {}
+class VisitFinancialSummaryDto extends createZodDto(visitFinancialSummarySchema) {}
 
 /**
- * Opening balances, adjustments and balances (docs/modules/billing.md). The patient views that
- * need balances (`GET /billing/patients`, `/owing-count`, `/export`) live in their own controller;
- * the routes here never share a path shape with them.
+ * Opening balances, adjustments, balances and a completed visit's summary
+ * (docs/modules/billing.md). The patient views that need balances (`GET /billing/patients`,
+ * `/owing-count`, `/export`) live in their own controller; the routes here never share a path
+ * shape with them.
  */
 @Controller('billing')
 export class BillingController {
@@ -55,5 +59,13 @@ export class BillingController {
   @ZodResponse({ status: 201, type: PatientBalanceDto })
   adjust(@Param() params: PatientParamsDto, @Body() body: AdjustmentInputDto) {
     return this.billing.adjustBalance(params.id, body);
+  }
+
+  /** `visit:read` is re-checked by the service (the visit's money comes from `clinical`). */
+  @Get('visits/:visitId/summary')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: VisitFinancialSummaryDto })
+  visitSummary(@Param() params: VisitParamsDto) {
+    return this.billing.visitSummary(params.visitId);
   }
 }

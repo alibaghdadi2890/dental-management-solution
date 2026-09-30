@@ -1,0 +1,1 @@
+ALTER TYPE "public"."ledger_entry_kind" ADD VALUE 'visit_charge';

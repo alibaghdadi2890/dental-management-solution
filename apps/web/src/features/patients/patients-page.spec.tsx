@@ -402,8 +402,12 @@ describe('PatientsPage', () => {
   it('shows the balance from the balances query, danger-styled when owing', async () => {
     const fetchMock = mockApi({
       balances: [
-        { patientId: RANA.id, balances: [{ amount: '250.00', currency: 'USD' }] },
-        { patientId: SAMI.id, balances: [] },
+        {
+          patientId: RANA.id,
+          balances: [{ amount: '250.00', currency: 'USD' }],
+          charged: [],
+        },
+        { patientId: SAMI.id, balances: [], charged: [] },
       ],
     });
     renderPage();
@@ -903,7 +907,9 @@ describe('PatientsPage', () => {
     await waitFor(() => {
       expect(within(row).getAllByRole('cell')[7]?.getAttribute('aria-busy')).toBe('true');
     });
-    release(json([{ patientId: OMAR.id, balances: [{ amount: '40.00', currency: 'USD' }] }]));
+    release(
+      json([{ patientId: OMAR.id, balances: [{ amount: '40.00', currency: 'USD' }], charged: [] }]),
+    );
     expect(await within(row).findByText('$40')).toBeTruthy();
   });
 

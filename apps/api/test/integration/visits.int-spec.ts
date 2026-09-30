@@ -567,6 +567,111 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
     });
   });
 
+  describe('complete', () => {
+    it('completes a paused visit: the pause ends, money and duration freeze, the room frees', async () => {
+      const patient = await createPatient(main, 'Complete Paused');
+      const visit = await started(assistant.agent, {
+        patientId: patient.id,
+        dentistId: dentist.user.profileId,
+        roomId: room(2),
+      });
+      testApp.clock.advance({ seconds: 90 });
+      await acted(assistant.agent, visit.id, 'pause');
+      testApp.clock.advance({ minutes: 10 });
+
+      const completed = await acted(assistant.agent, visit.id, 'complete');
+      const completedAt = new Date(new Date(NOON).getTime() + 690_000).toISOString();
+      expect(completed).toMatchObject({
+        id: visit.id,
+        status: 'completed',
+        pausedAt: null,
+        pausedSeconds: 600,
+        completedAt,
+        durationMinutes: 2,
+        money: { subtotal: '0.00', discount: '0.00', total: '0.00', capped: false },
+      });
+      expect(await visitRow(visit.id)).toMatchObject({ status: 'completed', paused_at: null });
+      const completedBy = await database.ownerPool.query<{ completed_by: string }>(
+        'select completed_by from visits where id = $1',
+        [visit.id],
+      );
+      expect(completedBy.rows[0]?.completed_by).toBe(assistant.user.id);
+      expect((await main.owner.get(`/api/v1/visits/${visit.id}`)).body).toMatchObject({
+        status: 'completed',
+        completedAt,
+      });
+      expect((await live(main.owner, `?patientId=${patient.id}`)).map((ref) => ref.id)).toEqual([]);
+
+      const audit = await auditOf(main.owner, `resourceType=visit&resourceId=${visit.id}`);
+      expect(audit.find((entry) => entry.action === 'visit.complete')).toMatchObject({
+        actorUserId: assistant.user.id,
+        before: { status: 'paused', pausedSeconds: 0 },
+        after: { status: 'completed', pausedAt: null, pausedSeconds: 600, total: '0.00' },
+      });
+      await expect
+        .poll(async () =>
+          (await auditOf(main.owner, 'resourceType=event'))
+            .filter((entry) => entry.action === 'VisitCompleted')
+            .map((entry) => entry.after),
+        )
+        .toContainEqual({
+          visitId: visit.id,
+          patientId: patient.id,
+          currency: 'USD',
+          total: '0.00',
+          localDate: TODAY,
+        });
+
+      const other = await createPatient(main, 'Complete Room Reuse');
+      const reused = await started(main.owner, {
+        patientId: other.id,
+        dentistId: main.ownerProfileId,
+        roomId: room(2),
+      });
+      await acted(main.owner, reused.id, 'discard');
+      testApp.clock.set(new Date(NOON));
+    });
+
+    it('completes the live visit of a patient archived since it started', async () => {
+      const patient = await createPatient(main, 'Complete Archived');
+      const visit = await started(main.owner, {
+        patientId: patient.id,
+        dentistId: main.ownerProfileId,
+        roomId: room(2),
+      });
+      const archive = await main.owner.post('/api/v1/patients/archive').send({ ids: [patient.id] });
+      expect(archive.status, JSON.stringify(archive.body)).toBe(200);
+      expect((await acted(main.owner, visit.id, 'complete')).status).toBe('completed');
+    });
+
+    it('refuses a second completion (409), front desk (403) and a discarded or unknown visit (404)', async () => {
+      const patient = await createPatient(main, 'Complete Refused');
+      const visit = await started(main.owner, {
+        patientId: patient.id,
+        dentistId: main.ownerProfileId,
+        roomId: room(2),
+      });
+      const forbidden = await act(frontdesk.agent, visit.id, 'complete');
+      expect(forbidden.status).toBe(403);
+      await acted(main.owner, visit.id, 'complete');
+      const again = await act(main.owner, visit.id, 'complete');
+      expect(again.status).toBe(409);
+      expect(problem(again.body).code).toBe('visit.not_live');
+
+      const discardedVisit = await started(main.owner, {
+        patientId: patient.id,
+        dentistId: main.ownerProfileId,
+        roomId: room(2),
+      });
+      await acted(main.owner, discardedVisit.id, 'discard');
+      for (const id of [discardedVisit.id, newId()]) {
+        const missing = await act(main.owner, id, 'complete');
+        expect(missing.status).toBe(404);
+        expect(problem(missing.body).code).toBe('visit.not_found');
+      }
+    });
+  });
+
   describe('discard', () => {
     it('discards an empty paused visit: the room is free again and the visit reads as not found', async () => {
       const patient = await createPatient(main, 'Discard Empty');

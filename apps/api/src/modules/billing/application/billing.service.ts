@@ -1,39 +1,43 @@
-import type {
-  AdjustmentInput,
-  CreateWithOpeningBalance,
-  LedgerEntryKind,
-  OpeningBalanceInput,
-  OpeningBalanceResult,
-  Patient,
-  PatientBalance,
-  Tenant,
+import {
+  type AdjustmentInput,
+  type CreateWithOpeningBalance,
+  fromCents,
+  type LedgerEntryKind,
+  type OpeningBalanceInput,
+  type OpeningBalanceResult,
+  type Patient,
+  type PatientBalance,
+  type Tenant,
+  toCents,
+  type VisitFinancialSummary,
 } from '@dcm/contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
 import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import { EventBus } from '../../../platform/events/event-bus';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { AuditService } from '../../audit';
+import { VisitNotLiveError, VisitsService } from '../../clinical';
 import { PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
-import { sumBalances } from '../domain/balances';
+import { patientBalance, sumBalances } from '../domain/balances';
 import type { LedgerEntry } from '../domain/ledger-entry';
-import { LEDGER_ENTRY_RECORDED, type LedgerEntryRecorded } from '../events/ledger-events';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
+import { LedgerWriter } from './ledger-writer';
 
 /** The fields a caller chooses; the kind, currency and creator are set by `append`. */
 type EntryFields = Pick<LedgerEntry, 'amount' | 'effectiveDate' | 'note' | 'reason'>;
 
 /**
  * The patient ledger of the current tenant (docs/modules/billing.md): opening balances,
- * adjustments and balances (design Q1, Q12, Q13). Entries are stamped with the tenant currency;
- * every write re-checks `payment:write`, holds the patient row `FOR SHARE`
- * (`PatientsService.lockForDependentWrite`, so a concurrent merge waits for it), is audited in
- * the same transaction and emits `LedgerEntryRecorded` after commit. Patient existence always
- * comes from `PatientsService`, which requires `patient:read` — every system role holds it.
+ * adjustments, balances (design Q1, Q12, Q13) and a completed visit's summary (spec W2). Entries
+ * are stamped with the tenant currency; every write re-checks `payment:write`, holds the patient
+ * row `FOR SHARE` (`PatientsService.lockForDependentWrite`, so a concurrent merge waits for it)
+ * and goes through `LedgerWriter` (audited in the same transaction, `LedgerEntryRecorded` after
+ * commit). Visit charges are posted by `VisitChargeSubscriber`, not here. Patient existence
+ * always comes from `PatientsService`, which requires `patient:read` — every system role holds it.
  */
 @Injectable()
 export class BillingService {
@@ -42,12 +46,13 @@ export class BillingService {
   constructor(
     private readonly context: RequestContext,
     private readonly tenantDb: TenantDb,
-    private readonly events: EventBus,
+    private readonly writer: LedgerWriter,
     private readonly audit: AuditService,
     private readonly tenancy: TenancyService,
     private readonly patients: PatientsService,
     private readonly entries: LedgerEntriesRepository,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly visits: VisitsService,
   ) {}
 
   /**
@@ -65,7 +70,8 @@ export class BillingService {
       const patient = await this.createPatient(input.patient);
       // Just created in this transaction: nobody else can see, merge or archive it yet.
       const entry = await this.appendOpeningBalance(patient.id, input.openingBalance, tenant);
-      return { patient, balance: { patientId: patient.id, balances: sumBalances([entry]) } };
+      const balance = { patientId: patient.id, balances: sumBalances([entry]), charged: [] };
+      return { patient, balance };
     });
   }
 
@@ -109,7 +115,10 @@ export class BillingService {
     });
   }
 
-  /** `balances: []` when the patient has no entries (or they net to zero in every currency). */
+  /**
+   * `balances: []` when the patient has no entries (or they net to zero in every currency);
+   * `charged` sums the visit charges alone (the Record's _Lifetime billed_, W8).
+   */
   async balanceOf(patientId: string): Promise<PatientBalance> {
     this.context.requirePermission('payment:read');
     return this.tenantDb.run(async () => {
@@ -129,10 +138,12 @@ export class BillingService {
       const visible = new Set((await this.patients.getMany(patientIds)).map(({ id }) => id));
       const known = [...new Set(patientIds)].filter((id) => visible.has(id));
       const sums = await this.entries.sumsByPatient(known);
-      return known.map((patientId) => ({
-        patientId,
-        balances: sumBalances(sums.filter((sum) => sum.patientId === patientId)),
-      }));
+      return known.map((patientId) =>
+        patientBalance(
+          patientId,
+          sums.filter((sum) => sum.patientId === patientId),
+        ),
+      );
     });
   }
 
@@ -143,6 +154,41 @@ export class BillingService {
   async patientIdsOwing(): Promise<string[]> {
     this.context.requirePermission('payment:read');
     return this.entries.patientIdsOwing();
+  }
+
+  /**
+   * A completed visit's figures (spec W2), in the visit currency and from the ledger alone: the
+   * charge was posted in the completion's transaction, so it is already there. _This visit_ = its
+   * `visit_charge` (0 when none: a zero total, W20), nothing paid yet; _Previous_ = the balance
+   * less the charge; the total = the balance. Needs `payment:read`, and `visit:read` for
+   * `VisitsService.visitMoney`: unknown or discarded → 404 `visit.not_found`; a live visit →
+   * 409 `visit.not_live` (it has no charge yet). Balances in other currencies are left out.
+   */
+  async visitSummary(visitId: string): Promise<VisitFinancialSummary> {
+    this.context.requirePermission('payment:read');
+    return this.tenantDb.run(async () => {
+      const visit = await this.visits.visitMoney(visitId);
+      if (visit.status !== 'completed') {
+        throw new VisitNotLiveError('The visit is still live; its summary follows completion');
+      }
+      const charge = await this.entries.findVisitCharge(visitId);
+      const [sum] = (await this.entries.sumsByPatient([visit.patientId])).filter(
+        ({ currency }) => currency === visit.currency,
+      );
+      const chargeCents = charge ? toCents(charge.amount) : 0n;
+      const balanceCents = sum ? toCents(sum.amount) : 0n;
+      return {
+        visitId,
+        currency: visit.currency,
+        visit: {
+          total: fromCents(chargeCents),
+          paid: fromCents(0n),
+          outstanding: fromCents(chargeCents),
+        },
+        previous: fromCents(balanceCents - chargeCents),
+        totalOutstanding: fromCents(balanceCents),
+      };
+    });
   }
 
   /**
@@ -216,38 +262,25 @@ export class BillingService {
     });
   }
 
-  /** Inserts, audits and publishes one entry in the tenant currency. */
-  private async append(
+  /** One entry in the tenant currency, through `LedgerWriter` (inserted, audited, published). */
+  private append(
     patientId: string,
     kind: LedgerEntryKind,
     tenant: Tenant,
     fields: EntryFields,
   ): Promise<LedgerEntry> {
-    const entry = await this.entries.insert({
+    return this.writer.append({
       patientId,
       kind,
       currency: tenant.currency,
       createdBy: this.context.requireUserId(),
+      visitId: null,
       ...fields,
     });
-    await this.audit.record({
-      action: 'ledger_entry.create',
-      resourceType: 'ledger_entry',
-      resourceId: entry.id,
-      after: entry,
-      reason: entry.reason ?? undefined,
-    });
-    const event: LedgerEntryRecorded = this.events.create(LEDGER_ENTRY_RECORDED, {
-      entryId: entry.id,
-      patientId,
-      kind,
-    });
-    await this.events.publish(event);
-    return entry;
   }
 
   private async balanceIn(patientId: string): Promise<PatientBalance> {
-    return { patientId, balances: sumBalances(await this.entries.sumsByPatient([patientId])) };
+    return patientBalance(patientId, await this.entries.sumsByPatient([patientId]));
   }
 
   /**

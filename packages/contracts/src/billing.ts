@@ -17,7 +17,8 @@ import { patientCreateSchema, patientListQuerySchema, patientSchema } from './pa
  * imports `billing` (design Q1, Q4, Q5).
  */
 
-export const LEDGER_ENTRY_KINDS = ['opening_balance', 'adjustment'] as const;
+/** `visit_charge` (feature 4a, ADR-0024): posted when a visit completes, in that transaction. */
+export const LEDGER_ENTRY_KINDS = ['opening_balance', 'adjustment', 'visit_charge'] as const;
 export const ledgerEntryKindSchema = z.enum(LEDGER_ENTRY_KINDS);
 export type LedgerEntryKind = z.infer<typeof ledgerEntryKindSchema>;
 
@@ -64,10 +65,15 @@ export const balanceMoneySchema = z.object({
 });
 export type BalanceMoney = z.infer<typeof balanceMoneySchema>;
 
-/** Balance = Σ amount per currency (design Q13); a patient without entries gets `balances: []`. */
+/**
+ * Balance = Σ amount per currency (design Q13); a patient without entries gets `balances: []`.
+ * `charged` is Σ `visit_charge` per currency (the Record's _Lifetime billed_, spec W8), by the
+ * same rules: non-zero currencies only, ordered by code.
+ */
 export const patientBalanceSchema = z.object({
   patientId: idSchema,
   balances: z.array(balanceMoneySchema),
+  charged: z.array(balanceMoneySchema),
 });
 export type PatientBalance = z.infer<typeof patientBalanceSchema>;
 
@@ -123,3 +129,22 @@ export const openingBalanceResultSchema = z.object({
   balance: patientBalanceSchema,
 });
 export type OpeningBalanceResult = z.infer<typeof openingBalanceResultSchema>;
+
+/**
+ * `GET /billing/visits/:visitId/summary` (spec W2): a completed visit's figures, all in the visit
+ * currency and read from the ledger. _This visit_ is its `visit_charge` (0 when the total was 0,
+ * W20); nothing is paid yet (payments are feature 5); _Previous_ is the balance less the charge
+ * (negative for a credit); the total is the balance. Balances in other currencies are left out.
+ */
+export const visitFinancialSummarySchema = z.object({
+  visitId: idSchema,
+  currency: currencySchema,
+  visit: z.object({
+    total: balanceAmountSchema,
+    paid: balanceAmountSchema,
+    outstanding: balanceAmountSchema,
+  }),
+  previous: balanceAmountSchema,
+  totalOutstanding: balanceAmountSchema,
+});
+export type VisitFinancialSummary = z.infer<typeof visitFinancialSummarySchema>;

@@ -3,6 +3,7 @@ import {
   surfacesSchema,
   toothCodeSchema,
   type Visit,
+  type VisitMoney,
   type VisitService,
   visitMoney,
 } from '@dcm/contracts';
@@ -31,22 +32,29 @@ export function toVisitService(service: StoredVisitService, currency: string): V
   };
 }
 
-/**
- * The `Visit` the API answers with: the row, its services and the money — computed from the
- * services while the visit is live (the same `visitMoney` the SPA previews with), the frozen
- * totals once it is completed. `serverNow` lets the client run the timer from an offset.
- */
-export function toVisit(visit: StoredVisit, services: StoredVisitService[], now: Date): Visit {
-  const computed = visitMoney(
+/** The money computed from the services (the same `visitMoney` the SPA previews with). */
+export function computedMoney(visit: StoredVisit, services: StoredVisitService[]): VisitMoney {
+  return visitMoney(
     services.map((service) => ({ base: service.baseAmount, discount: service.discountAmount })),
     visit.discountMode,
     visit.discountValue,
   );
+}
+
+/** The visit's money: computed while it is live, the totals frozen at completion after. */
+export function moneyOf(visit: StoredVisit, services: StoredVisitService[]): VisitMoney {
+  const computed = computedMoney(visit, services);
   const { subtotal, discountAmount, total } = visit;
-  const money =
-    subtotal !== null && discountAmount !== null && total !== null
-      ? { subtotal, discount: discountAmount, total, capped: computed.capped }
-      : computed;
+  return subtotal !== null && discountAmount !== null && total !== null
+    ? { subtotal, discount: discountAmount, total, capped: computed.capped }
+    : computed;
+}
+
+/**
+ * The `Visit` the API answers with: the row, its services and the money (`moneyOf`).
+ * `serverNow` lets the client run the timer from an offset.
+ */
+export function toVisit(visit: StoredVisit, services: StoredVisitService[], now: Date): Visit {
   return {
     id: visit.id,
     patientId: visit.patientId,
@@ -66,7 +74,7 @@ export function toVisit(visit: StoredVisit, services: StoredVisitService[], now:
     discountValue: visit.discountValue,
     currency: visit.currency,
     services: services.map((service) => toVisitService(service, visit.currency)),
-    money,
+    money: moneyOf(visit, services),
     serverNow: now.toISOString(),
   };
 }
