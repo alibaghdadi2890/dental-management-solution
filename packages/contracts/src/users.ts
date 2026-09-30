@@ -81,3 +81,10 @@ export const practitionerSchema = z.object({
   title: z.string().nullable(),
 });
 export type Practitioner = z.infer<typeof practitionerSchema>;
+
+/**
+ * Query for `GET /users/practitioners`. With `branchId`, only active dentists assigned to that
+ * branch (`staff_branches`); without it, every active dentist of the tenant (unchanged).
+ */
+export const practitionerQuerySchema = z.object({ branchId: idSchema.optional() });
+export type PractitionerQuery = z.infer<typeof practitionerQuerySchema>;

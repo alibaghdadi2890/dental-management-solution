@@ -1,5 +1,6 @@
 import type {
   Practitioner,
+  PractitionerQuery,
   StaffUser,
   StaffUserCreate,
   StaffUserPatch,
@@ -63,15 +64,16 @@ export class UsersService {
   }
 
   /**
-   * Active dentists, ordered by display name (tenant-locale collation), then user id. Not
-   * permission-gated here: a building block like `TenancyService.activeBranches`, used wherever
-   * the app offers "assign a dentist" (feature 3 Q2); `GET /users/practitioners` still requires
-   * `user:read`.
+   * Active dentists, ordered by display name (tenant-locale collation), then user id. With
+   * `branchId`, only those assigned to that branch (`staff_branches`); an unknown branch yields
+   * `[]`. Not permission-gated here: a building block like `TenancyService.activeBranches`, used
+   * wherever the app offers "assign a dentist" (feature 3 Q2); `GET /users/practitioners` still
+   * requires `user:read`.
    */
-  listPractitioners(): Promise<Practitioner[]> {
+  listPractitioners(query?: PractitionerQuery): Promise<Practitioner[]> {
     return this.tenantDb.run(async () => {
       // Sequential: both reads join the same transaction, i.e. one connection.
-      const profiles = await this.staff.practitioners();
+      const profiles = await this.staff.practitioners(query?.branchId);
       const { locale } = await this.tenancy.currentTenant();
       return sortByDisplayName(profiles, locale).map(toPractitioner);
     });

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  practitionerQuerySchema,
   practitionerSchema,
   resetPasswordRequestSchema,
   staffUserCreateSchema,
@@ -78,6 +79,19 @@ describe('practitionerSchema', () => {
       practitionerSchema.safeParse({ userId: USER_ID, displayName: 'Dr. Ana Reyes', title: null })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('practitionerQuerySchema', () => {
+  it('leaves branchId unset when absent, and accepts one when given', () => {
+    expect(practitionerQuerySchema.parse({})).toEqual({});
+    expect(practitionerQuerySchema.parse({ branchId: BRANCH_ID })).toEqual({
+      branchId: BRANCH_ID,
+    });
+  });
+
+  it('rejects a branchId that is not a uuid', () => {
+    expect(practitionerQuerySchema.safeParse({ branchId: 'main' }).success).toBe(false);
   });
 });
 

@@ -25,12 +25,14 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
 - `list()`, `get(userId)` (`user:read`) — `StaffUser` with email, roles and branches. `StaffUser.id`
   is the global auth user id (D7); `StaffUser.profileId` is this tenant's `staff_profiles.id` — the
   id a domain model refers to a staff member in a clinical role by (ADR-0020).
-- `listPractitioners()` — active staff whose `practitioner_type = 'dentist'`, ordered by display
-  name (tenant-locale collation), then auth user id. Not permission-gated: a building block like
-  `TenancyService.activeBranches`, used wherever the app offers "assign a dentist" (feature 3 Q2);
-  `GET /users/practitioners` still requires `user:read` (every system role holds it). A new
-  clinic's owner is a dentist unless the platform admin chose another type (`provisioning`), so
-  the list is not empty on day one. Each `Practitioner` carries `id` (the staff profile id,
+- `listPractitioners({ branchId? })` — active staff whose `practitioner_type = 'dentist'`,
+  ordered by display name (tenant-locale collation), then auth user id. With `branchId`, only
+  those assigned to that branch (`staff_branches`); an unknown branch yields `[]`. Not
+  permission-gated: a building block like `TenancyService.activeBranches`, used wherever the app
+  offers "assign a dentist" (feature 3 Q2) or "start a visit" (feature 4a's `StartVisitPopover`);
+  `GET /users/practitioners?branchId=` still requires `user:read` (every system role holds it). A
+  new clinic's owner is a dentist unless the platform admin chose another type (`provisioning`),
+  so the list is not empty on day one. Each `Practitioner` carries `id` (the staff profile id,
   ADR-0020 — the id other modules should store) and `userId` (the auth user id, kept for links
   back to `users`).
 - `practitionersByProfileIds(profileIds)` — practitioners among `profileIds`
@@ -59,16 +61,16 @@ Every mutation is audited (`user.create`, `user.update` with before/after, `user
 
 ## HTTP
 
-| Route                            | Access                                 |
-| -------------------------------- | -------------------------------------- |
-| `GET /session`                   | Authenticated, pending password ok     |
-| `GET /users`, `GET /users/:id`   | `user:read`                            |
-| `GET /users/practitioners`       | `user:read`                            |
-| `POST /users`                    | `user:write`                           |
-| `PATCH /users/:id`               | `user:write`                           |
-| `POST /users/:id/deactivate`     | `user:write` (`{ reason }`)            |
-| `POST /users/:id/reactivate`     | `user:write` (`{ reason }`)            |
-| `POST /users/:id/reset-password` | `user:write` (`{ temporaryPassword }`) |
+| Route                                | Access                                 |
+| ------------------------------------ | -------------------------------------- |
+| `GET /session`                       | Authenticated, pending password ok     |
+| `GET /users`, `GET /users/:id`       | `user:read`                            |
+| `GET /users/practitioners?branchId=` | `user:read`                            |
+| `POST /users`                        | `user:write`                           |
+| `PATCH /users/:id`                   | `user:write`                           |
+| `POST /users/:id/deactivate`         | `user:write` (`{ reason }`)            |
+| `POST /users/:id/reactivate`         | `user:write` (`{ reason }`)            |
+| `POST /users/:id/reset-password`     | `user:write` (`{ temporaryPassword }`) |
 
 `:id` is the auth user id. Another tenant's user is `404 user.not_found` (RLS).
 

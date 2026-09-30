@@ -1,5 +1,6 @@
 import {
   idSchema,
+  practitionerQuerySchema,
   practitionerSchema,
   resetPasswordRequestSchema,
   staffUserCreateSchema,
@@ -7,7 +8,17 @@ import {
   staffUserSchema,
   staffUserStatusChangeSchema,
 } from '@dcm/contracts';
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
@@ -19,6 +30,7 @@ class StaffUserPatchDto extends createZodDto(staffUserPatchSchema) {}
 class StaffUserStatusChangeDto extends createZodDto(staffUserStatusChangeSchema) {}
 class ResetPasswordDto extends createZodDto(resetPasswordRequestSchema) {}
 class PractitionerDto extends createZodDto(practitionerSchema) {}
+class PractitionerQueryDto extends createZodDto(practitionerQuerySchema) {}
 class UserParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 
 /** Staff users of the current tenant; `:id` is the auth user id (D7). */
@@ -37,8 +49,8 @@ export class UsersController {
   @Get('practitioners')
   @RequirePermission('user:read')
   @ZodResponse({ type: [PractitionerDto] })
-  practitioners() {
-    return this.users.listPractitioners();
+  practitioners(@Query() query: PractitionerQueryDto) {
+    return this.users.listPractitioners(query);
   }
 
   @Get(':id')

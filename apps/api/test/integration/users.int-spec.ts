@@ -351,6 +351,41 @@ describe('users: staff profiles with identity, branches and roles', () => {
       const agent = await signInAndSetPassword(testApp.app, body.email, TEMPORARY);
       expect((await agent.get('/api/v1/users/practitioners')).status).toBe(200);
     });
+
+    it('filters by branch, and excludes an inactive dentist even in their own branch', async () => {
+      const atMain = await createUser({ displayName: 'Dr. Main Dentist', branchIds: [main.id] });
+      const atNorth = await createUser({
+        displayName: 'Dr. North Dentist',
+        branchIds: [north.id],
+      });
+
+      const mainOnly = (await api.get(`/users/practitioners?branchId=${main.id}`))
+        .body as Practitioner[];
+      expect(relevant([atMain.id, atNorth.id], mainOnly)).toEqual([atMain.id]);
+
+      const northOnly = (await api.get(`/users/practitioners?branchId=${north.id}`))
+        .body as Practitioner[];
+      expect(relevant([atMain.id, atNorth.id], northOnly)).toEqual([atNorth.id]);
+
+      const both = (await api.get('/users/practitioners')).body as Practitioner[];
+      expect(relevant([atMain.id, atNorth.id], both)).toEqual(
+        expect.arrayContaining([atMain.id, atNorth.id]),
+      );
+
+      expect(
+        (await api.post(`/users/${atMain.id}/deactivate`, { reason: 'Left the clinic' })).status,
+      ).toBe(200);
+      const afterDeactivate = (await api.get(`/users/practitioners?branchId=${main.id}`))
+        .body as Practitioner[];
+      expect(relevant([atMain.id], afterDeactivate)).toEqual([]);
+    });
+
+    it('returns an empty list for a branch with no practitioners, including an unknown branch id', async () => {
+      const unknownBranchId = newId();
+      const empty = (await api.get(`/users/practitioners?branchId=${unknownBranchId}`))
+        .body as Practitioner[];
+      expect(empty).toEqual([]);
+    });
   });
 
   it('answers 404 for users of no one', async () => {

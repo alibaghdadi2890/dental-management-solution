@@ -71,17 +71,40 @@ export class StaffRepository {
   /**
    * Active dentists, ordered by auth user id for a deterministic DB-level order (for
    * `UsersService.listPractitioners`, which re-sorts by display name in the tenant's locale — DB
-   * byte-order is not locale-aware).
+   * byte-order is not locale-aware). With `branchId`, only those assigned to that branch
+   * (`staff_branches`); an unknown or empty branch simply yields no rows.
    */
-  practitioners(): Promise<StaffProfile[]> {
+  practitioners(branchId?: string): Promise<StaffProfile[]> {
+    const dentistFilter = and(
+      eq(staffProfiles.practitionerType, 'dentist'),
+      eq(staffProfiles.active, true),
+    );
+    if (branchId === undefined) {
+      return this.db.run(async (tx) =>
+        (
+          await tx
+            .select()
+            .from(staffProfiles)
+            .where(dentistFilter)
+            .orderBy(asc(staffProfiles.authUserId))
+        ).map(toProfile),
+      );
+    }
     return this.db.run(async (tx) =>
       (
         await tx
-          .select()
+          .select({ profile: staffProfiles })
           .from(staffProfiles)
-          .where(and(eq(staffProfiles.practitionerType, 'dentist'), eq(staffProfiles.active, true)))
+          .innerJoin(
+            staffBranches,
+            and(
+              eq(staffBranches.authUserId, staffProfiles.authUserId),
+              eq(staffBranches.branchId, branchId),
+            ),
+          )
+          .where(dentistFilter)
           .orderBy(asc(staffProfiles.authUserId))
-      ).map(toProfile),
+      ).map((row) => toProfile(row.profile)),
     );
   }
 

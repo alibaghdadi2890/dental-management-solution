@@ -12,10 +12,9 @@ import {
 /**
  * `clinical`'s charting records (spec §Data model / §Backend — clinical): diagnoses,
  * treatment plans, tooth presence, the patient chart and its supporting reads. `visits.ts` has
- * the visit lifecycle and money shapes; `visit-money.ts` the pure arithmetic. `dentitionStageSchema`
- * lives in `patient-age.ts` (`patients` owns the dentition override; `clinical-records.ts` only
- * reuses it) — re-exported here via `export *` from `index.ts`'s pass over `patient-age.js`, not
- * this file, so it isn't re-declared.
+ * the visit lifecycle and money shapes; `visit-money.ts` the pure arithmetic.
+ * `dentitionStageSchema` lives in `patient-age.ts` (`patients` owns the override); this file
+ * imports it.
  */
 
 /** A free-text note on a diagnosis or plan record — short, unlike a patient's own notes field
