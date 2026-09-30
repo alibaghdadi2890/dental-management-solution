@@ -923,12 +923,32 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(cleared.body).toMatchObject({ dentitionOverride: null });
       expect((await getPatient(main.owner, patient.id)).dentitionOverride).toBeNull();
 
-      // Setting it to its current value writes, audits and emits nothing.
+      // Setting it to its current value changes nothing: no write, no audit entry.
       const entriesBefore = await auditOf(main.owner, `resourceId=${patient.id}`);
+      const updatedAtBefore = (await getPatient(main.owner, patient.id)).updatedAt;
       const noop = await setDentition(agent, patient.id, null);
       expect(noop.status).toBe(200);
       const entriesAfter = await auditOf(main.owner, `resourceId=${patient.id}`);
       expect(entriesAfter).toHaveLength(entriesBefore.length);
+      expect((await getPatient(main.owner, patient.id)).updatedAt).toBe(updatedAtBefore);
+    });
+
+    it('returns 404 patient.not_found for an unknown patient', async () => {
+      const response = await setDentition(main.owner, newId(), 'mixed');
+      expect(response.status).toBe(404);
+      expect(response.body).toMatchObject({ code: 'patient.not_found' });
+    });
+
+    it('rejects an unknown dentition stage with 400 validation_failed', async () => {
+      const patient = await createPatient(main.owner, {
+        fullName: 'Dentition Invalid',
+        phone: '71000056',
+      });
+      const response = await main.owner
+        .put(`/api/v1/patients/${patient.id}/dentition`)
+        .send({ override: 'baby' });
+      expect(response.status).toBe(400);
+      expect(response.body).toMatchObject({ code: 'validation_failed' });
     });
 
     it('refuses front desk: visit:write, not patient:write', async () => {
@@ -973,7 +993,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(response.body).toMatchObject({ code: 'patient.merged' });
     });
 
-    it('re-checks the permission in the service, not only at the route', async () => {
+    it('re-checks visit:write in the service, not only at the route', async () => {
       const patient = await createPatient(main.owner, {
         fullName: 'Dentition Recheck',
         phone: '71000055',
@@ -985,6 +1005,25 @@ describe('patients: records, search, duplicates, archive and merge', () => {
           { requestId: newId(), actorKind: 'user', tenantId: main.tenant.id, userId: newId() },
           () => {
             context.setPermissions(['patient:write']);
+            return service.setDentition(patient.id, { override: 'mixed' });
+          },
+        ),
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
+      expect((await getPatient(main.owner, patient.id)).dentitionOverride).toBeNull();
+    });
+
+    it('also requires patient:read (it returns the full record)', async () => {
+      const patient = await createPatient(main.owner, {
+        fullName: 'Dentition Recheck Read',
+        phone: '71000057',
+      });
+      const service = testApp.app.get(PatientsService);
+      const context = testApp.app.get(RequestContext);
+      await expect(
+        context.run(
+          { requestId: newId(), actorKind: 'user', tenantId: main.tenant.id, userId: newId() },
+          () => {
+            context.setPermissions(['visit:write']);
             return service.setDentition(patient.id, { override: 'mixed' });
           },
         ),

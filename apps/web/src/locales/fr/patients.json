@@ -171,7 +171,16 @@
         "update": "Informations modifiées",
         "archive": "Patient archivé",
         "restore": "Patient restauré",
-        "merge": "Dossiers fusionnés"
+        "merge": "Dossiers fusionnés",
+        "dentition": {
+          "set": "Denture réglée sur : {{stage}}",
+          "auto": "Denture revenue en automatique",
+          "stage": {
+            "primary": "temporaire",
+            "mixed": "mixte",
+            "permanent": "permanente"
+          }
+        }
       },
       "ledger_entry": {
         "repoint": "Solde transféré depuis un dossier fusionné"

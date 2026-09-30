@@ -205,13 +205,15 @@ export class PatientsService {
 
   /**
    * Sets or clears the chart's dentition override (spec W14), from the workspace's chart card
-   * header only — needs `visit:write`, not `patient:write`. Locks the row `FOR UPDATE`, like
-   * `update`; archived → 409 `patient.archived` (merged away → 409 `patient.merged`, checked
-   * first since a merged record is always archived too). A no-op override changes nothing and
-   * audits nothing, like `update`. Audits `patient.dentition` with before/after.
+   * header only — needs `visit:write`, not `patient:write` — plus `patient:read`, since it
+   * returns the full record. Locks the row `FOR UPDATE`, like `update`; archived → 409
+   * `patient.archived` (merged away → 409 `patient.merged`, checked first since a merged record
+   * is always archived too). A no-op override changes nothing and audits nothing, like `update`.
+   * Audits `patient.dentition` with before/after.
    */
   async setDentition(id: string, input: DentitionOverride): Promise<Patient> {
     this.context.requirePermission('visit:write');
+    this.context.requirePermission('patient:read');
     return this.tenantDb.run(async () => {
       const before = await this.patients.findForUpdate(id);
       if (!before) throw new PatientNotFoundError(NOT_FOUND);

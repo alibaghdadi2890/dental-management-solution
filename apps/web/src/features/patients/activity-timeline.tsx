@@ -1,4 +1,5 @@
 import type { AuditEntry } from '@dcm/contracts';
+import { DENTITION_STAGES } from '@dcm/contracts';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useId } from 'react';
@@ -17,6 +18,7 @@ const KNOWN_ACTIONS = [
   'patient.archive',
   'patient.restore',
   'patient.merge',
+  'patient.dentition',
   'ledger_entry.repoint',
   'contact.link',
   'contact.unlink',
@@ -28,6 +30,24 @@ type KnownAction = (typeof KNOWN_ACTIONS)[number];
 
 const isKnown = (action: string): action is KnownAction =>
   (KNOWN_ACTIONS as readonly string[]).includes(action);
+
+const isDentitionStage = (value: unknown): value is (typeof DENTITION_STAGES)[number] =>
+  typeof value === 'string' && (DENTITION_STAGES as readonly string[]).includes(value);
+
+/**
+ * `patient.dentition` (spec W14) has two labels, chosen from its `after.dentitionOverride`
+ * (`null` back to auto, else the stage it was set to) rather than a single static string like
+ * every other known action.
+ */
+function dentitionLabel(entry: AuditEntry, t: TFunction<'patients'>): string {
+  const after = entry.after as { dentitionOverride?: unknown } | null;
+  const stage = after?.dentitionOverride;
+  return isDentitionStage(stage)
+    ? t('activity.actions.patient.dentition.set', {
+        stage: t(`activity.actions.patient.dentition.stage.${stage}`),
+      })
+    : t('activity.actions.patient.dentition.auto');
+}
 
 function actorOf(
   entry: AuditEntry,
@@ -91,7 +111,9 @@ export function ActivityTimeline({
               />
               <div className="text-[12.5px] leading-[1.4] font-medium">
                 {isKnown(entry.action)
-                  ? t(`activity.actions.${entry.action}`)
+                  ? entry.action === 'patient.dentition'
+                    ? dentitionLabel(entry, t)
+                    : t(`activity.actions.${entry.action}`)
                   : t('activity.actions.other')}
               </div>
               <div className="font-mono text-[11.5px] leading-[1.4] text-ink-muted">

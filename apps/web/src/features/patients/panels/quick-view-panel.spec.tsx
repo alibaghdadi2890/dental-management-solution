@@ -213,6 +213,26 @@ describe('QuickViewPanel', () => {
     expect(items[0]?.firstElementChild?.nextSibling?.textContent).toBe('Contact linked');
   });
 
+  it('renders a patient.dentition audit entry, labelled by its after.dentitionOverride', async () => {
+    mockApi({
+      patients: [RANA],
+      audit: {
+        [RANA.id]: [
+          entry(5, { action: 'patient.dentition', after: { dentitionOverride: null } }),
+          entry(4, { action: 'patient.dentition', after: { dentitionOverride: 'mixed' } }),
+        ],
+      },
+    });
+    renderPanels({ url: `/?panel=quick:${RANA.id}` });
+    const aside = await quickView();
+    const activity = within(aside).getByRole('region', { name: 'Activity' });
+    const items = await within(activity).findAllByRole('listitem');
+    expect(items.map((item) => item.firstElementChild?.nextSibling?.textContent)).toEqual([
+      'Dentition back to automatic',
+      'Dentition set to Mixed',
+    ]);
+  });
+
   it('has no activity timeline without audit:read', async () => {
     const fetchMock = mockApi({ patients: [RANA], audit: AUDIT });
     renderPanels({

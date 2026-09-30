@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { chargeUnitSchema } from './catalog.js';
 import { idSchema, isoDateSchema, isoDateTimeSchema, moneySchema, optionalText } from './common.js';
-import { DENTITION_STAGES } from './patient-age.js';
+import { dentitionStageSchema } from './patient-age.js';
 import {
   successionPositionSchema,
   surfaceKeySchema,
@@ -12,10 +12,11 @@ import {
 /**
  * `clinical`'s charting records (spec §Data model / §Backend — clinical): diagnoses,
  * treatment plans, tooth presence, the patient chart and its supporting reads. `visits.ts` has
- * the visit lifecycle and money shapes; `visit-money.ts` the pure arithmetic.
+ * the visit lifecycle and money shapes; `visit-money.ts` the pure arithmetic. `dentitionStageSchema`
+ * lives in `patient-age.ts` (`patients` owns the dentition override; `clinical-records.ts` only
+ * reuses it) — re-exported here via `export *` from `index.ts`'s pass over `patient-age.js`, not
+ * this file, so it isn't re-declared.
  */
-
-export const dentitionStageSchema = z.enum(DENTITION_STAGES);
 
 /** A free-text note on a diagnosis or plan record — short, unlike a patient's own notes field
  * (`patients.ts`'s `optionalText(2000)`). */

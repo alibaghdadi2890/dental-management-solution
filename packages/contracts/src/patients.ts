@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { optionalEmailSchema } from './auth.js';
 import { reasonSchema } from './audit.js';
-import { dentitionStageSchema } from './clinical-records.js';
 import {
   blankToUndefined,
   displayNumberSchema,
@@ -14,7 +13,7 @@ import {
   optionalText,
 } from './common.js';
 import { contactLinkInputSchema, matchedContactSchema, primaryGuardianSchema } from './contacts.js';
-import { AGE_BANDS } from './patient-age.js';
+import { AGE_BANDS, dentitionStageSchema } from './patient-age.js';
 
 /**
  * `patients` (feature 3): patient records, the palette, the list and its filters, and merge.

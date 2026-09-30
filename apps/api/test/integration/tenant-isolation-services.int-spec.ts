@@ -293,18 +293,32 @@ describe('tenant isolation through the public services', () => {
         ownerA
           .post('/api/v1/patients/merge')
           .send({ keepId: id, dropId: a.patient.id, reason: 'Hijack' }),
+        ownerA.put(`/api/v1/patients/${id}/dentition`).send({ override: 'mixed' }),
       ];
       for (const response of await Promise.all(attempts)) {
         expect(response.status).toBe(404);
         expect(response.body).toMatchObject({ code: 'patient.not_found' });
       }
       const untouched = await database.ownerPool.query(
-        'select id, full_name, deleted_at, merged_into_id from patients where id = any($1) order by full_name',
+        `select id, full_name, deleted_at, merged_into_id, dentition_override from patients
+         where id = any($1) order by full_name`,
         [[a.patient.id, id]],
       );
       expect(untouched.rows).toEqual([
-        { id: a.patient.id, full_name: 'Alpha Patient', deleted_at: null, merged_into_id: null },
-        { id, full_name: 'Bravo Patient', deleted_at: null, merged_into_id: null },
+        {
+          id: a.patient.id,
+          full_name: 'Alpha Patient',
+          deleted_at: null,
+          merged_into_id: null,
+          dentition_override: null,
+        },
+        {
+          id,
+          full_name: 'Bravo Patient',
+          deleted_at: null,
+          merged_into_id: null,
+          dentition_override: null,
+        },
       ]);
     });
 

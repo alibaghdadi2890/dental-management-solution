@@ -171,7 +171,16 @@
         "update": "Details updated",
         "archive": "Patient archived",
         "restore": "Patient restored",
-        "merge": "Records merged"
+        "merge": "Records merged",
+        "dentition": {
+          "set": "Dentition set to {{stage}}",
+          "auto": "Dentition back to automatic",
+          "stage": {
+            "primary": "Primary",
+            "mixed": "Mixed",
+            "permanent": "Permanent"
+          }
+        }
       },
       "ledger_entry": {
         "repoint": "Balance moved from a merged record"

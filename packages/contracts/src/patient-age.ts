@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Calendar/age arithmetic for `patients` (feature 3). No I/O, no time zone, no `Date` objects —
  * every date is an ISO `YYYY-MM-DD` string and every "today" is passed in by the caller, already
@@ -48,6 +50,7 @@ export function ageOn(dob: string, today: string): number {
 
 export const DENTITION_STAGES = ['primary', 'mixed', 'permanent'] as const;
 export type DentitionStage = (typeof DENTITION_STAGES)[number];
+export const dentitionStageSchema = z.enum(DENTITION_STAGES);
 
 /** `primary` 0–5, `mixed` 6–12, `permanent` 13+ (README §Patients age·sex column). */
 export function dentitionStage(age: number): DentitionStage {
