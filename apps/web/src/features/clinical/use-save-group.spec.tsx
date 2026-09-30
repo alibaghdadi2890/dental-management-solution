@@ -417,6 +417,38 @@ describe('useFlushSaveGroups', () => {
     expect(result.current.group.state).toBe('failed');
   });
 
+  it('flushes every group together, and resolves false when any one of them fails', async () => {
+    const notes = vi.fn().mockResolvedValue(undefined);
+    const discount = vi.fn().mockRejectedValue(new Error('offline'));
+    const price = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(
+      () => ({
+        notes: useSaveGroup({ key: 'notes', serverValue: '', save: notes }),
+        discount: useSaveGroup({ key: 'discount', serverValue: '0', save: discount }),
+        price: useSaveGroup({ key: 'service:1', serverValue: '80', save: price }),
+        flush: useFlushSaveGroups(),
+      }),
+      { wrapper },
+    );
+    act(() => {
+      result.current.notes.setValue('Checked');
+      result.current.discount.setValue('10');
+      result.current.price.setValue('95');
+    });
+
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.flush();
+    });
+    expect(saved).toBe(false);
+    expect(notes).toHaveBeenCalledWith('Checked');
+    expect(discount).toHaveBeenCalledWith('10');
+    expect(price).toHaveBeenCalledWith('95');
+    expect(result.current.notes.state).toBe('saved');
+    expect(result.current.discount.state).toBe('failed');
+    expect(result.current.price.state).toBe('saved');
+  });
+
   it('retries a failed group and resolves true with nothing to send', async () => {
     const save = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined);
     const { result } = renderGroup(save);

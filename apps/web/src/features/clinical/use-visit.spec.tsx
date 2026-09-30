@@ -46,6 +46,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  // Back to the browser's own focus state, even when a test failed half-way.
+  focusManager.setFocused(undefined);
   client.clear();
   vi.useRealTimers();
   apiFetchMock.mockReset();
@@ -112,6 +114,5 @@ describe('useVisit', () => {
     });
     expect(visitFetches()).toBe(2);
     expect(result.current.notes.value).toBe('typing');
-    focusManager.setFocused(undefined);
   });
 });

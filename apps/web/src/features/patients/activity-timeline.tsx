@@ -1,5 +1,5 @@
 import type { AuditEntry } from '@dcm/contracts';
-import { DENTITION_STAGES } from '@dcm/contracts';
+import { dentitionStageSchema } from '@dcm/contracts';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useId } from 'react';
@@ -31,9 +31,6 @@ type KnownAction = (typeof KNOWN_ACTIONS)[number];
 const isKnown = (action: string): action is KnownAction =>
   (KNOWN_ACTIONS as readonly string[]).includes(action);
 
-const isDentitionStage = (value: unknown): value is (typeof DENTITION_STAGES)[number] =>
-  typeof value === 'string' && (DENTITION_STAGES as readonly string[]).includes(value);
-
 /**
  * `patient.dentition` (spec W14) has two labels, chosen from its `after.dentitionOverride`
  * (`null` back to auto, else the stage it was set to) rather than a single static string like
@@ -41,10 +38,10 @@ const isDentitionStage = (value: unknown): value is (typeof DENTITION_STAGES)[nu
  */
 function dentitionLabel(entry: AuditEntry, t: TFunction<'patients'>): string {
   const after = entry.after as { dentitionOverride?: unknown } | null;
-  const stage = after?.dentitionOverride;
-  return isDentitionStage(stage)
+  const stage = dentitionStageSchema.safeParse(after?.dentitionOverride);
+  return stage.success
     ? t('activity.actions.patient.dentition.set', {
-        stage: t(`activity.actions.patient.dentition.stage.${stage}`),
+        stage: t(`activity.actions.patient.dentition.stage.${stage.data}`),
       })
     : t('activity.actions.patient.dentition.auto');
 }

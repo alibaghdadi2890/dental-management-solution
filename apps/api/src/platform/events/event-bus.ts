@@ -58,13 +58,19 @@ export class EventBus {
     };
   }
 
+  /**
+   * Runs the event's in-transaction handlers now and dispatches it after the commit (at once
+   * outside a transaction). Dispatch follows the commit, not the handlers' outcome: a publisher that
+   * catches an in-transaction handler's error and still commits dispatches the event anyway.
+   */
   async publish(event: DomainEvent): Promise<void> {
     // Registered first, so events that in-transaction handlers publish dispatch after this one.
     const deferred = this.tenantDb.afterCommit(() => this.dispatch(event));
     // EventEmitter2 types listeners as returning void; Nest's wrappers return the handler's promise.
-    const handlers: readonly ((event: DomainEvent) => unknown)[] = this.emitter.listeners(
-      `${IN_TRANSACTION}${event.name}`,
-    );
+    // A copy: a handler that (un)subscribes must not change this loop.
+    const handlers: readonly ((event: DomainEvent) => unknown)[] = [
+      ...this.emitter.listeners(`${IN_TRANSACTION}${event.name}`),
+    ];
     if (handlers.length > 0) {
       if (!deferred) {
         throw new Error(`${event.name} has in-transaction handlers and needs an open transaction`);

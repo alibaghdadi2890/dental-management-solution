@@ -249,6 +249,13 @@ describe('validSurfaces', () => {
     expect(validSurfaces('11', ['I', 'M', 'D', 'B', 'L'])).toBe(true);
     expect(validSurfaces('16', ['O', 'M', 'D', 'B', 'L'])).toBe(true);
   });
+
+  it('draws the line between the canine (anterior) and the first premolar (posterior)', () => {
+    expect(validSurfaces('13', ['I'])).toBe(true);
+    expect(validSurfaces('13', ['O'])).toBe(false);
+    expect(validSurfaces('14', ['O'])).toBe(true);
+    expect(validSurfaces('14', ['I'])).toBe(false);
+  });
 });
 
 describe('anatomicalName', () => {

@@ -145,6 +145,21 @@ describe('in-transaction handlers', () => {
     expect(ran).toBe(false);
   });
 
+  it('all run when one unsubscribes itself while running', async () => {
+    const { bus, emitter } = setup({ inTransaction: true });
+    const ran: string[] = [];
+    const once = () => {
+      ran.push('once');
+      emitter.off(IN_TRANSACTION_VISIT_COMPLETED, once);
+    };
+    emitter.on(IN_TRANSACTION_VISIT_COMPLETED, once);
+    emitter.on(IN_TRANSACTION_VISIT_COMPLETED, () => ran.push('second'));
+    emitter.on(IN_TRANSACTION_VISIT_COMPLETED, () => ran.push('third'));
+
+    await bus.publish(bus.create('VisitCompleted', { visitId: 'v1' }));
+    expect(ran).toEqual(['once', 'second', 'third']);
+  });
+
   it('leave events without in-transaction listeners dispatching as before', async () => {
     const { bus, emitter, commit, received } = setup({ inTransaction: true });
     emitter.on(IN_TRANSACTION_VISIT_COMPLETED, () => undefined);
