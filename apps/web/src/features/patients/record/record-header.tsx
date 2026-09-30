@@ -8,6 +8,7 @@ import { Pill } from '@/components/ui/list';
 import { Tabs } from '@/components/ui/tabs';
 import { usePermission } from '@/features/auth/use-permission';
 import { StartVisitPopover } from '@/features/clinical/start-visit-popover';
+import { useStartingVisit } from '@/features/clinical/use-starting-visit';
 import { liveVisitsQuery } from '@/features/clinical/visits-api';
 import { formatAgeLine, formatPhone, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
@@ -119,18 +120,21 @@ function MergedNotice({ keptId }: { keptId: string }) {
  * **Resume visit** — the patient's most recently started live visit (a merge can leave two, W1) —
  * or **Start visit**, which opens the start popover (spec §Record). An archived patient can't start
  * one but can still resume theirs. Both need `visit:write`: the front desk sees neither (W18).
+ * While a start is in flight, Start stays (with its popover) even once the reloaded list has the
+ * new visit: the popover goes to the workspace when the start is done.
  */
 function VisitAction({ patientId, archived }: { patientId: string; archived: boolean }) {
   const { t } = useTranslation('patients');
   const navigate = useNavigate();
   const live = useQuery(liveVisitsQuery({ patientId }));
+  const starting = useStartingVisit(patientId);
   if (live.isPending) return null;
   // Should the list fail, Start still gets there: starting resumes a live visit.
   const latest = (live.data ?? []).reduce<LiveVisitRef | undefined>(
     (found, visit) => (found && found.startedAt >= visit.startedAt ? found : visit),
     undefined,
   );
-  if (latest) {
+  if (latest && !starting) {
     return (
       <Button
         variant="primary"

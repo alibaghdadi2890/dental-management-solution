@@ -151,7 +151,9 @@
       "roomInvalid": "Cette salle n'est plus disponible",
       "dentistInvalid": "Ce dentiste ne travaille plus dans ce site",
       "archived": "Ce patient est archivé. Restaurez le dossier pour démarrer une visite.",
-      "failed": "Impossible de démarrer la visite : {{reason}}"
+      "failed": "Impossible de démarrer la visite : {{reason}}",
+      "merged": "Ce dossier a été fusionné avec un autre. Démarrez la visite depuis le dossier conservé.",
+      "branchRequired": "Une visite démarre dans un site, et cette session n'en a aucun. Changez de site et réessayez."
     }
   }
 }

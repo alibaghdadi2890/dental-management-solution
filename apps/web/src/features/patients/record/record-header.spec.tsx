@@ -1,15 +1,20 @@
 import { ageOn, type Patient, type Permission } from '@dcm/contracts';
+import { QueryObserver } from '@tanstack/react-query';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { BRANCH, liveRef } from '@/features/clinical/start-visit.test-utils';
+import { BRANCH, liveRef, startedVisit } from '@/features/clinical/start-visit.test-utils';
+import { liveVisitsQuery } from '@/features/clinical/visits-api';
 import { todayIn } from '@/lib/format';
 import {
   ALL_PERMISSIONS,
+  DENTIST_ID,
+  id,
   json,
   mockApi,
   patient,
   patientContact,
   problem,
+  profileId,
   renderRecord,
   sent,
   sessionWith,
@@ -300,6 +305,57 @@ describe('RecordHeader', () => {
       expect(within(banner).queryByRole('button', { name: 'Resume visit' })).toBeNull();
       fireEvent.click(start);
       expect(await screen.findByRole('dialog', { name: 'Start visit' })).toBeTruthy();
+    });
+
+    it('opens the workspace of a visit started here, though Resume replaces Start meanwhile', async () => {
+      let started = false;
+      mockApi({
+        patients: [RANA],
+        get: (path) => {
+          if (path === liveOf(RANA)) return json(started ? [liveRef(60, RANA.fullName)] : []);
+          // The pill's list answers late: the start's cache update waits for it, while the
+          // record's own list already swaps Start for Resume.
+          if (path === '/visits/live?mine=true') {
+            return new Promise((resolve) => {
+              setTimeout(() => {
+                resolve(json(started ? [liveRef(60, RANA.fullName)] : []));
+              }, 100);
+            });
+          }
+          if (path === `/rooms?branchId=${BRANCH.id}`) return json([]);
+          if (path === '/visits/start-defaults') {
+            return json({ dentistId: profileId(DENTIST_ID), roomId: null });
+          }
+          return undefined;
+        },
+        mutation: (method, path) => {
+          if (method !== 'POST' || path !== '/visits') return undefined;
+          started = true;
+          return json({ visit: startedVisit(60), resumed: false }, 201);
+        },
+      });
+      const { router, client } = renderRecord({
+        url: recordOf(RANA),
+        session: { ...sessionWith(DENTIST), branch: BRANCH },
+      });
+      // The header pill's query, mounted as the shell would have it.
+      const unsubscribe = new QueryObserver(client, liveVisitsQuery({ mine: true })).subscribe(
+        () => undefined,
+      );
+      try {
+        fireEvent.click(await within(await header()).findByRole('button', { name: 'Start visit' }));
+        const dialog = await screen.findByRole('dialog', { name: 'Start visit' });
+        await waitFor(() => {
+          expect(
+            within(dialog).getByRole<HTMLSelectElement>('combobox', { name: 'Dentist' }).value,
+          ).toBe(profileId(DENTIST_ID));
+        });
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Start visit' }));
+        await screen.findByText(`Workspace ${id(60)}`);
+        expect(router.state.location.pathname).toBe(`/visits/${id(60)}`);
+      } finally {
+        unsubscribe();
+      }
     });
 
     it('offers Resume but not Start on an archived record', async () => {

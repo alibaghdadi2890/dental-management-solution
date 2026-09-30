@@ -1,4 +1,4 @@
-import type { Permission, Room, Session, StartDefaults } from '@dcm/contracts';
+import type { Permission, Practitioner, Room, Session, StartDefaults } from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -39,16 +39,24 @@ const room = (n: number, name: string, active = true): Room => ({
   active,
 });
 const ROOMS = [room(71, 'Room 1'), room(72, 'Room 2'), room(73, 'Old room', false)];
+const DENTISTS: Practitioner[] = [
+  { id: ANA, userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null },
+  { id: MARCUS, userId: id(83), displayName: 'Dr. Marcus Lee', title: null },
+];
 
 type FetchMock = ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Promise<Response>>>;
 
 function mockStart({
   defaults = { dentistId: ANA, roomId: id(72) },
   rooms = ROOMS,
+  dentists = () => DENTISTS,
   start = () => json({ visit: startedVisit(60), resumed: false }, 201),
 }: {
-  defaults?: StartDefaults;
+  /** `null` answers the defaults with a 500. */
+  defaults?: StartDefaults | null;
   rooms?: Room[];
+  /** The branch's dentists at each read. */
+  dentists?: () => Practitioner[];
   start?: () => Response;
 } = {}): FetchMock {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -56,15 +64,12 @@ function mockStart({
     const method = init?.method ?? 'GET';
     if (method === 'POST' && path === '/visits') return Promise.resolve(start());
     if (path === `/users/practitioners?branchId=${BRANCH.id}`) {
-      return Promise.resolve(
-        json([
-          { id: ANA, userId: DENTIST_ID, displayName: 'Dr. Ana Reyes', title: null },
-          { id: MARCUS, userId: id(83), displayName: 'Dr. Marcus Lee', title: null },
-        ]),
-      );
+      return Promise.resolve(json(dentists()));
     }
     if (path === `/rooms?branchId=${BRANCH.id}`) return Promise.resolve(json(rooms));
-    if (path === '/visits/start-defaults') return Promise.resolve(json(defaults));
+    if (path === '/visits/start-defaults') {
+      return Promise.resolve(defaults ? json(defaults) : problem(500, 'internal'));
+    }
     return Promise.resolve(problem(404, 'not_found'));
   });
   vi.stubGlobal('fetch', fetchMock);
@@ -152,6 +157,12 @@ describe('StartVisitPopover', () => {
         .getAllByRole('option')
         .map((option) => option.textContent),
     ).toEqual(['Choose…', 'Room 1', 'Room 2']);
+    // Nothing left to fill: Start has the focus.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        within(dialog).getByRole('button', { name: 'Start visit' }),
+      );
+    });
 
     submit(dialog);
     await screen.findByText(`Workspace ${id(60)}`);
@@ -166,6 +177,9 @@ describe('StartVisitPopover', () => {
     await within(dialog).findByRole('option', { name: 'Dr. Marcus Lee' });
     expect(select(dialog, 'Dentist').value).toBe('');
     expect(select(dialog, 'Room').value).toBe('');
+    await waitFor(() => {
+      expect(document.activeElement).toBe(select(dialog, 'Dentist'));
+    });
 
     submit(dialog);
     expect(await within(dialog).findByText('Choose a dentist')).toBeTruthy();
@@ -216,6 +230,7 @@ describe('StartVisitPopover', () => {
     submit(dialog);
     expect(await within(dialog).findByText('Another live visit is using this room')).toBeTruthy();
     expect(select(dialog, 'Room').getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(select(dialog, 'Room'));
     expect(router.state.location.pathname).toBe('/');
 
     // Choosing another room clears it.
@@ -235,21 +250,95 @@ describe('StartVisitPopover', () => {
       await within(dialog).findByText('This dentist no longer works in this branch'),
     ).toBeTruthy();
     expect(select(dialog, 'Dentist').getAttribute('aria-invalid')).toBe('true');
+    expect(document.activeElement).toBe(select(dialog, 'Dentist'));
   });
 
-  it('says why an archived patient cannot start a visit', async () => {
-    mockStart({ start: () => problem(409, 'patient.archived') });
+  it('drops a chosen dentist the reloaded list no longer has', async () => {
+    let reads = 0;
+    mockStart({
+      defaults: { dentistId: null, roomId: id(72) },
+      dentists: () => {
+        reads += 1;
+        return reads === 1 ? DENTISTS : DENTISTS.filter((p) => p.id !== MARCUS);
+      },
+      start: () => problem(422, 'visit.dentist_invalid'),
+    });
+    renderPopover();
+    const dialog = await open();
+    await within(dialog).findByRole('option', { name: 'Dr. Marcus Lee' });
+    fireEvent.change(select(dialog, 'Dentist'), { target: { value: MARCUS } });
+    submit(dialog);
+    await within(dialog).findByText('This dentist no longer works in this branch');
+    await waitFor(() => {
+      expect(within(dialog).queryByRole('option', { name: 'Dr. Marcus Lee' })).toBeNull();
+    });
+    expect(select(dialog, 'Dentist').value).toBe('');
+  });
+
+  it('starts empty when the defaults fail to load', async () => {
+    const fetchMock = mockStart({ defaults: null });
+    renderPopover();
+    const dialog = await open();
+    await within(dialog).findByRole('option', { name: 'Dr. Marcus Lee' });
+    expect(select(dialog, 'Dentist').value).toBe('');
+    expect(select(dialog, 'Room').value).toBe('');
+    fireEvent.change(select(dialog, 'Dentist'), { target: { value: ANA } });
+    fireEvent.change(select(dialog, 'Room'), { target: { value: id(71) } });
+    submit(dialog);
+    await screen.findByText(`Workspace ${id(60)}`);
+    expect(posted(fetchMock)).toEqual({ patientId: PATIENT_ID, dentistId: ANA, roomId: id(71) });
+  });
+
+  it.each([
+    ['patient.archived', 409, 'This patient is archived. Restore the record to start a visit.'],
+    [
+      'patient.merged',
+      409,
+      'This record was merged into another one. Start the visit from the kept record.',
+    ],
+    [
+      'visit.branch_required',
+      422,
+      'Visits start in a branch, and this session has none. Switch branch and try again.',
+    ],
+  ])('says why %s can’t start a visit', async (code, status, message) => {
+    mockStart({ start: () => problem(status, code) });
     renderPopover();
     const dialog = await open();
     await waitFor(() => {
       expect(select(dialog, 'Dentist').value).toBe(ANA);
     });
     submit(dialog);
-    expect(
-      await within(dialog).findByText(
-        'This patient is archived. Restore the record to start a visit.',
-      ),
-    ).toBeTruthy();
+    expect(await within(dialog).findByText(message)).toBeTruthy();
+  });
+
+  it('can’t be dismissed while the start is in flight', async () => {
+    let answer: (response: Response) => void = () => undefined;
+    const fetchMock = mockStart();
+    const base = fetchMock.getMockImplementation();
+    fetchMock.mockImplementation((url: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? new Promise<Response>((resolve) => {
+            answer = resolve;
+          })
+        : (base?.(url, init) ?? Promise.resolve(problem(404, 'not_found'))),
+    );
+    renderPopover();
+    const dialog = await open();
+    await waitFor(() => {
+      expect(select(dialog, 'Dentist').value).toBe(ANA);
+    });
+    submit(dialog);
+    await waitFor(() => {
+      expect(within(dialog).getByRole('button', { name: 'Cancel' }).hasAttribute('disabled')).toBe(
+        true,
+      );
+    });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(screen.getByRole('dialog', { name: 'Start visit' })).toBe(dialog);
+
+    answer(json({ visit: startedVisit(60), resumed: false }, 201));
+    await screen.findByText(`Workspace ${id(60)}`);
   });
 
   it('explains that a visit needs a branch when the session has none', async () => {

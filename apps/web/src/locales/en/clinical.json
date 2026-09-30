@@ -151,7 +151,9 @@
       "roomInvalid": "This room is no longer available",
       "dentistInvalid": "This dentist no longer works in this branch",
       "archived": "This patient is archived. Restore the record to start a visit.",
-      "failed": "Couldn't start the visit: {{reason}}"
+      "failed": "Couldn't start the visit: {{reason}}",
+      "merged": "This record was merged into another one. Start the visit from the kept record.",
+      "branchRequired": "Visits start in a branch, and this session has none. Switch branch and try again."
     }
   }
 }

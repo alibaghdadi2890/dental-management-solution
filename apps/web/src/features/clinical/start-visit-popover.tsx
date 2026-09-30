@@ -2,7 +2,7 @@ import type { BranchRef } from '@dcm/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Popover } from 'radix-ui';
-import { type ReactNode, type SubmitEvent, useId, useState } from 'react';
+import { type ReactNode, type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, Select } from '@/components/ui/field';
@@ -12,6 +12,7 @@ import { useActingTenantId } from '@/features/platform/acting-tenant';
 import { branchRoomsQuery, tenancyKeys } from '@/features/tenancy/tenancy-api';
 import { branchPractitionersQuery, userKeys } from '@/features/users/users-api';
 import { ApiError } from '@/lib/api';
+import { startVisitKey, useStartingVisit } from './use-starting-visit';
 import { startVisitMutation } from './visit-mutations';
 import { startDefaultsQuery } from './visits-api';
 
@@ -34,13 +35,24 @@ const FIELD_ERRORS = {
 const isFieldError = (code: string): code is keyof typeof FIELD_ERRORS =>
   Object.hasOwn(FIELD_ERRORS, code);
 
+/** The start errors that say why this patient or session can't start a visit at all. */
+const FORM_ERRORS = {
+  'patient.archived': 'startVisit.errors.archived',
+  'patient.merged': 'startVisit.errors.merged',
+  'visit.branch_required': 'startVisit.errors.branchRequired',
+} as const;
+
+const isFormError = (code: string): code is keyof typeof FORM_ERRORS =>
+  Object.hasOwn(FORM_ERRORS, code);
+
 /**
  * The Start visit popover (spec V3/W7), anchored to its trigger (`children`): the dentist — the
  * session branch's dentists, the caller pre-selected when they are one — and the room — the
  * branch's active rooms, required when it has any, hidden when it has none (W7) — then
  * `POST /visits` and on to the workspace. A patient who already has a live visit gets that one
- * back (`resumed`), which is where they were going anyway: no toast either way. Without a
- * branch in the session, it only says why a visit can't start.
+ * back (`resumed`), which is where they were going anyway: no toast either way. It can't be
+ * dismissed while the start is in flight. Without a branch in the session, it only says why a
+ * visit can't start.
  */
 export function StartVisitPopover({
   patientId,
@@ -54,15 +66,28 @@ export function StartVisitPopover({
   const titleId = useId();
   const [open, setOpen] = useState(false);
   const branch = useSession().data?.branch ?? null;
+  const starting = useStartingVisit(patientId);
 
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
+    <Popover.Root
+      open={open}
+      onOpenChange={(next) => {
+        if (next || !starting) setOpen(next);
+      }}
+    >
       <Popover.Trigger asChild>{children}</Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
           align="end"
           sideOffset={6}
           aria-labelledby={titleId}
+          // The form focuses its first empty field once its lists have loaded (`StartVisitForm`);
+          // until then, the popover itself.
+          onOpenAutoFocus={(event) => {
+            if (!branch) return;
+            event.preventDefault();
+            if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
+          }}
           className="z-30 w-[300px] max-w-[calc(100vw-24px)] animate-fadein rounded-[10px] border border-border bg-surface p-4 shadow-[0_10px_28px_rgba(27,26,31,.14)]"
         >
           <h2 id={titleId} className="m-0 mb-3.5 text-[14px] leading-none font-semibold">
@@ -110,7 +135,11 @@ function StartVisitForm({
   const practitioners = useQuery(branchPractitionersQuery(branch.id));
   const rooms = useQuery(branchRoomsQuery(branch.id));
   const defaults = useQuery(startDefaultsQuery());
-  const start = useMutation(startVisitMutation(queryClient, tenantId));
+  const start = useMutation({
+    ...startVisitMutation(queryClient, tenantId),
+    mutationKey: startVisitKey(tenantId, patientId),
+  });
+  const formRef = useRef<HTMLFormElement>(null);
 
   // `null` = not picked yet: the default applies once it has loaded.
   const [picked, setPicked] = useState<Record<FieldName, string | null>>({
@@ -120,16 +149,39 @@ function StartVisitForm({
   const [errors, setErrors] = useState<Errors>({});
 
   const activeRooms = rooms.data?.filter((room) => room.active) ?? [];
-  // A default that is no longer listed (a dentist moved, a room deactivated) is no default.
+  // A choice or default that is no longer listed (a dentist moved, a room deactivated — the
+  // lists reload after the server says so) is no choice.
   const listed = (value: string | null | undefined, items: readonly { id: string }[]) =>
     value && items.some((item) => item.id === value) ? value : '';
-  const dentistId = picked.dentist ?? listed(defaults.data?.dentistId, practitioners.data ?? []);
-  const roomId = picked.room ?? listed(defaults.data?.roomId, activeRooms);
+  const dentistId = listed(picked.dentist ?? defaults.data?.dentistId, practitioners.data ?? []);
+  const roomId = listed(picked.room ?? defaults.data?.roomId, activeRooms);
   const needsRoom = activeRooms.length > 0;
 
+  // Without its defaults (a failed read), the form just starts empty.
   const loading = practitioners.isPending || rooms.isPending || defaults.isPending;
-  const loadFailed = practitioners.isError || rooms.isError || defaults.isError;
+  const loadFailed = practitioners.isError || rooms.isError;
   const noDentist = practitioners.data?.length === 0;
+
+  const focusControl = (name: FieldName | 'start') => {
+    const control = formRef.current?.elements.namedItem(name);
+    if (control instanceof HTMLElement) control.focus();
+  };
+
+  // Once the lists are in: the first field still to fill, else Start. Deferred past the
+  // popover's own opening focus, which runs after this in the same commit.
+  const ready = !loading && !loadFailed;
+  const firstControl = !dentistId ? 'dentist' : needsRoom && !roomId ? 'room' : 'start';
+  const focusedOnLoad = useRef(false);
+  useEffect(() => {
+    if (!ready || focusedOnLoad.current) return;
+    const timer = setTimeout(() => {
+      focusedOnLoad.current = true;
+      focusControl(firstControl);
+    });
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [ready, firstControl]);
 
   const pick = (field: FieldName, value: string) => {
     setPicked((current) => ({ ...current, [field]: value }));
@@ -144,36 +196,41 @@ function StartVisitForm({
       ...(needsRoom && !roomId ? { room: t('startVisit.errors.roomRequired') } : {}),
     };
     setErrors(missing);
-    if (missing.dentist || missing.room) return;
-    start.mutate(
-      { patientId, dentistId, ...(needsRoom ? { roomId } : {}) },
-      {
-        onSuccess: ({ visit }) => {
-          onStarted();
-          void navigate({ to: '/visits/$visitId', params: { visitId: visit.id } });
-        },
-        onError: (error) => {
-          const code = error instanceof ApiError ? error.code : undefined;
-          if (code !== undefined && isFieldError(code)) {
-            const known = FIELD_ERRORS[code];
-            setErrors({ [known.field]: t(known.key) });
-            if (known.stale) {
-              void queryClient.invalidateQueries({
-                queryKey:
-                  known.field === 'room'
-                    ? tenancyKeys.rooms(tenantId, branch.id)
-                    : userKeys.branchPractitioners(tenantId, branch.id),
-              });
-            }
-            return;
+    if (missing.dentist || missing.room) {
+      focusControl(missing.dentist ? 'dentist' : 'room');
+      return;
+    }
+    // `mutateAsync`, not `mutate` with callbacks: those are skipped once this form unmounts, and
+    // going to the workspace must not depend on it staying mounted.
+    start.mutateAsync({ patientId, dentistId, ...(needsRoom ? { roomId } : {}) }).then(
+      ({ visit }) => {
+        onStarted();
+        void navigate({ to: '/visits/$visitId', params: { visitId: visit.id } });
+      },
+      (error: unknown) => {
+        const code = error instanceof ApiError ? error.code : undefined;
+        if (code !== undefined && isFieldError(code)) {
+          const known = FIELD_ERRORS[code];
+          setErrors({ [known.field]: t(known.key) });
+          focusControl(known.field);
+          if (known.stale) {
+            void queryClient.invalidateQueries({
+              queryKey:
+                known.field === 'room'
+                  ? tenancyKeys.rooms(tenantId, branch.id)
+                  : userKeys.branchPractitioners(tenantId, branch.id),
+            });
           }
-          setErrors({
-            form:
-              code === 'patient.archived'
-                ? t('startVisit.errors.archived')
-                : t('startVisit.errors.failed', { reason: error.message }),
-          });
-        },
+          return;
+        }
+        setErrors({
+          form:
+            code !== undefined && isFormError(code)
+              ? t(FORM_ERRORS[code])
+              : t('startVisit.errors.failed', {
+                  reason: error instanceof Error ? error.message : String(error),
+                }),
+        });
       },
     );
   };
@@ -195,11 +252,12 @@ function StartVisitForm({
   }
 
   return (
-    <form noValidate onSubmit={submit} className="flex flex-col gap-3.5">
+    <form ref={formRef} noValidate onSubmit={submit} className="flex flex-col gap-3.5">
       <Field label={t('startVisit.dentist')} error={errors.dentist}>
         {(field) => (
           <Select
             {...field}
+            name="dentist"
             value={dentistId}
             disabled={noDentist}
             onChange={(event) => {
@@ -227,6 +285,7 @@ function StartVisitForm({
           {(field) => (
             <Select
               {...field}
+              name="room"
               value={roomId}
               onChange={(event) => {
                 pick('room', event.target.value);
@@ -255,6 +314,7 @@ function StartVisitForm({
         </Button>
         <Button
           type="submit"
+          name="start"
           variant="primary"
           size="sm"
           busy={start.isPending}

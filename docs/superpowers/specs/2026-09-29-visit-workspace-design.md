@@ -466,3 +466,5 @@ Each step keeps lint, typecheck and tests green, and ships its docs and ADR.
 - Last write wins can drop an edit when two people edit the same field in the same second (W6).
 - Missing and not-erupted tooth statuses, and changing the dentist or room of a live visit, wait
   for a design.
+- The feature-3 "Patient created" toast keeps its **Open record** action; Start visit from the
+  toast needs a global popover host (later).
