@@ -52,13 +52,22 @@ function pendingRefetches(queryClient: QueryClient): Set<string> {
   return pending;
 }
 
+/** A completed or discarded visit never changes again. */
+const isTerminal = (visit: Visit | undefined): boolean =>
+  visit?.status === 'completed' || visit?.status === 'discarded';
+
+const cachedIsTerminal = (queryClient: QueryClient, queryKey: readonly unknown[]): boolean =>
+  isTerminal(queryClient.getQueryData<Visit>(queryKey));
+
 /**
  * Refetches the visit instead of trusting the cache: after a failed write (the server may have
  * moved on), and after a write answered while another write of the same visit was in flight.
  * In the second case the refetch may be cancelled by the other write's own `writeVisit`, so the
- * visit is marked to be refetched once more after the burst's last write.
+ * visit is marked to be refetched once more after the burst's last write. A visit cached as
+ * completed or discarded is final and is never refetched (a discarded one answers 404).
  */
 function refetchVisit(queryClient: QueryClient, queryKey: readonly unknown[]): Promise<void> {
+  if (cachedIsTerminal(queryClient, queryKey)) return Promise.resolve();
   if (queryClient.isMutating({ mutationKey: queryKey }) > 1) {
     pendingRefetches(queryClient).add(hashKey(queryKey));
   }
@@ -72,10 +81,19 @@ function refetchVisit(queryClient: QueryClient, queryKey: readonly unknown[]): P
  * still in flight, this answer may already be outdated, so the visit is refetched instead. The
  * last mutation of such a burst writes its own answer (cancelling that refetch), then refetches
  * once more: the server may have applied the burst in another order than it answered.
+ *
+ * A completed or discarded visit is the last word: it is always written, even mid-burst, and no
+ * answer arriving after it replaces it.
  */
 function writeVisit(queryClient: QueryClient, tenantId: Tenant, visit: Visit): Promise<void> {
   const queryKey = visitKeys.detail(tenantId, visit.id);
   return queryClient.cancelQueries({ queryKey }).then(() => {
+    if (isTerminal(visit)) {
+      pendingRefetches(queryClient).delete(hashKey(queryKey));
+      queryClient.setQueryData(queryKey, visit);
+      return;
+    }
+    if (cachedIsTerminal(queryClient, queryKey)) return;
     if (queryClient.isMutating({ mutationKey: queryKey }) > 1) {
       void refetchVisit(queryClient, queryKey);
       return;
@@ -207,7 +225,9 @@ export function visitMutations(
         updateService(visitId, serviceId, patch, tenant),
       onSuccess: visitOnly,
     }),
-    /** Removing a performed plan's service also reopens the plan (the Undo of Perform). */
+    /** Removing a performed plan's service also reopens the plan (the Undo of Perform). UI code
+     * removes a service through `useChartingActions().removeService`, never this directly: that
+     * drops the service's price save group before the DELETE. */
     removeService: mutationOptions({
       ...base,
       mutationFn: (serviceId: string) => removeService(visitId, serviceId, tenant),

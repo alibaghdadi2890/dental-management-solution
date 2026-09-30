@@ -32,7 +32,7 @@ describe('VisitHeader', () => {
     mockWorkspace();
     const { router } = renderWorkspace();
     const banner = await header();
-    expect(within(banner).getByText('P-000001 · 8 yrs')).toBeTruthy();
+    expect(within(banner).getByText('P-000001 · 8 yrs · 1 Mar 2018')).toBeTruthy();
     const alerts = within(banner).getByRole('list', { name: 'Medical alerts' });
     expect(within(alerts).getByText('Penicillin allergy')).toBeTruthy();
     expect(within(banner).getByText('In progress')).toBeTruthy();

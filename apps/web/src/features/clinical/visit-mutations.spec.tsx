@@ -208,6 +208,51 @@ describe('visitMutations — stale refetches', () => {
     expect(stale(detailKey)).toBe(true);
   });
 
+  it('writes a discard answered mid-burst, and a later answer never replaces it', async () => {
+    const { client, cached, stale } = seededClient();
+    const notesAnswer = deferred<unknown>();
+    const discardAnswer = deferred<unknown>();
+    apiFetchMock
+      .mockReturnValueOnce(notesAnswer.promise)
+      .mockReturnValueOnce(discardAnswer.promise);
+    const mutations = visitMutations(client, VISIT_ID);
+
+    const notes = run(client, mutations.updateNotes, { notes: 'late' });
+    const discard = run(client, mutations.discard, undefined);
+    discardAnswer.resolve({ visit: visit({ status: 'discarded' }) });
+    await discard;
+    expect(cached()?.status).toBe('discarded');
+    expect(stale(detailKey)).toBe(false);
+
+    notesAnswer.resolve({ visit: visit({ notes: 'late' }) });
+    await notes;
+    expect(cached()).toMatchObject({ status: 'discarded', notes: '' });
+    expect(stale(detailKey)).toBe(false);
+  });
+
+  it('writes a completion answered mid-burst; a later failure does not refetch it', async () => {
+    const { client, cached, stale } = seededClient();
+    const notesAnswer = deferred<unknown>();
+    const completeAnswer = deferred<unknown>();
+    apiFetchMock
+      .mockReturnValueOnce(notesAnswer.promise)
+      .mockReturnValueOnce(completeAnswer.promise);
+    const mutations = visitMutations(client, VISIT_ID);
+
+    const notes = run(client, mutations.updateNotes, { notes: 'late' });
+    const complete = run(client, mutations.complete, undefined);
+    completeAnswer.resolve({ visit: visit({ status: 'completed' }) });
+    await complete;
+    expect(cached()?.status).toBe('completed');
+
+    apiFetchMock.mockRejectedValueOnce(new Error('visit.not_live'));
+    await expect(run(client, mutations.updateNotes, { notes: 'after' })).rejects.toThrow();
+    notesAnswer.resolve({ visit: visit({ notes: 'late' }) });
+    await notes;
+    expect(cached()?.status).toBe('completed');
+    expect(stale(detailKey)).toBe(false);
+  });
+
   it('refetches the visit when a mutation fails', async () => {
     const { client, stale, cached } = seededClient();
     apiFetchMock.mockRejectedValueOnce(new Error('conflict'));

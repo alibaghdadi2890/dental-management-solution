@@ -163,6 +163,7 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
           />
           <div className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-auto">
             <div className="min-w-0 flex-[1_1_600px] px-5 pt-[18px] pb-5">
+              <TodayDivider />
               {chart.data && patient.data && dentition ? (
                 <ChartCard
                   teeth={teeth}
@@ -221,6 +222,21 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
         </div>
       </ChartingActionsContext.Provider>
     </ToothSelectionContext.Provider>
+  );
+}
+
+/** The POC's section divider above the chart card: "Today's visit" (micro label), "What you are
+ * doing now", then a 1px rule filling the row. */
+function TodayDivider() {
+  const { t } = useTranslation('clinical');
+  return (
+    <div className="mb-[11px] flex flex-wrap items-center gap-[9px]">
+      <span className="text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase [&:lang(ar)]:tracking-normal">
+        {t('workspace.today')}
+      </span>
+      <span className="text-[12.5px] leading-[1.3] text-ink-muted">{t('workspace.todayHint')}</span>
+      <span aria-hidden className="h-px min-w-5 flex-1 bg-border" />
+    </div>
   );
 }
 

@@ -103,6 +103,8 @@
       "done": "Visit discarded"
     },
     "chartFailed": "Couldn't load the chart.",
+    "today": "Today's visit",
+    "todayHint": "What you are doing now",
     "toothPanel": "Selected tooth",
     "money": "Visit money",
     "services_one": "{{count}} service",
@@ -111,11 +113,7 @@
   },
   "chartCard": {
     "title": "Dental chart",
-    "hint": "Click a tooth to examine it · ← → to move, Esc to deselect",
-    "mode": {
-      "surface": "5 surfaces per tooth",
-      "simple": "Whole-tooth charting"
-    }
+    "hint": "Click a tooth to examine it · ← → to move, Esc to deselect"
   },
   "dentition": {
     "label": "Dentition: {{value}}",

@@ -3,7 +3,6 @@ import { type ReactNode, useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChartLegend } from '../chart/chart-legend';
 import { DentalChart } from '../chart/dental-chart';
-import { useChartSettings } from '../chart/use-chart-settings';
 import { DentitionSelect, type ResolvedDentition } from './dentition-select';
 import { useToothSelection } from './tooth-selection';
 
@@ -41,13 +40,13 @@ export function ChartCardFrame({
 }
 
 /**
- * The workspace's dental chart card: the title, the hint, the dentition selector and how the
- * clinic charts (surfaces or whole teeth), the legend, then the full chart at 12px cells, drawn
- * from `teeth` (the patient's records plus this visit's services, derived by the page). Clicking
- * a tooth selects it (`useToothSelection`), which clears the pending surfaces. Whatever changes
- * the selection (a click, the arrows, the panel's succession link), the selected tooth is
- * scrolled into view in the horizontally scrolling arch, and focus follows it when it was already
- * in the chart (the arrows walk the teeth with focus).
+ * The workspace's dental chart card: the title, the POC's hint, the dentition selector, the
+ * legend, then the full chart at 12px cells, drawn from `teeth` (the patient's records plus this
+ * visit's services, derived by the page). Clicking a tooth selects it (`useToothSelection`),
+ * which clears the pending surfaces. Whatever changes the selection (a click, the arrows, the
+ * panel's succession link), the selected tooth is scrolled into view in the horizontally
+ * scrolling arch, and focus follows it when it was already in the chart (the arrows walk the
+ * teeth with focus).
  */
 export function ChartCard({
   teeth,
@@ -62,8 +61,6 @@ export function ChartCard({
   dentition: ResolvedDentition;
   canWrite: boolean;
 }) {
-  const { t } = useTranslation('clinical');
-  const { mode } = useChartSettings();
   const selection = useToothSelection();
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -80,11 +77,8 @@ export function ChartCard({
   return (
     <ChartCardFrame
       subtitle={
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+        <div className="mt-2.5">
           <DentitionSelect patient={patient} dentition={dentition} canWrite={canWrite} />
-          <span className="text-[12.5px] leading-none text-ink-muted">
-            {t(`chartCard.mode.${mode}`)}
-          </span>
         </div>
       }
       aside={<ChartLegend dentition={dentition.stage} />}

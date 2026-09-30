@@ -103,6 +103,8 @@
       "done": "Visite abandonnée"
     },
     "chartFailed": "Impossible de charger le schéma dentaire.",
+    "today": "Visite du jour",
+    "todayHint": "Ce que vous faites maintenant",
     "toothPanel": "Dent sélectionnée",
     "money": "Montants de la visite",
     "services_one": "{{count}} acte",
@@ -111,11 +113,7 @@
   },
   "chartCard": {
     "title": "Schéma dentaire",
-    "hint": "Cliquez sur une dent pour l’examiner · ← → pour vous déplacer, Échap pour désélectionner",
-    "mode": {
-      "surface": "5 faces par dent",
-      "simple": "Dent entière"
-    }
+    "hint": "Cliquez sur une dent pour l’examiner · ← → pour vous déplacer, Échap pour désélectionner"
   },
   "dentition": {
     "label": "Denture : {{value}}",

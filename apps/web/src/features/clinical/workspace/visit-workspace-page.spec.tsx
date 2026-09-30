@@ -31,7 +31,8 @@ describe('VisitWorkspacePage', () => {
     renderWorkspace();
     const card = await chartCard();
     expect(within(card).getByText('Click a tooth to examine it · ← → to move, Esc to deselect'));
-    expect(within(card).getByText('5 surfaces per tooth')).toBeTruthy();
+    expect(screen.getByText("Today's visit")).toBeTruthy();
+    expect(screen.getByText('What you are doing now')).toBeTruthy();
     expect(within(card).getByRole('group', { name: 'Upper arch' })).toBeTruthy();
     expect(within(card).getByText('Treatment')).toBeTruthy();
     expect(screen.getByRole('complementary', { name: 'Selected tooth' })).toBeTruthy();
@@ -95,12 +96,12 @@ describe('VisitWorkspacePage', () => {
     const card = await chartCard();
     fireEvent.click(within(card).getByRole('button', { name: /^#16 · / }));
     fireEvent.click(await screen.findByRole('button', { name: 'Add diagnosis' }));
-    expect(await screen.findByRole('complementary', { name: 'Add diagnosis' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: 'Add diagnosis' })).toBeTruthy();
 
     // Focus back on the page (the drawer is an aside, not a modal dialog).
     (document.activeElement as HTMLElement | null)?.blur();
     fireEvent.keyDown(document.body, { key: 'Escape' });
-    expect(screen.queryByRole('complementary', { name: 'Add diagnosis' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Add diagnosis' })).toBeNull();
     expect(screen.getByRole('heading', { name: '#16' })).toBeTruthy();
 
     fireEvent.keyDown(document.body, { key: 'Escape' });

@@ -9,9 +9,10 @@ import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
 import { useToast } from '@/components/ui/toast-context';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { ApiError } from '@/lib/api';
-import { ageOrNull, formatCalendarDate, todayIn } from '@/lib/format';
+import { formatAgeLine, formatCalendarDate, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
+import { useAnyGroupDirty } from '../save-groups-context';
 import { useVisitMutations } from '../visit-mutations';
 import { useVisitTimer } from '../use-visit-timer';
 
@@ -43,8 +44,9 @@ function looksEmpty(visit: Visit, chart: PatientChart): boolean {
 /**
  * The workspace header band (spec §Visit Workspace → Visit header): the patient chip back to the
  * record, the compact alert chips, then the status and date block, the timer chip (running or
- * paused), Pause / Resume and — while the visit is still empty — a menu with **Discard visit**.
- * Without `visit:write` (front desk, W18) it shows a View only badge instead of the controls.
+ * paused), Pause / Resume and — while the visit is still empty, unsaved edits included — a menu
+ * with **Discard visit**. Without `visit:write` (front desk, W18) it shows a View only badge
+ * instead of the controls.
  */
 export function VisitHeader({
   visit,
@@ -74,7 +76,20 @@ export function VisitHeader({
 
   const dentist = dentistNames.get(visit.dentistId);
   const date = formatCalendarDate(visit.localDate, locale);
-  const age = patient ? ageOrNull(patient.dateOfBirth, todayIn(tenant.timeZone)) : null;
+  // Unsaved notes or prices are something recorded too: no Discard until they settle.
+  const unsaved = useAnyGroupDirty();
+  const ageLine =
+    patient && formatAgeLine(patient.dateOfBirth, todayIn(tenant.timeZone), { locale });
+  // The record header's age line ("8 yrs · 1 Mar 2018").
+  const age =
+    ageLine?.kind === 'full'
+      ? t('patients:record.ageLine', {
+          age: t('patients:ageYears', { count: ageLine.age }),
+          dob: ageLine.dob,
+        })
+      : ageLine?.kind === 'dobOnly'
+        ? ageLine.dob
+        : t('patients:record.ageUnknown');
 
   const toggle = () => {
     const [mutation, failed] = running
@@ -117,7 +132,7 @@ export function VisitHeader({
       >
         <span
           aria-hidden
-          className="grid size-[34px] flex-none place-items-center rounded-lg border border-primary-tint-border bg-primary-tint text-[12.5px] leading-none font-semibold text-primary"
+          className="grid size-[34px] flex-none place-items-center rounded-[8px] border border-primary-tint-border bg-primary-tint text-[12.5px] leading-none font-semibold text-primary"
         >
           {patient ? initials(patient.fullName) : ''}
         </span>
@@ -127,13 +142,7 @@ export function VisitHeader({
               {patient.fullName}
             </span>
             <span className="block font-mono text-[12.5px] leading-[1.3] text-ink-muted">
-              {t('workspace.patientLine', {
-                number: patient.displayNumber,
-                age:
-                  age === null
-                    ? t('patients:record.ageUnknown')
-                    : t('patients:ageYears', { count: age }),
-              })}
+              {t('workspace.patientLine', { number: patient.displayNumber, age })}
             </span>
           </span>
         ) : (
@@ -149,7 +158,7 @@ export function VisitHeader({
           {patient.medicalAlerts.map((alert) => (
             <li
               key={alert}
-              className="rounded-[5px] border border-warning-border bg-warning-bg px-2 py-1 text-[11.5px] leading-none font-medium text-warning"
+              className="rounded-[5px] border border-warning-border bg-warning-bg px-2 py-1 text-[11px] leading-none font-medium text-warning"
             >
               {alert}
             </li>
@@ -171,7 +180,7 @@ export function VisitHeader({
           aria-label={t('workspace.timer')}
           data-state={running ? 'running' : 'paused'}
           className={cn(
-            'flex items-center gap-[9px] rounded-lg border px-[13px] py-[7px]',
+            'flex items-center gap-[9px] rounded-[8px] border px-[13px] py-[7px]',
             running
               ? 'border-primary-tint-border bg-primary-tint text-primary'
               : 'border-border bg-subtle text-ink-tertiary',
@@ -202,7 +211,7 @@ export function VisitHeader({
             >
               {t(running ? 'workspace.pause' : 'workspace.resume')}
             </Button>
-            {chart && looksEmpty(visit, chart) && (
+            {chart && !unsaved && looksEmpty(visit, chart) && (
               <Menu>
                 <MenuTrigger asChild>
                   <IconButton aria-label={t('workspace.actions')} disabled={busy}>
