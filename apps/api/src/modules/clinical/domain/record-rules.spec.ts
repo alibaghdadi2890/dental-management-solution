@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { assertCurrency, assertTarget } from './record-rules';
+import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
+import { assertCurrency, assertLinePrice, assertTarget } from './record-rules';
 import {
   CurrencyMismatchError,
   SurfacesInvalidError,
@@ -74,5 +75,30 @@ describe('assertCurrency', () => {
     expect(() => {
       assertCurrency('USD', 'LBP');
     }).toThrow(CurrencyMismatchError);
+  });
+});
+
+describe('assertLinePrice', () => {
+  it('accepts a discount up to the base', () => {
+    expect(() => {
+      assertLinePrice({ baseAmount: '60.00', discountAmount: '60' }, 'discountAmount');
+    }).not.toThrow();
+    expect(() => {
+      assertLinePrice({ baseAmount: '0', discountAmount: '0.00' }, 'baseAmount');
+    }).not.toThrow();
+  });
+
+  it('reports a discount above the base at the field that changed', () => {
+    const at = (changed: 'baseAmount' | 'discountAmount') => {
+      try {
+        assertLinePrice({ baseAmount: '10.00', discountAmount: '10.01' }, changed);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationFailedError);
+        return (error as ValidationFailedError).issues.map((issue) => issue.path);
+      }
+      throw new Error('expected a ValidationFailedError');
+    };
+    expect(at('discountAmount')).toEqual(['discountAmount']);
+    expect(at('baseAmount')).toEqual(['baseAmount']);
   });
 });

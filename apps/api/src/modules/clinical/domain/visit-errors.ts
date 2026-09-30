@@ -43,9 +43,24 @@ export class RecordNotRemovableError extends DomainError {
   readonly kind = 'conflict';
 }
 
-/** Performing or cancelling a plan that is no longer `planned`. */
+/**
+ * No such service, diagnosis or plan on the visit's patient (a service: in the visit). A record of
+ * another patient reads as not found through this visit.
+ */
+export class RecordNotFoundError extends DomainError {
+  readonly code = 'record.not_found';
+  readonly kind = 'not_found';
+}
+
+/** Performing, cancelling or removing a plan that is no longer `planned`. */
 export class PlanNotOpenError extends DomainError {
   readonly code = 'plan.not_open';
+  readonly kind = 'conflict';
+}
+
+/** Cancel is for plans from an earlier visit; a plan made in this visit is removed (W13). */
+export class PlanNotCancellableError extends DomainError {
+  readonly code = 'plan.not_cancellable';
   readonly kind = 'conflict';
 }
 

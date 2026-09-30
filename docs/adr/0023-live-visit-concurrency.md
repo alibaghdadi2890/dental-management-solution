@@ -70,8 +70,9 @@ Other decisions from the same design are settled here too:
 - Every other lifecycle mutation (pause, resume, notes, discount, discard) locks only the visit
   row `FOR UPDATE`. None of them touches the patient, so no cycle exists.
 - `lockForDependentWrite` refuses a merged-away patient (409 `patient.merged`) and allows an
-  archived one (a ledger write-off). `start` itself also refuses an archived patient (409
-  `patient.archived`).
+  archived one (a ledger write-off). `start` itself refuses a _new_ visit for an archived
+  patient (409 `patient.archived`); it checks after looking for the live visit, so a visit
+  whose patient was archived since it started can still be resumed.
 
 **Merge exception.** After a merge, the kept patient can have two live visits: its own and the
 one re-pointed from the dropped patient. Both stay usable and both complete normally.

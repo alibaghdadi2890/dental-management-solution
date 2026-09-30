@@ -9,7 +9,8 @@ import {
 import type { StoredVisitService } from '../persistence/visit-services.repository';
 import type { StoredVisit } from '../persistence/visits.repository';
 
-function toVisitService(service: StoredVisitService, currency: string): VisitService {
+/** A service line in the visit currency; `final` = base − line discount. */
+export function toVisitService(service: StoredVisitService, currency: string): VisitService {
   const line = { base: service.baseAmount, discount: service.discountAmount };
   return {
     id: service.id,

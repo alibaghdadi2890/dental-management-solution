@@ -10,3 +10,9 @@ export class CatalogItemInUseError extends DomainError {
   readonly code = 'catalog.in_use';
   readonly kind = 'conflict';
 }
+
+/** A deactivated row can't be added to a visit, diagnosed or planned (spec §VisitRecordsService). */
+export class CatalogItemInactiveError extends DomainError {
+  readonly code = 'catalog.inactive';
+  readonly kind = 'invalid';
+}

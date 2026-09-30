@@ -1,4 +1,11 @@
-import { validSurfaces, type ChargeUnit, type SurfaceKey, type ToothCode } from '@dcm/contracts';
+import {
+  toCents,
+  validSurfaces,
+  type ChargeUnit,
+  type SurfaceKey,
+  type ToothCode,
+} from '@dcm/contracts';
+import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import {
   CurrencyMismatchError,
   SurfacesInvalidError,
@@ -34,5 +41,25 @@ export function assertCurrency(visitCurrency: string, priceCurrency: string): vo
     throw new CurrencyMismatchError(
       `The price is in ${priceCurrency}; this visit is in ${visitCurrency}`,
     );
+  }
+}
+
+/**
+ * A service's price after an edit (spec §VisitRecordsService): the line discount stays within the
+ * base (`visit_services_discount_within_base`). A breach is reported at the field the edit
+ * changed — the discount when it was sent, else the base that dropped below it.
+ */
+export function assertLinePrice(
+  price: { baseAmount: string; discountAmount: string },
+  changed: 'baseAmount' | 'discountAmount',
+): void {
+  if (toCents(price.discountAmount) > toCents(price.baseAmount)) {
+    throw new ValidationFailedError('The discount is more than the price', [
+      {
+        path: changed,
+        code: 'discount_above_base',
+        message: 'The discount cannot be more than the price',
+      },
+    ]);
   }
 }

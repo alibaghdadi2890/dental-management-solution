@@ -1,8 +1,9 @@
 # `clinical` module
 
 **Status:** partly implemented. The service and diagnosis catalogs are done (feature 2). Of
-feature 4a, the visit lifecycle is done (start, resume, pause, notes, discount, discard, live
-visits); charting in a visit, the chart reads and completion are in progress.
+feature 4a, the visit lifecycle (start, resume, pause, notes, discount, discard, live visits) and
+charting in a visit (services, diagnoses, plans, tooth presence) are done; the chart reads and
+completion are in progress.
 
 ## Purpose
 
@@ -12,7 +13,8 @@ Clinical work on a patient:
   tooth/surfaces, notes, discount and status (feature 4a). Amend and void with a reason are 4b.
 - **The per-tenant catalogs**: services (what the clinic charges for) and diagnoses (what dentists
   record).
-- **Treatment plans** (planned): planned procedures and charting linked to visits.
+- **The clinical record**: diagnoses and treatment plans on the patient's teeth, dated by the
+  visit that recorded them, and which tooth is present at each succession position (feature 4a).
 
 Tooth numbering is Universal (1–32, A–T), per the POC. This module was renamed from `treatments`
 (ADR-0001) and owns the catalogs (ADR-0002).
@@ -87,11 +89,47 @@ The pure rules are in `domain/`: `visit-lifecycle.ts` (state machine), `visit-ti
   frees its room, clears `paused_at`, and reads as not found everywhere.
 - Every actor column (`started_by`, `discarded_by`, …) is the auth user id (W10).
 
+### Records in a visit
+
+Charting happens only inside a live visit (`VisitRecordsService`, spec §VisitRecordsService).
+
+- **The patient is the visit's**, never a request field. Records are looked up by id _and_ the
+  visit's patient (services by id and visit), so another patient's record reads as 404
+  `record.not_found`. Searches by tooth or by linked diagnosis filter on the patient too, so
+  they use the `(tenant_id, patient_id, tooth_code)` indexes.
+- **Catalog items** must be active (422 `catalog.inactive`). Code, name, category, charge unit
+  and price are copied as snapshots, so later catalog edits never change a record.
+- **Where** (W11, `record-rules.ts`'s `assertTarget`): a diagnosis always needs a tooth; a
+  service or plan follows its charge unit (`per_tooth` needs a tooth, 422
+  `visit.tooth_required`; `per_jaw` has none, 422 `visit.tooth_not_allowed`). Surfaces must be
+  ones the tooth has (422 `visit.surfaces_invalid`).
+- **One currency per visit** (W12): a service or performed plan priced in another currency → 422
+  `visit.currency_mismatch`.
+- **Who**: `recorded_by` / `changed_by` are the auth user id of whoever made the change (an
+  assistant or a platform admin too); `dentist_id` is the visit's dentist (W10).
+- **Removing** (W13) is a soft delete and only for records made in this visit: an older
+  diagnosis is resolved and an older plan cancelled instead (409 `record.not_removable`). Removing
+  a diagnosis unlinks the plans made for it. A plan is removed only while `planned` (409
+  `plan.not_open`) and cancelled only when it comes from an earlier visit (409
+  `plan.not_cancellable`).
+- **Perform** turns a `planned` plan into a service of the visit at the plan's price, tooth and
+  surfaces (`plan_id` set), and marks the plan performed in this visit. `visit_services_plan_unique`
+  backs a double perform (409 `plan.not_open`). Removing that service is the Undo: the plan goes
+  back to `planned` and its `performed_*` pair is cleared.
+- A plan made on a tooth links the tooth's most recent active diagnosis
+  (`diagnosis_record_id`), or none.
+- **Tooth presence** (W5, W15): `primary | permanent` at a succession position (a permanent
+  code at position 1–5), upserted on `(tenant_id, patient_id, position)` and stamped with the
+  visit that changed it. Setting the value it already has changes nothing.
+
 ## Public API (`index.ts`)
 
-`ClinicalModule`, `CatalogService`, `VisitsService`, `CatalogItemNotFoundError`,
-`CatalogItemInUseError`, and the events `CatalogChanged`, `VisitStarted`, `VisitPaused`,
-`VisitResumed`, `VisitDiscarded` and `VisitCompleted` (published from step 5 of feature 4a).
+`ClinicalModule`, `CatalogService`, `VisitsService`, `VisitRecordsService`,
+`CatalogItemNotFoundError`, `CatalogItemInUseError`, `CatalogItemInactiveError`, and the events
+`CatalogChanged`, `VisitStarted`, `VisitPaused`, `VisitResumed`, `VisitDiscarded`,
+`VisitCompleted` (published from step 5 of feature 4a), `DiagnosisRecorded`,
+`DiagnosisResolved`, `DiagnosisReopened`, `TreatmentPlanned`, `TreatmentPerformed`,
+`TreatmentCancelled` and `ToothStatusChanged`.
 
 `CatalogService`:
 
@@ -125,21 +163,45 @@ updated `Visit`.
 | `get(id)`                                  | `visit:read`  | The `Visit`: services, money, timer fields and `serverNow`. Unknown or discarded → 404 `visit.not_found`.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `live({ patientId?, mine? })`              | `visit:read`  | `LiveVisitRef[]`, oldest first, with the patient's and dentist's names and `serverNow`. `mine` (W18): the caller's staff profile (`UsersService.profileIdOf`) is the dentist, or the caller started it; a platform admin (no staff profile) matches only their own starts.                                                                                                                                                                                                                                                                |
 
+`VisitRecordsService` (see [Records in a visit](#records-in-a-visit)). Every method needs
+`visit:write`, runs in one transaction, locks the visit `FOR UPDATE` (409 `visit.not_live` unless
+live; 404 `visit.not_found`), is audited with before/after and answers `{ visit, record }`: the
+updated `Visit` and the record created or changed (a removed one included). Unknown records →
+404 `record.not_found`.
+
+| Method                                                                  | Audit action (resource type)                                                 | Notes                                                                                                                                              |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `addService(visitId, { procedureId, toothCode?, surfaces })`            | `visit_service.create` (`visit_service`)                                     | Base = the catalog price, line discount 0. No event.                                                                                               |
+| `updateService(visitId, serviceId, { baseAmount?, discountAmount? })`   | `visit_service.update`                                                       | Last write wins (W6). Discount above the base → 422 `validation_failed` at the field that broke it. No-op when unchanged. No event.                |
+| `removeService(visitId, serviceId)`                                     | `visit_service.delete`; `treatment_plan.unperform` for a service from a plan | Soft delete. A service from a plan puts the plan back to `planned` (the Undo of perform). No event.                                                |
+| `recordDiagnosis(visitId, { diagnosisId, toothCode, surfaces, note? })` | `diagnosis_record.create` (`diagnosis_record`)                               | `DiagnosisRecorded`.                                                                                                                               |
+| `resolveDiagnosis` / `reopenDiagnosis(visitId, recordId)`               | `diagnosis_record.resolve` / `.reopen`                                       | Any of the patient's diagnoses. Resolve stamps this visit and the time; reopen clears both. Idempotent. `DiagnosisResolved` / `DiagnosisReopened`. |
+| `removeDiagnosis(visitId, recordId)`                                    | `diagnosis_record.delete` (with the unlinked plan ids)                       | Recorded in this visit only (409 `record.not_removable`). Unlinks its plans. No event.                                                             |
+| `planTreatment(visitId, { procedureId, toothCode?, surfaces, note? })`  | `treatment_plan.create` (`treatment_plan`)                                   | Price snapshot; links the tooth's latest active diagnosis. `TreatmentPlanned`.                                                                     |
+| `performPlan(visitId, planId)`                                          | `visit_service.create` and `treatment_plan.perform`                          | `planned` only (409 `plan.not_open`); currency must match. `TreatmentPerformed`.                                                                   |
+| `cancelPlan(visitId, planId)`                                           | `treatment_plan.cancel`                                                      | From an earlier visit only (409 `plan.not_cancellable`), `planned` only (409 `plan.not_open`). `TreatmentCancelled`.                               |
+| `removePlan(visitId, planId)`                                           | `treatment_plan.delete`                                                      | Made in this visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`). Soft delete. No event.                                        |
+| `setToothPresence(visitId, position, { present })`                      | `tooth_status.set` (`tooth_status`)                                          | Upsert; no-op when unchanged. `ToothStatusChanged`.                                                                                                |
+
 ## HTTP
 
-| Route                                                                              | Access          |
-| ---------------------------------------------------------------------------------- | --------------- |
-| `GET /catalog/services`, `GET /catalog/diagnoses`                                  | `catalog:read`  |
-| `PUT /catalog/services`, `PUT /catalog/diagnoses`                                  | `catalog:write` |
-| `DELETE /catalog/{services,diagnoses}/:id`                                         | `catalog:write` |
-| `POST /catalog/{services,diagnoses}/:id/deactivate`                                | `catalog:write` |
-| `POST /catalog/seed-default`                                                       | `catalog:write` |
-| `POST /visits` → 201 `{ visit, resumed: false }` or 200 `{ visit, resumed: true }` | `visit:write`   |
-| `GET /visits/start-defaults` → `{ dentistId, roomId }`                             | `visit:write`   |
-| `GET /visits/live?patientId=&mine=` → `LiveVisitRef[]`                             | `visit:read`    |
-| `GET /visits/:id` → `Visit`                                                        | `visit:read`    |
-| `POST /visits/:id/{pause,resume,discard}` → `{ visit }`                            | `visit:write`   |
-| `PATCH /visits/:id/notes`, `PATCH /visits/:id/discount` → `{ visit }`              | `visit:write`   |
+| Route                                                                                                                                                                        | Access          |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `GET /catalog/services`, `GET /catalog/diagnoses`                                                                                                                            | `catalog:read`  |
+| `PUT /catalog/services`, `PUT /catalog/diagnoses`                                                                                                                            | `catalog:write` |
+| `DELETE /catalog/{services,diagnoses}/:id`                                                                                                                                   | `catalog:write` |
+| `POST /catalog/{services,diagnoses}/:id/deactivate`                                                                                                                          | `catalog:write` |
+| `POST /catalog/seed-default`                                                                                                                                                 | `catalog:write` |
+| `POST /visits` → 201 `{ visit, resumed: false }` or 200 `{ visit, resumed: true }`                                                                                           | `visit:write`   |
+| `GET /visits/start-defaults` → `{ dentistId, roomId }`                                                                                                                       | `visit:write`   |
+| `GET /visits/live?patientId=&mine=` → `LiveVisitRef[]`                                                                                                                       | `visit:read`    |
+| `GET /visits/:id` → `Visit`                                                                                                                                                  | `visit:read`    |
+| `POST /visits/:id/{pause,resume,discard}` → `{ visit }`                                                                                                                      | `visit:write`   |
+| `PATCH /visits/:id/notes`, `PATCH /visits/:id/discount` → `{ visit }`                                                                                                        | `visit:write`   |
+| `POST /visits/:id/services` → 201, `PATCH` / `DELETE /visits/:id/services/:serviceId` → `{ visit, record: VisitService }`                                                    | `visit:write`   |
+| `POST /visits/:id/diagnoses` → 201, `POST /visits/:id/diagnoses/:recordId/{resolve,reopen}`, `DELETE /visits/:id/diagnoses/:recordId` → `{ visit, record: DiagnosisRecord }` | `visit:write`   |
+| `POST /visits/:id/plans` → 201, `POST /visits/:id/plans/:planId/{perform,cancel}`, `DELETE /visits/:id/plans/:planId` → `{ visit, record: TreatmentPlan }`                   | `visit:write`   |
+| `PUT /visits/:id/teeth/:position` `{ present }` → `{ visit, record: { position, present } }`; a position that is not a succession position → 400 `validation_failed`         | `visit:write`   |
 
 ## Events
 
@@ -150,7 +212,14 @@ updated `Visit`.
   - `VisitDiscarded { visitId, patientId, roomId }`.
   - `VisitCompleted { visitId, patientId, currency, total, localDate }`: the type exists; it is
     published by `complete` (feature 4a step 5).
-  - Notes and discount changes are audited directly and emit no event.
+  - `DiagnosisRecorded { recordId, visitId, patientId, toothCode, diagnosisId }`,
+    `DiagnosisResolved` / `DiagnosisReopened { recordId, visitId, patientId, toothCode }`.
+  - `TreatmentPlanned { planId, visitId, patientId, toothCode, procedureId }`,
+    `TreatmentPerformed { planId, visitId, patientId, serviceId, toothCode }`,
+    `TreatmentCancelled { planId, visitId, patientId, toothCode }`.
+  - `ToothStatusChanged { visitId, patientId, position, present }`.
+  - Notes and discount changes, service adds, edits and removes, record removals and the undo of
+    a perform are audited directly and emit no event.
   - Planned: `VisitAmended`, `VisitVoided` (4b).
 - Consumes: `TenantProvisioned` (provisioning, event only — ADR-0014). It seeds the default
   catalog.
@@ -161,7 +230,8 @@ updated `Visit`.
 - `patients`: existence and the dependent-write lock (`lockForDependentWrite`, W22), names for
   the live visits.
 - `users`: the branch's dentists (`listPractitioners`), dentist names
-  (`practitionersByProfileIds`), the caller's staff profile.
+  (`practitionersByProfileIds`, also on diagnosis and plan records), the caller's staff profile
+  (`profileIdOf`).
 - `audit`.
 
 None of them imports `clinical`.
