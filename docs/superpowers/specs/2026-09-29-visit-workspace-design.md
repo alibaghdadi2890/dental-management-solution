@@ -517,6 +517,12 @@ reference for the shipped behaviour.
   shows at that position. Save groups keep what was typed when the server echoes the same value
   (`10.` vs `10.00`), and a group is dropped before its record is deleted. The discount's `% / $`
   control is a radio group. A price edit equal in cents writes and audits nothing.
+- **Language switch:** the UI language (en/ar/fr) is picked from a globe menu in the sidebar
+  footer, beside Sign out, and on the sign-in page (`components/language-switch.tsx`), each
+  language listed in its own name. `i18n.changeLanguage` re-renders every string, sets
+  `<html lang dir>` and the locale-aware formats; the i18next detector keeps the choice in
+  `localStorage`, else the browser's language applies. The clinic's `tenant.locale` does not set
+  the UI default.
 - **Tests:** tenant isolation covers `VisitsService.get`/`live`, `ChartService`, the record
   routes and the billing visit summary; Playwright (`apps/web/e2e/visit.spec.ts`) covers the full visit
   with its post-visit figures, resuming from a second browser with the timer carried on, and the

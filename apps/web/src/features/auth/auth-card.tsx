@@ -1,8 +1,11 @@
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LanguageSwitch } from '@/components/language-switch';
 import { cn } from '@/lib/utils';
 
-/** POC login frame: centred 380px column, brand block, 12px-radius card, access notice. */
+/** POC login frame: centred 380px column, brand block, 12px-radius card, access notice. The
+ * language switch sits at the frame's top inline-end corner, on the brand row above the card, so
+ * a user can pick a language before signing in. */
 export function AuthCard({
   title,
   intro,
@@ -29,6 +32,9 @@ export function AuthCard({
             <div className="font-mono text-[11.5px] leading-snug tracking-[0.04em] text-ink-muted uppercase">
               {t('auth:brand.tagline')}
             </div>
+          </div>
+          <div className="ms-auto">
+            <LanguageSwitch label={t('auth:language')} variant="labelled" />
           </div>
         </div>
 

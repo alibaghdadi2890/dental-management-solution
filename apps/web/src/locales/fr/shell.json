@@ -33,7 +33,8 @@
   "user": {
     "fallbackRole": "Personnel",
     "platformAdmin": "Administrateur plateforme",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "language": "Langue"
   },
   "acting": {
     "banner": "Vous gérez {{tenant}} en tant qu’administrateur plateforme",

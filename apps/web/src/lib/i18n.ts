@@ -3,6 +3,15 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import { initReactI18next } from 'react-i18next';
 
 export const SUPPORTED_LANGUAGES = ['en', 'ar', 'fr'] as const;
+export type Language = (typeof SUPPORTED_LANGUAGES)[number];
+
+/** Each language in its own name (an endonym), the same whatever the UI language: the language
+ * switch lists them so a user can find theirs without reading the current one. */
+export const LANGUAGE_NAMES: Record<Language, string> = {
+  en: 'English',
+  ar: 'العربية',
+  fr: 'Français',
+};
 export const NAMESPACES = [
   'common',
   'shell',

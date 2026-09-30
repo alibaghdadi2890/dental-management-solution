@@ -33,7 +33,8 @@
   "user": {
     "fallbackRole": "موظف",
     "platformAdmin": "مسؤول المنصة",
-    "signOut": "تسجيل الخروج"
+    "signOut": "تسجيل الخروج",
+    "language": "اللغة"
   },
   "acting": {
     "banner": "تدير {{tenant}} بصفتك مسؤول المنصة",

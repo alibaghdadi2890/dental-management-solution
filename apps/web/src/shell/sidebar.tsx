@@ -1,6 +1,7 @@
 import type { Session } from '@dcm/contracts';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { LanguageSwitch } from '@/components/language-switch';
 import { IconButton } from '@/components/ui/button';
 import { useSignOut } from '@/features/auth/use-sign-out';
 import { initials } from '@/lib/initials';
@@ -108,25 +109,28 @@ export function Sidebar({ session }: { session: Session | undefined }) {
                 : (session.roleNames[0] ?? t('user.fallbackRole'))}
             </div>
           </div>
-          <IconButton
-            aria-label={t('user.signOut')}
-            title={t('user.signOut')}
-            onClick={() => {
-              void signOut();
-            }}
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              className="rtl:-scale-x-100"
+          <div className="flex flex-none">
+            <LanguageSwitch label={t('user.language')} />
+            <IconButton
+              aria-label={t('user.signOut')}
+              title={t('user.signOut')}
+              onClick={() => {
+                void signOut();
+              }}
             >
-              <path d="M6 2.5H3.5v11H6M10 5l3 3-3 3M13 8H6.5" />
-            </svg>
-          </IconButton>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="rtl:-scale-x-100"
+              >
+                <path d="M6 2.5H3.5v11H6M10 5l3 3-3 3M13 8H6.5" />
+              </svg>
+            </IconButton>
+          </div>
         </div>
       )}
     </aside>

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ALL_PERMISSIONS, mockApi, sessionWith } from '@/features/patients/patients.test-utils';
+import i18n from '@/lib/i18n';
 import { renderShell } from './shell.test-utils';
 
 const header = () => within(screen.getByRole('banner'));
@@ -121,5 +122,29 @@ describe('AppShell header', () => {
     ctrlK();
     expect(screen.queryByRole('dialog', { name: 'Find patient' })).toBeNull();
     expect(confirm.isConnected).toBe(true);
+  });
+});
+
+describe('AppShell sidebar', () => {
+  afterEach(async () => {
+    cleanup();
+    vi.unstubAllGlobals();
+    await i18n.changeLanguage('en');
+  });
+
+  it('switches the language from the footer, beside Sign out', async () => {
+    mockApi();
+    renderShell({ url: '/visits', session: sessionWith(ALL_PERMISSIONS) });
+    await screen.findByText('Visits screen');
+    const sidebar = within(screen.getByRole('complementary'));
+    const trigger = sidebar.getByRole('button', { name: 'Language' });
+    expect(trigger.nextElementSibling).toBe(sidebar.getByRole('button', { name: 'Sign out' }));
+
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'العربية' }));
+
+    expect(await sidebar.findByRole('link', { name: 'المرضى' })).toBeTruthy();
+    expect(sidebar.getByRole('button', { name: 'تسجيل الخروج' })).toBeTruthy();
+    expect(document.documentElement.dir).toBe('rtl');
   });
 });

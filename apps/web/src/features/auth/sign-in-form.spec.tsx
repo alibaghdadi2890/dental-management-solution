@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '@/lib/i18n';
+import i18n from '@/lib/i18n';
 import { ApiError } from '@/lib/api';
 import { signInFailure } from './sign-in-failure';
 import { SignInForm } from './sign-in-form';
@@ -81,5 +81,21 @@ describe('SignInForm', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('locked for 15 minutes');
     expect((submitButton() as HTMLButtonElement).disabled).toBe(true);
     expect(submitButton().textContent).toContain('Locked — try again in 15 min');
+  });
+
+  it('lets the user pick a language before signing in', async () => {
+    renderForm();
+    try {
+      fireEvent.pointerDown(screen.getByRole('button', { name: 'Language' }), {
+        button: 0,
+        ctrlKey: false,
+      });
+      fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Français' }));
+      expect(await screen.findByRole('button', { name: 'Se connecter' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Langue' })).toBeTruthy();
+      expect(document.documentElement.lang).toBe('fr');
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 });
