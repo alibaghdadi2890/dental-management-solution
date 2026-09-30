@@ -8,8 +8,8 @@ import {
   type Visit,
 } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Link, Navigate, useNavigate } from '@tanstack/react-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, Navigate } from '@tanstack/react-router';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
@@ -38,6 +38,7 @@ import { ToothPanel } from './tooth-panel/tooth-panel';
 import { ToothSelectionContext, useToothSelectionState } from './tooth-selection';
 import { useChartKeyboard } from './use-chart-keyboard';
 import { VisitHeader } from './visit-header';
+import { useToothParam } from './workspace-search';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -168,18 +169,13 @@ function Workspace({
     ageYears: chart.data.dentition.ageYears,
   };
 
-  const { select } = selection;
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (tooth === undefined) return;
-    select(tooth);
-    void navigate({
-      to: '/visits/$visitId',
-      params: { visitId: visit.id },
-      search: {},
-      replace: true,
-    });
-  }, [tooth, select, navigate, visit.id]);
+  useToothParam({
+    tooth,
+    visitId: visit.id,
+    dentition: dentition?.stage,
+    toothStatus: chart.data?.toothStatus ?? NO_STATUS,
+    onSelect: selection.select,
+  });
 
   useChartKeyboard({
     orientation,
@@ -268,7 +264,7 @@ function Workspace({
             code={historyTooth}
             onCodeChange={setHistoryTooth}
             canStart={false}
-            visitId={visit.id}
+            onChartIt={selection.select}
           />
         </div>
       </ChartingActionsContext.Provider>

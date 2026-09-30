@@ -1,12 +1,22 @@
-import type { Permission } from '@dcm/contracts';
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import type { Permission, ToothCode } from '@dcm/contracts';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { sessionQueryOptions } from '@/features/auth/session';
 import {
   ALL_PERMISSIONS,
   EMPTY_CHART,
   mockApi,
   type MockApi,
+  problem,
   renderRecord,
+  sessionWith,
 } from '@/features/patients/patients.test-utils';
 import {
   diagnosisRecord,
@@ -15,6 +25,7 @@ import {
   treatmentPlan,
   VISIT_ID,
 } from '../workspace/workspace.test-utils';
+import { ToothHistoryDialog } from './tooth-history-dialog';
 
 const DENTIST: Permission[] = [...ALL_PERMISSIONS, 'visit:read', 'visit:write'];
 const FRONT_DESK: Permission[] = [...ALL_PERMISSIONS, 'visit:read'];
@@ -34,6 +45,34 @@ async function openHistory(
   button.focus();
   fireEvent.click(button);
   return { ...rendered, button };
+}
+
+/** The dialog alone, open on `code`, for what the record page can't reach (a failed chart). */
+function renderDialog(code: ToothCode) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+  });
+  client.setQueryData(sessionQueryOptions().queryKey, sessionWith(DENTIST));
+  const rootRoute = createRootRoute({
+    component: () => (
+      <ToothHistoryDialog
+        patientId={RANA.id}
+        patientName={RANA.fullName}
+        code={code}
+        onCodeChange={() => undefined}
+        canStart
+      />
+    ),
+  });
+  const router = createRouter({
+    routeTree: rootRoute,
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
 }
 
 describe('ToothHistoryDialog', () => {
@@ -59,7 +98,8 @@ describe('ToothHistoryDialog', () => {
               }),
             ],
             plans: [
-              treatmentPlan(30, 'Zircon crown', '16', { recordedAt: '2026-05-04T09:06:00.000Z' }),
+              // 02:30 on 5 May in the tenant's Asia/Beirut (UTC+3).
+              treatmentPlan(30, 'Zircon crown', '16', { recordedAt: '2026-05-04T23:30:00.000Z' }),
               treatmentPlan(32, 'Composite filling', '16', {
                 status: 'performed',
                 price: { amount: '80.00', currency: 'USD' },
@@ -98,7 +138,7 @@ describe('ToothHistoryDialog', () => {
       'GingivitisResolved12 Mar 2025Dr. Ana Reyes',
     ]);
     expect(plans?.map((item) => item.textContent)).toEqual([
-      'Zircon crownPlanned4 May 2026$400',
+      'Zircon crownPlanned5 May 2026$400',
       'Composite fillingPerformed12 Mar 2025$80',
       'Root canalCancelled12 Mar 2025$400',
     ]);
@@ -153,6 +193,56 @@ describe('ToothHistoryDialog', () => {
     expect(within(successor).getByText('Upper right first premolar · Rana Haddad')).toBeTruthy();
     expect(within(successor).getByText('Primary predecessor')).toBeTruthy();
     expect(within(successor).getByRole('button', { name: '#54' })).toBeTruthy();
+  });
+
+  it('offers "Chart it" only for the tooth the chart shows in the position', async () => {
+    await openHistory('#54', {
+      charts: {
+        [RANA.id]: {
+          ...EMPTY_CHART,
+          dentition: { stage: 'primary', source: 'auto', ageYears: 4 },
+          liveVisitId: VISIT_ID,
+        },
+      },
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Tooth #54' });
+    expect(
+      await within(dialog).findByRole('button', { name: 'Chart it in this visit' }),
+    ).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: '#14' }));
+
+    const successor = await screen.findByRole('dialog', { name: 'Tooth #14' });
+    expect(
+      await within(successor).findByText(
+        'The chart shows #54 in this position: chart it there, or record which tooth is present from its panel in the visit.',
+      ),
+    ).toBeTruthy();
+    expect(within(successor).queryByRole('button', { name: 'Chart it in this visit' })).toBeNull();
+    expect(within(successor).queryByRole('button', { name: 'Start a visit' })).toBeNull();
+  });
+
+  it('says why nothing can be charted when the chart fails to load', async () => {
+    mockApi({
+      patients: [RANA],
+      get: (path) => (path.endsWith('/chart') ? problem(500, 'internal') : undefined),
+    });
+    renderDialog('16');
+    const dialog = await screen.findByRole('dialog', { name: 'Tooth #16' });
+    expect(
+      await within(dialog).findByText(
+        'Couldn’t load the chart, so this tooth can’t be charted from here.',
+      ),
+    ).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: /visit/ })).toBeNull();
+  });
+
+  it('offers no "Start a visit" on an archived record', async () => {
+    await openHistory('#16', {
+      patients: [{ ...RANA, archivedAt: '2026-09-01T10:00:00.000Z' }],
+    });
+    const dialog = await screen.findByRole('dialog', { name: 'Tooth #16' });
+    expect(await within(dialog).findByText('No treatment recorded for this tooth')).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Start a visit' })).toBeNull();
   });
 
   it('names no predecessor in a permanent dentition when it has no records', async () => {

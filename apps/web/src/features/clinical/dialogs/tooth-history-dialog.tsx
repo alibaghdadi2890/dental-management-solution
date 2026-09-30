@@ -19,6 +19,7 @@ import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { formatCalendarDate, formatDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { shownTooth } from '../chart/shown-tooth';
 import { ToothGlyph } from '../chart/tooth-glyph';
 import {
   useChartSettings,
@@ -44,9 +45,10 @@ export interface ToothHistoryDialogProps {
   onCodeChange: (code: ToothCode | null) => void;
   /** Whether the empty state may offer **Start a visit** (not on an archived record). */
   canStart: boolean;
-  /** The visit "Chart it in this visit" goes to: the workspace's own. Elsewhere, the patient's
-   * most recently started live visit (the chart's). */
-  visitId?: string | undefined;
+  /** Inside the visit workspace: "Chart it in this visit" selects the tooth there (the dialog
+   * closes itself). Elsewhere it goes to the patient's most recently started live visit (the
+   * chart's) with the tooth selected. */
+  onChartIt?: ((code: ToothCode) => void) | undefined;
 }
 
 /**
@@ -57,7 +59,8 @@ export interface ToothHistoryDialogProps {
  * three stages in order: diagnoses (Active / Resolved), treatment plans (Planned / Performed /
  * Cancelled, with the price) and the completed services as a timeline. A tooth with none of them
  * offers **Chart it in this visit** while a visit is live for the patient (to the workspace, with
- * the tooth selected) or **Start a visit** (the start popover); both need `visit:write`. A modal:
+ * the tooth selected; only for the tooth the chart shows in its position) or **Start a visit**
+ * (the start popover); both need `visit:write`. A modal:
  * focus is trapped, `Esc` closes it and focus goes back to what opened it.
  */
 export function ToothHistoryDialog({
@@ -66,7 +69,7 @@ export function ToothHistoryDialog({
   code,
   onCodeChange,
   canStart,
-  visitId,
+  onChartIt,
 }: ToothHistoryDialogProps) {
   // Radix only hands focus back to a `Dialog.Trigger`, and this dialog is opened by code.
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -99,7 +102,7 @@ export function ToothHistoryDialog({
               code={code}
               onCodeChange={onCodeChange}
               canStart={canStart}
-              visitId={visitId}
+              onChartIt={onChartIt}
             />
           )}
         </Dialog.Content>
@@ -114,7 +117,7 @@ function HistoryContent({
   code,
   onCodeChange,
   canStart,
-  visitId,
+  onChartIt,
 }: ToothHistoryDialogProps & { code: ToothCode }) {
   const { t } = useTranslation(['clinical', 'common']);
   const { mode, orientation } = useChartSettings();
@@ -199,8 +202,10 @@ function HistoryContent({
               <EmptyHistory
                 patientId={patientId}
                 code={code}
-                liveVisitId={visitId ?? chart.data?.liveVisitId}
+                chart={chart.data}
+                chartFailed={chart.isError}
                 canStart={canStart}
+                onChartIt={onChartIt}
                 onLeave={() => {
                   onCodeChange(null);
                 }}
@@ -384,44 +389,66 @@ function Stage({
   );
 }
 
-/** Nothing recorded on the tooth: chart it in the live visit, else start one (`visit:write`). */
+/**
+ * Nothing recorded on the tooth (`visit:write` only): chart it in the live visit — when it is the
+ * tooth the chart shows in its position; otherwise a note names the one it shows — else start a
+ * visit. Without the chart (a failed read) there is no knowing which, and the note says so.
+ */
 function EmptyHistory({
   patientId,
   code,
-  liveVisitId,
+  chart,
+  chartFailed,
   canStart,
+  onChartIt,
   onLeave,
 }: {
   patientId: string;
   code: ToothCode;
-  /** `undefined` while the chart loads. */
-  liveVisitId: string | null | undefined;
+  /** `undefined` while the chart loads, or when it failed. */
+  chart: PatientChart | undefined;
+  chartFailed: boolean;
   canStart: boolean;
-  /** Closes the dialog on the way to the workspace. */
+  onChartIt: ((code: ToothCode) => void) | undefined;
+  /** Closes the dialog. */
   onLeave: () => void;
 }) {
   const { t } = useTranslation('clinical');
   const canWrite = usePermission('visit:write');
+  const label = useToothLabel();
   const navigate = useNavigate();
 
   let action: ReactNode = null;
-  if (canWrite && liveVisitId) {
-    action = (
-      <Button
-        variant="primary"
-        onClick={() => {
-          onLeave();
-          void navigate({
-            to: '/visits/$visitId',
-            params: { visitId: liveVisitId },
-            search: { tooth: code },
-          });
-        }}
-      >
-        {t('history.chartIt')}
-      </Button>
-    );
-  } else if (canWrite && canStart && liveVisitId === null) {
+  let note: string | null = null;
+  const liveVisitId = chart?.liveVisitId ?? null;
+  if (canWrite && chartFailed) {
+    note = t('history.chartFailed');
+  } else if (canWrite && chart && (onChartIt || liveVisitId)) {
+    const shown = shownTooth(code, chart.dentition.stage, chart.toothStatus);
+    if (shown !== code) {
+      note = t('history.notShown', { label: label(shown) });
+    } else {
+      action = (
+        <Button
+          variant="primary"
+          onClick={() => {
+            onLeave();
+            if (onChartIt) {
+              onChartIt(code);
+            } else if (liveVisitId) {
+              void navigate({
+                to: '/visits/$visitId',
+                params: { visitId: liveVisitId },
+                search: { tooth: code },
+              });
+            }
+          }}
+        >
+          {t('history.chartIt')}
+        </Button>
+      );
+    }
+  } else if (canWrite && chart && canStart) {
     action = (
       <StartVisitPopover patientId={patientId}>
         <Button variant="primary">{t('history.startVisit')}</Button>
@@ -437,6 +464,9 @@ function EmptyHistory({
       <p className={cn('m-0 text-[12.5px] leading-normal text-ink-muted', action && 'mb-4')}>
         {t('history.emptyBody')}
       </p>
+      {note !== null && (
+        <p className="m-0 mt-3 text-[12.5px] leading-normal text-ink-secondary">{note}</p>
+      )}
       {action}
     </div>
   );

@@ -421,22 +421,24 @@ export function OverviewTab({
           info
         )}
       </div>
-      <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-        {canPay && (
-          <BalanceCard patientId={patient.id} currency={tenant.currency} locale={locale} />
-        )}
-        {canVisits && (
-          <>
-            <TreatmentSummary
-              patientId={patient.id}
-              tenant={tenant}
-              locale={locale}
-              canPay={canPay}
-            />
-            {info}
-          </>
-        )}
-      </div>
+      {(canPay || canVisits) && (
+        <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
+          {canPay && (
+            <BalanceCard patientId={patient.id} currency={tenant.currency} locale={locale} />
+          )}
+          {canVisits && (
+            <>
+              <TreatmentSummary
+                patientId={patient.id}
+                tenant={tenant}
+                locale={locale}
+                canPay={canPay}
+              />
+              {info}
+            </>
+          )}
+        </div>
+      )}
       {canVisits && (
         <ToothHistoryDialog
           patientId={patient.id}

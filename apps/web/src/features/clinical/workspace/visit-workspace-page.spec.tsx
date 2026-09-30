@@ -103,6 +103,37 @@ describe('VisitWorkspacePage', () => {
     expect(router.state.location.pathname).toBe(`/visits/${VISIT_ID}`);
   });
 
+  it('selects nothing when ?tooth= names a tooth the chart does not show', async () => {
+    mockWorkspace({ chart: chart({ toothStatus: [{ position: '14', present: 'permanent' }] }) });
+    const { router } = renderWorkspace({ search: '?tooth=54' });
+    await chartCard();
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({});
+    });
+    const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
+    expect(within(aside).getByText('No tooth selected')).toBeTruthy();
+  });
+
+  it('"Chart it in this visit" selects the tooth here, without navigating', async () => {
+    // The chart lists a service on 16 (so the panel links its history), while the history read
+    // finds none: the dialog's empty state.
+    mockWorkspace({ chart: chart({ history: [historyLine(40, 'Composite filling', '16')] }) });
+    const { router } = renderWorkspace();
+    const card = await chartCard();
+    fireEvent.click(within(card).getByRole('button', { name: /^#16 · / }));
+    const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
+    fireEvent.click(await within(aside).findByRole('button', { name: 'Full tooth history →' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Tooth #16' });
+    const entries = router.history.length;
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Chart it in this visit' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(within(aside).getByRole('heading', { name: '#16' })).toBeTruthy();
+    expect(router.history.length).toBe(entries);
+    expect(router.state.location.search).toEqual({});
+  });
+
   it('opens the tooth history from "Full tooth history →", over the workspace', async () => {
     mockWorkspace({
       chart: chart({ history: [historyLine(40, 'Composite filling', '16')] }),
