@@ -26,3 +26,4 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0019](0019-contacts-are-people.md)                     | Contacts are people; ledgers stay per patient        | Accepted                           |
 | [0020](0020-dentists-referenced-by-staff-profile-id.md) | Dentists referenced by staff profile id              | Accepted (amends 0016)             |
 | [0021](0021-canonical-fdi-tooth-codes.md)               | Canonical FDI codes; chart settings are display-only | Accepted                           |
+| [0023](0023-live-visit-concurrency.md)                  | Live-visit concurrency, rooms and discard            | Accepted                           |
