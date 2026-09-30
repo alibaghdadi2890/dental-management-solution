@@ -94,6 +94,15 @@ export class UsersService {
   }
 
   /**
+   * The caller's (or any user's) staff profile id in this tenant (ADR-0020), or null when they
+   * have none — a platform admin acting in the tenant. Not permission-gated: a building block like
+   * `listPractitioners`, e.g. for `clinical`'s "my live visits" (W18).
+   */
+  profileIdOf(userId: string): Promise<string | null> {
+    return this.tenantDb.run(async () => (await this.staff.byUserId(userId))?.id ?? null);
+  }
+
+  /**
    * A new person in this clinic with a temporary password (D6). An email that already has an
    * identity is refused (`user.email_taken`); attaching it instead is the D7 extension point.
    */

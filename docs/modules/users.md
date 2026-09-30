@@ -40,7 +40,10 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
   showing the display name of a dentist already assigned to a patient even after they leave or
   change role. Not permission-gated either: `patients` (`primary_dentist_id`, the `sort=dentist`
   rank) and `billing` (the export's Dentist column) resolve dentist names through it (ADR-0020).
-  There is no lookup by auth user id: domain models never store one for a dentist.
+  Domain models never store an auth user id for a dentist.
+- `profileIdOf(userId)` — the user's `staff_profiles.id` in this tenant, or `null` (a platform
+  admin acting in the tenant has no profile). Not permission-gated either: `clinical`'s
+  `live({ mine: true })` matches the caller's visits as dentist through it (feature 4a, W18).
 - `createStaffUser(input)` (`user:write`, roles also need `role:write`): identity with a temporary
   password (D6) → membership mirror → profile → branches → roles, one transaction; a failure in any
   step rolls the identity back. `409 user.email_taken` for a registered email (D7 extension point:

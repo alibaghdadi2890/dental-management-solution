@@ -22,6 +22,7 @@ import {
   Query,
   Res,
 } from '@nestjs/common';
+import { ApiOkResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
@@ -51,7 +52,11 @@ export class VisitsController {
   /** 201 for a new visit; 200 with `resumed: true` when the patient already had a live one. */
   @Post()
   @RequirePermission('visit:write')
-  @ZodResponse({ status: 201, type: StartVisitResultDto })
+  @ZodResponse({ status: 201, description: 'A new visit', type: StartVisitResultDto })
+  @ApiOkResponse({
+    description: "The patient's live visit, resumed",
+    type: StartVisitResultDto.Output,
+  })
   async start(@Body() body: StartVisitDto, @Res({ passthrough: true }) response: Response) {
     const result = await this.visits.start(body);
     if (result.resumed) response.status(HttpStatus.OK);

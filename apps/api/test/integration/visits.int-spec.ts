@@ -251,17 +251,45 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
       await acted(main.owner, visit.id, 'discard');
     });
 
-    it('creates one visit for parallel starts of one patient; the others resume it', async () => {
+    it('serialises parallel starts of one patient on the advisory lock: one creates, one resumes', async () => {
       // A roomless branch, so only the per-patient lock (not the room index) keeps it to one.
       const patient = await createPatient(bare, 'Parallel Start');
       const body = { patientId: patient.id, dentistId: bare.ownerProfileId };
-      const responses = await Promise.all(Array.from({ length: 6 }, () => start(bare.owner, body)));
-      expect(responses.map((response) => response.status).sort()).toEqual([
-        200, 200, 200, 200, 200, 201,
-      ]);
-      const results = responses.map((response) => response.body as StartVisitResult);
-      expect(results.filter((result) => !result.resumed)).toHaveLength(1);
-      expect(new Set(results.map((result) => result.visit.id)).size).toBe(1);
+      const key = 'hashtextextended($1::text, 0)';
+      const lockKey = `visit-start:${patient.id}`;
+      const holder = await database.ownerPool.connect();
+      try {
+        await holder.query(`select pg_advisory_lock(${key})`, [lockKey]);
+        let settled = 0;
+        const pending = [start(bare.owner, body), start(bare.owner, body)].map((request) =>
+          request.then((response) => {
+            settled += 1;
+            return response;
+          }),
+        );
+        // Both starts reach the lock and wait on it (pg_locks splits the bigint key in two oids).
+        await expect
+          .poll(async () => {
+            const waiting = await database.ownerPool.query<{ n: number }>(
+              `select count(*)::int as n from pg_locks
+               where locktype = 'advisory' and not granted
+                 and ((classid::bigint << 32) | objid::bigint) = ${key}`,
+              [lockKey],
+            );
+            return waiting.rows[0]?.n;
+          })
+          .toBe(2);
+        expect(settled).toBe(0);
+        await holder.query(`select pg_advisory_unlock(${key})`, [lockKey]);
+
+        const responses = await Promise.all(pending);
+        expect(responses.map((response) => response.status).sort()).toEqual([200, 201]);
+        const results = responses.map((response) => response.body as StartVisitResult);
+        expect(results.filter((result) => result.resumed)).toHaveLength(1);
+        expect(new Set(results.map((result) => result.visit.id)).size).toBe(1);
+      } finally {
+        holder.release();
+      }
       const count = await database.ownerPool.query<{ n: number }>(
         'select count(*)::int as n from visits where patient_id = $1',
         [patient.id],
@@ -338,6 +366,73 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
       });
       expect(notADentist.status).toBe(422);
       expect(problem(notADentist.body).code).toBe('visit.dentist_invalid');
+    });
+
+    it('resumes the live visit of a patient archived since it started', async () => {
+      const patient = await createPatient(main, 'Archived Mid Visit');
+      const visit = await started(main.owner, {
+        patientId: patient.id,
+        dentistId: main.ownerProfileId,
+        roomId: room(3),
+      });
+      const archive = await main.owner.post('/api/v1/patients/archive').send({ ids: [patient.id] });
+      expect(archive.status, JSON.stringify(archive.body)).toBe(200);
+
+      const again = await start(main.owner, {
+        patientId: patient.id,
+        dentistId: main.ownerProfileId,
+        roomId: room(3),
+      });
+      expect(again.status, JSON.stringify(again.body)).toBe(200);
+      expect(again.body as StartVisitResult).toMatchObject({
+        resumed: true,
+        visit: { id: visit.id },
+      });
+
+      await acted(main.owner, visit.id, 'discard');
+      const fresh = await start(main.owner, {
+        patientId: patient.id,
+        dentistId: main.ownerProfileId,
+        roomId: room(3),
+      });
+      expect(fresh.status).toBe(409);
+      expect(problem(fresh.body).code).toBe('patient.archived');
+    });
+
+    it('refuses a merged-away patient (409 patient.merged)', async () => {
+      const kept = await createPatient(main, 'Merge Kept');
+      const dropped = await createPatient(main, 'Merge Dropped');
+      const merged = await main.owner
+        .post('/api/v1/patients/merge')
+        .send({ keepId: kept.id, dropId: dropped.id, reason: 'Same person' });
+      expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+
+      const response = await start(main.owner, {
+        patientId: dropped.id,
+        dentistId: main.ownerProfileId,
+        roomId: room(3),
+      });
+      expect(response.status).toBe(409);
+      expect(problem(response.body).code).toBe('patient.merged');
+    });
+
+    it('requires a session branch (422 visit.branch_required)', async () => {
+      const closing = await main.owner.post('/api/v1/branches').send({ name: 'Closing' });
+      expect(closing.status, JSON.stringify(closing.body)).toBe(201);
+      const branch = closing.body as Branch;
+      const stranded = await createStaff(main, 'dentist', branch.id);
+      const closed = await main.owner
+        .patch(`/api/v1/branches/${branch.id}`)
+        .send({ active: false });
+      expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+
+      const patient = await createPatient(main, 'No Branch');
+      const response = await start(stranded.agent, {
+        patientId: patient.id,
+        dentistId: stranded.user.profileId,
+      });
+      expect(response.status, JSON.stringify(response.body)).toBe(422);
+      expect(problem(response.body).code).toBe('visit.branch_required');
     });
 
     it('refuses an archived patient (409 patient.archived) and an unknown one (404)', async () => {
@@ -480,7 +575,7 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
         dentistId: dentist.user.profileId,
         roomId: room(0),
       });
-      await acted(assistant.agent, visit.id, 'pause');
+      const paused = await acted(assistant.agent, visit.id, 'pause');
       await assistant.agent
         .patch(`/api/v1/visits/${visit.id}/discount`)
         .send({ mode: 'percent', value: '10' });
@@ -505,7 +600,9 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
       await acted(main.owner, reused.id, 'discard');
 
       const audit = await auditOf(main.owner, `resourceType=visit&resourceId=${visit.id}`);
-      expect(audit.map((entry) => entry.action)).toContain('visit.discard');
+      const discardEntry = audit.find((entry) => entry.action === 'visit.discard');
+      expect(discardEntry?.before).toEqual({ status: 'paused', pausedAt: paused.pausedAt });
+      expect(discardEntry?.after).toMatchObject({ status: 'discarded', pausedAt: null });
     });
 
     it('refuses to discard a visit with notes, a service or a tooth change (409 visit.not_empty)', async () => {

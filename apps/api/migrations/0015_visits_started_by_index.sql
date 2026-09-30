@@ -1,0 +1,1 @@
+CREATE INDEX "visits_started_by_date_idx" ON "visits" USING btree ("tenant_id","started_by","local_date");

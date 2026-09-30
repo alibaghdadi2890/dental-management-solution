@@ -103,7 +103,11 @@ export class VisitsRepository {
     );
   }
 
-  /** The patient's oldest live visit. After a merge the kept patient may have two (W1). */
+  /**
+   * The patient's oldest live visit, `FOR SHARE` in the caller's transaction so it can't be
+   * discarded or completed before `start` answers with it. After a merge the kept patient may
+   * have two (W1).
+   */
   findLiveForPatient(patientId: string): Promise<StoredVisit | undefined> {
     return this.db.run(async (tx) => {
       const [row] = await tx
@@ -111,7 +115,8 @@ export class VisitsRepository {
         .from(visits)
         .where(and(eq(visits.patientId, patientId), live))
         .orderBy(asc(visits.startedAt), asc(visits.id))
-        .limit(1);
+        .limit(1)
+        .for('share');
       return row && toStored(row);
     });
   }

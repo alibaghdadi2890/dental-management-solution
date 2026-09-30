@@ -172,6 +172,8 @@ export const visits = pgTable(
       .on(table.tenantId, table.roomId)
       .where(sql`${table.status} in ${LIVE_STATUS_LIST} and ${table.roomId} is not null`),
     index('visits_patient_started_idx').on(table.tenantId, table.patientId, table.startedAt.desc()),
+    // `lastRoomToday`: the start popover's default room (V3).
+    index('visits_started_by_date_idx').on(table.tenantId, table.startedBy, table.localDate),
     index('visits_live_idx')
       .on(table.tenantId, table.status)
       .where(sql`${table.status} in ${LIVE_STATUS_LIST}`),

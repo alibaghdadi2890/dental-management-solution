@@ -82,7 +82,8 @@ export class VisitsService {
    * `FOR SHARE` (a merge waits), then the per-patient advisory lock (a parallel start waits and
    * then resumes), and only then the visit row. The dentist must be a dentist of the branch; the
    * room an active room of the branch, required when the branch has any (W7). A room another live
-   * visit holds → 409 `visit.room_busy`.
+   * visit holds → 409 `visit.room_busy`. An archived patient's live visit is still resumed; a new
+   * one → 409 `patient.archived`.
    */
   async start(input: StartVisitInput): Promise<StartVisitResult> {
     this.context.requirePermission('visit:write');
@@ -90,15 +91,16 @@ export class VisitsService {
     if (!branchId) throw new BranchRequiredError('A visit starts in a branch; choose one first');
     return this.tenantDb.run(async () => {
       const patient = await this.patients.lockForDependentWrite(input.patientId);
-      // `lockForDependentWrite` allows archived records (a ledger write-off); a visit doesn't.
+      await this.visits.lockPatientStarts(patient.id);
+      const existing = await this.visits.findLiveForPatient(patient.id);
+      if (existing) return { visit: await this.toVisit(existing), resumed: true };
+      // `lockForDependentWrite` allows archived records (a ledger write-off). A live visit of a
+      // patient archived since it started stays resumable; only a new one is refused.
       if (patient.archivedAt !== null) {
         throw new PatientArchivedError(
           'Archived patients cannot start a visit; restore them first',
         );
       }
-      await this.visits.lockPatientStarts(patient.id);
-      const existing = await this.visits.findLiveForPatient(patient.id);
-      if (existing) return { visit: await this.toVisit(existing), resumed: true };
 
       await this.assertBranchDentist(branchId, input.dentistId);
       const roomId = await this.roomFor(branchId, input.roomId);
@@ -277,9 +279,10 @@ export class VisitsService {
         action: 'visit.discard',
         resourceType: 'visit',
         resourceId: id,
-        before: { status: before.status },
+        before: { status: before.status, pausedAt: before.pausedAt },
         after: {
           status: after.status,
+          pausedAt: after.pausedAt,
           discardedAt: after.discardedAt,
           discardedBy: after.discardedBy,
         },
@@ -314,12 +317,7 @@ export class VisitsService {
     const userId = this.context.requireUserId();
     return this.tenantDb.run(async () => {
       const mine = query.mine
-        ? {
-            userId,
-            profileId: this.context.isPlatformAdmin
-              ? null
-              : (await this.users.get(userId)).profileId,
-          }
+        ? { userId, profileId: await this.users.profileIdOf(userId) }
         : undefined;
       const visits = await this.visits.liveRefs({ patientId: query.patientId, mine });
       if (visits.length === 0) return [];
@@ -355,7 +353,7 @@ export class VisitsService {
    * One lifecycle mutation: `visit:write`, one transaction, the visit locked `FOR UPDATE` and
    * live (`lockLive`), then `work`, which audits and publishes when it changes anything.
    */
-  private change(
+  private async change(
     id: string,
     work: (before: StoredVisit, now: Date) => Promise<StoredVisit>,
   ): Promise<VisitResult> {
