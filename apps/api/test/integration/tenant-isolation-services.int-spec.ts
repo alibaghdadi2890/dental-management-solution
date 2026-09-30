@@ -16,6 +16,7 @@ import type {
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { BillingService } from '../../src/modules/billing';
+import { ChartService, VisitsService } from '../../src/modules/clinical';
 import { ContactsService, PatientsService } from '../../src/modules/patients';
 import { UsersService } from '../../src/modules/users';
 import { RequestContext } from '../../src/platform/cls/request-context';
@@ -38,8 +39,8 @@ interface Clinic {
 
 /**
  * CLAUDE.md §14: tenant A's users cannot read or affect tenant B's rows through any public
- * service — branches, rooms, users, roles, audit, catalogs, patients, balances — and cannot pick
- * B with `X-Tenant-Id`.
+ * service — branches, rooms, users, roles, audit, catalogs, patients, balances, visits and their
+ * records, charts — and cannot pick B with `X-Tenant-Id`.
  */
 describe('tenant isolation through the public services', () => {
   let database: TestDatabase;
@@ -48,6 +49,7 @@ describe('tenant isolation through the public services', () => {
   let a: Clinic;
   let b: Clinic;
   let ownerA: TestAgent;
+  let ownerB: TestAgent;
 
   const provisionClinic = async (name: string): Promise<Clinic> => {
     const ownerEmail = uniqueEmail('owner');
@@ -102,7 +104,21 @@ describe('tenant isolation through the public services', () => {
     a = await provisionClinic('Alpha');
     b = await provisionClinic('Bravo');
     ownerA = await signInAndSetPassword(testApp.app, a.ownerEmail, TEMPORARY);
+    ownerB = await signInAndSetPassword(testApp.app, b.ownerEmail, TEMPORARY);
   });
+
+  /** B's owner as a dentist (their staff profile id) and B's active catalog services. */
+  const bOwnerDentist = async (): Promise<{ profileId: string; services: ServiceItem[] }> => {
+    const session = (await ownerB.get('/api/v1/session')).body as Session;
+    const profile = ((await ownerB.get('/api/v1/users')).body as StaffUser[]).find(
+      (user) => user.id === session.user.id,
+    );
+    if (!profile) throw new Error("B's owner has no staff profile");
+    const services = ((await ownerB.get('/api/v1/catalog/services')).body as ServiceItem[]).filter(
+      (service) => service.active,
+    );
+    return { profileId: profile.profileId, services };
+  };
 
   afterAll(async () => {
     await testApp.close();
@@ -372,18 +388,12 @@ describe('tenant isolation through the public services', () => {
     });
 
     it("visits: B's completed visit, its charge and its summary are not found for A", async () => {
-      const ownerB = await signInAndSetPassword(testApp.app, b.ownerEmail, TEMPORARY);
-      const session = (await ownerB.get('/api/v1/session')).body as Session;
-      const profile = ((await ownerB.get('/api/v1/users')).body as StaffUser[]).find(
-        (user) => user.id === session.user.id,
-      );
-      const item = ((await ownerB.get('/api/v1/catalog/services')).body as ServiceItem[]).find(
-        (service) => service.active && service.chargeUnit === 'per_jaw',
-      );
-      if (!profile || !item) throw new Error("B's owner profile or catalog is missing");
+      const { profileId, services } = await bOwnerDentist();
+      const item = services.find((service) => service.chargeUnit === 'per_jaw');
+      if (!item) throw new Error("B's catalog has no per-jaw service");
       const started = await ownerB.post('/api/v1/visits').send({
         patientId: b.patient.id,
-        dentistId: profile.profileId,
+        dentistId: profileId,
         roomId: b.room.id,
       });
       expect(started.status, JSON.stringify(started.body)).toBe(201);
@@ -413,6 +423,137 @@ describe('tenant isolation through the public services', () => {
       expect((await bCharges()).rows).toEqual(before);
       const balance = await ownerB.get(`/api/v1/billing/visits/${visitId}/summary`);
       expect(balance.status).toBe(200);
+    });
+
+    it("visits: B's live visit, its records and B's charts are not found for A, and unchanged", async () => {
+      // After the completed-visit test: this visit holds B's room until the suite ends.
+      const bPatient = (
+        await ownerB.post('/api/v1/patients').send({
+          fullName: 'Bravo Charted',
+          phone: '03 123 456',
+          dateOfBirth: '2016-05-01',
+        })
+      ).body as Patient;
+      const { profileId, services } = await bOwnerDentist();
+      const perTooth = services.find((service) => service.chargeUnit === 'per_tooth');
+      const bDiagnosis = (
+        (await ownerB.get('/api/v1/catalog/diagnoses')).body as DiagnosisItem[]
+      )[0];
+      if (!perTooth || !bDiagnosis) throw new Error("B's catalog was not seeded");
+      const started = await ownerB
+        .post('/api/v1/visits')
+        .send({ patientId: bPatient.id, dentistId: profileId, roomId: b.room.id });
+      expect(started.status, JSON.stringify(started.body)).toBe(201);
+      const visitId = (started.body as { visit: { id: string } }).visit.id;
+      const inB = async (request: Promise<{ status: number; body: unknown }>) => {
+        const response = await request;
+        expect(response.status, JSON.stringify(response.body)).toBeLessThan(300);
+        return (response.body as { record: { id: string } }).record.id;
+      };
+      const serviceId = await inB(
+        ownerB
+          .post(`/api/v1/visits/${visitId}/services`)
+          .send({ procedureId: perTooth.id, toothCode: '26' }),
+      );
+      const diagnosisRecordId = await inB(
+        ownerB
+          .post(`/api/v1/visits/${visitId}/diagnoses`)
+          .send({ diagnosisId: bDiagnosis.id, toothCode: '16' }),
+      );
+      const planId = await inB(
+        ownerB
+          .post(`/api/v1/visits/${visitId}/plans`)
+          .send({ procedureId: perTooth.id, toothCode: '16' }),
+      );
+      await inB(ownerB.put(`/api/v1/visits/${visitId}/teeth/15`).send({ present: 'permanent' }));
+
+      const clinicalTables = [
+        'visits',
+        'visit_services',
+        'patient_diagnoses',
+        'treatment_plans',
+        'tooth_status',
+      ];
+      const snapshot = () =>
+        Promise.all(
+          clinicalTables.map(
+            async (table) =>
+              (
+                await database.ownerPool.query<{ row: unknown }>(
+                  `select to_jsonb(t) as row from ${table} t where tenant_id = $1 order by id`,
+                  [b.tenant.id],
+                )
+              ).rows,
+          ),
+        );
+      const before = await snapshot();
+      // B's completed visit from the test before, and its service, are in there too.
+      expect(before.map((rows) => rows.length)).toEqual([2, 2, 1, 1, 1]);
+
+      const visit = `/api/v1/visits/${visitId}`;
+      const visitRoutes = [
+        ownerA.get(visit),
+        ownerA.get(`/api/v1/billing/visits/${visitId}/summary`),
+        ownerA.post(`${visit}/pause`),
+        ownerA.post(`${visit}/discard`),
+        ownerA.patch(`${visit}/notes`).send({ notes: 'Hijacked' }),
+        ownerA.patch(`${visit}/discount`).send({ mode: 'amount', value: '5.00' }),
+        ownerA.post(`${visit}/services`).send({ procedureId: perTooth.id, toothCode: '36' }),
+        ownerA.patch(`${visit}/services/${serviceId}`).send({ baseAmount: '0.00' }),
+        ownerA.delete(`${visit}/services/${serviceId}`),
+        ownerA.post(`${visit}/diagnoses`).send({ diagnosisId: bDiagnosis.id, toothCode: '36' }),
+        ownerA.post(`${visit}/diagnoses/${diagnosisRecordId}/resolve`),
+        ownerA.delete(`${visit}/diagnoses/${diagnosisRecordId}`),
+        ownerA.post(`${visit}/plans`).send({ procedureId: perTooth.id, toothCode: '36' }),
+        ownerA.post(`${visit}/plans/${planId}/perform`),
+        ownerA.post(`${visit}/plans/${planId}/cancel`),
+        ownerA.delete(`${visit}/plans/${planId}`),
+        ownerA.put(`${visit}/teeth/15`).send({ present: 'primary' }),
+      ];
+      for (const response of await Promise.all(visitRoutes)) {
+        expect(response.status, JSON.stringify(response.body)).toBe(404);
+        expect(response.body).toMatchObject({ code: 'visit.not_found' });
+      }
+      const chart = `/api/v1/clinical/patients/${bPatient.id}`;
+      const chartRoutes = [
+        ownerA.get(`${chart}/chart`),
+        ownerA.get(`${chart}/teeth/16/history`),
+        ownerA.get(`${chart}/last-visit`),
+        ownerA.get(`${chart}/summary`),
+      ];
+      for (const response of await Promise.all(chartRoutes)) {
+        expect(response.status, JSON.stringify(response.body)).toBe(404);
+        expect(response.body).toMatchObject({ code: 'patient.not_found' });
+      }
+      for (const query of ['', `?patientId=${bPatient.id}`]) {
+        const live = await ownerA.get(`/api/v1/visits/live${query}`);
+        expect(live.status).toBe(200);
+        expect(live.body).toEqual([]);
+      }
+
+      // The services themselves, in A's tenant context: RLS, not just the routes.
+      const inA = <T>(fn: () => Promise<T>) => asPlatformAdminIn(testApp.app, a.tenant.id, fn);
+      const visits = testApp.app.get(VisitsService);
+      const charts = testApp.app.get(ChartService);
+      await expect(inA(() => visits.get(visitId))).rejects.toMatchObject({
+        code: 'visit.not_found',
+      });
+      expect(await inA(() => visits.live({ patientId: bPatient.id }))).toEqual([]);
+      expect(await inA(() => visits.live({}))).toEqual([]);
+      for (const read of [
+        (): Promise<unknown> => charts.chart(bPatient.id),
+        () => charts.toothHistory(bPatient.id, '16'),
+        () => charts.lastVisit(bPatient.id),
+        () => charts.summary(bPatient.id),
+      ]) {
+        await expect(inA(read)).rejects.toMatchObject({ code: 'patient.not_found' });
+      }
+      const liveInB = await asPlatformAdminIn(testApp.app, b.tenant.id, () =>
+        visits.live({ patientId: bPatient.id }),
+      );
+      expect(liveInB.map((ref) => ref.id)).toEqual([visitId]);
+
+      expect(await snapshot()).toEqual(before);
     });
 
     it("billing views, export and the merge job never reach B's patients or ledger", async () => {
@@ -696,6 +837,12 @@ describe('tenant isolation through the public services', () => {
       'contacts',
       'patient_contacts',
       'ledger_entries',
+      'ledger_entry_lines',
+      'visits',
+      'visit_services',
+      'patient_diagnoses',
+      'treatment_plans',
+      'tooth_status',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class
