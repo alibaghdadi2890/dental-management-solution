@@ -166,6 +166,7 @@ export class VisitsRepository {
         .select({ id: visits.id })
         .from(visits)
         .where(and(eq(visits.patientId, keptId), live))
+        .orderBy(asc(visits.id))
         .for('update');
       const rows = await tx
         .update(visits)

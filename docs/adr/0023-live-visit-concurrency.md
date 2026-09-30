@@ -69,6 +69,13 @@ Other decisions from the same design are settled here too:
   paths lock in the same order, so they can't deadlock.
 - Every other lifecycle mutation (pause, resume, notes, discount, discard) locks only the visit
   row `FOR UPDATE`. None of them touches the patient, so no cycle exists.
+- The merge's re-point (4a, W24) also locks the kept patient's live visits `FOR UPDATE`, in id
+  order, before it moves the dropped patient's visits and records. Charting in one of them
+  finishes first, so the records moved next (tooth status, one row per position) never meet an
+  uncommitted write on the kept patient. No cycle can form: the merge holds both patient locks
+  before it touches any visit, so `start` and `complete` (patient first) wait for it before they
+  hold a visit; charting and the other mutations never lock a patient, and hold only their one
+  visit (and its records) while the merge waits for them.
 - `lockForDependentWrite` refuses a merged-away patient (409 `patient.merged`) and allows an
   archived one (a ledger write-off). `start` itself refuses a _new_ visit for an archived
   patient (409 `patient.archived`); it checks after looking for the live visit, so a visit

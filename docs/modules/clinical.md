@@ -175,8 +175,9 @@ completion lands on the kept one. In order:
 3. `tooth_status`: where both patients have a row at a position, the kept one wins and the
    dropped one is deleted (a state row, not history); the other rows move.
 4. Audit `clinical.repoint` on the kept patient (resource type `patient`, after =
-   `{ droppedId, visits, diagnoses, plans, toothStatusMoved, toothStatusDropped }`), only when
-   something changed.
+   `{ droppedId, visits, diagnoses, plans, toothStatusMoved, toothStatusDropped }`; before = the
+   deleted tooth-status rows `{ position, present, changedInVisitId }`, when there are any), only
+   when something changed.
 
 It isn't permission-gated: the merge needs `patient:write`, and front desk merges without
 `visit:write`. A merge chain (A into B, then B into C) ends on C, because each merge re-points in

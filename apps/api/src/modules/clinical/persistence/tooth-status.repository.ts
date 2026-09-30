@@ -17,6 +17,12 @@ export interface ToothStatusChange {
   changedBy: string;
 }
 
+/** A dropped patient's row that a merge deleted, for the audit's `before`. */
+export type DroppedToothStatus = Pick<
+  StoredToothStatus,
+  'position' | 'present' | 'changedInVisitId'
+>;
+
 function toStored({ tenantId: _tenantId, ...status }: ToothStatusRow): StoredToothStatus {
   return status;
 }
@@ -54,10 +60,12 @@ export class ToothStatusRepository {
   /**
    * The merge re-point (V10): the dropped patient's rows move to the kept patient, except at a
    * position the kept patient already has a row for, where the kept row wins and the dropped one
-   * is deleted (a pure state row, not history). Returns how many rows moved and how many were
-   * deleted.
+   * is deleted (a pure state row, not history). Returns how many rows moved and the deleted rows.
    */
-  mergeInto(droppedId: string, keptId: string): Promise<{ moved: number; dropped: number }> {
+  mergeInto(
+    droppedId: string,
+    keptId: string,
+  ): Promise<{ moved: number; dropped: DroppedToothStatus[] }> {
     return this.db.run(async (tx) => {
       const keptPositions = tx
         .select({ position: toothStatus.position })
@@ -68,13 +76,17 @@ export class ToothStatusRepository {
         .where(
           and(eq(toothStatus.patientId, droppedId), inArray(toothStatus.position, keptPositions)),
         )
-        .returning({ id: toothStatus.id });
+        .returning({
+          position: toothStatus.position,
+          present: toothStatus.present,
+          changedInVisitId: toothStatus.changedInVisitId,
+        });
       const moved = await tx
         .update(toothStatus)
         .set({ patientId: keptId })
         .where(eq(toothStatus.patientId, droppedId))
         .returning({ id: toothStatus.id });
-      return { moved: moved.length, dropped: dropped.length };
+      return { moved: moved.length, dropped };
     });
   }
 

@@ -271,8 +271,8 @@ export class PatientsService {
   /**
    * For a dependent module's write on this patient (`billing`'s ledger writes; `clinical`'s
    * visit start, W22): reads the patient `FOR SHARE` inside the caller's open transaction, so a
-   * merge (which locks `FOR UPDATE`) waits until the write is committed and its re-point job then
-   * finds it. Unknown → 404; merged away → 409 `patient.merged` (the write belongs on the kept
+   * merge (which locks `FOR UPDATE`) waits until the write is committed and the re-point then
+   * finds it: `clinical`'s in the merge transaction, `billing`'s ledger job after commit. Unknown → 404; merged away → 409 `patient.merged` (the write belongs on the kept
    * record). Archived-but-not-merged is allowed (e.g. writing off a debt). Throws when no
    * transaction is open: the lock would be released before the caller's write.
    */

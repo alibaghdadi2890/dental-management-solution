@@ -15,7 +15,8 @@ import { VisitsRepository } from '../persistence/visits.repository';
  *
  * Visits move first: their row locks serialise the re-point against charting in flight (see
  * `VisitsRepository.repointPatient`). Then diagnoses, plans and tooth status, where the kept
- * patient's row wins at a shared position. A merge chain (A into B, then B into C) needs nothing
+ * patient's row wins at a shared position (the dropped rows it replaces are the audit's
+ * `before`). A merge chain (A into B, then B into C) needs nothing
  * more: each merge re-points in its own transaction. Audited as `clinical.repoint` on the kept
  * patient, with the counts, when anything changed.
  *
@@ -44,13 +45,15 @@ export class MergeClinicalSubscriber {
       diagnoses,
       plans,
       toothStatusMoved: teeth.moved,
-      toothStatusDropped: teeth.dropped,
+      toothStatusDropped: teeth.dropped.length,
     };
     if (Object.values(counts).every((count) => count === 0)) return;
     await this.audit.record({
       action: 'clinical.repoint',
       resourceType: 'patient',
       resourceId: keptId,
+      // The dropped patient's tooth status lost on a clash is gone; the audit keeps it.
+      before: teeth.dropped.length > 0 ? { toothStatusDropped: teeth.dropped } : undefined,
       after: { droppedId, ...counts },
     });
   }

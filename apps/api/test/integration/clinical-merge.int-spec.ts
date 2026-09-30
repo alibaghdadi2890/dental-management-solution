@@ -10,9 +10,12 @@ import type {
   Session,
   StaffUser,
   StartVisitResult,
+  Tenant,
   Visit,
   VisitResult,
 } from '@dcm/contracts';
+import type { PoolClient } from 'pg';
+import type { Response } from 'supertest';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ToothStatusRepository } from '../../src/modules/clinical/persistence/tooth-status.repository';
@@ -43,6 +46,7 @@ interface RepointAudit {
   actor_user_id: string;
   resource_type: string;
   resource_id: string;
+  before: unknown;
   after: unknown;
 }
 
@@ -50,6 +54,7 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
   let database: TestDatabase;
   let testApp: TestApp;
   let admin: TestAgent;
+  let tenant: Tenant;
   let owner: TestAgent;
   let branch: Branch;
   let dentist: Staff;
@@ -147,7 +152,7 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
   const repointAudit = async (patient: Patient) =>
     (
       await database.ownerPool.query<RepointAudit>(
-        `select actor_user_id, resource_type, resource_id, after from audit_log
+        `select actor_user_id, resource_type, resource_id, before, after from audit_log
          where action = 'clinical.repoint' and resource_id = $1 order by occurred_at, id`,
         [patient.id],
       )
@@ -187,6 +192,7 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
       owner: { displayName: 'Merge Owner', email: ownerEmail, temporaryPassword: TEMPORARY },
     });
     expect(provisioned.status, JSON.stringify(provisioned.body)).toBe(201);
+    tenant = provisioned.body as Tenant;
     owner = await signInAndSetPassword(testApp.app, ownerEmail, TEMPORARY);
     const [first] = (await owner.get('/api/v1/branches')).body as Branch[];
     if (!first) throw new Error('provisioning created no branch');
@@ -254,6 +260,11 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
         actor_user_id: session.user.id,
         resource_type: 'patient',
         resource_id: kept.id,
+        before: {
+          toothStatusDropped: [
+            { position: '14', present: 'primary', changedInVisitId: droppedVisit.id },
+          ],
+        },
         after: {
           droppedId: dropped.id,
           visits: 1,
@@ -351,43 +362,108 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
     expect(await owned(c)).toEqual({ visits: 2, diagnoses: 1, plans: 1, toothStatus: 1 });
   });
 
-  it('serialises a completion racing a merge: both succeed and the charge ends on the kept patient', async () => {
-    const kept = await createPatient('Merge Kept Race');
-    const dropped = await createPatient('Merge Dropped Race');
-    const visit = await startVisit(dropped);
-    await addFill(visit, '36');
+  describe('locks (ADR-0023)', () => {
+    /** Sessions blocked by `pid`: a request that reached the holder's lock and waits on it. */
+    const blockedBy = async (pid: number) =>
+      (
+        await database.ownerPool.query<{ n: number }>(
+          'select count(*)::int as n from pg_stat_activity where $1 = any(pg_blocking_pids(pid))',
+          [pid],
+        )
+      ).rows[0]?.n;
 
-    const [merging, completing] = await Promise.all([merge(owner, kept, dropped), complete(visit)]);
-    expect(merging.status, JSON.stringify(merging.body)).toBe(200);
-    expect(completing.status, JSON.stringify(completing.body)).toBe(200);
-    expect(await owned(kept)).toMatchObject({ visits: 1 });
-    // A completion that won the race charged the dropped patient; the ledger job moves it.
-    await vi.waitFor(
-      async () => {
-        expect(await chargesOf(visit.id)).toEqual([{ patient_id: kept.id, amount: '50.00' }]);
-      },
-      { timeout: 15_000, interval: 100 },
-    );
-  });
+    /**
+     * `work` in an open transaction of the tenant on its own connection, then `request` sent
+     * while it is open: it must wait on the holder's locks, and settles only once they commit.
+     */
+    const whileHolding = async (
+      work: (holder: PoolClient) => Promise<void>,
+      request: () => Promise<Response>,
+    ): Promise<Response> => {
+      const holder = await database.ownerPool.connect();
+      try {
+        await holder.query('begin');
+        await holder.query("select set_config('app.tenant_id', $1, true)", [tenant.id]);
+        await work(holder);
+        const {
+          rows: [backend],
+        } = await holder.query<{ pid: number }>('select pg_backend_pid() as pid');
+        if (!backend) throw new Error('no backend pid');
+        let settled = false;
+        const pending = request().then((response) => {
+          settled = true;
+          return response;
+        });
+        await expect.poll(() => blockedBy(backend.pid)).toBe(1);
+        expect(settled).toBe(false);
+        await holder.query('commit');
+        return await pending;
+      } catch (error) {
+        await holder.query('rollback');
+        throw error;
+      } finally {
+        holder.release();
+      }
+    };
 
-  it('serialises charting racing a merge: the record ends on the kept patient', async () => {
-    const kept = await createPatient('Merge Kept Charting');
-    const dropped = await createPatient('Merge Dropped Charting');
-    const keptVisit = await startVisit(kept);
-    const droppedVisit = await startVisit(dropped);
+    it("waits for charting on the kept patient's live visit: its tooth status wins", async () => {
+      const kept = await createPatient('Merge Kept Charting');
+      const dropped = await createPatient('Merge Dropped Charting');
+      const keptVisit = await startVisit(kept);
+      const droppedVisit = await startVisit(dropped);
+      await setTooth(droppedVisit, '14', 'primary');
 
-    const [merging, charting, keptTooth] = await Promise.all([
-      merge(owner, kept, dropped),
-      dentist.agent
-        .post(visitPath(droppedVisit.id, 'diagnoses'))
-        .send({ diagnosisId: caries.id, toothCode: '36' }),
-      dentist.agent.put(visitPath(keptVisit.id, 'teeth/14')).send({ present: 'permanent' }),
-      setTooth(droppedVisit, '14', 'primary'),
-    ]);
-    expect(merging.status, JSON.stringify(merging.body)).toBe(200);
-    expect(charting.status, JSON.stringify(charting.body)).toBe(201);
-    expect(keptTooth.status, JSON.stringify(keptTooth.body)).toBe(200);
-    expect(await owned(dropped)).toEqual(nothing);
-    expect(await owned(kept)).toEqual({ visits: 2, diagnoses: 1, plans: 0, toothStatus: 1 });
+      // A charting change in flight on the kept visit: the visit locked, tooth 14 set.
+      const response = await whileHolding(
+        async (holder) => {
+          await holder.query('select id from visits where id = $1 for update', [keptVisit.id]);
+          await holder.query(
+            `insert into tooth_status (id, patient_id, position, present, changed_in_visit_id,
+                                       changed_by)
+             values ($1, $2, '14', 'permanent', $3, $4)`,
+            [newId(), kept.id, keptVisit.id, dentist.user.id],
+          );
+        },
+        () => merge(owner, kept, dropped),
+      );
+
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      expect((await chartOf(kept)).toothStatus).toEqual([{ position: '14', present: 'permanent' }]);
+      expect(await owned(dropped)).toEqual(nothing);
+    });
+
+    it('re-points visits first: a record written in a dropped visit in flight moves too', async () => {
+      const kept = await createPatient('Merge Kept In Flight');
+      const dropped = await createPatient('Merge Dropped In Flight');
+      const visit = await startVisit(dropped);
+
+      // A diagnosis being recorded in the dropped patient's visit: the visit locked, the row in.
+      const response = await whileHolding(
+        async (holder) => {
+          await holder.query('select id from visits where id = $1 for update', [visit.id]);
+          await holder.query(
+            `insert into patient_diagnoses (id, patient_id, tooth_code, diagnosis_id, code, name,
+                                            dentist_id, recorded_by, recorded_in_visit_id,
+                                            recorded_at)
+             values ($1, $2, '36', $3, $4, $5, $6, $7, $8, now())`,
+            [
+              newId(),
+              dropped.id,
+              caries.id,
+              caries.code,
+              caries.name,
+              dentist.user.profileId,
+              dentist.user.id,
+              visit.id,
+            ],
+          );
+        },
+        () => merge(owner, kept, dropped),
+      );
+
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      expect(await owned(dropped)).toEqual(nothing);
+      expect(await owned(kept)).toEqual({ visits: 1, diagnoses: 1, plans: 0, toothStatus: 0 });
+    });
   });
 });

@@ -373,6 +373,69 @@ describe('clinical: service and diagnosis catalogs', () => {
       expect((await api.delete(`/catalog/services/${zir.id}`)).status).toBe(204);
     });
 
+    it('waits for a record being written with the row, then refuses (409 catalog.in_use)', async () => {
+      const saved = await api.put('/catalog/services', {
+        items: [{ code: 'ZLOCK', name: 'Locked service', chargeUnit: 'per_tooth', price: '20' }],
+      });
+      expect(saved.status, JSON.stringify(saved.body)).toBe(200);
+      const item = await service('ZLOCK');
+      const visitId = newId();
+      await database.ownerPool.query(
+        `insert into visits (id, tenant_id, patient_id, branch_id, dentist_id, started_by, status,
+                             local_date, started_at, currency)
+         values ($1, $2, $3, $4, $5, $6, 'in_progress', '2026-06-10', now(), 'USD')`,
+        [visitId, tenant.id, newId(), newId(), newId(), newId()],
+      );
+
+      // A service being added in another transaction: the row read FOR KEY SHARE, the line in.
+      const holder = await database.ownerPool.connect();
+      try {
+        await holder.query('begin');
+        await holder.query("select set_config('app.tenant_id', $1, true)", [tenant.id]);
+        await holder.query('select id from procedures where id = $1 for key share', [item.id]);
+        await holder.query(
+          `insert into visit_services (id, visit_id, procedure_id, code, name, charge_unit,
+                                       tooth_code, base_amount, recorded_by)
+           values ($1, $2, $3, $4, $5, 'per_tooth', '16', 20, $6)`,
+          [newId(), visitId, item.id, item.code, item.name, newId()],
+        );
+        const {
+          rows: [backend],
+        } = await holder.query<{ pid: number }>('select pg_backend_pid() as pid');
+        if (!backend) throw new Error('no backend pid');
+        let settled = false;
+        const pending = api.delete(`/catalog/services/${item.id}`).then((response) => {
+          settled = true;
+          return response;
+        });
+        // The delete's FOR UPDATE waits on the holder's FOR KEY SHARE.
+        await expect
+          .poll(
+            async () =>
+              (
+                await database.ownerPool.query<{ n: number }>(
+                  `select count(*)::int as n from pg_stat_activity
+                   where $1 = any(pg_blocking_pids(pid))`,
+                  [backend.pid],
+                )
+              ).rows[0]?.n,
+          )
+          .toBe(1);
+        expect(settled).toBe(false);
+        await holder.query('commit');
+
+        const response = await pending;
+        expect(response.status, JSON.stringify(response.body)).toBe(409);
+        expect(response.body).toMatchObject({ code: 'catalog.in_use' });
+      } catch (error) {
+        await holder.query('rollback');
+        throw error;
+      } finally {
+        holder.release();
+      }
+      expect((await service('ZLOCK')).id).toBe(item.id);
+    });
+
     it('marks a row inactive', async () => {
       const dx = (await diagnoses()).find((item) => item.code === 'DX-ATTR');
       const response = await api.post(`/catalog/diagnoses/${dx?.id ?? ''}/deactivate`);
