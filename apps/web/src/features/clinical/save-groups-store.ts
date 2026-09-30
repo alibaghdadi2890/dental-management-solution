@@ -56,7 +56,8 @@ export class SaveGroupEntry<T> {
     serverValue: T,
     private save: SaveFn<T>,
     private equals: EqualsFn<T>,
-    private readonly onDirtyChange: () => void,
+    /** Called on every change of value or state (the store's value listeners, its dirty flag). */
+    private readonly onChange: () => void,
   ) {
     this.snapshot = { value: serverValue, state: 'idle' };
     this.seenServerValue = serverValue;
@@ -172,10 +173,9 @@ export class SaveGroupEntry<T> {
   }
 
   private update(next: SaveGroupSnapshot<T>): void {
-    const wasDirty = this.dirty;
     this.snapshot = next;
     for (const listener of this.listeners) listener();
-    if (wasDirty !== this.dirty) this.onDirtyChange();
+    this.onChange();
   }
 }
 
@@ -183,13 +183,15 @@ export class SaveGroupEntry<T> {
 export class SaveGroupsStore {
   private readonly entries = new Map<string, SaveGroupEntry<unknown>>();
   private readonly listeners = new Set<() => void>();
+  private readonly valueListeners = new Set<() => void>();
   private anyDirty = false;
+  private version = 0;
 
   /** The group for `key`, created from the first consumer's values. One key, one value type. */
   entry<T>(key: string, serverValue: T, save: SaveFn<T>, equals: EqualsFn<T>): SaveGroupEntry<T> {
     let entry = this.entries.get(key) as SaveGroupEntry<T> | undefined;
     if (!entry) {
-      entry = new SaveGroupEntry(serverValue, save, equals, this.refreshDirty);
+      entry = new SaveGroupEntry(serverValue, save, equals, this.changed);
       this.entries.set(key, entry as SaveGroupEntry<unknown>);
     }
     return entry;
@@ -204,6 +206,25 @@ export class SaveGroupsStore {
 
   /** True while any group has unsaved local edits (W6 pauses the visit refetch). */
   readonly isAnyDirty = (): boolean => this.anyDirty;
+
+  /** Listens to every change of any group's value or state, for a preview computed over several
+   * groups (the financial bar's money, `useUnsavedValues`). */
+  readonly subscribeValues = (listener: () => void): (() => void) => {
+    this.valueListeners.add(listener);
+    return () => {
+      this.valueListeners.delete(listener);
+    };
+  };
+
+  /** Bumped on every change `subscribeValues` reports. */
+  readonly valuesVersion = (): number => this.version;
+
+  /** The group's local value while it has unsaved edits; `undefined` when it has none (or there is
+   * no such group), so the server value is the current one. Reading never creates a group. */
+  readonly unsavedValue = (key: string): unknown => {
+    const entry = this.entries.get(key);
+    return entry?.dirty ? entry.getSnapshot().value : undefined;
+  };
 
   /**
    * Removes a group before its record is deleted (`service:<id>` before the service's DELETE),
@@ -224,6 +245,12 @@ export class SaveGroupsStore {
   readonly flushAll = async (): Promise<boolean> => {
     const outcomes = await Promise.all([...this.entries.values()].map((entry) => entry.flush()));
     return outcomes.every((outcome) => outcome === 'saved');
+  };
+
+  private readonly changed = (): void => {
+    this.version++;
+    for (const listener of this.valueListeners) listener();
+    this.refreshDirty();
   };
 
   private readonly refreshDirty = (): void => {

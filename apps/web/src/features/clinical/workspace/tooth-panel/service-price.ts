@@ -1,4 +1,10 @@
-import { lineFinal, toCents, type UpdateServiceInput, type VisitService } from '@dcm/contracts';
+import {
+  lineFinal,
+  type MoneyLine,
+  toCents,
+  type UpdateServiceInput,
+  type VisitService,
+} from '@dcm/contracts';
 import { type SaveGroup, useSaveGroup } from '../../use-save-group';
 import { servicePriceKey, useChartingActions } from '../charting-actions';
 
@@ -13,23 +19,29 @@ export const priceDraftOf = (service: VisitService): PriceDraft => ({
   discount: service.discount.amount,
 });
 
-/** A typed amount as a decimal the API accepts: blank or a bare dot is 0, `12.` is `12`. */
-function amountOf(typed: string): string {
+/** A typed amount (sanitised: digits, one dot) as a decimal the API accepts: blank or a bare dot
+ * is 0, `12.` is `12`. */
+export function amountOf(typed: string): string {
   const [whole = '', fraction = ''] = typed.split('.');
   const units = whole.replace(/^0+(?=\d)/, '') || '0';
   return fraction ? `${units}.${fraction}` : units;
 }
 
-/** What a draft saves and costs: the discount is capped at the base (the POC's `min(disc, base)`,
- * the same invariant `visit_services` enforces), so the typed value is kept while typing and the
- * cap applies to what is sent. */
-export function priceOf(draft: PriceDraft): { patch: UpdateServiceInput; final: string } {
+/** A draft as the line `visitMoney` sums: the discount is capped at the base (the POC's
+ * `min(disc, base)`, the same invariant `visit_services` enforces), so the typed value is kept
+ * while typing and the cap applies to what is sent and counted. */
+export function moneyLineOf(draft: PriceDraft): MoneyLine {
   const base = amountOf(draft.base);
   const typedDiscount = amountOf(draft.discount);
-  const discount = toCents(typedDiscount) > toCents(base) ? base : typedDiscount;
+  return { base, discount: toCents(typedDiscount) > toCents(base) ? base : typedDiscount };
+}
+
+/** What a draft saves and costs (`moneyLineOf`). */
+export function priceOf(draft: PriceDraft): { patch: UpdateServiceInput; final: string } {
+  const line = moneyLineOf(draft);
   return {
-    patch: { baseAmount: base, discountAmount: discount },
-    final: lineFinal({ base, discount }),
+    patch: { baseAmount: line.base, discountAmount: line.discount },
+    final: lineFinal(line),
   };
 }
 

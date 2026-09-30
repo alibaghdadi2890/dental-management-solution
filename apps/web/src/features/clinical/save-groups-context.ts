@@ -25,6 +25,16 @@ export function useAnyGroupDirty(): boolean {
   );
 }
 
+/** For a preview over several groups (the financial bar's money): each key's local value while its
+ * group has unsaved edits, else `undefined` (the server value is current). Re-renders on every
+ * change of any group; unlike `useSaveGroup`, it neither creates nor joins a group. */
+export function useUnsavedValues<T>(keys: readonly string[]): (T | undefined)[] {
+  const store = useSaveGroupsStore();
+  useSyncExternalStore(store.subscribeValues, store.valuesVersion);
+  // One key, one value type: the group was created with a `T` (see `SaveGroupsStore.entry`).
+  return keys.map((key) => store.unsavedValue(key) as T | undefined);
+}
+
 /** Sends every group's unsaved value and resolves to whether all saved (Complete runs it first,
  * so the frozen money and notes include the last edits). */
 export function useFlushSaveGroups(): () => Promise<boolean> {

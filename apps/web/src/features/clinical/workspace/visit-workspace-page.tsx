@@ -17,8 +17,8 @@ import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { patientQuery } from '@/features/patients/patients-api';
 import { ApiError } from '@/lib/api';
-import { formatMoney } from '@/lib/format';
 import { useChartSettings } from '../chart/use-chart-settings';
+import { useFlushSaveGroups } from '../save-groups-context';
 import { SaveGroupsProvider } from '../save-groups-provider';
 import { useVisit } from '../use-visit';
 import { chartQuery } from '../visits-api';
@@ -30,6 +30,9 @@ import {
   useChartingActionsState,
 } from './charting-actions';
 import type { ResolvedDentition } from './dentition-select';
+import { FinancialBar } from './financial-bar';
+import { NotesCard } from './notes-card';
+import { PlanBoard } from './plan-board';
 import { ToothPanel } from './tooth-panel/tooth-panel';
 import { ToothSelectionContext, useToothSelectionState } from './tooth-selection';
 import { useChartKeyboard } from './use-chart-keyboard';
@@ -113,8 +116,9 @@ function VisitWorkspacePage({ visitId }: { visitId: string }) {
 
 /**
  * The three bands in a full-height column: the header; the body, a wrapping row of the left
- * region (`1 1 600px`: the chart card) and the selected-tooth aside (`1 1 340px`), so the aside
- * reflows under the chart below ~1000px; and the financial bar. Read-only without `visit:write`
+ * region (`1 1 600px`: the chart card, the treatment plan and the clinical notes) and the
+ * selected-tooth aside (`1 1 340px`), so the aside reflows under the chart below ~1000px; and the
+ * financial bar. Read-only without `visit:write`
  * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
  * the chart, the tooth panel and the drawer; the drawer opens over a scrim.
  */
@@ -131,6 +135,11 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
   }, []);
   const actions = useChartingActionsState({ visit, selection, openDrawer: setDrawer });
   const teeth = useVisitTeeth(chart.data, visit);
+  // Review & complete sends every unsaved edit first; the summary dialog opens from here (H1).
+  const flush = useFlushSaveGroups();
+  const review = useCallback(() => {
+    void flush();
+  }, [flush]);
 
   // The patient's own override answers at once after a change; the chart's age stays the
   // server's (the tenant's date), so the stage never waits for the chart refetch.
@@ -188,6 +197,8 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
                   )}
                 </ChartCardFrame>
               )}
+              {chart.data && <PlanBoard chart={chart.data} canWrite={canWrite} />}
+              <NotesCard visit={visit} canWrite={canWrite} />
             </div>
             <aside
               aria-label={t('workspace.toothPanel')}
@@ -208,7 +219,7 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
               )}
             </aside>
           </div>
-          <FinancialBand visit={visit} />
+          <FinancialBar visit={visit} canWrite={canWrite} onReview={review} />
           {drawer !== null && canWrite && (
             <>
               <div
@@ -258,34 +269,5 @@ function useVisitTeeth(
           })
         : new Map<ToothCode, ToothState>(),
     [chart, visit.services],
-  );
-}
-
-/** The financial bar band (`surface`, 1px top border, upward shadow, 12px 22px): the service
- * count and the visit total from the visit's own money; the discount controls and actions fill
- * it. */
-function FinancialBand({ visit }: { visit: Visit }) {
-  const { t, i18n } = useTranslation('clinical');
-  const locale = i18n.resolvedLanguage ?? 'en';
-  return (
-    <footer
-      aria-label={t('workspace.money')}
-      className="flex flex-none flex-wrap items-center gap-x-[22px] gap-y-3.5 border-t border-border bg-surface px-[22px] py-3 shadow-[0_-4px_14px_rgba(27,26,31,.05)]"
-    >
-      <span className="flex-none text-[12.5px] leading-none whitespace-nowrap text-ink-muted">
-        {t('workspace.services', { count: visit.services.length })}
-      </span>
-      <span className="ms-auto flex flex-none flex-col items-end gap-1">
-        <span className="text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase [&:lang(ar)]:tracking-normal">
-          {t('workspace.total')}
-        </span>
-        <span
-          dir="ltr"
-          className="font-mono text-[21px] leading-none font-bold tracking-[-0.02em] tabular-nums"
-        >
-          {formatMoney({ amount: visit.money.total, currency: visit.currency }, locale)}
-        </span>
-      </span>
-    </footer>
   );
 }

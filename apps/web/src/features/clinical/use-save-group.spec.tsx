@@ -1,7 +1,12 @@
 import { act, cleanup, render, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useAnyGroupDirty, useDropSaveGroup, useFlushSaveGroups } from './save-groups-context';
+import {
+  useAnyGroupDirty,
+  useDropSaveGroup,
+  useFlushSaveGroups,
+  useUnsavedValues,
+} from './save-groups-context';
 import { SaveGroupsProvider } from './save-groups-provider';
 import { SAVE_DEBOUNCE_MS } from './save-groups-store';
 import { type SaveGroup, useSaveGroup } from './use-save-group';
@@ -491,5 +496,33 @@ describe('useDropSaveGroup', () => {
       result.current.drop('service:unknown');
     });
     expect(result.current.anyDirty).toBe(false);
+  });
+});
+
+describe('useUnsavedValues', () => {
+  it('reads each group’s value only while it has unsaved edits, re-rendering as it changes', async () => {
+    const { save, calls } = controlledSave();
+    const { result } = renderHook(
+      () => ({
+        group: useSaveGroup({ key: 'service:1', serverValue: '10', save }),
+        unsaved: useUnsavedValues<string>(['service:1', 'service:2']),
+      }),
+      { wrapper },
+    );
+    expect(result.current.unsaved).toEqual([undefined, undefined]);
+
+    act(() => {
+      result.current.group.setValue('12');
+    });
+    expect(result.current.unsaved).toEqual(['12', undefined]);
+    await settle();
+    expect(result.current.unsaved).toEqual(['12', undefined]);
+
+    await act(async () => {
+      calls[0]?.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.group.state).toBe('saved');
+    expect(result.current.unsaved).toEqual([undefined, undefined]);
   });
 });

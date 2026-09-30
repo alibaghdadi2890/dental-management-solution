@@ -1,5 +1,6 @@
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { json } from '@/features/patients/patients.test-utils';
 import {
   chart,
   FRONT_DESK,
@@ -8,6 +9,7 @@ import {
   renderWorkspace,
   sent,
   visit,
+  VISIT_ID,
 } from './workspace.test-utils';
 
 /** The chart card once the chart has loaded (its frame shows skeleton bars before). */
@@ -36,7 +38,27 @@ describe('VisitWorkspacePage', () => {
     expect(within(card).getByRole('group', { name: 'Upper arch' })).toBeTruthy();
     expect(within(card).getByText('Treatment')).toBeTruthy();
     expect(screen.getByRole('complementary', { name: 'Selected tooth' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Treatment plan' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Clinical notes' })).toBeTruthy();
     expect(screen.getByRole('contentinfo', { name: 'Visit money' })).toBeTruthy();
+  });
+
+  it('Review & complete sends unsaved edits at once', async () => {
+    const fetchMock = mockWorkspace({
+      mutation: (method, path, body) =>
+        method === 'PATCH' && path === `/visits/${VISIT_ID}/notes`
+          ? json({ visit: visit(body as { notes: string }) })
+          : undefined,
+    });
+    renderWorkspace();
+    await chartCard();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Clinical notes' }), {
+      target: { value: 'Sealed 16.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Review & complete' }));
+    // Well before the 700 ms debounce would have sent it.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(sent(fetchMock, 'PATCH', `/visits/${VISIT_ID}/notes`)).toEqual({ notes: 'Sealed 16.' });
   });
 
   it('selects a tooth on click, walks with the arrows and deselects with Esc', async () => {

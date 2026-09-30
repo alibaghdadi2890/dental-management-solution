@@ -106,14 +106,52 @@
     "today": "Today's visit",
     "todayHint": "What you are doing now",
     "toothPanel": "Selected tooth",
-    "money": "Visit money",
-    "services_one": "{{count}} service",
-    "services_other": "{{count}} services",
-    "total": "Visit total"
+    "money": "Visit money"
   },
   "chartCard": {
     "title": "Dental chart",
     "hint": "Click a tooth to examine it · ← → to move, Esc to deselect"
+  },
+  "planBoard": {
+    "title": "Treatment plan",
+    "subtitle": "Future work · not billed until performed",
+    "countLine": "{{teeth}} · {{procedures}}",
+    "teeth_one": "{{count}} tooth",
+    "teeth_other": "{{count}} teeth",
+    "procedures_one": "{{count}} procedure",
+    "procedures_other": "{{count}} procedures",
+    "jaw": "Jaw",
+    "noDiagnosis": "No diagnosis recorded",
+    "selectTooth": "Show {{label}} in the tooth panel",
+    "estimate": "Plan estimate",
+    "emptyTitle": "Nothing planned yet",
+    "emptyBody": "Select a tooth, record what you found, then plan the treatment. You can complete this visit as an examination without billing anything."
+  },
+  "notes": {
+    "title": "Clinical notes",
+    "subtitle": "Belongs to this visit",
+    "placeholder": "What did you observe and do? e.g. Occlusal caries on {{tooth}}, isolated with rubber dam, restored with bio composite. Patient tolerated well.",
+    "empty": "No notes for this visit."
+  },
+  "money": {
+    "subtotal": "Services",
+    "discount": "Visit discount",
+    "discountValue": "Visit discount value",
+    "mode": "Discount type",
+    "percent": "Percent",
+    "amount": "Amount",
+    "discountAmount": "Discount amount",
+    "total": "Visit total",
+    "count": "{{services}} · {{teeth}}",
+    "services_one": "{{count}} service",
+    "services_other": "{{count}} services",
+    "teeth_one": "{{count}} tooth",
+    "teeth_other": "{{count}} teeth",
+    "saveDraft": "Save draft",
+    "draftSaved": "Draft saved",
+    "draftSavedBody": "Visit stays open — nothing has been recorded to history yet.",
+    "review": "Review & complete",
+    "capped": "Discount exceeds the subtotal — capped at 100%"
   },
   "dentition": {
     "label": "Dentition: {{value}}",

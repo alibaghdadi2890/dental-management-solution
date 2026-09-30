@@ -106,14 +106,52 @@
     "today": "Visite du jour",
     "todayHint": "Ce que vous faites maintenant",
     "toothPanel": "Dent sélectionnée",
-    "money": "Montants de la visite",
-    "services_one": "{{count}} acte",
-    "services_other": "{{count}} actes",
-    "total": "Total de la visite"
+    "money": "Montants de la visite"
   },
   "chartCard": {
     "title": "Schéma dentaire",
     "hint": "Cliquez sur une dent pour l’examiner · ← → pour vous déplacer, Échap pour désélectionner"
+  },
+  "planBoard": {
+    "title": "Plan de traitement",
+    "subtitle": "Travaux à venir · non facturés avant réalisation",
+    "countLine": "{{teeth}} · {{procedures}}",
+    "teeth_one": "{{count}} dent",
+    "teeth_other": "{{count}} dents",
+    "procedures_one": "{{count}} acte",
+    "procedures_other": "{{count}} actes",
+    "jaw": "Arcade",
+    "noDiagnosis": "Aucun diagnostic enregistré",
+    "selectTooth": "Afficher {{label}} dans le panneau de la dent",
+    "estimate": "Estimation du plan",
+    "emptyTitle": "Rien de planifié pour l’instant",
+    "emptyBody": "Sélectionnez une dent, notez vos constatations, puis planifiez le traitement. Vous pouvez terminer cette visite comme un simple examen, sans rien facturer."
+  },
+  "notes": {
+    "title": "Notes cliniques",
+    "subtitle": "Propres à cette visite",
+    "placeholder": "Qu’avez-vous observé et fait ? ex. Carie occlusale sur {{tooth}}, isolation par digue, restauration au composite bioactif. Bien toléré par le patient.",
+    "empty": "Aucune note pour cette visite."
+  },
+  "money": {
+    "subtotal": "Actes",
+    "discount": "Remise sur la visite",
+    "discountValue": "Valeur de la remise sur la visite",
+    "mode": "Type de remise",
+    "percent": "Pourcentage",
+    "amount": "Montant",
+    "discountAmount": "Montant de la remise",
+    "total": "Total de la visite",
+    "count": "{{services}} · {{teeth}}",
+    "services_one": "{{count}} acte",
+    "services_other": "{{count}} actes",
+    "teeth_one": "{{count}} dent",
+    "teeth_other": "{{count}} dents",
+    "saveDraft": "Enregistrer le brouillon",
+    "draftSaved": "Brouillon enregistré",
+    "draftSavedBody": "La visite reste ouverte — rien n’a encore été inscrit à l’historique.",
+    "review": "Vérifier et terminer",
+    "capped": "La remise dépasse le sous-total — plafonnée à 100 %"
   },
   "dentition": {
     "label": "Denture : {{value}}",
