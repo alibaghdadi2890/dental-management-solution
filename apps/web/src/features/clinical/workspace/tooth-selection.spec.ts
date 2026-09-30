@@ -28,4 +28,22 @@ describe('useToothSelectionState', () => {
     expect(result.current.tooth).toBeNull();
     expect(result.current.surfaces).toEqual([]);
   });
+
+  it('ensureSelected keeps the pending surfaces of the tooth already selected', () => {
+    const { result } = renderHook(() => useToothSelectionState());
+    act(() => {
+      result.current.select('16');
+    });
+    act(() => {
+      result.current.toggleSurface('O');
+    });
+    act(() => {
+      result.current.ensureSelected('16');
+    });
+    expect(result.current.surfaces).toEqual(['O']);
+    act(() => {
+      result.current.ensureSelected('17');
+    });
+    expect(result.current).toMatchObject({ tooth: '17', surfaces: [] });
+  });
 });

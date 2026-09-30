@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
 import { IconButton } from './button';
 
 const FIELDS =
@@ -15,24 +16,38 @@ const FIELDS =
  * panel), unless the person has since moved it elsewhere. Escape inside the panel closes it
  * through `onClose`, so a dirty panel's unsaved-changes prompt still applies. `closeDisabled`
  * (a save in flight) turns both the close button and Escape off.
+ *
+ * The visit workspace's catalog drawer restyles it (spec §Add Service / Plan Treatment /
+ * Diagnosis Drawer): no eyebrow, a `subtitle` under the title, a `toolbar` (search and chips)
+ * at the foot of the header, and its own width, body and footer classes.
  */
 export function RightPanel({
   eyebrow,
   title,
+  subtitle,
+  toolbar,
   dirty,
   onClose,
   closeDisabled = false,
   initialFocus = 'heading',
   footer,
+  className,
+  bodyClassName,
+  footerClassName,
   children,
 }: {
-  eyebrow: string;
+  eyebrow?: string;
   title: string;
+  subtitle?: ReactNode;
+  toolbar?: ReactNode;
   dirty: boolean;
   onClose: () => void;
   closeDisabled?: boolean;
   initialFocus?: 'heading' | 'field';
   footer?: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
   children: ReactNode;
 }) {
   const { t } = useTranslation('common');
@@ -63,40 +78,58 @@ export function RightPanel({
         event.preventDefault();
         onClose();
       }}
-      className="flex w-[440px] max-w-[48%] flex-none animate-slidein flex-col border-s border-border bg-surface"
+      className={cn(
+        'flex w-[440px] max-w-[48%] flex-none animate-slidein flex-col border-s border-border bg-surface',
+        className,
+      )}
     >
-      <div className="flex flex-none items-start gap-3 border-b border-inner-divider px-[18px] pt-4 pb-3.5">
-        <div className="min-w-0 flex-1">
-          <div className="mb-1.5 text-[11.5px] leading-none font-medium tracking-[0.06em] text-ink-muted uppercase">
-            {eyebrow}
+      <div className="flex-none border-b border-inner-divider px-[18px] pt-4 pb-3.5">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            {eyebrow !== undefined && (
+              <div className="mb-1.5 text-[11.5px] leading-none font-medium tracking-[0.06em] text-ink-muted uppercase">
+                {eyebrow}
+              </div>
+            )}
+            <h2
+              ref={headingRef}
+              tabIndex={-1}
+              className="text-base leading-tight font-semibold tracking-[-0.01em] outline-none"
+            >
+              {title}
+            </h2>
+            {subtitle}
           </div>
-          <h2
-            ref={headingRef}
-            tabIndex={-1}
-            className="text-base leading-tight font-semibold tracking-[-0.01em] outline-none"
+          {dirty && (
+            <span className="mt-0.5 h-[22px] flex-none rounded-[5px] border border-warning-border bg-warning-bg px-2 text-[11.5px] leading-5 font-medium text-warning">
+              {t('unsaved')}
+            </span>
+          )}
+          <IconButton
+            aria-label={t('close')}
+            disabled={closeDisabled}
+            onClick={onClose}
+            className="disabled:cursor-not-allowed disabled:opacity-45"
           >
-            {title}
-          </h2>
+            <svg width="11" height="11" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1.6">
+              <path d="m2 2 6 6M8 2 2 8" />
+            </svg>
+          </IconButton>
         </div>
-        {dirty && (
-          <span className="mt-0.5 h-[22px] flex-none rounded-[5px] border border-warning-border bg-warning-bg px-2 text-[11.5px] leading-5 font-medium text-warning">
-            {t('unsaved')}
-          </span>
-        )}
-        <IconButton
-          aria-label={t('close')}
-          disabled={closeDisabled}
-          onClick={onClose}
-          className="disabled:cursor-not-allowed disabled:opacity-45"
-        >
-          <svg width="11" height="11" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1.6">
-            <path d="m2 2 6 6M8 2 2 8" />
-          </svg>
-        </IconButton>
+        {toolbar}
       </div>
-      <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto p-[18px]">{children}</div>
+      <div
+        className={cn('flex min-h-0 flex-1 flex-col gap-3.5 overflow-auto p-[18px]', bodyClassName)}
+      >
+        {children}
+      </div>
       {footer ? (
-        <div className="flex flex-none items-center justify-end gap-2 border-t border-inner-divider px-[18px] py-3">
+        <div
+          className={cn(
+            'flex flex-none items-center justify-end gap-2 border-t border-inner-divider px-[18px] py-3',
+            footerClassName,
+          )}
+        >
           {footer}
         </div>
       ) : null}

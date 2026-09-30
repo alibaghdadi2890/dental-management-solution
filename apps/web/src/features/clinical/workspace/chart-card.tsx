@@ -1,5 +1,5 @@
-import { deriveChart, type Patient, type PatientChart, type Visit } from '@dcm/contracts';
-import { type ReactNode, useId, useMemo } from 'react';
+import type { Patient, PatientChart, ToothCode, ToothState } from '@dcm/contracts';
+import { type ReactNode, useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChartLegend } from '../chart/chart-legend';
 import { DentalChart } from '../chart/dental-chart';
@@ -42,19 +42,21 @@ export function ChartCardFrame({
 
 /**
  * The workspace's dental chart card: the title, the hint, the dentition selector and how the
- * clinic charts (surfaces or whole teeth), the legend, then the full chart at 12px cells. The
- * chart draws the patient's records plus this visit's services as they stand in the visit cache
- * (`deriveChart`, the same derivation the API runs), so a service added here marks its tooth at
- * once. Clicking a tooth selects it (`useToothSelection`), which clears the pending surfaces.
+ * clinic charts (surfaces or whole teeth), the legend, then the full chart at 12px cells, drawn
+ * from `teeth` (the patient's records plus this visit's services, derived by the page). Clicking
+ * a tooth selects it (`useToothSelection`), which clears the pending surfaces. Whatever changes
+ * the selection (a click, the arrows, the panel's succession link), the selected tooth is
+ * scrolled into view in the horizontally scrolling arch, and focus follows it when it was already
+ * in the chart (the arrows walk the teeth with focus).
  */
 export function ChartCard({
-  visit,
+  teeth,
   chart,
   patient,
   dentition,
   canWrite,
 }: {
-  visit: Visit;
+  teeth: ReadonlyMap<ToothCode, ToothState>;
   chart: PatientChart;
   patient: Patient;
   dentition: ResolvedDentition;
@@ -63,16 +65,17 @@ export function ChartCard({
   const { t } = useTranslation('clinical');
   const { mode } = useChartSettings();
   const selection = useToothSelection();
-  const teeth = useMemo(
-    () =>
-      deriveChart({
-        diagnoses: chart.diagnoses,
-        plans: chart.plans,
-        history: chart.history,
-        liveServices: visit.services,
-      }),
-    [chart.diagnoses, chart.plans, chart.history, visit.services],
-  );
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = chartRef.current;
+    const button = container?.querySelector<HTMLElement>('button[aria-pressed="true"]');
+    if (!container || !button) return;
+    button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (container.contains(document.activeElement) && document.activeElement !== button) {
+      button.focus();
+    }
+  }, [selection.tooth]);
 
   return (
     <ChartCardFrame
@@ -86,14 +89,16 @@ export function ChartCard({
       }
       aside={<ChartLegend dentition={dentition.stage} />}
     >
-      <DentalChart
-        teeth={teeth}
-        dentition={dentition.stage}
-        toothStatus={chart.toothStatus}
-        size={12}
-        selected={selection.tooth}
-        onToothClick={selection.select}
-      />
+      <div ref={chartRef}>
+        <DentalChart
+          teeth={teeth}
+          dentition={dentition.stage}
+          toothStatus={chart.toothStatus}
+          size={12}
+          selected={selection.tooth}
+          onToothClick={selection.select}
+        />
+      </div>
     </ChartCardFrame>
   );
 }

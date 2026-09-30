@@ -55,7 +55,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               className={cn('size-[7px] flex-none rounded-full', DOT[toast.tone ?? 'success'])}
             />
             <span className="min-w-0 flex-1 text-[12.5px] leading-[1.4] font-medium">
-              {toast.text}
+              <span className="block">{toast.text}</span>
+              {toast.body && (
+                <span className="block text-[11.5px] leading-[1.4] font-normal opacity-[.72]">
+                  {toast.body}
+                </span>
+              )}
             </span>
             {toast.actionLabel && (
               <button

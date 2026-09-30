@@ -1,6 +1,15 @@
-import { effectiveDentition, type Session, type Visit } from '@dcm/contracts';
+import {
+  deriveChart,
+  effectiveDentition,
+  type PatientChart,
+  type Session,
+  type ToothCode,
+  type ToothState,
+  type Visit,
+} from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
@@ -9,17 +18,20 @@ import { usePermission } from '@/features/auth/use-permission';
 import { patientQuery } from '@/features/patients/patients-api';
 import { ApiError } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
-import { useChartSettings, useToothLabel, useToothName } from '../chart/use-chart-settings';
+import { useChartSettings } from '../chart/use-chart-settings';
 import { SaveGroupsProvider } from '../save-groups-provider';
 import { useVisit } from '../use-visit';
 import { chartQuery } from '../visits-api';
+import { CatalogDrawer } from './catalog-drawer';
 import { ChartCard, ChartCardFrame } from './chart-card';
-import type { ResolvedDentition } from './dentition-select';
 import {
-  ToothSelectionContext,
-  useToothSelection,
-  useToothSelectionState,
-} from './tooth-selection';
+  ChartingActionsContext,
+  type DrawerMode,
+  useChartingActionsState,
+} from './charting-actions';
+import type { ResolvedDentition } from './dentition-select';
+import { ToothPanel } from './tooth-panel/tooth-panel';
+import { ToothSelectionContext, useToothSelectionState } from './tooth-selection';
 import { useChartKeyboard } from './use-chart-keyboard';
 import { VisitHeader } from './visit-header';
 
@@ -42,7 +54,8 @@ export function VisitWorkspaceScreen({ visitId }: { visitId: string }) {
 /**
  * The visit workspace (spec §Screens 4 & 5): loads the live visit; an unknown or discarded id
  * (404) reads "Visit not found", any other failure offers Try again. A visit that is no longer
- * live — completed, or discarded from this page — goes to the patient's record.
+ * live — completed, or discarded from this page — goes to the patient's record, and so does one
+ * that turns 404 on a refetch (discarded elsewhere, W6): nothing is charted into a dead visit.
  */
 function VisitWorkspacePage({ visitId }: { visitId: string }) {
   const { t } = useTranslation(['clinical', 'common']);
@@ -50,6 +63,15 @@ function VisitWorkspacePage({ visitId }: { visitId: string }) {
   const visit = useVisit(visitId);
 
   if (!session?.tenant) return null;
+  const notFound = visit.error instanceof ApiError && visit.error.status === 404;
+  if (
+    visit.data &&
+    (notFound || visit.data.status === 'completed' || visit.data.status === 'discarded')
+  ) {
+    return (
+      <Navigate to="/patients/$patientId" params={{ patientId: visit.data.patientId }} replace />
+    );
+  }
   if (!visit.data) {
     if (visit.error === null) {
       return (
@@ -58,7 +80,6 @@ function VisitWorkspacePage({ visitId }: { visitId: string }) {
         </div>
       );
     }
-    const notFound = visit.error instanceof ApiError && visit.error.status === 404;
     return (
       <div className="h-full overflow-auto p-[22px]">
         <section className="rounded-xl border border-border bg-surface">
@@ -87,11 +108,6 @@ function VisitWorkspacePage({ visitId }: { visitId: string }) {
       </div>
     );
   }
-  if (visit.data.status === 'completed' || visit.data.status === 'discarded') {
-    return (
-      <Navigate to="/patients/$patientId" params={{ patientId: visit.data.patientId }} replace />
-    );
-  }
   return <Workspace visit={visit.data} tenant={session.tenant} />;
 }
 
@@ -99,7 +115,8 @@ function VisitWorkspacePage({ visitId }: { visitId: string }) {
  * The three bands in a full-height column: the header; the body, a wrapping row of the left
  * region (`1 1 600px`: the chart card) and the selected-tooth aside (`1 1 340px`), so the aside
  * reflows under the chart below ~1000px; and the financial bar. Read-only without `visit:write`
- * (W18). The tooth selection lives here, shared with the chart and the aside.
+ * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
+ * the chart, the tooth panel and the drawer; the drawer opens over a scrim.
  */
 function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
   const { t } = useTranslation('clinical');
@@ -108,6 +125,12 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
   const chart = useQuery(chartQuery(visit.patientId));
   const selection = useToothSelectionState();
   const { orientation } = useChartSettings();
+  const [drawer, setDrawer] = useState<DrawerMode | null>(null);
+  const closeDrawer = useCallback(() => {
+    setDrawer(null);
+  }, []);
+  const actions = useChartingActionsState({ visit, selection, openDrawer: setDrawer });
+  const teeth = useVisitTeeth(chart.data, visit);
 
   // The patient's own override answers at once after a change; the chart's age stays the
   // server's (the tenant's date), so the stage never waits for the chart refetch.
@@ -124,71 +147,101 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
     toothStatus: chart.data?.toothStatus ?? NO_STATUS,
     selected: selection.tooth,
     onSelect: selection.select,
+    onEscape: drawer === null ? undefined : closeDrawer,
   });
 
   return (
     <ToothSelectionContext.Provider value={selection}>
-      <div className="flex h-full flex-col">
-        <VisitHeader
-          visit={visit}
-          patient={patient.data}
-          chart={chart.data}
-          tenant={tenant}
-          canWrite={canWrite}
-        />
-        <div className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-auto">
-          <div className="min-w-0 flex-[1_1_600px] px-5 pt-[18px] pb-5">
-            {chart.data && patient.data && dentition ? (
-              <ChartCard
-                visit={visit}
-                chart={chart.data}
-                patient={patient.data}
-                dentition={dentition}
-                canWrite={canWrite}
-              />
-            ) : (
-              <ChartCardFrame>
-                {chart.error || patient.error ? (
-                  <ErrorState
-                    title={t('workspace.chartFailed')}
-                    body={t('workspace.failedBody')}
-                    onRetry={() => {
-                      void chart.refetch();
-                      void patient.refetch();
-                    }}
-                  />
-                ) : (
-                  <CardSkeleton label={t('workspace.loading')} />
-                )}
-              </ChartCardFrame>
-            )}
+      <ChartingActionsContext.Provider value={actions}>
+        <div className="relative flex h-full flex-col">
+          <VisitHeader
+            visit={visit}
+            patient={patient.data}
+            chart={chart.data}
+            tenant={tenant}
+            canWrite={canWrite}
+          />
+          <div className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-auto">
+            <div className="min-w-0 flex-[1_1_600px] px-5 pt-[18px] pb-5">
+              {chart.data && patient.data && dentition ? (
+                <ChartCard
+                  teeth={teeth}
+                  chart={chart.data}
+                  patient={patient.data}
+                  dentition={dentition}
+                  canWrite={canWrite}
+                />
+              ) : (
+                <ChartCardFrame>
+                  {chart.error || patient.error ? (
+                    <ErrorState
+                      title={t('workspace.chartFailed')}
+                      body={t('workspace.failedBody')}
+                      onRetry={() => {
+                        void chart.refetch();
+                        void patient.refetch();
+                      }}
+                    />
+                  ) : (
+                    <CardSkeleton label={t('workspace.loading')} />
+                  )}
+                </ChartCardFrame>
+              )}
+            </div>
+            <aside
+              aria-label={t('workspace.toothPanel')}
+              className="min-w-0 flex-[1_1_340px] border-s border-border bg-surface p-4"
+            >
+              {chart.data && dentition ? (
+                <ToothPanel
+                  visit={visit}
+                  chart={chart.data}
+                  teeth={teeth}
+                  dentition={dentition.stage}
+                  canWrite={canWrite}
+                  timeZone={tenant.timeZone}
+                  onOpenDrawer={setDrawer}
+                />
+              ) : (
+                !chart.error && <CardSkeleton label={t('workspace.loading')} />
+              )}
+            </aside>
           </div>
-          <ToothAside />
+          <FinancialBand visit={visit} />
+          {drawer !== null && canWrite && (
+            <>
+              <div
+                aria-hidden
+                onClick={closeDrawer}
+                className="absolute inset-0 z-20 animate-fadein bg-[rgba(27,26,31,.28)]"
+              />
+              <CatalogDrawer key={drawer} mode={drawer} onClose={closeDrawer} />
+            </>
+          )}
         </div>
-        <FinancialBand visit={visit} />
-      </div>
+      </ChartingActionsContext.Provider>
     </ToothSelectionContext.Provider>
   );
 }
 
-/** The selected-tooth aside (`surface`, 1px inline-start border, 16px padding): names the
- * selected tooth; the tooth panel fills it. */
-function ToothAside() {
-  const { t } = useTranslation('clinical');
-  const { tooth } = useToothSelection();
-  const label = useToothLabel();
-  const name = useToothName();
-  return (
-    <aside
-      aria-label={t('workspace.toothPanel')}
-      className="min-w-0 flex-[1_1_340px] border-s border-border bg-surface p-4"
-    >
-      <p className="m-0 text-[12.5px] leading-normal text-ink-muted">
-        {tooth === null
-          ? t('workspace.noTooth')
-          : t('workspace.toothLine', { label: label(tooth), name: name(tooth) })}
-      </p>
-    </aside>
+/** What the chart card and the tooth panel draw: the patient's records plus this visit's services
+ * as they stand in the visit cache (`deriveChart`, the same derivation the API runs), so a service
+ * added here marks its tooth at once. Empty until the chart loads. */
+function useVisitTeeth(
+  chart: PatientChart | undefined,
+  visit: Visit,
+): ReadonlyMap<ToothCode, ToothState> {
+  return useMemo(
+    () =>
+      chart
+        ? deriveChart({
+            diagnoses: chart.diagnoses,
+            plans: chart.plans,
+            history: chart.history,
+            liveServices: visit.services,
+          })
+        : new Map<ToothCode, ToothState>(),
+    [chart, visit.services],
   );
 }
 

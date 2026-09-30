@@ -9,6 +9,9 @@ export interface ToothSelection {
   /** Selects a tooth (or deselects with `null`); either way the pending surfaces are cleared
    * (spec invariant 9). */
   select: (tooth: ToothCode | null) => void;
+  /** Selects `tooth` unless it already is selected, in which case its pending surfaces stay
+   * (the diagnosis toast's Plan treatment, which plans on the diagnosed surfaces). */
+  ensureSelected: (tooth: ToothCode) => void;
   toggleSurface: (surface: SurfaceKey) => void;
 }
 
@@ -22,6 +25,9 @@ export function useToothSelectionState(): ToothSelection {
   const select = useCallback((tooth: ToothCode | null) => {
     setState({ tooth, surfaces: [] });
   }, []);
+  const ensureSelected = useCallback((tooth: ToothCode) => {
+    setState((current) => (current.tooth === tooth ? current : { tooth, surfaces: [] }));
+  }, []);
   const toggleSurface = useCallback((surface: SurfaceKey) => {
     setState((current) => ({
       ...current,
@@ -31,8 +37,8 @@ export function useToothSelectionState(): ToothSelection {
     }));
   }, []);
   return useMemo(
-    () => ({ tooth: state.tooth, surfaces: state.surfaces, select, toggleSurface }),
-    [state, select, toggleSurface],
+    () => ({ tooth: state.tooth, surfaces: state.surfaces, select, ensureSelected, toggleSurface }),
+    [state, select, ensureSelected, toggleSurface],
   );
 }
 

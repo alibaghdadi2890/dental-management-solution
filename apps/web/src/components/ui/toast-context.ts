@@ -4,6 +4,8 @@ export type ToastTone = 'success' | 'danger' | 'info';
 
 export interface ToastOptions {
   tone?: ToastTone;
+  /** A second line under the text (the POC's toast body, at 72% opacity). */
+  body?: string;
   actionLabel?: string;
   onAction?: () => void;
 }

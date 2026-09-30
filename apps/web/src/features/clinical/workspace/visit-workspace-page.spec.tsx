@@ -43,7 +43,7 @@ describe('VisitWorkspacePage', () => {
     renderWorkspace();
     const card = await chartCard();
     const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
-    expect(within(aside).getByText('Select a tooth on the chart to examine it.')).toBeTruthy();
+    expect(await within(aside).findByText('No tooth selected')).toBeTruthy();
 
     fireEvent.click(within(card).getByRole('button', { name: /^#16 · Upper right first molar/ }));
     expect(
@@ -51,14 +51,60 @@ describe('VisitWorkspacePage', () => {
         .getByRole('button', { name: /^#16 · / })
         .getAttribute('aria-pressed'),
     ).toBe('true');
-    expect(within(aside).getByText('#16 · Upper right first molar')).toBeTruthy();
+    expect(within(aside).getByRole('heading', { name: '#16' })).toBeTruthy();
+    expect(within(aside).getByText('Upper right first molar')).toBeTruthy();
 
     // Patient right on the right: 16 is followed by 17 on the upper row.
     fireEvent.keyDown(document.body, { key: 'ArrowRight' });
-    expect(within(aside).getByText('#17 · Upper right second molar')).toBeTruthy();
+    expect(within(aside).getByRole('heading', { name: '#17' })).toBeTruthy();
 
     fireEvent.keyDown(document.body, { key: 'Escape' });
-    expect(within(aside).getByText('Select a tooth on the chart to examine it.')).toBeTruthy();
+    expect(within(aside).getByText('No tooth selected')).toBeTruthy();
+  });
+
+  it('scrolls the arrowed-to tooth into view, and moves focus with it inside the chart', async () => {
+    mockWorkspace();
+    const scrolled = vi.spyOn(Element.prototype, 'scrollIntoView');
+    renderWorkspace();
+    const card = await chartCard();
+    const tooth16 = within(card).getByRole('button', { name: /^#16 · / });
+    tooth16.focus();
+    fireEvent.click(tooth16);
+    fireEvent.keyDown(tooth16, { key: 'ArrowRight' });
+
+    const tooth17 = within(card).getByRole('button', { name: /^#17 · / });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(tooth17);
+    });
+    expect(scrolled).toHaveBeenLastCalledWith({ block: 'nearest', inline: 'nearest' });
+    expect(scrolled.mock.contexts.at(-1)).toBe(tooth17);
+
+    // Focus elsewhere stays where it is.
+    const panelHeading = within(
+      screen.getByRole('complementary', { name: 'Selected tooth' }),
+    ).getByRole('button', { name: /^Diagnosis/ });
+    panelHeading.focus();
+    fireEvent.keyDown(document.body, { key: 'ArrowRight' });
+    expect(document.activeElement).toBe(panelHeading);
+    scrolled.mockRestore();
+  });
+
+  it('Esc closes the catalog drawer first, then deselects', async () => {
+    mockWorkspace();
+    renderWorkspace();
+    const card = await chartCard();
+    fireEvent.click(within(card).getByRole('button', { name: /^#16 · / }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add diagnosis' }));
+    expect(await screen.findByRole('complementary', { name: 'Add diagnosis' })).toBeTruthy();
+
+    // Focus back on the page (the drawer is an aside, not a modal dialog).
+    (document.activeElement as HTMLElement | null)?.blur();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.queryByRole('complementary', { name: 'Add diagnosis' })).toBeNull();
+    expect(screen.getByRole('heading', { name: '#16' })).toBeTruthy();
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByText('No tooth selected')).toBeTruthy();
   });
 
   it('shows the automatic dentition and sets another one, with a toast', async () => {
@@ -105,9 +151,9 @@ describe('VisitWorkspacePage', () => {
     // Looking is allowed: a tooth can still be selected.
     fireEvent.click(within(card).getByRole('button', { name: /^#16 · / }));
     expect(
-      within(screen.getByRole('complementary', { name: 'Selected tooth' })).getByText(
-        '#16 · Upper right first molar',
-      ),
+      within(screen.getByRole('complementary', { name: 'Selected tooth' })).getByRole('heading', {
+        name: '#16',
+      }),
     ).toBeTruthy();
   });
 
@@ -118,6 +164,19 @@ describe('VisitWorkspacePage', () => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });
     expect(await screen.findByText(`Record ${RANA.id}`)).toBeTruthy();
+  });
+
+  it('leaves for the patient record when the open visit turns 404 (discarded elsewhere)', async () => {
+    let current: ReturnType<typeof visit> | null = visit();
+    mockWorkspace({ visit: () => current });
+    const { router, client } = renderWorkspace();
+    await chartCard();
+
+    current = null;
+    await client.refetchQueries({ queryKey: ['visits'] });
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
+    });
   });
 
   it('says the visit was not found', async () => {

@@ -1,4 +1,16 @@
-import type { Patient, PatientChart, Permission, Visit } from '@dcm/contracts';
+import type {
+  DiagnosisItem,
+  DiagnosisRecord,
+  HistoryService,
+  Patient,
+  PatientChart,
+  Permission,
+  ServiceItem,
+  ToothCode,
+  TreatmentPlan,
+  Visit,
+  VisitService,
+} from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -35,8 +47,162 @@ export const RANA = patient(1, 'Rana Haddad', {
   medicalAlerts: ['Penicillin allergy'],
 });
 
-export const DENTIST_WRITE: Permission[] = ['patient:read', 'visit:read', 'visit:write'];
-export const FRONT_DESK: Permission[] = ['patient:read', 'visit:read'];
+export const DENTIST_WRITE: Permission[] = [
+  'patient:read',
+  'visit:read',
+  'visit:write',
+  'catalog:read',
+];
+export const FRONT_DESK: Permission[] = ['patient:read', 'visit:read', 'catalog:read'];
+export const OLDER_VISIT_ID = id(61);
+
+const usd = (amount: string) => ({ amount, currency: 'USD' });
+
+/** A catalog service; `n` makes its id. */
+export function serviceItem(
+  n: number,
+  name: string,
+  extra: Partial<ServiceItem> = {},
+): ServiceItem {
+  return {
+    id: id(n),
+    code: name.slice(0, 4).toUpperCase(),
+    name,
+    category: 'Restorative',
+    chargeUnit: 'per_tooth',
+    price: usd('80.00'),
+    frequent: false,
+    active: true,
+    ...extra,
+  };
+}
+
+export function diagnosisItem(
+  n: number,
+  name: string,
+  extra: Partial<DiagnosisItem> = {},
+): DiagnosisItem {
+  return {
+    id: id(n),
+    code: name.slice(0, 4).toUpperCase(),
+    name,
+    category: 'Caries',
+    frequent: false,
+    active: true,
+    ...extra,
+  };
+}
+
+/** A diagnosis on a tooth, recorded in this visit unless `recordedInVisitId` says otherwise. */
+export function diagnosisRecord(
+  n: number,
+  name: string,
+  toothCode: ToothCode,
+  extra: Partial<DiagnosisRecord> = {},
+): DiagnosisRecord {
+  return {
+    id: id(n),
+    patientId: RANA.id,
+    toothCode,
+    surfaces: [],
+    diagnosisId: id(n + 1),
+    code: 'DX',
+    name,
+    category: null,
+    status: 'active',
+    note: null,
+    dentistId: profileId(DENTIST_ID),
+    dentistName: 'Dr. Ana Reyes',
+    recordedBy: DENTIST_ID,
+    recordedInVisitId: VISIT_ID,
+    recordedInVisitDate: '2026-09-04',
+    recordedAt: '2026-09-04T09:05:00.000Z',
+    resolvedInVisitId: null,
+    resolvedAt: null,
+    ...extra,
+  };
+}
+
+/** A plan on a tooth, open and recorded in this visit unless `extra` says otherwise. */
+export function treatmentPlan(
+  n: number,
+  name: string,
+  toothCode: ToothCode | null,
+  extra: Partial<TreatmentPlan> = {},
+): TreatmentPlan {
+  return {
+    id: id(n),
+    patientId: RANA.id,
+    toothCode,
+    surfaces: [],
+    procedureId: id(n + 1),
+    code: 'PL',
+    name,
+    category: null,
+    chargeUnit: toothCode === null ? 'per_jaw' : 'per_tooth',
+    price: usd('400.00'),
+    diagnosisRecordId: null,
+    status: 'planned',
+    note: null,
+    dentistId: profileId(DENTIST_ID),
+    dentistName: 'Dr. Ana Reyes',
+    recordedBy: DENTIST_ID,
+    recordedInVisitId: VISIT_ID,
+    recordedAt: '2026-09-04T09:06:00.000Z',
+    performedInVisitId: null,
+    performedAt: null,
+    cancelledInVisitId: null,
+    cancelledAt: null,
+    ...extra,
+  };
+}
+
+/** A service of this visit. */
+export function visitService(
+  n: number,
+  name: string,
+  toothCode: ToothCode | null,
+  extra: Partial<VisitService> = {},
+): VisitService {
+  return {
+    id: id(n),
+    procedureId: id(n + 1),
+    code: 'SV',
+    name,
+    category: null,
+    chargeUnit: toothCode === null ? 'per_jaw' : 'per_tooth',
+    toothCode,
+    surfaces: [],
+    base: usd('80.00'),
+    discount: usd('0.00'),
+    final: usd('80.00'),
+    planId: null,
+    recordedBy: DENTIST_ID,
+    createdAt: '2026-09-04T09:10:00.000Z',
+    ...extra,
+  };
+}
+
+/** A service of an earlier, completed visit. */
+export function historyLine(
+  n: number,
+  name: string,
+  toothCode: ToothCode,
+  extra: Partial<HistoryService> = {},
+): HistoryService {
+  return {
+    id: id(n),
+    visitId: OLDER_VISIT_ID,
+    visitDate: '2025-03-12',
+    dentistName: 'Dr. Ana Reyes',
+    code: 'HS',
+    name,
+    toothCode,
+    surfaces: [],
+    final: usd('60.00'),
+    ...extra,
+  };
+}
 
 export function visit(extra: Partial<Visit> = {}): Visit {
   return {
@@ -80,9 +246,12 @@ export function chart(extra: Partial<PatientChart> = {}): PatientChart {
 type Answer = Response | Promise<Response> | undefined;
 
 export interface WorkspaceApi {
-  visit?: Visit | null;
+  /** A function answers each read with the state of the moment (a test's fake server). */
+  visit?: Visit | null | (() => Visit | null);
   patient?: Patient;
-  chart?: PatientChart;
+  chart?: PatientChart | (() => PatientChart);
+  services?: ServiceItem[];
+  diagnoses?: DiagnosisItem[];
   /** Overrides a mutation's answer; `undefined` falls back to the default. */
   mutation?: (method: string, path: string, body: unknown) => Answer;
 }
@@ -94,12 +263,16 @@ type FetchMock = ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Pr
 /** Answers the workspace's reads and lifecycle writes; returns the fetch mock. `visit: null`
  * answers the visit with a 404. */
 export function mockWorkspace({
-  visit: current = visit(),
+  visit: visitAnswer = visit(),
   patient: record = RANA,
-  chart: charted = chart(),
+  chart: chartAnswer = chart(),
+  services = [],
+  diagnoses = [],
   mutation,
 }: WorkspaceApi = {}): FetchMock {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    const current = typeof visitAnswer === 'function' ? visitAnswer() : visitAnswer;
+    const charted = typeof chartAnswer === 'function' ? chartAnswer() : chartAnswer;
     const path = (url.replace('/api/v1', '').split('?')[0] ?? '').replace(/\/$/, '');
     const method = init?.method ?? 'GET';
     const body: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
@@ -128,6 +301,8 @@ export function mockWorkspace({
     }
     if (path === `/patients/${record.id}`) return Promise.resolve(json(record));
     if (path === `/clinical/patients/${record.id}/chart`) return Promise.resolve(json(charted));
+    if (path === '/catalog/services') return Promise.resolve(json(services));
+    if (path === '/catalog/diagnoses') return Promise.resolve(json(diagnoses));
     if (path === '/users/practitioners') {
       return Promise.resolve(
         json([
