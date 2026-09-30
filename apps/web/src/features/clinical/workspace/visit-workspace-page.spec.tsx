@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { problem } from '@/features/patients/patients.test-utils';
 import {
   chart,
   FRONT_DESK,
@@ -285,6 +286,23 @@ describe('VisitWorkspacePage', () => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });
     expect(router.state.location.state.postVisit).toBeUndefined();
+  });
+
+  it('offers Try again when the visit fails to load for another reason', async () => {
+    const base = mockWorkspace();
+    let failing = true;
+    vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+      failing && url === `/api/v1/visits/${VISIT_ID}`
+        ? Promise.resolve(problem(500, 'internal'))
+        : base(url, init),
+    );
+    renderWorkspace();
+    expect(await screen.findByText("Couldn't load this visit")).toBeTruthy();
+    expect(screen.queryByText('Visit not found')).toBeNull();
+
+    failing = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await chartCard()).toBeTruthy();
   });
 
   it('says the visit was not found', async () => {

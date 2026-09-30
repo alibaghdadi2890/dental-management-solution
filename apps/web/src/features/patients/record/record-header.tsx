@@ -1,7 +1,7 @@
 import type { LiveVisitRef, Patient, PatientContact, Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { useEffect, useRef } from 'react';
+import { type Ref, useEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/list';
@@ -171,6 +171,7 @@ export function RecordHeader({
   tabsId,
   tab,
   onTab,
+  headingRef,
 }: {
   patient: Patient;
   tenant: Tenant;
@@ -179,6 +180,8 @@ export function RecordHeader({
   tabsId: string;
   tab: RecordTab;
   onTab: (tab: RecordTab) => void;
+  /** The patient's name, focusable by code (after the post-visit summary closes). */
+  headingRef?: Ref<HTMLHeadingElement> | undefined;
 }) {
   const { t } = useTranslation('patients');
   const canWrite = usePermission('patient:write');
@@ -228,7 +231,11 @@ export function RecordHeader({
         </span>
         <div className="min-w-[220px]">
           <div className="mb-[5px] flex flex-wrap items-center gap-2.5">
-            <h1 className="m-0 text-[22px] leading-[1.15] font-semibold tracking-[-0.02em]">
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              className="m-0 text-[22px] leading-[1.15] font-semibold tracking-[-0.02em] outline-none"
+            >
               {patient.fullName}
             </h1>
             {archived && <Pill tone="neutral">{t('record.archived')}</Pill>}

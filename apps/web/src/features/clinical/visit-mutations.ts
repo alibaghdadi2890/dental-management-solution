@@ -10,7 +10,7 @@ import type {
   VisitNotesInput,
 } from '@dcm/contracts';
 import { hashKey, mutationOptions, type QueryClient, useQueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { invalidatePatientData } from '@/features/patients/patients-api';
 import { actingTenantId, useActingTenantId } from '@/features/platform/acting-tenant';
 import {
@@ -279,6 +279,38 @@ export function visitMutations(
       onSuccess: charting,
     }),
   };
+}
+
+/**
+ * Resolves once no mutation of the visit is in flight (they share its mutation key), however
+ * each ends: Complete waits for a Perform now or a removal still on its way, so the visit it
+ * freezes includes them.
+ */
+export function visitMutationsSettled(
+  queryClient: QueryClient,
+  visitId: string,
+  tenantId: Tenant = actingTenantId(),
+): Promise<void> {
+  const mutationKey = visitKeys.detail(tenantId, visitId);
+  const idle = () => queryClient.isMutating({ mutationKey }) === 0;
+  if (idle()) return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsubscribe = queryClient.getMutationCache().subscribe(() => {
+      if (!idle()) return;
+      unsubscribe();
+      resolve();
+    });
+  });
+}
+
+/** `visitMutationsSettled` for the acting tenant, as a stable function. */
+export function useVisitMutationsSettled(visitId: string): () => Promise<void> {
+  const queryClient = useQueryClient();
+  const tenantId = useActingTenantId();
+  return useCallback(
+    () => visitMutationsSettled(queryClient, visitId, tenantId),
+    [queryClient, visitId, tenantId],
+  );
 }
 
 /** `visitMutations` for the acting tenant, stable across renders. */

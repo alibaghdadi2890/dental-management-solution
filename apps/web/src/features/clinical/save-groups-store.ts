@@ -254,6 +254,9 @@ export class SaveGroupsStore {
     this.refreshDirty();
   };
 
+  /** The keys of the groups there are (for dropping the ones whose record is gone). */
+  readonly keys = (): string[] => [...this.entries.keys()];
+
   /** Flushes every group; true when all of them saved. */
   readonly flushAll = async (): Promise<boolean> => {
     const outcomes = await Promise.all([...this.entries.values()].map((entry) => entry.flush()));

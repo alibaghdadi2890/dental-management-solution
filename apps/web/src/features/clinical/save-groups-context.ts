@@ -1,4 +1,4 @@
-import { createContext, useContext, useSyncExternalStore } from 'react';
+import { createContext, useContext, useEffect, useSyncExternalStore } from 'react';
 import type { SaveGroupsStore } from './save-groups-store';
 
 export const SaveGroupsContext = createContext<SaveGroupsStore | null>(null);
@@ -46,4 +46,21 @@ export function useFlushSaveGroups(): () => Promise<boolean> {
  * `service:<id>` right before every service DELETE. */
 export function useDropSaveGroup(): (key: string) => void {
   return useSaveGroupsStore().drop;
+}
+
+/**
+ * Drops the groups under `prefix` whose key isn't in `live`: records gone from the server (a
+ * service another user removed). Their unsaved value has nowhere to go, and a failed one would
+ * keep the workspace dirty — no refetch — and fail every flush, so Complete could never succeed.
+ */
+export function useDropOrphanedGroups(prefix: string, live: readonly string[]): void {
+  const store = useSaveGroupsStore();
+  // One string, so a list rebuilt on every render with the same keys doesn't re-run the effect.
+  const liveKeys = live.join('\n');
+  useEffect(() => {
+    const keep = new Set(liveKeys.split('\n'));
+    for (const key of store.keys()) {
+      if (key.startsWith(prefix) && !keep.has(key)) store.drop(key);
+    }
+  }, [store, prefix, liveKeys]);
 }

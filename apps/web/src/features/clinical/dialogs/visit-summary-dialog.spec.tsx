@@ -1,7 +1,7 @@
 import type { Visit, VisitFinancialSummary } from '@dcm/contracts';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { json, problem } from '@/features/patients/patients.test-utils';
+import { id, json, problem } from '@/features/patients/patients.test-utils';
 import {
   chart,
   DENTIST_WRITE,
@@ -54,13 +54,44 @@ const SUMMARY: VisitFinancialSummary = {
 
 const WITH_PAYMENTS = [...DENTIST_WRITE, 'payment:read' as const];
 
-/** A fake server for the live visit: the discount route stores the discount, complete completes. */
-function liveServer({ failDiscount = false } = {}) {
+/** A gate the test opens when it chooses: a held answer goes out once it is released. */
+function held() {
+  let release: () => void = () => undefined;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  return { gate, release };
+}
+
+/** A fake server for the live visit: the discount route stores the discount, complete completes
+ * (after `holdComplete`, when given), and Perform now answers once `holdPerform` (when given) is
+ * released. */
+function liveServer({
+  failDiscount = false,
+  holdComplete,
+  holdPerform,
+}: {
+  failDiscount?: boolean;
+  holdComplete?: Promise<unknown>;
+  holdPerform?: Promise<unknown>;
+} = {}) {
   let current: Visit = CHARTED;
   const fetchMock = mockWorkspace({
     visit: () => current,
+    chart: chart({ plans: [treatmentPlan(40, 'Zircon crown', '36')] }),
     visitSummary: SUMMARY,
     mutation: (method, path, body) => {
+      if (method === 'POST' && path === `/visits/${VISIT_ID}/plans/${id(40)}/perform`) {
+        const service = visitService(50, 'Zircon crown', '36', { planId: id(40) });
+        const record = treatmentPlan(40, 'Zircon crown', '36', {
+          status: 'performed',
+          performedInVisitId: VISIT_ID,
+        });
+        return (holdPerform ?? Promise.resolve()).then(() => {
+          current = { ...current, services: [...current.services, service] };
+          return json({ visit: current, record });
+        });
+      }
       if (method === 'PATCH' && path === `/visits/${VISIT_ID}/discount`) {
         if (failDiscount) return problem(500, 'internal');
         const { mode, value } = body as { mode: Visit['discountMode']; value: string };
@@ -68,8 +99,10 @@ function liveServer({ failDiscount = false } = {}) {
         return json({ visit: current });
       }
       if (method === 'POST' && path === `/visits/${VISIT_ID}/complete`) {
-        current = completed(current);
-        return json({ visit: current });
+        return (holdComplete ?? Promise.resolve()).then(() => {
+          current = completed(current);
+          return json({ visit: current });
+        });
       }
       return undefined;
     },
@@ -83,6 +116,12 @@ const openSummary = async () => {
   return screen.findByRole('dialog', { name: 'Complete visit' });
 };
 
+/** A press outside the dialog, on the scrim: Radix acts on the click that ends it. */
+const pressScrim = () => {
+  fireEvent.pointerDown(document.body);
+  fireEvent.click(document.body);
+};
+
 /** The figure beside a label in a dialog's rows. */
 const figureOf = (scope: HTMLElement, label: string) =>
   within(scope).getByText(label).nextElementSibling?.textContent;
@@ -91,6 +130,7 @@ describe('VisitSummaryDialog', () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('shows the visit to review: meta tiles, the teeth in FDI order, services, notes', async () => {
@@ -292,6 +332,80 @@ describe('VisitSummaryDialog', () => {
     expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('waits for a write still in flight (a Perform now) before completing', async () => {
+    const perform = held();
+    const fetchMock = liveServer({ holdPerform: perform.gate });
+    const { router } = renderWorkspace({ realRecord: true, permissions: WITH_PAYMENTS });
+    await screen.findByRole('group', { name: 'Upper arch' });
+    const board = screen.getByRole('region', { name: 'Treatment plan' });
+    fireEvent.click(
+      await within(board).findByRole('button', { name: 'Perform now: Zircon crown' }),
+    );
+    const dialog = await openSummary();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
+    expect(within(dialog).getByRole('button', { name: 'Recording…' })).toBeTruthy();
+
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/complete`)).toBeUndefined();
+
+    perform.release();
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
+    });
+    const writes = fetchMock.mock.calls
+      .filter(([, init]) => (init?.method ?? 'GET') !== 'GET')
+      .map(([url, init]) => `${init?.method ?? ''} ${url}`);
+    expect(writes).toEqual([
+      `POST /api/v1/visits/${VISIT_ID}/plans/${id(40)}/perform`,
+      `POST /api/v1/visits/${VISIT_ID}/complete`,
+    ]);
+  });
+
+  it('while recording: the timer stops, the discount is read-only, Esc and the scrim do nothing', async () => {
+    // Before the render, so the timer's own ticks run on the fake clock.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const complete = held();
+    liveServer({ holdComplete: complete.gate });
+    renderWorkspace({ realRecord: true, permissions: WITH_PAYMENTS });
+
+    // Before Complete, Esc and the scrim close it.
+    fireEvent.keyDown(await openSummary(), { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    await openSummary();
+    // Radix listens for outside presses from the tick after it opens.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
+    pressScrim();
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    const dialog = await openSummary();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
+    expect(within(dialog).getByRole('button', { name: 'Recording…' })).toBeTruthy();
+    const duration = figureOf(dialog, 'Duration');
+    expect(duration).toMatch(/^12:\d\d$/);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(figureOf(dialog, 'Duration')).toBe(duration);
+    expect(within(dialog).getByText(`Timer stops at ${duration ?? ''}`)).toBeTruthy();
+    const input = within(dialog).getByRole('textbox', { name: 'Visit discount value' });
+    expect(input.hasAttribute('readonly')).toBe(true);
+    expect(within(dialog).getByRole('radio', { name: 'Amount' })).toHaveProperty('disabled', true);
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    pressScrim();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(50);
+    });
+    expect(screen.getByRole('dialog', { name: 'Complete visit' })).toBe(dialog);
+
+    complete.release();
+    expect(await screen.findByRole('dialog', { name: 'Visit recorded' })).toBeTruthy();
   });
 
   it('does not complete on stale values when an edit fails to save', async () => {

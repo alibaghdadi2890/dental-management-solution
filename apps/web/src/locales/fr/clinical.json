@@ -150,6 +150,8 @@
     "saveDraft": "Enregistrer le brouillon",
     "draftSaved": "Brouillon enregistré",
     "draftSavedBody": "La visite reste ouverte — rien n’a encore été inscrit à l’historique.",
+    "draftFailed": "Brouillon non enregistré",
+    "draftFailedBody": "Certaines modifications n’ont pas pu être enregistrées. Réessayez-les, puis enregistrez à nouveau le brouillon.",
     "review": "Vérifier et terminer",
     "capped": "La remise dépasse le sous-total — plafonnée à 100 %"
   },
@@ -263,7 +265,7 @@
       "for": "pour {{name}}",
       "perform": "Réaliser",
       "toToday": "→ aujourd’hui",
-      "performNamed": "Réaliser {{name}} maintenant",
+      "performNamed": "Réaliser : {{name}}",
       "performTitle": "Ajoute {{price}} à la visite du jour comme acte réalisé",
       "cancel": "Annuler le plan",
       "cancelNamed": "Annuler {{name}}",

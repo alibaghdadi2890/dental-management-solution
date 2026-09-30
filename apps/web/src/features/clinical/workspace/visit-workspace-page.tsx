@@ -20,6 +20,7 @@ import { ApiError } from '@/lib/api';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
 import { VisitSummaryDialog } from '../dialogs/visit-summary-dialog';
+import { useDropOrphanedGroups } from '../save-groups-context';
 import { SaveGroupsProvider } from '../save-groups-provider';
 import { useVisit } from '../use-visit';
 import { chartQuery } from '../visits-api';
@@ -28,6 +29,8 @@ import { ChartCard, ChartCardFrame } from './chart-card';
 import {
   ChartingActionsContext,
   type DrawerMode,
+  SERVICE_PRICE_PREFIX,
+  servicePriceKey,
   useChartingActionsState,
 } from './charting-actions';
 import type { ResolvedDentition } from './dentition-select';
@@ -143,7 +146,8 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
  * the chart, the tooth panel and the drawer; the drawer opens over a scrim. `?tooth=` selects
  * its tooth (the tooth history's "Chart it in this visit"), then leaves the URL. The tooth
  * panel's "Full tooth history →" opens the tooth history dialog, and the financial bar's
- * **Review & complete** the visit summary.
+ * **Review & complete** the visit summary. The price groups of services no longer on the visit
+ * (removed by someone else) are dropped as the visit refreshes.
  */
 function Workspace({
   visit,
@@ -174,6 +178,10 @@ function Workspace({
   }, []);
   const actions = useChartingActionsState({ visit, selection, openDrawer: setDrawer });
   const teeth = useVisitTeeth(chart.data, visit);
+  useDropOrphanedGroups(
+    SERVICE_PRICE_PREFIX,
+    visit.services.map((service) => servicePriceKey(service.id)),
+  );
 
   // The patient's own override answers at once after a change; the chart's age stays the
   // server's (the tenant's date), so the stage never waits for the chart refetch.

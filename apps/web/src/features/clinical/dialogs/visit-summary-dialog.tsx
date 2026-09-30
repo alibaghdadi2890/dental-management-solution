@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { useChartSettings, useSurfaceLabel, useToothLabel } from '../chart/use-chart-settings';
 import { useFlushSaveGroups, useLocalValues } from '../save-groups-context';
 import { useVisitTimer } from '../use-visit-timer';
-import { useVisitMutations } from '../visit-mutations';
+import { useVisitMutations, useVisitMutationsSettled } from '../visit-mutations';
 import { servicePriceKey } from '../workspace/charting-actions';
 import { DiscountControl } from '../workspace/discount-control';
 import { NOTES_KEY } from '../workspace/notes-card';
@@ -40,7 +40,9 @@ export interface VisitSummaryDialogProps {
  * clinical notes. Opening it doesn't stop the timer.
  *
  * **Complete visit** first sends every unsaved edit (V6); if any fails, the visit is not completed
- * on stale values and the dialog says so. Then `POST /visits/:id/complete` ("Recording…"): the
+ * on stale values and the dialog says so. It then waits for the visit's writes still in flight (a
+ * Perform now, a removal), so the visit it freezes has them. Then `POST /visits/:id/complete`
+ * ("Recording…": the timer shown stops and the discount turns read-only): the
  * cached visit turns `completed` and the workspace page leaves for the record's Overview with the
  * post-visit summary (W16) — the page navigates, never this dialog, so there is one navigation.
  * A modal: focus is trapped, `Esc` closes it and focus goes back to what opened it.
@@ -104,24 +106,33 @@ function SummaryContent({
   const timer = useVisitTimer(visit.id);
   const { dentistNames } = useStaffNames();
   const flush = useFlushSaveGroups();
+  const settled = useVisitMutationsSettled(visit.id);
   const complete = useMutation(useVisitMutations(visit.id).complete);
   const [error, setError] = useState<string | null>(null);
   const [notes] = useLocalValues<string>([NOTES_KEY]);
   const text = notes ?? visit.notes;
+  // The duration as it stood on Complete: what is recorded, so it no longer ticks.
+  const [frozenTimer, setFrozenTimer] = useState<string | null>(null);
+  const shownTimer = frozenTimer ?? timer;
 
   const onComplete = async () => {
     setError(null);
     onRecording(true);
-    if (!(await flush())) {
-      setError(t('summary.unsaved'));
+    setFrozenTimer(timer);
+    const stop = (message: string) => {
+      setError(message);
+      setFrozenTimer(null);
       onRecording(false);
+    };
+    if (!(await flush())) {
+      stop(t('summary.unsaved'));
       return;
     }
+    await settled();
     try {
       await complete.mutateAsync();
     } catch (failure) {
-      setError(t('summary.failed', { reason: failure instanceof Error ? failure.message : '' }));
-      onRecording(false);
+      stop(t('summary.failed', { reason: failure instanceof Error ? failure.message : '' }));
     }
     // Completed: the page, which reads the cached visit, leaves for the record (W16).
   };
@@ -150,13 +161,13 @@ function SummaryContent({
           </Tile>
           <Tile label={t('summary.duration')}>
             <span dir="ltr" className={cn(FIGURE, 'text-[14px] font-semibold')}>
-              {timer}
+              {shownTimer}
             </span>
           </Tile>
         </dl>
         <TeethTreated visit={visit} />
         <Services visit={visit} />
-        <FinancialBlock visit={visit} />
+        <FinancialBlock visit={visit} readOnly={recording} />
         {chart && <RecordedForLater visit={visit} chart={chart} />}
         <h3 className={cn(MICRO, 'mb-2 text-ink-muted')}>{t('summary.notes')}</h3>
         <p
@@ -186,7 +197,7 @@ function SummaryContent({
           {t('summary.continue')}
         </Button>
         <span className="ms-auto text-[12.5px] leading-none text-ink-muted">
-          {t('summary.timerStops', { time: timer })}
+          {t('summary.timerStops', { time: shownTimer })}
         </span>
         <Button
           variant="primary"
@@ -298,9 +309,9 @@ function Services({ visit }: { visit: Visit }) {
   );
 }
 
-/** Subtotal, the visit discount (the footer's control and group), the cap warning and Total due:
- * `useLiveMoney`, the server's arithmetic over what is typed now. */
-function FinancialBlock({ visit }: { visit: Visit }) {
+/** Subtotal, the visit discount (the footer's control and group; read-only while recording), the
+ * cap warning and Total due: `useLiveMoney`, the server's arithmetic over what is typed now. */
+function FinancialBlock({ visit, readOnly }: { visit: Visit; readOnly: boolean }) {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const discount = useVisitDiscount(visit);
@@ -327,7 +338,7 @@ function FinancialBlock({ visit }: { visit: Visit }) {
           {t('summary.discount')}
         </span>
         <span className="flex items-center gap-[7px]">
-          <DiscountControl discount={discount} currency={visit.currency} readOnly={false} />
+          <DiscountControl discount={discount} currency={visit.currency} readOnly={readOnly} />
           <span
             dir="ltr"
             className={cn(

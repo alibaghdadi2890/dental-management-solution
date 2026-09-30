@@ -1,11 +1,12 @@
 import type { Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
-import { useId } from 'react';
+import { type RefObject, useCallback, useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
 import { TabPanel } from '@/components/ui/tabs';
+import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { PostVisitSummaryDialog } from '@/features/clinical/dialogs/post-visit-summary-dialog';
@@ -31,6 +32,8 @@ interface RecordProps {
 interface RecordNavigation {
   onTab: (tab: RecordTab) => void;
   onPanel: (panel: RecordPanel | undefined) => void;
+  /** The patient's name in the header, for focus after the post-visit summary. */
+  headingRef: RefObject<HTMLHeadingElement | null>;
 }
 
 /**
@@ -39,15 +42,40 @@ interface RecordNavigation {
  * — the record is one entry however many tabs or panels were opened, so Back (and "All patients")
  * leaves it. Switching tabs closes a panel. A visit just completed in the workspace
  * (`HistoryState.postVisit`, W16) opens its post-visit summary over the record, for those with
- * `payment:read`; closing it clears the state, so a refresh doesn't open it again.
+ * `payment:read`, and focus goes to the patient's name when it closes; without it, a "Visit
+ * recorded" toast says so. Either way the state is then cleared, so a refresh doesn't repeat it.
  */
 export function PatientRecordScreen({ patientId, tab, panel }: RecordProps) {
+  const { t } = useTranslation('clinical');
   const navigate = useNavigate();
+  const toast = useToast();
+  const { data: session } = useSession();
   const postVisit = useLocation({ select: (location) => location.state.postVisit });
   const canPay = usePermission('payment:read');
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // The visit already announced by a toast: an effect may run twice for one arrival.
+  const toasted = useRef<string | null>(null);
   const go = (search: { tab: RecordTab; panel?: RecordPanel | undefined }) => {
     void navigate({ to: '/patients/$patientId', params: { patientId }, search, replace: true });
   };
+  const clearPostVisit = useCallback(() => {
+    void navigate({
+      to: '/patients/$patientId',
+      params: { patientId },
+      search: true,
+      replace: true,
+      state: (state) => ({ ...state, postVisit: undefined }),
+    });
+  }, [navigate, patientId]);
+  const toastInstead = session !== undefined && !canPay && postVisit !== undefined;
+
+  useEffect(() => {
+    if (!toastInstead || toasted.current === postVisit) return;
+    toasted.current = postVisit;
+    toast(t('postVisit.title'), { tone: 'success' });
+    clearPostVisit();
+  }, [toastInstead, postVisit, toast, t, clearPostVisit]);
+
   return (
     <>
       <PatientRecordPage
@@ -55,6 +83,7 @@ export function PatientRecordScreen({ patientId, tab, panel }: RecordProps) {
         patientId={patientId}
         tab={tab}
         panel={panel}
+        headingRef={headingRef}
         onTab={(next) => {
           go({ tab: next });
         }}
@@ -65,14 +94,10 @@ export function PatientRecordScreen({ patientId, tab, panel }: RecordProps) {
       {postVisit !== undefined && canPay && (
         <PostVisitSummaryDialog
           visitId={postVisit}
-          onClose={() => {
-            void navigate({
-              to: '/patients/$patientId',
-              params: { patientId },
-              search: true,
-              replace: true,
-              state: (state) => ({ ...state, postVisit: undefined }),
-            });
+          onClose={clearPostVisit}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            headingRef.current?.focus();
           }}
         />
       )}
@@ -98,6 +123,7 @@ function PatientRecord({
   panel,
   onTab,
   onPanel,
+  headingRef,
   tenant,
 }: RecordProps & RecordNavigation & { tenant: Tenant }) {
   const { t, i18n } = useTranslation(['patients', 'common']);
@@ -166,6 +192,7 @@ function PatientRecord({
           tabsId={tabsId}
           tab={tab}
           onTab={onTab}
+          headingRef={headingRef}
         />
         <TabPanel idBase={tabsId} tabKey={tab} className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
           {tab === 'overview' ? (
@@ -241,15 +268,17 @@ function RecordSkeleton({ tab }: { tab: RecordTab }) {
                 skeleton(t('record.info.title'))
               )}
             </div>
-            <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-              {canPay && skeleton(t('billing:balance.title'))}
-              {canVisits && (
-                <>
-                  {skeleton(t('record.summary.title'))}
-                  {skeleton(t('record.info.title'))}
-                </>
-              )}
-            </div>
+            {(canPay || canVisits) && (
+              <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
+                {canPay && skeleton(t('billing:balance.title'))}
+                {canVisits && (
+                  <>
+                    {skeleton(t('record.summary.title'))}
+                    {skeleton(t('record.info.title'))}
+                  </>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <Card title={t('record.form.title')} className="max-w-[760px] px-[22px] py-5">

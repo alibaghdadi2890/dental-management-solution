@@ -66,6 +66,23 @@ describe('VisitHeader', () => {
     expect(timerChip().dataset.state).toBe('running');
   });
 
+  it('opens a visit paused elsewhere as paused, with Resume and a frozen timer', async () => {
+    const fetchMock = mockWorkspace({
+      visit: visit({ status: 'paused', pausedAt: '2026-09-04T09:10:00.000Z', pausedSeconds: 60 }),
+    });
+    renderWorkspace();
+    const banner = await header();
+    expect(within(banner).getByText('Paused')).toBeTruthy();
+    expect(within(banner).queryByRole('button', { name: 'Pause' })).toBeNull();
+    expect(timerChip().dataset.state).toBe('paused');
+    // Ten minutes from the start to the pause, less the minute already paused.
+    expect(timerChip().textContent).toBe('09:00');
+
+    fireEvent.click(within(banner).getByRole('button', { name: 'Resume' }));
+    await screen.findByRole('button', { name: 'Pause' });
+    expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/resume`)).toBeNull();
+  });
+
   it('offers Discard visit while the visit is empty; confirming returns to the record', async () => {
     const fetchMock = mockWorkspace();
     const { router } = renderWorkspace();

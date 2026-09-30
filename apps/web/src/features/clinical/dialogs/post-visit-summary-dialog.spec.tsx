@@ -50,14 +50,15 @@ const CLEAR: VisitFinancialSummary = {
 /** The record as the workspace leaves it after Complete: `postVisit` in the entry's state. */
 async function arriveAfterComplete(
   completed: Visit,
-  summary: VisitFinancialSummary,
+  summary: VisitFinancialSummary | Promise<VisitFinancialSummary>,
   permissions: Permission[] = ALL_PERMISSIONS,
 ) {
   const fetchMock = mockApi({
     patients: [RANA],
     get: (path) => {
       if (path === `/visits/${VISIT_ID}`) return json(completed);
-      if (path === `/billing/visits/${VISIT_ID}/summary`) return json(summary);
+      if (path === `/billing/visits/${VISIT_ID}/summary`)
+        return Promise.resolve(summary).then(json);
       return undefined;
     },
   });
@@ -140,6 +141,34 @@ describe('PostVisitSummaryDialog', () => {
     expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
   });
 
+  it('shows no footer action until the figures are in, so Done never turns into Pay later', async () => {
+    let answer: (summary: VisitFinancialSummary) => void = () => undefined;
+    await arriveAfterComplete(
+      COMPLETED,
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
+    expect(await within(dialog).findByText('4 Sep 2026 · 13 min · 3 services')).toBeTruthy();
+    expect(within(dialog).queryByRole('button')).toBeNull();
+
+    answer(OWING);
+    expect(await within(dialog).findByRole('button', { name: 'Pay later' })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Done' })).toBeNull();
+  });
+
+  it("hands focus to the patient's name when it closes", async () => {
+    await arriveAfterComplete(COMPLETED, OWING);
+    const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Pay later' }));
+    const heading = screen.getByRole('heading', { level: 1, name: 'Rana Haddad' });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(heading);
+    });
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it('Esc closes it too', async () => {
     const { router } = await arriveAfterComplete(COMPLETED, OWING);
     const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
@@ -150,13 +179,18 @@ describe('PostVisitSummaryDialog', () => {
     expect(router.state.location.state.postVisit).toBeUndefined();
   });
 
-  it('is not shown without payment:read', async () => {
-    const { fetchMock } = await arriveAfterComplete(
+  it('is not shown without payment:read: a toast says the visit was recorded, once', async () => {
+    const { fetchMock, router } = await arriveAfterComplete(
       COMPLETED,
       OWING,
       ALL_PERMISSIONS.filter((permission) => permission !== 'payment:read'),
     );
+    expect(await screen.findByText('Visit recorded')).toBeTruthy();
+    await waitFor(() => {
+      expect(router.state.location.state.postVisit).toBeUndefined();
+    });
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(screen.getAllByText('Visit recorded')).toHaveLength(1);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(
       fetchMock.mock.calls.some(([url]) => url.includes(`/billing/visits/${VISIT_ID}/summary`)),

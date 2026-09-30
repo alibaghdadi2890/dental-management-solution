@@ -274,18 +274,18 @@ describe('ToothPanel', () => {
     renderWorkspace();
     await selectTooth(/^#16 · /);
 
-    fireEvent.click(within(aside()).getByRole('button', { name: 'Perform Zircon crown now' }));
+    fireEvent.click(within(aside()).getByRole('button', { name: 'Perform now: Zircon crown' }));
     expect(
       await within(aside()).findByText('One planned treatment performed — see below.'),
     ).toBeTruthy();
-    expect(within(aside()).queryByRole('button', { name: 'Perform Zircon crown now' })).toBeNull();
+    expect(within(aside()).queryByRole('button', { name: 'Perform now: Zircon crown' })).toBeNull();
     // The service card, tagged as coming from the plan.
     expect(within(section('Completed')).getByText('From plan')).toBeTruthy();
 
     expect(await screen.findByText('Zircon crown performed')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(
-      await within(aside()).findByRole('button', { name: 'Perform Zircon crown now' }),
+      await within(aside()).findByRole('button', { name: 'Perform now: Zircon crown' }),
     ).toBeTruthy();
     expect(sent(fetchMock, 'DELETE', `/visits/${VISIT_ID}/services/${id(50)}`)).toBeNull();
     expect(within(aside()).queryByText('One planned treatment performed — see below.')).toBeNull();
@@ -334,6 +334,39 @@ describe('ToothPanel', () => {
     });
     expect(sent(fetchMock, 'PATCH', `/visits/${VISIT_ID}/services/${id(30)}`)).toBeUndefined();
     expect(within(section('Completed')).getByText('No treatment recorded for this tooth'));
+  });
+
+  it('forgets a price edit whose service someone else removed, so Complete can go ahead', async () => {
+    const { state, fetchMock } = fakeClinic({
+      visit: visit({ services: [visitService(30, 'Composite filling', '16')] }),
+    });
+    renderWorkspace();
+    await selectTooth(/^#16 · /);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // Removed elsewhere: the price save answers 404 and the refetch has no such service.
+    state.visit = { ...state.visit, services: [] };
+    fireEvent.change(within(section('Completed')).getByLabelText('Base price'), {
+      target: { value: '95' },
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
+    });
+    await waitFor(() => {
+      expect(within(section('Completed')).getByText('No treatment recorded for this tooth'));
+    });
+    expect(sent(fetchMock, 'PATCH', `/visits/${VISIT_ID}/services/${id(30)}`)).toEqual({
+      baseAmount: '95',
+      discountAmount: '0.00',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review & complete' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Complete visit' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
+    await waitFor(() => {
+      expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/complete`)).toBeNull();
+    });
+    const patches = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH');
+    expect(patches).toHaveLength(1);
   });
 
   it('removes a service once, and a service already gone is no error', async () => {

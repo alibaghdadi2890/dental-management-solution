@@ -31,15 +31,19 @@ const owes = (amount: string) => toCents(amount) > 0n;
  * visit is owed, **Paid in full** otherwise (partly paid arrives with payments, feature 5). The
  * body's three blocks come from `GET /billing/visits/:id/summary` (W2): This visit, Previous
  * visits and Total outstanding (`danger` while owed, `success` with the settled note when clear).
- * The footer is **Pay later**, or **Done** when nothing is owed; **Record payment** arrives with
- * feature 5. A modal: focus is trapped and `Esc` closes it.
+ * The footer is **Pay later**, or **Done** when nothing is owed — shown once the figures are in,
+ * so it never flips from one to the other; **Record payment** arrives with feature 5. A modal:
+ * focus is trapped and `Esc` closes it. Nothing opened it, so on close focus goes where
+ * `onCloseAutoFocus` puts it (the record's heading).
  */
 export function PostVisitSummaryDialog({
   visitId,
   onClose,
+  onCloseAutoFocus,
 }: {
   visitId: string;
   onClose: () => void;
+  onCloseAutoFocus: (event: Event) => void;
 }) {
   return (
     <Dialog.Root
@@ -50,7 +54,10 @@ export function PostVisitSummaryDialog({
     >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 animate-fadein bg-[rgba(27,26,31,.34)]" />
-        <Dialog.Content className="fixed start-1/2 top-1/2 z-50 w-[calc(100%-48px)] max-w-[540px] -translate-x-1/2 -translate-y-1/2 animate-popin overflow-hidden rounded-xl bg-surface shadow-[0_18px_48px_rgba(27,26,31,.2)] rtl:translate-x-1/2">
+        <Dialog.Content
+          onCloseAutoFocus={onCloseAutoFocus}
+          className="fixed start-1/2 top-1/2 z-50 w-[calc(100%-48px)] max-w-[540px] -translate-x-1/2 -translate-y-1/2 animate-popin overflow-hidden rounded-xl bg-surface shadow-[0_18px_48px_rgba(27,26,31,.2)] rtl:translate-x-1/2"
+        >
           <PostVisitContent visitId={visitId} />
         </Dialog.Content>
       </Dialog.Portal>
@@ -64,6 +71,7 @@ function PostVisitContent({ visitId }: { visitId: string }) {
   const visit = useQuery(visitQuery(visitId));
   const summary = useVisitSummary(visitId);
   const owing = summary.data ? owes(summary.data.totalOutstanding) : false;
+  const settled = summary.data !== undefined || visit.isError || summary.isError;
 
   let body: ReactNode;
   if (visit.data && summary.data) {
@@ -117,11 +125,15 @@ function PostVisitContent({ visitId }: { visitId: string }) {
       </div>
       <div className="px-[22px] py-[18px]">{body}</div>
       <div className="flex items-center gap-2.5 border-t border-inner-divider bg-sunken px-[22px] py-3.5">
-        <Dialog.Close asChild>
-          <Button variant="secondary" className="h-10 px-[15px] text-[13px]">
-            {owing ? t('postVisit.payLater') : t('postVisit.done')}
-          </Button>
-        </Dialog.Close>
+        {settled ? (
+          <Dialog.Close asChild>
+            <Button variant="secondary" className="h-10 px-[15px] text-[13px]">
+              {owing ? t('postVisit.payLater') : t('postVisit.done')}
+            </Button>
+          </Dialog.Close>
+        ) : (
+          <span aria-hidden className="h-10" />
+        )}
       </div>
     </>
   );

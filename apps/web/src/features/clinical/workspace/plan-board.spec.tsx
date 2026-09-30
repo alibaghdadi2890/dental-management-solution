@@ -154,7 +154,7 @@ describe('PlanBoard', () => {
     renderWorkspace();
     const card = await board();
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Perform Root canal now' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Perform now: Root canal' }));
     expect(await screen.findByText('Root canal performed')).toBeTruthy();
     expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/plans/${id(20)}/perform`)).toBeNull();
     expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();

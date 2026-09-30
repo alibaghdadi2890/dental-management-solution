@@ -1,10 +1,11 @@
 import { toCents, type Visit } from '@dcm/contracts';
-import { type ReactNode, useId } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast-context';
 import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { useFlushSaveGroups } from '../save-groups-context';
 import { DiscountControl } from './discount-control';
 import { useLiveMoney, useVisitDiscount } from './visit-discount';
 
@@ -30,8 +31,9 @@ const Divider = () => <span aria-hidden className="h-8 w-px flex-none bg-inner-d
 /**
  * The financial bar (spec §Visit Workspace → Financial bar): Services (the subtotal), Visit
  * discount (the control), Discount amount (`danger` when non-zero) and Visit total, then the
- * count line, **Save draft** (a toast only: nothing is recorded until completion) and **Review &
- * complete**. The figures are `useLiveMoney`: the server's arithmetic over what is typed now.
+ * count line, **Save draft** (it sends the edits still waiting, then says the visit stays open —
+ * or, when one fails, that the draft wasn't saved; nothing is recorded until completion) and
+ * **Review & complete**. The figures are `useLiveMoney`: the server's arithmetic over what is typed now.
  *
  * The bar wraps (`flex-wrap`), and the count line and both buttons never shrink (`flex: none`,
  * `nowrap`): with `nowrap`, the over-discount warning would squeeze every item below its text
@@ -52,11 +54,24 @@ export function FinancialBar({
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const toast = useToast();
+  const flush = useFlushSaveGroups();
+  const [savingDraft, setSavingDraft] = useState(false);
   const discount = useVisitDiscount(visit);
   const money = useLiveMoney(visit, discount.value);
   const format = (amount: string) => formatMoney({ amount, currency: visit.currency }, locale);
   const discounted = toCents(money.discount) > 0n;
   const teeth = new Set(visit.services.flatMap((service) => service.toothCode ?? [])).size;
+
+  const saveDraft = async () => {
+    setSavingDraft(true);
+    const saved = await flush();
+    setSavingDraft(false);
+    if (saved) {
+      toast(t('money.draftSaved'), { tone: 'success', body: t('money.draftSavedBody') });
+    } else {
+      toast(t('money.draftFailed'), { tone: 'danger', body: t('money.draftFailedBody') });
+    }
+  };
 
   return (
     <footer
@@ -109,9 +124,10 @@ export function FinancialBar({
         </span>
         <Button
           variant="outline"
+          busy={savingDraft}
           disabled={!canWrite}
           onClick={() => {
-            toast(t('money.draftSaved'), { tone: 'success', body: t('money.draftSavedBody') });
+            void saveDraft();
           }}
           className="h-[38px] px-[15px] text-[13px]"
         >

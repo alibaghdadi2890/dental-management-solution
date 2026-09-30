@@ -303,6 +303,30 @@ describe('FinancialBar', () => {
     expect(writes().length).toBe(before);
   });
 
+  it('Save draft sends what is still waiting to be saved first', async () => {
+    const { fetchMock } = fakeVisit();
+    renderWorkspace();
+    const footer = await bar();
+    fireEvent.change(discountInput(), { target: { value: '10' } });
+    // Well before the 700 ms debounce would have sent it.
+    fireEvent.click(within(footer).getByRole('button', { name: 'Save draft' }));
+    expect(await screen.findByText('Draft saved')).toBeTruthy();
+    expect(sent(fetchMock, 'PATCH', DISCOUNT_PATH)).toEqual({ mode: 'percent', value: '10' });
+  });
+
+  it('Save draft says so when a change could not be saved', async () => {
+    fakeVisit(undefined, 'fail');
+    renderWorkspace();
+    const footer = await bar();
+    fireEvent.change(await baseInput(), { target: { value: '100' } });
+    fireEvent.click(within(footer).getByRole('button', { name: 'Save draft' }));
+    expect(await screen.findByText('Draft not saved')).toBeTruthy();
+    expect(
+      screen.getByText("Some changes couldn't be saved. Retry them, then save the draft again."),
+    ).toBeTruthy();
+    expect(screen.queryByText('Draft saved')).toBeNull();
+  });
+
   it('is read-only for front desk: the discount is shown, nothing can be changed', async () => {
     fakeVisit(visit({ services: SERVICES, discountMode: 'amount', discountValue: '12.50' }));
     renderWorkspace({ permissions: FRONT_DESK });

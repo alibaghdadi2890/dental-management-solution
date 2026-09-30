@@ -150,6 +150,8 @@
     "saveDraft": "Save draft",
     "draftSaved": "Draft saved",
     "draftSavedBody": "Visit stays open — nothing has been recorded to history yet.",
+    "draftFailed": "Draft not saved",
+    "draftFailedBody": "Some changes couldn't be saved. Retry them, then save the draft again.",
     "review": "Review & complete",
     "capped": "Discount exceeds the subtotal — capped at 100%"
   },
@@ -263,7 +265,7 @@
       "for": "for {{name}}",
       "perform": "Perform now",
       "toToday": "→ today",
-      "performNamed": "Perform {{name}} now",
+      "performNamed": "Perform now: {{name}}",
       "performTitle": "Adds {{price}} to today’s visit as a completed service",
       "cancel": "Cancel",
       "cancelNamed": "Cancel {{name}}",

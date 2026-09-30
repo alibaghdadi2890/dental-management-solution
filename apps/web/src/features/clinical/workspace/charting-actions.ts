@@ -35,9 +35,12 @@ export interface ChartTarget {
   surfaces: readonly SurfaceKey[];
 }
 
+/** What every service price group's key starts with. */
+export const SERVICE_PRICE_PREFIX = 'service:';
+
 /** The save group key of one service's Base/Discount inputs (V6), shared by every place that
  * edits that price (the tooth panel, the summary dialog). */
-export const servicePriceKey = (serviceId: string) => `service:${serviceId}`;
+export const servicePriceKey = (serviceId: string) => `${SERVICE_PRICE_PREFIX}${serviceId}`;
 
 export interface ChartingActions {
   addService: (item: ServiceItem, target: ChartTarget) => void;

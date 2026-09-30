@@ -109,8 +109,10 @@ describe('OverviewTab', () => {
     );
     cleanup();
     renderRecord({ url: URL_, permissions: ['patient:read'] });
-    await screen.findByRole('region', { name: 'Patient information' });
+    const info = await screen.findByRole('region', { name: 'Patient information' });
     expect(screen.queryByRole('region', { name: 'Balance' })).toBeNull();
+    // Like the Overview without visit:read or payment:read: one column, no empty second one.
+    expect(info.parentElement?.parentElement?.children).toHaveLength(1);
   });
 
   it('says so when the balance fails to load', async () => {
