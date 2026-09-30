@@ -406,6 +406,22 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
     expect(await chargesOf(visit.id)).toHaveLength(1);
   });
 
+  it('charges the kept patient for a visit completed after its patient was merged away', async () => {
+    const kept = await createPatient('Charge Merge Kept');
+    const dropped = await createPatient('Charge Merge Dropped');
+    const visit = await chargeableVisit(dropped);
+    const merged = await owner
+      .post('/api/v1/patients/merge')
+      .send({ keepId: kept.id, dropId: dropped.id, reason: 'Same person' });
+    expect(merged.status, JSON.stringify(merged.body)).toBe(200);
+
+    await completed(dentist.agent, visit.id);
+    expect(await chargesOf(visit.id)).toEqual([
+      expect.objectContaining({ patient_id: kept.id, amount: '117.00' }),
+    ]);
+    expect((await summary(visit.id)).totalOutstanding).toBe('117.00');
+  });
+
   it('times the visit without its pauses: 61 s of work is 2 minutes', async () => {
     const patient = await createPatient('Charge Duration');
     const visit = await startVisit(patient);

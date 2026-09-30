@@ -1,6 +1,6 @@
 import type { ToothPresenceValue } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { toothStatus } from './schema';
 
@@ -48,6 +48,33 @@ export class ToothStatusRepository {
         .where(and(eq(toothStatus.patientId, patientId), eq(toothStatus.position, position)))
         .for('update');
       return row && toStored(row);
+    });
+  }
+
+  /**
+   * The merge re-point (V10): the dropped patient's rows move to the kept patient, except at a
+   * position the kept patient already has a row for, where the kept row wins and the dropped one
+   * is deleted (a pure state row, not history). Returns how many rows moved and how many were
+   * deleted.
+   */
+  mergeInto(droppedId: string, keptId: string): Promise<{ moved: number; dropped: number }> {
+    return this.db.run(async (tx) => {
+      const keptPositions = tx
+        .select({ position: toothStatus.position })
+        .from(toothStatus)
+        .where(eq(toothStatus.patientId, keptId));
+      const dropped = await tx
+        .delete(toothStatus)
+        .where(
+          and(eq(toothStatus.patientId, droppedId), inArray(toothStatus.position, keptPositions)),
+        )
+        .returning({ id: toothStatus.id });
+      const moved = await tx
+        .update(toothStatus)
+        .set({ patientId: keptId })
+        .where(eq(toothStatus.patientId, droppedId))
+        .returning({ id: toothStatus.id });
+      return { moved: moved.length, dropped: dropped.length };
     });
   }
 

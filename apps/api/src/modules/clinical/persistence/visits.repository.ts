@@ -151,6 +151,32 @@ export class VisitsRepository {
   }
 
   /**
+   * The merge re-point's first step (V10, W24), in the merge transaction: every visit of
+   * `droppedId` moves to `keptId`; returns how many moved. The rows are locked by the update, so
+   * it waits for a charting change in flight (which holds its visit `FOR UPDATE`), and later
+   * changes read the new patient. The kept patient's live visits are locked `FOR UPDATE` first
+   * for the same reason: the records moved next (tooth status above all, one row per position)
+   * then meet no uncommitted write on the kept patient. No deadlock (ADR-0023): charting locks
+   * its visit before any record and never a patient, and `complete` and `start` lock the patient
+   * first, so they wait for the merge (or it for them) before holding any visit.
+   */
+  async repointPatient(droppedId: string, keptId: string): Promise<number> {
+    return this.db.run(async (tx) => {
+      await tx
+        .select({ id: visits.id })
+        .from(visits)
+        .where(and(eq(visits.patientId, keptId), live))
+        .for('update');
+      const rows = await tx
+        .update(visits)
+        .set({ patientId: keptId })
+        .where(eq(visits.patientId, droppedId))
+        .returning({ id: visits.id });
+      return rows.length;
+    });
+  }
+
+  /**
    * The room of the most recent visit `userId` started on `localDate` (discarded ones included: a
    * visit discarded because it was opened on the wrong patient was still in the right room), or
    * null. The start popover's default room (V3).

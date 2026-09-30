@@ -367,8 +367,11 @@ an unknown id inside a body is a 422 at its path.
   - `PatientUpdated { patientId, fields }`: the names of the changed patch fields.
   - `PatientArchived { patientId }`
   - `PatientRestored { patientId }`
-  - `PatientsMerged { keptId, droppedId }`: consumed by `billing`, which re-points the dropped
-    patient's ledger entries to the kept one through a BullMQ job (design Q9, ADR-0017).
+  - `PatientsMerged { keptId, droppedId }`, published inside the merge transaction. Consumed by
+    `clinical`, whose in-transaction handler re-points the dropped patient's visits, diagnoses,
+    plans and tooth status before commit (a failure there fails the merge; spec W24), and by
+    `billing` after commit, which re-points the dropped patient's ledger entries to the kept one
+    through a BullMQ job (design Q9, ADR-0017).
   - `ContactLinked { patientId, contactId }`: a link was made (a contact route, or a create).
   - `ContactUnlinked { patientId, contactId }`.
   - `ContactUpdated { contactId }`: an unlinked contact's own fields changed; it became a
@@ -384,9 +387,11 @@ an unknown id inside a body is a 422 at its path.
   `practitionersByProfileIds`; ADR-0016, ADR-0020).
 - `audit`.
 
-Nothing here imports `billing`. `billing` depends on `patients` (`create` with contacts, `getMany`,
-`listItemsByIds` (the export's rows and guardian columns), `lockForDependentWrite`,
-`search`/`searchIds` with their internal options, `survivorOf`, and `PatientsMerged`).
+Nothing here imports `billing` or `clinical`. `billing` depends on `patients` (`create` with
+contacts, `getMany`, `listItemsByIds` (the export's rows and guardian columns),
+`lockForDependentWrite`, `search`/`searchIds` with their internal options, `survivorOf`, and
+`PatientsMerged`). `clinical` depends on `patients` (`get`, `getMany`, `lockForDependentWrite`,
+and `PatientsMerged`).
 
 ## Permissions
 

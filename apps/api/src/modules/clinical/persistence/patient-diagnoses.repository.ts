@@ -112,6 +112,21 @@ export class PatientDiagnosesRepository {
     return toStored(row);
   }
 
+  /**
+   * The merge re-point (V10): every diagnosis record of `droppedId`, removed ones included, moves
+   * to `keptId`. Returns how many moved.
+   */
+  async repointPatient(droppedId: string, keptId: string): Promise<number> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .update(patientDiagnoses)
+        .set({ patientId: keptId })
+        .where(eq(patientDiagnoses.patientId, droppedId))
+        .returning({ id: patientDiagnoses.id }),
+    );
+    return rows.length;
+  }
+
   /** The id of the tooth's most recently recorded active diagnosis, or null (spec §drawer). */
   async latestActiveOnTooth(patientId: string, toothCode: string): Promise<string | null> {
     const [row] = await this.db.run((tx) =>

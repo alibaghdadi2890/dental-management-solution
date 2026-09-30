@@ -6,6 +6,7 @@ import { UsersModule } from '../users';
 import { CatalogSeedingSubscriber } from './application/catalog-seeding.subscriber';
 import { CatalogService } from './application/catalog.service';
 import { ChartService } from './application/chart.service';
+import { MergeClinicalSubscriber } from './application/merge-clinical.subscriber';
 import { VisitRecordsService } from './application/visit-records.service';
 import { VisitsService } from './application/visits.service';
 import { CatalogController } from './http/catalog.controller';
@@ -25,7 +26,7 @@ import { VisitsRepository } from './persistence/visits.repository';
  * lifecycle, charting in a visit and the patient's chart reads (feature 4a). Depends on
  * `patients` (existence, the dependent-write lock, names, date of birth and dentition), `users`
  * (branch dentists, dentist names) and `tenancy` (currency, time zone, rooms); none of them
- * imports `clinical`.
+ * imports `clinical`. Re-points a merged patient's records inside the merge transaction.
  */
 @Module({
   imports: [AuditModule, PatientsModule, TenancyModule, UsersModule],
@@ -48,6 +49,7 @@ import { VisitsRepository } from './persistence/visits.repository';
     TreatmentPlansRepository,
     ToothStatusRepository,
     ChartService,
+    MergeClinicalSubscriber,
   ],
   exports: [CatalogService, VisitsService, VisitRecordsService, ChartService],
 })

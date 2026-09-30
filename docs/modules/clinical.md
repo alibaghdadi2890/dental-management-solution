@@ -2,8 +2,8 @@
 
 **Status:** partly implemented. The service and diagnosis catalogs are done (feature 2). Of
 feature 4a, the visit lifecycle (start, resume, pause, notes, discount, discard, complete, live
-visits), charting in a visit (services, diagnoses, plans, tooth presence) and the patient's chart
-reads (chart, tooth history, last visit, summary) are done; the merge re-point is in progress.
+visits), charting in a visit (services, diagnoses, plans, tooth presence), the patient's chart
+reads (chart, tooth history, last visit, summary) and the merge re-point are done.
 
 ## Purpose
 
@@ -158,6 +158,30 @@ from one `practitionersByProfileIds` call per read.
 - **Summary** (W8): completed visits, active diagnoses, `planned` plans, distinct teeth and the
   number of services over completed visits' services, in one query.
 
+### Merge re-point
+
+`MergeClinicalSubscriber` handles `PatientsMerged` **in the merge transaction** (spec V10, W24;
+ADR-0024's in-transaction handlers), which already holds both patients `FOR UPDATE`. A failure
+rolls the merge back, so a visit's `patient_id` is always a live patient and a charge posted at
+completion lands on the kept one. In order:
+
+1. `visits` move to the kept patient. The kept patient's live visits are locked `FOR UPDATE`
+   first and the dropped patient's are locked by the update, so the re-point waits for charting
+   in flight (which holds its visit `FOR UPDATE`) and later changes read the new patient.
+   Charting locks a visit and no patient; `complete` locks the patient before its visit
+   (ADR-0023), so it either finishes before the merge takes the patients or waits for the merge
+   and re-reads the visit. Neither order can deadlock.
+2. `patient_diagnoses`, then `treatment_plans` (removed rows too).
+3. `tooth_status`: where both patients have a row at a position, the kept one wins and the
+   dropped one is deleted (a state row, not history); the other rows move.
+4. Audit `clinical.repoint` on the kept patient (resource type `patient`, after =
+   `{ droppedId, visits, diagnoses, plans, toothStatusMoved, toothStatusDropped }`), only when
+   something changed.
+
+It isn't permission-gated: the merge needs `patient:write`, and front desk merges without
+`visit:write`. A merge chain (A into B, then B into C) ends on C, because each merge re-points in
+its own transaction. The kept patient may then have two live visits; both stay usable (W1).
+
 ## Public API (`index.ts`)
 
 `ClinicalModule`, `CatalogService`, `VisitsService` (with the `VisitChargeFacts` and
@@ -275,13 +299,16 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
   - Planned: `VisitAmended`, `VisitVoided` (4b).
 - Consumes: `TenantProvisioned` (provisioning, event only — ADR-0014). It seeds the default
   catalog.
+- Consumes: `PatientsMerged` (patients), in the merge transaction: the
+  [merge re-point](#merge-re-point).
 
 ## Depends on
 
 - `tenancy`: the tenant currency (ADR-0015) and time zone (the local date, the age for the
   chart), the branch's rooms (ADR-0007).
 - `patients`: existence and the dependent-write lock (`lockForDependentWrite`, W22), names for
-  the live visits, the date of birth and dentition override for the chart (`get`).
+  the live visits, the date of birth and dentition override for the chart (`get`), and
+  `PatientsMerged` (the re-point).
 - `users`: the branch's dentists (`listPractitioners`), dentist names
   (`practitionersByProfileIds`, also on diagnosis and plan records), the caller's staff profile
   (`profileIdOf`).

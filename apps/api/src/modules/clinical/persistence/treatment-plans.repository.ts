@@ -111,6 +111,21 @@ export class TreatmentPlansRepository {
   }
 
   /**
+   * The merge re-point (V10): every plan of `droppedId`, removed ones included, moves to
+   * `keptId`. Returns how many moved.
+   */
+  async repointPatient(droppedId: string, keptId: string): Promise<number> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .update(treatmentPlans)
+        .set({ patientId: keptId })
+        .where(eq(treatmentPlans.patientId, droppedId))
+        .returning({ id: treatmentPlans.id }),
+    );
+    return rows.length;
+  }
+
+  /**
    * Clears the link from the patient's plans to a diagnosis record being removed (removed plans
    * included, so none points at it); returns the ids of the plans that were linked.
    */
