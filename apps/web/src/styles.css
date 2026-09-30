@@ -62,6 +62,7 @@
   /* Surfaces */
   --color-surface: #ffffff;
   --color-faint: #faf8f4;
+  --color-sunken: #fdfcfa;
   --color-subtle: #f2f0ea;
   --color-row-divider: #f2efe8;
   --color-inner-divider: #eee9df;
@@ -80,6 +81,7 @@
   --color-primary-deep: #2b2e6b;
   --color-primary-tint: #eceef8;
   --color-primary-tint-border: #c3c7ea;
+  --color-primary-tint-strong: #9aa0d8;
   --color-selected: #f7f8fd;
   /* Status */
   --color-success: #2f6b47;
@@ -91,6 +93,8 @@
   --color-warning-dot: #b8893a;
   --color-warning-ink: #5c4a22;
   --color-warning-control: #d9c089;
+  --color-planned-bg: #fdfaf3;
+  --color-planned-border: #e0c58f;
   --color-dirty: #fffdf8;
   --color-danger: #9b2c2c;
   --color-danger-bg: #f8e9e6;

@@ -1,0 +1,72 @@
+{
+  "tooth": {
+    "name": "{{quadrant}} {{tooth}}",
+    "primaryName": "{{quadrant}} primary {{tooth}}"
+  },
+  "quadrant": {
+    "upperRight": "Upper right",
+    "upperLeft": "Upper left",
+    "lowerLeft": "Lower left",
+    "lowerRight": "Lower right"
+  },
+  "toothName": {
+    "centralIncisor": "central incisor",
+    "lateralIncisor": "lateral incisor",
+    "canine": "canine",
+    "firstPremolar": "first premolar",
+    "secondPremolar": "second premolar",
+    "firstMolar": "first molar",
+    "secondMolar": "second molar",
+    "thirdMolar": "third molar"
+  },
+  "surface": {
+    "M": "Mesial",
+    "D": "Distal",
+    "B": "Buccal / facial",
+    "L": "Lingual",
+    "O": "Occlusal",
+    "I": "Incisal"
+  },
+  "surfaceShort": {
+    "M": "M",
+    "D": "D",
+    "B": "B",
+    "L": "L",
+    "O": "O",
+    "I": "I"
+  },
+  "glyph": {
+    "surfaceTreated": "{{name}} · treated"
+  },
+  "title": {
+    "primary": "primary tooth",
+    "notErupted": "not yet erupted",
+    "planned": "planned: {{names}}",
+    "recordedServices_one": "{{count}} recorded service",
+    "recordedServices_other": "{{count}} recorded services",
+    "treatedToday": "treated in this visit",
+    "noRecordedTreatment": "no recorded treatment"
+  },
+  "chart": {
+    "upperArch": "Upper arch",
+    "lowerArch": "Lower arch",
+    "right": "R",
+    "left": "L",
+    "rightTitle": "Patient's right",
+    "leftTitle": "Patient's left"
+  },
+  "legend": {
+    "treatment": "Treatment",
+    "markers": "Markers",
+    "none": "No treatment",
+    "treatedSurface": "Treated surface",
+    "wholeTooth": "Whole tooth",
+    "treated": "Treated",
+    "treatedToday": "Treated today",
+    "diagnosis": "Diagnosis",
+    "planned": "Planned",
+    "selected": "Selected",
+    "primary": "Primary",
+    "notErupted": "Not erupted"
+  }
+}

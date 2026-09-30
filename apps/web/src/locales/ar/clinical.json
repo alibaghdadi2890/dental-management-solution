@@ -1,0 +1,76 @@
+{
+  "tooth": {
+    "name": "{{tooth}}، {{quadrant}}",
+    "primaryName": "{{tooth}} اللبنية، {{quadrant}}"
+  },
+  "quadrant": {
+    "upperRight": "الربع العلوي الأيمن",
+    "upperLeft": "الربع العلوي الأيسر",
+    "lowerLeft": "الربع السفلي الأيسر",
+    "lowerRight": "الربع السفلي الأيمن"
+  },
+  "toothName": {
+    "centralIncisor": "السن القاطعة المركزية",
+    "lateralIncisor": "السن القاطعة الجانبية",
+    "canine": "سن الناب",
+    "firstPremolar": "السن الضاحكة الأولى",
+    "secondPremolar": "السن الضاحكة الثانية",
+    "firstMolar": "السن الرحوية الأولى",
+    "secondMolar": "السن الرحوية الثانية",
+    "thirdMolar": "السن الرحوية الثالثة"
+  },
+  "surface": {
+    "M": "إنسي",
+    "D": "وحشي",
+    "B": "دهليزي / شفوي",
+    "L": "لساني",
+    "O": "إطباقي",
+    "I": "قاطع"
+  },
+  "surfaceShort": {
+    "M": "M",
+    "D": "D",
+    "B": "B",
+    "L": "L",
+    "O": "O",
+    "I": "I"
+  },
+  "glyph": {
+    "surfaceTreated": "{{name}} · معالَج"
+  },
+  "title": {
+    "primary": "سن لبنية",
+    "notErupted": "لم تبزغ بعد",
+    "planned": "مخطط: {{names}}",
+    "recordedServices_zero": "لا خدمات مسجلة",
+    "recordedServices_one": "خدمة واحدة مسجلة",
+    "recordedServices_two": "خدمتان مسجلتان",
+    "recordedServices_few": "{{count}} خدمات مسجلة",
+    "recordedServices_many": "{{count}} خدمة مسجلة",
+    "recordedServices_other": "{{count}} خدمة مسجلة",
+    "treatedToday": "عولجت في هذه الزيارة",
+    "noRecordedTreatment": "لا علاج مسجل"
+  },
+  "chart": {
+    "upperArch": "الفك العلوي",
+    "lowerArch": "الفك السفلي",
+    "right": "يمين",
+    "left": "يسار",
+    "rightTitle": "يمين المريض",
+    "leftTitle": "يسار المريض"
+  },
+  "legend": {
+    "treatment": "العلاج",
+    "markers": "العلامات",
+    "none": "بلا علاج",
+    "treatedSurface": "سطح معالَج",
+    "wholeTooth": "السن كاملة",
+    "treated": "معالَجة",
+    "treatedToday": "عولجت اليوم",
+    "diagnosis": "تشخيص",
+    "planned": "مخطط",
+    "selected": "محددة",
+    "primary": "لبنية",
+    "notErupted": "لم تبزغ"
+  }
+}

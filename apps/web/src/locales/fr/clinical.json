@@ -1,0 +1,72 @@
+{
+  "tooth": {
+    "name": "{{tooth}} {{quadrant}}",
+    "primaryName": "{{tooth}} temporaire {{quadrant}}"
+  },
+  "quadrant": {
+    "upperRight": "supérieure droite",
+    "upperLeft": "supérieure gauche",
+    "lowerLeft": "inférieure gauche",
+    "lowerRight": "inférieure droite"
+  },
+  "toothName": {
+    "centralIncisor": "Incisive centrale",
+    "lateralIncisor": "Incisive latérale",
+    "canine": "Canine",
+    "firstPremolar": "Première prémolaire",
+    "secondPremolar": "Deuxième prémolaire",
+    "firstMolar": "Première molaire",
+    "secondMolar": "Deuxième molaire",
+    "thirdMolar": "Troisième molaire"
+  },
+  "surface": {
+    "M": "Mésiale",
+    "D": "Distale",
+    "B": "Vestibulaire",
+    "L": "Linguale",
+    "O": "Occlusale",
+    "I": "Incisale"
+  },
+  "surfaceShort": {
+    "M": "M",
+    "D": "D",
+    "B": "V",
+    "L": "L",
+    "O": "O",
+    "I": "I"
+  },
+  "glyph": {
+    "surfaceTreated": "{{name}} · traitée"
+  },
+  "title": {
+    "primary": "dent temporaire",
+    "notErupted": "pas encore sortie",
+    "planned": "prévu : {{names}}",
+    "recordedServices_one": "{{count}} soin enregistré",
+    "recordedServices_other": "{{count}} soins enregistrés",
+    "treatedToday": "traitée pendant cette visite",
+    "noRecordedTreatment": "aucun soin enregistré"
+  },
+  "chart": {
+    "upperArch": "Arcade supérieure",
+    "lowerArch": "Arcade inférieure",
+    "right": "D",
+    "left": "G",
+    "rightTitle": "Droite du patient",
+    "leftTitle": "Gauche du patient"
+  },
+  "legend": {
+    "treatment": "Soins",
+    "markers": "Repères",
+    "none": "Aucun soin",
+    "treatedSurface": "Face traitée",
+    "wholeTooth": "Dent entière",
+    "treated": "Traitée",
+    "treatedToday": "Traitée aujourd’hui",
+    "diagnosis": "Diagnostic",
+    "planned": "Prévu",
+    "selected": "Sélectionnée",
+    "primary": "Temporaire",
+    "notErupted": "Pas sortie"
+  }
+}
