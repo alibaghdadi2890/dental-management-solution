@@ -1,4 +1,80 @@
 {
   "title": "Settings",
-  "subtitle": "Clinic-wide configuration. Changes apply to every dentist in the clinic."
+  "subtitle": "Clinic-wide configuration. Changes apply to every dentist in the clinic.",
+  "chart": {
+    "readOnly": "The chart settings are managed by the clinic owner. You can view them here.",
+    "saveFailed": "Couldn't save — try again.",
+    "inUse": "In use",
+    "notInUse": "Not in use",
+    "detail": {
+      "title": "Dental / tooth chart",
+      "intro": "Choose how much detail the chart records. This affects the chart everywhere in the application — the visit workspace, the patient profile and every tooth panel. Existing records are never altered; surface detail already captured is simply not displayed while simple view is on.",
+      "group": "Chart detail",
+      "simple": {
+        "label": "Simple tooth view",
+        "body": "The tooth is charted as a whole. Fewer targets, faster charting, and a calmer chart — right for clinics that do not record surface detail."
+      },
+      "surface": {
+        "label": "Surface view",
+        "body": "Each tooth exposes its five surfaces ({{m}}, {{d}}, {{b}}, {{l}} and {{o}} or {{i}}). Services can be scoped to the exact surfaces treated."
+      },
+      "toast": {
+        "simple": "Simple tooth view enabled. The chart now works at whole-tooth level everywhere.",
+        "surface": "Surface view enabled. Teeth can now be charted by individual surface."
+      }
+    },
+    "notation": {
+      "title": "Tooth notation",
+      "intro": "Which numbering the chart, tooth picker and tooth history show. The stored record never changes: every tooth is always saved by its FDI code, so switching just relabels the chart, with nothing to migrate.",
+      "group": "Notation",
+      "fdi": {
+        "label": "FDI notation",
+        "body": "Two-digit codes by quadrant — #11 to #48 for permanent teeth, #51 to #85 for primary. The system most dental software uses."
+      },
+      "universal": {
+        "label": "Universal notation",
+        "body": "Permanent teeth numbered 1–32, primary teeth lettered A–T."
+      },
+      "toast": {
+        "fdi": "FDI notation enabled. Tooth numbers switch to FDI two-digit codes everywhere.",
+        "universal": "Universal notation enabled. Tooth numbers switch to Universal notation (1–32, A–T) everywhere."
+      }
+    },
+    "orientation": {
+      "title": "Chart orientation",
+      "intro": "Which side of the screen the patient's right-hand quadrants sit on. This flips the numbering direction, the R/L side markers and the left/right arrow-key order together, so the chart always stays internally consistent.",
+      "group": "Orientation",
+      "patient_right_on_right": {
+        "label": "Patient's right on the right",
+        "body": "Numbering runs right to left across the screen, so tooth #1 and the upper right quadrant sit on the right. Matches how many clinicians read a chart while seated at the chair."
+      },
+      "patient_right_on_left": {
+        "label": "Patient's right on the left",
+        "body": "The textbook patient-facing convention: you view the arch as if facing the patient, so their right side falls on your left and numbering runs left to right."
+      },
+      "toast": {
+        "patient_right_on_right": "Patient's right now on the right. The chart, its side markers and keyboard order all follow this setting.",
+        "patient_right_on_left": "Patient's right now on the left. The chart, its side markers and keyboard order all follow this setting."
+      }
+    },
+    "dentition": {
+      "title": "Dentition",
+      "intro": "Not a setting — the chart follows each patient's age automatically, so no one has to remember to switch modes before examining a child. One chart serves all three stages: every column is an anatomical position holding whichever tooth is actually present.",
+      "primary": {
+        "stage": "Primary dentition",
+        "age": "Age 0–5",
+        "body": "Twenty primary teeth, lettered A–T. Permanent molar positions show as not yet erupted."
+      },
+      "mixed": {
+        "stage": "Mixed dentition",
+        "age": "Age 6–12",
+        "body": "Permanent incisors and first molars alongside primary canines and molars, in one chart. Each position shows the tooth actually present."
+      },
+      "permanent": {
+        "stage": "Permanent dentition",
+        "age": "Age 13+",
+        "body": "Thirty-two permanent teeth, numbered 1–32."
+      }
+    }
+  }
 }

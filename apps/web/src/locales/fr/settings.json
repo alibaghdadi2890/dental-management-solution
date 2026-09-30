@@ -1,4 +1,80 @@
 {
   "title": "Paramètres",
-  "subtitle": "Configuration du cabinet. Les modifications s’appliquent à tous les dentistes du cabinet."
+  "subtitle": "Configuration du cabinet. Les modifications s’appliquent à tous les dentistes du cabinet.",
+  "chart": {
+    "readOnly": "Les paramètres du schéma dentaire sont gérés par le titulaire de la clinique. Vous pouvez les consulter ici.",
+    "saveFailed": "Échec de l’enregistrement — réessayez.",
+    "inUse": "Utilisé",
+    "notInUse": "Non utilisé",
+    "detail": {
+      "title": "Schéma dentaire",
+      "intro": "Choisissez le niveau de détail enregistré par le schéma. Cela concerne le schéma dans toute l’application — l’espace de visite, la fiche patient et chaque panneau de dent. Les enregistrements existants ne sont jamais modifiés : le détail de surface déjà saisi n’est simplement plus affiché tant que la vue simplifiée est active.",
+      "group": "Détail du schéma",
+      "simple": {
+        "label": "Vue simplifiée",
+        "body": "La dent est enregistrée dans son ensemble. Moins de cibles, une saisie plus rapide et un schéma plus calme — adapté aux cliniques qui n’enregistrent pas le détail des surfaces."
+      },
+      "surface": {
+        "label": "Vue par surface",
+        "body": "Chaque dent expose ses cinq surfaces ({{m}}, {{d}}, {{b}}, {{l}} et {{o}} ou {{i}}). Les soins peuvent être limités aux surfaces exactement traitées."
+      },
+      "toast": {
+        "simple": "Vue simplifiée activée. Le schéma fonctionne désormais au niveau de la dent entière partout.",
+        "surface": "Vue par surface activée. Les dents peuvent désormais être enregistrées par surface."
+      }
+    },
+    "notation": {
+      "title": "Notation dentaire",
+      "intro": "La numérotation affichée par le schéma, le sélecteur de dent et l’historique. L’enregistrement stocké ne change jamais : chaque dent est toujours enregistrée selon son code FDI, donc changer de notation ne fait que réétiqueter le schéma, sans rien à migrer.",
+      "group": "Notation",
+      "fdi": {
+        "label": "Notation FDI",
+        "body": "Codes à deux chiffres par quadrant — de #11 à #48 pour les dents permanentes, de #51 à #85 pour les dents temporaires. Le système utilisé par la plupart des logiciels dentaires."
+      },
+      "universal": {
+        "label": "Notation universelle",
+        "body": "Dents permanentes numérotées de 1 à 32, dents temporaires lettrées de A à T."
+      },
+      "toast": {
+        "fdi": "Notation FDI activée. La numérotation des dents passe partout aux codes FDI à deux chiffres.",
+        "universal": "Notation universelle activée. La numérotation des dents passe partout à la notation universelle (1–32, A–T)."
+      }
+    },
+    "orientation": {
+      "title": "Orientation du schéma",
+      "intro": "Le côté de l’écran où se trouvent les quadrants droits du patient. Cela inverse ensemble le sens de la numérotation, les repères D/G et l’ordre des flèches gauche/droite, afin que le schéma reste toujours cohérent.",
+      "group": "Orientation",
+      "patient_right_on_right": {
+        "label": "Droite du patient à droite",
+        "body": "La numérotation va de droite à gauche à l’écran, si bien que la dent nº 1 et le quadrant supérieur droit se trouvent à droite. Correspond à la façon dont de nombreux praticiens lisent un schéma installés au fauteuil."
+      },
+      "patient_right_on_left": {
+        "label": "Droite du patient à gauche",
+        "body": "La convention classique face au patient : vous regardez l’arcade comme si vous faisiez face au patient, donc sa droite se trouve à votre gauche et la numérotation va de gauche à droite."
+      },
+      "toast": {
+        "patient_right_on_right": "Droite du patient désormais à droite. Le schéma, ses repères et l’ordre du clavier suivent tous ce réglage.",
+        "patient_right_on_left": "Droite du patient désormais à gauche. Le schéma, ses repères et l’ordre du clavier suivent tous ce réglage."
+      }
+    },
+    "dentition": {
+      "title": "Denture",
+      "intro": "Ce n’est pas un réglage — le schéma suit automatiquement l’âge de chaque patient, pour que personne n’ait à penser à changer de mode avant d’examiner un enfant. Un seul schéma couvre les trois stades : chaque colonne est une position anatomique qui affiche la dent réellement présente.",
+      "primary": {
+        "stage": "Denture temporaire",
+        "age": "0–5 ans",
+        "body": "Vingt dents temporaires, lettrées de A à T. Les positions des molaires permanentes apparaissent comme non encore sorties."
+      },
+      "mixed": {
+        "stage": "Denture mixte",
+        "age": "6–12 ans",
+        "body": "Incisives et premières molaires permanentes aux côtés des canines et molaires temporaires, dans un seul schéma. Chaque position affiche la dent réellement présente."
+      },
+      "permanent": {
+        "stage": "Denture permanente",
+        "age": "13 ans et plus",
+        "body": "Trente-deux dents permanentes, numérotées de 1 à 32."
+      }
+    }
+  }
 }
