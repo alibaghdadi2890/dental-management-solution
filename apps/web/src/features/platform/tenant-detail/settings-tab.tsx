@@ -30,7 +30,7 @@ export function SettingsTab({ tenant }: { tenant: Tenant }) {
   const [saved, setSaved] = useState(false);
   const patch = changed(tenant, form);
   const dirty = Object.keys(patch).length > 0;
-  const mutation = useMutation({ mutationFn: () => updateTenantSettings(tenant.id, patch) });
+  const mutation = useMutation({ mutationFn: () => updateTenantSettings(patch, tenant.id) });
 
   const set = (key: keyof SettingsForm) => (value: string) => {
     setForm((current) => ({ ...current, [key]: value }));

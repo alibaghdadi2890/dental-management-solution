@@ -46,7 +46,7 @@ export function ChartDetailPreview({
   orientation: ChartOrientation;
 }) {
   return (
-    <span aria-hidden className="flex flex-none items-end gap-1">
+    <span aria-hidden dir="ltr" className="flex flex-none items-end gap-1">
       {DETAIL_PREVIEW_CODES.map((code, index) => (
         <ToothGlyph
           key={code}

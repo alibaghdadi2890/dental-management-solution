@@ -139,6 +139,61 @@ describe('ChartSettingsSection', () => {
     expect(radioFor("Patient's right on the left")).toHaveProperty('disabled', true);
   });
 
+  it('shows a danger toast, re-enables the group, and keeps the old option selected on failure', async () => {
+    const fetchMock = vi.fn(() => Promise.resolve(new Response('', { status: 500 })));
+    vi.stubGlobal('fetch', fetchMock);
+    renderSection(['tenant:write']);
+
+    fireEvent.click(radioFor('Universal notation'));
+
+    await screen.findByText(/Couldn.t save/);
+    expect(radioFor('Universal notation')).toHaveProperty('disabled', false);
+    expect(radioFor('FDI notation')).toHaveProperty('checked', true);
+    expect(radioFor('Universal notation')).toHaveProperty('checked', false);
+  });
+
+  it('disables only the group being changed while its own patch is pending', async () => {
+    let resolvePatch!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      resolvePatch = resolve;
+    });
+    const fetchMock = vi.fn((url: string) =>
+      url.endsWith('/tenant')
+        ? pending
+        : Promise.resolve(
+            new Response(
+              JSON.stringify(sessionWith(['tenant:write'], { toothNotation: 'universal' })),
+              {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              },
+            ),
+          ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    renderSection(['tenant:write']);
+
+    fireEvent.click(radioFor('Universal notation'));
+
+    // Its own group disables while its patch is in flight...
+    expect(radioFor('Universal notation')).toHaveProperty('disabled', true);
+    expect(radioFor('FDI notation')).toHaveProperty('disabled', true);
+    // ...but the other two groups stay live.
+    expect(radioFor('Simple tooth view')).toHaveProperty('disabled', false);
+    expect(radioFor('Surface view')).toHaveProperty('disabled', false);
+    expect(radioFor("Patient's right on the right")).toHaveProperty('disabled', false);
+    expect(radioFor("Patient's right on the left")).toHaveProperty('disabled', false);
+
+    resolvePatch(
+      new Response(JSON.stringify(tenantResponse({ toothNotation: 'universal' })), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    await screen.findByText(/Universal notation enabled/);
+    expect(radioFor('Universal notation')).toHaveProperty('disabled', false);
+  });
+
   it("doesn't patch when clicking the already-selected card", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

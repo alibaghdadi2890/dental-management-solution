@@ -6,7 +6,7 @@ import {
   TOOTH_NOTATIONS,
   type ToothNotation,
 } from '@dcm/contracts';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/toast-context';
 import {
@@ -21,6 +21,10 @@ import { useUpdateTenantSettings } from './tenancy-api';
 
 /** POC visual order (Simple first, Surface second) — not `CHART_MODES`' declaration order. */
 const DETAIL_OPTIONS: readonly ChartMode[] = ['simple', 'surface'];
+
+/** The one patch key each card group writes, also `useState`'s "which group is saving" value
+ * (§5: only the group being changed disables, not all three). */
+type SettingGroup = 'chartMode' | 'toothNotation' | 'chartOrientation';
 
 function RadioCard<T extends string>({
   name,
@@ -48,7 +52,7 @@ function RadioCard<T extends string>({
   return (
     <label
       className={cn(
-        'flex items-start gap-3.5 rounded-[10px] border p-4 text-start',
+        'flex items-start gap-3.5 rounded-[10px] border p-4 text-start has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-1 has-[:focus-visible]:outline-primary',
         checked
           ? 'border-primary bg-selected shadow-[0_0_0_3px_rgba(59,63,143,.12)]'
           : 'border-border bg-surface',
@@ -101,6 +105,10 @@ function RadioCard<T extends string>({
  * chart preferences, each a radio-card group with an In use / Not in use badge and a live
  * preview, plus the static Dentition explanation. Every card stays mounted and disabled without
  * `tenant:write` (W18-style read-only, catalog's own pattern), with one note above the groups.
+ * While a group's own PATCH is in flight only that group's cards disable — the other two groups
+ * stay live — and a failure re-enables the group with the previous option still selected, since
+ * the session (the source of truth for `mode`/`notation`/`orientation`) is only refetched on
+ * success.
  */
 export function ChartSettingsSection() {
   const { t } = useTranslation(['settings', 'clinical']);
@@ -109,12 +117,18 @@ export function ChartSettingsSection() {
   const { mode, notation, orientation } = useChartSettings();
   const surfaceLabel = useSurfaceLabel();
   const mutation = useUpdateTenantSettings();
+  // Which group's own PATCH is in flight — only that group's cards disable while it saves; a
+  // failure clears this without touching the session, so the old option stays selected (§4/§5).
+  const [pendingGroup, setPendingGroup] = useState<SettingGroup | null>(null);
 
-  const disabled = !canWrite || mutation.isPending;
   const inUseLabel = t('chart.inUse');
   const notInUseLabel = t('chart.notInUse');
+  const detailDisabled = !canWrite || pendingGroup === 'chartMode';
+  const notationDisabled = !canWrite || pendingGroup === 'toothNotation';
+  const orientationDisabled = !canWrite || pendingGroup === 'chartOrientation';
 
-  const apply = (patch: TenantSettingsPatch, toastText: string) => {
+  const apply = (group: SettingGroup, patch: TenantSettingsPatch, toastText: string) => {
+    setPendingGroup(group);
     mutation.mutate(patch, {
       onSuccess: () => {
         toast(toastText);
@@ -122,20 +136,23 @@ export function ChartSettingsSection() {
       onError: () => {
         toast(t('chart.saveFailed'), { tone: 'danger' });
       },
+      onSettled: () => {
+        setPendingGroup(null);
+      },
     });
   };
 
   const selectMode = (next: ChartMode) => {
-    if (disabled || next === mode) return;
-    apply({ chartMode: next }, t(`chart.detail.toast.${next}`));
+    if (detailDisabled || next === mode) return;
+    apply('chartMode', { chartMode: next }, t(`chart.detail.toast.${next}`));
   };
   const selectNotation = (next: ToothNotation) => {
-    if (disabled || next === notation) return;
-    apply({ toothNotation: next }, t(`chart.notation.toast.${next}`));
+    if (notationDisabled || next === notation) return;
+    apply('toothNotation', { toothNotation: next }, t(`chart.notation.toast.${next}`));
   };
   const selectOrientation = (next: ChartOrientation) => {
-    if (disabled || next === orientation) return;
-    apply({ chartOrientation: next }, t(`chart.orientation.toast.${next}`));
+    if (orientationDisabled || next === orientation) return;
+    apply('chartOrientation', { chartOrientation: next }, t(`chart.orientation.toast.${next}`));
   };
 
   const surfaceBody = t('chart.detail.surface.body', {
@@ -173,7 +190,7 @@ export function ChartSettingsSection() {
               name="chartMode"
               value={value}
               checked={value === mode}
-              disabled={disabled}
+              disabled={detailDisabled}
               label={t(`chart.detail.${value}.label`)}
               body={value === 'surface' ? surfaceBody : t('chart.detail.simple.body')}
               preview={<ChartDetailPreview mode={value} orientation={orientation} />}
@@ -203,7 +220,7 @@ export function ChartSettingsSection() {
               name="toothNotation"
               value={value}
               checked={value === notation}
-              disabled={disabled}
+              disabled={notationDisabled}
               label={t(`chart.notation.${value}.label`)}
               body={t(`chart.notation.${value}.body`)}
               preview={<NotationPreview notation={value} />}
@@ -233,7 +250,7 @@ export function ChartSettingsSection() {
               name="chartOrientation"
               value={value}
               checked={value === orientation}
-              disabled={disabled}
+              disabled={orientationDisabled}
               label={t(`chart.orientation.${value}.label`)}
               body={t(`chart.orientation.${value}.body`)}
               preview={<OrientationPreview orientation={value} />}

@@ -87,7 +87,12 @@ export function setTenantStatus(tenantId: string, status: TenantStatus, reason: 
   });
 }
 
-export function updateTenantSettings(tenantId: string, patch: TenantSettingsPatch) {
+/**
+ * `tenantId` is explicit for a platform admin acting on a clinic from outside it; omitted, it
+ * falls back to the caller's own session tenant (`apiFetch`'s default), which is how
+ * `features/tenancy`'s `useUpdateTenantSettings` reuses this for a staff member's own settings.
+ */
+export function updateTenantSettings(patch: TenantSettingsPatch, tenantId?: string) {
   return apiFetch('/tenant', tenantSchema, { method: 'PATCH', json: patch, tenantId });
 }
 
