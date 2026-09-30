@@ -8,8 +8,8 @@ import {
   type Visit,
 } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Link, Navigate } from '@tanstack/react-router';
-import { useCallback, useMemo, useState } from 'react';
+import { Link, Navigate, useNavigate } from '@tanstack/react-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
@@ -18,6 +18,7 @@ import { usePermission } from '@/features/auth/use-permission';
 import { patientQuery } from '@/features/patients/patients-api';
 import { ApiError } from '@/lib/api';
 import { useChartSettings } from '../chart/use-chart-settings';
+import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
 import { useFlushSaveGroups } from '../save-groups-context';
 import { SaveGroupsProvider } from '../save-groups-provider';
 import { useVisit } from '../use-visit';
@@ -45,11 +46,17 @@ type Tenant = NonNullable<Session['tenant']>;
 const NO_STATUS: never[] = [];
 
 /** The `/visits/$visitId` route: one workspace per visit, so its autosave groups (V6) never
- * carry over from one visit to the next. */
-export function VisitWorkspaceScreen({ visitId }: { visitId: string }) {
+ * carry over from one visit to the next. `tooth` is `?tooth=`, the tooth to select on arrival. */
+export function VisitWorkspaceScreen({
+  visitId,
+  tooth,
+}: {
+  visitId: string;
+  tooth?: ToothCode | undefined;
+}) {
   return (
     <SaveGroupsProvider key={visitId}>
-      <VisitWorkspacePage visitId={visitId} />
+      <VisitWorkspacePage visitId={visitId} tooth={tooth} />
     </SaveGroupsProvider>
   );
 }
@@ -60,7 +67,7 @@ export function VisitWorkspaceScreen({ visitId }: { visitId: string }) {
  * live — completed, or discarded from this page — goes to the patient's record, and so does one
  * that turns 404 on a refetch (discarded elsewhere, W6): nothing is charted into a dead visit.
  */
-function VisitWorkspacePage({ visitId }: { visitId: string }) {
+function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothCode | undefined }) {
   const { t } = useTranslation(['clinical', 'common']);
   const { data: session } = useSession();
   const visit = useVisit(visitId);
@@ -111,7 +118,7 @@ function VisitWorkspacePage({ visitId }: { visitId: string }) {
       </div>
     );
   }
-  return <Workspace visit={visit.data} tenant={session.tenant} />;
+  return <Workspace visit={visit.data} tenant={session.tenant} tooth={tooth} />;
 }
 
 /**
@@ -120,9 +127,19 @@ function VisitWorkspacePage({ visitId }: { visitId: string }) {
  * selected-tooth aside (`1 1 340px`), so the aside reflows under the chart below ~1000px; and the
  * financial bar. Read-only without `visit:write`
  * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
- * the chart, the tooth panel and the drawer; the drawer opens over a scrim.
+ * the chart, the tooth panel and the drawer; the drawer opens over a scrim. `?tooth=` selects
+ * its tooth (the tooth history's "Chart it in this visit"), then leaves the URL. The tooth
+ * panel's "Full tooth history →" opens the tooth history dialog.
  */
-function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
+function Workspace({
+  visit,
+  tenant,
+  tooth,
+}: {
+  visit: Visit;
+  tenant: Tenant;
+  tooth: ToothCode | undefined;
+}) {
   const { t } = useTranslation('clinical');
   const canWrite = usePermission('visit:write');
   const patient = useQuery(patientQuery(visit.patientId));
@@ -133,6 +150,7 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
   const closeDrawer = useCallback(() => {
     setDrawer(null);
   }, []);
+  const [historyTooth, setHistoryTooth] = useState<ToothCode | null>(null);
   const actions = useChartingActionsState({ visit, selection, openDrawer: setDrawer });
   const teeth = useVisitTeeth(chart.data, visit);
   // Review & complete sends every unsaved edit first; the summary dialog opens from here (H1).
@@ -149,6 +167,19 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
       : chart.data.dentition),
     ageYears: chart.data.dentition.ageYears,
   };
+
+  const { select } = selection;
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (tooth === undefined) return;
+    select(tooth);
+    void navigate({
+      to: '/visits/$visitId',
+      params: { visitId: visit.id },
+      search: {},
+      replace: true,
+    });
+  }, [tooth, select, navigate, visit.id]);
 
   useChartKeyboard({
     orientation,
@@ -213,6 +244,7 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
                   canWrite={canWrite}
                   timeZone={tenant.timeZone}
                   onOpenDrawer={setDrawer}
+                  onOpenHistory={setHistoryTooth}
                 />
               ) : (
                 !chart.error && <CardSkeleton label={t('workspace.loading')} />
@@ -230,6 +262,14 @@ function Workspace({ visit, tenant }: { visit: Visit; tenant: Tenant }) {
               <CatalogDrawer key={drawer} mode={drawer} onClose={closeDrawer} />
             </>
           )}
+          <ToothHistoryDialog
+            patientId={visit.patientId}
+            patientName={patient.data?.fullName}
+            code={historyTooth}
+            onCodeChange={setHistoryTooth}
+            canStart={false}
+            visitId={visit.id}
+          />
         </div>
       </ChartingActionsContext.Provider>
     </ToothSelectionContext.Provider>

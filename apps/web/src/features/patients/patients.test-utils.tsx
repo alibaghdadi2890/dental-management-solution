@@ -1,12 +1,16 @@
 import type {
   AuditEntry,
   BalanceMoney,
+  ClinicalSummary,
   ContactLookupItem,
+  LastVisit,
   Patient,
+  PatientChart,
   PatientContact,
   PatientListItem,
   Permission,
   Session,
+  ToothHistory,
 } from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
@@ -171,9 +175,36 @@ export const problem = (
     status,
   );
 
+/** A permanent dentition with nothing charted and no live visit. */
+export const EMPTY_CHART: PatientChart = {
+  dentition: { stage: 'permanent', source: 'auto', ageYears: 36 },
+  toothStatus: [],
+  diagnoses: [],
+  plans: [],
+  history: [],
+  liveVisitId: null,
+  teeth: [],
+};
+
+export const NO_COUNTS: ClinicalSummary = {
+  visits: 0,
+  activeDiagnoses: 0,
+  plannedProcedures: 0,
+  teethTreated: 0,
+  servicesPerformed: 0,
+};
+
 export interface MockApi {
   patients?: Patient[];
   balances?: Record<string, BalanceMoney[]>;
+  /** The balance's `charged` (Σ visit charges, W8) per patient id; none by default. */
+  charged?: Record<string, BalanceMoney[]>;
+  /** `clinical`'s reads per patient id: `EMPTY_CHART`, no last visit, `NO_COUNTS` and an empty
+   * history for every tooth unless given. */
+  charts?: Record<string, PatientChart>;
+  lastVisits?: Record<string, LastVisit>;
+  summaries?: Record<string, ClinicalSummary>;
+  toothHistories?: Record<string, ToothHistory[]>;
   audit?: Record<string, AuditEntry[]>;
   /** `GET /patients/:id/contacts` per patient id (none by default). */
   contacts?: Record<string, PatientContact[]>;
@@ -199,6 +230,11 @@ type FetchMock = ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Pr
 export function mockApi({
   patients = [],
   balances = {},
+  charged = {},
+  charts = {},
+  lastVisits = {},
+  summaries = {},
+  toothHistories = {},
   audit = {},
   contacts = {},
   lookup = [],
@@ -291,7 +327,25 @@ export function mockApi({
     const balanceOf = /^\/billing\/patients\/([^/]+)\/balance$/.exec(bare)?.[1];
     if (balanceOf) {
       return Promise.resolve(
-        json({ patientId: balanceOf, balances: balances[balanceOf] ?? [], charged: [] }),
+        json({
+          patientId: balanceOf,
+          balances: balances[balanceOf] ?? [],
+          charged: charged[balanceOf] ?? [],
+        }),
+      );
+    }
+    const clinical =
+      /^\/clinical\/patients\/([^/]+)\/(chart|last-visit|summary|teeth\/(\d+)\/history)$/.exec(
+        bare,
+      );
+    if (clinical) {
+      const [, patientId = '', read, toothCode] = clinical;
+      if (read === 'chart') return Promise.resolve(json(charts[patientId] ?? EMPTY_CHART));
+      if (read === 'last-visit') return Promise.resolve(json(lastVisits[patientId] ?? null));
+      if (read === 'summary') return Promise.resolve(json(summaries[patientId] ?? NO_COUNTS));
+      const history = toothHistories[patientId]?.find((tooth) => tooth.toothCode === toothCode);
+      return Promise.resolve(
+        json(history ?? { toothCode, diagnoses: [], plans: [], services: [] }),
       );
     }
     const detail = /^\/patients\/([^/]+)$/.exec(bare)?.[1];

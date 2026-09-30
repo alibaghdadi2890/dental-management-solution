@@ -436,7 +436,7 @@ describe('InformationTab', () => {
     await waitFor(() => {
       expect(router.state.location.search).toEqual({ tab: 'overview' });
     });
-    expect(await screen.findByRole('region', { name: 'Treatment summary' })).toBeTruthy();
+    expect(await screen.findByRole('region', { name: 'Balance' })).toBeTruthy();
   });
 
   it('asks before leaving the record while there are unsaved changes', async () => {

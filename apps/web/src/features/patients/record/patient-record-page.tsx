@@ -187,7 +187,14 @@ function PatientRecord({
 function RecordSkeleton({ tab }: { tab: RecordTab }) {
   const { t } = useTranslation(['patients', 'billing']);
   const canPay = usePermission('payment:read');
+  const canVisits = usePermission('visit:read');
   const label = t('panel.loading');
+  // The Overview's own arrangement (`OverviewTab`), so nothing moves once the record is in.
+  const skeleton = (title: string) => (
+    <Card title={title}>
+      <CardSkeleton label={label} />
+    </Card>
+  );
   return (
     <div className="h-full overflow-auto">
       <div className="border-b border-border bg-surface px-[26px] pt-5 pb-[54px]">
@@ -203,20 +210,24 @@ function RecordSkeleton({ tab }: { tab: RecordTab }) {
       <div className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
         {tab === 'overview' ? (
           <div className="flex flex-wrap items-start gap-4">
-            <div className="min-w-0 flex-[1_1_520px]">
-              <Card title={t('record.info.title')}>
-                <CardSkeleton label={label} />
-              </Card>
+            <div className="flex min-w-0 flex-[1_1_520px] flex-col gap-4">
+              {canVisits ? (
+                <>
+                  {skeleton(t('record.lastVisit.title'))}
+                  {skeleton(t('record.dental.title'))}
+                </>
+              ) : (
+                skeleton(t('record.info.title'))
+              )}
             </div>
             <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
-              {canPay && (
-                <Card title={t('billing:balance.title')}>
-                  <CardSkeleton label={label} />
-                </Card>
+              {canPay && skeleton(t('billing:balance.title'))}
+              {canVisits && (
+                <>
+                  {skeleton(t('record.summary.title'))}
+                  {skeleton(t('record.info.title'))}
+                </>
               )}
-              <Card title={t('record.summary.title')}>
-                <CardSkeleton label={label} />
-              </Card>
             </div>
           </div>
         ) : (

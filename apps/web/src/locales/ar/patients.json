@@ -419,7 +419,9 @@
       "planned": "الإجراءات المخطّطة",
       "teeth": "الأسنان المعالَجة",
       "services": "الخدمات المنفّذة",
-      "billed": "إجمالي ما فُوتر"
+      "billed": "إجمالي ما فُوتر",
+      "loading": "جارٍ تحميل ملخص العلاج…",
+      "failed": "تعذّر تحميل ملخص العلاج"
     },
     "info": {
       "title": "معلومات المريض",
@@ -448,7 +450,27 @@
       "merged": "تم دمج هذا السجل في سجل آخر، لذا لا يمكن تعديل بياناته."
     },
     "guardian": "وليّ الأمر · {{name}}",
-    "guardianWithPhone": "وليّ الأمر · {{name}} · <phone>{{phone}}</phone>"
+    "guardianWithPhone": "وليّ الأمر · {{name}} · <phone>{{phone}}</phone>",
+    "lastVisit": {
+      "title": "آخر زيارة",
+      "date": "التاريخ",
+      "dentist": "الطبيب",
+      "duration": "المدة",
+      "total": "الإجمالي",
+      "minutes": "{{minutes, number}} د",
+      "services": "الخدمات",
+      "chip": "{{name}} · {{target}}",
+      "jaw": "الفك",
+      "none": "لا زيارات مسجلة بعد.",
+      "loading": "جارٍ تحميل آخر زيارة…",
+      "failed": "تعذّر تحميل آخر زيارة"
+    },
+    "dental": {
+      "title": "حالة الأسنان",
+      "hint": "انقر على سن لرؤية تاريخها الكامل",
+      "loading": "جارٍ تحميل المخطط…",
+      "failed": "تعذّر تحميل المخطط"
+    }
   },
   "contacts": {
     "relationship": "صلة القرابة",

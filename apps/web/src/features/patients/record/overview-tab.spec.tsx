@@ -1,12 +1,28 @@
+import type { Permission } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mockApi, patient, patientContact, problem, renderRecord } from '../patients.test-utils';
+import {
+  ALL_PERMISSIONS,
+  EMPTY_CHART,
+  mockApi,
+  patient,
+  patientContact,
+  problem,
+  renderRecord,
+} from '../patients.test-utils';
 
 const RANA = patient(1, 'Rana Haddad', {
   email: 'rana@example.com',
   insurance: 'Allianz — Gold',
 });
 const URL_ = `/patients/${RANA.id}`;
+const CLINICAL: Permission[] = [...ALL_PERMISSIONS, 'visit:read'];
+
+/** The terms and values of a card's definition list, in order. */
+const rowsOf = (region: HTMLElement) =>
+  within(region)
+    .getAllByRole('term')
+    .map((term) => [term.textContent, term.nextElementSibling?.textContent]);
 
 /** A card of the loaded record (the loading skeleton's cards carry the same titles). */
 const card = async (name: string) => {
@@ -93,7 +109,7 @@ describe('OverviewTab', () => {
     );
     cleanup();
     renderRecord({ url: URL_, permissions: ['patient:read'] });
-    await screen.findByRole('region', { name: 'Treatment summary' });
+    await screen.findByRole('region', { name: 'Patient information' });
     expect(screen.queryByRole('region', { name: 'Balance' })).toBeNull();
   });
 
@@ -119,31 +135,174 @@ describe('OverviewTab', () => {
   it('has no Balance card without payment:read, and never asks for it', async () => {
     const fetchMock = mockApi({ patients: [RANA] });
     renderRecord({ url: URL_, permissions: ['patient:read', 'patient:write'] });
-    await card('Treatment summary');
+    await card('Patient information');
     expect(screen.queryByRole('region', { name: 'Balance' })).toBeNull();
     expect(fetchMock.mock.calls.some(([url]) => url.includes('/balance'))).toBe(false);
   });
 
-  it('shows zeros in the Treatment summary', async () => {
-    mockApi({ patients: [RANA] });
-    renderRecord({ url: URL_ });
+  it('fills the Treatment summary from the clinical counts and the visit charges (W8)', async () => {
+    mockApi({
+      patients: [RANA],
+      summaries: {
+        [RANA.id]: {
+          visits: 3,
+          activeDiagnoses: 2,
+          plannedProcedures: 1,
+          teethTreated: 4,
+          servicesPerformed: 1250,
+        },
+      },
+      charged: {
+        [RANA.id]: [
+          { amount: '20.00', currency: 'EUR' },
+          { amount: '1480.50', currency: 'USD' },
+        ],
+      },
+    });
+    renderRecord({ url: URL_, permissions: CLINICAL });
     const summary = await card('Treatment summary');
-    const values = within(summary)
-      .getAllByRole('definition')
-      .map((value) => value.textContent);
+    await waitFor(() => {
+      expect(rowsOf(summary)).toEqual([
+        ['Visits recorded', '3'],
+        ['Active diagnoses', '2'],
+        ['Planned procedures', '1'],
+        ['Teeth with treatment', '4'],
+        ['Services performed', '1,250'],
+        ['Lifetime billed', '$1,480.50'],
+      ]);
+    });
+  });
+
+  it('bills $0 over a lifetime without visit charges, and leaves the row out without payment:read', async () => {
+    mockApi({ patients: [RANA] });
+    renderRecord({ url: URL_, permissions: CLINICAL });
+    const summary = await card('Treatment summary');
+    await waitFor(() => {
+      expect(rowsOf(summary).at(-1)).toEqual(['Lifetime billed', '$0']);
+    });
     expect(
-      within(summary)
-        .getAllByRole('term')
-        .map((term) => term.textContent),
-    ).toEqual([
-      'Visits recorded',
-      'Active diagnoses',
-      'Planned procedures',
-      'Teeth with treatment',
-      'Services performed',
-      'Lifetime billed',
+      rowsOf(summary)
+        .slice(0, 5)
+        .map(([, value]) => value),
+    ).toEqual(['0', '0', '0', '0', '0']);
+
+    cleanup();
+    const fetchMock = mockApi({ patients: [RANA] });
+    renderRecord({ url: URL_, permissions: ['patient:read', 'visit:read'] });
+    const again = await card('Treatment summary');
+    await waitFor(() => {
+      expect(rowsOf(again)).toHaveLength(5);
+    });
+    expect(within(again).queryByText('Lifetime billed')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('/balance'))).toBe(false);
+  });
+
+  it('shows the last visit: its facts, its services as chips and its note', async () => {
+    mockApi({
+      patients: [RANA],
+      lastVisits: {
+        [RANA.id]: {
+          id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d60',
+          date: '2026-05-04',
+          dentistName: 'Dr. Ana Reyes',
+          durationMinutes: 45,
+          total: { amount: '140.00', currency: 'USD' },
+          services: [
+            { name: 'Composite filling', toothCode: '16' },
+            { name: 'Scaling', toothCode: null },
+          ],
+          notes: 'Occlusal caries on 16, restored.',
+        },
+      },
+    });
+    renderRecord({ url: URL_, permissions: CLINICAL });
+    const last = await card('Last visit');
+    await within(last).findByText('Dr. Ana Reyes');
+    expect(rowsOf(last)).toEqual([
+      ['Date', '4 May 2026'],
+      ['Dentist', 'Dr. Ana Reyes'],
+      ['Duration', '45 min'],
+      ['Total', '$140'],
     ]);
-    expect(values).toEqual(['0', '0', '0', '0', '0', '$0']);
+    const chips = within(last).getByRole('list', { name: 'Services' });
+    expect(
+      within(chips)
+        .getAllByRole('listitem')
+        .map((chip) => chip.textContent),
+    ).toEqual(['Composite filling · #16', 'Scaling · Jaw']);
+    expect(within(last).getByText('Occlusal caries on 16, restored.').tagName).toBe('BLOCKQUOTE');
+    expect(within(last).queryByRole('button', { name: /All visits/ })).toBeNull();
+  });
+
+  it('reads dashes and "No visits recorded yet." before the first completed visit', async () => {
+    mockApi({ patients: [RANA] });
+    renderRecord({ url: URL_, permissions: CLINICAL });
+    const last = await card('Last visit');
+    expect(await within(last).findByText('No visits recorded yet.')).toBeTruthy();
+    expect(rowsOf(last)).toEqual([
+      ['Date', '—'],
+      ['Dentist', '—'],
+      ['Duration', '—'],
+      ['Total', '—'],
+    ]);
+    expect(within(last).queryByRole('list')).toBeNull();
+  });
+
+  it('shows the compact chart, not selectable, whose teeth open their history', async () => {
+    mockApi({ patients: [RANA], charts: { [RANA.id]: EMPTY_CHART } });
+    renderRecord({ url: URL_, permissions: CLINICAL });
+    const dental = await card('Dental status');
+    expect(within(dental).getByText('Click a tooth for its full history')).toBeTruthy();
+    await within(dental).findByRole('group', { name: 'Upper arch' });
+    const tooth = within(dental).getByRole('button', { name: /^#16 · Upper right first molar/ });
+    expect(tooth.getAttribute('aria-pressed')).toBeNull();
+    expect(within(dental).queryByText('R')).toBeNull();
+    fireEvent.click(tooth);
+    expect(await screen.findByRole('dialog', { name: 'Tooth #16' })).toBeTruthy();
+  });
+
+  it('puts the visit cards on the left and the details on the right, with visit:read', async () => {
+    mockApi({ patients: [RANA] });
+    renderRecord({ url: URL_, permissions: CLINICAL });
+    await card('Last visit');
+    const titles = screen
+      .getAllByRole('region')
+      .map((region) => region.getAttribute('aria-labelledby'))
+      .map((id) => (id ? document.getElementById(id)?.textContent : null));
+    expect(titles).toEqual([
+      'Last visit',
+      'Dental status',
+      'Balance',
+      'Treatment summary',
+      'Patient information',
+    ]);
+  });
+
+  it('has no visit cards without visit:read, and never asks clinical for them', async () => {
+    const fetchMock = mockApi({ patients: [RANA] });
+    renderRecord({ url: URL_ });
+    await card('Patient information');
+    for (const name of ['Last visit', 'Dental status', 'Treatment summary']) {
+      expect(screen.queryByRole('region', { name })).toBeNull();
+    }
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('/clinical/'))).toBe(false);
+  });
+
+  it('says so when a clinical read fails', async () => {
+    mockApi({
+      patients: [RANA],
+      get: (path) => (path.startsWith('/clinical/') ? problem(500, 'internal') : undefined),
+    });
+    renderRecord({ url: URL_, permissions: CLINICAL });
+    expect((await within(await card('Last visit')).findByRole('alert')).textContent).toBe(
+      'Couldn’t load the last visit',
+    );
+    expect((await within(await card('Dental status')).findByRole('alert')).textContent).toBe(
+      'Couldn’t load the chart',
+    );
+    expect((await within(await card('Treatment summary')).findByRole('alert')).textContent).toBe(
+      'Couldn’t load the treatment summary',
+    );
   });
 
   it('shows the patient information, "Not recorded" where missing, and Complete opens the tab', async () => {

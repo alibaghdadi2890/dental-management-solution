@@ -323,5 +323,24 @@
     "loading": "Loading the catalog…",
     "failedTitle": "Couldn’t load the catalog",
     "failedBody": "Something went wrong while loading the catalog."
+  },
+  "history": {
+    "title": "Tooth {{label}}",
+    "subtitle": "{{name}} · {{patient}}",
+    "loading": "Loading the tooth history…",
+    "failed": "Couldn’t load this tooth’s history.",
+    "diagnosis": "Diagnosis",
+    "plan": "Treatment plan",
+    "completed": "Completed services",
+    "active": "Active",
+    "resolved": "Resolved",
+    "planned": "Planned",
+    "performed": "Performed",
+    "cancelled": "Cancelled",
+    "done": "Completed",
+    "emptyTitle": "No treatment recorded for this tooth",
+    "emptyBody": "Chart it during a visit and it will appear here.",
+    "chartIt": "Chart it in this visit",
+    "startVisit": "Start a visit"
   }
 }

@@ -7,6 +7,7 @@ import type {
   Permission,
   ServiceItem,
   ToothCode,
+  ToothHistory,
   TreatmentPlan,
   Visit,
   VisitService,
@@ -36,6 +37,7 @@ import {
   sessionWith,
 } from '@/features/patients/patients.test-utils';
 import { VisitWorkspaceScreen } from './visit-workspace-page';
+import { parseWorkspaceSearch } from './workspace-search';
 
 /** Test-only: the workspace's fixtures, an API mock and the `/visits/$visitId` route's wiring on
  * a memory router, with a stand-in patient record to land on. */
@@ -252,6 +254,8 @@ export interface WorkspaceApi {
   chart?: PatientChart | (() => PatientChart);
   services?: ServiceItem[];
   diagnoses?: DiagnosisItem[];
+  /** `GET …/teeth/:code/history` answers; an empty history for any other tooth. */
+  toothHistories?: ToothHistory[];
   /** Overrides a mutation's answer; `undefined` falls back to the default. */
   mutation?: (method: string, path: string, body: unknown) => Answer;
 }
@@ -268,6 +272,7 @@ export function mockWorkspace({
   chart: chartAnswer = chart(),
   services = [],
   diagnoses = [],
+  toothHistories = [],
   mutation,
 }: WorkspaceApi = {}): FetchMock {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
@@ -301,6 +306,15 @@ export function mockWorkspace({
     }
     if (path === `/patients/${record.id}`) return Promise.resolve(json(record));
     if (path === `/clinical/patients/${record.id}/chart`) return Promise.resolve(json(charted));
+    const toothCode = new RegExp(`^/clinical/patients/${record.id}/teeth/(\\d+)/history$`).exec(
+      path,
+    )?.[1];
+    if (toothCode) {
+      const history = toothHistories.find((tooth) => tooth.toothCode === toothCode);
+      return Promise.resolve(
+        json(history ?? { toothCode, diagnoses: [], plans: [], services: [] }),
+      );
+    }
     if (path === '/catalog/services') return Promise.resolve(json(services));
     if (path === '/catalog/diagnoses') return Promise.resolve(json(diagnoses));
     if (path === '/users/practitioners') {
@@ -332,10 +346,12 @@ export function sent(fetchMock: FetchMock, method: string, path: string): unknow
   return typeof body === 'string' ? JSON.parse(body) : null;
 }
 
-/** Renders `/visits/<id>` as the route does (`VisitWorkspaceScreen`), plus a stand-in record. */
+/** Renders `/visits/<id>` (plus `search`, e.g. `?tooth=16`) as the route does
+ * (`VisitWorkspaceScreen`), plus a stand-in record. */
 export function renderWorkspace({
   permissions = DENTIST_WRITE,
-}: { permissions?: Permission[] } = {}) {
+  search = '',
+}: { permissions?: Permission[]; search?: string } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
@@ -344,11 +360,13 @@ export function renderWorkspace({
   const visitRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/visits/$visitId',
+    validateSearch: (raw: Record<string, unknown>) => parseWorkspaceSearch(raw),
     component: VisitRoute,
   });
   function VisitRoute() {
     const { visitId } = visitRoute.useParams();
-    return <VisitWorkspaceScreen visitId={visitId} />;
+    const { tooth } = visitRoute.useSearch();
+    return <VisitWorkspaceScreen visitId={visitId} tooth={tooth} />;
   }
   const recordRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -366,7 +384,7 @@ export function renderWorkspace({
   }
   const router = createRouter({
     routeTree: rootRoute.addChildren([visitRoute, recordRoute]),
-    history: createMemoryHistory({ initialEntries: [`/visits/${VISIT_ID}`] }),
+    history: createMemoryHistory({ initialEntries: [`/visits/${VISIT_ID}${search}`] }),
   });
   render(
     <QueryClientProvider client={client}>

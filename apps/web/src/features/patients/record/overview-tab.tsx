@@ -1,11 +1,23 @@
-import type { Patient, PatientContact, Session } from '@dcm/contracts';
+import type {
+  ClinicalSummary,
+  Patient,
+  PatientContact,
+  Session,
+  ToothCode,
+  ToothState,
+} from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card } from '@/components/ui/card';
+import { Card, CardSkeleton } from '@/components/ui/card';
 import { SHIMMER } from '@/components/ui/list';
 import { usePermission } from '@/features/auth/use-permission';
 import { BalanceCard } from '@/features/billing/balance-card';
+import { balanceQuery } from '@/features/billing/billing-api';
+import { DentalChart } from '@/features/clinical/chart/dental-chart';
+import { useToothLabel } from '@/features/clinical/chart/use-chart-settings';
+import { ToothHistoryDialog } from '@/features/clinical/dialogs/tooth-history-dialog';
+import { chartQuery, clinicalSummaryQuery, lastVisitQuery } from '@/features/clinical/visits-api';
 import { formatCalendarDate, formatMoney, formatPhone } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CONTACT_ROLES, type ContactRole, roleHolder } from '../contact-rows';
@@ -13,15 +25,73 @@ import { contactsQuery } from '../contacts-api';
 
 type Tenant = NonNullable<Session['tenant']>;
 
-const SUMMARY_ROWS = ['visits', 'diagnoses', 'planned', 'teeth', 'services'] as const;
+const NONE = '—';
 
-/** Until visits, diagnoses and plans exist (features 4+), every count is zero. */
-function TreatmentSummary({ tenant, locale }: { tenant: Tenant; locale: string }) {
+/** A card's load failure, in place of its body. */
+function Failed({ children }: { children: string }) {
+  return (
+    <p role="alert" className="m-0 text-[12.5px] leading-snug text-ink-muted">
+      {children}
+    </p>
+  );
+}
+
+const SUMMARY_ROWS = [
+  ['visits', 'visits'],
+  ['diagnoses', 'activeDiagnoses'],
+  ['planned', 'plannedProcedures'],
+  ['teeth', 'teethTreated'],
+  ['services', 'servicesPerformed'],
+] as const satisfies readonly (readonly [string, keyof ClinicalSummary])[];
+
+/**
+ * The Treatment summary (spec W8): `clinical`'s five counts, then _Lifetime billed_ — the
+ * patient's visit charges in the tenant currency, from the balance (`payment:read`; the row is
+ * left out without it, and reads "—" until the balance is in).
+ */
+function TreatmentSummary({
+  patientId,
+  tenant,
+  locale,
+  canPay,
+}: {
+  patientId: string;
+  tenant: Tenant;
+  locale: string;
+  canPay: boolean;
+}) {
   const { t } = useTranslation('patients');
-  const zero = new Intl.NumberFormat(locale).format(0);
+  const summary = useQuery(clinicalSummaryQuery(patientId));
+  const balance = useQuery({ ...balanceQuery(patientId), enabled: canPay });
+
+  if (!summary.data) {
+    return (
+      <Card title={t('record.summary.title')}>
+        {summary.isError ? (
+          <Failed>{t('record.summary.failed')}</Failed>
+        ) : (
+          <CardSkeleton label={t('record.summary.loading')} />
+        )}
+      </Card>
+    );
+  }
+  const counts = summary.data;
+  const number = new Intl.NumberFormat(locale);
+  const billed = balance.data
+    ? formatMoney(
+        balance.data.charged.find((money) => money.currency === tenant.currency) ?? {
+          amount: '0',
+          currency: tenant.currency,
+        },
+        locale,
+      )
+    : NONE;
   const rows: [string, string][] = [
-    ...SUMMARY_ROWS.map((key): [string, string] => [t(`record.summary.${key}`), zero]),
-    [t('record.summary.billed'), formatMoney({ amount: '0', currency: tenant.currency }, locale)],
+    ...SUMMARY_ROWS.map(([key, field]): [string, string] => [
+      t(`record.summary.${key}`),
+      number.format(counts[field]),
+    ]),
+    ...(canPay ? [[t('record.summary.billed'), billed] satisfies [string, string]] : []),
   ];
   return (
     <Card title={t('record.summary.title')}>
@@ -38,6 +108,129 @@ function TreatmentSummary({ tenant, locale }: { tenant: Tenant; locale: string }
           </div>
         ))}
       </dl>
+    </Card>
+  );
+}
+
+const MICRO =
+  'mb-[5px] text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase [&:lang(ar)]:tracking-normal';
+
+/**
+ * The Last visit card (spec §Tab: Overview): the most recently completed visit's date, dentist,
+ * duration and total, its services as chips ("Composite filling · #16", or "· Jaw" for a
+ * jaw-level one) and its clinical note as a quote. Without a completed visit, dashes and "No
+ * visits recorded yet." "All visits →" arrives with the visit history (4b).
+ */
+function LastVisitCard({ patientId, locale }: { patientId: string; locale: string }) {
+  const { t } = useTranslation('patients');
+  const label = useToothLabel();
+  const lastVisit = useQuery(lastVisitQuery(patientId));
+
+  let body: ReactNode;
+  if (lastVisit.isPending) {
+    body = <CardSkeleton label={t('record.lastVisit.loading')} />;
+  } else if (lastVisit.isError) {
+    body = <Failed>{t('record.lastVisit.failed')}</Failed>;
+  } else {
+    const visit = lastVisit.data;
+    const facts = [
+      {
+        key: 'date',
+        value: visit ? formatCalendarDate(visit.date, locale) : NONE,
+        className: 'font-medium',
+      },
+      { key: 'dentist', value: visit?.dentistName ?? NONE, className: 'font-medium' },
+      {
+        key: 'duration',
+        value: visit ? t('record.lastVisit.minutes', { minutes: visit.durationMinutes }) : NONE,
+        className: 'font-mono font-medium',
+      },
+      {
+        key: 'total',
+        value: visit ? formatMoney(visit.total, locale) : NONE,
+        className: 'font-mono font-semibold tabular-nums',
+      },
+    ] as const;
+    const note = visit ? visit.notes.trim() : t('record.lastVisit.none');
+    body = (
+      <>
+        <dl className="m-0 mb-3.5 flex flex-wrap gap-[26px]">
+          {facts.map((fact) => (
+            <div key={fact.key}>
+              <dt className={MICRO}>{t(`record.lastVisit.${fact.key}`)}</dt>
+              <dd className={cn('m-0 text-[13px] leading-none', fact.className)}>{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {visit && visit.services.length > 0 && (
+          <ul
+            aria-label={t('record.lastVisit.services')}
+            className="m-0 mb-3 flex list-none flex-wrap gap-[7px] p-0"
+          >
+            {visit.services.map((service, index) => (
+              <li
+                key={index}
+                className="rounded-md border border-border bg-faint px-[9px] py-[5px] text-[12.5px] leading-none font-medium text-ink-secondary"
+              >
+                {t('record.lastVisit.chip', {
+                  name: service.name,
+                  target:
+                    service.toothCode === null
+                      ? t('record.lastVisit.jaw')
+                      : label(service.toothCode),
+                })}
+              </li>
+            ))}
+          </ul>
+        )}
+        {note && (
+          <blockquote className="m-0 rounded-e-md border-s-2 border-border-strong bg-faint px-[13px] py-[11px] text-[12.5px] leading-[1.6] whitespace-pre-line text-ink-secondary">
+            {note}
+          </blockquote>
+        )}
+      </>
+    );
+  }
+  return <Card title={t('record.lastVisit.title')}>{body}</Card>;
+}
+
+/**
+ * The Dental status card (spec §Tab: Overview): the patient's chart at 8 px cells, read-only —
+ * charting happens only in a visit — where a click on a tooth opens its history.
+ */
+function DentalStatusCard({
+  patientId,
+  onOpenHistory,
+}: {
+  patientId: string;
+  onOpenHistory: (code: ToothCode) => void;
+}) {
+  const { t } = useTranslation('patients');
+  const chart = useQuery(chartQuery(patientId));
+  const teeth = useMemo(
+    () => new Map<ToothCode, ToothState>(chart.data?.teeth.map((tooth) => [tooth.code, tooth])),
+    [chart.data],
+  );
+  return (
+    <Card
+      title={t('record.dental.title')}
+      action={
+        <span className="text-[12.5px] leading-none text-ink-muted">{t('record.dental.hint')}</span>
+      }
+    >
+      {chart.data ? (
+        <DentalChart
+          teeth={teeth}
+          dentition={chart.data.dentition.stage}
+          toothStatus={chart.data.toothStatus}
+          size={8}
+          onToothClick={onOpenHistory}
+        />
+      ) : chart.isError ? (
+        <Failed>{t('record.dental.failed')}</Failed>
+      ) : (
+        <CardSkeleton label={t('record.dental.loading')} />
+      )}
     </Card>
   );
 }
@@ -187,9 +380,10 @@ function PatientInfoCard({
 }
 
 /**
- * The record's Overview (workspace spec §Tab: Overview). The Last visit and Dental status cards
- * wait for visits and charting; until then the left column holds the patient's details and the
- * right one the Balance (`payment:read` only) above the Treatment summary.
+ * The record's Overview (workspace spec §Tab: Overview): with `visit:read`, the Last visit and
+ * Dental status cards on the left, and on the right the Balance (`payment:read` only), the
+ * Treatment summary and the patient's details. Without it, the details take the left column. A
+ * tooth clicked in the chart opens its history.
  */
 export function OverviewTab({
   patient,
@@ -205,22 +399,53 @@ export function OverviewTab({
 }) {
   const canPay = usePermission('payment:read');
   const canWrite = usePermission('patient:write');
+  const canVisits = usePermission('visit:read');
+  const [historyTooth, setHistoryTooth] = useState<ToothCode | null>(null);
+  const info = (
+    <PatientInfoCard
+      patient={patient}
+      tenant={tenant}
+      locale={locale}
+      onComplete={canWrite ? onComplete : undefined}
+    />
+  );
   return (
     <div className="flex flex-wrap items-start gap-4">
       <div className="flex min-w-0 flex-[1_1_520px] flex-col gap-4">
-        <PatientInfoCard
-          patient={patient}
-          tenant={tenant}
-          locale={locale}
-          onComplete={canWrite ? onComplete : undefined}
-        />
+        {canVisits ? (
+          <>
+            <LastVisitCard patientId={patient.id} locale={locale} />
+            <DentalStatusCard patientId={patient.id} onOpenHistory={setHistoryTooth} />
+          </>
+        ) : (
+          info
+        )}
       </div>
       <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
         {canPay && (
           <BalanceCard patientId={patient.id} currency={tenant.currency} locale={locale} />
         )}
-        <TreatmentSummary tenant={tenant} locale={locale} />
+        {canVisits && (
+          <>
+            <TreatmentSummary
+              patientId={patient.id}
+              tenant={tenant}
+              locale={locale}
+              canPay={canPay}
+            />
+            {info}
+          </>
+        )}
       </div>
+      {canVisits && (
+        <ToothHistoryDialog
+          patientId={patient.id}
+          patientName={patient.fullName}
+          code={historyTooth}
+          onCodeChange={setHistoryTooth}
+          canStart={patient.archivedAt === null}
+        />
+      )}
     </div>
   );
 }

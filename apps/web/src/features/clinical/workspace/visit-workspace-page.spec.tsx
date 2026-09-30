@@ -4,6 +4,7 @@ import { json } from '@/features/patients/patients.test-utils';
 import {
   chart,
   FRONT_DESK,
+  historyLine,
   mockWorkspace,
   RANA,
   renderWorkspace,
@@ -83,6 +84,52 @@ describe('VisitWorkspacePage', () => {
 
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(within(aside).getByText('No tooth selected')).toBeTruthy();
+  });
+
+  it('selects the tooth named by ?tooth= on arrival, then leaves the URL', async () => {
+    mockWorkspace();
+    const { router } = renderWorkspace({ search: '?tooth=16' });
+    const card = await chartCard();
+    const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
+    expect(await within(aside).findByRole('heading', { name: '#16' })).toBeTruthy();
+    expect(
+      within(card)
+        .getByRole('button', { name: /^#16 · / })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+    await waitFor(() => {
+      expect(router.state.location.search).toEqual({});
+    });
+    expect(router.state.location.pathname).toBe(`/visits/${VISIT_ID}`);
+  });
+
+  it('opens the tooth history from "Full tooth history →", over the workspace', async () => {
+    mockWorkspace({
+      chart: chart({ history: [historyLine(40, 'Composite filling', '16')] }),
+      toothHistories: [
+        {
+          toothCode: '16',
+          diagnoses: [],
+          plans: [],
+          services: [historyLine(40, 'Composite filling', '16')],
+        },
+      ],
+    });
+    renderWorkspace();
+    const card = await chartCard();
+    fireEvent.click(within(card).getByRole('button', { name: /^#16 · / }));
+    const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
+    fireEvent.click(await within(aside).findByRole('button', { name: 'Full tooth history →' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Tooth #16' });
+    expect(within(dialog).getByText('Upper right first molar · Rana Haddad')).toBeTruthy();
+    expect(await within(dialog).findByText('Composite filling')).toBeTruthy();
+
+    // Esc closes the dialog, not the selection.
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(within(aside).getByRole('heading', { name: '#16' })).toBeTruthy();
   });
 
   it('scrolls the arrowed-to tooth into view, and moves focus with it inside the chart', async () => {

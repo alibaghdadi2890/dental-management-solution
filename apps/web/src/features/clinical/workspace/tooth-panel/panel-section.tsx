@@ -150,18 +150,19 @@ export function LinkButton({
   );
 }
 
-/** A tiny status badge (Resolved, Planned, From plan, Primary). */
+/** A tiny status badge (Active, Resolved, Planned, From plan, Primary). */
 export function Badge({
   tone,
   children,
 }: {
-  tone: 'success' | 'warning' | 'neutral';
+  tone: 'danger' | 'success' | 'warning' | 'neutral';
   children: ReactNode;
 }) {
   return (
     <span
       className={cn(
         'flex-none rounded-[4px] border px-[7px] py-[3px] text-[11.5px] leading-none font-medium',
+        tone === 'danger' && 'border-danger-border bg-danger-bg text-danger',
         tone === 'success' && 'border-success-border bg-success-bg text-success',
         tone === 'warning' && 'border-warning-border bg-warning-bg text-warning',
         tone === 'neutral' && 'border-border bg-subtle text-ink-secondary',

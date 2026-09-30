@@ -371,5 +371,24 @@
     "loading": "جارٍ تحميل الكتالوج…",
     "failedTitle": "تعذّر تحميل الكتالوج",
     "failedBody": "حدث خطأ أثناء تحميل الكتالوج."
+  },
+  "history": {
+    "title": "السن {{label}}",
+    "subtitle": "{{name}} · {{patient}}",
+    "loading": "جارٍ تحميل تاريخ السن…",
+    "failed": "تعذّر تحميل تاريخ هذه السن.",
+    "diagnosis": "التشخيص",
+    "plan": "خطة العلاج",
+    "completed": "الخدمات المنجزة",
+    "active": "نشط",
+    "resolved": "محلول",
+    "planned": "مخطط",
+    "performed": "منفّذ",
+    "cancelled": "ملغى",
+    "done": "منجز",
+    "emptyTitle": "لا علاج مسجل لهذه السن",
+    "emptyBody": "سجّلها أثناء زيارة وستظهر هنا.",
+    "chartIt": "سجّلها في هذه الزيارة",
+    "startVisit": "ابدأ زيارة"
   }
 }

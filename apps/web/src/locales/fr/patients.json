@@ -379,7 +379,9 @@
       "planned": "Actes prévus",
       "teeth": "Dents traitées",
       "services": "Actes réalisés",
-      "billed": "Total facturé"
+      "billed": "Total facturé",
+      "loading": "Chargement du résumé des soins…",
+      "failed": "Impossible de charger le résumé des soins"
     },
     "info": {
       "title": "Informations patient",
@@ -408,7 +410,27 @@
       "merged": "Ce dossier a été fusionné avec un autre : ses informations ne peuvent pas être modifiées."
     },
     "guardian": "Responsable légal · {{name}}",
-    "guardianWithPhone": "Responsable légal · {{name}} · <phone>{{phone}}</phone>"
+    "guardianWithPhone": "Responsable légal · {{name}} · <phone>{{phone}}</phone>",
+    "lastVisit": {
+      "title": "Dernière visite",
+      "date": "Date",
+      "dentist": "Dentiste",
+      "duration": "Durée",
+      "total": "Total",
+      "minutes": "{{minutes, number}} min",
+      "services": "Actes",
+      "chip": "{{name}} · {{target}}",
+      "jaw": "Arcade",
+      "none": "Aucune visite enregistrée pour l’instant.",
+      "loading": "Chargement de la dernière visite…",
+      "failed": "Impossible de charger la dernière visite"
+    },
+    "dental": {
+      "title": "État dentaire",
+      "hint": "Cliquez sur une dent pour voir tout son historique",
+      "loading": "Chargement du schéma…",
+      "failed": "Impossible de charger le schéma"
+    }
   },
   "contacts": {
     "relationship": "Lien",

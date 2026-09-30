@@ -323,5 +323,24 @@
     "loading": "Chargement du catalogue…",
     "failedTitle": "Impossible de charger le catalogue",
     "failedBody": "Une erreur est survenue lors du chargement du catalogue."
+  },
+  "history": {
+    "title": "Dent {{label}}",
+    "subtitle": "{{name}} · {{patient}}",
+    "loading": "Chargement de l’historique de la dent…",
+    "failed": "Impossible de charger l’historique de cette dent.",
+    "diagnosis": "Diagnostic",
+    "plan": "Plan de traitement",
+    "completed": "Actes réalisés",
+    "active": "Actif",
+    "resolved": "Résolu",
+    "planned": "Planifié",
+    "performed": "Réalisé",
+    "cancelled": "Annulé",
+    "done": "Réalisé",
+    "emptyTitle": "Aucun traitement enregistré pour cette dent",
+    "emptyBody": "Notez-la pendant une visite et elle apparaîtra ici.",
+    "chartIt": "La noter dans cette visite",
+    "startVisit": "Commencer une visite"
   }
 }

@@ -88,7 +88,8 @@ export function StartVisitPopover({
             event.preventDefault();
             if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
           }}
-          className="z-30 w-[300px] max-w-[calc(100vw-24px)] animate-fadein rounded-[10px] border border-border bg-surface p-4 shadow-[0_10px_28px_rgba(27,26,31,.14)]"
+          // On the dialogs' layer: the tooth history's empty state opens it too.
+          className="z-50 w-[300px] max-w-[calc(100vw-24px)] animate-fadein rounded-[10px] border border-border bg-surface p-4 shadow-[0_10px_28px_rgba(27,26,31,.14)]"
         >
           <h2 id={titleId} className="m-0 mb-3.5 text-[14px] leading-none font-semibold">
             {t('startVisit.title')}
