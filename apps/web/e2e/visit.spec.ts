@@ -157,7 +157,7 @@ test('the owner charts a visit, completes it and sees its figures with the openi
     await expect(
       page.getByRole('status').filter({ hasText: 'Zircon crown planned' }),
     ).toBeVisible();
-    await panel.getByRole('button', { name: 'Perform Zircon crown now' }).click();
+    await panel.getByRole('button', { name: 'Perform now: Zircon crown' }).click();
     await expect(
       page.getByRole('status').filter({ hasText: 'Zircon crown performed' }),
     ).toBeVisible();
