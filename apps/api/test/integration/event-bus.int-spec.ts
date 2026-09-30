@@ -9,6 +9,7 @@ import { APP_CONFIG } from '../../src/platform/config/config.module';
 import { TenantDb } from '../../src/platform/db/tenant-db';
 import type { DomainEvent } from '../../src/platform/events/domain-event';
 import { EventBus, OnDomainEventInTransaction } from '../../src/platform/events/event-bus';
+import { DomainError } from '../../src/platform/kernel/domain-error';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { testConfig } from '../support/test-config';
@@ -21,6 +22,11 @@ import { testConfig } from '../support/test-config';
 const PROBE_TABLE = `event_bus_probe_${newId().replaceAll('-', '')}`;
 const probe = sql.identifier(PROBE_TABLE);
 const PROBE_EVENT = 'ProbeRecorded';
+
+class ProbeFailed extends DomainError {
+  readonly code = 'probe.failed';
+  readonly kind = 'conflict';
+}
 
 interface ProbePayload {
   fail: boolean;
@@ -43,7 +49,7 @@ class ProbeHandler {
       ),
     );
     if (event.payload.fail) {
-      throw new Error('handler failed');
+      throw new ProbeFailed('handler failed');
     }
   }
 }
@@ -166,7 +172,7 @@ describe('in-transaction domain event handlers', () => {
 
     const attempt = context.run(seed(tenantId), () => publishInTransaction(true, published));
 
-    await expect(attempt).rejects.toThrow('handler failed');
+    await expect(attempt).rejects.toBeInstanceOf(ProbeFailed);
     expect(await probeRows(tenantId)).toEqual([]);
     expect(published.eventId).toBeDefined();
     expect(await auditActions(published.eventId ?? '')).toEqual([]);

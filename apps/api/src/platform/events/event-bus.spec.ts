@@ -5,18 +5,25 @@ import { ClsServiceManager } from 'nestjs-cls';
 import { describe, expect, it } from 'vitest';
 import type { AppClsStore } from '../cls/app-cls-store';
 import { RequestContext } from '../cls/request-context';
-import type { Transaction } from '../db/database';
 import type { TenantDb } from '../db/tenant-db';
+import { DomainError } from '../kernel/domain-error';
 import type { DomainEvent } from './domain-event';
 import { ANY_DOMAIN_EVENT, EventBus, OnDomainEventInTransaction } from './event-bus';
 
 type Hook = () => void | Promise<void>;
 
-/** A `TenantDb` stand-in: with `inTransaction`, after-commit hooks queue up until `commit()`. */
+class ChargeFailed extends DomainError {
+  readonly code = 'visit.charge_failed';
+  readonly kind = 'conflict';
+}
+
+/**
+ * A `TenantDb` stand-in: with `inTransaction`, after-commit hooks queue up until `commit()`; a
+ * rollback is simply never calling it.
+ */
 function fakeTenantDb(options: { inTransaction: boolean }) {
   const pending: Hook[] = [];
   const tenantDb = {
-    currentTransaction: () => (options.inTransaction ? ({} as Transaction) : undefined),
     afterCommit: (hook: Hook) => {
       if (options.inTransaction) pending.push(hook);
       return options.inTransaction;
@@ -96,17 +103,33 @@ describe('in-transaction handlers', () => {
     expect(order).toEqual(['in-transaction', 'after-commit']);
   });
 
-  it('reject publish when they throw, and the after-commit dispatch never runs', async () => {
-    const { bus, emitter, pending } = setup({ inTransaction: true });
-    // Decorated handlers reject asynchronously; the Nest wiring test below covers that path.
-    emitter.on(IN_TRANSACTION_VISIT_COMPLETED, () => {
-      throw new Error('ledger failed');
+  it('reject publish when they throw, and nothing is dispatched', async () => {
+    const { bus, emitter, received } = setup({ inTransaction: true });
+    const failure = new ChargeFailed('ledger failed');
+    // Decorated handlers reject asynchronously; the Nest wiring tests below cover that path.
+    emitter.on('in-transaction:PatientCreated', () => {
+      throw failure;
     });
 
-    await expect(bus.publish(bus.create('VisitCompleted', { visitId: 'v1' }))).rejects.toThrow(
-      'ledger failed',
+    await expect(bus.publish(bus.create('PatientCreated', { patientId: 'p1' }))).rejects.toBe(
+      failure,
     );
-    expect(pending).toHaveLength(0);
+    expect(received).toHaveLength(0);
+  });
+
+  it('dispatch the events they publish after the event that caused them', async () => {
+    const { bus, emitter, commit } = setup({ inTransaction: true });
+    const dispatched: string[] = [];
+    emitter.on(IN_TRANSACTION_VISIT_COMPLETED, () => {
+      void bus.publish(bus.create('LedgerEntryRecorded', { entryId: 'e1' }));
+    });
+    emitter.on('VisitCompleted', () => dispatched.push('VisitCompleted'));
+    emitter.on('LedgerEntryRecorded', () => dispatched.push('LedgerEntryRecorded'));
+
+    await bus.publish(bus.create('VisitCompleted', { visitId: 'v1' }));
+    await commit();
+
+    expect(dispatched).toEqual(['VisitCompleted', 'LedgerEntryRecorded']);
   });
 
   it('need an open transaction', async () => {
@@ -136,10 +159,24 @@ describe('in-transaction handlers', () => {
 
 describe('decorated handlers (Nest wiring)', () => {
   @Injectable()
-  class FailingHandlers {
+  class ChargeHandlers {
+    readonly log: string[] = [];
+    failFirst = false;
+
     @OnDomainEventInTransaction('VisitCompleted')
-    postCharge(): Promise<void> {
-      return Promise.reject(new Error('ledger write failed'));
+    async postCharge(): Promise<void> {
+      this.log.push('first:start');
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      this.log.push('first:end');
+      if (this.failFirst) {
+        throw new ChargeFailed('ledger write failed');
+      }
+    }
+
+    @OnDomainEventInTransaction('VisitCompleted')
+    recordFollowUp(): Promise<void> {
+      this.log.push('second');
+      return Promise.resolve();
     }
 
     // Plain `@OnEvent` is here only to pin the library default that makes `suppressErrors: false`
@@ -153,24 +190,34 @@ describe('decorated handlers (Nest wiring)', () => {
   async function wire() {
     const moduleRef = await Test.createTestingModule({
       imports: [EventEmitterModule.forRoot()],
-      providers: [FailingHandlers],
+      providers: [ChargeHandlers],
     }).compile();
     moduleRef.useLogger(false);
     await moduleRef.init();
-    return moduleRef;
-  }
-
-  it('surface an in-transaction handler error to the publisher (@OnEvent swallows by default)', async () => {
-    const moduleRef = await wire();
     const emitter = moduleRef.get(EventEmitter2);
     const context = new RequestContext(ClsServiceManager.getClsService<AppClsStore>());
-    const { tenantDb, pending } = fakeTenantDb({ inTransaction: true });
+    const { tenantDb } = fakeTenantDb({ inTransaction: true });
     const bus = new EventBus(emitter, context, tenantDb);
+    return { moduleRef, emitter, bus, handlers: moduleRef.get(ChargeHandlers) };
+  }
 
-    await expect(bus.publish(bus.create('VisitCompleted', { visitId: 'v1' }))).rejects.toThrow(
-      'ledger write failed',
-    );
-    expect(pending).toHaveLength(0);
+  it('run one at a time, in registration order', async () => {
+    const { moduleRef, bus, handlers } = await wire();
+
+    await bus.publish(bus.create('VisitCompleted', { visitId: 'v1' }));
+
+    expect(handlers.log).toEqual(['first:start', 'first:end', 'second']);
+    await moduleRef.close();
+  });
+
+  it('surface the error, with its type, and stop at the first throw (@OnEvent swallows by default)', async () => {
+    const { moduleRef, emitter, bus, handlers } = await wire();
+    handlers.failFirst = true;
+
+    await expect(
+      bus.publish(bus.create('VisitCompleted', { visitId: 'v1' })),
+    ).rejects.toBeInstanceOf(ChargeFailed);
+    expect(handlers.log).toEqual(['first:start', 'first:end']);
     await expect(emitter.emitAsync('SwallowedByDefault', {})).resolves.toEqual([undefined]);
     await moduleRef.close();
   });

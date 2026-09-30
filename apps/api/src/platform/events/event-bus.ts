@@ -15,10 +15,12 @@ const IN_TRANSACTION = 'in-transaction:';
 export const OnDomainEvent = (name: string): MethodDecorator => OnEvent(name);
 
 /**
- * Subscribes a handler that runs inside the publisher's open transaction, before commit; a throw
- * rolls the whole transaction back (CLAUDE.md §9). Database work through `TenantDb` only, on the
- * handler's own module's tables, and fast: it holds the publisher's locks. `@OnEvent` swallows
- * handler errors unless `suppressErrors` is false.
+ * Subscribes a handler that runs inside the publisher's open `TenantDb` transaction, before commit;
+ * a throw rolls the whole transaction back (CLAUDE.md §9). Handlers of one event run sequentially,
+ * in registration order, and the first throw stops the rest. Database work through `TenantDb`
+ * only, on the handler's own module's tables, and fast: it holds the publisher's locks. Events
+ * published outside a `TenantDb` transaction (including `withoutTenant` work) can't have such
+ * handlers. `@OnEvent` swallows handler errors unless `suppressErrors` is false.
  */
 export const OnDomainEventInTransaction = (name: string): MethodDecorator =>
   OnEvent(`${IN_TRANSACTION}${name}`, { suppressErrors: false });
@@ -57,18 +59,25 @@ export class EventBus {
   }
 
   async publish(event: DomainEvent): Promise<void> {
-    const channel = `${IN_TRANSACTION}${event.name}`;
-    if (this.emitter.listenerCount(channel) > 0) {
-      if (!this.tenantDb.currentTransaction()) {
+    // Registered first, so events that in-transaction handlers publish dispatch after this one.
+    const deferred = this.tenantDb.afterCommit(() => this.dispatch(event));
+    // EventEmitter2 types listeners as returning void; Nest's wrappers return the handler's promise.
+    const handlers: readonly ((event: DomainEvent) => unknown)[] = this.emitter.listeners(
+      `${IN_TRANSACTION}${event.name}`,
+    );
+    if (handlers.length > 0) {
+      if (!deferred) {
         throw new Error(`${event.name} has in-transaction handlers and needs an open transaction`);
       }
-      // Rejects when a handler throws, so the publisher's transaction rolls back.
-      await this.emitter.emitAsync(channel, event);
+      // One at a time: they share the transaction's single connection, and a handler still running
+      // after another's failure could query after the rollback. A throw rolls the transaction back.
+      for (const handler of handlers) {
+        await handler.call(this.emitter, event);
+      }
     }
-    if (this.tenantDb.afterCommit(() => this.dispatch(event))) {
-      return;
+    if (!deferred) {
+      await this.dispatch(event);
     }
-    await this.dispatch(event);
   }
 
   private async dispatch(event: DomainEvent): Promise<void> {

@@ -237,8 +237,9 @@ Rules:
   time (notifications, materialization, PDF generation) enqueue a BullMQ job instead of doing the
   work in the handler.
 - Reactions that must be atomic with the change subscribe with `@OnDomainEventInTransaction`
-  (database work only through `TenantDb`, their own module's tables, fast); slow or external
-  reactions enqueue a job.
+  (database work only through `TenantDb`, their own module's tables, fast; they run sequentially,
+  and only for events published inside a `TenantDb` transaction); slow or external reactions
+  enqueue a job.
 - Every event is also persisted to the `audit` module's log via a single generic subscriber.
 - Jobs are idempotent (use a deterministic `jobId`), carry `tenantId`, and are retried with
   backoff. Failed jobs go to a dead-letter queue that is monitored.
