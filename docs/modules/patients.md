@@ -123,6 +123,11 @@ with an opening balance) are composed by `billing` on top of this module (design
 
 ### `search(query, internal?)`
 
+`internal.idsNotIn` (feature 4b) leaves patients out; `view=notSeen` and `lastVisit=never` are
+refused without it (and `GET /patients` answers them with 400): `billing` serves them, with the
+ids `clinical` reports seen (`docs/modules/billing.md`, Patient views). `counts()` no longer
+returns a Not seen figure; that chip is `GET /billing/patients/not-seen-count`.
+
 - Items are `PatientListItem`s, which carry (addendum C7):
   - `primaryGuardian`: `{ contactId, fullName, phone, relationship }` of the patient's primary
     guardian link, resolved (a contact linked to a patient shows that patient's name and phone),

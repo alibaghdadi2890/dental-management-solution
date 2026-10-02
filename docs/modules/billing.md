@@ -44,18 +44,23 @@ ADR-0017).
 ## Owns
 
 - `ledger_entries` (tenant RLS): `id`, `tenant_id`, `patient_id`, `kind` (`ledger_entry_kind`
-  enum: `opening_balance`, `adjustment`, `visit_charge`), `amount numeric(12,2)` (signed; check
+  enum: `opening_balance`, `adjustment`, and the visit kinds `visit_charge`,
+  `visit_charge_adjustment`, `visit_charge_reversal`), `amount numeric(12,2)` (signed; check
   `amount <> 0`), `currency char(3)`, `effective_date date`, `note?`, `reason?`, `created_by`
-  (the actor's auth user id), `visit_id?`, timestamps.
+  (the actor's auth user id), `visit_id?`, `amendment_id?`, timestamps.
   - `patient_id` has no foreign key, because `patients` owns that table. Existence is always
     checked through `PatientsService`: `lockForDependentWrite` for writes, `getMany` for reads.
-  - `visit_id` is the completed visit a `visit_charge` bills, set iff the kind is
-    `visit_charge` (check `ledger_entries_visit_iff_charge`, which compares `kind::text`: the
-    enum value is added in the same migration run, see ADR-0024). No foreign key: `clinical` owns
-    `visits`. The partial unique index `ledger_entries_visit_unique` on `(tenant_id, visit_id)`,
-    where `visit_id` is set, charges a visit at most once.
-  - Indexes: `tenant_id`, `(tenant_id, patient_id)`, the visit index above, and the unique
-    `(tenant_id, id)` that `ledger_entry_lines` references.
+  - `visit_id` is the visit a visit-kind entry is about, set iff the kind is one of the three
+    (check `ledger_entries_visit_iff_visit_kind`, which compares `kind::text`: enum values are
+    added in the same migration run, see ADR-0024). No foreign key: `clinical` owns `visits`.
+  - `amendment_id` is the `visit_amendments` row a `visit_charge_adjustment` posts, set iff the
+    kind is that (feature 4b, ADR-0025); no foreign key either.
+  - `ledger_entries_visit_kind_unique` on `(tenant_id, visit_id, kind, coalesce(amendment_id,
+<nil uuid>))` where `visit_id` is set: a visit is charged once, reversed once and adjusted once
+    per amendment. (No enum literal in the predicate: index predicates must be immutable and an
+    enum's text cast isn't.)
+  - Indexes: `tenant_id`, `(tenant_id, patient_id)`, `(tenant_id, visit_id)` where set, the unique
+    index above, and the unique `(tenant_id, id)` that `ledger_entry_lines` references.
   - Entries are never edited or deleted. The merge job is the only writer that updates a row,
     and it changes `patient_id` (and `updated_at`) only; `created_by`, `visit_id` and the amount
     stay. Enforced by grants (migration `0011_ledger_append_only`, like `audit_log`): the runtime
@@ -81,10 +86,12 @@ ADR-0017).
 | `createWithOpeningBalance({ patient, openingBalance })`              | `payment:write` + `patient:write` | One `TenantDb` transaction. `asOf` is checked before anything is written (path `openingBalance.asOf`). Then `PatientsService.create`, which is `patient`'s whole create schema — including `contacts` (linked in the same transaction, design addendum C4) and `linkContactId` — and the `opening_balance` entry; the new patient is not re-read. The patient, its display number, any contact links, and the `opening_balance` entry, with their audit entries and events, commit or roll back together (a failed link or a failed entry leaves nothing: no patient, no contact, no link, no entry, and the display-number counter is not advanced). The patient's field errors (contacts included) come back under `patient.` (e.g. `patient.phone`, `patient.contacts.0.target.contactId`, `patient.linkContactId`). Returns `{ patient, balance }`. |
 | `recordOpeningBalance(patientId, { amount, asOf, note? })`           | `payment:write`                   | A building block for the feature 6 import. Checks `asOf` (path `asOf`) and locks the patient. Unknown patient → 404 `patient.not_found`; merged away → 409 `patient.merged`. Returns the patient's balance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `adjustBalance(patientId, { amount, effectiveDate, reason, note? })` | `payment:write`                   | The amount is signed and non-zero. A reason is required and is written to the entry and the audit entry. Locks the patient: unknown → 404, merged away → 409 `patient.merged`, archived allowed. Returns the balance after the entry. There is no UI for it in feature 3.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `balanceOf(patientId)`                                               | `payment:read`                    | `{ patientId, balances, charged }`; `charged` is Σ `visit_charge` per currency (_Lifetime billed_, W8), non-zero currencies only. Unknown patient → 404.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `balanceOf(patientId)`                                               | `payment:read`                    | `{ patientId, balances, charged }`; `charged` is Σ the visit kinds (charges, adjustments, reversals) per currency (_Lifetime billed_, W8), non-zero currencies only. Unknown patient → 404.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `balancesFor(patientIds)`                                            | `payment:read`                    | Returned in input order, de-duplicated, each with `balances` and `charged`. Ids the tenant can't see are omitted. Patients without entries get `balances: []` and `charged: []`. One aggregate query for all ids.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `patientIdsOwing()`                                                  | `payment:read`                    | Ids of the patients owing in any currency, archived ones included, in id order. One SQL aggregate. A building block for `billing`'s patient views.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `visitSummary(visitId)`                                              | `payment:read`                    | A completed visit's figures, in the visit currency, from the ledger alone (spec W2): `{ visitId, currency, visit: { total, paid, outstanding }, previous, totalOutstanding }`. _This visit_ = its `visit_charge` (0 when none, W20), `paid` 0 until payments (feature 5); `previous` = the balance − the charge; `totalOutstanding` = the balance. `VisitsService.visitMoney` also requires `visit:read`: unknown or discarded visit → 404 `visit.not_found`; a live one → 409 `visit.not_live`. Balances in other currencies are left out. While a charge posted before a merge still sits on the dropped patient (until the `merge-ledger` job moves it), the balance is summed over both the visit's patient and the charge's.                                                                                                                       |
+| `balancesForVisits(visitIds)`                                        | `payment:read`                    | Per visit, in input order: `{ visitId, currency, charged, paid, outstanding }`; `charged` = Σ its visit entries, `paid` = `paidOn`. Visits without entries are omitted (4b).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `paidOn(visitId)`                                                    | none (internal)                   | What is paid on the visit: always 0 until payments (feature 5). Read inside the void transaction (ADR-0026), so it checks no permission and has no route.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `repointMergedEntries(keptId, droppedId)`                            | none (job only)                   | The merge re-point, run by `MergeLedgerWorker` (see below): moves the dropped patient's entries to the kept patient's survivor. Refuses to run outside a job or system task. Returns the number of entries moved.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 
 Every write goes through the internal `LedgerWriter`: it records the entry (and a visit charge's
@@ -114,6 +121,33 @@ Patient existence comes from `PatientsService` (`getMany`, `lockForDependentWrit
 requires `patient:read`. In practice, reads and writes here need `patient:read` as well as the
 `payment:*` permission. Every system role holds it.
 
+### Visit corrections (feature 4b, ADR-0025, ADR-0026)
+
+The same subscriber also handles, in the amend or void transaction:
+
+- `VisitAmended` → a `visit_charge_adjustment` of the delta (negative for a credit), naming the
+  amendment, dated the tenant's today, with the amendment's reason and no lines; a zero delta
+  posts nothing.
+- `VisitVoided` → if `paidOn(visitId) > 0`, `VisitHasPaymentsError` (409 `visit.has_payments`)
+  rolls the void back; else a `visit_charge_reversal` of −Σ the visit's entries (nothing when they
+  net to zero), dated today, with the void reason.
+
+`visitSummary` reads every visit entry, so an amended visit's _This visit_ is its net charge and a
+voided one's is 0.
+
+### Visit views (`application/visit-views.service.ts`, feature 4b)
+
+The Visits screen's money, composed on `VisitsService` like the patient views on
+`PatientsService`. Every method requires `payment:read`; `VisitsService` re-checks `visit:read`.
+
+- `unpaid(query)`: the visits list restricted to `visitIdsOwing()` (visits whose entries sum
+  above 0) through `search`'s internal `idsIn`.
+- `unpaidSummary(filters)`: the Unpaid footer (`count`, `billed`) and its tab chip (`tabCount`,
+  filters ignored).
+- `open(query, labels)`: the visits CSV export of any tab (_Unpaid_ included), read a cursor page
+  at a time: Visit, Date, Time, Room, Patient, Patient ID, Dentist, Services, Subtotal, Discount,
+  Total, Paid, Balance, Status (headers and statuses in `en`/`ar`/`fr`).
+
 ### Patient views (`application/patient-views.service.ts`)
 
 Internal to the module (not exported); `http/billing-patients.controller.ts` and the export use
@@ -121,11 +155,12 @@ it. Every method requires `payment:read`, and `PatientsService.search`/`searchId
 `patient:read`. The query is `PatientListQuery`, the same as `GET /patients`, and the result the
 same offset page (ADR-0018).
 
-| Method          | Notes                                                                                                                                                                                                                                                                                                                                      |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `list(query)`   | `view=owing` → the active view restricted to `patientIdsOwing()` (`search`'s internal `idsIn`). `sort=balance` → `search`'s internal `rank` from `rankByBalance` over every non-zero tenant-currency balance (`sumsInCurrency`); works with every view, `owing` included, and with `q` and the filters. Any other query is passed through. |
-| `owingCount()`  | The active patients owing in any currency (the tab chip): `search`'s total over the owing ids.                                                                                                                                                                                                                                             |
-| `idsFor(query)` | Every patient id of a view (the list query without paging), in the view's order, unpaged (`PatientsService.searchIds`, same owing/balance handling). The export's snapshot. Bounded by the tenant's patient count (ADR-0018).                                                                                                              |
+| Method           | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `list(query)`    | `view=notSeen` → the active view without the patients `clinical` saw in the last 180 days; `lastVisit=never` → without any patient with a counted visit (`search`'s internal `idsNotIn`, feature 4b). `view=owing` → the active view restricted to `patientIdsOwing()` (`search`'s internal `idsIn`). `sort=balance` → `search`'s internal `rank` from `rankByBalance` over every non-zero tenant-currency balance (`sumsInCurrency`); works with every view, `owing` included, and with `q` and the filters. Any other query is passed through. |
+| `owingCount()`   | The active patients owing in any currency (the tab chip): `search`'s total over the owing ids.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `notSeenCount()` | The Not seen tab chip: active patients without a counted visit in the last 180 days.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `idsFor(query)`  | Every patient id of a view (the list query without paging), in the view's order, unpaged (`PatientsService.searchIds`, same owing/balance handling). The export's snapshot. Bounded by the tenant's patient count (ADR-0018).                                                                                                                                                                                                                                                                                                                    |
 
 ### CSV export (`application/patient-export.service.ts`)
 
@@ -249,10 +284,16 @@ today, takes the **snapshot** — the ids to export, in order — and returns `{
 | `GET /billing/visits/:visitId/summary`   | `payment:read`  | 200 `VisitFinancialSummary` (`visitFinancialSummarySchema`). The service also requires `visit:read`. A live visit → 409 `visit.not_live`; unknown or discarded → 404 `visit.not_found`.                                                                                                                                                  |
 | `GET /billing/patients`                  | `payment:read`  | The `GET /patients` query (`view=owing` and `sort=balance` included). 200 `PatientPage`. The service also requires `patient:read`.                                                                                                                                                                                                       |
 | `GET /billing/patients/owing-count`      | `payment:read`  | 200 `{ count }` (`owingCountSchema`). The service also requires `patient:read`.                                                                                                                                                                                                                                                          |
+| `GET /billing/patients/not-seen-count`   | `payment:read`  | 200 `{ count }`. The services also require `patient:read` and `visit:read`.                                                                                                                                                                                                                                                              |
+| `GET /billing/visits/balances?visitIds=` | `payment:read`  | 1–100 ids. 200 `VisitBalance[]`.                                                                                                                                                                                                                                                                                                         |
+| `GET /billing/visits/unpaid`             | `payment:read`  | The `GET /visits` query. 200 `VisitPage`. The service also requires `visit:read`.                                                                                                                                                                                                                                                        |
+| `GET /billing/visits/unpaid/summary`     | `payment:read`  | The visit filters. 200 `{ count, billed, tabCount }`.                                                                                                                                                                                                                                                                                    |
+| `GET /billing/visits/export`             | `payment:read`  | The visit filters, `tab` (`unpaid` too) and `lang?`. 200 `text/csv`, `visits-<tenant's today>.csv`, streamed like the patients export. The service also requires `visit:read`.                                                                                                                                                           |
 | `GET /billing/patients/export`           | `payment:read`  | The list query without `page`/`size`, plus `ids?` (1–100) and `lang?` (`en`/`ar`/`fr`, overrides `Accept-Language`). 200 `text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="patients-<tenant's today>.csv"`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`. The service also requires `patient:read`. |
 
-The patient-views routes live in `http/billing-patients.controller.ts`, registered before
-`billing.controller.ts`. They are static two-segment paths, and the routes above that take an id
+The patient-views routes live in `http/billing-patients.controller.ts` and the visit views in
+`http/billing-visits.controller.ts`, both registered before `billing.controller.ts`, whose
+`visits/:visitId/summary` would otherwise capture `visits/unpaid/summary`. They are static two-segment paths, and the routes above that take an id
 all have three segments under `patients/` (`:id/balance`, `:id/adjustments`), so neither
 captures the other. If a two-segment `patients/:id` route is ever added, it must come after the
 static paths.
@@ -287,6 +328,8 @@ pipe a `Readable`: stream callbacks run outside the request's async context, whe
     dropped patient's entries through the `merge-ledger` job (design Q9).
   - `VisitCompleted { visitId, patientId, currency, total, localDate }` (from `clinical`),
     **in the completion's transaction**, to post the visit charge (ADR-0024).
+  - `VisitAmended` and `VisitVoided` (from `clinical`), **in the amend or void transaction**, to
+    post the adjustment or the reversal, or to veto the void (ADR-0025, ADR-0026).
 
 ## Jobs
 

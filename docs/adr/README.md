@@ -29,3 +29,5 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0022](0022-records-on-the-tooth-dated-by-visit.md)         | Clinical records live on the tooth, dated by visit   | Accepted                           |
 | [0023](0023-live-visit-concurrency.md)                      | Live-visit concurrency, rooms and discard            | Accepted                           |
 | [0024](0024-visit-charges-in-the-completion-transaction.md) | Visit charges in the completion transaction          | Accepted                           |
+| [0025](0025-visit-amendments-are-append-only-snapshots.md)  | Visit amendments are append-only snapshots           | Accepted                           |
+| [0026](0026-billing-vetoes-a-void-in-the-transaction.md)    | Billing vetoes a void inside the transaction         | Accepted                           |

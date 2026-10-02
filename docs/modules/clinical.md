@@ -1,17 +1,20 @@
 # `clinical` module
 
-**Status:** implemented for features 2 and 4a. The service and diagnosis catalogs (feature 2);
+**Status:** implemented for features 2, 4a and 4b. The service and diagnosis catalogs (feature 2);
 the visit lifecycle (start, resume, pause, notes, discount, discard, complete, live visits),
 charting in a visit (services, diagnoses, plans, tooth presence), the patient's chart reads
 (chart, tooth history, last visit, summary), the merge re-point and the SPA's visit workspace
-(feature 4a). Amend and void of a completed visit and the visits list are feature 4b.
+(feature 4a); the visits list, amend and void of a completed visit, the per-patient visit stats
+and the record's history and chart tabs (feature 4b, spec
+`2026-10-01-visits-list-amend-void-design.md`).
 
 ## Purpose
 
 Clinical work on a patient:
 
 - **Visits**: encounters with a dentist, room, date, timer, services performed with
-  tooth/surfaces, notes, discount and status (feature 4a). Amend and void with a reason are 4b.
+  tooth/surfaces, notes, discount and status (feature 4a); amended or voided with a reason
+  (feature 4b).
 - **The per-tenant catalogs**: services (what the clinic charges for) and diagnoses (what dentists
   record).
 - **The clinical record**: diagnoses and treatment plans on the patient's teeth, dated by the
@@ -55,12 +58,18 @@ foreign keys inside `clinical` are composite with `tenant_id`, so each target ha
 `dentist_id` a staff profile id (ADR-0020). Tooth codes are canonical FDI text (CHECK on the 52
 codes), `surfaces text[]` is a subset of `M D B L O I`.
 
-- `visits`: `status` (enum `in_progress | paused | completed | discarded`), `local_date`, timer
+- `visits`: `display_number` (per tenant, minted at start, shown `V-000123`), `status` (enum
+  `in_progress | paused | completed | discarded | amended | voided`), `local_date`, timer
   fields (`started_at`, `paused_at?`, `paused_seconds`), `notes`, `discount_mode` (enum
   `percent | amount`) + raw `discount_value ≥ 0`, `currency`, and at completion `completed_at`,
   `completed_by`, `duration_minutes`, `subtotal`, `discount_amount`, `total`; `discarded_at`,
-  `discarded_by`. Checks: `paused_at` set iff paused; completed/discarded ⇒ their fields.
-  `visits_room_live_unique`: one live visit per room (W1).
+  `discarded_by`; `voided_at`, `voided_by`, `void_reason`. Checks: `paused_at` set iff paused;
+  completed (and amended, voided) / discarded / voided ⇒ their fields. `visits_room_live_unique`:
+  one live visit per room (W1); `visits_branch_started_idx` serves the list.
+- `visit_counters`: one row per tenant, the last visit number (feature 4b, migration 0020).
+- `visit_amendments`: append-only (no UPDATE/DELETE for the runtime role): per amendment the
+  visit before and after (`AmendmentSnapshot`), `reason`, `delta`, `currency`, `amended_by`,
+  `sequence` per visit (ADR-0025).
 - `visit_services`: catalog snapshot, `tooth_code` iff `per_tooth`, `base_amount`,
   `discount_amount` (`0 ≤ discount ≤ base`), `plan_id?`, soft delete. `visit_services_plan_unique`:
   a plan is performed by at most one non-deleted service row.
@@ -72,8 +81,36 @@ codes), `surfaces text[]` is a subset of `M D B L O I`.
 - `tooth_status`: `primary | permanent` per succession position (W5), changed in a visit;
   `tooth_status_position_unique` on `(tenant_id, patient_id, position)`.
 
-The pure rules are in `domain/`: `visit-lifecycle.ts` (state machine), `visit-timer.ts`,
-`discard-rule.ts`, `record-rules.ts` (tooth/surface/charge-unit/currency) and `visit-errors.ts`.
+The pure rules are in `domain/`: `visit-lifecycle.ts` (state machine, and `correct` for amend
+and void), `visit-timer.ts`, `discard-rule.ts`, `record-rules.ts` (tooth/surface/charge-unit/
+currency), `visit-amendment.ts` (`planAmendment`), `visit-cursor.ts`, `visit-range.ts` and
+`visit-errors.ts`.
+
+### Visits list, amend and void (feature 4b)
+
+- **Counted visits** are `completed` or `amended`: Last visit, visit counts, billed sums and the
+  treatment summary count them. A `voided` visit counts nowhere but stays in the patient's history,
+  and its records stay, marked through `voidedVisitIds` (D6, D18).
+- **Amend** (`visit:amend`, a completed or amended visit): the services that stay may change tooth
+  and surfaces (per-tooth only, under the recording rules), the others are soft-deleted, and the
+  visit discount may change; a service that performed a plan can be removed — its plan returns to
+  `planned` — but not moved; at least one service stays. Locks patient then visit (ADR-0023),
+  refuses a stale `expectedUpdatedAt` (409 `visit.stale`), appends `visit_amendments`, audits
+  `visit.amend` (before/after/reason) and publishes `VisitAmended` in the transaction (ADR-0025).
+- **Void** (`visit:void`, a completed or amended visit): sets `voided` with the reason, audits
+  `visit.void`, publishes `VisitVoided` in the transaction; `billing` may veto it (409
+  `visit.has_payments`, ADR-0026). Voided is final.
+- **List** (`search`): cursor-paged by `(started_at, id)`, newest first; the session branch's
+  visits, or with `patientId` one patient's in every branch; never discarded. Tabs `all`,
+  `in_progress` (with paused), `voided_amended`, `history` (counted + voided); `range` on the
+  tenant-local date; `q` matches the visit number, a service code or name, or the patients
+  `PatientsService.searchIds` finds. `summary` gives the filtered count and billed sums and the
+  unfiltered tab counts. `internal.idsIn` is `billing`'s Unpaid tab.
+- **Stats**: `lastVisitFor(patientIds)` (the patients list's Last visit and Visits) and
+  `patientIdsSeenWithin(days)` (the Not seen view and the Never filter, composed by `billing`).
+
+The French UI writes the buccal surface as **V** (_vestibulaire_), the usual French dental
+letter; the stored key stays `B` (`surfaceShort` in `locales/fr/clinical.json`).
 
 ### Visits
 
@@ -281,6 +318,11 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 | `GET /clinical/patients/:id/chart` → `PatientChart`, `GET /clinical/patients/:id/summary` → `ClinicalSummary`                                                                | `visit:read`    |
 | `GET /clinical/patients/:id/last-visit` → `LastVisit` or JSON `null`                                                                                                         | `visit:read`    |
 | `GET /clinical/patients/:id/teeth/:toothCode/history` → `ToothHistory`; a code that is not one of the 52 FDI codes → 400 `validation_failed`                                 | `visit:read`    |
+| `GET /visits?tab=&range=&dentistId=&roomId=&q=&patientId=&cursor=&limit=` → `VisitPage` (registered before `:id`)                                                            | `visit:read`    |
+| `GET /visits/summary` (same filters) → `VisitListSummary`                                                                                                                    | `visit:read`    |
+| `POST /visits/:id/amend` `AmendVisitInput` → `{ visit }`                                                                                                                     | `visit:amend`   |
+| `POST /visits/:id/void` `{ expectedUpdatedAt, reason }` → `{ visit }`                                                                                                        | `visit:void`    |
+| `GET /clinical/patients/visit-stats?patientIds=` (1–100) → `VisitStat[]`                                                                                                     | `visit:read`    |
 
 ## Events
 
@@ -300,7 +342,10 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
   - `ToothStatusChanged { visitId, patientId, position, present }`.
   - Notes and discount changes, service adds, edits and removes, record removals and the undo of
     a perform are audited directly and emit no event.
-  - Planned: `VisitAmended`, `VisitVoided` (4b).
+  - `VisitAmended { visitId, patientId, amendmentId, currency, delta, reason }` and
+    `VisitVoided { visitId, patientId, currency, reason }`, published inside the amend or void
+    transaction: `billing` posts the adjustment or reversal before commit, or vetoes the void
+    (ADR-0025, ADR-0026).
 - Consumes: `TenantProvisioned` (provisioning, event only — ADR-0014). It seeds the default
   catalog.
 - Consumes: `PatientsMerged` (patients), in the merge transaction: the
@@ -319,11 +364,14 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 - `audit`.
 
 None of them imports `clinical`. `billing` imports `clinical` (`chargeFacts`, `visitMoney`,
-`VisitNotLiveError`, `VisitCompleted`; ADR-0024); `clinical` never imports `billing`.
+`VisitNotLiveError`, the visit events, and `search` / `aggregate` / `lastVisitFor` /
+`patientIdsSeenWithin` for its visit and patient views; ADR-0024); `clinical` never imports
+`billing`.
 
 ## Permissions
 
 - `visit:read`, `visit:write`.
+- `visit:amend`, `visit:void`: owner and dentist (feature 4b).
 - `catalog:read`: every clinic role.
 - `catalog:write`: owner. A platform admin acting in the tenant also has it.
 

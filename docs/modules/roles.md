@@ -24,6 +24,9 @@ there is no UI or API to create them yet. Permissions come from the catalog in `
 | `payment:write`                         | ✓     | ✓       | –         | ✓         |
 | `payment:refund`, `audit:read`          | ✓     | ✓       | –         | –         |
 
+`visit:amend` and `visit:void` are enforced by `POST /visits/:id/amend` and `/void` and
+re-checked in `VisitsService` (feature 4b); the SPA shows front desk "Request a change" instead.
+
 `platform:admin` is never granted by a role (platform admins are decided by rule, ADR-0008). The
 matrix is the pure constant `domain/system-roles.ts`; a unit test pins it per role. Renaming a
 permission ships a migration that rewrites stored grants (`0006_catalog_permissions`:
