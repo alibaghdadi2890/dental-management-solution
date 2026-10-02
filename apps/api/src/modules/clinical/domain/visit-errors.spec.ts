@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AmendNoChangeError,
+  AmendPlanLinkedError,
+  AmendUnknownServiceError,
   BranchRequiredError,
   CurrencyMismatchError,
   DentistInvalidError,
@@ -17,7 +20,10 @@ import {
   VisitMovedError,
   VisitNotEmptyError,
   VisitNotFoundError,
+  VisitNotAmendableError,
   VisitNotLiveError,
+  VisitNotVoidableError,
+  VisitStaleError,
 } from './visit-errors';
 
 /**
@@ -45,6 +51,12 @@ describe('visit domain errors', () => {
     [new ToothNotAllowedError('x'), 'visit.tooth_not_allowed', 'invalid'],
     [new SurfacesInvalidError('x'), 'visit.surfaces_invalid', 'invalid'],
     [new CurrencyMismatchError('x'), 'visit.currency_mismatch', 'invalid'],
+    [new VisitNotAmendableError('x'), 'visit.not_amendable', 'conflict'],
+    [new VisitNotVoidableError('x'), 'visit.not_voidable', 'conflict'],
+    [new VisitStaleError('x'), 'visit.stale', 'conflict'],
+    [new AmendNoChangeError('x'), 'visit.amend_no_change', 'invalid'],
+    [new AmendUnknownServiceError('x'), 'visit.amend_unknown_service', 'invalid'],
+    [new AmendPlanLinkedError('x'), 'visit.amend_plan_linked', 'invalid'],
   ])('%s carries code %s and kind %s', (error, code, kind) => {
     expect(error.code).toBe(code);
     expect(error.kind).toBe(kind);

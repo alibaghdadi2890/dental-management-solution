@@ -76,6 +76,7 @@ function history(
     name: 'Amalgam Filling',
     surfaces: [],
     final: MONEY,
+    planId: null,
     ...overrides,
   };
 }

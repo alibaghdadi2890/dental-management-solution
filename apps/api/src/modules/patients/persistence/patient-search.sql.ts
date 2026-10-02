@@ -19,7 +19,8 @@ import type { PatientRankKeys } from '../domain/rank-keys';
 import { joinLinkedPatient, resolvedFullName, resolvedPhoneSearch } from './contact-resolution.sql';
 import { contacts, patientContacts, patients } from './schema';
 
-/** `active`/`notSeen` (currently identical — design Q14) map to `deleted_at is null`. */
+/** `active`/`notSeen` map to `deleted_at is null`; `notSeen` is narrowed by the caller's
+ * `idsNotIn` (the patients `clinical` saw lately, feature 4b). */
 export type PatientView = 'active' | 'notSeen' | 'archived';
 
 export interface PatientSearchFilters {
@@ -36,6 +37,8 @@ export interface PatientSearchFilters {
   /** Inclusive upper bound: `date_of_birth <= dobOnOrBefore`. */
   dobOnOrBefore?: string;
   alerts?: 'yes' | 'no';
+  /** Leaves these patients out (an empty list leaves nobody out). */
+  idsNotIn?: readonly string[];
 }
 
 export type PatientSortKey = 'name' | 'age' | 'recent' | 'dentist' | 'balance';
@@ -205,6 +208,9 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
   }
 
   if (idsIn) conditions.push(idAmong(patients.id, idsIn));
+  if (filters.idsNotIn && filters.idsNotIn.length > 0) {
+    conditions.push(sql`not ${idAmong(patients.id, filters.idsNotIn)}`);
+  }
 
   return and(...conditions) ?? sql`true`;
 }

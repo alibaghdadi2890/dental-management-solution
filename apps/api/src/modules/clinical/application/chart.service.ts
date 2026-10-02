@@ -30,11 +30,13 @@ import { VisitsRepository } from '../persistence/visits.repository';
 import { toDiagnosisRecord, toHistoryService, toTreatmentPlan } from './record-mapping';
 import { toVisitService } from './visit-mapping';
 
-/** A patient's diagnoses, plans and completed services, with the dentists' names resolved. */
+/** A patient's diagnoses, plans and finished services, with the dentists' names resolved, and
+ * which of the patient's visits were voided (D6). */
 interface Records {
   diagnoses: DiagnosisRecord[];
   plans: TreatmentPlan[];
   history: HistoryService[];
+  voidedVisitIds: string[];
 }
 
 /**
@@ -42,7 +44,8 @@ interface Records {
  * treatment summary read it (docs/modules/clinical.md, spec §ChartService). Everything needs
  * `visit:read` and runs in one `TenantDb` transaction; the patient comes from `PatientsService`,
  * so an unknown one (another tenant's included) is 404 `patient.not_found`. Records that were
- * removed never appear; history is the services of completed visits. A patient's records are
+ * removed never appear; history is the services of completed, amended and voided visits — a voided
+ * visit's records and treatment stay as recorded and are marked through `voidedVisitIds` (4b, D6). A patient's records are
  * bounded (hundreds), so nothing is paginated. Dentist names come from one
  * `practitionersByProfileIds` call per read.
  */
@@ -76,7 +79,7 @@ export class ChartService {
       // A birth date on the tenant's tomorrow (allowed at entry) is a newborn.
       const ageYears =
         patient.dateOfBirth === null ? null : Math.max(0, ageOn(patient.dateOfBirth, today));
-      const records = await this.records(patient.id);
+      const { voidedVisitIds, ...records } = await this.records(patient.id);
       const liveVisit = (await this.visits.liveRefs({ patientId: patient.id })).at(-1);
       const liveServices = liveVisit
         ? (await this.services.listForVisit(liveVisit.id)).map((service) =>
@@ -92,6 +95,7 @@ export class ChartService {
         })),
         ...records,
         liveVisitId: liveVisit?.id ?? null,
+        voidedVisitIds,
         teeth: [...deriveChart({ ...records, liveServices }).values()],
       };
     });
@@ -105,13 +109,16 @@ export class ChartService {
   toothHistory(patientId: string, toothCode: ToothCode): Promise<ToothHistory> {
     return this.read(async () => {
       const patient = await this.patients.get(patientId);
-      const { diagnoses, plans, history } = await this.records(patient.id, toothCode);
-      return { toothCode, diagnoses, plans, services: history };
+      const { diagnoses, plans, history, voidedVisitIds } = await this.records(
+        patient.id,
+        toothCode,
+      );
+      return { toothCode, diagnoses, plans, services: history, voidedVisitIds };
     });
   }
 
   /**
-   * The most recently completed visit (the Last visit card), or null: its local date, dentist,
+   * The most recently completed visit, amended or not (the Last visit card, D18), or null: its local date, dentist,
    * duration, frozen total and the services that weren't removed, as chips.
    */
   lastVisit(patientId: string): Promise<LastVisit> {
@@ -158,7 +165,7 @@ export class ChartService {
   private async records(patientId: string, toothCode?: ToothCode): Promise<Records> {
     const diagnoses = await this.diagnoses.listForPatient(patientId, toothCode);
     const plans = await this.plans.listForPatient(patientId, toothCode);
-    const history = await this.services.completedForPatient(patientId, toothCode);
+    const history = await this.services.finishedForPatient(patientId, toothCode);
     const names = await this.dentistNames([
       ...diagnoses.map(({ record }) => record.dentistId),
       ...plans.map((plan) => plan.dentistId),
@@ -171,6 +178,7 @@ export class ChartService {
       ),
       plans: plans.map((plan) => toTreatmentPlan(plan, nameOf(plan.dentistId))),
       history: history.map((line) => toHistoryService(line, nameOf(line.dentistId))),
+      voidedVisitIds: await this.visits.voidedIdsForPatient(patientId),
     };
   }
 

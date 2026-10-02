@@ -269,9 +269,9 @@ export type PatientListQuery = z.infer<typeof patientListQuerySchema>;
 export const patientPageSchema = offsetPageSchema(patientListItemSchema);
 export type PatientPage = z.infer<typeof patientPageSchema>;
 
+/** The *Not seen* chip comes from `clinical` (`GET /clinical/patients/not-seen/count`, 4b). */
 export const patientCountsSchema = z.object({
   active: z.number().int().nonnegative(),
-  notSeen: z.number().int().nonnegative(),
   archived: z.number().int().nonnegative(),
 });
 export type PatientCounts = z.infer<typeof patientCountsSchema>;

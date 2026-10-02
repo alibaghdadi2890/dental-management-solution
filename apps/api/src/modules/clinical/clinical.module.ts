@@ -7,6 +7,7 @@ import { CatalogSeedingSubscriber } from './application/catalog-seeding.subscrib
 import { CatalogService } from './application/catalog.service';
 import { ChartService } from './application/chart.service';
 import { MergeClinicalSubscriber } from './application/merge-clinical.subscriber';
+import { PlanUnperformer } from './application/plan-unperformer';
 import { VisitRecordsService } from './application/visit-records.service';
 import { VisitsService } from './application/visits.service';
 import { CatalogController } from './http/catalog.controller';
@@ -18,6 +19,8 @@ import { PatientDiagnosesRepository } from './persistence/patient-diagnoses.repo
 import { ProceduresRepository } from './persistence/procedures.repository';
 import { ToothStatusRepository } from './persistence/tooth-status.repository';
 import { TreatmentPlansRepository } from './persistence/treatment-plans.repository';
+import { VisitAmendmentsRepository } from './persistence/visit-amendments.repository';
+import { VisitCountersRepository } from './persistence/visit-counters.repository';
 import { VisitServicesRepository } from './persistence/visit-services.repository';
 import { VisitsRepository } from './persistence/visits.repository';
 
@@ -45,6 +48,9 @@ import { VisitsRepository } from './persistence/visits.repository';
     VisitsRepository,
     VisitServicesRepository,
     VisitRecordsService,
+    PlanUnperformer,
+    VisitCountersRepository,
+    VisitAmendmentsRepository,
     PatientDiagnosesRepository,
     TreatmentPlansRepository,
     ToothStatusRepository,

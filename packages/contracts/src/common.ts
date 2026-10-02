@@ -129,6 +129,22 @@ export const aggregateAmountSchema = z
   .string()
   .regex(/^-?\d{1,18}\.\d{2}$/, 'Expected a decimal amount with exactly 2 decimals');
 
+/** Splits a comma-separated id list (a query string), trims each, drops empties and de-dupes
+ * (order preserved). */
+export function commaSeparatedIds(max: number) {
+  return z
+    .string()
+    .min(1)
+    .transform((value) => {
+      const ids = value
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0);
+      return Array.from(new Set(ids));
+    })
+    .pipe(z.array(idSchema).min(1).max(max));
+}
+
 export const cursorPageQuerySchema = z.object({
   cursor: z.string().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),

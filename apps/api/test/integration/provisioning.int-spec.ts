@@ -156,7 +156,7 @@ describe('provisioning (platform admin)', () => {
       platformAdmin: false,
       tenant: { id: tenant.id },
       branch: { name: 'Main St' },
-      roleNames: ['Owner'],
+      roles: [{ key: 'owner', name: 'Owner' }],
     });
     expect([...session.permissions].sort()).toEqual(
       PERMISSIONS.filter((permission) => permission !== 'platform:admin').sort(),

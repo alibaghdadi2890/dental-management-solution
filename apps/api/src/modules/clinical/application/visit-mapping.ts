@@ -57,6 +57,7 @@ export function moneyOf(visit: StoredVisit, services: StoredVisitService[]): Vis
 export function toVisit(visit: StoredVisit, services: StoredVisitService[], now: Date): Visit {
   return {
     id: visit.id,
+    displayNumber: visit.displayNumber,
     patientId: visit.patientId,
     branchId: visit.branchId,
     roomId: visit.roomId,
@@ -68,6 +69,7 @@ export function toVisit(visit: StoredVisit, services: StoredVisitService[], now:
     pausedAt: visit.pausedAt?.toISOString() ?? null,
     pausedSeconds: visit.pausedSeconds,
     completedAt: visit.completedAt?.toISOString() ?? null,
+    completedBy: visit.completedBy,
     durationMinutes: visit.durationMinutes,
     notes: visit.notes,
     discountMode: visit.discountMode,
@@ -75,6 +77,9 @@ export function toVisit(visit: StoredVisit, services: StoredVisitService[], now:
     currency: visit.currency,
     services: services.map((service) => toVisitService(service, visit.currency)),
     money: moneyOf(visit, services),
+    voidedAt: visit.voidedAt?.toISOString() ?? null,
+    voidReason: visit.voidReason,
+    updatedAt: visit.updatedAt.toISOString(),
     serverNow: now.toISOString(),
   };
 }

@@ -80,6 +80,11 @@ export interface PatientSearchInternal {
   rank?: PatientRankKeys;
   /** Overrides `query.size` (1–500) for `search` (e.g. a one-row page when only the total counts). */
   size?: number;
+  /**
+   * Leaves these patients out. Required for `view=notSeen` and `lastVisit=never`, which `clinical`
+   * serves (feature 4b): it passes the patients seen lately, or every patient with a visit.
+   */
+  idsNotIn?: readonly string[];
 }
 
 const MAX_INTERNAL_PAGE_SIZE = 500;
@@ -338,7 +343,7 @@ export class PatientsService {
       throw new RangeError(`search: page size must be 1–${MAX_INTERNAL_PAGE_SIZE}`);
     }
     return this.tenantDb.run(async () => {
-      const filters = await this.filtersFor(query);
+      const filters = await this.filtersFor(query, internal);
       const rank = await this.rankFor(query, internal);
       const { rows, total } = await this.patients.search(filters, {
         page: query.page,
@@ -362,7 +367,7 @@ export class PatientsService {
     this.context.requirePermission('patient:read');
     assertInternalFor(query, internal);
     return this.tenantDb.run(async () => {
-      const filters = await this.filtersFor(query);
+      const filters = await this.filtersFor(query, internal);
       const rank = await this.rankFor(query, internal);
       return this.patients.searchIds(filters, {
         sort: query.sort,
@@ -373,11 +378,10 @@ export class PatientsService {
     });
   }
 
-  /** The tab chips; `notSeen` equals `active` until visits exist (design Q14). */
+  /** The tab chips; the *Not seen* chip is `clinical`'s (`GET /clinical/patients/not-seen/count`). */
   async counts(): Promise<PatientCounts> {
     this.context.requirePermission('patient:read');
-    const { active, archived } = await this.patients.counts();
-    return { active, notSeen: active, archived };
+    return this.patients.counts();
   }
 
   /** Groups of active patients sharing a name (diacritics-insensitive) and a date of birth. */
@@ -526,10 +530,14 @@ export class PatientsService {
     return localDate(this.clock.now(), tenant.timeZone);
   }
 
-  private async filtersFor(query: UnpagedQuery): Promise<PatientSearchFilters> {
+  private async filtersFor(
+    query: UnpagedQuery,
+    internal: PatientSearchInternal,
+  ): Promise<PatientSearchFilters> {
     const filters: PatientSearchFilters = {
       view: query.view === 'owing' ? 'active' : query.view,
     };
+    if (internal.idsNotIn !== undefined) filters.idsNotIn = internal.idsNotIn;
     if (query.q !== undefined) filters.q = query.q;
     if (query.dentist !== undefined) filters.dentist = query.dentist;
     if (query.alerts !== undefined) filters.alerts = query.alerts;
@@ -538,7 +546,7 @@ export class PatientsService {
       if (bounds.after !== undefined) filters.dobAfter = bounds.after;
       if (bounds.onOrBefore !== undefined) filters.dobOnOrBefore = bounds.onOrBefore;
     }
-    // `lastVisit`: nobody has visits before feature 4, so "any" and "never" both match everyone.
+    // `lastVisit=never` and `view=notSeen` arrive with `internal.idsNotIn` from `clinical`.
     return filters;
   }
 
@@ -609,19 +617,28 @@ export class PatientsService {
   }
 }
 
-/** `view=owing` and `sort=balance` need the internal options only `billing` supplies. */
+/**
+ * `view=owing` and `sort=balance` need the internal options only `billing` supplies;
+ * `view=notSeen` and `lastVisit=never` those only `clinical` supplies.
+ */
 function assertInternalFor(
-  query: Pick<PatientListQuery, 'view' | 'sort'>,
+  query: Pick<PatientListQuery, 'view' | 'sort' | 'lastVisit'>,
   internal: PatientSearchInternal,
 ): void {
   if (query.view === 'owing' && internal.idsIn === undefined) {
     throw unsupported('view', 'The owing view is served by billing');
+  }
+  if (query.view === 'notSeen' && internal.idsNotIn === undefined) {
+    throw unsupported('view', 'The not-seen view is served by clinical');
+  }
+  if (query.lastVisit === 'never' && internal.idsNotIn === undefined) {
+    throw unsupported('lastVisit', 'The last-visit filter is served by clinical');
   }
   if (query.sort === 'balance' && internal.rank === undefined) {
     throw unsupported('sort', 'Sorting by balance is served by billing');
   }
 }
 
-function unsupported(path: 'view' | 'sort', message: string): ValidationFailedError {
+function unsupported(path: 'view' | 'sort' | 'lastVisit', message: string): ValidationFailedError {
   return new ValidationFailedError(message, [{ path, code: 'unsupported', message }]);
 }

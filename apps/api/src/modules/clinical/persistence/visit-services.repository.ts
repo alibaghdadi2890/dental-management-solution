@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, inArray, isNull } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { isUniqueViolation } from '../../../platform/db/unique-violation';
 import { PlanNotOpenError, RecordNotFoundError } from '../domain/visit-errors';
@@ -25,18 +25,22 @@ export type NewVisitService = Pick<
   | 'recordedBy'
 >;
 
-/** A price edit (W6) or the soft delete. */
+/** A price edit (W6), an amendment's new tooth and surfaces (4b), or the soft delete. */
 export type VisitServicePatch = Partial<
-  Pick<StoredVisitService, 'baseAmount' | 'discountAmount' | 'deletedAt'>
+  Pick<StoredVisitService, 'baseAmount' | 'discountAmount' | 'toothCode' | 'surfaces' | 'deletedAt'>
 >;
 
-/** A service of a completed visit, with the visit facts a history line shows. */
-export interface CompletedService {
+/** A service of a finished visit, with the visit facts a history line shows. */
+export interface FinishedService {
   service: StoredVisitService;
   visitDate: string;
   dentistId: string;
   currency: string;
 }
+
+/** Visits whose services are history: completed, amended and — marked by the caller — voided
+ * (D6: a voided visit's treatment stays on the chart). */
+const FINISHED_STATUSES = ['completed', 'amended', 'voided'] as const;
 
 function toStored({ tenantId: _tenantId, ...service }: VisitServiceRow): StoredVisitService {
   return service;
@@ -62,12 +66,28 @@ export class VisitServicesRepository {
     );
   }
 
+  /** The services of these visits that aren't removed, in the order they were added. */
+  listForVisits(visitIds: readonly string[]): Promise<StoredVisitService[]> {
+    if (visitIds.length === 0) return Promise.resolve([]);
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(visitServices)
+          .where(
+            and(inArray(visitServices.visitId, [...visitIds]), isNull(visitServices.deletedAt)),
+          )
+          .orderBy(asc(visitServices.createdAt), asc(visitServices.id))
+      ).map(toStored),
+    );
+  }
+
   /**
-   * The services of the patient's completed visits that aren't removed, most recent visit first
-   * (then the order they were added in reverse); only one tooth's when `toothCode` is given.
-   * Each carries its visit's local date, dentist and currency.
+   * The services of the patient's finished visits (`FINISHED_STATUSES`) that aren't removed, most
+   * recent visit first (then the order they were added in reverse); only one tooth's when
+   * `toothCode` is given. Each carries its visit's local date, dentist and currency.
    */
-  completedForPatient(patientId: string, toothCode?: string): Promise<CompletedService[]> {
+  finishedForPatient(patientId: string, toothCode?: string): Promise<FinishedService[]> {
     return this.db.run(async (tx) => {
       const rows = await tx
         .select({
@@ -81,7 +101,7 @@ export class VisitServicesRepository {
         .where(
           and(
             eq(visits.patientId, patientId),
-            eq(visits.status, 'completed'),
+            inArray(visits.status, [...FINISHED_STATUSES]),
             toothCode === undefined ? undefined : eq(visitServices.toothCode, toothCode),
             isNull(visitServices.deletedAt),
           ),

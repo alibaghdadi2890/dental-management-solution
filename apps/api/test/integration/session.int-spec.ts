@@ -140,7 +140,7 @@ describe('session: role-based permissions, branch switch and password change', (
       expect([...session.permissions].sort()).toEqual([...FRONTDESK].sort());
       expect(session).toMatchObject({
         platformAdmin: false,
-        roleNames: ['Front desk'],
+        roles: [{ key: 'frontdesk', name: 'Front desk' }],
         user: { displayName: 'Jamie Ortiz', email },
         tenant: {
           id: tenant.id,
@@ -168,12 +168,15 @@ describe('session: role-based permissions, branch switch and password change', (
 
       await inTenant.patch(`/users/${user.id}`, { roleKeys: ['frontdesk', 'owner'] });
       expect((await agent.get('/api/v1/roles')).status).toBe(200);
-      expect((await sessionOf(agent)).roleNames).toEqual(['Owner', 'Front desk']);
+      expect((await sessionOf(agent)).roles).toEqual([
+        { key: 'owner', name: 'Owner' },
+        { key: 'frontdesk', name: 'Front desk' },
+      ]);
     });
 
     it('lets a platform admin outside a tenant hold only platform:admin', async () => {
       const session = await sessionOf(admin);
-      expect(session).toMatchObject({ platformAdmin: true, tenant: null, roleNames: [] });
+      expect(session).toMatchObject({ platformAdmin: true, tenant: null, roles: [] });
       expect(session.permissions).toEqual(['platform:admin']);
     });
   });

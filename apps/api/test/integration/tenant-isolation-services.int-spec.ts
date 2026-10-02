@@ -182,11 +182,7 @@ describe('tenant isolation through the public services', () => {
         const found = (await ownerA.get(`/api/v1/patients?q=${q}`)).body as PatientPage;
         expect(found.items.map((item) => item.id)).not.toContain(b.patient.id);
       }
-      expect((await ownerA.get('/api/v1/patients/counts')).body).toEqual({
-        active,
-        notSeen: active,
-        archived,
-      });
+      expect((await ownerA.get('/api/v1/patients/counts')).body).toEqual({ active, archived });
       const twins = await ownerA.get(
         `/api/v1/patients/duplicates/check?fullName=${encodeURIComponent(b.patient.fullName)}&dateOfBirth=1990-01-01`,
       );
@@ -411,16 +407,42 @@ describe('tenant isolation through the public services', () => {
       const before = (await bCharges()).rows;
       expect(before).toHaveLength(1);
 
+      const correction = { expectedUpdatedAt: new Date().toISOString(), reason: 'Not yours' };
       const attempts = [
         ownerA.get(`/api/v1/billing/visits/${visitId}/summary`),
         ownerA.get(`/api/v1/visits/${visitId}`),
         ownerA.post(`/api/v1/visits/${visitId}/complete`),
+        ownerA.post(`/api/v1/visits/${visitId}/void`).send(correction),
+        ownerA.post(`/api/v1/visits/${visitId}/amend`).send({
+          ...correction,
+          discount: { mode: 'percent', value: '0' },
+          services: [{ id: newId() }],
+        }),
       ];
       for (const response of await Promise.all(attempts)) {
         expect(response.status).toBe(404);
         expect(response.body).toMatchObject({ code: 'visit.not_found' });
       }
       expect((await bCharges()).rows).toEqual(before);
+
+      // The 4b lists: A's visits list, Unpaid tab, balances and stats never show B's visit.
+      const listed = await Promise.all([
+        ownerA.get('/api/v1/visits?range=all'),
+        ownerA.get('/api/v1/billing/visits/unpaid?range=all'),
+        ownerA.get(`/api/v1/visits?range=all&patientId=${b.patient.id}`),
+      ]);
+      for (const response of listed) {
+        expect(response.status).toBe(200);
+        expect((response.body as { items: { id: string }[] }).items.map((v) => v.id)).not.toContain(
+          visitId,
+        );
+      }
+      expect(
+        (await ownerA.get(`/api/v1/billing/visits/balances?visitIds=${visitId}`)).body,
+      ).toEqual([]);
+      expect(
+        (await ownerA.get(`/api/v1/clinical/patients/visit-stats?patientIds=${b.patient.id}`)).body,
+      ).toEqual([{ patientId: b.patient.id, lastVisitDate: null, visitCount: 0 }]);
       const balance = await ownerB.get(`/api/v1/billing/visits/${visitId}/summary`);
       expect(balance.status).toBe(200);
     });
@@ -843,6 +865,8 @@ describe('tenant isolation through the public services', () => {
       'patient_diagnoses',
       'treatment_plans',
       'tooth_status',
+      'visit_counters',
+      'visit_amendments',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

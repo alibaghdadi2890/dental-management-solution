@@ -134,6 +134,34 @@
       "when": 1790761593552,
       "tag": "0018_ledger_lines_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790852437468,
+      "tag": "0019_visit_status_corrections",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790852750301,
+      "tag": "0020_visit_corrections",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790852784667,
+      "tag": "0021_ledger_visit_correction_kinds",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790852844709,
+      "tag": "0022_ledger_visit_corrections",
+      "breakpoints": true
     }
   ]
 }

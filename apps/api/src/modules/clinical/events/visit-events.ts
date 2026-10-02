@@ -37,3 +37,32 @@ export type VisitCompleted = DomainEvent<
   typeof VISIT_COMPLETED,
   { visitId: string; patientId: string; currency: string; total: string; localDate: string }
 >;
+
+/**
+ * A completed visit was amended (4b, D1–D4, ADR-0025), published inside the amend transaction:
+ * `billing` posts `delta` (after − before total, negative for a credit) as a visit charge
+ * adjustment before commit. `reason` is the dentist's, carried onto the ledger entry.
+ */
+export const VISIT_AMENDED = 'VisitAmended';
+export type VisitAmended = DomainEvent<
+  typeof VISIT_AMENDED,
+  {
+    visitId: string;
+    patientId: string;
+    amendmentId: string;
+    currency: string;
+    delta: string;
+    reason: string;
+  }
+>;
+
+/**
+ * A completed or amended visit was voided (4b, D4), published inside the void transaction:
+ * `billing` reverses what the visit charged — or vetoes the void when payments sit on it
+ * (ADR-0026), which rolls the whole void back.
+ */
+export const VISIT_VOIDED = 'VisitVoided';
+export type VisitVoided = DomainEvent<
+  typeof VISIT_VOIDED,
+  { visitId: string; patientId: string; currency: string; reason: string }
+>;

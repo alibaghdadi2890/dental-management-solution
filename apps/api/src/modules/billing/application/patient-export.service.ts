@@ -11,6 +11,7 @@ import { CLOCK } from '../../../platform/clock/clock.module';
 import { RequestContext } from '../../../platform/cls/request-context';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
+import { VisitsService } from '../../clinical';
 import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
@@ -62,6 +63,8 @@ interface RowContext {
   labels: ExportLabels;
   balance: string | undefined;
   dentistName: string | undefined;
+  /** Counted visits (4b, D18): the last one's local date and how many. */
+  visits: { lastVisitDate: string | null; visitCount: number } | undefined;
 }
 
 interface Column {
@@ -108,10 +111,10 @@ const COLUMNS: readonly Column[] = [
       return phone === null || phone === undefined ? '' : formatPhoneFor(phone, tenant.country);
     },
   },
-  // Last visit and Visits: empty until visits exist (feature 4).
-  { key: 'lastVisit', value: () => '' },
+  // Last visit and Visits: counted visits only (4b, D18), from `clinical`.
+  { key: 'lastVisit', value: ({ visits }) => visits?.lastVisitDate ?? '' },
   { key: 'dentist', value: ({ dentistName }) => dentistName ?? '' },
-  { key: 'visits', numeric: true, value: () => '' },
+  { key: 'visits', numeric: true, value: ({ visits }) => String(visits?.visitCount ?? 0) },
   { key: 'balance', numeric: true, value: ({ balance }) => balance ?? NO_BALANCE },
 ];
 
@@ -125,7 +128,7 @@ const NO_BALANCE = '0.00';
 /**
  * The Patients list as CSV (design Q4, docs/modules/billing.md): the table's columns for the
  * selected `ids` in that order, or for every patient of the filtered and sorted view. Requires
- * `payment:read` and `patient:read`.
+ * `payment:read`, `patient:read` and `visit:read` (every system role holds all three).
  */
 @Injectable()
 export class PatientExportService {
@@ -136,6 +139,7 @@ export class PatientExportService {
     private readonly users: UsersService,
     private readonly views: PatientViewsService,
     private readonly entries: LedgerEntriesRepository,
+    private readonly visits: VisitsService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -178,12 +182,19 @@ export class PatientExportService {
       const batch = await this.patientsIn(ids.slice(start, start + CHUNK_SIZE));
       if (batch.length === 0) continue;
       const balances = await this.balancesIn(batch, shared.tenant.currency);
+      const visits = new Map(
+        (await this.visits.lastVisitFor(batch.map((patient) => patient.id))).map((stats) => [
+          stats.patientId,
+          stats,
+        ]),
+      );
       await this.resolveDentists(batch, dentistNames);
       const lines = batch.map((patient) => {
         const row: RowContext = {
           ...shared,
           patient,
           balance: balances.get(patient.id),
+          visits: visits.get(patient.id),
           dentistName:
             patient.primaryDentistId === null
               ? undefined

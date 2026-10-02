@@ -36,7 +36,10 @@ export class BillingPatientsController {
     private readonly exports: PatientExportService,
   ) {}
 
-  /** The same query and page shape as `GET /patients`, plus `view=owing` and `sort=balance`. */
+  /**
+   * The same query and page shape as `GET /patients`, plus `view=owing`, `sort=balance`,
+   * `view=notSeen` and `lastVisit=never`.
+   */
   @Get()
   @RequirePermission('payment:read')
   @ZodResponse({ type: PatientPageDto })
@@ -49,6 +52,13 @@ export class BillingPatientsController {
   @ZodResponse({ type: OwingCountDto })
   owingCount() {
     return this.views.owingCount();
+  }
+
+  @Get('not-seen-count')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: OwingCountDto })
+  notSeenCount() {
+    return this.views.notSeenCount();
   }
 
   /**

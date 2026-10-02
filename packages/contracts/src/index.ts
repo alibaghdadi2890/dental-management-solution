@@ -17,5 +17,6 @@ export * from './session.js';
 export * from './tenancy.js';
 export * from './tooth.js';
 export * from './users.js';
+export * from './visit-list.js';
 export * from './visit-money.js';
 export * from './visits.js';

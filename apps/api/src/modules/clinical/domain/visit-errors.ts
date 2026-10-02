@@ -127,3 +127,41 @@ export class CurrencyMismatchError extends DomainError {
   readonly code = 'visit.currency_mismatch';
   readonly kind = 'invalid';
 }
+
+// --- Amend and void (feature 4b) ---
+
+/** Only a completed (or already amended) visit is amended (D4). */
+export class VisitNotAmendableError extends DomainError {
+  readonly code = 'visit.not_amendable';
+  readonly kind = 'conflict';
+}
+
+/** Only a completed (or amended) visit is voided; a voided one stays voided (D4). */
+export class VisitNotVoidableError extends DomainError {
+  readonly code = 'visit.not_voidable';
+  readonly kind = 'conflict';
+}
+
+/** The visit changed since the client read it (`expectedUpdatedAt`, D8): reload and retry. */
+export class VisitStaleError extends DomainError {
+  readonly code = 'visit.stale';
+  readonly kind = 'conflict';
+}
+
+/** The amendment changes nothing. */
+export class AmendNoChangeError extends DomainError {
+  readonly code = 'visit.amend_no_change';
+  readonly kind = 'invalid';
+}
+
+/** An amendment names a service the visit doesn't have, or the same one twice. */
+export class AmendUnknownServiceError extends DomainError {
+  readonly code = 'visit.amend_unknown_service';
+  readonly kind = 'invalid';
+}
+
+/** A service that performed a plan can be removed, not re-toothed (D2). */
+export class AmendPlanLinkedError extends DomainError {
+  readonly code = 'visit.amend_plan_linked';
+  readonly kind = 'invalid';
+}

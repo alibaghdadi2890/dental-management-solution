@@ -39,7 +39,7 @@ export class SessionService {
       tenant: clinic?.tenant ?? null,
       branch: clinic?.branches.find((branch) => branch.id === session.branchId) ?? null,
       branches: clinic?.branches ?? [],
-      roleNames: member?.roleNames ?? [],
+      roles: member?.roles ?? [],
       permissions: this.context.grantedPermissions(),
       idleTimeoutSeconds: idleTimeoutSeconds(session.trusted),
     };
@@ -49,7 +49,10 @@ export class SessionService {
     return this.tenantDb.run(async () => {
       const profile = await this.staff.byUserId(userId);
       const roles = (await this.roles.rolesFor([userId])).get(userId) ?? [];
-      return { displayName: profile?.displayName, roleNames: roles.map((role) => role.name) };
+      return {
+        displayName: profile?.displayName,
+        roles: roles.map((role) => ({ key: role.key, name: role.name })),
+      };
     });
   }
 

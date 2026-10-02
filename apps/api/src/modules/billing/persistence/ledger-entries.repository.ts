@@ -1,7 +1,13 @@
+import { VISIT_LEDGER_KINDS } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import type { LedgerEntry, LedgerEntryLine, PatientCurrencySum } from '../domain/ledger-entry';
+import type {
+  LedgerEntry,
+  LedgerEntryLine,
+  PatientCurrencySum,
+  VisitSum,
+} from '../domain/ledger-entry';
 import { ledgerEntries, ledgerEntryLines } from './schema';
 
 type LedgerEntryRow = typeof ledgerEntries.$inferSelect;
@@ -20,6 +26,7 @@ function toDomain(row: LedgerEntryRow): LedgerEntry {
     reason: row.reason,
     createdBy: row.createdBy,
     visitId: row.visitId,
+    amendmentId: row.amendmentId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -48,18 +55,58 @@ export class LedgerEntriesRepository {
     );
   }
 
-  /** The `visit_charge` of `visitId`, or undefined when none was posted (a zero total, W20). */
-  async findVisitCharge(visitId: string): Promise<LedgerEntry | undefined> {
-    const [row] = await this.db.run((tx) =>
-      tx.select().from(ledgerEntries).where(eq(ledgerEntries.visitId, visitId)),
+  /** Every entry about `visitId` (charge, adjustments, reversal), oldest first. */
+  async listForVisit(visitId: string): Promise<LedgerEntry[]> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .select()
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.visitId, visitId))
+        .orderBy(ledgerEntries.createdAt, ledgerEntries.id),
     );
-    return row && toDomain(row);
+    return rows.map(toDomain);
+  }
+
+  /** Σ amount per visit and currency over the visit entries of `visitIds`; visits without entries
+   * are absent. */
+  async sumsByVisit(visitIds: readonly string[]): Promise<VisitSum[]> {
+    if (visitIds.length === 0) return [];
+    return this.db.run(async (tx) => {
+      const rows = await tx
+        .select({
+          visitId: ledgerEntries.visitId,
+          currency: ledgerEntries.currency,
+          amount: sql<string>`sum(${ledgerEntries.amount})::text`,
+        })
+        .from(ledgerEntries)
+        .where(inArray(ledgerEntries.visitId, [...visitIds]))
+        .groupBy(ledgerEntries.visitId, ledgerEntries.currency)
+        .orderBy(ledgerEntries.visitId, ledgerEntries.currency);
+      return rows.flatMap(({ visitId, ...sum }) => (visitId === null ? [] : [{ visitId, ...sum }]));
+    });
+  }
+
+  /**
+   * The visits whose entries sum above zero in some currency — still owing, payments being
+   * feature 5 — in id order (the Unpaid tab). Kept in the database, like `patientIdsOwing`.
+   */
+  async visitIdsOwing(): Promise<string[]> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .selectDistinct({ visitId: ledgerEntries.visitId })
+        .from(ledgerEntries)
+        .where(isNotNull(ledgerEntries.visitId))
+        .groupBy(ledgerEntries.visitId, ledgerEntries.currency)
+        .having(sql`sum(${ledgerEntries.amount}) > 0`)
+        .orderBy(ledgerEntries.visitId),
+    );
+    return rows.flatMap((row) => (row.visitId === null ? [] : [row.visitId]));
   }
 
   /**
    * Σ amount per patient and currency, summed by Postgres on `numeric` (exact), as decimal
-   * strings, for the patients among `patientIds`, with `charged` = Σ amount over the
-   * `visit_charge` entries alone (`0` when there is none). Patients without entries are absent;
+   * strings, for the patients among `patientIds`, with `charged` = Σ amount over the visit
+   * entries alone — charges, adjustments, reversals (`0` when there is none). Patients without entries are absent;
    * zero sums are included. Ordered by patient, then currency.
    */
   async sumsByPatient(patientIds: readonly string[]): Promise<PatientCurrencySum[]> {
@@ -71,7 +118,7 @@ export class LedgerEntriesRepository {
           patientId: ledgerEntries.patientId,
           currency: ledgerEntries.currency,
           amount: sql<string>`sum(${ledgerEntries.amount})::text`,
-          charged: sql<string>`coalesce(sum(${ledgerEntries.amount}) filter (where ${ledgerEntries.kind} = 'visit_charge'), 0)::text`,
+          charged: sql<string>`coalesce(sum(${ledgerEntries.amount}) filter (where ${inArray(ledgerEntries.kind, [...VISIT_LEDGER_KINDS])}), 0)::text`,
         })
         .from(ledgerEntries)
         .where(among)

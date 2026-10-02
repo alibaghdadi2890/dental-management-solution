@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   aggregateAmountSchema,
   blankToUndefined,
+  commaSeparatedIds,
   currencySchema,
   decimalAmountSchema,
   idSchema,
@@ -10,6 +11,7 @@ import {
 } from './common.js';
 import { reasonSchema } from './audit.js';
 import { patientCreateSchema, patientListQuerySchema, patientSchema } from './patients.js';
+import { VISIT_LIST_TABS, visitFiltersSchema } from './visit-list.js';
 
 /**
  * `billing` (feature 3, ADR-0017): opening balances and adjustments on the patient ledger, and
@@ -17,10 +19,27 @@ import { patientCreateSchema, patientListQuerySchema, patientSchema } from './pa
  * imports `billing` (design Q1, Q4, Q5).
  */
 
-/** `visit_charge` (feature 4a, ADR-0024): posted when a visit completes, in that transaction. */
-export const LEDGER_ENTRY_KINDS = ['opening_balance', 'adjustment', 'visit_charge'] as const;
+/**
+ * `visit_charge` (feature 4a, ADR-0024): posted when a visit completes, in that transaction.
+ * `visit_charge_adjustment` / `visit_charge_reversal` (feature 4b): an amendment's difference and
+ * a void's reversal, posted in the amend/void transaction. The three are the visit kinds.
+ */
+export const LEDGER_ENTRY_KINDS = [
+  'opening_balance',
+  'adjustment',
+  'visit_charge',
+  'visit_charge_adjustment',
+  'visit_charge_reversal',
+] as const;
 export const ledgerEntryKindSchema = z.enum(LEDGER_ENTRY_KINDS);
 export type LedgerEntryKind = z.infer<typeof ledgerEntryKindSchema>;
+
+/** The entries that carry a `visit_id`; their sum is what the visit charges now. */
+export const VISIT_LEDGER_KINDS = [
+  'visit_charge',
+  'visit_charge_adjustment',
+  'visit_charge_reversal',
+] as const satisfies LedgerEntryKind[];
 
 /** Max length of a ledger entry's free-text note (opening balance or adjustment). */
 const LEDGER_NOTE_MAX = 200;
@@ -82,21 +101,6 @@ export const patientBalancesSchema = z.array(patientBalanceSchema);
 /** Shared by `balancesQuerySchema.patientIds` and `patientExportQuerySchema.ids`. */
 const MAX_COMMA_SEPARATED_IDS = 100;
 
-/** Splits a comma-separated id list, trims each, drops empties and de-dupes (order preserved). */
-function commaSeparatedIds(max: number) {
-  return z
-    .string()
-    .min(1)
-    .transform((value) => {
-      const ids = value
-        .split(',')
-        .map((id) => id.trim())
-        .filter((id) => id.length > 0);
-      return Array.from(new Set(ids));
-    })
-    .pipe(z.array(idSchema).min(1).max(max));
-}
-
 export const balancesQuerySchema = z.object({
   patientIds: commaSeparatedIds(MAX_COMMA_SEPARATED_IDS),
 });
@@ -136,6 +140,42 @@ export type OpeningBalanceResult = z.infer<typeof openingBalanceResultSchema>;
  * W20); nothing is paid yet (payments are feature 5); _Previous_ is the balance less the charge
  * (negative for a credit); the total is the balance. Balances in other currencies are left out.
  */
+export const visitBalancesQuerySchema = z.object({
+  visitIds: commaSeparatedIds(MAX_COMMA_SEPARATED_IDS),
+});
+export type VisitBalancesQuery = z.infer<typeof visitBalancesQuerySchema>;
+
+/**
+ * `GET /billing/visits/balances` (4b): per visit, in its currency, `charged` = Σ its visit
+ * entries (charge, adjustments, reversal), `paid` = its payment allocations (none before feature
+ * 5), `outstanding` = charged − paid. A visit without entries (live, or a zero total) is absent.
+ */
+export const visitBalanceSchema = z.object({
+  visitId: idSchema,
+  currency: currencySchema,
+  charged: balanceAmountSchema,
+  paid: balanceAmountSchema,
+  outstanding: balanceAmountSchema,
+});
+export type VisitBalance = z.infer<typeof visitBalanceSchema>;
+export const visitBalancesSchema = z.array(visitBalanceSchema);
+
+/** `GET /billing/visits/unpaid/summary`: `count`/`billed` follow the filters, `tabCount` (the
+ * Unpaid tab chip) ignores them. */
+export const unpaidVisitsSummarySchema = z.object({
+  count: z.number().int().nonnegative(),
+  billed: z.array(balanceMoneySchema),
+  tabCount: z.number().int().nonnegative(),
+});
+export type UnpaidVisitsSummary = z.infer<typeof unpaidVisitsSummarySchema>;
+
+/** `GET /billing/visits/export`: the list filters (any tab, *Unpaid* included) and a language. */
+export const visitExportQuerySchema = visitFiltersSchema.extend({
+  tab: blankToUndefined(z.enum([...VISIT_LIST_TABS, 'unpaid']).default('all')),
+  lang: blankToUndefined(exportLanguageSchema.optional()),
+});
+export type VisitExportQuery = z.infer<typeof visitExportQuerySchema>;
+
 export const visitFinancialSummarySchema = z.object({
   visitId: idSchema,
   currency: currencySchema,

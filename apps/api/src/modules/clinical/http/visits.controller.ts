@@ -1,4 +1,5 @@
 import {
+  amendVisitSchema,
   idSchema,
   liveVisitQuerySchema,
   liveVisitRefSchema,
@@ -6,9 +7,14 @@ import {
   startVisitResultSchema,
   startVisitSchema,
   visitDiscountSchema,
+  visitFiltersSchema,
+  visitListQuerySchema,
+  visitListSummarySchema,
   visitNotesSchema,
+  visitPageSchema,
   visitResultSchema,
   visitSchema,
+  voidVisitSchema,
 } from '@dcm/contracts';
 import {
   Body,
@@ -39,6 +45,12 @@ class VisitResultDto extends createZodDto(visitResultSchema) {}
 class VisitNotesDto extends createZodDto(visitNotesSchema) {}
 class VisitDiscountDto extends createZodDto(visitDiscountSchema) {}
 class VisitParamsDto extends createZodDto(z.object({ id: idSchema })) {}
+class AmendVisitDto extends createZodDto(amendVisitSchema) {}
+class VisitListQueryDto extends createZodDto(visitListQuerySchema) {}
+class VisitPageDto extends createZodDto(visitPageSchema) {}
+class VisitFiltersDto extends createZodDto(visitFiltersSchema) {}
+class VisitListSummaryDto extends createZodDto(visitListSummarySchema) {}
+class VoidVisitDto extends createZodDto(voidVisitSchema) {}
 
 /**
  * The live visit's lifecycle (docs/modules/clinical.md, spec §HTTP). Every change answers with
@@ -75,6 +87,21 @@ export class VisitsController {
   @ZodResponse({ type: [LiveVisitRefDto] })
   live(@Query() query: LiveVisitQueryDto) {
     return this.visits.live(query);
+  }
+
+  /** The visits list (4b): cursor-paged, newest first; the Unpaid tab is `billing`'s. */
+  @Get()
+  @RequirePermission('visit:read')
+  @ZodResponse({ type: VisitPageDto })
+  search(@Query() query: VisitListQueryDto) {
+    return this.visits.search(query);
+  }
+
+  @Get('summary')
+  @RequirePermission('visit:read')
+  @ZodResponse({ type: VisitListSummaryDto })
+  summary(@Query() query: VisitFiltersDto) {
+    return this.visits.summary(query);
   }
 
   @Get(':id')
@@ -115,6 +142,24 @@ export class VisitsController {
   @ZodResponse({ type: VisitResultDto })
   complete(@Param() params: VisitParamsDto) {
     return this.visits.complete(params.id);
+  }
+
+  /** `{ visit }` amended; `billing` has posted the difference in the same transaction (4b). */
+  @Post(':id/amend')
+  @RequirePermission('visit:amend')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: VisitResultDto })
+  amend(@Param() params: VisitParamsDto, @Body() body: AmendVisitDto) {
+    return this.visits.amend(params.id, body);
+  }
+
+  /** `{ visit }` voided; `billing` has reversed its charge in the same transaction (4b). */
+  @Post(':id/void')
+  @RequirePermission('visit:void')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: VisitResultDto })
+  void(@Param() params: VisitParamsDto, @Body() body: VoidVisitDto) {
+    return this.visits.void(params.id, body);
   }
 
   @Patch(':id/notes')

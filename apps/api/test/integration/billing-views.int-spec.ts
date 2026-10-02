@@ -352,7 +352,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         '',
         '',
         'Dr. Export Dentist',
-        '',
+        '0',
         '250.00',
       ].join(',');
 
@@ -368,7 +368,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         '',
         '',
         '',
-        '',
+        '0',
         '0.00',
       ].join(',');
 
@@ -401,7 +401,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
           '',
           '',
           '',
-          '',
+          '0',
           '-50.00',
         ].join(','),
       );
@@ -492,7 +492,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
           '',
           '',
           'Dr. Gone Since',
-          '',
+          '0',
           '0.00',
         ].join(','),
       );
@@ -524,7 +524,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
             '71 900 001',
             '',
             '',
-            '',
+            '0',
             '0.00',
           ].join(','),
         );

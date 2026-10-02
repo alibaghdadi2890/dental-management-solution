@@ -15,6 +15,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -125,6 +126,10 @@ const surfacesCheck = (name: string, column: AnyColumn) =>
   check(name, sql`${column} <@ ${sql.raw(`ARRAY[${quotedList(SURFACES)}]::text[]`)}`);
 
 const LIVE_STATUS_LIST = sql.raw(`(${quotedList(LIVE_VISIT_STATUSES)})`);
+/** Statuses that carry frozen money and a completion: completed, and those corrected since.
+ * CHECKs compare them as text: the migrations run in one transaction, and Postgres refuses a
+ * literal of an enum value added in the same transaction (0019). */
+const FINISHED_STATUS_LIST = sql.raw(`(${quotedList(['completed', 'amended', 'voided'])})`);
 
 /**
  * A clinical encounter (spec W1–W4, W19). Money is computed live from the services while the visit
@@ -136,6 +141,8 @@ export const visits = pgTable(
   {
     id: idColumn(),
     tenantId: tenantIdColumn(),
+    /** Per-tenant counter value minted at start (`visit_counters`), shown as `V-000123` (4b, D9). */
+    displayNumber: integer().notNull(),
     patientId: uuid().notNull(),
     branchId: uuid().notNull(),
     /** Null when the branch has no active rooms (W7). */
@@ -152,6 +159,9 @@ export const visits = pgTable(
     completedBy: uuid(),
     discardedAt: instant(),
     discardedBy: uuid(),
+    voidedAt: instant(),
+    voidedBy: uuid(),
+    voidReason: text(),
     durationMinutes: integer(),
     notes: text().notNull().default(''),
     discountMode: discountMode().notNull().default('percent'),
@@ -167,6 +177,7 @@ export const visits = pgTable(
     index('visits_tenant_idx').on(table.tenantId),
     // Target of the composite foreign keys from the record tables.
     unique('visits_tenant_id_unique').on(table.tenantId, table.id),
+    unique('visits_display_number_unique').on(table.tenantId, table.displayNumber),
     // One live visit per room (W1); `VisitsService.start` maps a violation to 409 visit.room_busy.
     uniqueIndex('visits_room_live_unique')
       .on(table.tenantId, table.roomId)
@@ -174,6 +185,13 @@ export const visits = pgTable(
     index('visits_patient_started_idx').on(table.tenantId, table.patientId, table.startedAt.desc()),
     // `lastRoomToday`: the start popover's default room (V3).
     index('visits_started_by_date_idx').on(table.tenantId, table.startedBy, table.localDate),
+    // The visits list (4b): a branch's visits, newest first, paged by (started_at, id).
+    index('visits_branch_started_idx').on(
+      table.tenantId,
+      table.branchId,
+      table.startedAt.desc(),
+      table.id.desc(),
+    ),
     index('visits_live_idx')
       .on(table.tenantId, table.status)
       .where(sql`${table.status} in ${LIVE_STATUS_LIST}`),
@@ -185,11 +203,19 @@ export const visits = pgTable(
     ),
     check(
       'visits_completed_fields',
-      sql`${table.status} <> 'completed' or (${table.completedAt} is not null and ${table.completedBy} is not null and ${table.durationMinutes} is not null and ${table.subtotal} is not null and ${table.discountAmount} is not null and ${table.total} is not null)`,
+      sql`${table.status}::text not in ${FINISHED_STATUS_LIST} or (${table.completedAt} is not null and ${table.completedBy} is not null and ${table.durationMinutes} is not null and ${table.subtotal} is not null and ${table.discountAmount} is not null and ${table.total} is not null)`,
     ),
     check(
       'visits_discarded_fields',
       sql`${table.status} <> 'discarded' or (${table.discardedAt} is not null and ${table.discardedBy} is not null)`,
+    ),
+    check(
+      'visits_voided_fields',
+      sql`(${table.status}::text = 'voided') = (${table.voidedAt} is not null and ${table.voidedBy} is not null and ${table.voidReason} is not null)`,
+    ),
+    check(
+      'visits_void_reason_length',
+      sql`${table.voidReason} is null or char_length(${table.voidReason}) >= 3`,
     ),
     check(
       'visits_duration_positive',
@@ -199,6 +225,57 @@ export const visits = pgTable(
       'visits_money_consistent',
       sql`${table.total} is null or (${table.subtotal} >= 0 and ${table.discountAmount} >= 0 and ${table.discountAmount} <= ${table.subtotal} and ${table.total} = ${table.subtotal} - ${table.discountAmount})`,
     ),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/** One row per tenant: the source of the next `visits.display_number` (4b, D9). */
+export const visitCounters = pgTable(
+  'visit_counters',
+  {
+    tenantId: tenantIdColumn().primaryKey(),
+    lastValue: integer().notNull(),
+    ...timestamps(),
+  },
+  () => [tenantIsolationPolicy()],
+);
+
+/**
+ * One amendment of a completed visit (4b, D1–D4, ADR-0025): append-only (no UPDATE/DELETE grant),
+ * the visit as it was and as it became (`AmendmentSnapshot`), the reason and the money delta
+ * `billing` posts. The visit row and its services hold the current state; this is its history.
+ */
+export const visitAmendments = pgTable(
+  'visit_amendments',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    visitId: uuid().notNull(),
+    /** 1, 2, … per visit. */
+    sequence: integer().notNull(),
+    reason: text().notNull(),
+    before: jsonb().notNull(),
+    after: jsonb().notNull(),
+    /** `after.total − before.total`, in the visit currency. */
+    delta: money().notNull(),
+    currency: char({ length: 3 }).notNull(),
+    amendedBy: uuid().notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('visit_amendments_tenant_idx').on(table.tenantId),
+    uniqueIndex('visit_amendments_sequence_unique').on(
+      table.tenantId,
+      table.visitId,
+      table.sequence,
+    ),
+    foreignKey({
+      name: 'visit_amendments_visit_fk',
+      columns: [table.tenantId, table.visitId],
+      foreignColumns: [visits.tenantId, visits.id],
+    }),
+    check('visit_amendments_sequence_positive', sql`${table.sequence} >= 1`),
+    check('visit_amendments_reason_length', sql`char_length(${table.reason}) >= 3`),
     tenantIsolationPolicy(),
   ],
 );

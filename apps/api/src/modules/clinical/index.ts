@@ -6,6 +6,7 @@ export { VisitRecordsService } from './application/visit-records.service';
 export {
   type VisitChargeFacts,
   type VisitMoneyFacts,
+  type VisitSearchInternal,
   VisitsService,
 } from './application/visits.service';
 export {
@@ -32,14 +33,18 @@ export {
   type TreatmentPlanned,
 } from './events/record-events';
 export {
+  VISIT_AMENDED,
   VISIT_COMPLETED,
   VISIT_DISCARDED,
   VISIT_PAUSED,
   VISIT_RESUMED,
   VISIT_STARTED,
+  VISIT_VOIDED,
+  type VisitAmended,
   type VisitCompleted,
   type VisitDiscarded,
   type VisitPaused,
   type VisitResumed,
   type VisitStarted,
+  type VisitVoided,
 } from './events/visit-events';

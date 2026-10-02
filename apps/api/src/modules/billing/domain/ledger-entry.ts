@@ -13,8 +13,10 @@ export interface LedgerEntry {
   note: string | null;
   reason: string | null;
   createdBy: string;
-  /** The visit a `visit_charge` bills; null for every other kind. */
+  /** The visit a visit-kind entry (`VISIT_LEDGER_KINDS`) is about; null for the other kinds. */
   visitId: string | null;
+  /** The amendment a `visit_charge_adjustment` posts; null for every other kind. */
+  amendmentId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -34,11 +36,18 @@ export interface LedgerEntryLine {
 
 /**
  * One patient's sums in one currency, as aggregated by the database: `amount` over every entry,
- * `charged` over the `visit_charge` entries only.
+ * `charged` over the visit entries only (charges, their adjustments and reversals).
  */
 export interface PatientCurrencySum {
   patientId: string;
   amount: string;
   charged: string;
   currency: string;
+}
+
+/** One visit's ledger sum in its currency (`VISIT_LEDGER_KINDS` entries). */
+export interface VisitSum {
+  visitId: string;
+  currency: string;
+  amount: string;
 }

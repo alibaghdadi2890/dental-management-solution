@@ -59,6 +59,7 @@ import {
 } from '../persistence/visit-services.repository';
 import { type StoredVisit, VisitsRepository } from '../persistence/visits.repository';
 import { CatalogService } from './catalog.service';
+import { PlanUnperformer, planStatusOf } from './plan-unperformer';
 import { toDiagnosisRecord, toTreatmentPlan } from './record-mapping';
 import { toVisit, toVisitService } from './visit-mapping';
 
@@ -78,21 +79,6 @@ const resolutionOf = ({ status, resolvedInVisitId, resolvedAt }: StoredDiagnosis
   status,
   resolvedInVisitId,
   resolvedAt,
-});
-
-/** The fields perform, its undo and cancel change, for the audit's before/after. */
-const planStatusOf = ({
-  status,
-  performedInVisitId,
-  performedAt,
-  cancelledInVisitId,
-  cancelledAt,
-}: StoredTreatmentPlan) => ({
-  status,
-  performedInVisitId,
-  performedAt,
-  cancelledInVisitId,
-  cancelledAt,
 });
 
 const priceOf = ({ baseAmount, discountAmount }: StoredVisitService) => ({
@@ -124,6 +110,7 @@ export class VisitRecordsService {
     private readonly diagnoses: PatientDiagnosesRepository,
     private readonly plans: TreatmentPlansRepository,
     private readonly teeth: ToothStatusRepository,
+    private readonly unperformer: PlanUnperformer,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -208,7 +195,7 @@ export class VisitRecordsService {
         before,
         after: { deletedAt: after.deletedAt },
       });
-      if (before.planId !== null) await this.unperform(before.planId, visit);
+      if (before.planId !== null) await this.unperformer.unperform(before.planId, visit);
       return toVisitService(after, visit.currency);
     });
   }
@@ -568,32 +555,6 @@ export class VisitRecordsService {
           : this.events.create(DIAGNOSIS_REOPENED, payload);
       await this.events.publish(event);
       return this.diagnosisRecord(after, recordedInVisitDate);
-    });
-  }
-
-  /**
-   * The undo of perform: the plan the removed service came from goes back to `planned` and its
-   * `performed_*` pair is cleared. The partial unique index no longer counts the removed service,
-   * so the plan can be performed again. A service with a `plan_id` exists only while its plan is
-   * performed in the service's visit (perform writes both, and only this undo reverts them), so
-   * anything else is a broken invariant, not a user error.
-   */
-  private async unperform(planId: string, visit: StoredVisit): Promise<void> {
-    const before = await this.plans.lockForPatient(planId, visit.patientId);
-    if (before.status !== 'performed' || before.performedInVisitId !== visit.id) {
-      throw new Error(`plan ${planId} of a removed service is not performed in visit ${visit.id}`);
-    }
-    const after = await this.plans.update(planId, {
-      status: 'planned',
-      performedInVisitId: null,
-      performedAt: null,
-    });
-    await this.audit.record({
-      action: `${PLAN}.unperform`,
-      resourceType: PLAN,
-      resourceId: planId,
-      before: planStatusOf(before),
-      after: planStatusOf(after),
     });
   }
 

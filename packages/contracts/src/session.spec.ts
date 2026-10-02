@@ -19,7 +19,7 @@ const session: Session = {
   },
   branch: { id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70', name: 'Main St' },
   branches: [{ id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70', name: 'Main St' }],
-  roleNames: ['Dentist'],
+  roles: [{ key: 'dentist', name: 'Dentist' }],
   permissions: ['patient:read'],
   idleTimeoutSeconds: 900,
 };
@@ -36,7 +36,7 @@ describe('sessionSchema', () => {
       tenant: null,
       branch: null,
       branches: [],
-      roleNames: [],
+      roles: [],
       permissions: ['platform:admin'],
       idleTimeoutSeconds: null,
     };

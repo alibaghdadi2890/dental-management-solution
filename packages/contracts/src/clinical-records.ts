@@ -148,6 +148,8 @@ export const historyServiceSchema = z.object({
   toothCode: toothCodeSchema.nullable(),
   surfaces: surfacesSchema,
   final: moneySchema,
+  /** The plan this service performed, if any (the record's treatment threads, 4b). */
+  planId: idSchema.nullable(),
 });
 export type HistoryService = z.infer<typeof historyServiceSchema>;
 
@@ -197,6 +199,8 @@ export const patientChartSchema = z.object({
   /** Completed services, most recent first. */
   history: z.array(historyServiceSchema),
   liveVisitId: idSchema.nullable(),
+  /** The patient's voided visits (feature 4b, D6): records and services from them stay, marked. */
+  voidedVisitIds: z.array(idSchema),
   /** Derived per-tooth state (`chart.ts`'s `deriveChart`), one entry per code that has any. */
   teeth: z.array(toothStateSchema),
 });
@@ -208,6 +212,8 @@ export const toothHistorySchema = z.object({
   diagnoses: z.array(diagnosisRecordSchema),
   plans: z.array(treatmentPlanSchema),
   services: z.array(historyServiceSchema),
+  /** Which of the visits these records came from were voided (D6). */
+  voidedVisitIds: z.array(idSchema),
 });
 export type ToothHistory = z.infer<typeof toothHistorySchema>;
 

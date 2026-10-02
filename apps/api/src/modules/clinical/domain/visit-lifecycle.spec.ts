@@ -1,7 +1,12 @@
 import type { VisitStatus } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
-import { isLive, transition, type VisitAction } from './visit-lifecycle';
-import { IllegalVisitTransitionError, VisitNotLiveError } from './visit-errors';
+import { correct, isLive, transition, type VisitAction } from './visit-lifecycle';
+import {
+  IllegalVisitTransitionError,
+  VisitNotAmendableError,
+  VisitNotLiveError,
+  VisitNotVoidableError,
+} from './visit-errors';
 
 describe('transition', () => {
   it.each<[VisitStatus, VisitAction, VisitStatus]>([
@@ -54,4 +59,23 @@ describe('isLive', () => {
   ])('%s → %s', (status, live) => {
     expect(isLive(status)).toBe(live);
   });
+});
+
+describe('correct', () => {
+  it.each<[VisitStatus, 'amend' | 'void', VisitStatus]>([
+    ['completed', 'amend', 'amended'],
+    ['amended', 'amend', 'amended'],
+    ['completed', 'void', 'voided'],
+    ['amended', 'void', 'voided'],
+  ])('%s --%s--> %s', (from, correction, to) => {
+    expect(correct(from, correction)).toBe(to);
+  });
+
+  it.each<VisitStatus>(['in_progress', 'paused', 'discarded', 'voided'])(
+    'refuses to amend or void a %s visit',
+    (from) => {
+      expect(() => correct(from, 'amend')).toThrow(VisitNotAmendableError);
+      expect(() => correct(from, 'void')).toThrow(VisitNotVoidableError);
+    },
+  );
 });

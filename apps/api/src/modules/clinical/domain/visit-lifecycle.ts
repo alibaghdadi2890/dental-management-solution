@@ -1,5 +1,10 @@
 import type { VisitStatus } from '@dcm/contracts';
-import { IllegalVisitTransitionError, VisitNotLiveError } from './visit-errors';
+import {
+  IllegalVisitTransitionError,
+  VisitNotAmendableError,
+  VisitNotLiveError,
+  VisitNotVoidableError,
+} from './visit-errors';
 
 /** The statuses in which a visit can still change (and holds its room, spec W1). */
 export const LIVE_VISIT_STATUSES = ['in_progress', 'paused'] as const satisfies VisitStatus[];
@@ -11,6 +16,8 @@ const NEXT: Record<VisitStatus, Partial<Record<VisitAction, VisitStatus>>> = {
   paused: { resume: 'in_progress', complete: 'completed', discard: 'discarded' },
   completed: {},
   discarded: {},
+  amended: {},
+  voided: {},
 };
 
 export function isLive(status: VisitStatus): boolean {
@@ -35,4 +42,24 @@ export function transition(status: VisitStatus, action: VisitAction): VisitStatu
     throw new IllegalVisitTransitionError(`Visit is ${status}; cannot ${action}`);
   }
   return next;
+}
+
+/** A correction of a finished visit (feature 4b, D4). */
+export type VisitCorrection = 'amend' | 'void';
+
+/**
+ * Amend and void apply to a completed visit, or one amended since (D4): either becomes `amended`
+ * or `voided`. Voided is final; live and discarded visits are not corrected but changed or
+ * discarded.
+ *
+ * @throws VisitNotAmendableError / VisitNotVoidableError from any other status (409).
+ */
+export function correct(status: VisitStatus, correction: VisitCorrection): VisitStatus {
+  if (status === 'completed' || status === 'amended') {
+    return correction === 'amend' ? 'amended' : 'voided';
+  }
+  const message = `Visit is ${status}; only a completed visit can be ${correction === 'amend' ? 'amended' : 'voided'}`;
+  throw correction === 'amend'
+    ? new VisitNotAmendableError(message)
+    : new VisitNotVoidableError(message);
 }

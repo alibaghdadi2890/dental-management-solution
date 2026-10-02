@@ -312,9 +312,10 @@ describe('clinical: service and diagnosis catalogs', () => {
       const visitId = newId();
       const patientId = newId();
       await database.ownerPool.query(
-        `insert into visits (id, tenant_id, patient_id, branch_id, dentist_id, started_by, status,
-                             local_date, started_at, currency)
-         values ($1, $2, $3, $4, $5, $6, 'in_progress', '2026-06-10', now(), 'USD')`,
+        `insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
+                             started_by, status, local_date, started_at, currency)
+         values ($1, $2, (select coalesce(max(display_number), 0) + 1 from visits where tenant_id = $2),
+                 $3, $4, $5, $6, 'in_progress', '2026-06-10', now(), 'USD')`,
         [visitId, tenant.id, patientId, newId(), newId(), newId()],
       );
       const paro = await service('PARO');
@@ -381,9 +382,10 @@ describe('clinical: service and diagnosis catalogs', () => {
       const item = await service('ZLOCK');
       const visitId = newId();
       await database.ownerPool.query(
-        `insert into visits (id, tenant_id, patient_id, branch_id, dentist_id, started_by, status,
-                             local_date, started_at, currency)
-         values ($1, $2, $3, $4, $5, $6, 'in_progress', '2026-06-10', now(), 'USD')`,
+        `insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
+                             started_by, status, local_date, started_at, currency)
+         values ($1, $2, (select coalesce(max(display_number), 0) + 1 from visits where tenant_id = $2),
+                 $3, $4, $5, $6, 'in_progress', '2026-06-10', now(), 'USD')`,
         [visitId, tenant.id, newId(), newId(), newId(), newId()],
       );
 

@@ -37,8 +37,9 @@ import { ContactsService } from '../application/contacts.service';
 import { PatientsService } from '../application/patients.service';
 
 /**
- * `GET /patients` takes the shared list query minus what needs balances: `view=owing` and
- * `sort=balance` are served by `GET /billing/patients` (design Q5) and answered here with 400.
+ * `GET /patients` takes the shared list query minus what needs another module's data:
+ * `view=owing`, `sort=balance`, `view=notSeen` and `lastVisit=never` are served by
+ * `GET /billing/patients` (design Q5, feature 4b) and answered here with 400.
  */
 const patientsRouteQuerySchema = patientListQuerySchema
   .refine((query) => query.view !== 'owing', {
@@ -48,6 +49,14 @@ const patientsRouteQuerySchema = patientListQuerySchema
   .refine((query) => query.sort !== 'balance', {
     message: 'Sorting by balance is served by GET /billing/patients',
     path: ['sort'],
+  })
+  .refine((query) => query.view !== 'notSeen', {
+    message: 'The not-seen view is served by GET /billing/patients',
+    path: ['view'],
+  })
+  .refine((query) => query.lastVisit !== 'never', {
+    message: 'The never-seen filter is served by GET /billing/patients',
+    path: ['lastVisit'],
   });
 
 class PatientDto extends createZodDto(patientSchema) {}

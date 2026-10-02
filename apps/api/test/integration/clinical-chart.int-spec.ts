@@ -128,10 +128,17 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
     const id = newId();
     const total = visit.total ?? '0';
     await database.ownerPool.query(
-      `insert into visits (id, tenant_id, patient_id, branch_id, dentist_id, started_by, status,
-                           local_date, started_at, completed_at, completed_by, duration_minutes,
-                           notes, currency, subtotal, discount_amount, total)
-       values ($1, $2, $3, $4, $5, $6, 'completed', $7, $8, $9, $6, $10, $11, 'USD', $12, 0, $12)`,
+      `with minted as (
+         insert into visit_counters (tenant_id, last_value) values ($2, 1)
+         on conflict (tenant_id) do update set last_value = visit_counters.last_value + 1
+         returning last_value
+       )
+       insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
+                           started_by, status, local_date, started_at, completed_at, completed_by,
+                           duration_minutes, notes, currency, subtotal, discount_amount, total)
+       select $1, $2, minted.last_value, $3, $4, $5, $6, 'completed', $7::date, $8::timestamptz,
+              $9::timestamptz, $6, $10, $11, 'USD', $12::numeric, 0, $12::numeric
+       from minted`,
       [
         id,
         tenant.id,
@@ -292,6 +299,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         plans: [],
         history: [],
         liveVisitId: null,
+        voidedVisitIds: [],
         teeth: [],
       });
 
@@ -352,9 +360,9 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       const visit = await startVisit(patient);
       // An older live visit (a merge can leave two): the chart follows the latest one.
       await database.ownerPool.query(
-        `insert into visits (id, tenant_id, patient_id, branch_id, dentist_id, started_by, status,
-                             local_date, started_at, currency)
-         values ($1, $2, $3, $4, $5, $6, 'in_progress', $7, $8, 'USD')`,
+        `insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
+                             started_by, status, local_date, started_at, currency)
+         values ($1, $2, 1000000, $3, $4, $5, $6, 'in_progress', $7, $8, 'USD')`,
         [
           newId(),
           tenant.id,
@@ -415,6 +423,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
           toothCode: null,
           surfaces: [],
           final: { amount: '30.00', currency: 'USD' },
+          planId: null,
         },
         {
           id: filled,
@@ -426,6 +435,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
           toothCode: '16',
           surfaces: ['O'],
           final: { amount: '45.00', currency: 'USD' },
+          planId: null,
         },
       ]);
 

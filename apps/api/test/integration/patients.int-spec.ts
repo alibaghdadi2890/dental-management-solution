@@ -715,24 +715,19 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(many.map((patient) => patient.id)).toEqual([jose.id]);
     });
 
-    it('answers view=owing and sort=balance with 400: billing serves them', async () => {
-      for (const query of ['view=owing', 'sort=balance']) {
+    it('answers the views other modules serve with 400: owing, balance, not seen, never seen', async () => {
+      for (const query of ['view=owing', 'sort=balance', 'view=notSeen', 'lastVisit=never']) {
         const response = await clinic.owner.get(`/api/v1/patients?${query}`);
         expect(response.status).toBe(400);
         expect(response.body).toMatchObject({ code: 'validation_failed' });
       }
     });
 
-    it('counts active (= not seen) and archived, ignoring filters', async () => {
+    it('counts active and archived, ignoring filters', async () => {
       const before = (await clinic.owner.get('/api/v1/patients/counts')).body as PatientCounts;
-      expect(before.notSeen).toBe(before.active);
       await clinic.owner.post('/api/v1/patients/archive').send({ ids: [omar.id] });
       const after = (await clinic.owner.get('/api/v1/patients/counts')).body as PatientCounts;
-      expect(after).toEqual({
-        active: before.active - 1,
-        notSeen: before.active - 1,
-        archived: before.archived + 1,
-      });
+      expect(after).toEqual({ active: before.active - 1, archived: before.archived + 1 });
       const active = await search(clinic.owner, 'view=active&size=50');
       expect(active.total).toBe(after.active);
       await clinic.owner.post('/api/v1/patients/restore').send({ ids: [omar.id] });

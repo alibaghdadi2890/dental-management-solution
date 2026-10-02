@@ -19,9 +19,31 @@ import { DISCOUNT_MODES } from './visit-money.js';
  * shapes around it. `clinical-records.ts` has the charting schemas (diagnoses, plans, chart).
  */
 
-export const VISIT_STATUSES = ['in_progress', 'paused', 'completed', 'discarded'] as const;
+export const VISIT_STATUSES = [
+  'in_progress',
+  'paused',
+  'completed',
+  'discarded',
+  'amended',
+  'voided',
+] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 export const visitStatusSchema = z.enum(VISIT_STATUSES);
+
+/**
+ * The statuses that count as a visit the patient had (feature 4b, D18): completed, possibly
+ * amended since. A voided visit stays in the history but counts nowhere — not in Last visit, the
+ * visit count, the billed sums or the treatment summary.
+ */
+export const COUNTED_VISIT_STATUSES = ['completed', 'amended'] as const satisfies VisitStatus[];
+
+const VISIT_NUMBER_PAD = 6;
+
+/** `V-` + the per-tenant visit counter, zero-padded to at least 6 digits (`V-000123`), like
+ * patient numbers. Pure. */
+export function formatVisitNumber(value: number): string {
+  return `V-${String(value).padStart(VISIT_NUMBER_PAD, '0')}`;
+}
 
 /** Same values as `DiscountMode` (`visit-money.ts`); the schema lives here with the rest of the
  * visit request/response shapes. */
@@ -54,6 +76,8 @@ export type VisitService = z.infer<typeof visitServiceSchema>;
 
 export const visitSchema = z.object({
   id: idSchema,
+  /** The per-tenant visit counter value, minted at start; shown as `formatVisitNumber`. */
+  displayNumber: z.number().int().positive(),
   patientId: idSchema,
   branchId: idSchema,
   roomId: idSchema.nullable(),
@@ -68,6 +92,8 @@ export const visitSchema = z.object({
   pausedAt: isoDateTimeSchema.nullable(),
   pausedSeconds: z.number().int().nonnegative(),
   completedAt: isoDateTimeSchema.nullable(),
+  /** The auth user id who completed it (W10); the workspace tells others it was done elsewhere. */
+  completedBy: idSchema.nullable(),
   /** Set only once the visit is completed. */
   durationMinutes: z.number().int().positive().nullable(),
   notes: z.string(),
@@ -82,6 +108,10 @@ export const visitSchema = z.object({
     total: aggregateAmountSchema,
     capped: z.boolean(),
   }),
+  voidedAt: isoDateTimeSchema.nullable(),
+  voidReason: z.string().nullable(),
+  /** Amend and void send it back as `expectedUpdatedAt` (D8): a stale one is refused. */
+  updatedAt: isoDateTimeSchema,
   /** So the client can render the timer from an offset instead of trusting its own clock. */
   serverNow: isoDateTimeSchema,
 });

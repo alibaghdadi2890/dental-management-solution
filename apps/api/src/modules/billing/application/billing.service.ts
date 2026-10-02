@@ -9,6 +9,7 @@ import {
   type PatientBalance,
   type Tenant,
   toCents,
+  type VisitBalance,
   type VisitFinancialSummary,
 } from '@dcm/contracts';
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -117,7 +118,8 @@ export class BillingService {
 
   /**
    * `balances: []` when the patient has no entries (or they net to zero in every currency);
-   * `charged` sums the visit charges alone (the Record's _Lifetime billed_, W8).
+   * `charged` sums the visit entries alone — charges, adjustments, reversals (the Record's
+   * _Lifetime billed_, W8).
    */
   async balanceOf(patientId: string): Promise<PatientBalance> {
     this.context.requirePermission('payment:read');
@@ -157,35 +159,74 @@ export class BillingService {
   }
 
   /**
-   * A completed visit's figures (spec W2), in the visit currency and from the ledger alone: the
-   * charge was posted in the completion's transaction, so it is already there. _This visit_ = its
-   * `visit_charge` (0 when none: a zero total, W20), nothing paid yet; _Previous_ = the balance
-   * less the charge; the total = the balance. Needs `payment:read`, and `visit:read` for
-   * `VisitsService.visitMoney`: unknown or discarded → 404 `visit.not_found`; a live visit →
-   * 409 `visit.not_live` (it has no charge yet). Balances in other currencies are left out —
-   * known gap, `docs/modules/billing.md`.
+   * What is paid on the visit — payment allocations arrive with feature 5, so always 0 for now.
+   * Read inside the void transaction (ADR-0026) whatever the caller may read, so it checks no
+   * permission and has no route; `balancesForVisits` is the gated read.
+   */
+  paidOn(_visitId: string): Promise<string> {
+    return Promise.resolve(fromCents(0n));
+  }
+
+  /**
+   * Per visit among `visitIds` (4b): `charged` = Σ its visit entries (charge, adjustments,
+   * reversal), `paid` (0 until feature 5), `outstanding`; in input order, visits without entries
+   * omitted. RLS limits it to the tenant's entries.
+   */
+  async balancesForVisits(visitIds: readonly string[]): Promise<VisitBalance[]> {
+    this.context.requirePermission('payment:read');
+    return this.tenantDb.run(async () => {
+      const sums = await this.entries.sumsByVisit(visitIds);
+      const byVisit = new Map(sums.map((sum) => [sum.visitId, sum]));
+      const balances: VisitBalance[] = [];
+      for (const visitId of new Set(visitIds)) {
+        const sum = byVisit.get(visitId);
+        if (!sum) continue;
+        const charged = toCents(sum.amount);
+        const paid = toCents(await this.paidOn(visitId));
+        balances.push({
+          visitId,
+          currency: sum.currency,
+          charged: fromCents(charged),
+          paid: fromCents(paid),
+          outstanding: fromCents(charged - paid),
+        });
+      }
+      return balances;
+    });
+  }
+
+  /**
+   * A finished visit's figures (spec W2), in the visit currency and from the ledger alone: the
+   * entries were posted in the completion's, amendment's or void's transaction, so they are
+   * already there. _This visit_ = Σ its visit entries (the charge, its adjustments, a reversal; 0
+   * when none: a zero total, W20), nothing paid yet; _Previous_ = the balance less that; the
+   * total = the balance. Needs `payment:read`, and `visit:read` for `VisitsService.visitMoney`:
+   * unknown or discarded → 404 `visit.not_found`; a live visit → 409 `visit.not_live` (it has no
+   * charge yet). Balances in other currencies are left out — known gap, `docs/modules/billing.md`.
    *
-   * The charge's own `patientId` can differ from `visit.patientId` for a while: a merge
-   * re-points the visit in its own transaction, but a charge posted before that merge still sits
-   * on the dropped patient until the async `merge-ledger` job moves it (design Q9, ADR-0024's
-   * "Consequences"). While that window is open the balance is summed over both patient ids (same
-   * currency) so _this visit_ / _previous_ / the total stay consistent; once the job has run,
-   * `charge.patientId === visit.patientId` and this is the same single-patient sum as before.
+   * A visit entry's own `patientId` can differ from `visit.patientId` for a while: a merge
+   * re-points the visit in its own transaction, but entries posted before that merge still sit
+   * on the dropped patient until the async `merge-ledger` job moves them (design Q9, ADR-0024's
+   * "Consequences"). While that window is open the balance is summed over every patient id the
+   * visit's entries name (same currency) so _this visit_ / _previous_ / the total stay
+   * consistent.
    */
   async visitSummary(visitId: string): Promise<VisitFinancialSummary> {
     this.context.requirePermission('payment:read');
     return this.tenantDb.run(async () => {
       const visit = await this.visits.visitMoney(visitId);
-      if (visit.status !== 'completed') {
+      if (visit.status === 'in_progress' || visit.status === 'paused') {
         throw new VisitNotLiveError('The visit is still live; its summary follows completion');
       }
-      const charge = await this.entries.findVisitCharge(visitId);
-      const patientIds =
-        charge && charge.patientId !== visit.patientId
-          ? [visit.patientId, charge.patientId]
-          : [visit.patientId];
+      const visitEntries = (await this.entries.listForVisit(visitId)).filter(
+        (entry) => entry.currency === visit.currency,
+      );
+      const patientIds = [
+        ...new Set([visit.patientId, ...visitEntries.map((entry) => entry.patientId)]),
+      ];
       const sums = await this.entries.sumsByPatient(patientIds);
-      const chargeCents = charge ? toCents(charge.amount) : 0n;
+      const chargeCents = visitEntries.reduce((total, entry) => total + toCents(entry.amount), 0n);
+      const paidCents = toCents(await this.paidOn(visitId));
       const balanceCents = sums
         .filter(({ currency }) => currency === visit.currency)
         .reduce((total, sum) => total + toCents(sum.amount), 0n);
@@ -194,10 +235,10 @@ export class BillingService {
         currency: visit.currency,
         visit: {
           total: fromCents(chargeCents),
-          paid: fromCents(0n),
-          outstanding: fromCents(chargeCents),
+          paid: fromCents(paidCents),
+          outstanding: fromCents(chargeCents - paidCents),
         },
-        previous: fromCents(balanceCents - chargeCents),
+        previous: fromCents(balanceCents - (chargeCents - paidCents)),
         totalOutstanding: fromCents(balanceCents),
       };
     });
@@ -287,6 +328,7 @@ export class BillingService {
       currency: tenant.currency,
       createdBy: this.context.requireUserId(),
       visitId: null,
+      amendmentId: null,
       ...fields,
     });
   }

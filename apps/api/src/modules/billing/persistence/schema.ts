@@ -1,4 +1,4 @@
-import { LEDGER_ENTRY_KINDS } from '@dcm/contracts';
+import { LEDGER_ENTRY_KINDS, VISIT_LEDGER_KINDS } from '@dcm/contracts';
 import { sql } from 'drizzle-orm';
 import {
   char,
@@ -33,8 +33,12 @@ const money = () => numeric({ precision: 12, scale: 2 });
  * `patient_id` has no foreign key: `patients` owns that table (CLAUDE.md §4 rule 1). Entries are
  * never edited or deleted; only the merge job re-points `patient_id` (design Q9).
  *
- * A `visit_charge` (feature 4a, ADR-0024) names its visit in `visit_id` — no foreign key either,
- * `clinical` owns `visits` — and one visit is charged at most once (`ledger_entries_visit_unique`).
+ * The visit kinds (`VISIT_LEDGER_KINDS`) name their visit in `visit_id` — no foreign key either,
+ * `clinical` owns `visits`: the `visit_charge` (feature 4a, ADR-0024), then any number of
+ * `visit_charge_adjustment`s (amendments) and at most one `visit_charge_reversal` (a void, 4b).
+ * An adjustment names the `visit_amendments` row it posts (`amendment_id`, no foreign key), so a
+ * visit is charged once, reversed once and adjusted once per amendment
+ * (`ledger_entries_visit_kind_unique`).
  */
 export const ledgerEntries = pgTable(
   'ledger_entries',
@@ -51,8 +55,10 @@ export const ledgerEntries = pgTable(
     reason: text(),
     /** The auth user id of the actor who recorded the entry. */
     createdBy: uuid().notNull(),
-    /** The completed visit a `visit_charge` bills; set iff the kind is `visit_charge`. */
+    /** The visit a visit-kind entry is about; set iff the kind is one of `VISIT_LEDGER_KINDS`. */
     visitId: uuid(),
+    /** The amendment a `visit_charge_adjustment` posts; set iff the kind is that (4b). */
+    amendmentId: uuid(),
     ...timestamps(),
   },
   (table) => [
@@ -60,16 +66,32 @@ export const ledgerEntries = pgTable(
     index('ledger_entries_patient_idx').on(table.tenantId, table.patientId),
     // Target of the composite foreign key from `ledger_entry_lines`.
     unique('ledger_entries_tenant_id_unique').on(table.tenantId, table.id),
-    // A second guard against a double charge (W2), after `complete`'s visit lock.
-    uniqueIndex('ledger_entries_visit_unique')
+    // A second guard against a double charge (W2) or a double reversal, after the visit lock that
+    // `complete` and `void` hold.
+    // No enum literal in the predicate: index predicates must be immutable, and an enum's text
+    // cast isn't. A charge and a reversal have no amendment, so the coalesce makes them unique.
+    uniqueIndex('ledger_entries_visit_kind_unique')
+      .on(
+        table.tenantId,
+        table.visitId,
+        table.kind,
+        sql`coalesce(${table.amendmentId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      )
+      .where(sql`${table.visitId} is not null`),
+    // A visit's balance (`GET /billing/visits/balances`, the Unpaid tab).
+    index('ledger_entries_visit_idx')
       .on(table.tenantId, table.visitId)
       .where(sql`${table.visitId} is not null`),
     check('ledger_entries_amount_non_zero', sql`${table.amount} <> 0`),
     // Compared as text: the migrations run in one transaction, and Postgres refuses a literal of an
     // enum value added in the same transaction (`0016_ledger_visit_charge_kind`).
     check(
-      'ledger_entries_visit_iff_charge',
-      sql`(${table.visitId} is not null) = (${table.kind}::text = 'visit_charge')`,
+      'ledger_entries_visit_iff_visit_kind',
+      sql`(${table.visitId} is not null) = (${table.kind}::text in ${sql.raw(`(${VISIT_LEDGER_KINDS.map((kind) => `'${kind}'`).join(', ')})`)})`,
+    ),
+    check(
+      'ledger_entries_amendment_iff_adjustment',
+      sql`(${table.amendmentId} is not null) = (${table.kind}::text = 'visit_charge_adjustment')`,
     ),
     tenantIsolationPolicy(),
   ],

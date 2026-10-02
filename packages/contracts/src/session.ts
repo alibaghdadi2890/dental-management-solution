@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { roleRefSchema } from './roles.js';
 import { countrySchema, currencySchema, idSchema, localeSchema, timeZoneSchema } from './common.js';
 import { permissionSchema } from './permissions.js';
 import { chartModeSchema, chartOrientationSchema, toothNotationSchema } from './tooth.js';
@@ -35,7 +36,8 @@ export const sessionSchema = z.object({
   /** Active branch; the sidebar shows a switcher when `branches` has more than one entry. */
   branch: branchRefSchema.nullable(),
   branches: z.array(branchRefSchema),
-  roleNames: z.array(z.string()),
+  /** The user's roles here; a system role's name is shown translated by its key (4b). */
+  roles: z.array(roleRefSchema),
   permissions: z.array(permissionSchema),
   /** Server-enforced idle timeout; null for sessions on a trusted workstation. */
   idleTimeoutSeconds: z.number().int().positive().nullable(),

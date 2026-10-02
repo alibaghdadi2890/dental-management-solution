@@ -8,7 +8,7 @@ import {
 } from '@dcm/contracts';
 import type { StoredDiagnosisRecord } from '../persistence/patient-diagnoses.repository';
 import type { StoredTreatmentPlan } from '../persistence/treatment-plans.repository';
-import type { CompletedService } from '../persistence/visit-services.repository';
+import type { FinishedService } from '../persistence/visit-services.repository';
 
 // The tables' CHECKs admit exactly the contract's tooth codes and surface keys.
 
@@ -70,7 +70,7 @@ export function toTreatmentPlan(plan: StoredTreatmentPlan, dentistName: string):
 
 /** A service of a completed visit as a history line: its final price in the visit currency. */
 export function toHistoryService(
-  { service, visitDate, currency }: CompletedService,
+  { service, visitDate, currency }: FinishedService,
   dentistName: string,
 ): HistoryService {
   return {
@@ -86,5 +86,6 @@ export function toHistoryService(
       amount: lineFinal({ base: service.baseAmount, discount: service.discountAmount }),
       currency,
     },
+    planId: service.planId,
   };
 }
