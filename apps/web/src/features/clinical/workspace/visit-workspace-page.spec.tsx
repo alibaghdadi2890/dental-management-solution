@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { problem } from '@/features/patients/patients.test-utils';
+import { DENTIST_ID, problem, SESSION_USER_ID } from '@/features/patients/patients.test-utils';
 import {
   chart,
   FRONT_DESK,
@@ -130,6 +130,7 @@ describe('VisitWorkspacePage', () => {
       toothHistories: [
         {
           toothCode: '16',
+          voidedVisitIds: [],
           diagnoses: [],
           plans: [],
           services: [historyLine(40, 'Composite filling', '16')],
@@ -265,13 +266,36 @@ describe('VisitWorkspacePage', () => {
     const { router, client } = renderWorkspace();
     await chartCard();
 
-    // Completed elsewhere, picked up by the refetch.
-    current = visit({ status: 'completed', completedAt: current.serverNow, durationMinutes: 13 });
+    // Completed by this user (another tab), picked up by the refetch.
+    current = visit({
+      status: 'completed',
+      completedAt: current.serverNow,
+      completedBy: SESSION_USER_ID,
+      durationMinutes: 13,
+    });
     await client.refetchQueries({ queryKey: ['visits'] });
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });
     expect(router.state.location.state.postVisit).toBe(VISIT_ID);
+  });
+
+  it('stays, read-only with a banner, when someone else completes the open visit', async () => {
+    let current = visit();
+    mockWorkspace({ visit: () => current });
+    const { router, client } = renderWorkspace();
+    await chartCard();
+
+    current = visit({
+      status: 'completed',
+      completedAt: '2026-09-04T09:13:00.000Z',
+      completedBy: DENTIST_ID,
+      durationMinutes: 13,
+    });
+    await client.refetchQueries({ queryKey: ['visits'] });
+    expect(await screen.findByText('Completed by Dr. Ana Reyes at 12:13.')).toBeTruthy();
+    expect(router.state.location.pathname).toBe(`/visits/${VISIT_ID}`);
+    expect(screen.getByRole('link', { name: 'View summary' })).toBeTruthy();
   });
 
   it('leaves for the patient record when the open visit turns 404 (discarded elsewhere)', async () => {

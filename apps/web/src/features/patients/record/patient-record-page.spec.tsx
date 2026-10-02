@@ -10,7 +10,7 @@ describe('PatientRecordPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('has only the Overview and Patient information tabs, Overview first', async () => {
+  it('shows the tabs the permissions allow, Overview first', async () => {
     mockApi({ patients: [RANA] });
     renderRecord({ url: `/patients/${RANA.id}` });
     const tabs = await screen.findByRole('tablist', { name: 'Patient record' });
@@ -18,7 +18,7 @@ describe('PatientRecordPage', () => {
       within(tabs)
         .getAllByRole('tab')
         .map((tab) => tab.textContent),
-    ).toEqual(['Overview', 'Patient information']);
+    ).toEqual(['Overview', 'Balance & payments', 'Patient information']);
     expect(within(tabs).getByRole('tab', { name: 'Overview' }).getAttribute('aria-selected')).toBe(
       'true',
     );
@@ -64,13 +64,14 @@ describe('PatientRecordPage', () => {
     mockApi({ patients: [RANA] });
     const { router } = renderRecord({ url: `/patients/${RANA.id}` });
     const overview = await screen.findByRole('tab', { name: 'Overview' });
+    const balance = screen.getByRole('tab', { name: 'Balance & payments' });
     const information = screen.getByRole('tab', { name: 'Patient information' });
     expect(overview.tabIndex).toBe(0);
     expect(information.tabIndex).toBe(-1);
     expect(overview.getAttribute('aria-controls')).toBe(screen.getByRole('tabpanel').id);
     overview.focus();
     fireEvent.keyDown(overview, { key: 'ArrowRight' });
-    expect(document.activeElement).toBe(information);
+    expect(document.activeElement).toBe(balance);
     fireEvent.keyDown(information, { key: 'Home' });
     expect(document.activeElement).toBe(overview);
     fireEvent.keyDown(overview, { key: 'End' });
@@ -82,7 +83,11 @@ describe('PatientRecordPage', () => {
     expect(await screen.findByRole('tabpanel', { name: 'Patient information' })).toBeTruthy();
   });
 
-  it('shows the Overview for an unknown tab', async () => {
+  it('shows the Overview for an unknown tab, or one the session may not open', async () => {
+    mockApi({ patients: [RANA] });
+    renderRecord({ url: `/patients/${RANA.id}?tab=nope` });
+    expect(await screen.findByRole('tab', { name: 'Overview', selected: true })).toBeTruthy();
+    cleanup();
     mockApi({ patients: [RANA] });
     renderRecord({ url: `/patients/${RANA.id}?tab=chart` });
     expect(await screen.findByRole('tab', { name: 'Overview', selected: true })).toBeTruthy();

@@ -13,6 +13,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { patientKeys, setDentition } from '@/features/patients/patients-api';
 import { useActingTenantId } from '@/features/platform/acting-tenant';
 import { clinicalKeys } from '../visits-api';
+import { apiErrorMessage } from '@/lib/api-error-message';
 
 export interface ResolvedDentition {
   stage: DentitionStage;
@@ -37,7 +38,7 @@ export function DentitionSelect({
   dentition: ResolvedDentition;
   canWrite: boolean;
 }) {
-  const { t } = useTranslation('clinical');
+  const { t, i18n } = useTranslation('clinical');
   const toast = useToast();
   const queryClient = useQueryClient();
   const tenantId = useActingTenantId();
@@ -79,7 +80,7 @@ export function DentitionSelect({
         );
       },
       onError: (error) => {
-        toast(t('dentition.failed', { reason: error.message }), { tone: 'danger' });
+        toast(t('dentition.failed', { reason: apiErrorMessage(error, i18n) }), { tone: 'danger' });
       },
     });
   };

@@ -1,10 +1,12 @@
-import type { BalanceMoney, PatientListItem, PatientListQuery } from '@dcm/contracts';
+import type { BalanceMoney, PatientListItem, PatientListQuery, VisitStat } from '@dcm/contracts';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { balancesQuery } from '@/features/billing/billing-api';
+import { visitStatsQuery } from '@/features/clinical/visits-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import {
   duplicatesQuery,
+  notSeenCountQuery,
   owingCountQuery,
   patientCountsQuery,
   patientListQuery,
@@ -21,6 +23,7 @@ const NO_ROWS: readonly PatientListItem[] = [];
  * - Balances are per page of ids, so the previous page's answer is no use for the next one:
  *   `balancesLoading` holds while the rows on screen have no balances yet, and their cells
  *   shimmer instead of reading "—" (which means "no balance").
+ * - Last visit and Visits come per page from `clinical` (`visitStats`, 4b), like the balances.
  * - Dentist names come from `useStaffNames` (all staff with `user:read`, else the practitioners),
  *   keyed by staff profile id (ADR-0020).
  */
@@ -28,12 +31,19 @@ export function usePatientsListData(query: PatientListQuery, { canPay }: { canPa
   const list = useQuery({ ...patientListQuery(query), placeholderData: keepPreviousData });
   const counts = useQuery(patientCountsQuery());
   const owing = useQuery({ ...owingCountQuery(), enabled: canPay });
+  const notSeen = useQuery({ ...notSeenCountQuery(), enabled: canPay });
   const duplicates = useQuery(duplicatesQuery());
   const staff = useStaffNames();
 
   const rows = list.data?.items ?? NO_ROWS;
   const ids = rows.map((row) => row.id);
   const balances = useQuery({ ...balancesQuery(ids), enabled: canPay && ids.length > 0 });
+  const visitStats = useQuery(visitStatsQuery(ids));
+
+  const visitsById = useMemo(
+    () => new Map<string, VisitStat>((visitStats.data ?? []).map((stat) => [stat.patientId, stat])),
+    [visitStats.data],
+  );
 
   const balanceById = useMemo(() => {
     const byId = new Map<string, readonly BalanceMoney[]>();
@@ -65,10 +75,13 @@ export function usePatientsListData(query: PatientListQuery, { canPay }: { canPa
     rows,
     counts: counts.data,
     owingCount: owing.data?.count,
+    notSeenCount: notSeen.data?.count,
     practitioners: staff.practitioners ?? [],
     dentistNames: staff.dentistNames,
     balanceById,
     balancesLoading: balances.isLoading,
+    visitsById,
+    visitsLoading: visitStats.isLoading,
     twins,
     duplicateCount,
     firstPair,

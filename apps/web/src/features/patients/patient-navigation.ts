@@ -35,9 +35,13 @@ export function usePatientNavigation() {
     openNewPatient: (prefill?: PatientPrefill) => {
       openPanel({ kind: 'new' }, { prefill });
     },
-    /** The patient record (`/patients/$patientId`). */
-    openPatient: (patientId: string) => {
-      void router.navigate({ to: '/patients/$patientId', params: { patientId } });
+    /** The patient record (`/patients/$patientId`); `startVisit` opens its start popover. */
+    openPatient: (patientId: string, { startVisit = false }: { startVisit?: boolean } = {}) => {
+      void router.navigate({
+        to: '/patients/$patientId',
+        params: { patientId },
+        ...(startVisit ? { search: { startVisit: true as const } } : {}),
+      });
     },
     /** The record's "Edit patient": the Patients edit panel over the list (README "Patient record
      * + visit workspace"). Its entry is marked as pushed, so closing the panel — or saving it —

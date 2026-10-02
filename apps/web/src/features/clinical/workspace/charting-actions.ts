@@ -25,6 +25,7 @@ import { useToothLabel } from '../chart/use-chart-settings';
 import { useDropSaveGroup } from '../save-groups-context';
 import { useVisitMutations } from '../visit-mutations';
 import type { ToothSelection } from './tooth-selection';
+import { apiErrorMessage } from '@/lib/api-error-message';
 
 /** The catalog drawer's three modes (spec §Add Service / Plan Treatment / Diagnosis Drawer). */
 export type DrawerMode = 'service' | 'plan' | 'diagnosis';
@@ -115,7 +116,7 @@ export function useChartingActionsState({
   return useMemo(() => {
     const run = runner(queryClient);
     const failed = (error: unknown) => {
-      const reason = error instanceof Error ? error.message : String(error);
+      const reason = apiErrorMessage(error, i18n);
       toast(t('actions.failed', { reason }), { tone: 'danger' });
     };
     const fire = <TData, TVariables, TContext>(
@@ -246,6 +247,7 @@ export function useChartingActionsState({
     drop,
     toast,
     t,
+    i18n,
     locale,
     toothLabel,
     removing,

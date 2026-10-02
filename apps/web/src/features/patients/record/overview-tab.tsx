@@ -119,9 +119,17 @@ const MICRO =
  * The Last visit card (spec §Tab: Overview): the most recently completed visit's date, dentist,
  * duration and total, its services as chips ("Composite filling · #16", or "· Jaw" for a
  * jaw-level one) and its clinical note as a quote. Without a completed visit, dashes and "No
- * visits recorded yet." "All visits →" arrives with the visit history (4b).
+ * visits recorded yet." "All visits →" opens the Visits & history tab.
  */
-function LastVisitCard({ patientId, locale }: { patientId: string; locale: string }) {
+function LastVisitCard({
+  patientId,
+  locale,
+  onAllVisits,
+}: {
+  patientId: string;
+  locale: string;
+  onAllVisits: () => void;
+}) {
   const { t } = useTranslation('patients');
   const label = useToothLabel();
   const lastVisit = useQuery(lastVisitQuery(patientId));
@@ -191,7 +199,22 @@ function LastVisitCard({ patientId, locale }: { patientId: string; locale: strin
       </>
     );
   }
-  return <Card title={t('record.lastVisit.title')}>{body}</Card>;
+  return (
+    <Card
+      title={t('record.lastVisit.title')}
+      action={
+        <button
+          type="button"
+          onClick={onAllVisits}
+          className="cursor-pointer text-[12.5px] font-medium text-primary hover:underline"
+        >
+          {t('record.lastVisit.all')}
+        </button>
+      }
+    >
+      {body}
+    </Card>
+  );
 }
 
 /**
@@ -390,12 +413,15 @@ export function OverviewTab({
   tenant,
   locale,
   onComplete,
+  onAllVisits,
 }: {
   patient: Patient;
   tenant: Tenant;
   locale: string;
   /** "Complete →": the Patient information tab. */
   onComplete: () => void;
+  /** The Last visit card's "All visits →": the Visits & history tab. */
+  onAllVisits: () => void;
 }) {
   const canPay = usePermission('payment:read');
   const canWrite = usePermission('patient:write');
@@ -414,7 +440,7 @@ export function OverviewTab({
       <div className="flex min-w-0 flex-[1_1_520px] flex-col gap-4">
         {canVisits ? (
           <>
-            <LastVisitCard patientId={patient.id} locale={locale} />
+            <LastVisitCard patientId={patient.id} locale={locale} onAllVisits={onAllVisits} />
             <DentalStatusCard patientId={patient.id} onOpenHistory={setHistoryTooth} />
           </>
         ) : (

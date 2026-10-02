@@ -45,6 +45,8 @@ export const profileId = (userId: string) => userId.replace('4c5d', '4c5e');
 export const DENTIST_ID = id(80);
 export const INACTIVE_DENTIST_ID = id(81);
 export const FRONT_DESK_ID = id(82);
+/** The signed-in user of `sessionWith`. */
+export const SESSION_USER_ID = id(90);
 
 export function patient(n: number, fullName: string, extra: Partial<Patient> = {}): Patient {
   return {
@@ -116,7 +118,7 @@ export const ALL_PERMISSIONS: Permission[] = [
 
 export function sessionWith(permissions: Permission[]): Session {
   return {
-    user: { id: id(90), displayName: 'Jamie Ortiz', email: 'j@example.com' },
+    user: { id: SESSION_USER_ID, displayName: 'Jamie Ortiz', email: 'j@example.com' },
     platformAdmin: false,
     mustChangePassword: false,
     tenant: {
@@ -133,7 +135,7 @@ export function sessionWith(permissions: Permission[]): Session {
     },
     branch: null,
     branches: [],
-    roleNames: [],
+    roles: [],
     permissions,
     idleTimeoutSeconds: 900,
   };
@@ -183,6 +185,7 @@ export const EMPTY_CHART: PatientChart = {
   plans: [],
   history: [],
   liveVisitId: null,
+  voidedVisitIds: [],
   teeth: [],
 };
 
@@ -287,9 +290,16 @@ export function mockApi({
     const custom = get?.(path);
     if (custom) return Promise.resolve(custom);
     if (bare === '/patients/counts') {
-      return Promise.resolve(json({ active: 0, notSeen: 0, archived: 0 }));
+      return Promise.resolve(json({ active: 0, archived: 0 }));
     }
     if (bare === '/billing/patients/owing-count') return Promise.resolve(json({ count: 0 }));
+    if (bare === '/billing/patients/not-seen-count') return Promise.resolve(json({ count: 0 }));
+    if (bare === '/clinical/patients/visit-stats') {
+      const ids = new URLSearchParams(path.split('?')[1]).get('patientIds')?.split(',') ?? [];
+      return Promise.resolve(
+        json(ids.map((patientId) => ({ patientId, lastVisitDate: null, visitCount: 0 }))),
+      );
+    }
     if (bare === '/patients/duplicates') return Promise.resolve(json([]));
     if (bare === '/patients/duplicates/check') return Promise.resolve(json(twins));
     if (bare === '/users/practitioners') {
@@ -345,7 +355,7 @@ export function mockApi({
       if (read === 'summary') return Promise.resolve(json(summaries[patientId] ?? NO_COUNTS));
       const history = toothHistories[patientId]?.find((tooth) => tooth.toothCode === toothCode);
       return Promise.resolve(
-        json(history ?? { toothCode, diagnoses: [], plans: [], services: [] }),
+        json(history ?? { toothCode, diagnoses: [], plans: [], services: [], voidedVisitIds: [] }),
       );
     }
     const detail = /^\/patients\/([^/]+)$/.exec(bare)?.[1];
@@ -460,8 +470,16 @@ export function renderRecord({
   });
   function RecordRoute() {
     const { patientId } = recordRoute.useParams();
-    const { tab, panel } = recordRoute.useSearch();
-    return <PatientRecordScreen patientId={patientId} tab={tab} panel={panel} />;
+    const { tab, panel, view, visitId } = recordRoute.useSearch();
+    return (
+      <PatientRecordScreen
+        patientId={patientId}
+        tab={tab}
+        panel={panel}
+        view={view}
+        visitId={visitId}
+      />
+    );
   }
   const workspaceRoute = createRoute({
     getParentRoute: () => rootRoute,

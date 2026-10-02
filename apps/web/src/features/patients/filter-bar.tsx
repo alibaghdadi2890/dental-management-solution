@@ -2,53 +2,12 @@ import { AGE_BANDS, type PatientListQuery, type Practitioner } from '@dcm/contra
 import { useEffect, useEffectEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { SearchInput } from '@/components/ui/list';
-import { cn } from '@/lib/utils';
+import { FilterChip, SearchInput } from '@/components/ui/list';
 import { activeFilterCount, clearFilters, withFilter } from './list-query';
 
 const SEARCH_DEBOUNCE_MS = 250;
 /** `patientListQuerySchema.q`'s limit. */
 const SEARCH_MAX_LENGTH = 100;
-
-/** A labelled select chip; tinted `#eceef8`/`#c3c7ea` once it differs from its default (POC). */
-function FilterChip({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  /** `''` is the chip's default ("Any", "All", "Any time"). */
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (value: string) => void;
-}) {
-  const on = value !== '';
-  return (
-    <label
-      className={cn(
-        'flex h-9 items-center gap-1.5 rounded-lg border ps-[11px] pe-1.5',
-        on ? 'border-primary-tint-border bg-primary-tint' : 'border-border-control bg-surface',
-      )}
-    >
-      <span className="text-[12.5px] leading-none whitespace-nowrap text-ink-muted">{label}</span>
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-        className="cursor-pointer border-none bg-transparent pe-0.5 text-[12.5px] leading-none font-medium outline-none"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
 
 function oneOf<T extends string>(values: readonly T[], value: string): T | undefined {
   return values.find((candidate) => candidate === value);
@@ -56,7 +15,7 @@ function oneOf<T extends string>(values: readonly T[], value: string): T | undef
 
 /**
  * Search (debounced 250ms) and the Dentist, Last visit, Age and Alerts chips (README §Patients,
- * list anatomy 4). Last visit offers only "Any time" and "Never" until visits exist (design Q14).
+ * list anatomy 4). Last visit offers "Any time" and "Never" (4b, D18).
  * Every edit goes through `withFilter`, so it lands on page 1.
  */
 export function FilterBar({

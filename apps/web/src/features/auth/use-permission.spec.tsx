@@ -28,7 +28,7 @@ const session: Session = {
   },
   branch: null,
   branches: [],
-  roleNames: ['Dentist'],
+  roles: [{ key: 'dentist', name: 'Dentist' }],
   permissions: ['patient:read', 'visit:write'],
   idleTimeoutSeconds: 900,
 };

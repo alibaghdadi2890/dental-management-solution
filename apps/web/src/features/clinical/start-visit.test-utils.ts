@@ -28,6 +28,7 @@ export function liveRef(
 export function startedVisit(n: number, extra: Partial<Visit> = {}): Visit {
   return {
     id: id(n),
+    displayNumber: 1,
     patientId: id(1),
     branchId: BRANCH.id,
     roomId: null,
@@ -39,6 +40,7 @@ export function startedVisit(n: number, extra: Partial<Visit> = {}): Visit {
     pausedAt: null,
     pausedSeconds: 0,
     completedAt: null,
+    completedBy: null,
     durationMinutes: null,
     notes: '',
     discountMode: 'percent',
@@ -46,6 +48,9 @@ export function startedVisit(n: number, extra: Partial<Visit> = {}): Visit {
     currency: 'USD',
     services: [],
     money: { subtotal: '0.00', discount: '0.00', total: '0.00', capped: false },
+    voidedAt: null,
+    voidReason: null,
+    updatedAt: '2026-09-04T09:00:00.000Z',
     serverNow: '2026-09-04T09:00:00.000Z',
     ...extra,
   };

@@ -7,7 +7,7 @@ import {
   MenuRadioItem,
   MenuTrigger,
 } from '@/components/ui/menu';
-import { LANGUAGE_NAMES, type Language, SUPPORTED_LANGUAGES } from '@/lib/i18n';
+import { chooseLanguage, LANGUAGE_NAMES, type Language, SUPPORTED_LANGUAGES } from '@/lib/i18n';
 
 function GlobeIcon() {
   return (
@@ -33,8 +33,8 @@ const isLanguage = (value: string | undefined): value is Language =>
 /**
  * The UI language switch: a menu of the supported languages, each in its own name, the current
  * one checked. Picking one calls `i18n.changeLanguage`, so every string, `<html lang dir>` and the
- * locale-aware formats follow, and the language detector keeps the choice in `localStorage` for
- * the next visit. `icon` is the sidebar's 30px globe button beside Sign out; `labelled` adds the
+ * locale-aware formats follow, and the choice is kept in `localStorage` for the next visit — over
+ * the clinic's language (`applyClinicLanguage`). `icon` is the sidebar's 30px globe button beside Sign out; `labelled` adds the
  * current language's name, for the sign-in page. `label` is its accessible name ("Language").
  */
 export function LanguageSwitch({
@@ -72,7 +72,7 @@ export function LanguageSwitch({
         <MenuRadioGroup
           value={current}
           onValueChange={(next) => {
-            if (next !== current) void i18n.changeLanguage(next);
+            if (next !== current && isLanguage(next)) chooseLanguage(next);
           }}
         >
           {SUPPORTED_LANGUAGES.map((language) => (

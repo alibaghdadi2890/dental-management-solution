@@ -15,6 +15,7 @@ import { ApiError } from '@/lib/api';
 import { startVisitKey, useStartingVisit } from './use-starting-visit';
 import { startVisitMutation } from './visit-mutations';
 import { startDefaultsQuery } from './visits-api';
+import { apiErrorMessage } from '@/lib/api-error-message';
 
 type FieldName = 'dentist' | 'room';
 type Errors = Partial<Record<FieldName | 'form', string>>;
@@ -56,15 +57,18 @@ const isFormError = (code: string): code is keyof typeof FORM_ERRORS =>
  */
 export function StartVisitPopover({
   patientId,
+  defaultOpen = false,
   children,
 }: {
   patientId: string;
+  /** Open on first render (the record's `?startVisit=1`, from the patient-created toast). */
+  defaultOpen?: boolean;
   /** The trigger button. */
   children: ReactNode;
 }) {
   const { t } = useTranslation('clinical');
   const titleId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const branch = useSession().data?.branch ?? null;
   const starting = useStartingVisit(patientId);
 
@@ -129,7 +133,7 @@ function StartVisitForm({
   onCancel: () => void;
   onStarted: () => void;
 }) {
-  const { t } = useTranslation(['clinical', 'common']);
+  const { t, i18n } = useTranslation(['clinical', 'common']);
   const queryClient = useQueryClient();
   const tenantId = useActingTenantId();
   const navigate = useNavigate();
@@ -229,7 +233,7 @@ function StartVisitForm({
             code !== undefined && isFormError(code)
               ? t(FORM_ERRORS[code])
               : t('startVisit.errors.failed', {
-                  reason: error instanceof Error ? error.message : String(error),
+                  reason: apiErrorMessage(error, i18n),
                 }),
         });
       },

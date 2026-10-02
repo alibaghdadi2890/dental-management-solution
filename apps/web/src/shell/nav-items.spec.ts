@@ -20,7 +20,7 @@ const base: Session = {
   },
   branch: null,
   branches: [],
-  roleNames: ['Front desk'],
+  roles: [{ key: 'frontdesk', name: 'Front desk' }],
   permissions: [],
   idleTimeoutSeconds: 900,
 };

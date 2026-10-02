@@ -1,7 +1,7 @@
 import type { Visit, VisitFinancialSummary } from '@dcm/contracts';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { id, json, problem } from '@/features/patients/patients.test-utils';
+import { id, json, problem, SESSION_USER_ID } from '@/features/patients/patients.test-utils';
 import {
   chart,
   DENTIST_WRITE,
@@ -40,6 +40,7 @@ const completed = (live: Visit): Visit => ({
   ...live,
   status: 'completed',
   completedAt: '2026-09-04T09:13:00.000Z',
+  completedBy: SESSION_USER_ID,
   durationMinutes: 13,
   money: { subtotal: '180.00', discount: '18.00', total: '162.00', capped: false },
 });

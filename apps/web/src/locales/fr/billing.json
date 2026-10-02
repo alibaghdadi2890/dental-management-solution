@@ -16,6 +16,17 @@
     "currentVisit": "Reste dû sur la visite en cours",
     "previous": "Reste dû antérieur",
     "total": "Total dû",
-    "otherCurrencies": "Aussi {{amounts}}"
+    "otherCurrencies": "Aussi {{amounts}}",
+    "recentVisit": "Visite la plus récente · {{date}}",
+    "visitTotal": "Total de la visite",
+    "visitPaid": "Payé sur la visite",
+    "nothingBilled": "Rien de facturé pour l’instant — un solde apparaît dès la première visite terminée.",
+    "settled": "Rien à régler. Le compte de ce patient est soldé."
+  },
+  "payments": {
+    "title": "Historique des paiements",
+    "newestFirst": "Les plus récents d’abord",
+    "emptyTitle": "Aucun paiement enregistré",
+    "emptyBody": "Les paiements enregistrés pour ce patient apparaîtront ici."
   }
 }

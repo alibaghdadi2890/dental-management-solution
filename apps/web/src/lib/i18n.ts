@@ -27,6 +27,9 @@ export const NAMESPACES = [
 
 type Messages = Record<string, unknown>;
 
+/** Where the user's own language choice is kept (the detector's default key). */
+const STORAGE_KEY = 'i18nextLng';
+
 // One JSON file per language and feature namespace: locales/<lng>/<namespace>.json
 const files = import.meta.glob<Messages>('../locales/*/*.json', { eager: true, import: 'default' });
 
@@ -56,7 +59,41 @@ void i18n
     ns: NAMESPACES,
     defaultNS: 'common',
     interpolation: { escapeValue: false },
-    detection: { order: ['localStorage', 'navigator'], caches: ['localStorage'] },
+    // Only an explicit pick is saved (`chooseLanguage`): until then the clinic's language applies
+    // over the browser's (`applyClinicLanguage`, 4a follow-up).
+    detection: {
+      order: ['localStorage', 'navigator'],
+      caches: [],
+      lookupLocalStorage: STORAGE_KEY,
+    },
   });
+
+function savedLanguage(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** The language switch: changes the UI language and remembers it as this browser's choice. */
+export function chooseLanguage(language: Language): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, language);
+  } catch {
+    // Private mode: the choice holds for this visit only.
+  }
+  void i18n.changeLanguage(language);
+}
+
+/**
+ * The UI language order: the user's saved choice, else the clinic's language (`tenant.locale`,
+ * once the session is in), else the browser's. Does nothing once a choice is saved.
+ */
+export function applyClinicLanguage(locale: string): void {
+  if (savedLanguage() !== null) return;
+  if (!SUPPORTED_LANGUAGES.some((language) => language === locale)) return;
+  if (i18n.resolvedLanguage !== locale) void i18n.changeLanguage(locale);
+}
 
 export default i18n;

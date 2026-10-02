@@ -45,16 +45,15 @@ describe('OverviewTab', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows an owed balance as the previous and total outstanding, in the danger tone', async () => {
+  it('shows an owed balance with nothing billed yet as previous and total, in the danger tone', async () => {
     mockApi({ patients: [RANA], balances: { [RANA.id]: [{ amount: '250.00', currency: 'USD' }] } });
     renderRecord({ url: URL_ });
     const figure = await total();
     expect(figure.textContent).toBe('$250');
     expect(figure.className).toContain('text-danger');
     const balance = await card('Balance');
-    expect(
-      within(balance).getByText('Current visit outstanding').nextElementSibling?.textContent,
-    ).toBe('—');
+    expect(within(balance).getByText(/Nothing billed yet/)).toBeTruthy();
+    expect(within(balance).queryByText('Current visit outstanding')).toBeNull();
     expect(within(balance).getByText('Previous outstanding').nextElementSibling?.textContent).toBe(
       '$250',
     );
@@ -233,7 +232,7 @@ describe('OverviewTab', () => {
         .map((chip) => chip.textContent),
     ).toEqual(['Composite filling · #16', 'Scaling · Jaw']);
     expect(within(last).getByText('Occlusal caries on 16, restored.').tagName).toBe('BLOCKQUOTE');
-    expect(within(last).queryByRole('button', { name: /All visits/ })).toBeNull();
+    expect(within(last).getByRole('button', { name: /All visits/ })).toBeTruthy();
   });
 
   it('reads dashes and "No visits recorded yet." before the first completed visit', async () => {

@@ -31,5 +31,11 @@
     "saving": "Enregistrement…",
     "saved": "Enregistré à l’instant",
     "failed": "Échec de l’enregistrement — réessayer"
+  },
+  "roles": {
+    "owner": "Propriétaire",
+    "dentist": "Dentiste",
+    "assistant": "Assistant(e)",
+    "frontdesk": "Accueil"
   }
 }

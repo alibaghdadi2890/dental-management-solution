@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { LanguageSwitch } from '@/components/language-switch';
 import { IconButton } from '@/components/ui/button';
 import { useSignOut } from '@/features/auth/use-sign-out';
+import { useRoleLabel } from '@/features/users/role-label';
 import { initials } from '@/lib/initials';
 import { BranchSwitcher } from './branch-switcher';
 import { type NavItem, visibleNav } from './nav-items';
@@ -57,7 +58,10 @@ function ClinicBlock({ session }: { session: Session }) {
           </>
         ) : (
           <>
-            <div className="truncate text-sm leading-tight font-semibold tracking-[-0.01em]">
+            <div
+              dir="auto"
+              className="truncate text-sm leading-tight font-semibold tracking-[-0.01em] [unicode-bidi:isolate]"
+            >
               {session.tenant?.name}
             </div>
             <BranchSwitcher branch={session.branch} branches={session.branches} />
@@ -70,6 +74,7 @@ function ClinicBlock({ session }: { session: Session }) {
 
 export function Sidebar({ session }: { session: Session | undefined }) {
   const { t } = useTranslation('shell');
+  const roleLabel = useRoleLabel();
   const signOut = useSignOut();
   const nav = session ? visibleNav(session) : undefined;
 
@@ -106,7 +111,9 @@ export function Sidebar({ session }: { session: Session | undefined }) {
             <div className="text-[11.5px] leading-[1.3] text-ink-muted">
               {session.platformAdmin
                 ? t('user.platformAdmin')
-                : (session.roleNames[0] ?? t('user.fallbackRole'))}
+                : session.roles[0]
+                  ? roleLabel(session.roles[0])
+                  : t('user.fallbackRole')}
             </div>
           </div>
           <div className="flex flex-none">

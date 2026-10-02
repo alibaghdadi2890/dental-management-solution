@@ -1,5 +1,7 @@
 import { Outlet } from '@tanstack/react-router';
+import { useEffect } from 'react';
 import { useSession } from '@/features/auth/session';
+import { applyClinicLanguage } from '@/lib/i18n';
 import { CommandPalette } from '@/features/patients/command-palette';
 import { ActingTenantBanner } from './acting-tenant-banner';
 import { AppHeader } from './app-header';
@@ -9,9 +11,14 @@ import { Sidebar } from './sidebar';
 import { useCommandPalette } from './use-command-palette';
 
 /** POC app shell: 212px sidebar, 56px header, and a main area each screen fills and scrolls.
- * It owns the ⌘K patient palette (mounted once, opened by the header or the shortcut). */
+ * It owns the ⌘K patient palette (mounted once, opened by the header or the shortcut), and
+ * applies the clinic's language until the user picks one (`applyClinicLanguage`). */
 export function AppShell() {
   const { data: session } = useSession();
+  const clinicLocale = session?.tenant?.locale;
+  useEffect(() => {
+    if (clinicLocale) applyClinicLanguage(clinicLocale);
+  }, [clinicLocale]);
   const acting = session?.platformAdmin === true ? session.tenant : null;
   const canFind = patientActions(session).find;
   const palette = useCommandPalette(canFind);

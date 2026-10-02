@@ -16,6 +16,17 @@
     "currentVisit": "Current visit outstanding",
     "previous": "Previous outstanding",
     "total": "Total outstanding",
-    "otherCurrencies": "Also {{amounts}}"
+    "otherCurrencies": "Also {{amounts}}",
+    "recentVisit": "Most recent visit · {{date}}",
+    "visitTotal": "Visit total",
+    "visitPaid": "Visit paid",
+    "nothingBilled": "Nothing billed yet — a balance appears once the first visit is completed.",
+    "settled": "Nothing outstanding. This patient’s account is fully settled."
+  },
+  "payments": {
+    "title": "Payment history",
+    "newestFirst": "Newest first",
+    "emptyTitle": "No payments recorded yet",
+    "emptyBody": "Payments recorded for this patient will appear here."
   }
 }

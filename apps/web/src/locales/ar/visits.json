@@ -1,4 +1,234 @@
 {
   "title": "الزيارات",
-  "subtitle": "تظهر الزيارات هنا عندما يبدأ طبيب الأسنان زيارة من ملف المريض أو من جدول اليوم."
+  "subtitle": "{{today}} · {{unpaid}}",
+  "subtitleToday_zero": "لا زيارات اليوم",
+  "subtitleToday_one": "زيارة واحدة اليوم",
+  "subtitleToday_two": "زيارتان اليوم",
+  "subtitleToday_few": "{{count}} زيارات اليوم",
+  "subtitleToday_many": "{{count}} زيارة اليوم",
+  "subtitleToday_other": "{{count}} زيارة اليوم",
+  "subtitleUnpaid_zero": "لا أرصدة مستحقة",
+  "subtitleUnpaid_one": "زيارة واحدة برصيد مستحق",
+  "subtitleUnpaid_two": "زيارتان برصيد مستحق",
+  "subtitleUnpaid_few": "{{count}} زيارات برصيد مستحق",
+  "subtitleUnpaid_many": "{{count}} زيارة برصيد مستحق",
+  "subtitleUnpaid_other": "{{count}} زيارة برصيد مستحق",
+  "subtitleLoading": "جارٍ التحميل…",
+  "exportCsv": "تصدير CSV",
+  "exportFailed": "تعذّر تصدير الزيارات: {{reason}}",
+  "paid": "مدفوعة",
+  "tabs": {
+    "label": "طرق عرض الزيارات",
+    "all": "الكل",
+    "in_progress": "قيد التنفيذ",
+    "unpaid": "غير مدفوعة",
+    "voided_amended": "الملغاة والمعدّلة"
+  },
+  "search": {
+    "label": "البحث في الزيارات",
+    "placeholder": "المريض أو رقم الزيارة أو الخدمة"
+  },
+  "filters": {
+    "date": "التاريخ",
+    "dentist": "الطبيب",
+    "room": "الغرفة",
+    "any": "الكل",
+    "clear": "مسح عوامل التصفية",
+    "range": {
+      "today": "اليوم",
+      "7d": "آخر 7 أيام",
+      "30d": "آخر 30 يومًا",
+      "90d": "آخر 90 يومًا",
+      "12m": "آخر 12 شهرًا",
+      "all": "كل الأوقات"
+    }
+  },
+  "columns": {
+    "table": "الزيارات",
+    "visit": "الزيارة",
+    "date": "التاريخ / الوقت",
+    "patient": "المريض",
+    "dentist": "الطبيب",
+    "services": "الخدمات",
+    "total": "الإجمالي",
+    "balance": "الرصيد",
+    "status": "الحالة"
+  },
+  "status": {
+    "in_progress": "قيد التنفيذ",
+    "paused": "متوقفة مؤقتًا",
+    "completed": "مكتملة",
+    "amended": "معدّلة",
+    "voided": "ملغاة",
+    "discarded": "مستبعدة"
+  },
+  "footer": {
+    "label": "الصفحات",
+    "count_zero": "لا زيارات",
+    "count_one": "زيارة واحدة",
+    "count_two": "زيارتان",
+    "count_few": "{{formatted}} زيارات",
+    "count_many": "{{formatted}} زيارة",
+    "count_other": "{{formatted}} زيارة",
+    "billed": "{{amount}} مفوترة",
+    "rows": "الصفوف",
+    "previous": "السابق",
+    "next": "التالي"
+  },
+  "states": {
+    "loading": "جارٍ تحميل الزيارات",
+    "errorTitle": "تعذّر تحميل الزيارات",
+    "errorBody": "تحقّق من اتصالك وحاول مرة أخرى.",
+    "emptyTitle": "لا توجد زيارات مسجّلة بعد",
+    "emptyBody": "تظهر الزيارات هنا عندما يبدأ الطبيب زيارة من ملف المريض.",
+    "noMatchTitle": "لا توجد زيارات مطابقة",
+    "noMatchBody": "وسّع نطاق التاريخ أو امسح عوامل التصفية."
+  },
+  "panel": {
+    "eyebrow": "زيارة",
+    "voidedBanner": "أُلغيت هذه الزيارة — {{reason}}. لا تُحتسب في أي رصيد أو تقرير لكنها تبقى في سجل المريض.",
+    "services": "الخدمات",
+    "jaw": "الفك",
+    "subtotal": "المجموع الفرعي",
+    "discount": "الخصم",
+    "total": "الإجمالي",
+    "paid": "المدفوع",
+    "balance": "الرصيد",
+    "void": "إلغاء",
+    "amend": "تعديل",
+    "openRecord": "فتح في الملف",
+    "requestNote": "يمكن للطبيب فقط إلغاء الزيارة المكتملة أو تعديلها.",
+    "requestChange": "طلب تغيير",
+    "requestToast": "اطلب من {{dentist}} تعديل هذه الزيارة أو إلغاءها"
+  },
+  "trail": {
+    "title": "سجل التدقيق",
+    "loading": "جارٍ تحميل سجل التدقيق",
+    "failed": "تعذّر تحميل سجل التدقيق.",
+    "more": "عرض المزيد",
+    "moreFailed": "تعذّر تحميل المزيد من الإدخالات.",
+    "meta": "{{at}} · {{who}}",
+    "system": "النظام",
+    "platformAdmin": "مسؤول المنصة",
+    "unknownUser": "موظف سابق",
+    "actions": {
+      "start": "بدأت الزيارة",
+      "pause": "إيقاف مؤقت",
+      "resume": "استئناف",
+      "update": "تغيّرت الملاحظات أو الخصم",
+      "complete": "اكتملت الزيارة",
+      "completeTotal": "اكتملت الزيارة · {{total}}",
+      "amend": "عُدّلت — {{reason}}",
+      "amendTotals": "عُدّلت — {{reason}} · {{before}} ← {{after}}",
+      "void": "أُلغيت — {{reason}}",
+      "other": "تغيير"
+    }
+  },
+  "amend": {
+    "badge": "قيد التعديل",
+    "tooth": "السن",
+    "toothOf": "سن {{name}}",
+    "surfaces": "الأسطح",
+    "remove": "إزالة {{name}}",
+    "restore": "إعادة {{name}}",
+    "undo": "تراجع",
+    "planHint": "تعود خطة العلاج الخاصة بها إلى مخططة.",
+    "planLocked": "نفّذت خطة: يمكن إزالتها فقط",
+    "discount": "خصم الزيارة",
+    "discountMode": "نوع الخصم",
+    "discountValue": "الخصم",
+    "mode": {
+      "percent": "%",
+      "amount": "مبلغ"
+    },
+    "save": "حفظ التعديل",
+    "problem": {
+      "noService": "أبقِ خدمة واحدة على الأقل — لإزالة كل شيء، ألغِ الزيارة.",
+      "tooth": "أدخل سنًّا والأسطح الموجودة فيها فقط.",
+      "discount": "أدخل الخصم كرقم."
+    },
+    "confirmTitle": "تعديل {{number}}؟",
+    "confirmBody": "يتغيّر الإجمالي من {{before}} إلى {{after}}. {{effect}} يبقى الأصل في سجل التدقيق.",
+    "credit": "يحصل المريض على رصيد دائن قدره {{amount}}.",
+    "charge": "يدين المريض بمبلغ إضافي قدره {{amount}}.",
+    "sameTotal": "لا يتغيّر الإجمالي.",
+    "reason": "سبب التعديل",
+    "done": "عُدّلت {{number}}"
+  },
+  "void": {
+    "title": "إلغاء {{number}}؟",
+    "body": "تُزال الزيارة ورسومها البالغة {{amount}} من الأرصدة والتقارير. تبقى سجلاتها السريرية.",
+    "reason": "سبب الإلغاء",
+    "ok": "إلغاء الزيارة",
+    "done": "أُلغيت {{number}}",
+    "refundTitle": "استرد المدفوعات أولًا",
+    "refundBody": "لدى {{number}} مدفوعات بقيمة {{amount}}. استردها أو انقلها قبل إلغاء الزيارة.",
+    "refundOk": "حسنًا"
+  },
+  "history": {
+    "viewLabel": "طريقة عرض السجل",
+    "views": {
+      "visits": "الزيارات",
+      "clinical": "السريري"
+    },
+    "chip": "{{name}} · {{tooth}}",
+    "amendedTimes_zero": "لم تُعدّل",
+    "amendedTimes_one": "عُدّلت مرة",
+    "amendedTimes_two": "عُدّلت مرتين",
+    "amendedTimes_few": "عُدّلت {{count}} مرات",
+    "amendedTimes_many": "عُدّلت {{count}} مرة",
+    "amendedTimes_other": "عُدّلت {{count}} مرة",
+    "unpaid": "غير مدفوعة",
+    "performed": "الخدمات المنفّذة",
+    "notes": "الملاحظات السريرية",
+    "voided": "أُلغيت — {{reason}}",
+    "visitTotal": "إجمالي الزيارة",
+    "outstanding": "المستحق",
+    "emptyBody": "يبدأ سجل علاج هذا المريض بأول زيارة.",
+    "startFirst": "بدء أول زيارة",
+    "more": "تحميل المزيد"
+  },
+  "clinical": {
+    "loading": "جارٍ تحميل السجل السريري",
+    "failed": "تعذّر تحميل السجل السريري.",
+    "emptyTitle": "لا يوجد سجل سريري بعد",
+    "emptyBody": "تظهر التشخيصات والخطط والعلاجات هنا عند تسجيلها في زيارة.",
+    "filter": {
+      "active": "نشطة",
+      "planned": "مخططة",
+      "resolved": "محلولة"
+    },
+    "tooth": "السن",
+    "allTeeth": "كل الأسنان",
+    "needsAttention_zero": "تحتاج متابعة · {{count}}",
+    "needsAttention_one": "تحتاج متابعة · {{count}}",
+    "needsAttention_two": "تحتاج متابعة · {{count}}",
+    "needsAttention_few": "تحتاج متابعة · {{count}}",
+    "needsAttention_many": "تحتاج متابعة · {{count}}",
+    "needsAttention_other": "تحتاج متابعة · {{count}}",
+    "nothingOpen": "لا شيء مفتوح.",
+    "completed_zero": "علاج مكتمل · {{count}}",
+    "completed_one": "علاج مكتمل · {{count}}",
+    "completed_two": "علاج مكتمل · {{count}}",
+    "completed_few": "علاج مكتمل · {{count}}",
+    "completed_many": "علاج مكتمل · {{count}}",
+    "completed_other": "علاج مكتمل · {{count}}",
+    "showCompleted": "عرض العلاج المكتمل",
+    "unplanned": "علاج بلا تشخيص أو خطة",
+    "serviceOn": "{{name}} · {{date}}",
+    "noPlan": "لا خطة بعد",
+    "next": "التالي: {{name}} ({{price}})",
+    "voidedVisit": "زيارة ملغاة",
+    "step": {
+      "diagnosed": "شُخّص",
+      "planned": "خُطّط {{name}}",
+      "performed": "نُفّذ",
+      "cancelled": "أُلغي",
+      "resolved": "حُلّ"
+    }
+  },
+  "chartTab": {
+    "loading": "جارٍ تحميل المخطط",
+    "failed": "تعذّر تحميل المخطط."
+  }
 }

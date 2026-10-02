@@ -205,6 +205,7 @@ export function historyLine(
     toothCode,
     surfaces: [],
     final: usd('60.00'),
+    planId: null,
     ...extra,
   };
 }
@@ -212,6 +213,7 @@ export function historyLine(
 export function visit(extra: Partial<Visit> = {}): Visit {
   return {
     id: VISIT_ID,
+    displayNumber: 1,
     patientId: RANA.id,
     branchId: id(70),
     roomId: null,
@@ -223,6 +225,7 @@ export function visit(extra: Partial<Visit> = {}): Visit {
     pausedAt: null,
     pausedSeconds: 0,
     completedAt: null,
+    completedBy: null,
     durationMinutes: null,
     notes: '',
     discountMode: 'percent',
@@ -230,6 +233,9 @@ export function visit(extra: Partial<Visit> = {}): Visit {
     currency: 'USD',
     services: [],
     money: { subtotal: '0.00', discount: '0.00', total: '0.00', capped: false },
+    voidedAt: null,
+    voidReason: null,
+    updatedAt: '2026-09-04T09:00:00.000Z',
     serverNow: '2026-09-04T09:12:05.000Z',
     ...extra,
   };
@@ -243,6 +249,7 @@ export function chart(extra: Partial<PatientChart> = {}): PatientChart {
     plans: [],
     history: [],
     liveVisitId: VISIT_ID,
+    voidedVisitIds: [],
     teeth: [],
     ...extra,
   };
@@ -318,7 +325,7 @@ export function mockWorkspace({
     if (toothCode) {
       const history = toothHistories.find((tooth) => tooth.toothCode === toothCode);
       return Promise.resolve(
-        json(history ?? { toothCode, diagnoses: [], plans: [], services: [] }),
+        json(history ?? { toothCode, diagnoses: [], plans: [], services: [], voidedVisitIds: [] }),
       );
     }
     if (visitSummary && path === `/billing/visits/${visitSummary.visitId}/summary`) {

@@ -199,7 +199,7 @@ function PatientsList({
   const viewCounts = {
     active: data.counts?.active,
     owing: data.owingCount,
-    notSeen: data.counts?.notSeen,
+    notSeen: data.notSeenCount,
     archived: data.counts?.archived,
   };
   const selectedRows = rows.filter((row) => selected.has(row.id));
@@ -258,14 +258,16 @@ function PatientsList({
             onChange={(view) => {
               setQuery(withFilter(query, { view }));
             }}
-            tabs={VIEWS.filter((view) => canPay || view !== 'owing').map((view) => {
-              const value = viewCounts[view];
-              return {
-                key: view,
-                label: t(`views.${view}`),
-                count: value === undefined ? undefined : count(value),
-              };
-            })}
+            tabs={VIEWS.filter((view) => canPay || (view !== 'owing' && view !== 'notSeen')).map(
+              (view) => {
+                const value = viewCounts[view];
+                return {
+                  key: view,
+                  label: t(`views.${view}`),
+                  count: value === undefined ? undefined : count(value),
+                };
+              },
+            )}
           />
           {query.view === 'active' && data.duplicateCount > 0 && (
             <DuplicateBanner
@@ -378,6 +380,8 @@ function PatientsList({
                     context={context}
                     balances={data.balanceById.get(patient.id)}
                     balanceLoading={data.balancesLoading}
+                    visits={data.visitsById.get(patient.id)}
+                    visitsLoading={data.visitsLoading}
                     selected={selected.has(patient.id)}
                     highlighted={panel !== null && 'id' in panel && panel.id === patient.id}
                     stale={stale}

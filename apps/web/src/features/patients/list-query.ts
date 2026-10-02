@@ -280,17 +280,20 @@ export function toSearch(query: PatientListQuery): Partial<PatientListQuery> {
 }
 
 /**
- * Without `payment:read` the billing route that serves the Owes balance view and sort by balance
- * answers 403, so those fall back to the Active view and the default name sort (page 1) instead
- * of an error. Returns `query` itself when nothing needs to change.
+ * Without `payment:read` the billing route that serves the Owes balance and Not seen views, the
+ * sort by balance and the "Never" filter answers 403, so those fall back to the Active view, the
+ * default name sort and any last visit (page 1) instead of an error. Returns `query` itself when
+ * nothing needs to change.
  */
 export function withoutBalanceViews(query: PatientListQuery): PatientListQuery {
-  const owing = query.view === 'owing';
+  const billingView = query.view === 'owing' || query.view === 'notSeen';
   const byBalance = query.sort === 'balance';
-  if (!owing && !byBalance) return query;
+  const never = query.lastVisit === 'never';
+  if (!billingView && !byBalance && !never) return query;
   return withFilter(query, {
-    ...(owing ? { view: LIST_QUERY_DEFAULTS.view } : {}),
+    ...(billingView ? { view: LIST_QUERY_DEFAULTS.view } : {}),
     ...(byBalance ? { sort: LIST_QUERY_DEFAULTS.sort, dir: LIST_QUERY_DEFAULTS.dir } : {}),
+    ...(never ? { lastVisit: undefined } : {}),
   });
 }
 

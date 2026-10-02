@@ -40,7 +40,7 @@ function sessionWith(permissions: Permission[], settings: Settings = {}): Sessio
     },
     branch: null,
     branches: [],
-    roleNames: [],
+    roles: [],
     permissions,
     idleTimeoutSeconds: 900,
   };

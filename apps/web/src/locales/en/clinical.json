@@ -106,7 +106,10 @@
     "today": "Today's visit",
     "todayHint": "What you are doing now",
     "toothPanel": "Selected tooth",
-    "money": "Visit money"
+    "money": "Visit money",
+    "completedElsewhere": "Completed by {{name}} at {{time}}.",
+    "someoneElse": "someone else",
+    "viewSummary": "View summary"
   },
   "chartCard": {
     "title": "Dental chart",
@@ -153,7 +156,8 @@
     "draftFailed": "Draft not saved",
     "draftFailedBody": "Some changes couldn't be saved. Retry them, then save the draft again.",
     "review": "Review & complete",
-    "capped": "Discount exceeds the subtotal — capped at 100%"
+    "capped": "Discount exceeds the subtotal — capped at 100%",
+    "openPlans": "Open plans {{amount}} · not in today’s total"
   },
   "dentition": {
     "label": "Dentition: {{value}}",
@@ -272,7 +276,12 @@
       "performedNote_one": "One planned treatment performed — see below.",
       "performedNote_other": "{{count}} planned treatments performed — see below.",
       "emptyTitle": "No planned treatment for this tooth",
-      "emptyBody": "Plan work now and bill it when it is performed — this visit or a later one."
+      "emptyBody": "Plan work now and bill it when it is performed — this visit or a later one.",
+      "cancelTitle": "Cancel {{name}}?",
+      "cancelBody": "The plan stays in the tooth’s history as cancelled.",
+      "cancelOk": "Cancel plan",
+      "keep": "Keep plan",
+      "cancelled": "{{name}} cancelled"
     },
     "completed": {
       "label": "Completed",
@@ -397,5 +406,44 @@
     "done": "Done",
     "loading": "Loading the visit's figures…",
     "failed": "Couldn't load the visit's figures."
+  },
+  "errors": {
+    "visit": {
+      "not_found": "This visit no longer exists.",
+      "not_live": "This visit is no longer in progress, so it can’t change.",
+      "illegal_transition": "The visit can’t do that in its current state.",
+      "room_busy": "Another visit is using this room.",
+      "not_empty": "Only an empty visit can be discarded.",
+      "moved": "The visit moved to another patient; try again.",
+      "branch_required": "Choose a branch first.",
+      "dentist_invalid": "Choose a dentist of this branch.",
+      "room_invalid": "Choose an active room of this branch.",
+      "room_required": "Choose the room for this visit.",
+      "tooth_required": "Choose a tooth.",
+      "tooth_not_allowed": "This item isn’t recorded on a tooth.",
+      "surfaces_invalid": "This tooth doesn’t have those surfaces.",
+      "currency_mismatch": "This price is in another currency than the visit.",
+      "stale": "The visit changed since you opened it. It has been reloaded — check it and try again.",
+      "not_amendable": "Only a completed visit can be amended.",
+      "not_voidable": "Only a completed visit can be voided.",
+      "amend_no_change": "The amendment changes nothing.",
+      "amend_unknown_service": "A service isn’t on this visit any more; reload and try again.",
+      "amend_plan_linked": "A service that performed a plan can be removed, not moved.",
+      "has_payments": "This visit has payments: refund or move them before voiding it.",
+      "invalid_cursor": "The list moved on; start again from the first page."
+    },
+    "record": {
+      "not_removable": "Only records made in this visit can be removed.",
+      "not_found": "That record isn’t on this patient any more."
+    },
+    "plan": {
+      "not_open": "This plan is no longer open.",
+      "not_cancellable": "A plan made in this visit is removed, not cancelled."
+    },
+    "catalog": {
+      "not_found": "That catalog item no longer exists.",
+      "in_use": "That catalog item is in use.",
+      "inactive": "That catalog item is inactive."
+    }
   }
 }

@@ -1,7 +1,7 @@
 import type { LiveVisitRef, Patient, PatientContact, Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { type Ref, useEffect, useRef } from 'react';
+import { Link, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
+import { type Ref, useEffect, useRef, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/list';
@@ -18,7 +18,7 @@ import { minorOn } from '../patient-form';
 import { usePatientNavigation } from '../patient-navigation';
 import { patientQuery } from '../patients-api';
 import { useArchivePatients } from '../use-archive-patients';
-import { RECORD_TABS, type RecordTab } from './record-search';
+import { type RecordTab, useRecordTabs } from './record-search';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -121,13 +121,28 @@ function MergedNotice({ keptId }: { keptId: string }) {
  * or **Start visit**, which opens the start popover (spec §Record). An archived patient can't start
  * one but can still resume theirs. Both need `visit:write`: the front desk sees neither (W18).
  * While a start is in flight, Start stays (with its popover) even once the reloaded list has the
- * new visit: the popover goes to the workspace when the start is done.
+ * new visit: the popover goes to the workspace when the start is done. `?startVisit=1` (the
+ * patient-created toast's Start visit) opens the popover once, then leaves the URL.
  */
 function VisitAction({ patientId, archived }: { patientId: string; archived: boolean }) {
   const { t } = useTranslation('patients');
   const navigate = useNavigate();
   const live = useQuery(liveVisitsQuery({ patientId }));
   const starting = useStartingVisit(patientId);
+  const requested = useSearch({
+    strict: false,
+    select: (search) => 'startVisit' in search && search.startVisit === true,
+  });
+  const [openOnArrival] = useState(requested);
+  useEffect(() => {
+    if (!requested) return;
+    void navigate({
+      from: '/patients/$patientId',
+      to: '.',
+      search: (previous) => ({ ...previous, startVisit: undefined }),
+      replace: true,
+    });
+  }, [requested, navigate]);
   if (live.isPending) return null;
   // Should the list fail, Start still gets there: starting resumes a live visit.
   const latest = (live.data ?? []).reduce<LiveVisitRef | undefined>(
@@ -149,7 +164,7 @@ function VisitAction({ patientId, archived }: { patientId: string; archived: boo
   }
   if (archived) return null;
   return (
-    <StartVisitPopover patientId={patientId}>
+    <StartVisitPopover patientId={patientId} defaultOpen={openOnArrival}>
       <Button variant="primary" className="font-semibold">
         {t('record.startVisit')}
       </Button>
@@ -186,6 +201,7 @@ export function RecordHeader({
   const { t } = useTranslation('patients');
   const canWrite = usePermission('patient:write');
   const canVisit = usePermission('visit:write');
+  const recordTabs = useRecordTabs();
   const { editPatient } = usePatientNavigation();
   const archived = patient.archivedAt !== null;
   const merged = patient.mergedIntoId;
@@ -302,7 +318,7 @@ export function RecordHeader({
       <Tabs
         idBase={tabsId}
         label={t('record.tabs.label')}
-        tabs={RECORD_TABS.map((key) => ({ key, label: t(`record.tabs.${key}`) }))}
+        tabs={recordTabs.map((key) => ({ key, label: t(`record.tabs.${key}`) }))}
         active={tab}
         onChange={onTab}
         className="mt-[18px]"

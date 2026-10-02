@@ -1,9 +1,14 @@
-import { type BalanceMoney, type PatientListItem, type PatientListQuery } from '@dcm/contracts';
+import {
+  type BalanceMoney,
+  type PatientListItem,
+  type PatientListQuery,
+  type VisitStat,
+} from '@dcm/contracts';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SHIMMER } from '@/components/ui/list';
 import { owedBalances } from '@/features/billing/owed-balances';
-import { ageOrNull, formatMoney, formatPhone } from '@/lib/format';
+import { ageOrNull, formatCalendarDate, formatMoney, formatPhone } from '@/lib/format';
 import { firstName, initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
 import type { SortableColumn } from './list-query';
@@ -74,7 +79,7 @@ function PlainHeader({ label, end = false }: { label: string; end?: boolean }) {
 const checkboxClass = 'ms-0.5 size-[15px] cursor-pointer accent-primary';
 
 /** 40px header row with the page's select-all checkbox and the sortable column labels. Visits and
- * Last visit are not sortable until visits exist (design Q14); Balance only with `payment:read`. */
+ * Last visit are not sortable (4b, D18); Balance only with `payment:read`. */
 export function PatientsTableHead({
   query,
   onSort,
@@ -275,6 +280,8 @@ export function PatientRow({
   context,
   balances,
   balanceLoading,
+  visits,
+  visitsLoading,
   selected,
   highlighted,
   stale,
@@ -288,6 +295,9 @@ export function PatientRow({
   balances: readonly BalanceMoney[] | undefined;
   /** This page's balances are still loading: the cell shimmers rather than reading "—". */
   balanceLoading: boolean;
+  /** Counted visits (4b, D18); `undefined` while `visitsLoading`. */
+  visits: VisitStat | undefined;
+  visitsLoading: boolean;
   selected: boolean;
   /** The row whose panel is open. */
   highlighted: boolean;
@@ -381,7 +391,13 @@ export function PatientRow({
       </span>
       <PhoneCell patient={patient} today={context.today} country={context.country} />
       <span role="cell" className="text-[12.5px] leading-[1.3] text-ink-secondary">
-        {NONE}
+        {visitsLoading ? (
+          <span className={bar('w-16')} />
+        ) : visits?.lastVisitDate ? (
+          formatCalendarDate(visits.lastVisitDate, context.locale)
+        ) : (
+          NONE
+        )}
       </span>
       <span role="cell" className="truncate text-[12.5px] leading-[1.3] text-ink-secondary">
         {dentist}
@@ -390,7 +406,7 @@ export function PatientRow({
         role="cell"
         className="text-end font-mono text-[12.5px] leading-none text-ink-secondary"
       >
-        {NONE}
+        {visitsLoading ? <span className={bar('ms-auto w-5')} /> : String(visits?.visitCount ?? 0)}
       </span>
       <BalanceCell
         balances={balances}

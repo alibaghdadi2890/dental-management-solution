@@ -87,6 +87,7 @@ describe('ToothHistoryDialog', () => {
         [RANA.id]: [
           {
             toothCode: '16',
+            voidedVisitIds: [],
             diagnoses: [
               diagnosisRecord(20, 'Dental caries', '16', {
                 recordedInVisitDate: '2026-05-04',

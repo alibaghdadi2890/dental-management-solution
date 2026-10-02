@@ -47,7 +47,7 @@ function sessionWith({
     },
     branch: null,
     branches: [],
-    roleNames: ['Dentist'],
+    roles: [{ key: 'dentist', name: 'Dentist' }],
     permissions: ['visit:read'],
     idleTimeoutSeconds: 900,
   };

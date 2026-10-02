@@ -11,6 +11,7 @@ import {
   toothHistorySchema,
   toothPresenceResultSchema,
   visitResultSchema,
+  visitStatSchema,
   visitSchema,
   type AddServiceInput,
   type LiveVisitQuery,
@@ -60,6 +61,8 @@ export const clinicalKeys = {
     [...clinicalKeys.all(tenantId), 'summary', patientId] as const,
   lastVisit: (tenantId: string | null, patientId: string) =>
     [...clinicalKeys.all(tenantId), 'last-visit', patientId] as const,
+  visitStats: (tenantId: string | null, patientIds: readonly string[]) =>
+    [...clinicalKeys.all(tenantId), 'visit-stats', [...patientIds].sort()] as const,
 };
 
 /** Omitted entirely when `tenantId` is left to the ambient acting tenant (`billing-api.ts`). */
@@ -132,6 +135,19 @@ export const clinicalSummaryQuery = (patientId: string, tenantId?: string) =>
     queryKey: clinicalKeys.summary(tenantId ?? actingTenantId(), patientId),
     queryFn: () =>
       apiFetch(`/clinical/patients/${patientId}/summary`, clinicalSummarySchema, scope(tenantId)),
+  });
+
+/** The patients list's Last visit and Visits columns for the visible page (4b, D18). */
+export const visitStatsQuery = (patientIds: readonly string[], tenantId?: string) =>
+  queryOptions({
+    queryKey: clinicalKeys.visitStats(tenantId ?? actingTenantId(), patientIds),
+    queryFn: () =>
+      apiFetch(
+        `/clinical/patients/visit-stats?patientIds=${patientIds.join(',')}`,
+        z.array(visitStatSchema),
+        scope(tenantId),
+      ),
+    enabled: patientIds.length > 0,
   });
 
 // Writes: each answers with the updated visit (`{ visit }`), plus the affected `record` for the

@@ -64,7 +64,7 @@ function sessionWith(permissions: Permission[]): Session {
     },
     branch: null,
     branches: [],
-    roleNames: [],
+    roles: [],
     permissions,
     idleTimeoutSeconds: 900,
   };

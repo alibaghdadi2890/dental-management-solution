@@ -1,4 +1,5 @@
 import { toCents, type Visit } from '@dcm/contracts';
+import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -6,6 +7,8 @@ import { useToast } from '@/components/ui/toast-context';
 import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useFlushSaveGroups } from '../save-groups-context';
+import { chartQuery } from '../visits-api';
+import { plansTotal } from './tooth-panel/tooth-records';
 import { DiscountControl } from './discount-control';
 import { useLiveMoney, useVisitDiscount } from './visit-discount';
 
@@ -61,6 +64,9 @@ export function FinancialBar({
   const format = (amount: string) => formatMoney({ amount, currency: visit.currency }, locale);
   const discounted = toCents(money.discount) > 0n;
   const teeth = new Set(visit.services.flatMap((service) => service.toothCode ?? [])).size;
+  // The patient's open plans (4a follow-up): what is still to do, apart from today's total.
+  const chart = useQuery(chartQuery(visit.patientId));
+  const openPlans = plansTotal(chart.data?.plans.filter((plan) => plan.status === 'planned') ?? []);
 
   const saveDraft = async () => {
     setSavingDraft(true);
@@ -114,6 +120,11 @@ export function FinancialBar({
         >
           {t('money.capped')}
         </p>
+      )}
+      {openPlans && (
+        <span className="text-[12.5px] leading-none text-ink-muted">
+          {t('money.openPlans', { amount: formatMoney(openPlans, locale) })}
+        </span>
       )}
       <div className="ms-auto flex flex-none items-center gap-2.5">
         <span className="flex-none text-[12.5px] leading-none whitespace-nowrap text-ink-muted">

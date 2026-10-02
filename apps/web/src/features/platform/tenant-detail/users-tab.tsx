@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { platformKeys, setUserActive, usersQuery } from '@/features/platform/platform-api';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useRoleLabel } from '@/features/users/role-label';
 
 const COLUMNS =
   'minmax(240px,1.6fr) minmax(110px,0.8fr) minmax(150px,1fr) minmax(130px,1fr) 104px 44px';
@@ -53,6 +54,7 @@ export function UsersTab({
   onResetPassword: (user: StaffUser) => void;
 }) {
   const { t } = useTranslation(['admin', 'common']);
+  const roleLabel = useRoleLabel();
   const confirm = useConfirm();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -143,7 +145,7 @@ export function UsersTab({
         <span className="flex flex-wrap gap-1">
           {user.roles.map((role) => (
             <Pill key={role.key} tone="indigo">
-              {role.name}
+              {roleLabel(role)}
             </Pill>
           ))}
         </span>

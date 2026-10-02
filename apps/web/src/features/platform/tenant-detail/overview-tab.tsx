@@ -12,6 +12,7 @@ import {
 } from '@/features/clinical/catalog/catalog-api';
 import { branchesQuery, roomsQuery, usersQuery } from '@/features/platform/platform-api';
 import { formatDate } from '@/lib/format';
+import { useRoleLabel } from '@/features/users/role-label';
 
 function Card({
   label,
@@ -83,6 +84,7 @@ function SeedCatalogCard({ tenantId }: { tenantId: string }) {
 
 export function OverviewTab({ tenant }: { tenant: Tenant }) {
   const { t, i18n } = useTranslation('admin');
+  const roleLabel = useRoleLabel();
   const branches = useQuery(branchesQuery(tenant.id));
   const rooms = useQuery(roomsQuery(tenant.id));
   const services = useQuery(servicesQuery(tenant.id));
@@ -105,7 +107,8 @@ export function OverviewTab({ tenant }: { tenant: Tenant }) {
     if (!active) return undefined;
     const counts = new Map<string, number>();
     for (const role of active.flatMap((user) => user.roles)) {
-      counts.set(role.name, (counts.get(role.name) ?? 0) + 1);
+      const name = roleLabel(role);
+      counts.set(name, (counts.get(name) ?? 0) + 1);
     }
     return [...counts].map(([name, count]) => `${count} ${name}`).join(' · ');
   };

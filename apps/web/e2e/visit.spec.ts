@@ -17,8 +17,8 @@ async function signIn(page: Page, email: string, password: string) {
 }
 
 /** The platform admin provisions a clinic (Lebanon and USD by default, the default catalog) whose
- * owner is a dentist, and gives its branch two rooms (a live visit holds its room, and the resume
- * flow leaves one live); the owner then chooses their own password. */
+ * owner is a dentist, and gives its branch three rooms (a live visit holds its room, and the resume
+ * and notation flows each leave one live); the owner then chooses their own password. */
 async function provisionClinic(browser: Browser): Promise<Clinic> {
   const run = Date.now().toString(36);
   const name = `Visit Clinic ${run}`;
@@ -42,7 +42,7 @@ async function provisionClinic(browser: Browser): Promise<Clinic> {
   await page.getByText(name).click();
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
   await page.getByRole('link', { name: 'Branches & rooms' }).click();
-  for (const [index, room] of ['Room 1', 'Room 2'].entries()) {
+  for (const [index, room] of ['Room 1', 'Room 2', 'Room 3'].entries()) {
     await page.getByRole('button', { name: 'Add room' }).click();
     await page
       .getByRole('textbox', { name: 'Code' })
@@ -50,7 +50,7 @@ async function provisionClinic(browser: Browser): Promise<Clinic> {
       .fill(`R${String(index + 1)}`);
     await page.getByRole('textbox', { name: 'Name' }).nth(index).fill(room);
   }
-  await expect(page.getByRole('region', { name: '2 unsaved changes' })).toBeVisible();
+  await expect(page.getByRole('region', { name: '3 unsaved changes' })).toBeVisible();
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Changes saved' })).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
@@ -102,8 +102,8 @@ async function registerPatient(
 
 /** Record header → Start visit → the popover (the owner is the branch's dentist, pre-selected)
  * with the given room → the workspace. */
-async function startVisit(page: Page, room: 'Room 1' | 'Room 2') {
-  await page.getByRole('button', { name: 'Start visit' }).click();
+async function startVisit(page: Page, room: 'Room 1' | 'Room 2' | 'Room 3') {
+  await page.getByRole('main').getByRole('button', { name: 'Start visit' }).click();
   const popover = page.getByRole('dialog', { name: 'Start visit' });
   await expect(popover.getByRole('combobox', { name: 'Dentist' })).toHaveValue(/.+/);
   await popover.getByRole('combobox', { name: 'Room' }).selectOption({ label: room });
@@ -312,4 +312,93 @@ test('Universal notation relabels the charts; a dentition override changes the c
   } finally {
     await setNotation('FDI notation', /^FDI notation enabled/);
   }
+});
+
+test('a completed visit is amended with a reason, then voided, from the Visits screen', async ({
+  page,
+}) => {
+  test.slow();
+  await signInAsOwner(page);
+  await registerPatient(page, { name: 'Lina Haddad', phone: '03 555 404' });
+  await startVisit(page, 'Room 3');
+  const chart = chartCard(page);
+  const panel = page.getByRole('complementary', { name: 'Selected tooth' });
+
+  await test.step('two composites, completed', async () => {
+    for (const label of ['#36', '#46']) {
+      await tooth(chart, label).click();
+      await panel.getByRole('button', { name: 'Add completed service', exact: true }).click();
+      await pickFromDrawer(page, 'Add completed service', 'Composite');
+      await expect(
+        page.getByRole('status').filter({ hasText: 'Composite added' }).first(),
+      ).toBeVisible();
+    }
+    await page.getByRole('button', { name: 'Review & complete' }).click();
+    await page
+      .getByRole('dialog', { name: 'Complete visit' })
+      .getByRole('button', { name: 'Complete visit' })
+      .click();
+    const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
+    await recorded.getByRole('button', { name: 'Pay later' }).click();
+    await expect(recorded).toBeHidden();
+  });
+
+  const table = page.getByRole('table', { name: 'Visits' });
+  const row = table.getByRole('row').filter({ hasText: 'Lina Haddad' });
+  const details = page.getByRole('complementary', { name: 'Lina Haddad' });
+  const figure = (label: string) =>
+    details.getByText(label, { exact: true }).locator('xpath=following-sibling::span');
+
+  await test.step('the Visits screen lists it, completed and unpaid', async () => {
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('link', { name: 'Visits' })
+      .click();
+    await expect(row).toContainText('Completed');
+    await row.click();
+    await expect(details.getByText('Composite', { exact: true }).first()).toBeVisible();
+  });
+
+  let before = '';
+  await test.step('amend: remove one composite with a reason; the balance follows', async () => {
+    before = (await figure('Total').textContent()) ?? '';
+    await details.getByRole('button', { name: 'Amend' }).click();
+    await details
+      .getByRole('button', { name: /^Remove / })
+      .last()
+      .click();
+    await details.getByRole('button', { name: 'Save amendment' }).click();
+    const confirm = page.getByRole('alertdialog');
+    await expect(confirm).toContainText(`Total changes ${before} →`);
+    await confirm.getByLabel('Reason for amendment').fill('Second filling not placed');
+    await confirm.getByRole('button', { name: 'Save amendment' }).click();
+    await expect(page.getByRole('status').filter({ hasText: /amended$/ })).toBeVisible();
+    await expect(row).toContainText('Amended');
+    await row.click();
+    const after = (await figure('Total').textContent()) ?? '';
+    expect(after).not.toBe(before);
+    await expect(figure('Balance')).toHaveText(after);
+    await expect(details.getByText(/^Amended — Second filling not placed/)).toBeVisible();
+  });
+
+  await test.step('void with a reason: struck through in the list and in the history', async () => {
+    await details.getByRole('button', { name: 'Void' }).click();
+    const confirm = page.getByRole('alertdialog');
+    await confirm.getByLabel('Reason for voiding').fill('Wrong patient');
+    await confirm.getByRole('button', { name: 'Void visit' }).click();
+    await expect(page.getByRole('status').filter({ hasText: /voided$/ })).toBeVisible();
+    await expect(row).toContainText('Voided');
+    await expect(row.getByRole('cell').nth(5)).toHaveClass(/line-through/);
+
+    await row.click();
+    await details.getByRole('link', { name: 'Open in record' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Lina Haddad' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Visits & history', selected: true })).toBeVisible();
+    const history = page.getByRole('tabpanel', { name: 'Visits & history' });
+    await expect(history.getByText('Voided', { exact: true }).first()).toBeVisible();
+    await page.getByRole('tab', { name: 'Balance & payments' }).click();
+    await expect(page.getByRole('region', { name: 'Balance' })).toContainText(
+      /Total outstanding\s*\$0/,
+    );
+  });
 });

@@ -1,5 +1,7 @@
 import type { DiagnosisRecord, TreatmentPlan } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
+import { useConfirm } from '@/components/ui/confirm-context';
+import { useToast } from '@/components/ui/toast-context';
 import { formatDate, formatMoney } from '@/lib/format';
 import { useChartingActions } from '../charting-actions';
 import { Badge, EmptyBlock, LinkButton, PanelSection } from './panel-section';
@@ -35,6 +37,8 @@ export function PlanSection({
   onAdd: () => void;
 }) {
   const { t, i18n } = useTranslation('clinical');
+  const confirm = useConfirm();
+  const toast = useToast();
   const locale = i18n.resolvedLanguage ?? 'en';
   const actions = useChartingActions();
   const openPlans = plans.filter((plan) => plan.status === 'planned');
@@ -126,7 +130,20 @@ export function PlanSection({
                     label={t('panel.plan.cancel')}
                     name={t('panel.plan.cancelNamed', { name: plan.name })}
                     onClick={() => {
-                      actions.cancelPlan(plan.id);
+                      // A plan from an earlier visit: confirm first (4a follow-up), then say so.
+                      confirm({
+                        title: t('panel.plan.cancelTitle', { name: plan.name }),
+                        body: t('panel.plan.cancelBody'),
+                        okLabel: t('panel.plan.cancelOk'),
+                        cancelLabel: t('panel.plan.keep'),
+                        tone: 'warn',
+                        onConfirm: () => {
+                          actions.cancelPlan(plan.id);
+                          toast(t('panel.plan.cancelled', { name: plan.name }), {
+                            tone: 'success',
+                          });
+                        },
+                      });
                     }}
                   />
                 ))}

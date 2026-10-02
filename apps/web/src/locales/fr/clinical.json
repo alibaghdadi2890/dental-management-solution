@@ -106,7 +106,10 @@
     "today": "Visite du jour",
     "todayHint": "Ce que vous faites maintenant",
     "toothPanel": "Dent sélectionnée",
-    "money": "Montants de la visite"
+    "money": "Montants de la visite",
+    "completedElsewhere": "Terminée par {{name}} à {{time}}.",
+    "someoneElse": "quelqu’un d’autre",
+    "viewSummary": "Voir le récapitulatif"
   },
   "chartCard": {
     "title": "Schéma dentaire",
@@ -153,7 +156,8 @@
     "draftFailed": "Brouillon non enregistré",
     "draftFailedBody": "Certaines modifications n’ont pas pu être enregistrées. Réessayez-les, puis enregistrez à nouveau le brouillon.",
     "review": "Vérifier et terminer",
-    "capped": "La remise dépasse le sous-total — plafonnée à 100 %"
+    "capped": "La remise dépasse le sous-total — plafonnée à 100 %",
+    "openPlans": "Plans ouverts {{amount}} · hors total du jour"
   },
   "dentition": {
     "label": "Denture : {{value}}",
@@ -272,7 +276,12 @@
       "performedNote_one": "Un traitement planifié a été réalisé — voir ci-dessous.",
       "performedNote_other": "{{count}} traitements planifiés ont été réalisés — voir ci-dessous.",
       "emptyTitle": "Aucun traitement planifié pour cette dent",
-      "emptyBody": "Planifiez maintenant et facturez à la réalisation — lors de cette visite ou d’une prochaine."
+      "emptyBody": "Planifiez maintenant et facturez à la réalisation — lors de cette visite ou d’une prochaine.",
+      "cancelTitle": "Annuler {{name}} ?",
+      "cancelBody": "Le plan reste dans l’historique de la dent comme annulé.",
+      "cancelOk": "Annuler le plan",
+      "keep": "Garder le plan",
+      "cancelled": "{{name}} annulé"
     },
     "completed": {
       "label": "Réalisé",
@@ -397,5 +406,44 @@
     "done": "Terminé",
     "loading": "Chargement des montants de la visite…",
     "failed": "Impossible de charger les montants de la visite."
+  },
+  "errors": {
+    "visit": {
+      "not_found": "Cette visite n’existe plus.",
+      "not_live": "Cette visite n’est plus en cours et ne peut plus changer.",
+      "illegal_transition": "La visite ne peut pas faire cela dans son état actuel.",
+      "room_busy": "Une autre visite utilise cette salle.",
+      "not_empty": "Seule une visite vide peut être abandonnée.",
+      "moved": "La visite a été déplacée vers un autre patient ; réessayez.",
+      "branch_required": "Choisissez d’abord un cabinet.",
+      "dentist_invalid": "Choisissez un dentiste de ce cabinet.",
+      "room_invalid": "Choisissez une salle active de ce cabinet.",
+      "room_required": "Choisissez la salle de cette visite.",
+      "tooth_required": "Choisissez une dent.",
+      "tooth_not_allowed": "Cet acte ne s’enregistre pas sur une dent.",
+      "surfaces_invalid": "Cette dent n’a pas ces faces.",
+      "currency_mismatch": "Ce prix est dans une autre devise que la visite.",
+      "stale": "La visite a changé depuis son ouverture. Elle a été rechargée — vérifiez puis réessayez.",
+      "not_amendable": "Seule une visite terminée peut être modifiée.",
+      "not_voidable": "Seule une visite terminée peut être annulée.",
+      "amend_no_change": "La modification ne change rien.",
+      "amend_unknown_service": "Un acte n’est plus sur cette visite ; rechargez et réessayez.",
+      "amend_plan_linked": "Un acte ayant réalisé un plan peut être retiré, pas déplacé.",
+      "has_payments": "Cette visite a des paiements : remboursez-les ou déplacez-les avant de l’annuler.",
+      "invalid_cursor": "La liste a changé ; reprenez à la première page."
+    },
+    "record": {
+      "not_removable": "Seuls les éléments saisis dans cette visite peuvent être retirés.",
+      "not_found": "Cet élément n’est plus dans le dossier de ce patient."
+    },
+    "plan": {
+      "not_open": "Ce plan n’est plus ouvert.",
+      "not_cancellable": "Un plan créé dans cette visite se retire, il ne s’annule pas."
+    },
+    "catalog": {
+      "not_found": "Cet élément du catalogue n’existe plus.",
+      "in_use": "Cet élément du catalogue est utilisé.",
+      "inactive": "Cet élément du catalogue est inactif."
+    }
   }
 }

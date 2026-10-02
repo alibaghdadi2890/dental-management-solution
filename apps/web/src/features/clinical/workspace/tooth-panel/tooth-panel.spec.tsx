@@ -259,7 +259,11 @@ describe('ToothPanel', () => {
     expect(panel.getByRole('button', { name: 'Remove Zircon crown' })).toBeTruthy();
     expect(panel.queryByRole('button', { name: 'Remove Root canal' })).toBeNull();
 
+    // Cancelling a plan from an earlier visit asks first (4a follow-up).
     fireEvent.click(panel.getByRole('button', { name: 'Cancel Root canal' }));
+    expect(await screen.findByText('Cancel Root canal?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel plan' }));
+    expect(await screen.findByText('Root canal cancelled')).toBeTruthy();
     fireEvent.click(panel.getByRole('button', { name: 'Resolve Old abscess' }));
     await waitFor(() => {
       expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/plans/${id(22)}/cancel`)).toBeNull();

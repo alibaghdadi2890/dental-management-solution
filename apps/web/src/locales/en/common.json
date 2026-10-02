@@ -31,5 +31,11 @@
     "saving": "Saving…",
     "saved": "Saved just now",
     "failed": "Failed to save — retry"
+  },
+  "roles": {
+    "owner": "Owner",
+    "dentist": "Dentist",
+    "assistant": "Assistant",
+    "frontdesk": "Front desk"
   }
 }

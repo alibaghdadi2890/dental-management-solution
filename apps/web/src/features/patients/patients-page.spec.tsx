@@ -109,7 +109,7 @@ function sessionWith(permissions: Permission[]): Session {
     },
     branch: null,
     branches: [],
-    roleNames: [],
+    roles: [],
     permissions,
     idleTimeoutSeconds: 900,
   };
@@ -147,9 +147,21 @@ function mockApi({
 }: Api = {}) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     const path = url.replace('/api/v1', '');
-    if (path === '/patients/counts')
-      return Promise.resolve(json({ active: 54, notSeen: 54, archived: 3 }));
+    if (path === '/patients/counts') return Promise.resolve(json({ active: 54, archived: 3 }));
     if (path === '/billing/patients/owing-count') return Promise.resolve(json({ count: 7 }));
+    if (path === '/billing/patients/not-seen-count') return Promise.resolve(json({ count: 54 }));
+    if (path.startsWith('/clinical/patients/visit-stats')) {
+      const ids = new URLSearchParams(path.split('?')[1]).get('patientIds')?.split(',') ?? [];
+      return Promise.resolve(
+        json(
+          ids.map((patientId) =>
+            patientId === id(1)
+              ? { patientId, lastVisitDate: '2026-08-12', visitCount: 3 }
+              : { patientId, lastVisitDate: null, visitCount: 0 },
+          ),
+        ),
+      );
+    }
     if (path === '/patients/duplicates') return Promise.resolve(json(duplicates));
     if (path === '/users/practitioners') {
       return Promise.resolve(
@@ -304,7 +316,7 @@ describe('PatientsPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders the number, Age·sex, formatted phone and "—" for Visits and Last visit', async () => {
+  it('renders the number, Age·sex, formatted phone, last visit and visit count', async () => {
     mockApi();
     renderPage();
     const cells = within(await rowOf('Rana Haddad')).getAllByRole('cell');
@@ -313,11 +325,15 @@ describe('PatientsPage', () => {
     expect(cells[1]?.textContent).toContain('Penicillin');
     expect(cells[2]?.textContent).toBe(`${String(age)} · F`);
     expect(cells[3]?.textContent).toBe('03 123 456');
-    expect(cells[4]?.textContent).toBe('—');
+    await waitFor(() => {
+      expect(cells[4]?.textContent).toBe('12 Aug 2026');
+    });
     expect(cells[5]?.textContent).toBe('Dr. Ana Reyes');
-    expect(cells[6]?.textContent).toBe('—');
+    expect(cells[6]?.textContent).toBe('3');
     const sami = within(await rowOf('Sami Khoury')).getAllByRole('cell');
     expect(sami[2]?.textContent).toBe('— · M');
+    expect(sami[4]?.textContent).toBe('—');
+    expect(sami[6]?.textContent).toBe('0');
   });
 
   it('shows "—" for a minor recorded without a phone', async () => {

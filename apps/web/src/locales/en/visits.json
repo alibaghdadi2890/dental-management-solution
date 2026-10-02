@@ -1,4 +1,210 @@
 {
   "title": "Visits",
-  "subtitle": "Visits appear here once a dentist starts one from a patient's record or today's schedule."
+  "subtitle": "{{today}} · {{unpaid}}",
+  "subtitleToday_one": "{{count}} today",
+  "subtitleToday_other": "{{count}} today",
+  "subtitleUnpaid_one": "{{count}} with an open balance",
+  "subtitleUnpaid_other": "{{count}} with an open balance",
+  "subtitleLoading": "Loading…",
+  "exportCsv": "Export CSV",
+  "exportFailed": "Couldn't export the visits: {{reason}}",
+  "paid": "Paid",
+  "tabs": {
+    "label": "Visit views",
+    "all": "All",
+    "in_progress": "In progress",
+    "unpaid": "Unpaid",
+    "voided_amended": "Voided & amended"
+  },
+  "search": {
+    "label": "Search visits",
+    "placeholder": "Patient, visit number or service"
+  },
+  "filters": {
+    "date": "Date",
+    "dentist": "Dentist",
+    "room": "Room",
+    "any": "Any",
+    "clear": "Clear filters",
+    "range": {
+      "today": "Today",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "90d": "Last 90 days",
+      "12m": "Last 12 months",
+      "all": "All time"
+    }
+  },
+  "columns": {
+    "table": "Visits",
+    "visit": "Visit",
+    "date": "Date / time",
+    "patient": "Patient",
+    "dentist": "Dentist",
+    "services": "Services",
+    "total": "Total",
+    "balance": "Balance",
+    "status": "Status"
+  },
+  "status": {
+    "in_progress": "In progress",
+    "paused": "Paused",
+    "completed": "Completed",
+    "amended": "Amended",
+    "voided": "Voided",
+    "discarded": "Discarded"
+  },
+  "footer": {
+    "label": "Pages",
+    "count_one": "{{formatted}} visit",
+    "count_other": "{{formatted}} visits",
+    "billed": "{{amount}} billed",
+    "rows": "Rows",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "states": {
+    "loading": "Loading visits",
+    "errorTitle": "Couldn't load visits",
+    "errorBody": "Check your connection and try again.",
+    "emptyTitle": "No visits recorded yet",
+    "emptyBody": "Visits appear here once a dentist starts one from a patient's record.",
+    "noMatchTitle": "No visits match",
+    "noMatchBody": "Try a wider date range or clear the filters."
+  },
+  "panel": {
+    "eyebrow": "Visit",
+    "voidedBanner": "This visit was voided — {{reason}}. It counts in no balance or report but stays in the patient's history.",
+    "services": "Services",
+    "jaw": "Jaw",
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "total": "Total",
+    "paid": "Paid",
+    "balance": "Balance",
+    "void": "Void",
+    "amend": "Amend",
+    "openRecord": "Open in record",
+    "requestNote": "Only a dentist can void or amend a completed visit.",
+    "requestChange": "Request a change",
+    "requestToast": "Ask {{dentist}} to amend or void this visit"
+  },
+  "trail": {
+    "title": "Audit trail",
+    "loading": "Loading the audit trail",
+    "failed": "Couldn't load the audit trail.",
+    "more": "Show more",
+    "moreFailed": "Couldn't load more entries.",
+    "meta": "{{at}} · {{who}}",
+    "system": "System",
+    "platformAdmin": "Platform admin",
+    "unknownUser": "Former staff member",
+    "actions": {
+      "start": "Visit started",
+      "pause": "Paused",
+      "resume": "Resumed",
+      "update": "Notes or discount changed",
+      "complete": "Visit completed",
+      "completeTotal": "Visit completed · {{total}}",
+      "amend": "Amended — {{reason}}",
+      "amendTotals": "Amended — {{reason}} · {{before}} → {{after}}",
+      "void": "Voided — {{reason}}",
+      "other": "Changed"
+    }
+  },
+  "amend": {
+    "badge": "Amending",
+    "tooth": "Tooth",
+    "toothOf": "Tooth of {{name}}",
+    "surfaces": "Surfaces",
+    "remove": "Remove {{name}}",
+    "restore": "Put back {{name}}",
+    "undo": "Undo",
+    "planHint": "Its treatment plan goes back to planned.",
+    "planLocked": "Performed a plan: it can only be removed",
+    "discount": "Visit discount",
+    "discountMode": "Discount type",
+    "discountValue": "Discount",
+    "mode": {
+      "percent": "%",
+      "amount": "Amount"
+    },
+    "save": "Save amendment",
+    "problem": {
+      "noService": "Keep at least one service — to remove everything, void the visit.",
+      "tooth": "Enter a tooth and only surfaces it has.",
+      "discount": "Enter the discount as a number."
+    },
+    "confirmTitle": "Amend {{number}}?",
+    "confirmBody": "Total changes {{before}} → {{after}}. {{effect}} The original is kept in the audit trail.",
+    "credit": "The patient gets {{amount}} credit.",
+    "charge": "The patient owes {{amount}} more.",
+    "sameTotal": "The total doesn't change.",
+    "reason": "Reason for amendment",
+    "done": "{{number}} amended"
+  },
+  "void": {
+    "title": "Void {{number}}?",
+    "body": "The visit and its {{amount}} charge are removed from balances and reports. Its clinical records stay.",
+    "reason": "Reason for voiding",
+    "ok": "Void visit",
+    "done": "{{number}} voided",
+    "refundTitle": "Refund payments first",
+    "refundBody": "{{number}} has {{amount}} in payments. Refund or move them before voiding the visit.",
+    "refundOk": "Got it"
+  },
+  "history": {
+    "viewLabel": "History view",
+    "views": {
+      "visits": "Visits",
+      "clinical": "Clinical"
+    },
+    "chip": "{{name}} · {{tooth}}",
+    "amendedTimes_one": "Amended once",
+    "amendedTimes_other": "Amended {{count}}×",
+    "unpaid": "Unpaid",
+    "performed": "Services performed",
+    "notes": "Clinical notes",
+    "voided": "Voided — {{reason}}",
+    "visitTotal": "Visit total",
+    "outstanding": "Outstanding",
+    "emptyBody": "This patient’s treatment history starts with the first visit.",
+    "startFirst": "Start first visit",
+    "more": "Load more"
+  },
+  "clinical": {
+    "loading": "Loading the clinical record",
+    "failed": "Couldn’t load the clinical record.",
+    "emptyTitle": "No clinical history yet",
+    "emptyBody": "Diagnoses, plans and treatment appear here once they are recorded in a visit.",
+    "filter": {
+      "active": "Active",
+      "planned": "Planned",
+      "resolved": "Resolved"
+    },
+    "tooth": "Tooth",
+    "allTeeth": "All teeth",
+    "needsAttention_one": "Needs attention · {{count}}",
+    "needsAttention_other": "Needs attention · {{count}}",
+    "nothingOpen": "Nothing open.",
+    "completed_one": "Completed treatment · {{count}}",
+    "completed_other": "Completed treatment · {{count}}",
+    "showCompleted": "Show completed treatment",
+    "unplanned": "Treatment without a diagnosis or plan",
+    "serviceOn": "{{name}} · {{date}}",
+    "noPlan": "No plan yet",
+    "next": "Next: {{name}} ({{price}})",
+    "voidedVisit": "voided visit",
+    "step": {
+      "diagnosed": "Diagnosed",
+      "planned": "Planned {{name}}",
+      "performed": "Performed",
+      "cancelled": "Cancelled",
+      "resolved": "Resolved"
+    }
+  },
+  "chartTab": {
+    "loading": "Loading the chart",
+    "failed": "Couldn’t load the chart."
+  }
 }

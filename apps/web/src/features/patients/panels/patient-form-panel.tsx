@@ -158,6 +158,7 @@ function PatientForm({
   const queryClient = useQueryClient();
   const { openPatient } = usePatientNavigation();
   const canRecordBalance = usePermission('payment:write');
+  const canStartVisit = usePermission('visit:write');
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -238,12 +239,23 @@ function PatientForm({
       if (editing) {
         toast(t('form.updated'));
       } else {
-        toast(t('form.created'), {
-          actionLabel: t('form.openRecord'),
-          onAction: () => {
-            openPatient(id);
-          },
-        });
+        // Those who can start a visit get straight to it (4a follow-up): the record, popover open.
+        toast(
+          t('form.created'),
+          canStartVisit
+            ? {
+                actionLabel: t('form.startVisit'),
+                onAction: () => {
+                  openPatient(id, { startVisit: true });
+                },
+              }
+            : {
+                actionLabel: t('form.openRecord'),
+                onAction: () => {
+                  openPatient(id);
+                },
+              },
+        );
       }
     } catch (error) {
       const failure = failureOf(error, sent);

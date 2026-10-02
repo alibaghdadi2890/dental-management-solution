@@ -276,7 +276,8 @@
       "contactIsPatient": "This contact is the patient being registered",
       "contactAlreadyPatient": "This contact is already a patient — search for their record instead"
     },
-    "archivedWhileEditing": "This patient was archived while you were editing. Your changes are kept here, but they can’t be saved until the record is restored."
+    "archivedWhileEditing": "This patient was archived while you were editing. Your changes are kept here, but they can’t be saved until the record is restored.",
+    "startVisit": "Start visit"
   },
   "merge": {
     "eyebrow": "Merge duplicates",
@@ -370,6 +371,9 @@
     "tabs": {
       "label": "Patient record",
       "overview": "Overview",
+      "history": "Visits & history",
+      "chart": "Dental chart",
+      "balance": "Balance & payments",
       "information": "Patient information"
     },
     "summary": {
@@ -423,7 +427,8 @@
       "jaw": "Jaw",
       "none": "No visits recorded yet.",
       "loading": "Loading the last visit…",
-      "failed": "Couldn’t load the last visit"
+      "failed": "Couldn’t load the last visit",
+      "all": "All visits →"
     },
     "dental": {
       "title": "Dental status",

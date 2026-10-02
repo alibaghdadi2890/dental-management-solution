@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { useAnyGroupDirty } from '../save-groups-context';
 import { useVisitMutations } from '../visit-mutations';
 import { useVisitTimer } from '../use-visit-timer';
+import { apiErrorMessage } from '@/lib/api-error-message';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -97,7 +98,7 @@ export function VisitHeader({
       : ([resume, 'workspace.resumeFailed'] as const);
     mutation.mutate(undefined, {
       onError: (error) => {
-        toast(t(failed, { reason: error.message }), { tone: 'danger' });
+        toast(t(failed, { reason: apiErrorMessage(error, i18n) }), { tone: 'danger' });
       },
     });
   };

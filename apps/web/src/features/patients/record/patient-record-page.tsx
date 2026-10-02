@@ -9,7 +9,10 @@ import { TabPanel } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
+import { BalanceTab } from '@/features/billing/balance-tab';
 import { PostVisitSummaryDialog } from '@/features/clinical/dialogs/post-visit-summary-dialog';
+import { ChartTab } from '@/features/clinical/record/chart-tab';
+import { HistoryTab } from '@/features/clinical/record/history-tab';
 import { ApiError } from '@/lib/api';
 import { useContactDrafts } from '../contact-drafts';
 import { patientQuery } from '../patients-api';
@@ -18,7 +21,13 @@ import { InformationTab } from './information-tab';
 import { OverviewTab } from './overview-tab';
 import { BackToPatients, RecordHeader } from './record-header';
 import { AddContactPanel } from './add-contact-panel';
-import type { RecordPanel, RecordTab } from './record-search';
+import {
+  type HistoryView,
+  type RecordPanel,
+  type RecordSearch,
+  type RecordTab,
+  useRecordTabs,
+} from './record-search';
 
 type Tenant = NonNullable<Session['tenant']>;
 
@@ -27,10 +36,15 @@ interface RecordProps {
   tab: RecordTab;
   /** The open right panel (`?panel=`), if any. */
   panel: RecordPanel | undefined;
+  /** Visits & history's view and the visit it expands (4b). */
+  view?: HistoryView | undefined;
+  visitId?: string | undefined;
 }
 
 interface RecordNavigation {
   onTab: (tab: RecordTab) => void;
+  /** Visits & history: switch the view, or open one visit in the Visits view. */
+  onHistory: (next: { view: HistoryView; visitId?: string | undefined }) => void;
   onPanel: (panel: RecordPanel | undefined) => void;
   /** The patient's name in the header, for focus after the post-visit summary. */
   headingRef: RefObject<HTMLHeadingElement | null>;
@@ -45,7 +59,7 @@ interface RecordNavigation {
  * `payment:read`, and focus goes to the patient's name when it closes; without it, a "Visit
  * recorded" toast says so. Either way the state is then cleared, so a refresh doesn't repeat it.
  */
-export function PatientRecordScreen({ patientId, tab, panel }: RecordProps) {
+export function PatientRecordScreen({ patientId, tab, panel, view, visitId }: RecordProps) {
   const { t } = useTranslation('clinical');
   const navigate = useNavigate();
   const toast = useToast();
@@ -55,7 +69,7 @@ export function PatientRecordScreen({ patientId, tab, panel }: RecordProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   // The visit already announced by a toast: an effect may run twice for one arrival.
   const toasted = useRef<string | null>(null);
-  const go = (search: { tab: RecordTab; panel?: RecordPanel | undefined }) => {
+  const go = (search: Omit<RecordSearch, 'startVisit'>) => {
     void navigate({ to: '/patients/$patientId', params: { patientId }, search, replace: true });
   };
   const clearPostVisit = useCallback(() => {
@@ -83,9 +97,14 @@ export function PatientRecordScreen({ patientId, tab, panel }: RecordProps) {
         patientId={patientId}
         tab={tab}
         panel={panel}
+        view={view}
+        visitId={visitId}
         headingRef={headingRef}
         onTab={(next) => {
           go({ tab: next });
+        }}
+        onHistory={(next) => {
+          go({ tab: 'history', ...next });
         }}
         onPanel={(next) => {
           go({ tab, panel: next });
@@ -119,9 +138,12 @@ function PatientRecordPage(props: RecordProps & RecordNavigation) {
 
 function PatientRecord({
   patientId,
-  tab,
+  tab: requestedTab,
   panel,
+  view,
+  visitId,
   onTab,
+  onHistory,
   onPanel,
   headingRef,
   tenant,
@@ -129,6 +151,8 @@ function PatientRecord({
   const { t, i18n } = useTranslation(['patients', 'common']);
   const locale = i18n.resolvedLanguage ?? 'en';
   const tabsId = useId();
+  // A tab the session may not open (a shared link) shows the Overview.
+  const tab = useRecordTabs().includes(requestedTab) ? requestedTab : 'overview';
   const patient = useQuery(patientQuery(patientId));
   const canWrite = usePermission('patient:write');
   // One set of contact actions for the Contacts & family card and the Add contact panel, so one
@@ -203,7 +227,22 @@ function PatientRecord({
               onComplete={() => {
                 onTab('information');
               }}
+              onAllVisits={() => {
+                onTab('history');
+              }}
             />
+          ) : tab === 'history' ? (
+            <HistoryTab
+              patient={patient.data}
+              locale={locale}
+              view={view ?? 'visits'}
+              visitId={visitId}
+              onNavigate={onHistory}
+            />
+          ) : tab === 'chart' ? (
+            <ChartTab patient={patient.data} />
+          ) : tab === 'balance' ? (
+            <BalanceTab patientId={patientId} currency={tenant.currency} locale={locale} />
           ) : (
             <InformationTab
               patient={patient.data}

@@ -1,4 +1,210 @@
 {
-  "title": "Consultations",
-  "subtitle": "Les consultations apparaissent ici dès qu’un dentiste en démarre une depuis le dossier d’un patient ou le planning du jour."
+  "title": "Visites",
+  "subtitle": "{{today}} · {{unpaid}}",
+  "subtitleToday_one": "{{count}} aujourd'hui",
+  "subtitleToday_other": "{{count}} aujourd'hui",
+  "subtitleUnpaid_one": "{{count}} avec un solde dû",
+  "subtitleUnpaid_other": "{{count}} avec un solde dû",
+  "subtitleLoading": "Chargement…",
+  "exportCsv": "Exporter en CSV",
+  "exportFailed": "Impossible d'exporter les visites : {{reason}}",
+  "paid": "Payé",
+  "tabs": {
+    "label": "Vues des visites",
+    "all": "Toutes",
+    "in_progress": "En cours",
+    "unpaid": "Impayées",
+    "voided_amended": "Annulées et modifiées"
+  },
+  "search": {
+    "label": "Rechercher des visites",
+    "placeholder": "Patient, numéro de visite ou acte"
+  },
+  "filters": {
+    "date": "Date",
+    "dentist": "Dentiste",
+    "room": "Salle",
+    "any": "Tous",
+    "clear": "Effacer les filtres",
+    "range": {
+      "today": "Aujourd'hui",
+      "7d": "7 derniers jours",
+      "30d": "30 derniers jours",
+      "90d": "90 derniers jours",
+      "12m": "12 derniers mois",
+      "all": "Toutes les dates"
+    }
+  },
+  "columns": {
+    "table": "Visites",
+    "visit": "Visite",
+    "date": "Date / heure",
+    "patient": "Patient",
+    "dentist": "Dentiste",
+    "services": "Actes",
+    "total": "Total",
+    "balance": "Solde",
+    "status": "Statut"
+  },
+  "status": {
+    "in_progress": "En cours",
+    "paused": "En pause",
+    "completed": "Terminée",
+    "amended": "Modifiée",
+    "voided": "Annulée",
+    "discarded": "Abandonnée"
+  },
+  "footer": {
+    "label": "Pages",
+    "count_one": "{{formatted}} visite",
+    "count_other": "{{formatted}} visites",
+    "billed": "{{amount}} facturés",
+    "rows": "Lignes",
+    "previous": "Précédent",
+    "next": "Suivant"
+  },
+  "states": {
+    "loading": "Chargement des visites",
+    "errorTitle": "Impossible de charger les visites",
+    "errorBody": "Vérifiez votre connexion et réessayez.",
+    "emptyTitle": "Aucune visite enregistrée",
+    "emptyBody": "Les visites apparaissent ici dès qu'un dentiste en commence une depuis le dossier d'un patient.",
+    "noMatchTitle": "Aucune visite ne correspond",
+    "noMatchBody": "Élargissez la période ou effacez les filtres."
+  },
+  "panel": {
+    "eyebrow": "Visite",
+    "voidedBanner": "Cette visite a été annulée — {{reason}}. Elle ne compte dans aucun solde ni rapport mais reste dans l'historique du patient.",
+    "services": "Actes",
+    "jaw": "Arcade",
+    "subtotal": "Sous-total",
+    "discount": "Remise",
+    "total": "Total",
+    "paid": "Payé",
+    "balance": "Solde",
+    "void": "Annuler",
+    "amend": "Modifier",
+    "openRecord": "Ouvrir le dossier",
+    "requestNote": "Seul un dentiste peut annuler ou modifier une visite terminée.",
+    "requestChange": "Demander une modification",
+    "requestToast": "Demandez à {{dentist}} de modifier ou d'annuler cette visite"
+  },
+  "trail": {
+    "title": "Journal d'audit",
+    "loading": "Chargement du journal d'audit",
+    "failed": "Impossible de charger le journal d'audit.",
+    "more": "Afficher plus",
+    "moreFailed": "Impossible de charger plus d'entrées.",
+    "meta": "{{at}} · {{who}}",
+    "system": "Système",
+    "platformAdmin": "Administrateur de la plateforme",
+    "unknownUser": "Ancien membre du personnel",
+    "actions": {
+      "start": "Visite commencée",
+      "pause": "Mise en pause",
+      "resume": "Reprise",
+      "update": "Notes ou remise modifiées",
+      "complete": "Visite terminée",
+      "completeTotal": "Visite terminée · {{total}}",
+      "amend": "Modifiée — {{reason}}",
+      "amendTotals": "Modifiée — {{reason}} · {{before}} → {{after}}",
+      "void": "Annulée — {{reason}}",
+      "other": "Modifiée"
+    }
+  },
+  "amend": {
+    "badge": "Modification",
+    "tooth": "Dent",
+    "toothOf": "Dent de {{name}}",
+    "surfaces": "Faces",
+    "remove": "Retirer {{name}}",
+    "restore": "Remettre {{name}}",
+    "undo": "Annuler",
+    "planHint": "Son plan de traitement redevient planifié.",
+    "planLocked": "A réalisé un plan : il ne peut qu'être retiré",
+    "discount": "Remise de la visite",
+    "discountMode": "Type de remise",
+    "discountValue": "Remise",
+    "mode": {
+      "percent": "%",
+      "amount": "Montant"
+    },
+    "save": "Enregistrer la modification",
+    "problem": {
+      "noService": "Gardez au moins un acte — pour tout retirer, annulez la visite.",
+      "tooth": "Saisissez une dent et seulement les faces qu'elle a.",
+      "discount": "Saisissez la remise sous forme de nombre."
+    },
+    "confirmTitle": "Modifier {{number}} ?",
+    "confirmBody": "Le total passe de {{before}} à {{after}}. {{effect}} L'original reste dans le journal d'audit.",
+    "credit": "Le patient reçoit un avoir de {{amount}}.",
+    "charge": "Le patient doit {{amount}} de plus.",
+    "sameTotal": "Le total ne change pas.",
+    "reason": "Motif de la modification",
+    "done": "{{number}} modifiée"
+  },
+  "void": {
+    "title": "Annuler {{number}} ?",
+    "body": "La visite et ses {{amount}} facturés sont retirés des soldes et des rapports. Ses données cliniques restent.",
+    "reason": "Motif de l'annulation",
+    "ok": "Annuler la visite",
+    "done": "{{number}} annulée",
+    "refundTitle": "Remboursez d'abord les paiements",
+    "refundBody": "{{number}} a {{amount}} de paiements. Remboursez-les ou déplacez-les avant d'annuler la visite.",
+    "refundOk": "Compris"
+  },
+  "history": {
+    "viewLabel": "Vue de l’historique",
+    "views": {
+      "visits": "Visites",
+      "clinical": "Clinique"
+    },
+    "chip": "{{name}} · {{tooth}}",
+    "amendedTimes_one": "Modifiée une fois",
+    "amendedTimes_other": "Modifiée {{count}} fois",
+    "unpaid": "Impayée",
+    "performed": "Actes réalisés",
+    "notes": "Notes cliniques",
+    "voided": "Annulée — {{reason}}",
+    "visitTotal": "Total de la visite",
+    "outstanding": "Reste dû",
+    "emptyBody": "L’historique des soins de ce patient commence avec sa première visite.",
+    "startFirst": "Commencer la première visite",
+    "more": "Charger plus"
+  },
+  "clinical": {
+    "loading": "Chargement du dossier clinique",
+    "failed": "Impossible de charger le dossier clinique.",
+    "emptyTitle": "Pas encore d’historique clinique",
+    "emptyBody": "Les diagnostics, plans et soins apparaissent ici dès qu’ils sont enregistrés dans une visite.",
+    "filter": {
+      "active": "Actifs",
+      "planned": "Planifiés",
+      "resolved": "Résolus"
+    },
+    "tooth": "Dent",
+    "allTeeth": "Toutes les dents",
+    "needsAttention_one": "À traiter · {{count}}",
+    "needsAttention_other": "À traiter · {{count}}",
+    "nothingOpen": "Rien en cours.",
+    "completed_one": "Soins terminés · {{count}}",
+    "completed_other": "Soins terminés · {{count}}",
+    "showCompleted": "Afficher les soins terminés",
+    "unplanned": "Soins sans diagnostic ni plan",
+    "serviceOn": "{{name}} · {{date}}",
+    "noPlan": "Pas encore de plan",
+    "next": "Suivant : {{name}} ({{price}})",
+    "voidedVisit": "visite annulée",
+    "step": {
+      "diagnosed": "Diagnostiqué",
+      "planned": "Planifié {{name}}",
+      "performed": "Réalisé",
+      "cancelled": "Annulé",
+      "resolved": "Résolu"
+    }
+  },
+  "chartTab": {
+    "loading": "Chargement du schéma",
+    "failed": "Impossible de charger le schéma."
+  }
 }

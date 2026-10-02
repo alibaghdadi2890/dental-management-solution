@@ -276,7 +276,8 @@
       "contactIsPatient": "Ce contact est le patient en cours d’enregistrement",
       "contactAlreadyPatient": "Ce contact est déjà un patient — recherchez plutôt son dossier"
     },
-    "archivedWhileEditing": "Ce patient a été archivé pendant votre modification. Vos changements restent ici, mais ne pourront être enregistrés qu’une fois le dossier restauré."
+    "archivedWhileEditing": "Ce patient a été archivé pendant votre modification. Vos changements restent ici, mais ne pourront être enregistrés qu’une fois le dossier restauré.",
+    "startVisit": "Commencer une visite"
   },
   "merge": {
     "eyebrow": "Fusionner les doublons",
@@ -370,6 +371,9 @@
     "tabs": {
       "label": "Dossier patient",
       "overview": "Vue d’ensemble",
+      "history": "Visites et historique",
+      "chart": "Schéma dentaire",
+      "balance": "Solde et paiements",
       "information": "Informations patient"
     },
     "summary": {
@@ -423,7 +427,8 @@
       "jaw": "Arcade",
       "none": "Aucune visite enregistrée pour l’instant.",
       "loading": "Chargement de la dernière visite…",
-      "failed": "Impossible de charger la dernière visite"
+      "failed": "Impossible de charger la dernière visite",
+      "all": "Toutes les visites →"
     },
     "dental": {
       "title": "État dentaire",

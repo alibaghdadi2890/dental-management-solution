@@ -44,10 +44,17 @@ function MiniGlyph({ filled }: { filled: 'centre' | 'all' }) {
  * The chart legend (spec §Interactions → Legend), in two labelled groups: what the tooth's fill
  * says (its treatment), then the markers layered on top, each in precedence order. Simple mode
  * collapses "Treated surface" and "Whole tooth" into "Treated". A child's dentition adds the
- * primary and not-erupted markers. Every item is one fixed height, so both groups are too. Wraps
+ * primary and not-erupted markers; outside a visit "Treated today" is left out. Every item is one fixed height, so both groups are too. Wraps
  * and aligns to the inline end.
  */
-export function ChartLegend({ dentition }: { dentition: DentitionStage }) {
+export function ChartLegend({
+  dentition,
+  showToday = true,
+}: {
+  dentition: DentitionStage;
+  /** "Treated today" means nothing outside a visit (the record's chart tab, 4b D17). */
+  showToday?: boolean;
+}) {
   const { t } = useTranslation('clinical');
   const { mode, notation } = useChartSettings();
 
@@ -78,6 +85,7 @@ export function ChartLegend({ dentition }: { dentition: DentitionStage }) {
           treatedToday,
         ];
 
+  const fills = showToday ? treatment : treatment.filter((item) => item !== treatedToday);
   const markers: LegendItem[] = [
     {
       label: t('legend.diagnosis'),
@@ -129,7 +137,7 @@ export function ChartLegend({ dentition }: { dentition: DentitionStage }) {
 
   return (
     <div className="flex flex-wrap justify-end gap-3">
-      {group(t('legend.treatment'), treatment)}
+      {group(t('legend.treatment'), fills)}
       {group(t('legend.markers'), markers)}
     </div>
   );

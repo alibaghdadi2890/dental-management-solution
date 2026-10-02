@@ -16,6 +16,7 @@ import { EmptyState, ErrorState } from '@/components/ui/list';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { patientQuery } from '@/features/patients/patients-api';
+import { useStaffNames } from '@/features/users/use-staff-names';
 import { ApiError } from '@/lib/api';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
@@ -70,9 +71,10 @@ export function VisitWorkspaceScreen({
  * (404) reads "Visit not found", any other failure offers Try again. A visit that is no longer
  * live — completed, or discarded from this page — goes to the patient's record, and so does one
  * that turns 404 on a refetch (discarded elsewhere, W6): nothing is charted into a dead visit.
- * A visit that completes while open here (the summary dialog's Complete, or elsewhere) lands on
- * the record with its post-visit summary (W16, `HistoryState.postVisit`); this redirect is the
- * only navigation after Complete. One opened already completed just shows the record.
+ * A visit completed here (the summary dialog's Complete) lands on the record with its
+ * post-visit summary (W16, `HistoryState.postVisit`); this redirect is the only navigation after
+ * Complete. One completed by someone else while open here stays, read-only, with a banner naming
+ * who completed it and when (4b). One opened already finished just shows the record.
  */
 function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothCode | undefined }) {
   const { t } = useTranslation(['clinical', 'common']);
@@ -84,10 +86,13 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
 
   if (!session?.tenant) return null;
   const notFound = visit.error instanceof ApiError && visit.error.status === 404;
-  if (
-    visit.data &&
-    (notFound || visit.data.status === 'completed' || visit.data.status === 'discarded')
-  ) {
+  // Completed by someone else while open here: the workspace stays, read-only, and says so.
+  const completedElsewhere =
+    seenLive &&
+    !notFound &&
+    visit.data?.status === 'completed' &&
+    visit.data.completedBy !== session.user.id;
+  if (visit.data && (notFound || !live) && !completedElsewhere) {
     const completedHere = seenLive && !notFound && visit.data.status === 'completed';
     return (
       <Navigate
@@ -158,8 +163,11 @@ function Workspace({
   tenant: Tenant;
   tooth: ToothCode | undefined;
 }) {
-  const { t } = useTranslation('clinical');
-  const canWrite = usePermission('visit:write');
+  const { t, i18n } = useTranslation('clinical');
+  // A visit completed elsewhere while open here is shown read-only (4b).
+  const live = visit.status === 'in_progress' || visit.status === 'paused';
+  const canWrite = usePermission('visit:write') && live;
+  const { names } = useStaffNames();
   const patient = useQuery(patientQuery(visit.patientId));
   const chart = useQuery(chartQuery(visit.patientId));
   const selection = useToothSelectionState();
@@ -221,6 +229,37 @@ function Workspace({
             tenant={tenant}
             canWrite={canWrite}
           />
+          {visit.status === 'completed' && visit.completedAt !== null && (
+            <div
+              role="status"
+              className="flex flex-wrap items-center gap-2 border-b border-primary-tint-border bg-primary-tint px-5 py-2.5 text-[13px] text-primary"
+            >
+              <span>
+                {t('workspace.completedElsewhere', {
+                  name:
+                    (visit.completedBy && names.get(visit.completedBy)) ||
+                    t('workspace.someoneElse'),
+                  time: new Intl.DateTimeFormat(
+                    i18n.resolvedLanguage === 'en' ? 'en-GB' : i18n.resolvedLanguage,
+                    {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hourCycle: 'h23',
+                      timeZone: tenant.timeZone,
+                    },
+                  ).format(new Date(visit.completedAt)),
+                })}
+              </span>
+              <Link
+                to="/patients/$patientId"
+                params={{ patientId: visit.patientId }}
+                state={{ postVisit: visit.id }}
+                className="font-medium underline"
+              >
+                {t('workspace.viewSummary')}
+              </Link>
+            </div>
+          )}
           <div className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-auto">
             <div className="min-w-0 flex-[1_1_600px] px-5 pt-[18px] pb-5">
               <TodayDivider />

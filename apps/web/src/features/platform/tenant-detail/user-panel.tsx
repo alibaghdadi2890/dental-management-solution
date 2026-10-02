@@ -28,6 +28,7 @@ import {
   type UserForm,
   userFormFrom,
 } from './user-form';
+import { useRoleLabel } from '@/features/users/role-label';
 
 type PanelError = UserFieldError | 'emailTaken' | 'lastOwner';
 type TextField = 'displayName' | 'email' | 'title' | 'phone';
@@ -48,6 +49,7 @@ export function UserPanel({
   const confirm = useConfirm();
   const queryClient = useQueryClient();
   const roles = useQuery(rolesQuery(tenantId));
+  const roleLabel = useRoleLabel();
   const branches = useQuery(branchesQuery(tenantId));
   const [initial] = useState<UserForm>(() => (user ? userFormFrom(user) : EMPTY_USER_FORM));
   const [form, setForm] = useState(initial);
@@ -195,7 +197,7 @@ export function UserPanel({
       <Eyebrow className="mt-2">{t('users.panel.sections.access')}</Eyebrow>
       <ChipCheckboxGroup
         label={t('users.fields.roles')}
-        options={(roles.data ?? []).map((role) => ({ value: role.key, label: role.name }))}
+        options={(roles.data ?? []).map((role) => ({ value: role.key, label: roleLabel(role) }))}
         selected={form.roleKeys}
         onToggle={(key) => {
           edit('roleKeys', toggle(form.roleKeys, key));
