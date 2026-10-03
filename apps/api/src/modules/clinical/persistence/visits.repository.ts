@@ -92,6 +92,23 @@ const COUNTED_STATUS_LIST = sql.raw(
 export class VisitsRepository {
   constructor(private readonly db: TenantDb) {}
 
+  /** Display numbers and local dates of `ids` (any status), in no particular order. */
+  numbersFor(
+    ids: readonly string[],
+  ): Promise<{ visitId: string; displayNumber: number; localDate: string }[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.db.run((tx) =>
+      tx
+        .select({
+          visitId: visits.id,
+          displayNumber: visits.displayNumber,
+          localDate: visits.localDate,
+        })
+        .from(visits)
+        .where(inArray(visits.id, [...ids])),
+    );
+  }
+
   /** A visit that isn't discarded: a discarded visit reads as not found everywhere (W4). */
   findById(id: string): Promise<StoredVisit | undefined> {
     return this.db.run(async (tx) => {

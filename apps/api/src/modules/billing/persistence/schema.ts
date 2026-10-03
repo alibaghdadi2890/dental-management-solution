@@ -1,6 +1,13 @@
-import { LEDGER_ENTRY_KINDS, VISIT_LEDGER_KINDS } from '@dcm/contracts';
+import {
+  LEDGER_ENTRY_KINDS,
+  PAYMENT_KINDS,
+  PAYMENT_METHODS,
+  VISIT_LEDGER_KINDS,
+} from '@dcm/contracts';
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
+  boolean,
   char,
   check,
   date,
@@ -137,6 +144,149 @@ export const ledgerEntryLines = pgTable(
     }),
     check('ledger_entry_lines_position_positive', sql`${table.position} >= 1`),
     check('ledger_entry_lines_amount_non_negative', sql`${table.amount} >= 0`),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/** Feature 5 (ADR-0027): the values of `PAYMENT_KINDS` / `PAYMENT_METHODS` in contracts. */
+export const paymentKind = pgEnum('payment_kind', PAYMENT_KINDS);
+export const paymentMethod = pgEnum('payment_method', PAYMENT_METHODS);
+/** `allocation`: a new source's first cover; `credit_applied`: existing credit used later;
+ * `release`: an allocation undone (negative). */
+export const allocationKind = pgEnum('allocation_kind', [
+  'allocation',
+  'credit_applied',
+  'release',
+]);
+
+/**
+ * Payments, refunds and voids on a patient's account (feature 5, spec P1–P11). Each row posts one
+ * ledger entry (`ledger_entry_id`: `payment` negative, `payment_refund` / `payment_void`
+ * positive), so the ledger stays the balance. Append-only like the ledger: corrections are new
+ * rows (`reverses_payment_id`); only the merge job may re-point `patient_id`.
+ *
+ * A household payment (B5) is one row per paid account sharing `receipt_number` and
+ * `household_group_id`. Refunds and voids carry their payment's receipt number. A replayed
+ * `Idempotency-Key` finds its rows by `idempotency_key`, under a lock on the key (P11).
+ */
+export const payments = pgTable(
+  'payments',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    patientId: uuid().notNull(),
+    kind: paymentKind().notNull(),
+    amount: money().notNull(),
+    currency: char({ length: 3 }).notNull(),
+    method: paymentMethod().notNull(),
+    paidAt: date().notNull(),
+    reference: text(),
+    note: text(),
+    /** Required for a refund or void (the audit entry carries it too). */
+    reason: text(),
+    receiptNumber: integer().notNull(),
+    householdGroupId: uuid(),
+    /** The contact who paid; null = the patient. No foreign key: `patients` owns contacts. */
+    payerContactId: uuid(),
+    /** The payment a refund or void reverses. */
+    reversesPaymentId: uuid(),
+    ledgerEntryId: uuid().notNull(),
+    idempotencyKey: uuid(),
+    /** The account's balance (tenant currency) right after a payment; the "partial" pill. */
+    balanceAfter: numeric({ precision: 20, scale: 2 }),
+    /** The branch it was recorded in, for later reports; null for a platform admin without one. */
+    branchId: uuid(),
+    /** The auth user id of the actor (CLAUDE.md §7). */
+    recordedBy: uuid().notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('payments_tenant_idx').on(table.tenantId),
+    index('payments_patient_idx').on(table.tenantId, table.patientId),
+    index('payments_paid_at_idx').on(table.tenantId, table.paidAt, table.createdAt),
+    unique('payments_tenant_id_unique').on(table.tenantId, table.id),
+    unique('payments_ledger_entry_unique').on(table.tenantId, table.ledgerEntryId),
+    // Not unique: a household receipt has one row per patient, and a merge may bring two of them
+    // onto one patient. The counter keeps numbers unique; the key lock keeps replays single.
+    index('payments_receipt_idx')
+      .on(table.tenantId, table.receiptNumber)
+      .where(sql`${table.reversesPaymentId} is null`),
+    index('payments_idempotency_idx')
+      .on(table.tenantId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
+    index('payments_reverses_idx')
+      .on(table.tenantId, table.reversesPaymentId)
+      .where(sql`${table.reversesPaymentId} is not null`),
+    foreignKey({
+      name: 'payments_ledger_entry_fk',
+      columns: [table.tenantId, table.ledgerEntryId],
+      foreignColumns: [ledgerEntries.tenantId, ledgerEntries.id],
+    }),
+    foreignKey({
+      name: 'payments_reverses_fk',
+      columns: [table.tenantId, table.reversesPaymentId],
+      foreignColumns: [table.tenantId, table.id],
+    }),
+    check('payments_amount_positive', sql`${table.amount} > 0`),
+    // Compared as text, like the ledger checks: the enum is created in the same migration run.
+    check(
+      'payments_reverses_iff_correction',
+      sql`(${table.reversesPaymentId} is not null) = (${table.kind}::text <> 'payment')`,
+    ),
+    check(
+      'payments_reason_iff_correction',
+      sql`(${table.reason} is not null) = (${table.kind}::text <> 'payment')`,
+    ),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/** The tenant's receipt sequence (`RCT-`, P10), minted like `visit_counters`. */
+export const paymentCounters = pgTable(
+  'payment_counters',
+  {
+    tenantId: tenantIdColumn().primaryKey(),
+    lastValue: integer().notNull(),
+    ...timestamps(),
+  },
+  () => [tenantIsolationPolicy()],
+);
+
+/**
+ * Which charge (`target_entry_id`: an opening balance, a debit adjustment or a visit's first
+ * entry) the money of a source (`source_entry_id`: a payment or a credit entry) covers (P2, P4).
+ * Append-only and signed: a release is a negative row, so the current allocation of a pair is
+ * Σ amount. `seq` orders rows written in one transaction (their `created_at` is the same).
+ */
+export const paymentAllocations = pgTable(
+  'payment_allocations',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    seq: bigint({ mode: 'number' }).generatedAlwaysAsIdentity(),
+    sourceEntryId: uuid().notNull(),
+    targetEntryId: uuid().notNull(),
+    amount: money().notNull(),
+    kind: allocationKind().notNull(),
+    /** B4: chosen in "Apply to a specific visit". */
+    manual: boolean().notNull().default(false),
+    ...timestamps(),
+  },
+  (table) => [
+    index('payment_allocations_tenant_idx').on(table.tenantId),
+    index('payment_allocations_source_idx').on(table.tenantId, table.sourceEntryId),
+    index('payment_allocations_target_idx').on(table.tenantId, table.targetEntryId),
+    foreignKey({
+      name: 'payment_allocations_source_fk',
+      columns: [table.tenantId, table.sourceEntryId],
+      foreignColumns: [ledgerEntries.tenantId, ledgerEntries.id],
+    }),
+    foreignKey({
+      name: 'payment_allocations_target_fk',
+      columns: [table.tenantId, table.targetEntryId],
+      foreignColumns: [ledgerEntries.tenantId, ledgerEntries.id],
+    }),
+    check('payment_allocations_amount_non_zero', sql`${table.amount} <> 0`),
     tenantIsolationPolicy(),
   ],
 );

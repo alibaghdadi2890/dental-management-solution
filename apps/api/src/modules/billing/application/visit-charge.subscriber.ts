@@ -22,6 +22,7 @@ import { LedgerEntriesRepository } from '../persistence/ledger-entries.repositor
 import { VisitHasPaymentsError } from '../domain/visit-payment-errors';
 import { BillingService } from './billing.service';
 import { LedgerWriter } from './ledger-writer';
+import { Settlement } from './settlement';
 
 /**
  * The visit's side of the ledger, as in-transaction handlers of `clinical`'s visit events: they
@@ -37,6 +38,9 @@ import { LedgerWriter } from './ledger-writer';
  *   `visit_charge_reversal`, nothing when that nets to zero — or vetoes the void when payments
  *   sit on the visit (ADR-0026).
  *
+ * Each entry is followed by a settle (feature 5, P4): credit covers a new charge, and an amount
+ * taken off a covered visit is released and re-applied.
+ *
  * Adjustments and reversals are dated the tenant's today and carry the reason, but no lines: the
  * before/after is `clinical`'s `visit_amendments` row (D7). Not gated by `payment:write`: the
  * trigger already required `visit:write`, `visit:amend` or `visit:void`.
@@ -51,6 +55,7 @@ export class VisitChargeSubscriber {
     private readonly billing: BillingService,
     private readonly entries: LedgerEntriesRepository,
     private readonly writer: LedgerWriter,
+    private readonly settlement: Settlement,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -79,6 +84,10 @@ export class VisitChargeSubscriber {
   @OnDomainEventInTransaction(VISIT_VOIDED)
   async onVisitVoided(event: VisitVoided): Promise<void> {
     const { visitId, patientId, currency, reason } = event.payload;
+    // Under the account lock, so a payment can't land on the visit between the check and the
+    // reversal (ADR-0026, P8).
+    await this.patients.lockForDependentWrite(patientId);
+    await this.settlement.lock([patientId]);
     if (toCents(await this.billing.paidOn(visitId)) > 0n) {
       throw new VisitHasPaymentsError(
         'This visit has payments; refund or move them before voiding it',
@@ -124,6 +133,8 @@ export class VisitChargeSubscriber {
         currency: facts.currency,
       })),
     );
+    // Existing credit covers the new charge at once (P4).
+    await this.settlement.settle(facts.patientId);
   }
 
   /** An adjustment or reversal on the tenant's today; `amend`/`void` hold the patient lock. */
@@ -141,5 +152,8 @@ export class VisitChargeSubscriber {
       note: null,
       createdBy: this.context.requireUserId(),
     });
+    // An amendment down (or a void) releases what payments covered above the new charge; the
+    // freed money covers other open charges or stays as credit (P4).
+    await this.settlement.settle(entry.patientId);
   }
 }

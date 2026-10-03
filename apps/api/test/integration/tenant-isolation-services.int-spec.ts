@@ -383,6 +383,99 @@ describe('tenant isolation through the public services', () => {
       expect(aLedger.rows).toEqual([{ n: 0 }]);
     });
 
+    it("payments: B's payments, receipts and allocations are not reachable from A", async () => {
+      const bPatient = (
+        await admin
+          .post('/api/v1/billing/opening-balances')
+          .set('X-Tenant-Id', b.tenant.id)
+          .send({
+            patient: { fullName: 'Bravo Payer', phone: '03 123 457' },
+            openingBalance: { amount: '90.00', asOf: '2026-01-15' },
+          })
+      ).body as { patient: Patient };
+      const id = bPatient.patient.id;
+      const recorded = await admin
+        .post('/api/v1/billing/payments')
+        .set('X-Tenant-Id', b.tenant.id)
+        .set('Idempotency-Key', newId())
+        .send({ patientId: id, amount: '40', method: 'cash', paidAt: '2026-01-16' });
+      expect(recorded.status, JSON.stringify(recorded.body)).toBe(201);
+      const paymentId = (recorded.body as { paymentIds: string[] }).paymentIds[0] ?? '';
+      const bRows = async () =>
+        (
+          await database.ownerPool.query<{
+            payments: number;
+            allocations: number;
+            counter: number;
+          }>(
+            `select (select count(*)::int from payments where tenant_id = $1) as payments,
+                    (select count(*)::int from payment_allocations where tenant_id = $1) as allocations,
+                    (select last_value from payment_counters where tenant_id = $1) as counter`,
+            [b.tenant.id],
+          )
+        ).rows;
+      const before = await bRows();
+      expect(before).toEqual([{ payments: 1, allocations: 1, counter: 1 }]);
+
+      for (const response of await Promise.all([
+        ownerA.get(`/api/v1/billing/payments/${paymentId}/receipt`),
+        ownerA
+          .post(`/api/v1/billing/payments/${paymentId}/refund`)
+          .send({ amount: '40', reason: 'Hijack attempt' }),
+        ownerA
+          .post(`/api/v1/billing/payments/${paymentId}/void`)
+          .send({ reason: 'Hijack attempt' }),
+      ])) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'payment.not_found' });
+      }
+      for (const response of await Promise.all([
+        ownerA.get(`/api/v1/billing/patients/${id}/account`),
+        ownerA.get(`/api/v1/billing/patients/${id}/statement`),
+        ownerA
+          .post('/api/v1/billing/payments')
+          .set('Idempotency-Key', newId())
+          .send({ patientId: id, amount: '1', method: 'cash', paidAt: '2026-01-16' }),
+      ])) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'patient.not_found' });
+      }
+      // B's billing contact: its family and family statement are not found from A.
+      const linked = await admin
+        .post(`/api/v1/patients/${id}/contacts`)
+        .set('X-Tenant-Id', b.tenant.id)
+        .send({
+          target: { newContact: { fullName: 'Bravo Parent', phone: '03 123 459' } },
+          relationship: 'parent',
+          isBillingContact: true,
+        });
+      expect(linked.status, JSON.stringify(linked.body)).toBe(201);
+      const contactId = (linked.body as { contact: { id: string } }[])[0]?.contact.id ?? '';
+      for (const response of await Promise.all([
+        ownerA.get(`/api/v1/billing/contacts/${contactId}/family`),
+        ownerA.get(`/api/v1/billing/contacts/${contactId}/family/statement`),
+      ])) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'contact.not_found' });
+      }
+      const transactions = await ownerA.get('/api/v1/billing/payments?range=all');
+      expect(transactions.body).toEqual({ items: [], nextCursor: null });
+      const outstanding = await ownerA.get('/api/v1/billing/outstanding');
+      expect(
+        (outstanding.body as { items: { patient: { id: string } }[] }).items.map(
+          (item) => item.patient.id,
+        ),
+      ).not.toContain(id);
+
+      // B's payment advanced B's receipt counter only.
+      const aCounter = await database.ownerPool.query(
+        'select count(*)::int as n from payment_counters where tenant_id = $1',
+        [a.tenant.id],
+      );
+      expect(aCounter.rows).toEqual([{ n: 0 }]);
+      expect(await bRows()).toEqual(before);
+    });
+
     it("visits: B's completed visit, its charge and its summary are not found for A", async () => {
       const { profileId, services } = await bOwnerDentist();
       const item = services.find((service) => service.chargeUnit === 'per_jaw');
@@ -867,6 +960,9 @@ describe('tenant isolation through the public services', () => {
       'tooth_status',
       'visit_counters',
       'visit_amendments',
+      'payments',
+      'payment_counters',
+      'payment_allocations',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

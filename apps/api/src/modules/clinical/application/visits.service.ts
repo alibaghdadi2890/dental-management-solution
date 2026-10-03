@@ -747,6 +747,17 @@ export class VisitsService {
   }
 
   /**
+   * For `billing`'s receipts, histories and statements (feature 5): each visit's display number
+   * and local date, in no particular order; unknown ids are absent.
+   */
+  async numbersFor(
+    visitIds: readonly string[],
+  ): Promise<{ visitId: string; displayNumber: number; localDate: string }[]> {
+    this.context.requirePermission('visit:read');
+    return this.tenantDb.run(() => this.visits.numbersFor([...new Set(visitIds)]));
+  }
+
+  /**
    * A visit's money (computed while live, frozen once completed) and timing, for `billing`'s
    * visit summary. Unknown or discarded → 404 `visit.not_found`.
    */

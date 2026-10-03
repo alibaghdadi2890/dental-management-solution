@@ -7,6 +7,8 @@ import type { TenantDb } from '../../../platform/db/tenant-db';
 import type { AuditService } from '../../audit';
 import type { PatientsService } from '../../patients';
 import type { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
+import type { PaymentsRepository } from '../persistence/payments.repository';
+import type { Settlement } from './settlement';
 import { BillingService } from './billing.service';
 
 const context = new RequestContext(ClsServiceManager.getClsService<AppClsStore>());
@@ -18,6 +20,11 @@ function service(survivors: Record<string, string> = {}) {
   const patients = { survivorOf: vi.fn((id: string) => Promise.resolve(survivors[id] ?? null)) };
   const entries = { repointPatient: vi.fn(() => Promise.resolve(2)) };
   const audit = { record: vi.fn(() => Promise.resolve()) };
+  const settlement = {
+    lock: vi.fn(() => Promise.resolve()),
+    settle: vi.fn(() => Promise.resolve([])),
+  };
+  const payments = { repointPatient: vi.fn(() => Promise.resolve(1)) };
   const unused = undefined as never;
   const billing = new BillingService(
     context,
@@ -29,8 +36,11 @@ function service(survivors: Record<string, string> = {}) {
     entries as unknown as LedgerEntriesRepository,
     unused,
     unused,
+    settlement as unknown as Settlement,
+    unused,
+    payments as unknown as PaymentsRepository,
   );
-  return { billing, tenantDb, entries, audit };
+  return { billing, tenantDb, entries, audit, settlement };
 }
 
 describe('BillingService.repointMergedEntries', () => {
@@ -51,8 +61,8 @@ describe('BillingService.repointMergedEntries', () => {
     expect(tenantDb.run).not.toHaveBeenCalled();
   });
 
-  it('moves the entries to the survivor both patients share, and audits it', async () => {
-    const { billing, entries, audit } = service({ kept: 'final', dropped: 'final' });
+  it('moves the entries and payments to the survivor both patients share, audits it and settles', async () => {
+    const { billing, entries, audit, settlement } = service({ kept: 'final', dropped: 'final' });
     await expect(
       context.run(JOB, () => billing.repointMergedEntries('kept', 'dropped')),
     ).resolves.toBe(2);
@@ -61,9 +71,10 @@ describe('BillingService.repointMergedEntries', () => {
       expect.objectContaining({
         action: 'ledger_entry.repoint',
         resourceId: 'final',
-        after: { droppedId: 'dropped', keptId: 'kept', count: 2 },
+        after: { droppedId: 'dropped', keptId: 'kept', count: 2, payments: 1 },
       }),
     );
+    expect(settlement.settle).toHaveBeenCalledWith('final');
   });
 
   it('moves nothing, logging ids only, unless the dropped patient was merged into the kept chain', async () => {

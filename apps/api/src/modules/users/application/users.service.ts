@@ -94,6 +94,24 @@ export class UsersService {
   }
 
   /**
+   * Display names of the staff among `userIds` (auth user ids, the `*_by` columns), deactivated
+   * staff included; a user without a profile here (a platform admin) is absent. A building block
+   * like `practitionersByProfileIds`, for "Recorded by" (feature 5).
+   */
+  namesByUserIds(userIds: readonly string[]): Promise<Map<string, string>> {
+    const wanted = new Set(userIds);
+    return this.tenantDb.run(async () => {
+      if (wanted.size === 0) return new Map<string, string>();
+      const profiles = await this.staff.list();
+      return new Map(
+        profiles
+          .filter((profile) => wanted.has(profile.authUserId))
+          .map((profile) => [profile.authUserId, profile.displayName]),
+      );
+    });
+  }
+
+  /**
    * The caller's (or any user's) staff profile id in this tenant (ADR-0020), or null when they
    * have none — a platform admin acting in the tenant. Not permission-gated: a building block like
    * `listPractitioners`, e.g. for `clinical`'s "my live visits" (W18).

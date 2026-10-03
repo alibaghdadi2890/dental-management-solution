@@ -1,6 +1,6 @@
 import { VISIT_LEDGER_KINDS } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { eq, inArray, isNotNull, sql } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import type {
   LedgerEntry,
@@ -55,6 +55,29 @@ export class LedgerEntriesRepository {
     );
   }
 
+  /**
+   * Serialises allocation on one account (feature 5, P4): a transaction-scoped advisory lock, so
+   * two payments, or a payment and a visit change, settle the same patient one after the other.
+   * Taken after the patient's `FOR SHARE` lock, in patient id order when several are locked.
+   */
+  async lockAccount(patientId: string): Promise<void> {
+    await this.db.run((tx) =>
+      tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`account:${patientId}`}, 0))`),
+    );
+  }
+
+  /** Every entry of `patientId`, oldest first (the statement, the running Remaining). */
+  async listForPatient(patientId: string): Promise<LedgerEntry[]> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .select()
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.patientId, patientId))
+        .orderBy(ledgerEntries.effectiveDate, ledgerEntries.createdAt, ledgerEntries.id),
+    );
+    return rows.map(toDomain);
+  }
+
   /** Every entry about `visitId` (charge, adjustments, reversal), oldest first. */
   async listForVisit(visitId: string): Promise<LedgerEntry[]> {
     const rows = await this.db.run((tx) =>
@@ -84,23 +107,6 @@ export class LedgerEntriesRepository {
         .orderBy(ledgerEntries.visitId, ledgerEntries.currency);
       return rows.flatMap(({ visitId, ...sum }) => (visitId === null ? [] : [{ visitId, ...sum }]));
     });
-  }
-
-  /**
-   * The visits whose entries sum above zero in some currency — still owing, payments being
-   * feature 5 — in id order (the Unpaid tab). Kept in the database, like `patientIdsOwing`.
-   */
-  async visitIdsOwing(): Promise<string[]> {
-    const rows = await this.db.run((tx) =>
-      tx
-        .selectDistinct({ visitId: ledgerEntries.visitId })
-        .from(ledgerEntries)
-        .where(isNotNull(ledgerEntries.visitId))
-        .groupBy(ledgerEntries.visitId, ledgerEntries.currency)
-        .having(sql`sum(${ledgerEntries.amount}) > 0`)
-        .orderBy(ledgerEntries.visitId),
-    );
-    return rows.flatMap((row) => (row.visitId === null ? [] : [row.visitId]));
   }
 
   /**

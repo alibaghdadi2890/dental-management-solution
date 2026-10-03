@@ -25,8 +25,11 @@ import { PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { patientBalance, sumBalances } from '../domain/balances';
 import type { LedgerEntry } from '../domain/ledger-entry';
+import { AllocationsRepository } from '../persistence/allocations.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
+import { PaymentsRepository } from '../persistence/payments.repository';
 import { LedgerWriter } from './ledger-writer';
+import { Settlement } from './settlement';
 
 /** The fields a caller chooses; the kind, currency and creator are set by `append`. */
 type EntryFields = Pick<LedgerEntry, 'amount' | 'effectiveDate' | 'note' | 'reason'>;
@@ -54,6 +57,9 @@ export class BillingService {
     private readonly entries: LedgerEntriesRepository,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly visits: VisitsService,
+    private readonly settlement: Settlement,
+    private readonly allocations: AllocationsRepository,
+    private readonly payments: PaymentsRepository,
   ) {}
 
   /**
@@ -91,6 +97,7 @@ export class BillingService {
       this.assertNotAfterToday(input.asOf, tenant, 'asOf');
       await this.patients.lockForDependentWrite(patientId);
       await this.appendOpeningBalance(patientId, input, tenant);
+      await this.settlement.settle(patientId);
       return this.balanceIn(patientId);
     });
   }
@@ -106,12 +113,17 @@ export class BillingService {
       const tenant = await this.tenancy.currentTenant();
       this.assertNotAfterToday(input.effectiveDate, tenant, 'effectiveDate');
       await this.patients.lockForDependentWrite(patientId);
-      await this.append(patientId, 'adjustment', tenant, {
+      const entry = await this.append(patientId, 'adjustment', tenant, {
         amount: input.amount,
         effectiveDate: input.effectiveDate,
         note: input.note ?? null,
         reason: input.reason,
       });
+      // A write-off (below zero) covers open charges oldest first; a debit takes any credit.
+      await this.settlement.settle(
+        patientId,
+        toCents(entry.amount) < 0n ? new Set([entry.id]) : new Set<string>(),
+      );
       return this.balanceIn(patientId);
     });
   }
@@ -159,35 +171,39 @@ export class BillingService {
   }
 
   /**
-   * What is paid on the visit — payment allocations arrive with feature 5, so always 0 for now.
-   * Read inside the void transaction (ADR-0026) whatever the caller may read, so it checks no
-   * permission and has no route; `balancesForVisits` is the gated read.
+   * What payments cover on the visit (P8): Σ the allocations to its charge whose source is a
+   * `payment` — write-offs and other credit don't block a void. Read inside the void transaction
+   * (ADR-0026) under the account lock, whatever the caller may read, so it checks no permission
+   * and has no route; `balancesForVisits` is the gated read.
    */
-  paidOn(_visitId: string): Promise<string> {
-    return Promise.resolve(fromCents(0n));
+  async paidOn(visitId: string): Promise<string> {
+    const allocated = await this.allocations.allocatedToVisits([visitId]);
+    return fromCents(allocated.get(visitId)?.payments ?? 0n);
   }
 
   /**
    * Per visit among `visitIds` (4b): `charged` = Σ its visit entries (charge, adjustments,
-   * reversal), `paid` (0 until feature 5), `outstanding`; in input order, visits without entries
-   * omitted. RLS limits it to the tenant's entries.
+   * reversal), `paid` (Σ allocated to it: payments, applied credit, write-offs), `outstanding`; in
+   * input order, visits without entries omitted. RLS limits it to the tenant's entries.
    */
   async balancesForVisits(visitIds: readonly string[]): Promise<VisitBalance[]> {
     this.context.requirePermission('payment:read');
     return this.tenantDb.run(async () => {
       const sums = await this.entries.sumsByVisit(visitIds);
       const byVisit = new Map(sums.map((sum) => [sum.visitId, sum]));
+      const allocated = await this.allocations.allocatedToVisits(visitIds);
       const balances: VisitBalance[] = [];
       for (const visitId of new Set(visitIds)) {
         const sum = byVisit.get(visitId);
         if (!sum) continue;
         const charged = toCents(sum.amount);
-        const paid = toCents(await this.paidOn(visitId));
+        const paid = allocated.get(visitId)?.all ?? 0n;
         balances.push({
           visitId,
           currency: sum.currency,
           charged: fromCents(charged),
           paid: fromCents(paid),
+          paidByPayments: fromCents(allocated.get(visitId)?.payments ?? 0n),
           outstanding: fromCents(charged - paid),
         });
       }
@@ -199,8 +215,8 @@ export class BillingService {
    * A finished visit's figures (spec W2), in the visit currency and from the ledger alone: the
    * entries were posted in the completion's, amendment's or void's transaction, so they are
    * already there. _This visit_ = Σ its visit entries (the charge, its adjustments, a reversal; 0
-   * when none: a zero total, W20), nothing paid yet; _Previous_ = the balance less that; the
-   * total = the balance. Needs `payment:read`, and `visit:read` for `VisitsService.visitMoney`:
+   * when none: a zero total, W20), _paid_ = Σ allocated to it (feature 5), with the payments
+   * that cover it; _Previous_ = the balance less this visit's outstanding; the total = the balance. Needs `payment:read`, and `visit:read` for `VisitsService.visitMoney`:
    * unknown or discarded → 404 `visit.not_found`; a live visit → 409 `visit.not_live` (it has no
    * charge yet). Balances in other currencies are left out — known gap, `docs/modules/billing.md`.
    *
@@ -226,7 +242,8 @@ export class BillingService {
       ];
       const sums = await this.entries.sumsByPatient(patientIds);
       const chargeCents = visitEntries.reduce((total, entry) => total + toCents(entry.amount), 0n);
-      const paidCents = toCents(await this.paidOn(visitId));
+      const paidCents =
+        (await this.allocations.allocatedToVisits([visitId])).get(visitId)?.all ?? 0n;
       const balanceCents = sums
         .filter(({ currency }) => currency === visit.currency)
         .reduce((total, sum) => total + toCents(sum.amount), 0n);
@@ -240,6 +257,7 @@ export class BillingService {
         },
         previous: fromCents(balanceCents - (chargeCents - paidCents)),
         totalOutstanding: fromCents(balanceCents),
+        payments: await this.allocations.paymentsForVisit(visitId),
       };
     });
   }
@@ -273,14 +291,18 @@ export class BillingService {
         this.logger.warn({ keptId, droppedId }, 'ledger re-point skipped: not a merged pair');
         return 0;
       }
+      await this.settlement.lock([droppedId, survivorId]);
       const count = await this.entries.repointPatient(droppedId, survivorId);
-      if (count > 0) {
+      const payments = await this.payments.repointPatient(droppedId, survivorId);
+      if (count > 0 || payments > 0) {
         await this.audit.record({
           action: 'ledger_entry.repoint',
           resourceType: 'patient',
           resourceId: survivorId,
-          after: { droppedId, keptId, count },
+          after: { droppedId, keptId, count, payments },
         });
+        // P15: one account now — the credit of one side meets the open charges of the other.
+        await this.settlement.settle(survivorId);
       }
       return count;
     });

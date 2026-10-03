@@ -4,7 +4,15 @@ import {
   createWithOpeningBalanceSchema,
   idSchema,
   openingBalanceResultSchema,
+  outstandingPageSchema,
+  outstandingQuerySchema,
+  patientAccountSchema,
   patientBalanceSchema,
+  receivablesSchema,
+  statementSchema,
+  familySchema,
+  familyStatementSchema,
+  payerQuerySchema,
   visitFinancialSummarySchema,
 } from '@dcm/contracts';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
@@ -12,6 +20,7 @@ import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
 import { BillingService } from '../application/billing.service';
+import { PaymentViewsService } from '../application/payment-views.service';
 
 class CreateWithOpeningBalanceDto extends createZodDto(createWithOpeningBalanceSchema) {}
 class OpeningBalanceResultDto extends createZodDto(openingBalanceResultSchema) {}
@@ -21,6 +30,15 @@ class BalancesQueryDto extends createZodDto(balancesQuerySchema) {}
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class VisitParamsDto extends createZodDto(z.object({ visitId: idSchema })) {}
 class VisitFinancialSummaryDto extends createZodDto(visitFinancialSummarySchema) {}
+class ReceivablesDto extends createZodDto(receivablesSchema) {}
+class OutstandingQueryDto extends createZodDto(outstandingQuerySchema) {}
+class OutstandingPageDto extends createZodDto(outstandingPageSchema) {}
+class PatientAccountDto extends createZodDto(patientAccountSchema) {}
+class StatementDto extends createZodDto(statementSchema) {}
+class PayerQueryDto extends createZodDto(payerQuerySchema) {}
+class FamilyDto extends createZodDto(familySchema) {}
+class FamilyStatementDto extends createZodDto(familyStatementSchema) {}
+class ContactParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 
 /**
  * Opening balances, adjustments, balances and a completed visit's summary
@@ -30,7 +48,55 @@ class VisitFinancialSummaryDto extends createZodDto(visitFinancialSummarySchema)
  */
 @Controller('billing')
 export class BillingController {
-  constructor(private readonly billing: BillingService) {}
+  constructor(
+    private readonly billing: BillingService,
+    private readonly payments: PaymentViewsService,
+  ) {}
+
+  /** The Payments KPI cards and aging bar (feature 5). */
+  @Get('aging')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: ReceivablesDto })
+  aging() {
+    return this.payments.receivables();
+  }
+
+  /** The Payments › Outstanding tab: owing patients, oldest unpaid first. */
+  @Get('outstanding')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: OutstandingPageDto })
+  outstanding(@Query() query: OutstandingQueryDto) {
+    return this.payments.outstanding(query);
+  }
+
+  @Get('patients/:id/account')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: PatientAccountDto })
+  account(@Param() params: PatientParamsDto, @Query() query: PayerQueryDto) {
+    return this.payments.account(params.id, query.payerContactId);
+  }
+
+  /** A billing contact's family: each account they pay for, and the total (feature 5). */
+  @Get('contacts/:id/family')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: FamilyDto })
+  family(@Param() params: ContactParamsDto) {
+    return this.payments.family(params.id);
+  }
+
+  @Get('contacts/:id/family/statement')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: FamilyStatementDto })
+  familyStatement(@Param() params: ContactParamsDto) {
+    return this.payments.familyStatement(params.id);
+  }
+
+  @Get('patients/:id/statement')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: StatementDto })
+  statement(@Param() params: PatientParamsDto) {
+    return this.payments.statement(params.id);
+  }
 
   /** `patient:write` is re-checked by the service (it creates the patient). */
   @Post('opening-balances')

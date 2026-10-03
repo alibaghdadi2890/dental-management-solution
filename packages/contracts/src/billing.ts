@@ -6,6 +6,7 @@ import {
   currencySchema,
   decimalAmountSchema,
   idSchema,
+  isoDateSchema,
   notFutureDateSchema,
   optionalText,
 } from './common.js';
@@ -23,6 +24,8 @@ import { VISIT_LIST_TABS, visitFiltersSchema } from './visit-list.js';
  * `visit_charge` (feature 4a, ADR-0024): posted when a visit completes, in that transaction.
  * `visit_charge_adjustment` / `visit_charge_reversal` (feature 4b): an amendment's difference and
  * a void's reversal, posted in the amend/void transaction. The three are the visit kinds.
+ * `payment` (negative), `payment_refund` and `payment_void` (positive): feature 5, one per
+ * `payments` row (ADR-0027).
  */
 export const LEDGER_ENTRY_KINDS = [
   'opening_balance',
@@ -30,9 +33,17 @@ export const LEDGER_ENTRY_KINDS = [
   'visit_charge',
   'visit_charge_adjustment',
   'visit_charge_reversal',
+  'payment',
+  'payment_refund',
+  'payment_void',
 ] as const;
 export const ledgerEntryKindSchema = z.enum(LEDGER_ENTRY_KINDS);
 export type LedgerEntryKind = z.infer<typeof ledgerEntryKindSchema>;
+
+/** How a payment was taken (feature 5); Insurance is a method, not a claim. */
+export const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'insurance'] as const;
+export const paymentMethodSchema = z.enum(PAYMENT_METHODS);
+export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 
 /** The entries that carry a `visit_id`; their sum is what the visit charges now. */
 export const VISIT_LEDGER_KINDS = [
@@ -137,8 +148,9 @@ export type OpeningBalanceResult = z.infer<typeof openingBalanceResultSchema>;
 /**
  * `GET /billing/visits/:visitId/summary` (spec W2): a completed visit's figures, all in the visit
  * currency and read from the ledger. _This visit_ is its `visit_charge` (0 when the total was 0,
- * W20); nothing is paid yet (payments are feature 5); _Previous_ is the balance less the charge
- * (negative for a credit); the total is the balance. Balances in other currencies are left out.
+ * W20); _paid_ is what is allocated to it (feature 5); _Previous_ is the balance less this
+ * visit's outstanding (negative for a credit); the total is the balance. Balances in other
+ * currencies are left out. `payments` lists the payments allocated to it, for the invoice.
  */
 export const visitBalancesQuerySchema = z.object({
   visitIds: commaSeparatedIds(MAX_COMMA_SEPARATED_IDS),
@@ -147,14 +159,16 @@ export type VisitBalancesQuery = z.infer<typeof visitBalancesQuerySchema>;
 
 /**
  * `GET /billing/visits/balances` (4b): per visit, in its currency, `charged` = Σ its visit
- * entries (charge, adjustments, reversal), `paid` = its payment allocations (none before feature
- * 5), `outstanding` = charged − paid. A visit without entries (live, or a zero total) is absent.
+ * entries (charge, adjustments, reversal), `paid` = what is allocated to it (payments, applied
+ * credit, write-offs; feature 5), `outstanding` = charged − paid. A visit without entries (live, or a zero total) is absent.
  */
 export const visitBalanceSchema = z.object({
   visitId: idSchema,
   currency: currencySchema,
   charged: balanceAmountSchema,
   paid: balanceAmountSchema,
+  /** The part of `paid` that payments cover: what blocks a void (P8); the rest is write-offs. */
+  paidByPayments: balanceAmountSchema,
   outstanding: balanceAmountSchema,
 });
 export type VisitBalance = z.infer<typeof visitBalanceSchema>;
@@ -186,5 +200,14 @@ export const visitFinancialSummarySchema = z.object({
   }),
   previous: balanceAmountSchema,
   totalOutstanding: balanceAmountSchema,
+  payments: z.array(
+    z.object({
+      paymentId: idSchema,
+      receiptNumber: z.number().int().positive(),
+      paidAt: isoDateSchema,
+      method: paymentMethodSchema,
+      amount: balanceAmountSchema,
+    }),
+  ),
 });
 export type VisitFinancialSummary = z.infer<typeof visitFinancialSummarySchema>;

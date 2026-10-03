@@ -105,6 +105,45 @@ export class ContactsService {
     });
   }
 
+  /** One contact, resolved (feature 5: a family's payer). Unknown or deleted → 404. */
+  async contactView(contactId: string): Promise<ContactView> {
+    this.context.requirePermission('patient:read');
+    return this.tenantDb.run(async () => {
+      const record = await this.contacts.findById(contactId);
+      if (!record) throw new ContactNotFoundError(CONTACT_NOT_FOUND);
+      return resolveContact(record.contact, record.linkedPatient);
+    });
+  }
+
+  /**
+   * The contact that is patient `patientId` (C4: "the mother becomes a patient"), resolved, or
+   * null — so a parent's own record can show the family they pay for (feature 5).
+   */
+  async contactOfPatient(patientId: string): Promise<ContactView | null> {
+    this.context.requirePermission('patient:read');
+    return this.tenantDb.run(async () => {
+      const contact = await this.contacts.findByLinkedPatient(patientId);
+      const record = contact ? await this.contacts.findById(contact.id) : undefined;
+      return record ? resolveContact(record.contact, record.linkedPatient) : null;
+    });
+  }
+
+  /**
+   * The primary billing contact of each of `patientIds` that has one, resolved, in no particular
+   * order (feature 5: Outstanding grouped by payer).
+   */
+  async primaryBillingContacts(
+    patientIds: readonly string[],
+  ): Promise<{ patientId: string; contact: ContactView }[]> {
+    this.context.requirePermission('patient:read');
+    return this.tenantDb.run(async () =>
+      (await this.links.primaryBillingFor(patientIds)).map((row) => ({
+        patientId: row.patientId,
+        contact: resolveContact(row.contact, row.linkedPatient),
+      })),
+    );
+  }
+
   /**
    * The contacts whose resolved phone is `phone`, normalised with the tenant's country (e.g. an
    * import matching a guardian's phone). A phone that does not parse matches nobody: `[]`.

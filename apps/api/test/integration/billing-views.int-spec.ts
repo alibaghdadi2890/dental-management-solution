@@ -717,7 +717,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
             actor_platform_admin: false,
             resource_type: 'patient',
             resource_id: keep.id,
-            after: { droppedId: drop.id, keptId: keep.id, count: 1 },
+            after: { droppedId: drop.id, keptId: keep.id, count: 1, payments: 0 },
           },
         ]);
 
@@ -813,8 +813,8 @@ describe('billing: patient views, CSV export and merge re-point', () => {
       const audit = await repointAudit(clinic.tenant.id);
       expect(audit.map((entry) => entry.resource_id)).toEqual([c.id, c.id]);
       expect(audit.map((entry) => entry.after)).toEqual([
-        { droppedId: b.id, keptId: c.id, count: 1 },
-        { droppedId: a.id, keptId: b.id, count: 1 },
+        { droppedId: b.id, keptId: c.id, count: 1, payments: 0 },
+        { droppedId: a.id, keptId: b.id, count: 1, payments: 0 },
       ]);
 
       // The queued jobs then run and find nothing left to move.

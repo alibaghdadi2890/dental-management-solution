@@ -10,6 +10,7 @@ export * from './contacts.js';
 export * from './digits.js';
 export * from './patient-age.js';
 export * from './patients.js';
+export * from './payments.js';
 export * from './permissions.js';
 export * from './phone.js';
 export * from './roles.js';

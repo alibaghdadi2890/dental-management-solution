@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { Transaction } from '../../../platform/db/database';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { isUniqueViolation } from '../../../platform/db/unique-violation';
@@ -187,6 +187,41 @@ export class PatientContactsRepository {
         .for('update'),
     );
     return rows.map(toLink);
+  }
+
+  /**
+   * The primary billing contact of each of `patientIds` that has one, resolved (feature 5:
+   * Outstanding grouped by payer). Soft-deleted contacts are left out.
+   */
+  async primaryBillingFor(
+    patientIds: readonly string[],
+  ): Promise<(Omit<PatientContactRecord, 'link'> & { patientId: string })[]> {
+    if (patientIds.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({
+          patientId: patientContacts.patientId,
+          contact: contacts,
+          linkedPatient: linkedPatients,
+        })
+        .from(patientContacts)
+        .innerJoin(
+          contacts,
+          and(eq(contacts.id, patientContacts.contactId), isNull(contacts.deletedAt)),
+        )
+        .leftJoin(linkedPatients, eq(linkedPatients.id, contacts.linkedPatientId))
+        .where(
+          and(
+            inArray(patientContacts.patientId, [...patientIds]),
+            eq(patientContacts.isPrimaryBilling, true),
+          ),
+        ),
+    );
+    return rows.map((row) => ({
+      patientId: row.patientId,
+      contact: toDomainContact(row.contact),
+      linkedPatient: toLinkedPatient(row.linkedPatient),
+    }));
   }
 
   /** The patients linking `contactId` as their billing contact (C12), archived ones included. */

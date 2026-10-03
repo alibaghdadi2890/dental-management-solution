@@ -19,8 +19,8 @@ import { localDate } from '../../../platform/kernel/local-date';
 import { VisitsService } from '../../clinical';
 import { TenancyService } from '../../tenancy';
 import { csvRow, UTF8_BOM } from '../domain/csv';
+import { AllocationsRepository } from '../persistence/allocations.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
-import { BillingService } from './billing.service';
 
 type VisitColumnKey =
   | 'visit'
@@ -122,8 +122,8 @@ export class VisitViewsService {
     private readonly tenantDb: TenantDb,
     private readonly tenancy: TenancyService,
     private readonly visits: VisitsService,
-    private readonly billing: BillingService,
     private readonly entries: LedgerEntriesRepository,
+    private readonly allocations: AllocationsRepository,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -131,7 +131,10 @@ export class VisitViewsService {
   async unpaid(query: VisitListQuery): Promise<VisitPage> {
     this.context.requirePermission('payment:read');
     return this.tenantDb.run(async () =>
-      this.visits.search({ ...query, tab: 'all' }, { idsIn: await this.entries.visitIdsOwing() }),
+      this.visits.search(
+        { ...query, tab: 'all' },
+        { idsIn: await this.allocations.visitIdsOwing() },
+      ),
     );
   }
 
@@ -139,7 +142,7 @@ export class VisitViewsService {
   async unpaidSummary(query: VisitFilters): Promise<UnpaidVisitsSummary> {
     this.context.requirePermission('payment:read');
     return this.tenantDb.run(async () => {
-      const idsIn = await this.entries.visitIdsOwing();
+      const idsIn = await this.allocations.visitIdsOwing();
       const filtered = await this.visits.aggregate({ ...query, tab: 'all' }, { idsIn });
       const tab = await this.visits.aggregate(
         { tab: 'all', range: 'all', q: undefined, patientId: query.patientId },
@@ -159,7 +162,7 @@ export class VisitViewsService {
     this.context.requirePermission('visit:read');
     const { timeZone } = await this.tenancy.currentTenant();
     const { lang: _lang, tab, ...filters } = query;
-    const idsIn = tab === 'unpaid' ? await this.entries.visitIdsOwing() : undefined;
+    const idsIn = tab === 'unpaid' ? await this.allocations.visitIdsOwing() : undefined;
     const listQuery = { ...filters, tab: tab === 'unpaid' ? 'all' : tab } as const;
     return {
       fileName: `visits-${localDate(this.clock.now(), timeZone)}.csv`,
@@ -203,12 +206,11 @@ export class VisitViewsService {
         sum.amount,
       ]),
     );
-    const paid = new Map<string, string>();
-    for (const visit of visits) paid.set(visit.id, await this.billing.paidOn(visit.id));
+    const allocated = await this.allocations.allocatedToVisits(visits.map((visit) => visit.id));
     return (visit: VisitListItem) => {
-      const paidOn = paid.get(visit.id) ?? '0.00';
+      const paid = allocated.get(visit.id)?.all ?? 0n;
       const charged = toCents(sums.get(visit.id) ?? '0');
-      return { paid: paidOn, balance: fromCents(charged - toCents(paidOn)) };
+      return { paid: fromCents(paid), balance: fromCents(charged - paid) };
     };
   }
 }

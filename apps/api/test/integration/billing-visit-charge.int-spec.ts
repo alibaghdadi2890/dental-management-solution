@@ -346,6 +346,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
       visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
       previous: '40.00',
       totalOutstanding: '157.00',
+      payments: [],
     });
     expect(await balanceOf(patient.id)).toEqual({
       patientId: patient.id,
@@ -381,6 +382,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
       visit: { total: '0.00', paid: '0.00', outstanding: '0.00' },
       previous: '25.00',
       totalOutstanding: '25.00',
+      payments: [],
     });
     expect((await balanceOf(patient.id)).charged).toEqual([]);
   });
@@ -487,6 +489,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
         visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
         previous: '40.00',
         totalOutstanding: '157.00',
+        payments: [],
       });
     } finally {
       await queue.resume();
@@ -502,6 +505,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
       visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
       previous: '40.00',
       totalOutstanding: '157.00',
+      payments: [],
     });
   });
 

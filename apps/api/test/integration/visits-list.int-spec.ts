@@ -266,6 +266,7 @@ describe('clinical + billing: the visits list, its summary and the visit-based p
         currency: 'USD',
         charged: '50.00',
         paid: '0.00',
+        paidByPayments: '0.00',
         outstanding: '50.00',
       },
       {
@@ -273,6 +274,7 @@ describe('clinical + billing: the visits list, its summary and the visit-based p
         currency: 'USD',
         charged: '0.00',
         paid: '0.00',
+        paidByPayments: '0.00',
         outstanding: '0.00',
       },
     ]);
