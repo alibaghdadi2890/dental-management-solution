@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { CardSkeleton } from '@/components/ui/card';
 import { useVisitSummary } from '@/features/billing/billing-api';
+import { useRecordPayment } from '@/features/billing/payments/payment-dialog-context';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { visitQuery } from '../visits-api';
@@ -27,12 +28,13 @@ const owes = (amount: string) => toCents(amount) > 0n;
 /**
  * The Post-Visit Financial Summary (spec §Post-Visit Financial Summary, "Visit recorded"), over
  * the record's Overview right after a visit completes (W16). The header: a ✓, the visit's date,
- * duration and service count (the completed visit), and its status pill — **Unpaid** while this
- * visit is owed, **Paid in full** otherwise (partly paid arrives with payments, feature 5). The
+ * duration and service count (the completed visit), and its status pill — **Unpaid**, **Partly
+ * paid** or **Paid in full**. The
  * body's three blocks come from `GET /billing/visits/:id/summary` (W2): This visit, Previous
  * visits and Total outstanding (`danger` while owed, `success` with the settled note when clear).
  * The footer is **Pay later**, or **Done** when nothing is owed — shown once the figures are in,
- * so it never flips from one to the other; **Record payment** arrives with feature 5. A modal:
+ * so it never flips from one to the other — and, while owed and with `payment:write`, **Record
+ * payment**, which pays this visit first and comes back here (feature 5). A modal:
  * focus is trapped and `Esc` closes it. Nothing opened it, so on close focus goes where
  * `onCloseAutoFocus` puts it (the record's heading).
  */
@@ -70,6 +72,7 @@ function PostVisitContent({ visitId }: { visitId: string }) {
   const locale = i18n.resolvedLanguage ?? 'en';
   const visit = useQuery(visitQuery(visitId));
   const summary = useVisitSummary(visitId);
+  const openPayment = useRecordPayment();
   const owing = summary.data ? owes(summary.data.totalOutstanding) : false;
   const settled = summary.data !== undefined || visit.isError || summary.isError;
 
@@ -114,12 +117,18 @@ function PostVisitContent({ visitId }: { visitId: string }) {
           <span
             className={cn(
               'flex-none rounded-md border px-2.5 py-1 text-[12.5px] leading-none font-semibold whitespace-nowrap',
-              owes(summary.data.visit.outstanding)
-                ? 'border-danger-border bg-danger-bg text-danger'
-                : 'border-success-border bg-success-bg text-success',
+              !owes(summary.data.visit.outstanding)
+                ? 'border-success-border bg-success-bg text-success'
+                : owes(summary.data.visit.paid)
+                  ? 'border-warning-border bg-warning-bg text-warning'
+                  : 'border-danger-border bg-danger-bg text-danger',
             )}
           >
-            {owes(summary.data.visit.outstanding) ? t('postVisit.unpaid') : t('postVisit.paid')}
+            {!owes(summary.data.visit.outstanding)
+              ? t('postVisit.paid')
+              : owes(summary.data.visit.paid)
+                ? t('postVisit.partlyPaid')
+                : t('postVisit.unpaid')}
           </span>
         )}
       </div>
@@ -133,6 +142,17 @@ function PostVisitContent({ visitId }: { visitId: string }) {
           </Dialog.Close>
         ) : (
           <span aria-hidden className="h-10" />
+        )}
+        {owing && openPayment && visit.data && (
+          <Button
+            variant="primary"
+            className="ms-auto h-10 px-[15px] text-[13px]"
+            onClick={() => {
+              openPayment({ patientId: visit.data.patientId, contextVisitId: visitId });
+            }}
+          >
+            {t('postVisit.recordPayment')}
+          </Button>
         )}
       </div>
     </>

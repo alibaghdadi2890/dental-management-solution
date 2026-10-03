@@ -6,7 +6,7 @@ import {
   type VisitListItem,
 } from '@dcm/contracts';
 import { useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { useConfirm } from '@/components/ui/confirm-context';
 import { RightPanel } from '@/components/ui/right-panel';
 import { useToast } from '@/components/ui/toast-context';
 import { usePermission } from '@/features/auth/use-permission';
+import { useRecordPayment } from '@/features/billing/payments/payment-dialog-context';
+import { openPrintable, printPath } from '@/features/billing/payments-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -82,7 +84,9 @@ export function VisitDetailPanel({
   locale: string;
   onClose: () => void;
 }) {
-  const { t, i18n } = useTranslation(['visits', 'common']);
+  const { t, i18n } = useTranslation(['visits', 'common', 'billing']);
+  const navigate = useNavigate();
+  const openPayment = useRecordPayment();
   const confirm = useConfirm();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -155,13 +159,20 @@ export function VisitDetailPanel({
   };
 
   const startVoid = () => {
-    if (toCents(paid) > 0n) {
+    if (toCents(balance?.paidByPayments ?? '0') > 0n) {
+      // Refunds are made from the patient's payments (B7): the dialog takes you there. Write-offs
+      // don't block a void (P8).
       confirm({
         title: t('void.refundTitle'),
-        body: t('void.refundBody', { number, amount: money(paid) }),
+        body: t('void.refundBody', { number, amount: money(balance?.paidByPayments ?? '0') }),
         okLabel: t('void.refundOk'),
         tone: 'warn',
-        onConfirm: () => undefined,
+        onConfirm: () => {
+          void navigate({
+            to: '/payments',
+            search: { tab: 'transactions', range: 'all', q: number },
+          });
+        },
       });
       return;
     }
@@ -332,6 +343,41 @@ export function VisitDetailPanel({
               tone={Number(outstanding) > 0 ? 'danger' : undefined}
             />
           </>
+        )}
+        {!draft && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {openPayment && correctable && Number(outstanding) > 0 && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  openPayment({ patientId: visit.patient.id, contextVisitId: visit.id });
+                }}
+              >
+                {t('billing:balance.record')}
+              </Button>
+            )}
+            {canPay && visit.status !== 'in_progress' && visit.status !== 'paused' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  openPrintable(printPath.invoice(visit.id));
+                }}
+              >
+                {t('panel.invoice')}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                openPrintable(printPath.quote(visit.patient.id));
+              }}
+            >
+              {t('panel.planQuote')}
+            </Button>
+          </div>
         )}
       </section>
       {!draft && correctable && access.request && (

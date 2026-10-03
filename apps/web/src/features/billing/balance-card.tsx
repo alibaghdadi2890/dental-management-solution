@@ -2,6 +2,7 @@ import type { BalanceMoney } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { Card, CardSkeleton } from '@/components/ui/card';
 import { usePermission } from '@/features/auth/use-permission';
 import { lastVisitQuery } from '@/features/clinical/visits-api';
@@ -9,6 +10,7 @@ import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { balanceQuery, visitSummaryQuery } from './billing-api';
 import { owedBalances } from './owed-balances';
+import { useRecordPayment } from './payments/payment-dialog-context';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -31,8 +33,9 @@ const amountClass = 'font-mono text-[14px] leading-none font-semibold tabular-nu
  * paid. Without one, "Nothing billed yet" over the ledger balance (an opening balance), led by the
  * tenant currency (or, when nothing is owed in it, by the first currency that is); any other
  * currency is listed under it. Total outstanding is danger-toned while anything is owed and
- * success-toned when clear. No Record payment yet: payments arrive with feature 5. Without
- * `visit:read` there is no split, only the ledger balance.
+ * success-toned when clear, and a credit (a negative total) gets its note. With `payment:write`,
+ * Record payment while anything is owed (feature 5). Without `visit:read` there is no split,
+ * only the ledger balance.
  */
 export function BalanceCard({
   patientId,
@@ -47,6 +50,7 @@ export function BalanceCard({
   detailed?: boolean;
 }) {
   const { t } = useTranslation('billing');
+  const openPayment = useRecordPayment();
   // The visit split needs `visit:read` too; without it the card shows the ledger balance alone.
   const canVisits = usePermission('visit:read');
   const balance = useQuery(balanceQuery(patientId));
@@ -146,10 +150,29 @@ export function BalanceCard({
             {formatMoney(total, locale)}
           </span>
         </div>
-        {detailed && !anyOwing && Number(total.amount) <= 0 && (
+        {Number(total.amount) < 0 && (
+          <p className="m-0 mt-2.5 rounded-lg border border-success-border bg-success-bg px-3 py-2 text-[12.5px] leading-snug text-success">
+            {t('balance.credit', {
+              amount: formatMoney({ ...total, amount: total.amount.replace('-', '') }, locale),
+            })}
+          </p>
+        )}
+        {detailed && !anyOwing && Number(total.amount) === 0 && (
           <p className="m-0 mt-2.5 text-[12.5px] leading-snug text-ink-muted">
             {t('balance.settled')}
           </p>
+        )}
+        {openPayment && (anyOwing || Number(total.amount) > 0) && (
+          <Button
+            variant="primary"
+            size="lg"
+            className="mt-3"
+            onClick={() => {
+              openPayment({ patientId });
+            }}
+          >
+            {t('balance.record')}
+          </Button>
         )}
       </>
     );

@@ -21,12 +21,107 @@
     "visitTotal": "Visit total",
     "visitPaid": "Visit paid",
     "nothingBilled": "Nothing billed yet — a balance appears once the first visit is completed.",
-    "settled": "Nothing outstanding. This patient’s account is fully settled."
+    "settled": "Nothing outstanding. This patient’s account is fully settled.",
+    "record": "Record payment",
+    "recordFirst": "Record first payment",
+    "credit": "Credit {{amount}} — applied to the next charge, or refunded from the payment.",
+    "statement": "Statement"
   },
   "payments": {
     "title": "Payment history",
     "newestFirst": "Newest first",
     "emptyTitle": "No payments recorded yet",
-    "emptyBody": "Payments recorded for this patient will appear here."
+    "emptyBody": "Every payment taken for this patient will be listed here with the visit it was applied to.",
+    "date": "Date",
+    "amount": "Amount",
+    "method": "Method",
+    "visit": "Visit",
+    "remaining": "Remaining",
+    "visits_one": "{{count}} visit",
+    "visits_other": "{{count}} visits",
+    "opening": "Opening balance",
+    "refunded": "Refunded {{amount}}",
+    "voided": "Voided",
+    "receipt": "Receipt",
+    "loading": "Loading payments"
+  },
+  "methods": {
+    "cash": "Cash",
+    "card": "Card",
+    "bank_transfer": "Bank transfer",
+    "insurance": "Insurance"
+  },
+  "charge": {
+    "visit": "{{number}} · {{date}}",
+    "opening": "Opening balance · {{date}}",
+    "adjustment": "Adjustment · {{date}}"
+  },
+  "record": {
+    "title": "Record payment",
+    "ruleVisit": "Applied to this visit first, then to the oldest unpaid charge.",
+    "rulePatient": "Applied to the oldest unpaid charge first.",
+    "loading": "Loading the account",
+    "loadFailed": "Couldn’t load this patient’s account. Close and try again.",
+    "outstanding": "Outstanding",
+    "amount": "Amount taken now",
+    "full": "Full amount {{amount}}",
+    "half": "Half {{amount}}",
+    "partialHint": "or type any partial amount",
+    "problem": {
+      "invalid": "Enter an amount, like 120 or 120.50.",
+      "zero": "The amount must be more than zero.",
+      "over": "The amount can’t be more than the {{amount}} owed."
+    },
+    "method": "Method",
+    "date": "Date",
+    "chooseDate": "Choose payment date",
+    "reference": "Reference",
+    "optional": "Optional",
+    "payer": "Payer",
+    "payerLine": "Payer: {{name}} ·",
+    "change": "change",
+    "patientPays": "The patient",
+    "defaultPayer": "Default ({{name}})",
+    "householdLabel": "Pay for the whole household",
+    "householdOff": "Pay for: this patient",
+    "householdOn_one": "Pay for: household ({{count}} patient · {{total}})",
+    "householdOn_other": "Pay for: household ({{count}} patients · {{total}})",
+    "specific": "Apply to a specific visit",
+    "specificLabel": "Charge to cover first",
+    "specificNone": "No — oldest first",
+    "specificHint": "It takes at most what it still owes; the rest goes to the oldest charges.",
+    "remaining": "Remaining after this payment",
+    "casePartial": "Partial payment — the balance stays on the account",
+    "caseFull": "Full payment — this clears the balance",
+    "allocation": "How this payment is applied",
+    "submit": "Record payment",
+    "submitFull": "Record full payment",
+    "recording": "Recording…",
+    "recorded": "{{amount}} recorded",
+    "stillOwed": "{{amount}} still outstanding",
+    "clear": "Patient balance is now clear",
+    "receipt": "Receipt"
+  },
+  "errors": {
+    "payment": {
+      "over_outstanding": "The amount is more than what is owed. Refresh and try again.",
+      "nothing_outstanding": "Nothing is owed on this account any more.",
+      "invalid_target": "That visit no longer has anything to pay.",
+      "invalid_payer": "That payer is no longer a billing contact of this patient.",
+      "over_refund": "That is more than what is left of the payment.",
+      "has_refunds": "Part of this payment was refunded; refund the rest instead of voiding it.",
+      "not_reversible": "This payment can no longer be refunded or voided.",
+      "not_found": "This payment no longer exists.",
+      "idempotency_mismatch": "This payment was already recorded differently. Close and start again."
+    }
+  },
+  "family": {
+    "title": "Family billed to {{name}}",
+    "members": "Accounts billed to {{name}}",
+    "oldest": "Unpaid since {{date}}",
+    "payer": "Payer",
+    "total": "Family outstanding",
+    "record": "Record family payment",
+    "statement": "Family statement"
   }
 }

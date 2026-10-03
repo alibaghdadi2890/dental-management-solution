@@ -87,7 +87,9 @@
     "openRecord": "Open in record",
     "requestNote": "Only a dentist can void or amend a completed visit.",
     "requestChange": "Request a change",
-    "requestToast": "Ask {{dentist}} to amend or void this visit"
+    "requestToast": "Ask {{dentist}} to amend or void this visit",
+    "invoice": "Invoice",
+    "planQuote": "Plan quote"
   },
   "trail": {
     "title": "Audit trail",
@@ -151,7 +153,7 @@
     "done": "{{number}} voided",
     "refundTitle": "Refund payments first",
     "refundBody": "{{number}} has {{amount}} in payments. Refund or move them before voiding the visit.",
-    "refundOk": "Got it"
+    "refundOk": "Go to payments"
   },
   "history": {
     "viewLabel": "History view",

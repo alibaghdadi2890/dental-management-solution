@@ -21,12 +21,109 @@
     "visitTotal": "Total de la visite",
     "visitPaid": "Payé sur la visite",
     "nothingBilled": "Rien de facturé pour l’instant — un solde apparaît dès la première visite terminée.",
-    "settled": "Rien à régler. Le compte de ce patient est soldé."
+    "settled": "Rien à régler. Le compte de ce patient est soldé.",
+    "record": "Enregistrer un paiement",
+    "recordFirst": "Enregistrer un premier paiement",
+    "credit": "Avoir de {{amount}} — appliqué au prochain acte, ou remboursé sur le paiement.",
+    "statement": "Relevé"
   },
   "payments": {
     "title": "Historique des paiements",
     "newestFirst": "Les plus récents d’abord",
     "emptyTitle": "Aucun paiement enregistré",
-    "emptyBody": "Les paiements enregistrés pour ce patient apparaîtront ici."
+    "emptyBody": "Chaque paiement de ce patient apparaîtra ici avec la visite à laquelle il a été imputé.",
+    "date": "Date",
+    "amount": "Montant",
+    "method": "Moyen",
+    "visit": "Visite",
+    "remaining": "Reste dû",
+    "visits_one": "{{count}} visite",
+    "visits_many": "{{count}} visites",
+    "visits_other": "{{count}} visites",
+    "opening": "Solde d’ouverture",
+    "refunded": "{{amount}} remboursé",
+    "voided": "Annulé",
+    "receipt": "Reçu",
+    "loading": "Chargement des paiements"
+  },
+  "methods": {
+    "cash": "Espèces",
+    "card": "Carte",
+    "bank_transfer": "Virement",
+    "insurance": "Assurance"
+  },
+  "charge": {
+    "visit": "{{number}} · {{date}}",
+    "opening": "Solde d’ouverture · {{date}}",
+    "adjustment": "Ajustement · {{date}}"
+  },
+  "record": {
+    "title": "Enregistrer un paiement",
+    "ruleVisit": "Imputé d’abord à cette visite, puis à l’acte impayé le plus ancien.",
+    "rulePatient": "Imputé d’abord à l’acte impayé le plus ancien.",
+    "loading": "Chargement du compte",
+    "loadFailed": "Impossible de charger le compte de ce patient. Fermez et réessayez.",
+    "outstanding": "Reste dû",
+    "amount": "Montant encaissé",
+    "full": "Montant total {{amount}}",
+    "half": "Moitié {{amount}}",
+    "partialHint": "ou saisissez un montant partiel",
+    "problem": {
+      "invalid": "Saisissez un montant, par exemple 120 ou 120,50.",
+      "zero": "Le montant doit être supérieur à zéro.",
+      "over": "Le montant ne peut pas dépasser les {{amount}} dus."
+    },
+    "method": "Moyen de paiement",
+    "date": "Date",
+    "chooseDate": "Choisir la date du paiement",
+    "reference": "Référence",
+    "optional": "Facultatif",
+    "payer": "Payeur",
+    "payerLine": "Payeur : {{name}} ·",
+    "change": "modifier",
+    "patientPays": "Le patient",
+    "defaultPayer": "Par défaut ({{name}})",
+    "householdLabel": "Payer pour tout le foyer",
+    "householdOff": "Payer pour : ce patient",
+    "householdOn_one": "Payer pour : le foyer ({{count}} patient · {{total}})",
+    "householdOn_many": "Payer pour : le foyer ({{count}} patients · {{total}})",
+    "householdOn_other": "Payer pour : le foyer ({{count}} patients · {{total}})",
+    "specific": "Imputer à une visite précise",
+    "specificLabel": "Acte à couvrir en premier",
+    "specificNone": "Non — le plus ancien d’abord",
+    "specificHint": "Il prend au plus ce qu’il reste dû ; le reste va aux actes les plus anciens.",
+    "remaining": "Reste après ce paiement",
+    "casePartial": "Paiement partiel — le solde reste sur le compte",
+    "caseFull": "Paiement complet — le solde est réglé",
+    "allocation": "Imputation de ce paiement",
+    "submit": "Enregistrer le paiement",
+    "submitFull": "Enregistrer le paiement complet",
+    "recording": "Enregistrement…",
+    "recorded": "{{amount}} enregistré",
+    "stillOwed": "Il reste {{amount}} dû",
+    "clear": "Le compte du patient est soldé",
+    "receipt": "Reçu"
+  },
+  "errors": {
+    "payment": {
+      "over_outstanding": "Le montant dépasse ce qui est dû. Actualisez et réessayez.",
+      "nothing_outstanding": "Plus rien n’est dû sur ce compte.",
+      "invalid_target": "Cette visite n’a plus rien à payer.",
+      "invalid_payer": "Ce payeur n’est plus un contact de facturation de ce patient.",
+      "over_refund": "C’est plus que ce qu’il reste du paiement.",
+      "has_refunds": "Une partie de ce paiement a été remboursée ; remboursez le reste au lieu de l’annuler.",
+      "not_reversible": "Ce paiement ne peut plus être remboursé ni annulé.",
+      "not_found": "Ce paiement n’existe plus.",
+      "idempotency_mismatch": "Ce paiement a déjà été enregistré autrement. Fermez et recommencez."
+    }
+  },
+  "family": {
+    "title": "Famille facturée à {{name}}",
+    "members": "Comptes facturés à {{name}}",
+    "oldest": "Impayé depuis le {{date}}",
+    "payer": "Payeur",
+    "total": "Reste dû de la famille",
+    "record": "Encaisser pour la famille",
+    "statement": "Relevé de la famille"
   }
 }

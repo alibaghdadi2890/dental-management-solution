@@ -1,0 +1,79 @@
+{
+  "back": "Retour",
+  "format": "A4 · tient sur une page",
+  "print": "Imprimer / PDF",
+  "loading": "Chargement…",
+  "failed": "Impossible de charger ce document. Fermez l’onglet et réessayez.",
+  "footer": "Merci de votre visite.",
+  "page": "Page 1 sur 1",
+  "void": "ANNULÉ",
+  "patient": "Patient",
+  "billTo": "Facturé à",
+  "insurance": "Assurance",
+  "code": "Code",
+  "service": "Acte",
+  "tooth": "Dent",
+  "amount": "Montant",
+  "date": "Date",
+  "subtotal": "Sous-total",
+  "discount": "Remise",
+  "total": "Total",
+  "receipt": {
+    "title": "Reçu",
+    "receivedFrom": "Reçu de",
+    "patient": "Patient",
+    "patients": "Patients",
+    "payment": "Paiement",
+    "reference": "Réf. {{reference}}",
+    "appliedTo": "Imputé à",
+    "amount": "Montant",
+    "total": "Total reçu",
+    "refundedTotal": "Remboursé",
+    "balanceAfter": "Solde après · {{name}}",
+    "refunded": "{{amount}} remboursé le {{date}} — {{reason}}",
+    "voided": "Annulé le {{date}} — {{reason}}",
+    "recordedBy": "Saisi par {{name}}"
+  },
+  "invoice": {
+    "title": "Facture",
+    "visit": "Visite",
+    "paid": "Payé",
+    "due": "Reste à payer",
+    "payments": "Paiements reçus"
+  },
+  "statement": {
+    "title": "Relevé de compte",
+    "asOf": "Au",
+    "description": "Libellé",
+    "charges": "Débits",
+    "payments": "Crédits",
+    "balance": "Solde",
+    "charged": "Total facturé",
+    "paid": "Total payé",
+    "outstanding": "Reste dû",
+    "kind": {
+      "opening_balance": "Solde d’ouverture",
+      "charge": "Visite",
+      "charge_correction": "Correction de visite",
+      "adjustment": "Ajustement",
+      "payment": "Paiement",
+      "refund": "Remboursement"
+    }
+  },
+  "quote": {
+    "title": "Devis du plan de traitement",
+    "preparedBy": "Établi par",
+    "treatment": "Traitement",
+    "estimate": "Total estimé",
+    "empty": "Ce patient n’a aucun plan de traitement en cours.",
+    "validity": "Ce devis est valable {{days}} jours, jusqu’au {{date}}. Les prix peuvent changer si le plan de traitement change.",
+    "signPatient": "Signature du patient",
+    "signDentist": "Signature du dentiste"
+  },
+  "formatMulti": "A4",
+  "familyStatement": {
+    "title": "Relevé de la famille",
+    "members": "Comptes",
+    "total": "Reste dû de la famille"
+  }
+}

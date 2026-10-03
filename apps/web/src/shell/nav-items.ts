@@ -7,10 +7,11 @@ interface NavEntry<TKey extends string, TPath extends string> {
   permission: Permission;
 }
 
-/** Sidebar entries (POC app shell). Schedule and Payments are not part of phase 1. */
+/** Sidebar entries (POC app shell). Schedule is not part of phase 1; Payments is feature 5. */
 export const MAIN_NAV = [
   { key: 'patients', to: '/patients', permission: 'patient:read' },
   { key: 'visits', to: '/visits', permission: 'visit:read' },
+  { key: 'payments', to: '/payments', permission: 'payment:read' },
 ] as const satisfies readonly NavEntry<string, string>[];
 
 /** Every clinic role reads the catalog; only `catalog:write` edits it (read-only screen otherwise). */

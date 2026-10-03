@@ -1,0 +1,79 @@
+{
+  "back": "رجوع",
+  "format": "A4 · صفحة واحدة",
+  "print": "طباعة / PDF",
+  "loading": "جارٍ التحميل…",
+  "failed": "تعذّر تحميل هذا المستند. أغلق التبويب وحاول مجددًا.",
+  "footer": "شكرًا لزيارتكم.",
+  "page": "صفحة 1 من 1",
+  "void": "ملغى",
+  "patient": "المريض",
+  "billTo": "الفاتورة باسم",
+  "insurance": "التأمين",
+  "code": "الرمز",
+  "service": "الخدمة",
+  "tooth": "السن",
+  "amount": "المبلغ",
+  "date": "التاريخ",
+  "subtotal": "المجموع الفرعي",
+  "discount": "الخصم",
+  "total": "الإجمالي",
+  "receipt": {
+    "title": "إيصال",
+    "receivedFrom": "استُلم من",
+    "patient": "المريض",
+    "patients": "المرضى",
+    "payment": "الدفعة",
+    "reference": "مرجع {{reference}}",
+    "appliedTo": "طُبِّق على",
+    "amount": "المبلغ",
+    "total": "إجمالي المستلم",
+    "refundedTotal": "المسترد",
+    "balanceAfter": "الرصيد بعدها · {{name}}",
+    "refunded": "استُرد {{amount}} في {{date}} — {{reason}}",
+    "voided": "أُلغي في {{date}} — {{reason}}",
+    "recordedBy": "سجّله {{name}}"
+  },
+  "invoice": {
+    "title": "فاتورة",
+    "visit": "الزيارة",
+    "paid": "المدفوع",
+    "due": "الرصيد المستحق",
+    "payments": "الدفعات المستلمة"
+  },
+  "statement": {
+    "title": "كشف حساب",
+    "asOf": "حتى تاريخ",
+    "description": "البيان",
+    "charges": "الرسوم",
+    "payments": "الدفعات",
+    "balance": "الرصيد",
+    "charged": "إجمالي الرسوم",
+    "paid": "إجمالي المدفوع",
+    "outstanding": "المستحق",
+    "kind": {
+      "opening_balance": "الرصيد الافتتاحي",
+      "charge": "زيارة",
+      "charge_correction": "تصحيح زيارة",
+      "adjustment": "تسوية",
+      "payment": "دفعة",
+      "refund": "استرداد"
+    }
+  },
+  "quote": {
+    "title": "عرض سعر خطة العلاج",
+    "preparedBy": "أعدّه",
+    "treatment": "العلاج",
+    "estimate": "الإجمالي التقديري",
+    "empty": "لا توجد خطط علاج مفتوحة لهذا المريض.",
+    "validity": "هذا التقدير صالح لمدة {{days}} يومًا، حتى {{date}}. قد تتغيّر الأسعار إذا تغيّرت خطة العلاج.",
+    "signPatient": "توقيع المريض",
+    "signDentist": "توقيع طبيب الأسنان"
+  },
+  "formatMulti": "A4",
+  "familyStatement": {
+    "title": "كشف حساب العائلة",
+    "members": "الحسابات",
+    "total": "مستحقات العائلة"
+  }
+}

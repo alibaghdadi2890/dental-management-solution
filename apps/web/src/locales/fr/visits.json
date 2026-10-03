@@ -87,7 +87,9 @@
     "openRecord": "Ouvrir le dossier",
     "requestNote": "Seul un dentiste peut annuler ou modifier une visite terminée.",
     "requestChange": "Demander une modification",
-    "requestToast": "Demandez à {{dentist}} de modifier ou d'annuler cette visite"
+    "requestToast": "Demandez à {{dentist}} de modifier ou d'annuler cette visite",
+    "invoice": "Facture",
+    "planQuote": "Devis du plan"
   },
   "trail": {
     "title": "Journal d'audit",
@@ -151,7 +153,7 @@
     "done": "{{number}} annulée",
     "refundTitle": "Remboursez d'abord les paiements",
     "refundBody": "{{number}} a {{amount}} de paiements. Remboursez-les ou déplacez-les avant d'annuler la visite.",
-    "refundOk": "Compris"
+    "refundOk": "Aller aux paiements"
   },
   "history": {
     "viewLabel": "Vue de l’historique",

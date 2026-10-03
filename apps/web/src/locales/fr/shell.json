@@ -20,7 +20,8 @@
     "catalog": "Catalogue",
     "settings": "Paramètres",
     "platform": "Plateforme",
-    "tenants": "Cabinets"
+    "tenants": "Cabinets",
+    "payments": "Paiements"
   },
   "breadcrumb": "Fil d’Ariane",
   "platformCrumb": "Plateforme",

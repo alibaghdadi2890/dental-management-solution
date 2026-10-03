@@ -11,14 +11,21 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PrintRouteImport } from './routes/print'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
 import { Route as AppPatientsPatientIdRouteImport } from './routes/_app/patients/$patientId'
+import { Route as AppPaymentsIndexRouteImport } from './routes/_app/payments/index'
 import { Route as AppVisitsIndexRouteImport } from './routes/_app/visits/index'
 import { Route as AppVisitsVisitIdRouteImport } from './routes/_app/visits/$visitId'
+import { Route as PrintFamilyStatementContactIdRouteImport } from './routes/print/family-statement.$contactId'
+import { Route as PrintInvoiceVisitIdRouteImport } from './routes/print/invoice.$visitId'
+import { Route as PrintQuotePatientIdRouteImport } from './routes/print/quote.$patientId'
+import { Route as PrintReceiptPaymentIdRouteImport } from './routes/print/receipt.$paymentId'
+import { Route as PrintStatementPatientIdRouteImport } from './routes/print/statement.$patientId'
 import { Route as AppAdminTenantsIndexRouteImport } from './routes/_app/admin/tenants/index'
 import { Route as AppAdminTenantsTenantIdRouteImport } from './routes/_app/admin/tenants/$tenantId'
 
@@ -29,6 +36,11 @@ const AppRoute = AppRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrintRoute = PrintRouteImport.update({
+  id: '/print',
+  path: '/print',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -61,6 +73,11 @@ const AppPatientsPatientIdRoute = AppPatientsPatientIdRouteImport.update({
   path: '/patients/$patientId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPaymentsIndexRoute = AppPaymentsIndexRouteImport.update({
+  id: '/payments/',
+  path: '/payments/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppVisitsIndexRoute = AppVisitsIndexRouteImport.update({
   id: '/visits/',
   path: '/visits/',
@@ -70,6 +87,32 @@ const AppVisitsVisitIdRoute = AppVisitsVisitIdRouteImport.update({
   id: '/visits/$visitId',
   path: '/visits/$visitId',
   getParentRoute: () => AppRoute,
+} as any)
+const PrintFamilyStatementContactIdRoute =
+  PrintFamilyStatementContactIdRouteImport.update({
+    id: '/family-statement/$contactId',
+    path: '/family-statement/$contactId',
+    getParentRoute: () => PrintRoute,
+  } as any)
+const PrintInvoiceVisitIdRoute = PrintInvoiceVisitIdRouteImport.update({
+  id: '/invoice/$visitId',
+  path: '/invoice/$visitId',
+  getParentRoute: () => PrintRoute,
+} as any)
+const PrintQuotePatientIdRoute = PrintQuotePatientIdRouteImport.update({
+  id: '/quote/$patientId',
+  path: '/quote/$patientId',
+  getParentRoute: () => PrintRoute,
+} as any)
+const PrintReceiptPaymentIdRoute = PrintReceiptPaymentIdRouteImport.update({
+  id: '/receipt/$paymentId',
+  path: '/receipt/$paymentId',
+  getParentRoute: () => PrintRoute,
+} as any)
+const PrintStatementPatientIdRoute = PrintStatementPatientIdRouteImport.update({
+  id: '/statement/$patientId',
+  path: '/statement/$patientId',
+  getParentRoute: () => PrintRoute,
 } as any)
 const AppAdminTenantsIndexRoute = AppAdminTenantsIndexRouteImport.update({
   id: '/admin/tenants/',
@@ -85,25 +128,39 @@ const AppAdminTenantsTenantIdRoute = AppAdminTenantsTenantIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
+  '/print': typeof PrintRouteWithChildren
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
+  '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
+  '/print/invoice/$visitId': typeof PrintInvoiceVisitIdRoute
+  '/print/quote/$patientId': typeof PrintQuotePatientIdRoute
+  '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
+  '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/admin/': typeof AppAdminIndexRoute
   '/patients/': typeof AppPatientsIndexRoute
+  '/payments/': typeof AppPaymentsIndexRoute
   '/visits/': typeof AppVisitsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/admin/tenants/': typeof AppAdminTenantsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/print': typeof PrintRouteWithChildren
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
   '/': typeof AppIndexRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
+  '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
+  '/print/invoice/$visitId': typeof PrintInvoiceVisitIdRoute
+  '/print/quote/$patientId': typeof PrintQuotePatientIdRoute
+  '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
+  '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/admin': typeof AppAdminIndexRoute
   '/patients': typeof AppPatientsIndexRoute
+  '/payments': typeof AppPaymentsIndexRoute
   '/visits': typeof AppVisitsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/admin/tenants': typeof AppAdminTenantsIndexRoute
@@ -112,13 +169,20 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
+  '/print': typeof PrintRouteWithChildren
   '/_app/catalog': typeof AppCatalogRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/': typeof AppIndexRoute
   '/_app/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/_app/visits/$visitId': typeof AppVisitsVisitIdRoute
+  '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
+  '/print/invoice/$visitId': typeof PrintInvoiceVisitIdRoute
+  '/print/quote/$patientId': typeof PrintQuotePatientIdRoute
+  '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
+  '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/patients/': typeof AppPatientsIndexRoute
+  '/_app/payments/': typeof AppPaymentsIndexRoute
   '/_app/visits/': typeof AppVisitsIndexRoute
   '/_app/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
   '/_app/admin/tenants/': typeof AppAdminTenantsIndexRoute
@@ -128,25 +192,39 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/print'
     | '/catalog'
     | '/settings'
     | '/patients/$patientId'
     | '/visits/$visitId'
+    | '/print/family-statement/$contactId'
+    | '/print/invoice/$visitId'
+    | '/print/quote/$patientId'
+    | '/print/receipt/$paymentId'
+    | '/print/statement/$patientId'
     | '/admin/'
     | '/patients/'
+    | '/payments/'
     | '/visits/'
     | '/admin/tenants/$tenantId'
     | '/admin/tenants/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/print'
     | '/catalog'
     | '/settings'
     | '/'
     | '/patients/$patientId'
     | '/visits/$visitId'
+    | '/print/family-statement/$contactId'
+    | '/print/invoice/$visitId'
+    | '/print/quote/$patientId'
+    | '/print/receipt/$paymentId'
+    | '/print/statement/$patientId'
     | '/admin'
     | '/patients'
+    | '/payments'
     | '/visits'
     | '/admin/tenants/$tenantId'
     | '/admin/tenants'
@@ -154,13 +232,20 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_app'
     | '/login'
+    | '/print'
     | '/_app/catalog'
     | '/_app/settings'
     | '/_app/'
     | '/_app/patients/$patientId'
     | '/_app/visits/$visitId'
+    | '/print/family-statement/$contactId'
+    | '/print/invoice/$visitId'
+    | '/print/quote/$patientId'
+    | '/print/receipt/$paymentId'
+    | '/print/statement/$patientId'
     | '/_app/admin/'
     | '/_app/patients/'
+    | '/_app/payments/'
     | '/_app/visits/'
     | '/_app/admin/tenants/$tenantId'
     | '/_app/admin/tenants/'
@@ -169,6 +254,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  PrintRoute: typeof PrintRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -185,6 +271,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/print': {
+      id: '/print'
+      path: '/print'
+      fullPath: '/print'
+      preLoaderRoute: typeof PrintRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/': {
@@ -229,6 +322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPatientsPatientIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/payments/': {
+      id: '/_app/payments/'
+      path: '/payments'
+      fullPath: '/payments/'
+      preLoaderRoute: typeof AppPaymentsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/visits/': {
       id: '/_app/visits/'
       path: '/visits'
@@ -242,6 +342,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/visits/$visitId'
       preLoaderRoute: typeof AppVisitsVisitIdRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/print/family-statement/$contactId': {
+      id: '/print/family-statement/$contactId'
+      path: '/family-statement/$contactId'
+      fullPath: '/print/family-statement/$contactId'
+      preLoaderRoute: typeof PrintFamilyStatementContactIdRouteImport
+      parentRoute: typeof PrintRoute
+    }
+    '/print/invoice/$visitId': {
+      id: '/print/invoice/$visitId'
+      path: '/invoice/$visitId'
+      fullPath: '/print/invoice/$visitId'
+      preLoaderRoute: typeof PrintInvoiceVisitIdRouteImport
+      parentRoute: typeof PrintRoute
+    }
+    '/print/quote/$patientId': {
+      id: '/print/quote/$patientId'
+      path: '/quote/$patientId'
+      fullPath: '/print/quote/$patientId'
+      preLoaderRoute: typeof PrintQuotePatientIdRouteImport
+      parentRoute: typeof PrintRoute
+    }
+    '/print/receipt/$paymentId': {
+      id: '/print/receipt/$paymentId'
+      path: '/receipt/$paymentId'
+      fullPath: '/print/receipt/$paymentId'
+      preLoaderRoute: typeof PrintReceiptPaymentIdRouteImport
+      parentRoute: typeof PrintRoute
+    }
+    '/print/statement/$patientId': {
+      id: '/print/statement/$patientId'
+      path: '/statement/$patientId'
+      fullPath: '/print/statement/$patientId'
+      preLoaderRoute: typeof PrintStatementPatientIdRouteImport
+      parentRoute: typeof PrintRoute
     }
     '/_app/admin/tenants/': {
       id: '/_app/admin/tenants/'
@@ -268,6 +403,7 @@ interface AppRouteChildren {
   AppVisitsVisitIdRoute: typeof AppVisitsVisitIdRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppPatientsIndexRoute: typeof AppPatientsIndexRoute
+  AppPaymentsIndexRoute: typeof AppPaymentsIndexRoute
   AppVisitsIndexRoute: typeof AppVisitsIndexRoute
   AppAdminTenantsTenantIdRoute: typeof AppAdminTenantsTenantIdRoute
   AppAdminTenantsIndexRoute: typeof AppAdminTenantsIndexRoute
@@ -281,6 +417,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppVisitsVisitIdRoute: AppVisitsVisitIdRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppPatientsIndexRoute: AppPatientsIndexRoute,
+  AppPaymentsIndexRoute: AppPaymentsIndexRoute,
   AppVisitsIndexRoute: AppVisitsIndexRoute,
   AppAdminTenantsTenantIdRoute: AppAdminTenantsTenantIdRoute,
   AppAdminTenantsIndexRoute: AppAdminTenantsIndexRoute,
@@ -288,9 +425,28 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
+interface PrintRouteChildren {
+  PrintFamilyStatementContactIdRoute: typeof PrintFamilyStatementContactIdRoute
+  PrintInvoiceVisitIdRoute: typeof PrintInvoiceVisitIdRoute
+  PrintQuotePatientIdRoute: typeof PrintQuotePatientIdRoute
+  PrintReceiptPaymentIdRoute: typeof PrintReceiptPaymentIdRoute
+  PrintStatementPatientIdRoute: typeof PrintStatementPatientIdRoute
+}
+
+const PrintRouteChildren: PrintRouteChildren = {
+  PrintFamilyStatementContactIdRoute: PrintFamilyStatementContactIdRoute,
+  PrintInvoiceVisitIdRoute: PrintInvoiceVisitIdRoute,
+  PrintQuotePatientIdRoute: PrintQuotePatientIdRoute,
+  PrintReceiptPaymentIdRoute: PrintReceiptPaymentIdRoute,
+  PrintStatementPatientIdRoute: PrintStatementPatientIdRoute,
+}
+
+const PrintRouteWithChildren = PrintRoute._addFileChildren(PrintRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  PrintRoute: PrintRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

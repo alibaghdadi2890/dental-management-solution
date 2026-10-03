@@ -20,6 +20,8 @@ export const NAMESPACES = [
   'patients',
   'billing',
   'visits',
+  'payments',
+  'printables',
   'catalog',
   'clinical',
   'settings',

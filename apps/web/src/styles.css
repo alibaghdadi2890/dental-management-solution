@@ -194,3 +194,18 @@
     color: var(--color-ink-muted);
   }
 }
+
+/* Printables (feature 5, B9): A4 sheets, printed or saved as PDF by the browser. */
+@page {
+  size: A4;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff;
+    height: auto;
+    overflow: visible;
+  }
+}

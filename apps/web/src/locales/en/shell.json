@@ -20,7 +20,8 @@
     "catalog": "Catalog",
     "settings": "Settings",
     "platform": "Platform",
-    "tenants": "Tenants"
+    "tenants": "Tenants",
+    "payments": "Payments"
   },
   "breadcrumb": "Breadcrumb",
   "platformCrumb": "Platform",

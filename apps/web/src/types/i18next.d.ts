@@ -6,6 +6,8 @@ import type catalog from '../locales/en/catalog.json';
 import type clinical from '../locales/en/clinical.json';
 import type common from '../locales/en/common.json';
 import type patients from '../locales/en/patients.json';
+import type payments from '../locales/en/payments.json';
+import type printables from '../locales/en/printables.json';
 import type settings from '../locales/en/settings.json';
 import type shell from '../locales/en/shell.json';
 import type visits from '../locales/en/visits.json';
@@ -22,6 +24,8 @@ declare module 'i18next' {
       patients: typeof patients;
       billing: typeof billing;
       visits: typeof visits;
+      payments: typeof payments;
+      printables: typeof printables;
       catalog: typeof catalog;
       clinical: typeof clinical;
       settings: typeof settings;

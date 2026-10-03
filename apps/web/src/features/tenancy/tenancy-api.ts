@@ -1,4 +1,4 @@
-import { roomSchema, type TenantSettingsPatch } from '@dcm/contracts';
+import { branchSchema, roomSchema, type TenantSettingsPatch } from '@dcm/contracts';
 import { queryOptions, useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 import { updateTenantSettings } from '@/features/platform/platform-api';
@@ -10,6 +10,7 @@ import { apiFetch } from '@/lib/api';
 export const tenancyKeys = {
   rooms: (tenantId: string | null, branchId: string) =>
     ['tenancy', tenantId, 'rooms', branchId] as const,
+  branches: (tenantId: string | null) => ['tenancy', tenantId, 'branches'] as const,
 };
 
 /** Omitted entirely when the caller relies on the ambient acting tenant (`apiFetch`'s default). */
@@ -44,5 +45,13 @@ export function useUpdateTenantSettings() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['session'] });
     },
+  });
+}
+
+/** `GET /branches`: the clinic's branches with address and phone (the printables' clinic block). */
+export function branchesQuery() {
+  return queryOptions({
+    queryKey: tenancyKeys.branches(actingTenantId()),
+    queryFn: () => apiFetch('/branches', z.array(branchSchema)),
   });
 }

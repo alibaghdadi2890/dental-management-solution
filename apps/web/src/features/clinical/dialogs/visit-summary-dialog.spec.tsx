@@ -51,6 +51,7 @@ const SUMMARY: VisitFinancialSummary = {
   visit: { total: '162.00', paid: '0.00', outstanding: '162.00' },
   previous: '50.00',
   totalOutstanding: '212.00',
+  payments: [],
 };
 
 const WITH_PAYMENTS = [...DENTIST_WRITE, 'payment:read' as const];

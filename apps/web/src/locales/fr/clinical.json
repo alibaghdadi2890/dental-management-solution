@@ -128,7 +128,8 @@
     "selectTooth": "Afficher {{label}} dans le panneau de la dent",
     "estimate": "Estimation du plan",
     "emptyTitle": "Rien de planifié pour l’instant",
-    "emptyBody": "Sélectionnez une dent, notez vos constatations, puis planifiez le traitement. Vous pouvez terminer cette visite comme un simple examen, sans rien facturer."
+    "emptyBody": "Sélectionnez une dent, notez vos constatations, puis planifiez le traitement. Vous pouvez terminer cette visite comme un simple examen, sans rien facturer.",
+    "quote": "Devis du plan"
   },
   "notes": {
     "title": "Notes cliniques",
@@ -405,7 +406,9 @@
     "payLater": "Payer plus tard",
     "done": "Terminé",
     "loading": "Chargement des montants de la visite…",
-    "failed": "Impossible de charger les montants de la visite."
+    "failed": "Impossible de charger les montants de la visite.",
+    "partlyPaid": "Payée en partie",
+    "recordPayment": "Enregistrer un paiement"
   },
   "errors": {
     "visit": {

@@ -1,0 +1,79 @@
+{
+  "back": "Back",
+  "format": "A4 · prints one page",
+  "print": "Print / PDF",
+  "loading": "Loading…",
+  "failed": "Couldn’t load this document. Close the tab and try again.",
+  "footer": "Thank you for your visit.",
+  "page": "Page 1 of 1",
+  "void": "VOID",
+  "patient": "Patient",
+  "billTo": "Bill to",
+  "insurance": "Insurance",
+  "code": "Code",
+  "service": "Service",
+  "tooth": "Tooth",
+  "amount": "Amount",
+  "date": "Date",
+  "subtotal": "Subtotal",
+  "discount": "Discount",
+  "total": "Total",
+  "receipt": {
+    "title": "Receipt",
+    "receivedFrom": "Received from",
+    "patient": "Patient",
+    "patients": "Patients",
+    "payment": "Payment",
+    "reference": "Ref. {{reference}}",
+    "appliedTo": "Applied to",
+    "amount": "Amount",
+    "total": "Total received",
+    "refundedTotal": "Refunded",
+    "balanceAfter": "Balance after · {{name}}",
+    "refunded": "Refunded {{amount}} on {{date}} — {{reason}}",
+    "voided": "Voided on {{date}} — {{reason}}",
+    "recordedBy": "Recorded by {{name}}"
+  },
+  "invoice": {
+    "title": "Invoice",
+    "visit": "Visit",
+    "paid": "Paid",
+    "due": "Balance due",
+    "payments": "Payments received"
+  },
+  "statement": {
+    "title": "Account statement",
+    "asOf": "As of",
+    "description": "Description",
+    "charges": "Charges",
+    "payments": "Payments",
+    "balance": "Balance",
+    "charged": "Total charged",
+    "paid": "Total paid",
+    "outstanding": "Outstanding",
+    "kind": {
+      "opening_balance": "Opening balance",
+      "charge": "Visit",
+      "charge_correction": "Visit correction",
+      "adjustment": "Adjustment",
+      "payment": "Payment",
+      "refund": "Refund"
+    }
+  },
+  "quote": {
+    "title": "Treatment plan quote",
+    "preparedBy": "Prepared by",
+    "treatment": "Treatment",
+    "estimate": "Estimated total",
+    "empty": "This patient has no open treatment plans.",
+    "validity": "This estimate is valid for {{days}} days, until {{date}}. Prices may change if the treatment plan changes.",
+    "signPatient": "Patient signature",
+    "signDentist": "Dentist signature"
+  },
+  "formatMulti": "A4",
+  "familyStatement": {
+    "title": "Family statement",
+    "members": "Accounts",
+    "total": "Family outstanding"
+  }
+}

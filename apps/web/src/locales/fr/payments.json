@@ -1,0 +1,116 @@
+{
+  "title": "Paiements",
+  "subtitle": "Ce qui a été encaissé, et ce que les patients doivent encore",
+  "exportCsv": "Exporter en CSV",
+  "exportFailed": "Export impossible : {{reason}}",
+  "kpi": {
+    "collected": "Encaissé · 30 jours",
+    "outstanding": "Reste dû",
+    "refunds": "Remboursements · 30 jours"
+  },
+  "aging": {
+    "title": "Ancienneté des créances",
+    "patients_one": "{{count}} patient",
+    "patients_many": "{{count}} patients",
+    "patients_other": "{{count}} patients"
+  },
+  "buckets": {
+    "d0_30": "0–30 jours",
+    "d31_60": "31–60 jours",
+    "d61_90": "61–90 jours",
+    "d90_plus": "Plus de 90 jours"
+  },
+  "tabs": {
+    "label": "Vues des paiements",
+    "transactions": "Transactions",
+    "outstanding": "Impayés"
+  },
+  "search": {
+    "placeholder": "Patient, reçu ou n° de visite",
+    "label": "Rechercher des paiements"
+  },
+  "filters": {
+    "date": "Date",
+    "method": "Moyen",
+    "bucket": "Ancienneté",
+    "any": "Tous",
+    "clear": "Effacer les filtres",
+    "range": {
+      "7d": "7 derniers jours",
+      "30d": "30 derniers jours",
+      "90d": "90 derniers jours",
+      "all": "Toute la période"
+    },
+    "group": "Afficher",
+    "byPatient": "Par patient",
+    "byPayer": "Par payeur (familles)"
+  },
+  "columns": {
+    "transactions": "Transactions",
+    "outstanding": "Soldes impayés",
+    "date": "Date",
+    "receipt": "Reçu",
+    "patient": "Patient",
+    "type": "Type",
+    "visits": "Visite(s)",
+    "recordedBy": "Saisi par",
+    "amount": "Montant",
+    "oldestUnpaid": "Plus ancien impayé",
+    "openVisits": "Visites",
+    "bucket": "Ancienneté",
+    "balance": "Solde"
+  },
+  "type": {
+    "refund": "Remboursement",
+    "void": "Annulation",
+    "partial": "· partiel"
+  },
+  "household": "foyer",
+  "actions": {
+    "receipt": "Reçu",
+    "refund": "Rembourser",
+    "void": "Annuler le paiement",
+    "askDentist": "Demandez à un dentiste de rembourser",
+    "takePayment": "Encaisser"
+  },
+  "refund": {
+    "title": "Rembourser {{receipt}}",
+    "body": "{{patient}} · jusqu’à {{amount}} peut être remboursé. Ce qu’il couvrait redevient dû.",
+    "amount": "Montant à rembourser",
+    "method": "Remboursé par",
+    "reason": "Motif (obligatoire, conservé dans l’historique)",
+    "problem": {
+      "invalid": "Saisissez un montant supérieur à zéro.",
+      "over": "Au plus {{amount}} peut être remboursé."
+    },
+    "submit": "Rembourser",
+    "done": "{{amount}} remboursé"
+  },
+  "void": {
+    "title": "Annuler {{receipt}} ?",
+    "body": "Pour un paiement saisi par erreur. Les {{amount}} sont retirés et ce qu’ils couvraient redevient dû.",
+    "bodyHousehold": "Pour un paiement saisi par erreur. La part de chaque patient de ce reçu ({{amount}} ici) est retirée.",
+    "ok": "Annuler le paiement",
+    "reason": "Motif",
+    "done": "{{receipt}} annulé"
+  },
+  "footer": {
+    "rows": "Lignes",
+    "label": "Pages",
+    "previous": "Précédent",
+    "next": "Suivant"
+  },
+  "states": {
+    "loading": "Chargement",
+    "errorTitle": "Impossible de charger les paiements",
+    "errorBody": "Vérifiez votre connexion et réessayez.",
+    "noMatchTitle": "Aucun résultat",
+    "noMatchBody": "Aucune ligne ne correspond à la recherche et aux filtres.",
+    "emptyTitle": "Rien pour l’instant",
+    "emptyBody": "Les paiements encaissés depuis un dossier patient, une visite ou cet écran apparaissent ici."
+  },
+  "family": {
+    "name": "{{name}} · famille",
+    "billedTo": "facturé à {{name}}"
+  }
+}

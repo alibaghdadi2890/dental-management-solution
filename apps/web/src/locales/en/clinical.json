@@ -128,7 +128,8 @@
     "selectTooth": "Show {{label}} in the tooth panel",
     "estimate": "Plan estimate",
     "emptyTitle": "Nothing planned yet",
-    "emptyBody": "Select a tooth, record what you found, then plan the treatment. You can complete this visit as an examination without billing anything."
+    "emptyBody": "Select a tooth, record what you found, then plan the treatment. You can complete this visit as an examination without billing anything.",
+    "quote": "Plan quote"
   },
   "notes": {
     "title": "Clinical notes",
@@ -405,7 +406,9 @@
     "payLater": "Pay later",
     "done": "Done",
     "loading": "Loading the visit's figures…",
-    "failed": "Couldn't load the visit's figures."
+    "failed": "Couldn't load the visit's figures.",
+    "partlyPaid": "Partly paid",
+    "recordPayment": "Record payment"
   },
   "errors": {
     "visit": {

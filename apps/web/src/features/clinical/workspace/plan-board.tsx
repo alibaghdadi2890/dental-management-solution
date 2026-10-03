@@ -15,6 +15,7 @@ import { useChartingActions } from './charting-actions';
 import { useToothSelection } from './tooth-selection';
 import { SurfaceTag } from './tooth-panel/surface-tag';
 import { plansTotal } from './tooth-panel/tooth-records';
+import { openPrintable, printPath } from '@/features/billing/payments-api';
 
 /** One tooth's open plans, or the jaw-level ones (`tooth: null`). */
 interface PlanGroup {
@@ -100,6 +101,17 @@ export function PlanBoard({ chart, canWrite }: { chart: PatientChart; canWrite: 
             <span className="text-[12.5px] leading-none font-semibold">
               {t('planBoard.estimate')}
             </span>
+            {open[0] && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (open[0]) openPrintable(printPath.quote(open[0].patientId));
+                }}
+                className="ms-auto cursor-pointer border-0 bg-transparent p-0 text-[12.5px] font-medium text-primary hover:underline"
+              >
+                {t('planBoard.quote')}
+              </button>
+            )}
             <span
               dir="ltr"
               className="font-mono text-[17px] leading-none font-bold tracking-[-0.02em] tabular-nums"

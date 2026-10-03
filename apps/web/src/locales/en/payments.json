@@ -1,0 +1,115 @@
+{
+  "title": "Payments",
+  "subtitle": "What was collected, and what patients still owe",
+  "exportCsv": "Export CSV",
+  "exportFailed": "Couldn’t export: {{reason}}",
+  "kpi": {
+    "collected": "Collected · 30 days",
+    "outstanding": "Outstanding",
+    "refunds": "Refunds · 30 days"
+  },
+  "aging": {
+    "title": "Receivables aging",
+    "patients_one": "{{count}} patient",
+    "patients_other": "{{count}} patients"
+  },
+  "buckets": {
+    "d0_30": "0–30 days",
+    "d31_60": "31–60 days",
+    "d61_90": "61–90 days",
+    "d90_plus": "90+ days"
+  },
+  "tabs": {
+    "label": "Payments views",
+    "transactions": "Transactions",
+    "outstanding": "Outstanding"
+  },
+  "search": {
+    "placeholder": "Patient, receipt or visit ID",
+    "label": "Search payments"
+  },
+  "filters": {
+    "date": "Date",
+    "method": "Method",
+    "bucket": "Age",
+    "any": "Any",
+    "clear": "Clear filters",
+    "range": {
+      "7d": "Last 7 days",
+      "30d": "Last 30 days",
+      "90d": "Last 90 days",
+      "all": "All time"
+    },
+    "group": "Show",
+    "byPatient": "By patient",
+    "byPayer": "By payer (families)"
+  },
+  "columns": {
+    "transactions": "Transactions",
+    "outstanding": "Outstanding balances",
+    "date": "Date",
+    "receipt": "Receipt",
+    "patient": "Patient",
+    "type": "Type",
+    "visits": "Visit(s)",
+    "recordedBy": "Recorded by",
+    "amount": "Amount",
+    "oldestUnpaid": "Oldest unpaid",
+    "openVisits": "Visits",
+    "bucket": "Age",
+    "balance": "Balance"
+  },
+  "type": {
+    "refund": "Refund",
+    "void": "Void",
+    "partial": "· partial"
+  },
+  "household": "household",
+  "actions": {
+    "receipt": "Receipt",
+    "refund": "Refund",
+    "void": "Void payment",
+    "askDentist": "Ask a dentist to refund",
+    "takePayment": "Take payment"
+  },
+  "refund": {
+    "title": "Refund {{receipt}}",
+    "body": "{{patient}} · up to {{amount}} can be refunded. What it covered becomes owed again.",
+    "amount": "Amount to refund",
+    "method": "Refunded by",
+    "reason": "Reason (required, kept in the audit trail)",
+    "problem": {
+      "invalid": "Enter an amount above zero.",
+      "over": "At most {{amount}} can be refunded."
+    },
+    "submit": "Refund",
+    "done": "{{amount}} refunded"
+  },
+  "void": {
+    "title": "Void {{receipt}}?",
+    "body": "Use this for a payment entered by mistake. The {{amount}} is removed and what it covered becomes owed again.",
+    "bodyHousehold": "Use this for a payment entered by mistake. Every patient’s part of this receipt ({{amount}} here) is removed.",
+    "ok": "Void payment",
+    "reason": "Reason",
+    "done": "{{receipt}} voided"
+  },
+  "footer": {
+    "rows": "Rows",
+    "label": "Pages",
+    "previous": "Previous",
+    "next": "Next"
+  },
+  "states": {
+    "loading": "Loading",
+    "errorTitle": "Couldn’t load payments",
+    "errorBody": "Check your connection and try again.",
+    "noMatchTitle": "Nothing matches",
+    "noMatchBody": "No rows match the current search and filters.",
+    "emptyTitle": "Nothing here yet",
+    "emptyBody": "Payments taken from a patient’s record, a visit or here appear in this list."
+  },
+  "family": {
+    "name": "{{name}} · family",
+    "billedTo": "billed to {{name}}"
+  }
+}

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { CardSkeleton } from '@/components/ui/card';
 import { ErrorState, Pill } from '@/components/ui/list';
 import { usePermission } from '@/features/auth/use-permission';
+import { useRecordPayment } from '@/features/billing/payments/payment-dialog-context';
 import type { HistoryView } from '@/features/patients/record/record-search';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -17,7 +18,8 @@ import { VisitStatusPill } from '../visits-list/visits-table';
 import { ClinicalThreads } from './clinical-threads';
 
 /** One visit of the history: collapsed to a summary line, expanded to its services (tooth
- * links open the tooth's history), notes and money. Voided visits are struck through at 70 %. */
+ * links open the tooth's history), notes and money — with Record payment for this visit (B4) while
+ * it is owed. Voided visits are struck through at 70 %. */
 function HistoryRow({
   visit,
   balance,
@@ -36,7 +38,8 @@ function HistoryRow({
   onToggle: () => void;
   onTooth: (code: ToothCode) => void;
 }) {
-  const { t } = useTranslation(['clinical', 'visits']);
+  const { t } = useTranslation(['clinical', 'visits', 'billing']);
+  const openPayment = useRecordPayment();
   const toothLabel = useToothLabel();
   const surfaceLabel = useSurfaceLabel();
   const rowRef = useRef<HTMLLIElement>(null);
@@ -189,6 +192,18 @@ function HistoryRow({
                     {money(balance.outstanding)}
                   </dd>
                 </div>
+                {owes && openPayment && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 self-end"
+                    onClick={() => {
+                      openPayment({ patientId: visit.patient.id, preselectVisitId: visit.id });
+                    }}
+                  >
+                    {t('billing:balance.record')}
+                  </Button>
+                )}
               </>
             )}
           </dl>

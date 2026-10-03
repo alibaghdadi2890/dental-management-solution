@@ -73,6 +73,7 @@ const balance = (paid: string): VisitBalance => ({
   currency: 'USD',
   charged: '140.00',
   paid,
+  paidByPayments: paid,
   outstanding: (140 - Number(paid)).toFixed(2),
 });
 
@@ -116,6 +117,11 @@ function renderPanel(permissions: Permission[], paid = '0.00') {
         path: '/patients/$patientId',
         component: () => null,
       }),
+      createRoute({
+        getParentRoute: () => rootRoute,
+        path: '/payments',
+        component: () => null,
+      }),
     ]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   });
@@ -128,6 +134,7 @@ function renderPanel(permissions: Permission[], paid = '0.00') {
       </ToastProvider>
     </QueryClientProvider>,
   );
+  return router;
 }
 
 const DENTIST: Permission[] = [
@@ -187,13 +194,17 @@ describe('VisitDetailPanel', () => {
     });
   });
 
-  it('says to refund payments first when the visit has some', async () => {
+  it('says to refund payments first when the visit has some, and goes to its payments', async () => {
     const fetchMock = mockApi();
-    renderPanel(DENTIST, '40.00');
+    const router = renderPanel(DENTIST, '40.00');
     fireEvent.click(await screen.findByRole('button', { name: 'Void' }));
     expect(await screen.findByText('Refund payments first')).toBeTruthy();
     expect(screen.queryByLabelText('Reason for voiding')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Go to payments' }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/payments');
+    });
+    expect(router.state.location.search).toMatchObject({ q: 'V-000042', range: 'all' });
     expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/void'))).toBe(false);
   });
 
@@ -204,7 +215,7 @@ describe('VisitDetailPanel', () => {
     fireEvent.change(screen.getByLabelText('Tooth of Composite filling'), {
       target: { value: '99' },
     });
-    const save = screen.getByRole('button', { name: 'Save amendment' });
+    const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save amendment' });
     expect(screen.getByText('Enter a tooth and only surfaces it has.')).toBeTruthy();
     expect(save.disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Remove Composite filling' }));
@@ -215,10 +226,10 @@ describe('VisitDetailPanel', () => {
     const fetchMock = mockApi();
     renderPanel(DENTIST);
     fireEvent.click(await screen.findByRole('button', { name: 'Amend' }));
-    const save = screen.getByRole('button', { name: 'Save amendment' });
-    expect((save as HTMLButtonElement).disabled).toBe(true);
+    const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save amendment' });
+    expect(save.disabled).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Remove Scaling' }));
-    expect((save as HTMLButtonElement).disabled).toBe(false);
+    expect(save.disabled).toBe(false);
     fireEvent.click(save);
     expect(
       await screen.findByText(

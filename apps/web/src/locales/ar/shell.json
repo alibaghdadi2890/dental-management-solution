@@ -20,7 +20,8 @@
     "catalog": "الكتالوج",
     "settings": "الإعدادات",
     "platform": "المنصة",
-    "tenants": "العيادات"
+    "tenants": "العيادات",
+    "payments": "المدفوعات"
   },
   "breadcrumb": "مسار التنقل",
   "platformCrumb": "المنصة",
