@@ -41,6 +41,8 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
   change role. Not permission-gated either: `patients` (`primary_dentist_id`, the `sort=dentist`
   rank) and `billing` (the export's Dentist column) resolve dentist names through it (ADR-0020).
   Domain models never store an auth user id for a dentist.
+- `namesByUserIds(userIds)` — display names of the staff among `userIds` (auth user ids, the `*_by`
+  columns), deactivated staff included; not permission-gated ("Recorded by" in `billing`, feature 5).
 - `profileIdOf(userId)` — the user's `staff_profiles.id` in this tenant, or `null` (a platform
   admin acting in the tenant has no profile). Not permission-gated either: `clinical`'s
   `live({ mine: true })` matches the caller's visits as dentist through it (feature 4a, W18).
