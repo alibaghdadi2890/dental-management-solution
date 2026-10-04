@@ -165,3 +165,9 @@ export class AmendPlanLinkedError extends DomainError {
   readonly code = 'visit.amend_plan_linked';
   readonly kind = 'invalid';
 }
+
+/** A checkout discount after the visit's day (checkout handoff, C5): amend the visit instead. */
+export class VisitCheckoutClosedError extends DomainError {
+  readonly code = 'visit.checkout_closed';
+  readonly kind = 'conflict';
+}

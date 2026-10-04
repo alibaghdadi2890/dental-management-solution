@@ -1,5 +1,6 @@
 import {
   amendVisitSchema,
+  checkoutDiscountSchema,
   idSchema,
   liveVisitQuerySchema,
   liveVisitRefSchema,
@@ -46,6 +47,7 @@ class VisitNotesDto extends createZodDto(visitNotesSchema) {}
 class VisitDiscountDto extends createZodDto(visitDiscountSchema) {}
 class VisitParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class AmendVisitDto extends createZodDto(amendVisitSchema) {}
+class CheckoutDiscountDto extends createZodDto(checkoutDiscountSchema) {}
 class VisitListQueryDto extends createZodDto(visitListQuerySchema) {}
 class VisitPageDto extends createZodDto(visitPageSchema) {}
 class VisitFiltersDto extends createZodDto(visitFiltersSchema) {}
@@ -151,6 +153,15 @@ export class VisitsController {
   @ZodResponse({ type: VisitResultDto })
   amend(@Param() params: VisitParamsDto, @Body() body: AmendVisitDto) {
     return this.visits.amend(params.id, body);
+  }
+
+  /** `{ visit }` with the discount set at checkout; `billing` has posted the difference. */
+  @Post(':id/checkout-discount')
+  @RequirePermission('visit:discount')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: VisitResultDto })
+  checkoutDiscount(@Param() params: VisitParamsDto, @Body() body: CheckoutDiscountDto) {
+    return this.visits.setCheckoutDiscount(params.id, body);
   }
 
   /** `{ visit }` voided; `billing` has reversed its charge in the same transaction (4b). */

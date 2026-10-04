@@ -1,5 +1,6 @@
 import {
   type AmendVisitInput,
+  type CheckoutDiscountInput,
   durationMinutes,
   lineFinal,
   surfacesSchema,
@@ -43,6 +44,7 @@ import {
   DentistInvalidError,
   RoomInvalidError,
   RoomRequiredError,
+  VisitCheckoutClosedError,
   VisitMovedError,
   VisitNotEmptyError,
   VisitNotFoundError,
@@ -478,19 +480,61 @@ export class VisitsService {
    */
   async amend(id: string, input: AmendVisitInput): Promise<VisitResult> {
     this.context.requirePermission('visit:amend');
+    return this.recharge(id, { kind: 'amendment', ...input });
+  }
+
+  /**
+   * Sets the visit discount at checkout (checkout handoff, C3–C5, ADR-0030) with
+   * `visit:discount`: an amendment of the discount alone that keeps the visit's status and needs
+   * no reason, on the visit's own day only (409 `visit.checkout_closed` afterwards; a later change
+   * is an amendment). Same locks, staleness check, `visit_amendments` row (kind
+   * `checkout_discount`) and `VisitAmended` as `amend`; audited `visit.discount`.
+   */
+  async setCheckoutDiscount(id: string, input: CheckoutDiscountInput): Promise<VisitResult> {
+    this.context.requirePermission('visit:discount');
+    return this.recharge(id, {
+      kind: 'checkout_discount',
+      expectedUpdatedAt: input.expectedUpdatedAt,
+      discount: input.discount,
+      reason: input.reason ?? null,
+    });
+  }
+
+  /** What `amend` and `setCheckoutDiscount` share: the visit's money changes after completion. */
+  private async recharge(
+    id: string,
+    change:
+      | ({ kind: 'amendment' } & AmendVisitInput)
+      | ({ kind: 'checkout_discount'; reason: string | null } & Pick<
+          AmendVisitInput,
+          'expectedUpdatedAt' | 'discount'
+        >),
+  ): Promise<VisitResult> {
     return this.tenantDb.run(async () => {
       const before = await this.lockPatientThenVisit(id, (visitId) =>
         this.visits.lockForCorrection(visitId),
       );
-      const status = correct(before.status, 'amend');
-      assertFresh(before, input.expectedUpdatedAt);
+      const amended = correct(before.status, 'amend');
+      if (change.kind === 'checkout_discount' && before.localDate !== (await this.today())) {
+        throw new VisitCheckoutClosedError(
+          "The discount is set at checkout on the visit's day; amend the visit instead",
+        );
+      }
+      assertFresh(before, change.expectedUpdatedAt);
+      const stored = await this.services.listForVisit(id);
       const plan = planAmendment(
         {
           discountMode: before.discountMode,
           discountValue: before.discountValue,
-          services: (await this.services.listForVisit(id)).map(toAmendable),
+          services: stored.map(toAmendable),
         },
-        input,
+        {
+          discount: change.discount,
+          services:
+            change.kind === 'amendment'
+              ? change.services
+              : stored.map((service) => ({ id: service.id })),
+        },
       );
       const now = this.clock.now();
       for (const service of plan.removed) {
@@ -499,20 +543,23 @@ export class VisitsService {
       for (const { id: serviceId, toothCode, surfaces } of plan.edited) {
         await this.services.update(serviceId, { toothCode, surfaces });
       }
-      for (const planId of plan.plansToReopen) {
-        await this.unperformer.unperform(planId, before, input.reason);
+      if (change.kind === 'amendment') {
+        for (const planId of plan.plansToReopen) {
+          await this.unperformer.unperform(planId, before, change.reason);
+        }
       }
       const after = await this.visits.update(id, {
-        status,
-        discountMode: input.discount.mode,
-        discountValue: input.discount.value,
+        status: change.kind === 'amendment' ? amended : before.status,
+        discountMode: change.discount.mode,
+        discountValue: change.discount.value,
         subtotal: plan.after.subtotal,
         discountAmount: plan.after.discountAmount,
         total: plan.after.total,
       });
       const amendmentId = await this.amendments.append({
         visitId: id,
-        reason: input.reason,
+        kind: change.kind,
+        reason: change.reason,
         before: plan.before,
         after: plan.after,
         delta: plan.delta,
@@ -520,12 +567,12 @@ export class VisitsService {
         amendedBy: this.context.requireUserId(),
       });
       await this.audit.record({
-        action: 'visit.amend',
+        action: change.kind === 'amendment' ? 'visit.amend' : 'visit.discount',
         resourceType: 'visit',
         resourceId: id,
         before: plan.before,
         after: plan.after,
-        reason: input.reason,
+        reason: change.reason ?? undefined,
       });
       const event: VisitAmended = this.events.create(VISIT_AMENDED, {
         visitId: id,
@@ -533,7 +580,7 @@ export class VisitsService {
         amendmentId,
         currency: after.currency,
         delta: plan.delta,
-        reason: input.reason,
+        reason: change.reason,
       });
       await this.events.publish(event);
       return { visit: await this.toVisit(after) };

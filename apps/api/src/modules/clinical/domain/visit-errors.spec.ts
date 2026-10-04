@@ -17,6 +17,7 @@ import {
   SurfacesInvalidError,
   ToothNotAllowedError,
   ToothRequiredError,
+  VisitCheckoutClosedError,
   VisitMovedError,
   VisitNotEmptyError,
   VisitNotFoundError,
@@ -57,6 +58,7 @@ describe('visit domain errors', () => {
     [new AmendNoChangeError('x'), 'visit.amend_no_change', 'invalid'],
     [new AmendUnknownServiceError('x'), 'visit.amend_unknown_service', 'invalid'],
     [new AmendPlanLinkedError('x'), 'visit.amend_plan_linked', 'invalid'],
+    [new VisitCheckoutClosedError('x'), 'visit.checkout_closed', 'conflict'],
   ])('%s carries code %s and kind %s', (error, code, kind) => {
     expect(error.code).toBe(code);
     expect(error.kind).toBe(kind);

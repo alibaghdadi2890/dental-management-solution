@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { count, eq, inArray, max } from 'drizzle-orm';
+import { and, count, eq, inArray, max } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import type { AmendmentSnapshot } from '../domain/visit-amendment';
 import { visitAmendments } from './schema';
 
 export interface NewVisitAmendment {
   visitId: string;
-  reason: string;
+  kind: 'amendment' | 'checkout_discount';
+  /** Null only for a checkout discount given without one. */
+  reason: string | null;
   before: AmendmentSnapshot;
   after: AmendmentSnapshot;
   delta: string;
@@ -42,14 +44,22 @@ export class VisitAmendmentsRepository {
     });
   }
 
-  /** How many times each visit was amended; visits never amended are absent. */
+  /**
+   * How many times each visit was amended; visits never amended are absent. A checkout discount
+   * is not an amendment to the reader (checkout handoff, C4), so it isn't counted.
+   */
   async countsFor(visitIds: readonly string[]): Promise<Map<string, number>> {
     if (visitIds.length === 0) return new Map();
     const rows = await this.db.run((tx) =>
       tx
         .select({ visitId: visitAmendments.visitId, amendments: count() })
         .from(visitAmendments)
-        .where(inArray(visitAmendments.visitId, [...visitIds]))
+        .where(
+          and(
+            inArray(visitAmendments.visitId, [...visitIds]),
+            eq(visitAmendments.kind, 'amendment'),
+          ),
+        )
         .groupBy(visitAmendments.visitId),
     );
     return new Map(rows.map((row) => [row.visitId, row.amendments]));

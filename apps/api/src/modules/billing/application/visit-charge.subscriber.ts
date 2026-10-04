@@ -33,7 +33,8 @@ import { Settlement } from './settlement';
  *   (W20: the ledger refuses 0). A second charge violates `ledger_entries_visit_kind_unique`;
  *   that can only be a bug, so it is raised, not ignored.
  * - `VisitAmended` posts the amendment's difference as a `visit_charge_adjustment` (4b, D7),
- *   negative for a credit, nothing for a zero delta.
+ *   negative for a credit, nothing for a zero delta. A discount set at checkout arrives the same
+ *   way, possibly without a reason.
  * - `VisitVoided` reverses what the visit charges now (charge plus adjustments) with a
  *   `visit_charge_reversal`, nothing when that nets to zero — or vetoes the void when payments
  *   sit on the visit (ADR-0026).
@@ -43,7 +44,7 @@ import { Settlement } from './settlement';
  *
  * Adjustments and reversals are dated the tenant's today and carry the reason, but no lines: the
  * before/after is `clinical`'s `visit_amendments` row (D7). Not gated by `payment:write`: the
- * trigger already required `visit:write`, `visit:amend` or `visit:void`.
+ * trigger already required `visit:write`, `visit:amend`, `visit:discount` or `visit:void`.
  */
 @Injectable()
 export class VisitChargeSubscriber {

@@ -41,7 +41,8 @@ export type VisitCompleted = DomainEvent<
 /**
  * A completed visit was amended (4b, D1–D4, ADR-0025), published inside the amend transaction:
  * `billing` posts `delta` (after − before total, negative for a credit) as a visit charge
- * adjustment before commit. `reason` is the dentist's, carried onto the ledger entry.
+ * adjustment before commit. `reason` is the dentist's, carried onto the ledger entry; a discount
+ * set at checkout is published the same way and may have none.
  */
 export const VISIT_AMENDED = 'VisitAmended';
 export type VisitAmended = DomainEvent<
@@ -52,7 +53,7 @@ export type VisitAmended = DomainEvent<
     amendmentId: string;
     currency: string;
     delta: string;
-    reason: string;
+    reason: string | null;
   }
 >;
 

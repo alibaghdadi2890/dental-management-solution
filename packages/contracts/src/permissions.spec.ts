@@ -34,6 +34,7 @@ describe('phase 1 catalog', () => {
     for (const permission of [
       'visit:void',
       'visit:amend',
+      'visit:discount',
       'payment:read',
       'payment:write',
       'payment:refund',

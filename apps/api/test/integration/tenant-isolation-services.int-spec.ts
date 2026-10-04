@@ -511,6 +511,10 @@ describe('tenant isolation through the public services', () => {
           discount: { mode: 'percent', value: '0' },
           services: [{ id: newId() }],
         }),
+        ownerA.post(`/api/v1/visits/${visitId}/checkout-discount`).send({
+          expectedUpdatedAt: correction.expectedUpdatedAt,
+          discount: { mode: 'percent', value: '5' },
+        }),
       ];
       for (const response of await Promise.all(attempts)) {
         expect(response.status).toBe(404);

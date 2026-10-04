@@ -46,7 +46,8 @@ interface LedgerRow {
 interface AmendmentRow {
   id: string;
   sequence: number;
-  reason: string;
+  kind: string;
+  reason: string | null;
   delta: string;
   amended_by: string;
   before: { total: string; services: { id: string }[] };
@@ -151,6 +152,11 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
       .post(`/api/v1/visits/${visit.id}/amend`)
       .send({ expectedUpdatedAt: visit.updatedAt, ...body });
 
+  const checkoutDiscount = (agent: TestAgent, visit: Visit, body: Record<string, unknown>) =>
+    agent
+      .post(`/api/v1/visits/${visit.id}/checkout-discount`)
+      .send({ expectedUpdatedAt: visit.updatedAt, ...body });
+
   const voidVisit = (agent: TestAgent, visit: Visit, reason = 'Wrong patient') =>
     agent
       .post(`/api/v1/visits/${visit.id}/void`)
@@ -171,7 +177,7 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
   const amendmentsOf = async (visitId: string) =>
     (
       await database.ownerPool.query<AmendmentRow>(
-        `select id, sequence, reason, delta::text, amended_by, before, after
+        `select id, sequence, kind, reason, delta::text, amended_by, before, after
          from visit_amendments where visit_id = $1 order by sequence`,
         [visitId],
       )
@@ -444,6 +450,131 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
       expect((await voidVisit(agent, visit)).status).toBe(403);
     }
     await ok(voidVisit(owner, visit));
+  });
+
+  describe('checkout discount (checkout handoff, C2–C7)', () => {
+    it('front desk sets the discount: the visit stays completed, the difference is posted', async () => {
+      const patient = await patientOwing('Checkout Discount', '40');
+      const { visit } = await completedVisit(patient);
+
+      const { visit: discounted } = await ok<VisitResult>(
+        checkoutDiscount(frontdesk.agent, visit, { discount: { mode: 'amount', value: '17' } }),
+      );
+
+      expect(discounted.status).toBe('completed');
+      expect(discounted.money).toMatchObject({
+        subtotal: '130.00',
+        discount: '17.00',
+        total: '113.00',
+      });
+      expect(discounted.services).toHaveLength(2);
+      expect(await ledgerOf(visit.id)).toEqual([
+        expect.objectContaining({ kind: 'visit_charge', amount: '117.00' }),
+        {
+          kind: 'visit_charge_adjustment',
+          amount: '-4.00',
+          effective_date: TODAY,
+          reason: null,
+          created_by: frontdesk.user.id,
+          amendment_id: expect.any(String) as string,
+        },
+      ]);
+      expect(await balanceOf(patient.id)).toEqual([{ amount: '153.00', currency: 'USD' }]);
+      expect(await amendmentsOf(visit.id)).toEqual([
+        expect.objectContaining({
+          sequence: 1,
+          kind: 'checkout_discount',
+          reason: null,
+          delta: '-4.00',
+          amended_by: frontdesk.user.id,
+        }),
+      ]);
+      const [latest] = await auditOf(visit.id);
+      expect(latest).toMatchObject({
+        action: 'visit.discount',
+        before: { total: '117.00' },
+        after: { total: '113.00' },
+      });
+
+      // With a reason, by the dentist; still not an amendment to the lists.
+      await ok(
+        checkoutDiscount(dentist.agent, discounted, {
+          reason: 'Family friend',
+          discount: { mode: 'percent', value: '50' },
+        }),
+      );
+      expect((await amendmentsOf(visit.id)).map((row) => [row.kind, row.reason])).toEqual([
+        ['checkout_discount', null],
+        ['checkout_discount', 'Family friend'],
+      ]);
+      const listed = await ok<{ items: { id: string; status: string; amendmentCount: number }[] }>(
+        owner.get(`/api/v1/visits?range=all&patientId=${patient.id}`),
+      );
+      expect(listed.items.find((item) => item.id === visit.id)).toMatchObject({
+        status: 'completed',
+        amendmentCount: 0,
+      });
+    });
+
+    it('is refused without the permission, stale, unchanged, live, voided or after the day', async () => {
+      const patient = await patientOwing('Checkout Refused', '1');
+      const { visit } = await completedVisit(patient);
+      const discount = { mode: 'percent', value: '20' };
+
+      expect((await checkoutDiscount(assistant.agent, visit, { discount })).status).toBe(403);
+
+      const stale = await checkoutDiscount(
+        frontdesk.agent,
+        { ...visit, updatedAt: '2026-01-01T00:00:00.000Z' },
+        { discount },
+      );
+      expect(stale.status).toBe(409);
+      expect(problem(stale.body).code).toBe('visit.stale');
+
+      const same = await checkoutDiscount(frontdesk.agent, visit, {
+        discount: { mode: 'percent', value: '10' },
+      });
+      expect(same.status).toBe(422);
+      expect(problem(same.body).code).toBe('visit.amend_no_change');
+
+      const live = await startVisit(await patientOwing('Checkout Live', '1'));
+      const notDone = await checkoutDiscount(frontdesk.agent, live, { discount });
+      expect(notDone.status).toBe(409);
+      expect(problem(notDone.body).code).toBe('visit.not_amendable');
+
+      // A visit of the day before (moving the clock a day would end the sessions).
+      const earlier = (await completedVisit(await patientOwing('Checkout Late', '1'))).visit;
+      await database.ownerPool.query(`update visits set local_date = '2026-06-09' where id = $1`, [
+        earlier.id,
+      ]);
+      const late = await checkoutDiscount(frontdesk.agent, earlier, { discount });
+      expect(late.status).toBe(409);
+      expect(problem(late.body).code).toBe('visit.checkout_closed');
+
+      const { visit: voided } = await ok<VisitResult>(voidVisit(owner, visit));
+      const gone = await checkoutDiscount(frontdesk.agent, voided, { discount });
+      expect(problem(gone.body).code).toBe('visit.not_amendable');
+
+      expect(await amendmentsOf(visit.id)).toEqual([]);
+    });
+
+    it('on a paid visit leaves the difference as credit', async () => {
+      const patient = await patientOwing('Checkout Paid', '1');
+      const { visit } = await completedVisit(patient);
+      await ok(
+        frontdesk.agent
+          .post('/api/v1/billing/payments')
+          .set('Idempotency-Key', newId())
+          .send({ patientId: patient.id, amount: '118', method: 'cash', paidAt: TODAY }),
+        201,
+      );
+      expect(await balanceOf(patient.id)).toEqual([]);
+
+      await ok(
+        checkoutDiscount(frontdesk.agent, visit, { discount: { mode: 'amount', value: '30' } }),
+      );
+      expect(await balanceOf(patient.id)).toEqual([{ amount: '-17.00', currency: 'USD' }]);
+    });
   });
 
   it('keeps amendments append-only for the runtime role', async () => {

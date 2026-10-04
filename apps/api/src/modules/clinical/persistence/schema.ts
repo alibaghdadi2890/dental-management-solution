@@ -106,6 +106,11 @@ export const discountMode = pgEnum('discount_mode', DISCOUNT_MODES);
 export const diagnosisStatus = pgEnum('diagnosis_status', DIAGNOSIS_STATUSES);
 export const planStatus = pgEnum('plan_status', PLAN_STATUSES);
 export const toothPresence = pgEnum('tooth_presence', TOOTH_PRESENCE_VALUES);
+/** A correction with a reason (4b), or the discount set at checkout (checkout handoff, C4). */
+export const visitAmendmentKind = pgEnum('visit_amendment_kind', [
+  'amendment',
+  'checkout_discount',
+]);
 
 const money = () => numeric({ precision: 12, scale: 2 });
 const instant = () => timestamp({ withTimezone: true });
@@ -253,7 +258,9 @@ export const visitAmendments = pgTable(
     visitId: uuid().notNull(),
     /** 1, 2, … per visit. */
     sequence: integer().notNull(),
-    reason: text().notNull(),
+    kind: visitAmendmentKind().notNull().default('amendment'),
+    /** Required for an amendment; optional for a checkout discount. */
+    reason: text(),
     before: jsonb().notNull(),
     after: jsonb().notNull(),
     /** `after.total − before.total`, in the visit currency. */
@@ -275,7 +282,10 @@ export const visitAmendments = pgTable(
       foreignColumns: [visits.tenantId, visits.id],
     }),
     check('visit_amendments_sequence_positive', sql`${table.sequence} >= 1`),
-    check('visit_amendments_reason_length', sql`char_length(${table.reason}) >= 3`),
+    check(
+      'visit_amendments_reason_length',
+      sql`(${table.kind}::text = 'checkout_discount' and ${table.reason} is null) or (${table.reason} is not null and char_length(${table.reason}) >= 3)`,
+    ),
     tenantIsolationPolicy(),
   ],
 );

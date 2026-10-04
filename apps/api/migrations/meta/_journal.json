@@ -183,6 +183,13 @@
       "when": 1790951597408,
       "tag": "0025_payments_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791103945232,
+      "tag": "0026_checkout_discount",
+      "breakpoints": true
     }
   ]
 }

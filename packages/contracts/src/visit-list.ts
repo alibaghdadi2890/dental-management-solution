@@ -144,6 +144,17 @@ export const amendVisitSchema = z.object({
 });
 export type AmendVisitInput = z.infer<typeof amendVisitSchema>;
 
+/**
+ * The visit discount set at checkout, on the visit's day (checkout handoff, C3–C5): the services
+ * stay as they are, the visit keeps its status and a reason is optional.
+ */
+export const checkoutDiscountSchema = z.object({
+  expectedUpdatedAt: isoDateTimeSchema,
+  reason: reasonSchema.optional(),
+  discount: amendVisitSchema.shape.discount,
+});
+export type CheckoutDiscountInput = z.infer<typeof checkoutDiscountSchema>;
+
 export const voidVisitSchema = z.object({
   expectedUpdatedAt: isoDateTimeSchema,
   reason: reasonSchema,
