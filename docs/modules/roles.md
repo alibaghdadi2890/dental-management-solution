@@ -18,6 +18,7 @@ there is no UI or API to create them yet. Permissions come from the catalog in `
 | `visit:read`                            | ✓     | ✓       | ✓         | ✓         |
 | `visit:write`                           | ✓     | ✓       | ✓         | –         |
 | `visit:void`, `visit:amend`             | ✓     | ✓       | –         | –         |
+| `visit:discount`                        | ✓     | ✓       | –         | ✓         |
 | `catalog:read`                          | ✓     | ✓       | ✓         | ✓         |
 | `catalog:write`, `import:run`           | ✓     | –       | –         | –         |
 | `payment:read`                          | ✓     | ✓       | ✓         | ✓         |
@@ -26,6 +27,8 @@ there is no UI or API to create them yet. Permissions come from the catalog in `
 
 `visit:amend` and `visit:void` are enforced by `POST /visits/:id/amend` and `/void` and
 re-checked in `VisitsService` (feature 4b); the SPA shows front desk "Request a change" instead.
+`visit:discount` is the visit discount at checkout, on the visit's day (ADR-0030); migration
+`0026_checkout_discount` grants it to the system roles of tenants seeded before it.
 
 `platform:admin` is never granted by a role (platform admins are decided by rule, ADR-0008). The
 matrix is the pure constant `domain/system-roles.ts`; a unit test pins it per role. Renaming a

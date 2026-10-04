@@ -184,7 +184,8 @@ The same subscriber also handles, in the amend or void transaction:
 
 - `VisitAmended` → a `visit_charge_adjustment` of the delta (negative for a credit), naming the
   amendment, dated the tenant's today, with the amendment's reason and no lines; a zero delta
-  posts nothing.
+  posts nothing. A checkout discount (ADR-0030) arrives as the same event, possibly without a
+  reason; on a paid visit the settle that follows leaves the difference as credit.
 - `VisitVoided` → if `paidOn(visitId) > 0`, `VisitHasPaymentsError` (409 `visit.has_payments`)
   rolls the void back; else a `visit_charge_reversal` of −Σ the visit's entries (nothing when they
   net to zero), dated today, with the void reason.

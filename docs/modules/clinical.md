@@ -68,8 +68,9 @@ codes), `surfaces text[]` is a subset of `M D B L O I`.
   one live visit per room (W1); `visits_branch_started_idx` serves the list.
 - `visit_counters`: one row per tenant, the last visit number (feature 4b, migration 0020).
 - `visit_amendments`: append-only (no UPDATE/DELETE for the runtime role): per amendment the
-  visit before and after (`AmendmentSnapshot`), `reason`, `delta`, `currency`, `amended_by`,
-  `sequence` per visit (ADR-0025).
+  visit before and after (`AmendmentSnapshot`), `kind` (`amendment` | `checkout_discount`,
+  ADR-0030), `reason` (required for an amendment), `delta`, `currency`, `amended_by`, `sequence`
+  per visit (ADR-0025).
 - `visit_services`: catalog snapshot, `tooth_code` iff `per_tooth`, `base_amount`,
   `discount_amount` (`0 ≤ discount ≤ base`), `plan_id?`, soft delete. `visit_services_plan_unique`:
   a plan is performed by at most one non-deleted service row.
@@ -100,6 +101,12 @@ currency), `visit-amendment.ts` (`planAmendment`), `visit-cursor.ts`, `visit-ran
 - **Void** (`visit:void`, a completed or amended visit): sets `voided` with the reason, audits
   `visit.void`, publishes `VisitVoided` in the transaction; `billing` may veto it (409
   `visit.has_payments`, ADR-0026). Voided is final.
+- **Checkout discount** (`visit:discount`, a completed or amended visit, on its tenant-local day;
+  ADR-0030): the visit discount alone, through the amend mechanics — same locks and staleness
+  check, a `visit_amendments` row of kind `checkout_discount`, `VisitAmended` in the transaction.
+  It is silent: the status stays, the reason is optional, the row isn't counted in
+  `amendmentCount`; audited `visit.discount`. After the day → 409 `visit.checkout_closed`; an
+  unchanged discount → 422 `visit.amend_no_change`.
 - **List** (`search`): cursor-paged by `(started_at, id)`, newest first; the session branch's
   visits, or with `patientId` one patient's in every branch; never discarded. Tabs `all`,
   `in_progress` (with paused), `voided_amended`, `history` (counted + voided); `range` on the
@@ -299,31 +306,32 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 
 ## HTTP
 
-| Route                                                                                                                                                                        | Access          |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| `GET /catalog/services`, `GET /catalog/diagnoses`                                                                                                                            | `catalog:read`  |
-| `PUT /catalog/services`, `PUT /catalog/diagnoses`                                                                                                                            | `catalog:write` |
-| `DELETE /catalog/{services,diagnoses}/:id`                                                                                                                                   | `catalog:write` |
-| `POST /catalog/{services,diagnoses}/:id/deactivate`                                                                                                                          | `catalog:write` |
-| `POST /catalog/seed-default`                                                                                                                                                 | `catalog:write` |
-| `POST /visits` → 201 `{ visit, resumed: false }` or 200 `{ visit, resumed: true }`                                                                                           | `visit:write`   |
-| `GET /visits/start-defaults` → `{ dentistId, roomId }`                                                                                                                       | `visit:write`   |
-| `GET /visits/live?patientId=&mine=` → `LiveVisitRef[]`                                                                                                                       | `visit:read`    |
-| `GET /visits/:id` → `Visit`                                                                                                                                                  | `visit:read`    |
-| `POST /visits/:id/{pause,resume,discard,complete}` → `{ visit }`                                                                                                             | `visit:write`   |
-| `PATCH /visits/:id/notes`, `PATCH /visits/:id/discount` → `{ visit }`                                                                                                        | `visit:write`   |
-| `POST /visits/:id/services` → 201, `PATCH` / `DELETE /visits/:id/services/:serviceId` → `{ visit, record: VisitService }`                                                    | `visit:write`   |
-| `POST /visits/:id/diagnoses` → 201, `POST /visits/:id/diagnoses/:recordId/{resolve,reopen}`, `DELETE /visits/:id/diagnoses/:recordId` → `{ visit, record: DiagnosisRecord }` | `visit:write`   |
-| `POST /visits/:id/plans` → 201, `POST /visits/:id/plans/:planId/{perform,cancel}`, `DELETE /visits/:id/plans/:planId` → `{ visit, record: TreatmentPlan }`                   | `visit:write`   |
-| `PUT /visits/:id/teeth/:position` `{ present }` → `{ visit, record: { position, present } }`; a position that is not a succession position → 400 `validation_failed`         | `visit:write`   |
-| `GET /clinical/patients/:id/chart` → `PatientChart`, `GET /clinical/patients/:id/summary` → `ClinicalSummary`                                                                | `visit:read`    |
-| `GET /clinical/patients/:id/last-visit` → `LastVisit` or JSON `null`                                                                                                         | `visit:read`    |
-| `GET /clinical/patients/:id/teeth/:toothCode/history` → `ToothHistory`; a code that is not one of the 52 FDI codes → 400 `validation_failed`                                 | `visit:read`    |
-| `GET /visits?tab=&range=&dentistId=&roomId=&q=&patientId=&cursor=&limit=` → `VisitPage` (registered before `:id`)                                                            | `visit:read`    |
-| `GET /visits/summary` (same filters) → `VisitListSummary`                                                                                                                    | `visit:read`    |
-| `POST /visits/:id/amend` `AmendVisitInput` → `{ visit }`                                                                                                                     | `visit:amend`   |
-| `POST /visits/:id/void` `{ expectedUpdatedAt, reason }` → `{ visit }`                                                                                                        | `visit:void`    |
-| `GET /clinical/patients/visit-stats?patientIds=` (1–100) → `VisitStat[]`                                                                                                     | `visit:read`    |
+| Route                                                                                                                                                                        | Access           |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| `GET /catalog/services`, `GET /catalog/diagnoses`                                                                                                                            | `catalog:read`   |
+| `PUT /catalog/services`, `PUT /catalog/diagnoses`                                                                                                                            | `catalog:write`  |
+| `DELETE /catalog/{services,diagnoses}/:id`                                                                                                                                   | `catalog:write`  |
+| `POST /catalog/{services,diagnoses}/:id/deactivate`                                                                                                                          | `catalog:write`  |
+| `POST /catalog/seed-default`                                                                                                                                                 | `catalog:write`  |
+| `POST /visits` → 201 `{ visit, resumed: false }` or 200 `{ visit, resumed: true }`                                                                                           | `visit:write`    |
+| `GET /visits/start-defaults` → `{ dentistId, roomId }`                                                                                                                       | `visit:write`    |
+| `GET /visits/live?patientId=&mine=` → `LiveVisitRef[]`                                                                                                                       | `visit:read`     |
+| `GET /visits/:id` → `Visit`                                                                                                                                                  | `visit:read`     |
+| `POST /visits/:id/{pause,resume,discard,complete}` → `{ visit }`                                                                                                             | `visit:write`    |
+| `PATCH /visits/:id/notes`, `PATCH /visits/:id/discount` → `{ visit }`                                                                                                        | `visit:write`    |
+| `POST /visits/:id/services` → 201, `PATCH` / `DELETE /visits/:id/services/:serviceId` → `{ visit, record: VisitService }`                                                    | `visit:write`    |
+| `POST /visits/:id/diagnoses` → 201, `POST /visits/:id/diagnoses/:recordId/{resolve,reopen}`, `DELETE /visits/:id/diagnoses/:recordId` → `{ visit, record: DiagnosisRecord }` | `visit:write`    |
+| `POST /visits/:id/plans` → 201, `POST /visits/:id/plans/:planId/{perform,cancel}`, `DELETE /visits/:id/plans/:planId` → `{ visit, record: TreatmentPlan }`                   | `visit:write`    |
+| `PUT /visits/:id/teeth/:position` `{ present }` → `{ visit, record: { position, present } }`; a position that is not a succession position → 400 `validation_failed`         | `visit:write`    |
+| `GET /clinical/patients/:id/chart` → `PatientChart`, `GET /clinical/patients/:id/summary` → `ClinicalSummary`                                                                | `visit:read`     |
+| `GET /clinical/patients/:id/last-visit` → `LastVisit` or JSON `null`                                                                                                         | `visit:read`     |
+| `GET /clinical/patients/:id/teeth/:toothCode/history` → `ToothHistory`; a code that is not one of the 52 FDI codes → 400 `validation_failed`                                 | `visit:read`     |
+| `GET /visits?tab=&range=&dentistId=&roomId=&q=&patientId=&cursor=&limit=` → `VisitPage` (registered before `:id`)                                                            | `visit:read`     |
+| `GET /visits/summary` (same filters) → `VisitListSummary`                                                                                                                    | `visit:read`     |
+| `POST /visits/:id/amend` `AmendVisitInput` → `{ visit }`                                                                                                                     | `visit:amend`    |
+| `POST /visits/:id/checkout-discount` `{ expectedUpdatedAt, discount, reason? }` → `{ visit }`                                                                                | `visit:discount` |
+| `POST /visits/:id/void` `{ expectedUpdatedAt, reason }` → `{ visit }`                                                                                                        | `visit:void`     |
+| `GET /clinical/patients/visit-stats?patientIds=` (1–100) → `VisitStat[]`                                                                                                     | `visit:read`     |
 
 ## Events
 
@@ -343,7 +351,8 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
   - `ToothStatusChanged { visitId, patientId, position, present }`.
   - Notes and discount changes, service adds, edits and removes, record removals and the undo of
     a perform are audited directly and emit no event.
-  - `VisitAmended { visitId, patientId, amendmentId, currency, delta, reason }` and
+  - `VisitAmended { visitId, patientId, amendmentId, currency, delta, reason }` (also for a
+    checkout discount, whose `reason` may be null) and
     `VisitVoided { visitId, patientId, currency, reason }`, published inside the amend or void
     transaction: `billing` posts the adjustment or reversal before commit, or vetoes the void
     (ADR-0025, ADR-0026).
@@ -373,6 +382,7 @@ None of them imports `clinical`. `billing` imports `clinical` (`chargeFacts`, `v
 
 - `visit:read`, `visit:write`.
 - `visit:amend`, `visit:void`: owner and dentist (feature 4b).
+- `visit:discount`: owner, dentist and front desk (checkout handoff, ADR-0030).
 - `catalog:read`: every clinic role.
 - `catalog:write`: owner. A platform admin acting in the tenant also has it.
 
