@@ -16,6 +16,7 @@ const KNOWN_ACTIONS = [
   'visit.update',
   'visit.complete',
   'visit.amend',
+  'visit.discount',
   'visit.void',
 ] as const;
 
@@ -44,6 +45,15 @@ function labelOf(
       ? t('trail.actions.amendTotals', { reason, before: money(before), after: money(after) })
       : t('trail.actions.amend', { reason });
   }
+  if (entry.action === 'visit.discount') {
+    const totals = {
+      before: money(totalOf(entry.before) ?? '0'),
+      after: money(totalOf(entry.after) ?? '0'),
+    };
+    return entry.reason
+      ? t('trail.actions.discountReason', { reason: entry.reason, ...totals })
+      : t('trail.actions.discount', totals);
+  }
   if (entry.action === 'visit.void') return t('trail.actions.void', { reason });
   if (entry.action === 'visit.complete') {
     const total = totalOf(entry.after);
@@ -68,7 +78,8 @@ function actorOf(
 /**
  * The detail panel's audit trail (D13: `audit:read` only): the visit's entries newest first, a
  * page at a time behind "Show more"; the latest dot filled. Amend and void read with their reason
- * (and an amendment with its before → after total).
+ * (and an amendment with its before → after total); a checkout discount with its totals, and its
+ * reason when one was given.
  */
 export function VisitAuditTrail({
   visitId,

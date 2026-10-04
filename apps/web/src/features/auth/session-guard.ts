@@ -5,9 +5,16 @@ import { actingTenantId, stopActing } from '@/features/platform/acting-tenant';
 import { ApiError } from '@/lib/api';
 import { sessionQueryOptions } from './session';
 
-/** Where a freshly signed-in user starts. */
-export function landingPath(session: Session): '/admin/tenants' | '/patients' {
-  return session.platformAdmin && session.tenant === null ? '/admin/tenants' : '/patients';
+/**
+ * Where a freshly signed-in user starts: a platform admin outside a clinic on the tenants list;
+ * whoever collects without treating (`payment:write` and no `visit:write`: the front desk) on the
+ * Today board; everyone else on Patients.
+ */
+export function landingPath(session: Session): '/admin/tenants' | '/today' | '/patients' {
+  if (session.platformAdmin && session.tenant === null) return '/admin/tenants';
+  const can = (permission: Session['permissions'][number]) =>
+    session.permissions.includes(permission);
+  return can('payment:write') && !can('visit:write') ? '/today' : '/patients';
 }
 
 /** The login screen's notice after being sent there. */

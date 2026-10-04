@@ -403,12 +403,19 @@
     "total": "Total dû",
     "totalHint": "Cette visite plus tout ce qui restait impayé avant",
     "settled": "Plus rien à encaisser. Le compte du patient est entièrement soldé.",
-    "payLater": "Payer plus tard",
     "done": "Terminé",
     "loading": "Chargement des montants de la visite…",
     "failed": "Impossible de charger les montants de la visite.",
     "partlyPaid": "Payée en partie",
-    "recordPayment": "Enregistrer un paiement"
+    "recordPayment": "Enregistrer un paiement",
+    "edit": "Modifier",
+    "editDiscount": "Modifier la remise de la visite",
+    "newTotal": "Nouveau total de la visite",
+    "discountReason": "Motif (facultatif)",
+    "applyDiscount": "Appliquer",
+    "printInvoice": "Imprimer la facture",
+    "frontDesk": "L’accueil encaissera le paiement.",
+    "discountReasonShort": "Saisissez au moins 3 caractères, ou laissez vide."
   },
   "errors": {
     "visit": {
@@ -433,7 +440,8 @@
       "amend_unknown_service": "Un acte n’est plus sur cette visite ; rechargez et réessayez.",
       "amend_plan_linked": "Un acte ayant réalisé un plan peut être retiré, pas déplacé.",
       "has_payments": "Cette visite a des paiements : remboursez-les ou déplacez-les avant de l’annuler.",
-      "invalid_cursor": "La liste a changé ; reprenez à la première page."
+      "invalid_cursor": "La liste a changé ; reprenez à la première page.",
+      "checkout_closed": "La remise ne peut être définie qu’à l’encaissement, le jour de la visite. Demandez à un dentiste de corriger la visite."
     },
     "record": {
       "not_removable": "Seuls les éléments saisis dans cette visite peuvent être retirés.",

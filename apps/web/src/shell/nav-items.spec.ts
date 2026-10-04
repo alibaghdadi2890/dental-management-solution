@@ -37,6 +37,14 @@ describe('visibleNav', () => {
     expect(nav.platform).toEqual([]);
   });
 
+  it('shows Today first to whoever collects (`payment:write`)', () => {
+    const nav = visibleNav({
+      ...base,
+      permissions: ['patient:read', 'visit:read', 'payment:read', 'payment:write'],
+    });
+    expect(keys(nav.main)).toEqual(['today', 'patients', 'visits', 'payments']);
+  });
+
   it('shows Catalog and Settings to the owner', () => {
     const nav = visibleNav({
       ...base,

@@ -1,0 +1,24 @@
+{
+  "title": "Today",
+  "noAccess": "There is nothing for you to collect here.",
+  "toPatients": "Go to Patients",
+  "checkout": {
+    "title": "Ready for checkout",
+    "empty": "No one is waiting to check out.",
+    "loading": "Loading the visits waiting for checkout",
+    "failed": "Couldn't load the visits waiting for checkout.",
+    "finished": "finished {{time}}",
+    "action": "Check out",
+    "actionFor": "Check out {{name}}"
+  },
+  "chair": {
+    "title": "In the chair",
+    "empty": "No visit in progress.",
+    "loading": "Loading the visits in progress",
+    "failed": "Couldn't load the visits in progress.",
+    "paused": "Paused"
+  },
+  "dialog": {
+    "title": "Checkout · {{name}}"
+  }
+}

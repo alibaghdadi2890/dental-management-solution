@@ -403,12 +403,19 @@
     "total": "Total outstanding",
     "totalHint": "This visit plus everything unpaid before it",
     "settled": "Nothing left to collect. The patient's account is fully settled.",
-    "payLater": "Pay later",
     "done": "Done",
     "loading": "Loading the visit's figures…",
     "failed": "Couldn't load the visit's figures.",
     "partlyPaid": "Partly paid",
-    "recordPayment": "Record payment"
+    "recordPayment": "Record payment",
+    "edit": "Edit",
+    "editDiscount": "Edit the visit discount",
+    "newTotal": "New visit total",
+    "discountReason": "Reason (optional)",
+    "applyDiscount": "Apply",
+    "printInvoice": "Print invoice",
+    "frontDesk": "The front desk will collect the payment.",
+    "discountReasonShort": "Use at least 3 characters, or leave it empty."
   },
   "errors": {
     "visit": {
@@ -433,7 +440,8 @@
       "amend_unknown_service": "A service isn’t on this visit any more; reload and try again.",
       "amend_plan_linked": "A service that performed a plan can be removed, not moved.",
       "has_payments": "This visit has payments: refund or move them before voiding it.",
-      "invalid_cursor": "The list moved on; start again from the first page."
+      "invalid_cursor": "The list moved on; start again from the first page.",
+      "checkout_closed": "The discount can only be set at checkout on the day of the visit. Ask a dentist to amend the visit."
     },
     "record": {
       "not_removable": "Only records made in this visit can be removed.",

@@ -20,7 +20,7 @@ const ARROW_STEPS: Readonly<Partial<Record<string, number>>> = {
  * beside a `% / $` segmented control (the `$` is the visit currency's symbol), a radio group:
  * the checked mode takes the tab stop and the arrow keys switch it. It edits the
  * `discount` save group it is given (`useVisitDiscount`), so the financial bar and the summary
- * dialog show one value. Typing is cleaned as it goes — anything but digits and one decimal
+ * dialog show one value; the checkout dialog gives it a plain draft instead. Typing is cleaned as it goes — anything but digits and one decimal
  * separator is dropped, so a negative can't be typed — and the value is kept as typed above its
  * cap; the cap is the money's business (`visitMoney`). Read-only without `visit:write`.
  */
@@ -29,7 +29,7 @@ export function DiscountControl({
   currency,
   readOnly,
 }: {
-  discount: SaveGroup<DiscountDraft>;
+  discount: Pick<SaveGroup<DiscountDraft>, 'value' | 'setValue'>;
   currency: string;
   readOnly: boolean;
 }) {

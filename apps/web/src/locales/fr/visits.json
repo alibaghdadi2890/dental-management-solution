@@ -111,7 +111,9 @@
       "amend": "Modifiée — {{reason}}",
       "amendTotals": "Modifiée — {{reason}} · {{before}} → {{after}}",
       "void": "Annulée — {{reason}}",
-      "other": "Modifiée"
+      "other": "Modifiée",
+      "discount": "Remise à l’encaissement · {{before}} → {{after}}",
+      "discountReason": "Remise à l’encaissement — {{reason}} · {{before}} → {{after}}"
     }
   },
   "amend": {

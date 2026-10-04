@@ -1,0 +1,24 @@
+{
+  "title": "Aujourd’hui",
+  "noAccess": "Vous n’avez rien à encaisser ici.",
+  "toPatients": "Aller aux patients",
+  "checkout": {
+    "title": "À encaisser",
+    "empty": "Personne n’attend à l’encaissement.",
+    "loading": "Chargement des visites à encaisser",
+    "failed": "Impossible de charger les visites à encaisser.",
+    "finished": "terminée à {{time}}",
+    "action": "Encaisser",
+    "actionFor": "Encaisser {{name}}"
+  },
+  "chair": {
+    "title": "Au fauteuil",
+    "empty": "Aucune visite en cours.",
+    "loading": "Chargement des visites en cours",
+    "failed": "Impossible de charger les visites en cours.",
+    "paused": "En pause"
+  },
+  "dialog": {
+    "title": "Encaissement · {{name}}"
+  }
+}

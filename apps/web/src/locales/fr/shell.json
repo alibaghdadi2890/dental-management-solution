@@ -21,7 +21,8 @@
     "settings": "Paramètres",
     "platform": "Plateforme",
     "tenants": "Cabinets",
-    "payments": "Paiements"
+    "payments": "Paiements",
+    "today": "Aujourd’hui"
   },
   "breadcrumb": "Fil d’Ariane",
   "platformCrumb": "Plateforme",
@@ -56,5 +57,8 @@
     "several_other": "{{count, number}} visites en cours",
     "running": "En cours",
     "pausedShort": "En pause"
+  },
+  "checkoutPill": {
+    "label": "Encaissement · {{n, number}}"
   }
 }

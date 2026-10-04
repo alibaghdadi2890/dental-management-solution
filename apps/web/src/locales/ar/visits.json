@@ -123,7 +123,9 @@
       "amend": "عُدّلت — {{reason}}",
       "amendTotals": "عُدّلت — {{reason}} · {{before}} ← {{after}}",
       "void": "أُلغيت — {{reason}}",
-      "other": "تغيير"
+      "other": "تغيير",
+      "discount": "خصم عند الدفع · {{before}} ← {{after}}",
+      "discountReason": "خصم عند الدفع — {{reason}} · {{before}} ← {{after}}"
     }
   },
   "amend": {

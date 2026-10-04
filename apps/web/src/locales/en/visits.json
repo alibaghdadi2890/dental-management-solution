@@ -111,7 +111,9 @@
       "amend": "Amended — {{reason}}",
       "amendTotals": "Amended — {{reason}} · {{before}} → {{after}}",
       "void": "Voided — {{reason}}",
-      "other": "Changed"
+      "other": "Changed",
+      "discount": "Discount set at checkout · {{before}} → {{after}}",
+      "discountReason": "Discount set at checkout — {{reason}} · {{before}} → {{after}}"
     }
   },
   "amend": {

@@ -1,3 +1,4 @@
+import { visitListKeys } from './visits-list/visits-list-api';
 import type {
   AddServiceInput,
   PlanTreatmentInput,
@@ -195,6 +196,8 @@ export function visitMutations(
         await Promise.all([
           invalidate(queryClient, [
             visitKeys.allLive(tenantId),
+            // The visits lists, and with them the header's checkout queue.
+            visitListKeys.lists(tenantId),
             ...chartingKeys(tenantId, visit.patientId),
             clinicalKeys.lastVisit(tenantId, visit.patientId),
           ]),

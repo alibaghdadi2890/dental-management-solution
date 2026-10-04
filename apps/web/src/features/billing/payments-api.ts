@@ -6,7 +6,6 @@ import {
   outstandingPageSchema,
   patientAccountSchema,
   type PaymentRequest,
-  paymentPreviewSchema,
   paymentWriteResultSchema,
   receiptSchema,
   receivablesSchema,
@@ -90,14 +89,6 @@ export function familyStatementQuery(contactId: string) {
     queryKey: paymentKeys.familyStatement(actingTenantId(), contactId),
     queryFn: () =>
       apiFetch(`/billing/contacts/${contactId}/family/statement`, familyStatementSchema),
-  });
-}
-
-export function previewPayment(input: PaymentRequest, signal?: AbortSignal) {
-  return apiFetch('/billing/payments/preview', paymentPreviewSchema, {
-    method: 'POST',
-    json: input,
-    ...(signal ? { signal } : {}),
   });
 }
 

@@ -208,7 +208,7 @@ test('the owner charts a visit, completes it and sees its figures with the openi
       /Outstanding from earlier visits\s*\$40/,
     );
     await expect(recorded).toContainText(/Total outstanding[\s\S]*\$400/);
-    await recorded.getByRole('button', { name: 'Pay later' }).click();
+    await recorded.getByRole('button', { name: 'Done' }).click();
     await expect(recorded).toBeHidden();
     await expect(page.getByRole('button', { name: 'Start visit' })).toBeVisible();
   });
@@ -339,7 +339,7 @@ test('a completed visit is amended with a reason, then voided, from the Visits s
       .getByRole('button', { name: 'Complete visit' })
       .click();
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
-    await recorded.getByRole('button', { name: 'Pay later' }).click();
+    await recorded.getByRole('button', { name: 'Done' }).click();
     await expect(recorded).toBeHidden();
   });
 

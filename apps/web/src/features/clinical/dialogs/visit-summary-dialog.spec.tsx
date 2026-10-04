@@ -326,7 +326,7 @@ describe('VisitSummaryDialog', () => {
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(arrivals.filter((path) => path === `/patients/${RANA.id}`)).toHaveLength(1);
 
-    fireEvent.click(within(recorded).getByRole('button', { name: 'Pay later' }));
+    fireEvent.click(within(recorded).getByRole('button', { name: 'Done' }));
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });

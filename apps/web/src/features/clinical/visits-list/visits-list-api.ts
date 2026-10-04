@@ -7,6 +7,7 @@ import {
   visitResultSchema,
   type AmendVisitInput,
   type AuditPage,
+  type CheckoutDiscountInput,
   type ExportLanguage,
   type VisitFilters,
   type VisitListQuery,
@@ -143,12 +144,20 @@ export function amendVisit(visitId: string, input: AmendVisitInput) {
   return apiFetch(`/visits/${visitId}/amend`, visitResultSchema, { method: 'POST', json: input });
 }
 
+/** The visit discount set at checkout (`visit:discount`, the visit's day only). */
+export function checkoutDiscount(visitId: string, input: CheckoutDiscountInput) {
+  return apiFetch(`/visits/${visitId}/checkout-discount`, visitResultSchema, {
+    method: 'POST',
+    json: input,
+  });
+}
+
 export function voidVisit(visitId: string, input: VoidVisitInput) {
   return apiFetch(`/visits/${visitId}/void`, visitResultSchema, { method: 'POST', json: input });
 }
 
 /**
- * After an amend or void: the lists, summaries and trails (`visitKeys`), the money
+ * After an amend, a checkout discount or a void: the lists, summaries and trails (`visitKeys`), the money
  * (`billingKeys`: balances, visit summaries, the patients' balances), the clinical record
  * (`clinicalKeys`: chart, last visit, stats) and the patients list (Last visit, Not seen).
  */

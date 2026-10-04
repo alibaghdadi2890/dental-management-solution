@@ -17,20 +17,11 @@ import { Field, Select, TextInput } from '@/components/ui/field';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/components/ui/toast-context';
 import { invalidateVisitData } from '@/features/clinical/visits-list/visits-list-api';
-import { actingTenantId } from '@/features/platform/acting-tenant';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { dateInputOrder, formatMoney, todayIn } from '@/lib/format';
-import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { cn } from '@/lib/utils';
-import { billingKeys } from '../billing-api';
 import { MoneyInput } from '../money-input';
-import {
-  accountQuery,
-  openPrintable,
-  previewPayment,
-  printPath,
-  recordPayment,
-} from '../payments-api';
+import { accountQuery, openPrintable, printPath, recordPayment } from '../payments-api';
 import type { PaymentRequestOptions } from './payment-dialog-context';
 import { useChargeLabel } from './use-charge-label';
 import {
@@ -45,14 +36,14 @@ import {
 type Tenant = NonNullable<Session['tenant']>;
 
 const FIGURE = 'font-mono leading-none tabular-nums';
-const PREVIEW_DEBOUNCE_MS = 300;
 
 /**
  * The Record payment modal (workspace spec §Record Payment; feature 5 §Screens 1): what is owed,
  * the amount taken now (empty, the outstanding as placeholder, Full / Half chips), the method,
- * date and reference, the payer, the household switch (B5), "Apply to a specific visit" (B4),
- * what remains and the allocation preview from the server's dry run. A payment is one
- * Idempotency-Key for the life of the modal, so a retry after a lost response never pays twice.
+ * date and reference, the payer, the household switch (B5) and "Apply to a specific visit" (B4).
+ * A payment is one Idempotency-Key for the life of the form, so a retry after a lost response
+ * never pays twice. The form itself (`RecordPaymentForm`) is also the checkout dialog's payment
+ * step, inside that dialog rather than over it.
  */
 export function RecordPaymentDialog({
   options,
@@ -64,7 +55,6 @@ export function RecordPaymentDialog({
   onClose: () => void;
 }) {
   const { t } = useTranslation('billing');
-  const account = useQuery(accountQuery(options.patientId, options.payerContactId));
   return (
     <Dialog.Root
       open
@@ -83,27 +73,50 @@ export function RecordPaymentDialog({
               {options.contextVisitId ? t('record.ruleVisit') : t('record.rulePatient')}
             </Dialog.Description>
           </div>
-          {account.data ? (
-            <PaymentForm
-              account={account.data}
-              options={options}
-              tenant={tenant}
-              onClose={onClose}
-            />
-          ) : (
-            <div className="px-[22px] py-5">
-              {account.isError ? (
-                <p role="alert" className="m-0 text-[12.5px] text-ink-muted">
-                  {t('record.loadFailed')}
-                </p>
-              ) : (
-                <CardSkeleton label={t('record.loading')} />
-              )}
-            </div>
-          )}
+          <RecordPaymentForm options={options} tenant={tenant} onClose={onClose} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/**
+ * The payment form with its Cancel and Record buttons, loading the patient's account first.
+ * `onClose` is called on Cancel and after a recorded payment (once `options.onRecorded` ran).
+ */
+export function RecordPaymentForm({
+  options,
+  tenant,
+  onClose,
+}: {
+  options: PaymentRequestOptions;
+  tenant: Tenant;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation(['billing', 'common']);
+  const account = useQuery(accountQuery(options.patientId, options.payerContactId));
+  if (account.data) {
+    return (
+      <PaymentForm account={account.data} options={options} tenant={tenant} onClose={onClose} />
+    );
+  }
+  return (
+    <>
+      <div className="flex-1 px-[22px] py-5">
+        {account.isError ? (
+          <p role="alert" className="m-0 text-[12.5px] text-ink-muted">
+            {t('record.loadFailed')}
+          </p>
+        ) : (
+          <CardSkeleton label={t('record.loading')} />
+        )}
+      </div>
+      <div className="flex items-center justify-end border-t border-inner-divider bg-sunken px-[22px] py-3.5">
+        <Button variant="secondary" onClick={onClose}>
+          {t('common:cancel')}
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -153,14 +166,6 @@ function PaymentForm({
   };
   const request =
     valid && status.amount !== null ? requestOf(draft, account, status.amount, context) : null;
-  const previewKey = useDebouncedValue(request ? JSON.stringify(request) : '', PREVIEW_DEBOUNCE_MS);
-  const preview = useQuery({
-    queryKey: [...billingKeys.all(actingTenantId()), 'payment-preview', previewKey],
-    queryFn: ({ signal }) =>
-      previewPayment(JSON.parse(previewKey) as Parameters<typeof previewPayment>[0], signal),
-    enabled: previewKey !== '' && previewKey === (request ? JSON.stringify(request) : ''),
-  });
-
   const payers = [
     { contactId: null, name: t('record.patientPays') },
     ...account.payers.map((payer) => ({ contactId: payer.contactId, name: payer.name })),
@@ -203,7 +208,7 @@ function PaymentForm({
 
   return (
     <>
-      <div className="flex min-h-0 flex-col gap-4 overflow-auto px-[22px] py-[18px]">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-[22px] py-[18px]">
         <div className="flex items-center justify-between rounded-lg border border-border bg-faint px-3.5 py-3">
           <span className="text-[12.5px] font-medium text-ink-secondary">
             {t('record.outstanding')}
@@ -425,67 +430,16 @@ function PaymentForm({
           </details>
         )}
 
-        <div className="rounded-[9px] border border-border bg-sunken px-3.5 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <span className="block text-[12.5px] font-medium">{t('record.remaining')}</span>
-              {status.remaining !== null && (
-                <span
-                  className={cn(
-                    'mt-0.5 block text-[12px]',
-                    status.full ? 'text-success' : 'text-warning',
-                  )}
-                >
-                  {status.full ? t('record.caseFull') : t('record.casePartial')}
-                </span>
-              )}
-            </div>
-            <span
-              dir="ltr"
-              className={cn(
-                FIGURE,
-                'text-[17px] font-bold',
-                status.remaining === null
-                  ? 'text-ink-muted'
-                  : status.remaining > 0n
-                    ? 'text-danger'
-                    : 'text-success',
-              )}
-            >
-              {status.remaining === null ? '—' : money(status.remaining)}
-            </span>
-          </div>
-          {preview.data && request && preview.data.allocations.length > 0 && (
-            <ul
-              aria-label={t('record.allocation')}
-              className="m-0 mt-2.5 list-none border-t border-border p-0 pt-2"
-            >
-              {preview.data.allocations.map((line) => (
-                <li
-                  key={line.entryId}
-                  className="flex justify-between gap-3 py-0.5 text-[12px] text-ink-secondary"
-                >
-                  <span>{chargeLabel(line)}</span>
-                  <span dir="ltr" className={FIGURE}>
-                    {formatMoney({ amount: line.amount, currency: account.currency }, locale)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
         {error && (
           <p role="alert" className="m-0 text-[12.5px] font-medium text-danger">
             {error}
           </p>
         )}
       </div>
-      <div className="flex items-center justify-end gap-2.5 border-t border-inner-divider bg-sunken px-[22px] py-3.5">
-        <Dialog.Close asChild>
-          <Button variant="secondary" disabled={saving}>
-            {t('common:cancel')}
-          </Button>
-        </Dialog.Close>
+      <div className="flex flex-none items-center justify-end gap-2.5 border-t border-inner-divider bg-sunken px-[22px] py-3.5">
+        <Button variant="secondary" disabled={saving} onClick={onClose}>
+          {t('common:cancel')}
+        </Button>
         <Button variant="primary" disabled={!valid || saving} onClick={() => void submit()}>
           {saving
             ? t('record.recording')

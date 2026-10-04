@@ -15,6 +15,7 @@ import { Route as PrintRouteImport } from './routes/print'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
 import { Route as AppPatientsPatientIdRouteImport } from './routes/_app/patients/$patientId'
@@ -56,6 +57,11 @@ const AppCatalogRoute = AppCatalogRouteImport.update({
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTodayRoute = AppTodayRouteImport.update({
+  id: '/today',
+  path: '/today',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   '/print': typeof PrintRouteWithChildren
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
+  '/today': typeof AppTodayRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
@@ -150,6 +157,7 @@ export interface FileRoutesByTo {
   '/print': typeof PrintRouteWithChildren
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
+  '/today': typeof AppTodayRoute
   '/': typeof AppIndexRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
@@ -172,6 +180,7 @@ export interface FileRoutesById {
   '/print': typeof PrintRouteWithChildren
   '/_app/catalog': typeof AppCatalogRoute
   '/_app/settings': typeof AppSettingsRoute
+  '/_app/today': typeof AppTodayRoute
   '/_app/': typeof AppIndexRoute
   '/_app/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/_app/visits/$visitId': typeof AppVisitsVisitIdRoute
@@ -195,6 +204,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/catalog'
     | '/settings'
+    | '/today'
     | '/patients/$patientId'
     | '/visits/$visitId'
     | '/print/family-statement/$contactId'
@@ -214,6 +224,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/catalog'
     | '/settings'
+    | '/today'
     | '/'
     | '/patients/$patientId'
     | '/visits/$visitId'
@@ -235,6 +246,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/_app/catalog'
     | '/_app/settings'
+    | '/_app/today'
     | '/_app/'
     | '/_app/patients/$patientId'
     | '/_app/visits/$visitId'
@@ -299,6 +311,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/today': {
+      id: '/_app/today'
+      path: '/today'
+      fullPath: '/today'
+      preLoaderRoute: typeof AppTodayRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/admin/': {
@@ -398,6 +417,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppCatalogRoute: typeof AppCatalogRoute
   AppSettingsRoute: typeof AppSettingsRoute
+  AppTodayRoute: typeof AppTodayRoute
   AppIndexRoute: typeof AppIndexRoute
   AppPatientsPatientIdRoute: typeof AppPatientsPatientIdRoute
   AppVisitsVisitIdRoute: typeof AppVisitsVisitIdRoute
@@ -412,6 +432,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppCatalogRoute: AppCatalogRoute,
   AppSettingsRoute: AppSettingsRoute,
+  AppTodayRoute: AppTodayRoute,
   AppIndexRoute: AppIndexRoute,
   AppPatientsPatientIdRoute: AppPatientsPatientIdRoute,
   AppVisitsVisitIdRoute: AppVisitsVisitIdRoute,

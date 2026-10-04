@@ -71,9 +71,6 @@ test('a partial payment, its receipt, a refund, and the balance restored', async
     const dialog = page.getByRole('dialog', { name: 'Record payment' });
     await expect(dialog.getByLabel('Amount taken now')).toHaveAttribute('placeholder', '200.00');
     await dialog.getByLabel('Amount taken now').fill('80');
-    await expect(
-      dialog.getByText('Partial payment — the balance stays on the account'),
-    ).toBeVisible();
     await dialog.getByRole('button', { name: 'Card' }).click();
     await dialog.getByRole('button', { name: 'Record payment' }).click();
     await expect(dialog).toBeHidden();

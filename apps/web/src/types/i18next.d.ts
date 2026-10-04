@@ -10,6 +10,7 @@ import type payments from '../locales/en/payments.json';
 import type printables from '../locales/en/printables.json';
 import type settings from '../locales/en/settings.json';
 import type shell from '../locales/en/shell.json';
+import type today from '../locales/en/today.json';
 import type visits from '../locales/en/visits.json';
 
 // English is the reference language: keys are type-checked against it.
@@ -29,6 +30,7 @@ declare module 'i18next' {
       catalog: typeof catalog;
       clinical: typeof clinical;
       settings: typeof settings;
+      today: typeof today;
     };
   }
 }

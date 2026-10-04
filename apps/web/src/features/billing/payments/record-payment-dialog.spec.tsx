@@ -50,17 +50,6 @@ const RESULT: RecordPaymentResult = {
 function mockApi(account: PatientAccount = ACCOUNT) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     const path = url.replace('/api/v1', '').split('?')[0];
-    if (path === '/billing/payments/preview') {
-      return Promise.resolve(
-        json({
-          currency: 'USD',
-          outstanding: '300.00',
-          remaining: '0.00',
-          allocations: [],
-          error: null,
-        }),
-      );
-    }
     if (path === '/billing/payments' && init?.method === 'POST') {
       return Promise.resolve(json(RESULT, 201));
     }
@@ -115,11 +104,9 @@ describe('Record payment (spec §Record Payment)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Half $150' }));
     expect(submit().textContent).toBe('Record payment');
-    expect(screen.getByText('Partial payment — the balance stays on the account')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Full amount $300' }));
     expect(submit().textContent).toBe('Record full payment');
-    expect(screen.getByText('Full payment — this clears the balance')).toBeTruthy();
   });
 
   it('posts the payment with an Idempotency-Key, the context visit and the method', async () => {

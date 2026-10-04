@@ -5,8 +5,11 @@ import {
   ALL_PERMISSIONS,
   json,
   mockApi,
+  type MockApi,
+  problem,
   renderRecord,
 } from '@/features/patients/patients.test-utils';
+import { todayIn } from '@/lib/format';
 import { RANA, visit, VISIT_ID, visitService } from '../workspace/workspace.test-utils';
 
 const usd = (amount: string) => ({ amount, currency: 'USD' });
@@ -54,9 +57,11 @@ async function arriveAfterComplete(
   completed: Visit,
   summary: VisitFinancialSummary | Promise<VisitFinancialSummary>,
   permissions: Permission[] = ALL_PERMISSIONS,
+  mutation?: MockApi['mutation'],
 ) {
   const fetchMock = mockApi({
     patients: [RANA],
+    ...(mutation ? { mutation } : {}),
     get: (path) => {
       if (path === `/visits/${VISIT_ID}`) return json(completed);
       if (path === `/billing/visits/${VISIT_ID}/summary`)
@@ -77,6 +82,10 @@ async function arriveAfterComplete(
   return { ...rendered, fetchMock };
 }
 
+/** The same visit, completed on the tenant's today: its discount can still be set at checkout. */
+const TODAYS: Visit = { ...COMPLETED, localDate: todayIn('Asia/Beirut') };
+const WITH_DISCOUNT: Permission[] = [...ALL_PERMISSIONS, 'visit:discount'];
+
 /** The figure beside a label. */
 const figureOf = (scope: HTMLElement, label: string) =>
   within(scope).getByText(label).closest('div')?.querySelector('dd')?.textContent;
@@ -87,7 +96,7 @@ describe('PostVisitSummaryDialog', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows what is owed, from the API, in danger, with Pay later and no Record payment', async () => {
+  it('shows what is owed, from the API, in danger, with Done and Record payment', async () => {
     await arriveAfterComplete(COMPLETED, OWING);
     const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
     expect(await within(dialog).findByText('4 Sep 2026 · 13 min · 3 services')).toBeTruthy();
@@ -107,9 +116,8 @@ describe('PostVisitSummaryDialog', () => {
     expect(within(dialog).getByText('This visit plus everything unpaid before it')).toBeTruthy();
     expect(within(dialog).queryByText(/Nothing left to collect/)).toBeNull();
 
-    expect(within(dialog).getByRole('button', { name: 'Pay later' })).toBeTruthy();
-    expect(within(dialog).queryByRole('button', { name: 'Done' })).toBeNull();
-    expect(within(dialog).queryByRole('button', { name: /Record payment/ })).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Record payment' })).toBeTruthy();
   });
 
   it('shows a settled account in success, Paid in full, with Done', async () => {
@@ -129,7 +137,6 @@ describe('PostVisitSummaryDialog', () => {
       within(dialog).getByText("Nothing left to collect. The patient's account is fully settled."),
     ).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Done' })).toBeTruthy();
-    expect(within(dialog).queryByRole('button', { name: 'Pay later' })).toBeNull();
   });
 
   it('closes for good: the state is cleared, so it never opens again', async () => {
@@ -143,7 +150,7 @@ describe('PostVisitSummaryDialog', () => {
     expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
   });
 
-  it('shows no footer action until the figures are in, so Done never turns into Pay later', async () => {
+  it('shows no footer action until the figures are in', async () => {
     let answer: (summary: VisitFinancialSummary) => void = () => undefined;
     await arriveAfterComplete(
       COMPLETED,
@@ -156,14 +163,13 @@ describe('PostVisitSummaryDialog', () => {
     expect(within(dialog).queryByRole('button')).toBeNull();
 
     answer(OWING);
-    expect(await within(dialog).findByRole('button', { name: 'Pay later' })).toBeTruthy();
-    expect(within(dialog).queryByRole('button', { name: 'Done' })).toBeNull();
+    expect(await within(dialog).findByRole('button', { name: 'Done' })).toBeTruthy();
   });
 
   it("hands focus to the patient's name when it closes", async () => {
     await arriveAfterComplete(COMPLETED, OWING);
     const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
-    fireEvent.click(await within(dialog).findByRole('button', { name: 'Pay later' }));
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Done' }));
     const heading = screen.getByRole('heading', { level: 1, name: 'Rana Haddad' });
     await waitFor(() => {
       expect(document.activeElement).toBe(heading);
@@ -179,6 +185,114 @@ describe('PostVisitSummaryDialog', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
     expect(router.state.location.state.postVisit).toBeUndefined();
+  });
+
+  it('Record payment is the next step of the same dialog; Cancel comes back to the figures', async () => {
+    await arriveAfterComplete(COMPLETED, OWING);
+    const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Record payment' }));
+
+    expect(
+      await within(dialog).findByText(
+        'Applied to this visit first, then to the oldest unpaid charge.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    expect(within(dialog).queryByRole('region', { name: 'This visit' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Done' })).toBeNull();
+
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Cancel' }));
+    expect(await within(dialog).findByRole('region', { name: 'This visit' })).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Done' })).toBeTruthy();
+  });
+
+  it('without payment:write: Done, a note that the front desk collects, and the invoice', async () => {
+    await arriveAfterComplete(
+      COMPLETED,
+      OWING,
+      ALL_PERMISSIONS.filter((permission) => permission !== 'payment:write'),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
+    expect(await within(dialog).findByRole('button', { name: 'Done' })).toBeTruthy();
+    expect(within(dialog).getByText('The front desk will collect the payment.')).toBeTruthy();
+    expect(within(dialog).getByRole('button', { name: 'Print invoice' })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Record payment' })).toBeNull();
+  });
+
+  it.each([
+    ['without visit:discount', TODAYS, OWING, ALL_PERMISSIONS],
+    ['after the day of the visit', COMPLETED, OWING, WITH_DISCOUNT],
+    [
+      'once the visit is paid',
+      TODAYS,
+      { ...OWING, visit: { ...OWING.visit, outstanding: '0.00' } },
+      WITH_DISCOUNT,
+    ],
+  ])('offers no discount edit %s', async (_case, completed, summary, permissions) => {
+    await arriveAfterComplete(completed, summary, permissions);
+    const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
+    await within(dialog).findByRole('button', { name: 'Print invoice' });
+    expect(within(dialog).queryByRole('button', { name: 'Edit the visit discount' })).toBeNull();
+  });
+
+  it('sets the discount at checkout: Apply waits for a change, then posts it', async () => {
+    const posted: unknown[] = [];
+    const { fetchMock } = await arriveAfterComplete(
+      TODAYS,
+      OWING,
+      WITH_DISCOUNT,
+      (method, path, body) => {
+        if (method !== 'POST' || path !== `/visits/${VISIT_ID}/checkout-discount`) return undefined;
+        posted.push(body);
+        return json({ visit: TODAYS });
+      },
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Edit the visit discount' }));
+
+    const apply = within(dialog).getByRole('button', { name: 'Apply' });
+    expect(apply).toHaveProperty('disabled', true);
+    fireEvent.change(within(dialog).getByLabelText('Visit discount value'), {
+      target: { value: '20' },
+    });
+    expect(within(dialog).getByText('$144')).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText('Reason (optional)'), {
+      target: { value: ' Family friend ' },
+    });
+    expect(apply).toHaveProperty('disabled', false);
+    const reads = fetchMock.mock.calls.length;
+    fireEvent.click(apply);
+
+    await waitFor(() => {
+      expect(within(dialog).queryByRole('button', { name: 'Apply' })).toBeNull();
+    });
+    expect(posted).toEqual([
+      {
+        expectedUpdatedAt: TODAYS.updatedAt,
+        discount: { mode: 'percent', value: '20' },
+        reason: 'Family friend',
+      },
+    ]);
+    // The visit and its figures are read again.
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(reads + 1);
+  });
+
+  it('shows why a checkout discount was refused and keeps the editor open', async () => {
+    await arriveAfterComplete(TODAYS, OWING, WITH_DISCOUNT, (method, path) =>
+      method === 'POST' && path.endsWith('/checkout-discount')
+        ? problem(409, 'visit.checkout_closed')
+        : undefined,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Edit the visit discount' }));
+    fireEvent.change(within(dialog).getByLabelText('Visit discount value'), {
+      target: { value: '5' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }));
+    expect((await within(dialog).findByRole('alert')).textContent).toContain(
+      'The discount can only be set at checkout on the day of the visit.',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Apply' })).toBeTruthy();
   });
 
   it('is not shown without payment:read: a toast says the visit was recorded, once', async () => {

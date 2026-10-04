@@ -21,7 +21,8 @@
     "settings": "الإعدادات",
     "platform": "المنصة",
     "tenants": "العيادات",
-    "payments": "المدفوعات"
+    "payments": "المدفوعات",
+    "today": "اليوم"
   },
   "breadcrumb": "مسار التنقل",
   "platformCrumb": "المنصة",
@@ -59,5 +60,8 @@
     "several_other": "{{count, number}} زيارة جارية",
     "running": "جارية",
     "pausedShort": "متوقفة مؤقتًا"
+  },
+  "checkoutPill": {
+    "label": "الدفع · {{n, number}}"
   }
 }

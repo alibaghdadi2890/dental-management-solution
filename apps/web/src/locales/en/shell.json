@@ -21,7 +21,8 @@
     "settings": "Settings",
     "platform": "Platform",
     "tenants": "Tenants",
-    "payments": "Payments"
+    "payments": "Payments",
+    "today": "Today"
   },
   "breadcrumb": "Breadcrumb",
   "platformCrumb": "Platform",
@@ -55,5 +56,8 @@
     "several_other": "{{count, number}} visits in progress",
     "running": "In progress",
     "pausedShort": "Paused"
+  },
+  "checkoutPill": {
+    "label": "Checkout · {{n, number}}"
   }
 }

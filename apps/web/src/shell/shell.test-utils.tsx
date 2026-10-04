@@ -17,10 +17,11 @@ import { ToastProvider } from '@/components/ui/toast';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { parsePatientsSearch, type PatientsSearch } from '@/features/patients/list-query';
 import { PatientsScreen } from '@/features/patients/patients-screen';
+import { TodayPage } from '@/features/today/today-page';
 import { AppShell } from './app-shell';
 
-/** Test-only: the real `AppShell` on a memory router with the real `/patients` screen and
- * stand-ins for the patient record, `/visits` and a visit's workspace, and `session` already loaded (as the `_app` guard would have it). */
+/** Test-only: the real `AppShell` on a memory router with the real `/patients` and `/today`
+ * screens and stand-ins for the patient record, `/visits` and a visit's workspace, and `session` already loaded (as the `_app` guard would have it). */
 export function renderShell({ url, session }: { url: string; session: Session }) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
@@ -65,8 +66,33 @@ export function renderShell({ url, session }: { url: string; session: Session })
     const { visitId } = useParams({ strict: false });
     return <p>{`Workspace ${visitId ?? ''}`}</p>;
   }
+  // `/today` wired as its route is: the open visit lives in the search.
+  const todayRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/today',
+    staticData: { navKey: 'today' },
+    component: TodayRoute,
+  });
+  function TodayRoute() {
+    const { visit } = useSearch({ strict: false });
+    const navigate = useNavigate();
+    return (
+      <TodayPage
+        openVisitId={visit}
+        onOpen={(next) => {
+          void navigate({ to: '/today', search: next ? { visit: next } : {} });
+        }}
+      />
+    );
+  }
   const router = createRouter({
-    routeTree: rootRoute.addChildren([patientsRoute, recordRoute, visitsRoute, workspaceRoute]),
+    routeTree: rootRoute.addChildren([
+      patientsRoute,
+      recordRoute,
+      visitsRoute,
+      workspaceRoute,
+      todayRoute,
+    ]),
     history: createMemoryHistory({ initialEntries: [url] }),
   });
   render(

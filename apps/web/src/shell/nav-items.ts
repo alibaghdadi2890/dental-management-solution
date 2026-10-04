@@ -7,8 +7,10 @@ interface NavEntry<TKey extends string, TPath extends string> {
   permission: Permission;
 }
 
-/** Sidebar entries (POC app shell). Schedule is not part of phase 1; Payments is feature 5. */
+/** Sidebar entries (POC app shell). Schedule is not part of phase 1; Payments is feature 5;
+ * Today is the board of whoever collects (`payment:write`). */
 export const MAIN_NAV = [
+  { key: 'today', to: '/today', permission: 'payment:write' },
   { key: 'patients', to: '/patients', permission: 'patient:read' },
   { key: 'visits', to: '/visits', permission: 'visit:read' },
   { key: 'payments', to: '/payments', permission: 'payment:read' },
