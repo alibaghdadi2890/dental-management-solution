@@ -29,7 +29,8 @@
   },
   "chargeUnit": {
     "per_tooth": "Per tooth",
-    "per_jaw": "Per jaw"
+    "per_jaw": "Per jaw",
+    "per_mouth": "Whole mouth"
   },
   "frequent": {
     "on": "Frequently used",

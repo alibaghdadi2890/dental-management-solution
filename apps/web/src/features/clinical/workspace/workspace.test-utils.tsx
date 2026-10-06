@@ -22,7 +22,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { vi } from 'vitest';
 import '@/lib/i18n';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
@@ -46,7 +46,7 @@ import { parseWorkspaceSearch } from './workspace-search';
  * a memory router, with a stand-in patient record to land on. */
 
 export const VISIT_ID = id(60);
-/** Aged 8 on the fixture's `serverNow` date: a mixed dentition. */
+/** A child by date of birth; the chart fixture decides which chart opens. */
 export const RANA = patient(1, 'Rana Haddad', {
   dateOfBirth: '2018-03-01',
   medicalAlerts: ['Penicillin allergy'],
@@ -120,7 +120,7 @@ export function diagnosisRecord(
     dentistName: 'Dr. Ana Reyes',
     recordedBy: DENTIST_ID,
     recordedInVisitId: VISIT_ID,
-    recordedInVisitDate: '2026-09-04',
+    recordedDate: '2026-09-04',
     recordedAt: '2026-09-04T09:05:00.000Z',
     resolvedInVisitId: null,
     resolvedAt: null,
@@ -139,12 +139,13 @@ export function treatmentPlan(
     id: id(n),
     patientId: RANA.id,
     toothCode,
+    jaw: null,
     surfaces: [],
     procedureId: id(n + 1),
     code: 'PL',
     name,
     category: null,
-    chargeUnit: toothCode === null ? 'per_jaw' : 'per_tooth',
+    chargeUnit: toothCode === null ? 'per_mouth' : 'per_tooth',
     price: usd('400.00'),
     diagnosisRecordId: null,
     status: 'planned',
@@ -154,6 +155,10 @@ export function treatmentPlan(
     recordedBy: DENTIST_ID,
     recordedInVisitId: VISIT_ID,
     recordedAt: '2026-09-04T09:06:00.000Z',
+    groupId: null,
+    startedInVisitId: null,
+    startedAt: null,
+    sessions: [],
     performedInVisitId: null,
     performedAt: null,
     cancelledInVisitId: null,
@@ -175,8 +180,9 @@ export function visitService(
     code: 'SV',
     name,
     category: null,
-    chargeUnit: toothCode === null ? 'per_jaw' : 'per_tooth',
+    chargeUnit: toothCode === null ? 'per_mouth' : 'per_tooth',
     toothCode,
+    jaw: null,
     surfaces: [],
     base: usd('80.00'),
     discount: usd('0.00'),
@@ -203,6 +209,7 @@ export function historyLine(
     code: 'HS',
     name,
     toothCode,
+    jaw: null,
     surfaces: [],
     final: usd('60.00'),
     planId: null,
@@ -226,6 +233,7 @@ export function visit(extra: Partial<Visit> = {}): Visit {
     pausedSeconds: 0,
     completedAt: null,
     completedBy: null,
+    unfinishedAnsweredAt: null,
     durationMinutes: null,
     notes: '',
     discountMode: 'percent',
@@ -243,10 +251,11 @@ export function visit(extra: Partial<Visit> = {}): Visit {
 
 export function chart(extra: Partial<PatientChart> = {}): PatientChart {
   return {
-    dentition: { stage: 'mixed', source: 'auto', ageYears: 8 },
+    dentition: { stage: 'permanent', source: 'auto', ageYears: 34 },
     toothStatus: [],
     diagnoses: [],
     plans: [],
+    planGroups: [],
     history: [],
     liveVisitId: VISIT_ID,
     voidedVisitIds: [],
@@ -353,6 +362,19 @@ export function mockWorkspace({
 
 /** The (last) `method path` call's JSON body, `null` for a call without one, or `undefined` when
  * there was no such call. */
+/** Opens the three-dot menu of the service row called `name` and picks `item`. */
+export async function pickRowAction(
+  scope: Pick<typeof screen, 'getByRole'>,
+  name: string,
+  item: string,
+): Promise<void> {
+  fireEvent.pointerDown(scope.getByRole('button', { name: `Actions: ${name}` }), {
+    button: 0,
+    ctrlKey: false,
+  });
+  fireEvent.click(await screen.findByRole('menuitem', { name: item }));
+}
+
 export function sent(fetchMock: FetchMock, method: string, path: string): unknown {
   const call = fetchMock.mock.calls.findLast(
     ([url, init]) => url === `/api/v1${path}` && (init?.method ?? 'GET') === method,

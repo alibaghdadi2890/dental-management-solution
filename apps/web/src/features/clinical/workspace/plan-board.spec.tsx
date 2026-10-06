@@ -20,11 +20,16 @@ import {
 
 const usd = (amount: string) => ({ amount, currency: 'USD' });
 
-/** Open plans on #26, #16 (two), primary #55 and one jaw-level, plus a performed and a cancelled
+/** Open plans on #26, #16 (two), primary #55, one whole-mouth and one on the lower jaw, plus a performed and a cancelled
  * one that the board leaves out. */
 const PLANS = [
   treatmentPlan(20, 'Root canal', '26', { recordedInVisitId: OLDER_VISIT_ID }),
   treatmentPlan(22, 'Scaling', null, { price: usd('60.00') }),
+  treatmentPlan(34, 'Whitening', null, {
+    chargeUnit: 'per_jaw',
+    jaw: 'lower',
+    price: usd('100.00'),
+  }),
   treatmentPlan(24, 'Zircon crown', '16', { surfaces: ['O', 'D'] }),
   treatmentPlan(26, 'Composite filling', '16', { price: usd('90.00') }),
   treatmentPlan(28, 'Pulpotomy', '55', { price: usd('50.00') }),
@@ -67,7 +72,7 @@ describe('PlanBoard', () => {
     vi.unstubAllGlobals();
   });
 
-  it('groups the open plans by tooth in numbering order, jaw-level last', async () => {
+  it('groups the open plans by tooth in numbering order, then the jaws and the whole mouth', async () => {
     fakeClinic(
       chart({
         plans: PLANS,
@@ -82,30 +87,36 @@ describe('PlanBoard', () => {
     const card = await board();
 
     const groups = [...card.querySelectorAll<HTMLElement>('[data-tooth]')];
-    expect(groups.map((group) => group.dataset.tooth)).toEqual(['16', '26', '55', 'jaw']);
-    expect(within(card).getByText('Future work · not billed until performed')).toBeTruthy();
-    expect(within(card).getByText('3 teeth · 5 procedures')).toBeTruthy();
+    expect(groups.map((group) => group.dataset.tooth)).toEqual([
+      '16',
+      '26',
+      '55',
+      'lower',
+      'mouth',
+    ]);
+    expect(within(card).getByText('3 teeth · 6 procedures')).toBeTruthy();
 
-    const [tooth16, tooth26, , jaw] = groups.map((group) => within(group));
+    const [tooth16, tooth26, , lower, mouth] = groups.map((group) => within(group));
     expect(tooth16?.getByRole('button', { name: '#16' })).toBeTruthy();
     expect(tooth16?.getByText('Upper right first molar')).toBeTruthy();
     // Active diagnoses only, in danger.
     expect(tooth16?.getByText('Dental caries').className).toContain('text-danger');
     expect(tooth16?.queryByText(/Old fracture/)).toBeNull();
     expect(tooth16?.getAllByRole('listitem').map((row) => row.textContent)).toEqual([
-      'Zircon crownO · D$400Perform now→ today',
-      'Composite filling$90Perform now→ today',
+      'Zircon crownO · D$400Perform now',
+      'Composite filling$90Perform now',
     ]);
     expect(tooth26?.getByText('No diagnosis recorded').className).toContain('text-ink-muted');
-    expect(jaw?.getByText('Jaw')).toBeTruthy();
-    expect(jaw?.queryByRole('button', { name: 'Jaw' })).toBeNull();
-    expect(jaw?.getByText('Jaw-level')).toBeTruthy();
+    expect(lower?.getByText('Lower jaw')).toBeTruthy();
+    expect(mouth?.getByText('Whole mouth')).toBeTruthy();
+    expect(mouth?.queryByRole('button', { name: 'Whole mouth' })).toBeNull();
+    expect(mouth?.queryByText('No diagnosis recorded')).toBeNull();
 
     // Performed and cancelled plans are not on the board; the estimate sums the open ones.
     expect(within(card).queryByText('Sealant')).toBeNull();
     expect(within(card).queryByText('Veneer')).toBeNull();
     expect(within(card).getByText('Plan estimate')).toBeTruthy();
-    expect(within(card).getByText('$1,000')).toBeTruthy();
+    expect(within(card).getByText('$1,100')).toBeTruthy();
   });
 
   it('orders by the Universal numbers when the clinic uses them', async () => {
@@ -128,7 +139,7 @@ describe('PlanBoard', () => {
       expect(within(card).getByRole('button', { name: '#3' })).toBeTruthy();
     });
     const groups = [...card.querySelectorAll<HTMLElement>('[data-tooth]')];
-    // #3 (16), #8 (11), #17 (38), #24 (31), then primary A (55), E (51), then the jaw.
+    // #3 (16), #8 (11), #17 (38), #24 (31), then primary A (55), E (51), then the mouth.
     expect(groups.map((group) => group.dataset.tooth)).toEqual([
       '16',
       '11',
@@ -136,7 +147,7 @@ describe('PlanBoard', () => {
       '31',
       '55',
       '51',
-      'jaw',
+      'mouth',
     ]);
   });
 
@@ -161,7 +172,7 @@ describe('PlanBoard', () => {
     await waitFor(() => {
       expect(within(card).queryByText('Root canal')).toBeNull();
     });
-    expect(within(card).getByText('2 teeth · 4 procedures')).toBeTruthy();
+    expect(within(card).getByText('2 teeth · 5 procedures')).toBeTruthy();
   });
 
   it('says nothing is planned yet', async () => {
@@ -178,11 +189,6 @@ describe('PlanBoard', () => {
     renderWorkspace();
     const card = await board();
     expect(within(card).getByText('Nothing planned yet')).toBeTruthy();
-    expect(
-      within(card).getByText(
-        'Select a tooth, record what you found, then plan the treatment. You can complete this visit as an examination without billing anything.',
-      ),
-    ).toBeTruthy();
     expect(within(card).queryByText('Plan estimate')).toBeNull();
   });
 

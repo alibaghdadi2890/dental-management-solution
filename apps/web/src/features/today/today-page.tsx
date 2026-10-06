@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Page } from '@/components/page';
 import { CardSkeleton } from '@/components/ui/card';
+import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import {
@@ -12,7 +13,12 @@ import {
   useCheckoutQueue,
 } from '@/features/clinical/checkout-queue';
 import { PostVisitSummaryDialog } from '@/features/clinical/dialogs/post-visit-summary-dialog';
-import { visitPageQuery } from '@/features/clinical/visits-list/visits-list-api';
+import {
+  checkOutVisit,
+  invalidateVisitData,
+  visitPageQuery,
+} from '@/features/clinical/visits-list/visits-list-api';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, todayIn } from '@/lib/format';
 import { ChairRow } from './chair-lane';
 import { CheckoutCard } from './checkout-lane';
@@ -63,6 +69,8 @@ const Note = ({ children, alert = false }: { children: ReactNode; alert?: boolea
  * **Check out**, which opens the same checkout dialog the completer saw (the open visit is in the
  * URL) — and **In the chair**, the branch's live visits with their running time. Both poll every
  * 30 s. A visit paid in full leaves the lane; its dialog stays, showing it paid, until Done.
+ * **Done** on a visit still waiting closes its checkout without a payment (ADR-0033): the card
+ * leaves the lane and the amount stays a receivable. `Esc` only closes the dialog.
  */
 export function TodayPage({
   openVisitId,
@@ -73,6 +81,8 @@ export function TodayPage({
 }) {
   const { t, i18n } = useTranslation('today');
   const locale = i18n.resolvedLanguage ?? 'en';
+  const queryClient = useQueryClient();
+  const toast = useToast();
   const { data: session } = useSession();
   const canOpenVisits = usePermission('visit:write');
   const queue = useCheckoutQueue();
@@ -83,6 +93,14 @@ export function TodayPage({
     enabled: queue.enabled,
     refetchInterval: CHECKOUT_REFETCH_MS,
     refetchOnWindowFocus: 'always',
+  });
+  // Pending until the lists are back, so the card goes at once and doesn't flash in again.
+  const checkOut = useMutation({
+    mutationFn: checkOutVisit,
+    onSuccess: () => invalidateVisitData(queryClient),
+    onError: (error) => {
+      toast(apiErrorMessage(error, i18n), { tone: 'danger' });
+    },
   });
   if (!session?.tenant) return null;
   const { timeZone } = session.tenant;
@@ -103,7 +121,10 @@ export function TodayPage({
     );
   }
 
-  const waitingOpen = queue.visits.find((visit) => visit.id === openVisitId);
+  const waitingVisits = queue.visits.filter(
+    (visit) => !(checkOut.isPending && visit.id === checkOut.variables),
+  );
+  const waitingOpen = waitingVisits.find((visit) => visit.id === openVisitId);
   const open = waitingOpen
     ? { id: waitingOpen.id, name: waitingOpen.patient.fullName }
     : opened?.id === openVisitId
@@ -118,14 +139,14 @@ export function TodayPage({
         <CardSkeleton label={t('checkout.loading')} />
       </div>
     );
-  } else if (queue.failed && queue.visits.length === 0) {
+  } else if (queue.failed && waitingVisits.length === 0) {
     waiting = <Note alert>{t('checkout.failed')}</Note>;
-  } else if (queue.visits.length === 0) {
+  } else if (waitingVisits.length === 0) {
     waiting = <Note>{t('checkout.empty')}</Note>;
   } else {
     waiting = (
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-        {queue.visits.map((visit) => (
+        {waitingVisits.map((visit) => (
           <CheckoutCard
             key={visit.id}
             visit={visit}
@@ -174,8 +195,8 @@ export function TodayPage({
       <Page title={t('title')} subtitle={subtitle}>
         <Lane
           title={t('checkout.title')}
-          count={queue.loading ? undefined : queue.visits.length}
-          framed={queue.visits.length === 0}
+          count={queue.loading ? undefined : waitingVisits.length}
+          framed={waitingVisits.length === 0}
         >
           {waiting}
         </Lane>
@@ -188,6 +209,13 @@ export function TodayPage({
           key={open.id}
           visitId={open.id}
           title={t('dialog.title', { name: open.name })}
+          {...(waitingOpen
+            ? {
+                onDone: () => {
+                  checkOut.mutate(open.id);
+                },
+              }
+            : {})}
           onClose={() => {
             onOpen(undefined);
           }}

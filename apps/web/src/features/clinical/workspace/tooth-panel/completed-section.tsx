@@ -1,10 +1,12 @@
-import type { HistoryService, ToothCode, VisitService } from '@dcm/contracts';
+import type { HistoryService, ToothCode, TreatmentPlan, VisitService } from '@dcm/contracts';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SaveState } from '@/components/ui/save-state';
 import { sanitizeAmountInput } from '@/lib/amount';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { useChartingActions } from '../charting-actions';
+import { ServiceMenu } from '../row-menu';
+import { UnfinishedRow } from '../unfinished-row';
 import { Badge, EmptyBlock, LinkButton, PanelSection } from './panel-section';
 import { priceOf, useServicePrice } from './service-price';
 import { SurfaceTag } from './surface-tag';
@@ -16,25 +18,34 @@ const PRICE_INPUT =
 
 /**
  * The Completed stage (spec §Selected Tooth Panel → Body 3): this visit's services on the tooth
- * as cards (name, surface tag, "From plan", **Remove**) with Base price and Discount inputs —
- * one autosaved group per service (V6) — and the Final price; then "Previously", the services of
- * earlier visits, with the "Full tooth history →" link. A tooth with neither shows the empty
- * block.
+ * (or the jaw, or the whole mouth)
+ * as cards (name, surface tag, "From plan", the three-dot menu) with Base price and Discount
+ * inputs — one autosaved group per service (V6) — and the Final price; before them its unfinished
+ * services (ADR-0032), whichever visit started them; then "Previously", the services of earlier
+ * visits, with the "Full tooth history →" link. A tooth with none of these shows the empty block.
  */
 export function CompletedSection({
   code,
   services,
+  unfinished,
   history,
   canWrite,
+  canWriteUnfinished,
   open,
   onToggle,
   onAdd,
   onOpenHistory,
 }: {
-  code: ToothCode;
+  /** Null for a jaw or the whole mouth: no tooth history to link. */
+  code: ToothCode | null;
   services: readonly VisitService[];
+  /** The target's plans in progress. */
+  unfinished: readonly TreatmentPlan[];
   history: readonly HistoryService[];
+  /** Services are charted in a visit only. */
   canWrite: boolean;
+  /** An unfinished service is also abandoned from the patient record. */
+  canWriteUnfinished: boolean;
   open: boolean;
   onToggle: () => void;
   onAdd: () => void;
@@ -43,6 +54,7 @@ export function CompletedSection({
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const parts = [
+    ...(unfinished.length > 0 ? [t('unfinished.count', { count: unfinished.length })] : []),
     ...(services.length > 0 ? [t('panel.completed.thisVisit', { count: services.length })] : []),
     ...(history.length > 0 ? [t('panel.completed.previously', { count: history.length })] : []),
   ];
@@ -61,6 +73,14 @@ export function CompletedSection({
           : undefined
       }
     >
+      {unfinished.map((plan) => (
+        <UnfinishedRow
+          key={plan.id}
+          plan={plan}
+          canWrite={canWriteUnfinished}
+          className="mb-2 rounded-lg border border-warning-border px-3 py-[11px]"
+        />
+      ))}
       {services.map((service) => (
         <ServiceCard key={service.id} service={service} canWrite={canWrite} />
       ))}
@@ -93,7 +113,7 @@ export function CompletedSection({
               ))}
             </tbody>
           </table>
-          {onOpenHistory && (
+          {onOpenHistory && code !== null && (
             <LinkButton
               className="mt-2.5"
               label={t('panel.completed.fullHistory')}
@@ -104,8 +124,8 @@ export function CompletedSection({
           )}
         </div>
       )}
-      {services.length === 0 && history.length === 0 && (
-        <EmptyBlock title={t('panel.completed.emptyTitle')} body={t('panel.completed.emptyBody')} />
+      {services.length === 0 && unfinished.length === 0 && history.length === 0 && (
+        <EmptyBlock title={t('panel.completed.emptyTitle')} />
       )}
     </PanelSection>
   );
@@ -151,21 +171,12 @@ function ServiceCard({ service, canWrite }: { service: VisitService; canWrite: b
       data-service={service.id}
       className="mb-2 rounded-lg border border-primary-tint-border bg-selected px-3 py-[11px]"
     >
-      <div className="mb-[9px] flex items-baseline gap-2">
+      <div className="mb-[9px] flex items-center gap-2">
         <span className="min-w-0 text-[13px] leading-[1.3] font-semibold">{service.name}</span>
         <SurfaceTag surfaces={service.surfaces} className="text-primary" />
         <span className="flex-1" />
         {service.planId !== null && <Badge tone="warning">{t('panel.completed.fromPlan')}</Badge>}
-        {canWrite && (
-          <LinkButton
-            tone="danger"
-            label={t('panel.remove')}
-            name={t('panel.removeNamed', { name: service.name })}
-            onClick={() => {
-              if (!removing) actions.removeService(service.id);
-            }}
-          />
-        )}
+        {canWrite && <ServiceMenu service={service} />}
       </div>
       <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
         {field('base', baseId, t('panel.completed.base'))}

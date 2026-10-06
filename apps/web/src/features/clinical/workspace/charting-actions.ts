@@ -1,14 +1,15 @@
 import type {
   ChargeUnit,
   DiagnosisItem,
-  PermanentToothCode,
+  Jaw,
+  PlanGroupInput,
   ServiceItem,
   SurfaceKey,
   ToothCode,
-  ToothPresenceValue,
   TreatmentPlan,
   UpdateServiceInput,
   Visit,
+  VisitService,
 } from '@dcm/contracts';
 import {
   MutationObserver,
@@ -21,8 +22,8 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/toast-context';
 import { ApiError } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
-import { useToothLabel } from '../chart/use-chart-settings';
-import { useDropSaveGroup } from '../save-groups-context';
+import { useLevelLabel, useToothLabel } from '../chart/use-chart-settings';
+import { useDropSaveGroup, useFlushSaveGroups } from '../save-groups-context';
 import { useVisitMutations } from '../visit-mutations';
 import type { ToothSelection } from './tooth-selection';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -30,10 +31,12 @@ import { apiErrorMessage } from '@/lib/api-error-message';
 /** The catalog drawer's three modes (spec §Add Service / Plan Treatment / Diagnosis Drawer). */
 export type DrawerMode = 'service' | 'plan' | 'diagnosis';
 
-/** What a drawer row commits against: the tooth and pending surfaces at the moment of the click. */
+/** What a drawer row commits against: the tooth and pending surfaces at the moment of the click,
+ * and for a per-jaw row the jaw its button named. */
 export interface ChartTarget {
   tooth: ToothCode | null;
   surfaces: readonly SurfaceKey[];
+  jaw?: Jaw | undefined;
 }
 
 /** What every service price group's key starts with. */
@@ -43,12 +46,45 @@ export const SERVICE_PRICE_PREFIX = 'service:';
  * edits that price (the tooth panel, the summary dialog). */
 export const servicePriceKey = (serviceId: string) => `${SERVICE_PRICE_PREFIX}${serviceId}`;
 
+/** Where the charting happens: inside a live visit, or on the patient record without one
+ * (ADR-0031), where only diagnoses and plans are recorded. */
+export type ChartingScope = { kind: 'visit'; visitId: string } | { kind: 'patient' };
+
+/** Whether a diagnosis or plan was recorded where the charting happens: in this visit, or on the
+ * patient record. Such a record is removed; another is resolved or cancelled (W13, ADR-0031). */
+export const madeHere = (scope: ChartingScope, record: { recordedInVisitId: string | null }) =>
+  scope.kind === 'visit'
+    ? record.recordedInVisitId === scope.visitId
+    : record.recordedInVisitId === null;
+
+/** Managing the patient's named plans: the patient record's Chart tab only. */
+export interface PlanGroupActions {
+  create: (input: PlanGroupInput) => Promise<void>;
+  update: (groupId: string, input: PlanGroupInput) => Promise<void>;
+  remove: (groupId: string) => void;
+  /** Moves an open plan into a named plan, or out of any (`null`). */
+  movePlan: (planId: string, groupId: string | null) => void;
+}
+
 export interface ChartingActions {
+  /** In the patient scope the visit-only actions (services, perform, resolve) are
+   * never offered. */
+  scope: ChartingScope;
   addService: (item: ServiceItem, target: ChartTarget) => void;
   planTreatment: (item: ServiceItem, target: ChartTarget) => void;
   recordDiagnosis: (item: DiagnosisItem, target: ChartTarget) => void;
-  /** Perform now: the plan becomes a service of this visit, with an Undo toast. */
+  /** Perform now, or Complete for an unfinished service: the plan becomes a service of this
+   * visit, with an Undo toast. */
   performPlan: (plan: TreatmentPlan) => void;
+  /** Not finished (ADR-0032): the service leaves the visit's charges and carries on to the
+   * visit that completes it. */
+  markUnfinished: (service: VisitService) => void;
+  /** Continue: this visit works on an unfinished service. */
+  continuePlan: (plan: TreatmentPlan) => void;
+  /** Not today: undoes this visit's work on an unfinished service from an earlier visit. */
+  undoSession: (plan: TreatmentPlan) => void;
+  /** Removes an unfinished service first added in this visit. */
+  removeUnfinished: (plan: TreatmentPlan) => void;
   removeService: (serviceId: string) => void;
   /** The services whose DELETE is in flight: their price inputs are frozen. */
   removing: ReadonlySet<string>;
@@ -59,12 +95,6 @@ export interface ChartingActions {
   removeDiagnosis: (recordId: string) => void;
   removePlan: (planId: string) => void;
   cancelPlan: (planId: string) => void;
-  /** The succession row (W5): records what occupies a column, then selects that tooth. */
-  setToothPresence: (
-    position: PermanentToothCode,
-    present: ToothPresenceValue,
-    select: ToothCode,
-  ) => void;
 }
 
 /** Runs one of `visitMutations`' options outside a component's lifecycle: the drawer closes on
@@ -76,17 +106,18 @@ function runner(queryClient: QueryClient) {
   ): Promise<TData> => new MutationObserver(queryClient, options).mutate(variables);
 }
 
-/** A per-tooth catalog item takes the tooth and its pending surfaces; a per-jaw one neither. */
-function scopeOf(chargeUnit: ChargeUnit, target: ChartTarget) {
-  if (chargeUnit === 'per_jaw' || target.tooth === null) return { surfaces: [] };
+/** A per-tooth catalog item takes the tooth and its pending surfaces, a per-jaw one its jaw, a
+ * whole-mouth one nothing. */
+export function scopeOf(chargeUnit: ChargeUnit, target: ChartTarget) {
+  if (chargeUnit === 'per_jaw') return { surfaces: [], ...(target.jaw && { jaw: target.jaw }) };
+  if (chargeUnit === 'per_mouth' || target.tooth === null) return { surfaces: [] };
   return { toothCode: target.tooth, surfaces: [...target.surfaces] };
 }
 
 /**
  * The workspace's charting writes (spec §Diagnosis → Treatment Plan → Completed Treatment), with
  * the POC's toasts: service added (+ Undo), diagnosis recorded (+ Plan treatment, reopening the
- * drawer in plan mode on the same tooth), treatment planned, plan performed (+ Undo), tooth
- * presence changed. None asks for confirmation (§Confirmation & Destructive Actions). Every
+ * drawer in plan mode on the same tooth), treatment planned, plan performed (+ Undo). None asks for confirmation (§Confirmation & Destructive Actions). Every
  * service DELETE first drops the service's price group, so an unsaved price edit never reaches
  * the deleted row nor keeps the workspace dirty. Created once per workspace and shared through
  * `ChartingActionsContext`.
@@ -106,12 +137,14 @@ export function useChartingActionsState({
   const queryClient = useQueryClient();
   const mutations = useVisitMutations(visit.id);
   const drop = useDropSaveGroup();
+  const flush = useFlushSaveGroups();
   const toothLabel = useToothLabel();
+  const levelLabel = useLevelLabel();
   const [removing, setRemoving] = useState<ReadonlySet<string>>(() => new Set());
   // The same set, read synchronously: a second Remove (the card's, then a toast's Undo) of a
   // service whose DELETE is in flight is skipped.
   const removingRef = useRef(new Set<string>());
-  const { select, ensureSelected } = selection;
+  const { ensureSelected } = selection;
 
   return useMemo(() => {
     const run = runner(queryClient);
@@ -125,8 +158,9 @@ export function useChartingActionsState({
     ) => {
       run(options, variables).catch(failed);
     };
-    const tooth = (code: ToothCode | null) =>
-      code === null ? t('actions.jawLevel') : t('actions.tooth', { label: toothLabel(code) });
+    const tooth = (code: ToothCode) => t('actions.tooth', { label: toothLabel(code) });
+    const targetOf = (record: { toothCode: ToothCode | null; jaw: Jaw | null }) =>
+      record.toothCode === null ? levelLabel(record.jaw) : tooth(record.toothCode);
 
     const removeService = (serviceId: string) => {
       if (removingRef.current.has(serviceId)) return;
@@ -149,14 +183,14 @@ export function useChartingActionsState({
     };
 
     return {
+      scope: { kind: 'visit', visitId: visit.id },
       removing,
       removeService,
       addService: (item, target) => {
         run(mutations.addService, { procedureId: item.id, ...scopeOf(item.chargeUnit, target) })
           .then(({ record }) => {
             toast(t('actions.serviceAdded', { name: item.name }), {
-              body:
-                record.toothCode === null ? t('actions.jawLevelService') : tooth(record.toothCode),
+              body: targetOf(record),
               actionLabel: t('actions.undo'),
               onAction: () => {
                 removeService(record.id);
@@ -171,7 +205,7 @@ export function useChartingActionsState({
           .then(({ record }) => {
             toast(t('actions.planned', { name: item.name }), {
               body: t('actions.plannedBody', {
-                target: tooth(record.toothCode),
+                target: targetOf(record),
                 price: formatMoney(record.price, locale),
               }),
             });
@@ -198,6 +232,50 @@ export function useChartingActionsState({
             });
           })
           .catch(failed);
+      },
+      markUnfinished: (service) => {
+        // The plan takes the service's price, so an edit still on its way is saved first.
+        flush()
+          .then((saved) => {
+            if (!saved) throw new Error(t('actions.unsavedPrice'));
+            drop(servicePriceKey(service.id));
+            return run(mutations.markUnfinished, service.id);
+          })
+          .then(({ record }) => {
+            toast(t('actions.unfinished', { name: service.name }), {
+              body: targetOf(record),
+              actionLabel: t('actions.undo'),
+              onAction: () => {
+                fire(mutations.performPlan, record.id);
+              },
+            });
+          })
+          .catch(failed);
+      },
+      removeUnfinished: (plan) => {
+        run(mutations.removeSession, plan.id)
+          // Work first added in this visit leaves no plan behind; a plan from before stays planned.
+          .then(({ record }) =>
+            record.recordedInVisitId === visit.id && record.status === 'planned'
+              ? run(mutations.removePlan, plan.id)
+              : undefined,
+          )
+          .catch(failed);
+      },
+      continuePlan: (plan) => {
+        run(mutations.recordSession, plan.id)
+          .then(() => {
+            toast(t('actions.continued', { name: plan.name }), {
+              actionLabel: t('actions.undo'),
+              onAction: () => {
+                fire(mutations.removeSession, plan.id);
+              },
+            });
+          })
+          .catch(failed);
+      },
+      undoSession: (plan) => {
+        fire(mutations.removeSession, plan.id);
       },
       performPlan: (plan) => {
         run(mutations.performPlan, plan.id)
@@ -231,27 +309,20 @@ export function useChartingActionsState({
       cancelPlan: (planId) => {
         fire(mutations.cancelPlan, planId);
       },
-      setToothPresence: (position, present, next) => {
-        run(mutations.setToothPresence, { position, present })
-          .then(() => {
-            select(next);
-            const done = present === 'permanent' ? 'exfoliated' : 'retained';
-            toast(t(`succession.${done}`), { body: t(`succession.${done}Body`) });
-          })
-          .catch(failed);
-      },
     } satisfies ChartingActions;
   }, [
+    visit.id,
     queryClient,
     mutations,
     drop,
+    flush,
     toast,
     t,
     i18n,
     locale,
     toothLabel,
+    levelLabel,
     removing,
-    select,
     ensureSelected,
     openDrawer,
   ]);
@@ -262,7 +333,7 @@ export const ChartingActionsContext = createContext<ChartingActions | null>(null
 export function useChartingActions(): ChartingActions {
   const actions = useContext(ChartingActionsContext);
   if (!actions) {
-    throw new Error('useChartingActions must be used inside the visit workspace');
+    throw new Error('useChartingActions must be used inside a charting provider');
   }
   return actions;
 }

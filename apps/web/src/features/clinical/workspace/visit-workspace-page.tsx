@@ -20,6 +20,7 @@ import { useStaffNames } from '@/features/users/use-staff-names';
 import { ApiError } from '@/lib/api';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
+import { UnfinishedDialog } from '../dialogs/unfinished-dialog';
 import { VisitSummaryDialog } from '../dialogs/visit-summary-dialog';
 import { useDropOrphanedGroups } from '../save-groups-context';
 import { SaveGroupsProvider } from '../save-groups-provider';
@@ -34,21 +35,19 @@ import {
   servicePriceKey,
   useChartingActionsState,
 } from './charting-actions';
-import type { ResolvedDentition } from './dentition-select';
 import { FinancialBar } from './financial-bar';
 import { NotesCard } from './notes-card';
 import { PlanBoard } from './plan-board';
+import { TodaysServices } from './todays-services';
+import { unfinishedWork } from './unfinished';
 import { ToothPanel } from './tooth-panel/tooth-panel';
 import { ToothSelectionContext, useToothSelectionState } from './tooth-selection';
 import { useChartKeyboard } from './use-chart-keyboard';
+import { useChartStage } from './use-chart-stage';
 import { VisitHeader } from './visit-header';
 import { useToothParam } from './workspace-search';
 
 type Tenant = NonNullable<Session['tenant']>;
-
-/** No presence records yet (the chart is loading): one stable array, so the keyboard doesn't
- * resubscribe on every render. */
-const NO_STATUS: never[] = [];
 
 /** The `/visits/$visitId` route: one workspace per visit, so its autosave groups (V6) never
  * carry over from one visit to the next. `tooth` is `?tooth=`, the tooth to select on arrival. */
@@ -144,14 +143,15 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
 
 /**
  * The three bands in a full-height column: the header; the body, a wrapping row of the left
- * region (`1 1 600px`: the chart card, the treatment plan and the clinical notes) and the
+ * region (`1 1 600px`: the chart card, today's services, the treatment plan and the notes) and the
  * selected-tooth aside (`1 1 340px`), so the aside reflows under the chart below ~1000px; and the
  * financial bar. Read-only without `visit:write`
  * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
  * the chart, the tooth panel and the drawer; the drawer opens over a scrim. `?tooth=` selects
  * its tooth (the tooth history's "Chart it in this visit"), then leaves the URL. The tooth
  * panel's "Full tooth history →" opens the tooth history dialog, and the financial bar's
- * **Review & complete** the visit summary. The price groups of services no longer on the visit
+ * **Review & complete** the visit summary. A visit of a patient with unfinished services opens
+ * with the question which of them it continues (`UnfinishedDialog`). The price groups of services no longer on the visit
  * (removed by someone else) are dropped as the visit refreshes.
  */
 function Workspace({
@@ -186,33 +186,45 @@ function Workspace({
   }, []);
   const actions = useChartingActionsState({ visit, selection, openDrawer: setDrawer });
   const teeth = useVisitTeeth(chart.data, visit);
+  // What the visit is asked about as it opens, until it has answered (unfinished spec U5).
+  const toAsk =
+    canWrite && visit.unfinishedAnsweredAt === null && chart.data
+      ? unfinishedWork(chart.data.plans, visit.id).toContinue
+      : [];
+  // Today's services that aren't on a tooth, per jaw and for the whole mouth.
+  const areaCounts = useMemo(() => {
+    const counts = { upper: 0, lower: 0, mouth: 0 };
+    for (const service of visit.services) {
+      if (service.toothCode === null) counts[service.jaw ?? 'mouth'] += 1;
+    }
+    return counts;
+  }, [visit.services]);
   useDropOrphanedGroups(
     SERVICE_PRICE_PREFIX,
     visit.services.map((service) => servicePriceKey(service.id)),
   );
 
-  // The patient's own override answers at once after a change; the chart's age stays the
-  // server's (the tenant's date), so the stage never waits for the chart refetch.
-  const dentition: ResolvedDentition | undefined = chart.data && {
-    ...(patient.data
+  // The patient's own switch answers at once after a change, without waiting for the chart.
+  const patientStage =
+    chart.data &&
+    (patient.data
       ? effectiveDentition(chart.data.dentition.ageYears, patient.data.dentitionOverride)
-      : chart.data.dentition),
-    ageYears: chart.data.dentition.ageYears,
-  };
+      : chart.data.dentition
+    ).stage;
+  const [stage, setStage] = useChartStage(patientStage, selection.tooth);
 
   useToothParam({
     tooth,
     visitId: visit.id,
-    dentition: dentition?.stage,
-    toothStatus: chart.data?.toothStatus ?? NO_STATUS,
+    ready: chart.data !== undefined,
     onSelect: selection.select,
   });
 
   useChartKeyboard({
     orientation,
-    dentition: dentition?.stage ?? 'permanent',
-    toothStatus: chart.data?.toothStatus ?? NO_STATUS,
+    dentition: stage ?? 'permanent',
     selected: selection.tooth,
+    areaSelected: selection.area !== null,
     onSelect: selection.select,
     // The summary dialog handles its own keys; while it is open the chart takes none.
     onEscape: drawer !== null ? closeDrawer : reviewing ? closeReview : undefined,
@@ -262,14 +274,14 @@ function Workspace({
           )}
           <div className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-auto">
             <div className="min-w-0 flex-[1_1_600px] px-5 pt-[18px] pb-5">
-              <TodayDivider />
-              {chart.data && patient.data && dentition ? (
+              {chart.data && patient.data && stage ? (
                 <ChartCard
                   teeth={teeth}
-                  chart={chart.data}
                   patient={patient.data}
-                  dentition={dentition}
+                  stage={stage}
+                  onStageChange={setStage}
                   canWrite={canWrite}
+                  areaCounts={areaCounts}
                 />
               ) : (
                 <ChartCardFrame>
@@ -287,6 +299,7 @@ function Workspace({
                   )}
                 </ChartCardFrame>
               )}
+              <TodaysServices visit={visit} chart={chart.data} canWrite={canWrite} />
               {chart.data && <PlanBoard chart={chart.data} canWrite={canWrite} />}
               <NotesCard visit={visit} canWrite={canWrite} />
             </div>
@@ -294,12 +307,11 @@ function Workspace({
               aria-label={t('workspace.toothPanel')}
               className="min-w-0 flex-[1_1_340px] border-s border-border bg-surface p-4"
             >
-              {chart.data && dentition ? (
+              {chart.data ? (
                 <ToothPanel
                   visit={visit}
                   chart={chart.data}
                   teeth={teeth}
-                  dentition={dentition.stage}
                   canWrite={canWrite}
                   timeZone={tenant.timeZone}
                   onOpenDrawer={setDrawer}
@@ -327,6 +339,7 @@ function Workspace({
               <CatalogDrawer key={drawer} mode={drawer} onClose={closeDrawer} />
             </>
           )}
+          {toAsk.length > 0 && <UnfinishedDialog visitId={visit.id} plans={toAsk} />}
           <ToothHistoryDialog
             patientId={visit.patientId}
             patientName={patient.data?.fullName}
@@ -338,21 +351,6 @@ function Workspace({
         </div>
       </ChartingActionsContext.Provider>
     </ToothSelectionContext.Provider>
-  );
-}
-
-/** The POC's section divider above the chart card: "Today's visit" (micro label), "What you are
- * doing now", then a 1px rule filling the row. */
-function TodayDivider() {
-  const { t } = useTranslation('clinical');
-  return (
-    <div className="mb-[11px] flex flex-wrap items-center gap-[9px]">
-      <span className="text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase [&:lang(ar)]:tracking-normal">
-        {t('workspace.today')}
-      </span>
-      <span className="text-[12.5px] leading-[1.3] text-ink-muted">{t('workspace.todayHint')}</span>
-      <span aria-hidden className="h-px min-w-5 flex-1 bg-border" />
-    </div>
   );
 }
 

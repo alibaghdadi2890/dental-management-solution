@@ -18,16 +18,20 @@ export interface ToothRecords {
   plans: TreatmentPlan[];
   /** Services of completed visits, most recent first. */
   history: HistoryService[];
-  /** This visit's services on the tooth. */
+  /** This visit's services on the tooth; none on the patient record. */
   services: VisitService[];
 }
 
-export function toothRecords(code: ToothCode, chart: PatientChart, visit: Visit): ToothRecords {
+export function toothRecords(
+  code: ToothCode,
+  chart: PatientChart,
+  visit: Visit | null,
+): ToothRecords {
   return {
     diagnoses: chart.diagnoses.filter((record) => record.toothCode === code),
     plans: chart.plans.filter((plan) => plan.toothCode === code),
     history: chart.history.filter((line) => line.toothCode === code),
-    services: visit.services.filter((line) => line.toothCode === code),
+    services: visit?.services.filter((line) => line.toothCode === code) ?? [],
   };
 }
 

@@ -45,10 +45,11 @@ export interface CheckoutQueue {
  * session branch's visits of today that still owe — with what each owes, polled every 30 s and on
  * focus. The header pill and the Today board share it (one query key), so they never disagree.
  *
- * A visit waits only until someone takes a payment on it: one that is partly paid has been
- * checked out, and what it still owes is a receivable (Visits → Unpaid, Payments → Outstanding),
- * not someone standing at the desk. So the queue is the owing visits nothing was paid on, and it
- * is known only once the balances are in.
+ * A visit waits only until someone takes a payment on it or closes its checkout without one
+ * (**Done** on the Today board, ADR-0033): either way it has been checked out, and what it still
+ * owes is a receivable (Visits → Unpaid, Payments → Outstanding), not someone standing at the
+ * desk. So the queue is the owing visits nothing was paid on and nobody closed, and it is known
+ * only once the balances are in.
  */
 export function useCheckoutQueue(): CheckoutQueue {
   const canCollect = usePermission('payment:write');
@@ -73,7 +74,7 @@ export function useCheckoutQueue(): CheckoutQueue {
   const balanceOf = (visitId: string) => balances.data?.find((row) => row.visitId === visitId);
   const untouched = (visit: VisitListItem) => {
     const balance = balanceOf(visit.id);
-    return balance !== undefined && toCents(balance.paid) === 0n;
+    return visit.checkedOutAt === null && balance !== undefined && toCents(balance.paid) === 0n;
   };
   return {
     enabled,

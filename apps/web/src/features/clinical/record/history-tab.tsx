@@ -10,9 +10,10 @@ import { useRecordPayment } from '@/features/billing/payments/payment-dialog-con
 import type { HistoryView } from '@/features/patients/record/record-search';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useSurfaceLabel, useToothLabel } from '../chart/use-chart-settings';
+import { useLevelLabel, useSurfaceLabel, useToothLabel } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
 import { StartVisitPopover } from '../start-visit-popover';
+import { VisitUnfinishedLines } from '../visit-unfinished-lines';
 import { patientVisitsQuery, visitBalancesQuery } from '../visits-list/visits-list-api';
 import { VisitStatusPill } from '../visits-list/visits-table';
 import { ClinicalThreads } from './clinical-threads';
@@ -41,6 +42,7 @@ function HistoryRow({
   const { t } = useTranslation(['clinical', 'visits', 'billing']);
   const openPayment = useRecordPayment();
   const toothLabel = useToothLabel();
+  const levelLabel = useLevelLabel();
   const surfaceLabel = useSurfaceLabel();
   const rowRef = useRef<HTMLLIElement>(null);
   const voided = visit.status === 'voided';
@@ -130,7 +132,7 @@ function HistoryRow({
                 >
                   <span>{service.name}</span>
                   {service.toothCode === null ? (
-                    <span className="text-ink-muted">{t('visits:panel.jaw')}</span>
+                    <span className="text-ink-muted">{levelLabel(service.jaw)}</span>
                   ) : (
                     <button
                       type="button"
@@ -149,6 +151,7 @@ function HistoryRow({
                 </li>
               ))}
             </ul>
+            <VisitUnfinishedLines patientId={visit.patient.id} visitId={visit.id} />
             {visit.notes.trim() && (
               <>
                 <h3 className="mt-3 mb-1.5 text-[12.5px] font-semibold">

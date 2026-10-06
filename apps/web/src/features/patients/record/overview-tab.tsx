@@ -15,7 +15,7 @@ import { usePermission } from '@/features/auth/use-permission';
 import { BalanceCard } from '@/features/billing/balance-card';
 import { balanceQuery } from '@/features/billing/billing-api';
 import { DentalChart } from '@/features/clinical/chart/dental-chart';
-import { useToothLabel } from '@/features/clinical/chart/use-chart-settings';
+import { useLevelLabel, useToothLabel } from '@/features/clinical/chart/use-chart-settings';
 import { ToothHistoryDialog } from '@/features/clinical/dialogs/tooth-history-dialog';
 import { chartQuery, clinicalSummaryQuery, lastVisitQuery } from '@/features/clinical/visits-api';
 import { formatCalendarDate, formatMoney, formatPhone } from '@/lib/format';
@@ -132,6 +132,7 @@ function LastVisitCard({
 }) {
   const { t } = useTranslation('patients');
   const label = useToothLabel();
+  const levelLabel = useLevelLabel();
   const lastVisit = useQuery(lastVisitQuery(patientId));
 
   let body: ReactNode;
@@ -183,9 +184,7 @@ function LastVisitCard({
                 {t('record.lastVisit.chip', {
                   name: service.name,
                   target:
-                    service.toothCode === null
-                      ? t('record.lastVisit.jaw')
-                      : label(service.toothCode),
+                    service.toothCode === null ? levelLabel(service.jaw) : label(service.toothCode),
                 })}
               </li>
             ))}
@@ -245,7 +244,6 @@ function DentalStatusCard({
         <DentalChart
           teeth={teeth}
           dentition={chart.data.dentition.stage}
-          toothStatus={chart.data.toothStatus}
           size={8}
           onToothClick={onOpenHistory}
         />

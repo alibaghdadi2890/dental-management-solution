@@ -41,6 +41,7 @@ export function startedVisit(n: number, extra: Partial<Visit> = {}): Visit {
     pausedSeconds: 0,
     completedAt: null,
     completedBy: null,
+    unfinishedAnsweredAt: null,
     durationMinutes: null,
     notes: '',
     discountMode: 'percent',

@@ -90,12 +90,12 @@ describe('ToothHistoryDialog', () => {
             voidedVisitIds: [],
             diagnoses: [
               diagnosisRecord(20, 'Dental caries', '16', {
-                recordedInVisitDate: '2026-05-04',
+                recordedDate: '2026-05-04',
                 note: 'Deep occlusal lesion',
               }),
               diagnosisRecord(22, 'Gingivitis', '16', {
                 status: 'resolved',
-                recordedInVisitDate: '2025-03-12',
+                recordedDate: '2025-03-12',
               }),
             ],
             plans: [
@@ -196,7 +196,7 @@ describe('ToothHistoryDialog', () => {
     expect(within(successor).getByRole('button', { name: '#54' })).toBeTruthy();
   });
 
-  it('offers "Chart it" only for the tooth the chart shows in the position', async () => {
+  it('offers "Chart it" for a tooth of either chart', async () => {
     await openHistory('#54', {
       charts: {
         [RANA.id]: {
@@ -214,12 +214,8 @@ describe('ToothHistoryDialog', () => {
 
     const successor = await screen.findByRole('dialog', { name: 'Tooth #14' });
     expect(
-      await within(successor).findByText(
-        'The chart shows #54 in this position: chart it there, or record which tooth is present from its panel in the visit.',
-      ),
+      await within(successor).findByRole('button', { name: 'Chart it in this visit' }),
     ).toBeTruthy();
-    expect(within(successor).queryByRole('button', { name: 'Chart it in this visit' })).toBeNull();
-    expect(within(successor).queryByRole('button', { name: 'Start a visit' })).toBeNull();
   });
 
   it('says why nothing can be charted when the chart fails to load', async () => {

@@ -239,7 +239,6 @@
     "ageLine": "{{age}} · {{stage}}",
     "dentition": {
       "primary": "denture temporaire",
-      "mixed": "denture mixte",
       "permanent": "denture permanente"
     },
     "duplicate": {
@@ -424,7 +423,6 @@
       "minutes": "{{minutes, number}} min",
       "services": "Actes",
       "chip": "{{name}} · {{target}}",
-      "jaw": "Arcade",
       "none": "Aucune visite enregistrée pour l’instant.",
       "loading": "Chargement de la dernière visite…",
       "failed": "Impossible de charger la dernière visite",

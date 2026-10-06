@@ -1,4 +1,4 @@
-import { toCents, type Visit } from '@dcm/contracts';
+import { isOpenPlan, toCents, type Visit } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -66,7 +66,7 @@ export function FinancialBar({
   const teeth = new Set(visit.services.flatMap((service) => service.toothCode ?? [])).size;
   // The patient's open plans (4a follow-up): what is still to do, apart from today's total.
   const chart = useQuery(chartQuery(visit.patientId));
-  const openPlans = plansTotal(chart.data?.plans.filter((plan) => plan.status === 'planned') ?? []);
+  const openPlans = plansTotal(chart.data?.plans.filter(isOpenPlan) ?? []);
 
   const saveDraft = async () => {
     setSavingDraft(true);

@@ -5,7 +5,6 @@ import {
   type PermanentToothCode,
   presentTooth,
   type ToothCode,
-  type ToothPresence,
   type ToothState,
   toothLabel,
 } from '@dcm/contracts';
@@ -20,8 +19,6 @@ export interface DentalChartProps {
   /** `deriveChart`'s sparse map: a tooth absent from it has no recorded treatment. */
   teeth: ReadonlyMap<ToothCode, ToothState>;
   dentition: DentitionStage;
-  /** Per-position presence records (W5), applied over the dentition stage. */
-  toothStatus: readonly ToothPresence[];
   /** 12 px cells for the full chart, 8 px for the compact one. */
   size: 12 | 8;
   /** The selected tooth. Passing it (even `null`) makes each tooth a toggle with `aria-pressed`;
@@ -29,33 +26,44 @@ export interface DentalChartProps {
   selected?: ToothCode | null;
   /** Without it the teeth are not interactive: each column is a labelled image, not a button. */
   onToothClick?: (code: ToothCode) => void;
+  /** The selected jaw or whole mouth. */
+  area?: 'upper' | 'lower' | 'mouth' | null;
+  /** With it the chart carries a bar over each jaw and a Whole mouth pill on the midline, each a
+   * toggle: services and plans that aren't on a tooth are charted from there. */
+  onAreaClick?: (area: 'upper' | 'lower' | 'mouth') => void;
+  /** How many of today's services each area has, shown as a count on its bar or pill. */
+  areaCounts?: Partial<Record<'upper' | 'lower' | 'mouth', number>>;
 }
 
 type Arch = 'upper' | 'lower';
 
 /**
- * The dental chart (spec §Dental Chart): one column per anatomical position, laid out by the
- * clinic's orientation and resolved to the tooth actually present (`presentTooth`). Numbers sit
+ * The dental chart (spec §Dental Chart): one of the patient's two charts — the 20 primary teeth or
+ * the 32 permanent ones (`dentition`) — one column per position, laid out by the clinic's
+ * orientation. Numbers sit
  * outside the arches — above the upper, below the lower — with R/L markers on the full chart.
  * Always `dir="ltr"` (W17): it is never mirrored, even in an RTL layout; only the orientation
- * setting flips it. The arch block scrolls horizontally as one unit. Presentational: the caller
+ * setting flips it. The arch block scrolls horizontally as one unit. With `onAreaClick` each jaw
+ * has a selectable bar outside its numbers and the midline a Whole mouth pill; a selected jaw (or
+ * both, for the whole mouth) is outlined. Presentational: the caller
  * owns the data, the selection and what a click does.
  */
 export function DentalChart({
   teeth,
   dentition,
-  toothStatus,
   size,
   selected,
   onToothClick,
+  area = null,
+  onAreaClick,
+  areaCounts,
 }: DentalChartProps) {
   const { t, i18n } = useTranslation('clinical');
   // The chart is LTR, but its text (titles, markers) reads in the locale's direction.
   const textDir = i18n.dir();
   const { mode, notation, orientation } = useChartSettings();
   const toothName = useToothName();
-  const presence = new Map(toothStatus.map((record) => [record.position, record.present]));
-  const { upper, lower } = archColumns(orientation);
+  const { upper, lower } = archColumns(orientation, dentition);
   const full = size === 12;
 
   // Primary glyphs are smaller, so each sits in a constant-height box aligned to the occlusal
@@ -64,7 +72,7 @@ export function DentalChart({
   const { width: columnWidth, height: glyphHeight } = chartGlyphBox(mode, size);
 
   const renderTooth = (column: PermanentToothCode, arch: Arch) => {
-    const { code, notErupted } = presentTooth(column, dentition, presence.get(column));
+    const { code, notErupted } = presentTooth(column, dentition);
     const tooth = teeth.get(code);
     const isSelected = selected === code;
     const label = toothLabel(code, notation);
@@ -189,14 +197,79 @@ export function DentalChart({
   );
   const patientRightOnRight = orientation === 'patient_right_on_right';
 
+  const areaButton = (target: 'upper' | 'lower' | 'mouth', className: string) => {
+    if (!onAreaClick) return null;
+    const pressed = area === target;
+    const count = areaCounts?.[target] ?? 0;
+    return (
+      <button
+        type="button"
+        dir={textDir}
+        aria-pressed={pressed}
+        onClick={() => {
+          onAreaClick(target);
+        }}
+        className={cn(
+          'flex h-7 cursor-pointer items-center gap-2 border px-3 text-[11.5px] leading-none font-semibold tracking-[.06em] uppercase [&:lang(ar)]:tracking-normal',
+          pressed
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-dashed border-divider-strong bg-transparent text-ink-muted hover:border-primary hover:text-primary',
+          className,
+        )}
+      >
+        {t(`level.${target}`)}
+        {count > 0 && (
+          <span
+            data-area-count
+            className={cn(
+              'grid size-[18px] flex-none place-items-center rounded-full font-mono text-[11px] leading-none tracking-normal',
+              pressed ? 'bg-surface text-primary' : 'bg-primary text-primary-foreground',
+            )}
+          >
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  };
+  /** A jaw: its bar outside the numbers, outlined while it (or the whole mouth) is selected. */
+  const jaw = (arch: Arch, columns: readonly PermanentToothCode[]) =>
+    onAreaClick ? (
+      <div
+        data-jaw={arch}
+        className={cn(
+          'flex flex-col gap-1.5 rounded-[10px] border p-1.5',
+          area === arch || area === 'mouth'
+            ? 'border-primary-tint-border bg-selected'
+            : 'border-transparent',
+        )}
+      >
+        {arch === 'upper' && areaButton('upper', 'rounded-md')}
+        {row(arch, columns)}
+        {arch === 'lower' && areaButton('lower', 'rounded-md')}
+      </div>
+    ) : (
+      row(arch, columns)
+    );
+
   return (
     <div data-dental-chart dir="ltr" className="overflow-x-auto">
       <div className="mx-auto flex w-max items-center gap-3 p-1.5">
         {full && marker(patientRightOnRight ? 'left' : 'right')}
-        <div className={cn('flex flex-col', full ? 'gap-[11px]' : 'gap-[9px]')}>
-          {row('upper', upper)}
-          <div className="h-px bg-border" />
-          {row('lower', lower)}
+        <div
+          className={cn('flex flex-col', onAreaClick ? 'gap-1' : full ? 'gap-[11px]' : 'gap-[9px]')}
+        >
+          {jaw('upper', upper)}
+          {onAreaClick ? (
+            <div className="flex items-center gap-3 px-1.5">
+              <span className="h-px flex-1 bg-border" />
+              {areaButton('mouth', 'rounded-full')}
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          ) : (
+            <div className="h-px bg-border" />
+          )}
+          {jaw('lower', lower)}
         </div>
         {full && marker(patientRightOnRight ? 'right' : 'left')}
       </div>

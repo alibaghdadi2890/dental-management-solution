@@ -278,7 +278,7 @@ export function RecordHeader({
                 {patient.medicalAlerts.map((alert) => (
                   <li
                     key={alert}
-                    className="inline-flex items-center gap-[5px] rounded-md border border-warning-border bg-warning-bg px-[9px] py-[5px] text-[11.5px] leading-none font-medium text-warning"
+                    className="inline-flex items-center gap-[5px] rounded-md border border-danger-border bg-danger-bg px-[9px] py-[5px] text-[11.5px] leading-none font-medium text-danger"
                   >
                     <AlertIcon />
                     {alert}

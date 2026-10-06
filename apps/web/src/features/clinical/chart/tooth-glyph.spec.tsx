@@ -118,7 +118,7 @@ describe('ToothGlyph', () => {
     expect(surfaceOrder(glyph('11', 'patient_right_on_right'))).toEqual(['B', 'M', 'I', 'D', 'L']);
   });
 
-  it('renders a 3×3 grid of the cell size, primary teeth at 0.78×', () => {
+  it('renders a 3×3 grid of the cell size, primary teeth the same size as permanent ones', () => {
     const { container, rerender } = render(
       <ToothGlyph
         variant="chart"
@@ -141,7 +141,7 @@ describe('ToothGlyph', () => {
         size={12}
       />,
     );
-    expect(glyphBox(container).style.gridTemplateColumns).toBe('repeat(3, 9px)');
+    expect(glyphBox(container).style.gridTemplateColumns).toBe('repeat(3, 12px)');
 
     rerender(
       <ToothGlyph
@@ -153,7 +153,7 @@ describe('ToothGlyph', () => {
         size={8}
       />,
     );
-    expect(glyphBox(container).style.gridTemplateColumns).toBe('repeat(3, 6px)');
+    expect(glyphBox(container).style.gridTemplateColumns).toBe('repeat(3, 8px)');
   });
 
   it('renders one whole-tooth cell in simple mode, sized from the cell size', () => {

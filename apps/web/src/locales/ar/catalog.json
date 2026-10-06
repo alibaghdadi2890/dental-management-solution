@@ -29,7 +29,8 @@
   },
   "chargeUnit": {
     "per_tooth": "لكل سن",
-    "per_jaw": "لكل فك"
+    "per_jaw": "لكل فك",
+    "per_mouth": "الفم كاملاً"
   },
   "frequent": {
     "on": "كثير الاستخدام",

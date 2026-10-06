@@ -76,7 +76,7 @@
     "eyebrow": "Visite",
     "voidedBanner": "Cette visite a été annulée — {{reason}}. Elle ne compte dans aucun solde ni rapport mais reste dans l'historique du patient.",
     "services": "Actes",
-    "jaw": "Arcade",
+    "jaw": "Arcade / bouche",
     "subtotal": "Sous-total",
     "discount": "Remise",
     "total": "Total",

@@ -1,49 +1,38 @@
 import { DENTITION_STAGES, type DentitionStage, type Patient } from '@dcm/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import {
-  Menu,
-  MenuContent,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator,
-  MenuTrigger,
-} from '@/components/ui/menu';
 import { useToast } from '@/components/ui/toast-context';
 import { patientKeys, setDentition } from '@/features/patients/patients-api';
 import { useActingTenantId } from '@/features/platform/acting-tenant';
-import { clinicalKeys } from '../visits-api';
 import { apiErrorMessage } from '@/lib/api-error-message';
-
-export interface ResolvedDentition {
-  stage: DentitionStage;
-  source: 'auto' | 'override';
-  ageYears: number | null;
-}
-
-const AUTO = 'auto';
+import { cn } from '@/lib/utils';
+import { clinicalKeys } from '../visits-api';
 
 /**
- * The chart card's **Dentition** selector (spec W14): "Auto · Mixed (age 8)" while the stage
- * follows the patient's age, else the stage set by hand; Primary, Mixed or Permanent override it,
- * and Back to auto clears the override (`PUT /patients/:id/dentition`, `visit:write`). The chart
- * is refetched for the new stage, and a toast confirms. Without `visit:write` it is plain text.
+ * The chart card's small toggle between a patient's two charts, **Primary** and **Permanent**,
+ * beside the card's title. Every patient has both; the one their age opens on (primary up to 12) is the default.
+ * Switching shows the other chart at once (`onChange`) and, with `visit:write`, is remembered on
+ * the patient (`PUT /patients/:id/dentition`), so the same chart opens next time for everyone.
+ * Without it the switch is only the viewer's own.
  */
 export function DentitionSelect({
   patient,
-  dentition,
+  stage,
   canWrite,
+  onChange,
 }: {
   patient: Patient;
-  dentition: ResolvedDentition;
+  /** The chart on screen. */
+  stage: DentitionStage;
   canWrite: boolean;
+  onChange: (stage: DentitionStage) => void;
 }) {
   const { t, i18n } = useTranslation('clinical');
   const toast = useToast();
   const queryClient = useQueryClient();
   const tenantId = useActingTenantId();
-  const change = useMutation({
-    mutationFn: (override: DentitionStage | null) => setDentition(patient.id, { override }),
+  const remember = useMutation({
+    mutationFn: (override: DentitionStage) => setDentition(patient.id, { override }),
     onSuccess: (updated) => {
       queryClient.setQueryData(patientKeys.detail(tenantId, updated.id), updated);
       return Promise.all([
@@ -51,76 +40,37 @@ export function DentitionSelect({
         queryClient.invalidateQueries({ queryKey: patientKeys.audit(tenantId, updated.id) }),
       ]);
     },
+    onError: (error) => {
+      toast(t('dentition.failed', { reason: apiErrorMessage(error, i18n) }), { tone: 'danger' });
+    },
   });
 
-  const stageName = (stage: DentitionStage) => t(`dentition.stage.${stage}`);
-  const value =
-    dentition.source === 'override'
-      ? t('dentition.manual', { stage: stageName(dentition.stage) })
-      : dentition.ageYears === null
-        ? t('dentition.auto', { stage: stageName(dentition.stage) })
-        : t('dentition.autoAge', { stage: stageName(dentition.stage), age: dentition.ageYears });
-  const label = t('dentition.label', { value });
-
-  if (!canWrite) {
-    return <span className="text-[12.5px] leading-none text-ink-secondary">{label}</span>;
-  }
-
-  const current = patient.dentitionOverride ?? AUTO;
-  const choose = (next: string) => {
-    if (next === current || change.isPending) return;
-    const override = DENTITION_STAGES.find((stage) => stage === next) ?? null;
-    change.mutate(override, {
-      onSuccess: () => {
-        toast(
-          override === null
-            ? t('dentition.backToAutoDone')
-            : t('dentition.setDone', { stage: stageName(override) }),
-          { tone: 'success' },
-        );
-      },
-      onError: (error) => {
-        toast(t('dentition.failed', { reason: apiErrorMessage(error, i18n) }), { tone: 'danger' });
-      },
-    });
-  };
-
   return (
-    <Menu>
-      <MenuTrigger asChild>
+    <div
+      role="group"
+      aria-label={t('dentition.label')}
+      className="inline-flex gap-0.5 rounded-[7px] border border-border bg-subtle p-0.5"
+    >
+      {DENTITION_STAGES.map((option) => (
         <button
+          key={option}
           type="button"
-          className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-border-control bg-surface px-2.5 text-[12.5px] leading-none font-medium text-ink-secondary hover:border-primary hover:text-primary"
-        >
-          {label}
-          <svg
-            aria-hidden
-            width="10"
-            height="10"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-          >
-            <path d="M3.5 6 8 10.5 12.5 6" />
-          </svg>
-        </button>
-      </MenuTrigger>
-      <MenuContent align="start">
-        <MenuRadioGroup value={current} onValueChange={choose}>
-          {DENTITION_STAGES.map((stage) => (
-            <MenuRadioItem key={stage} value={stage}>
-              {stageName(stage)}
-            </MenuRadioItem>
-          ))}
-          {patient.dentitionOverride !== null && (
-            <>
-              <MenuSeparator />
-              <MenuRadioItem value={AUTO}>{t('dentition.backToAuto')}</MenuRadioItem>
-            </>
+          aria-pressed={option === stage}
+          onClick={() => {
+            if (option === stage) return;
+            onChange(option);
+            if (canWrite) remember.mutate(option);
+          }}
+          className={cn(
+            'h-[22px] cursor-pointer rounded-[5px] border-0 px-2 text-[12px] leading-none font-medium',
+            option === stage
+              ? 'bg-surface font-semibold text-primary shadow-[0_1px_2px_rgba(27,26,31,.08)]'
+              : 'bg-transparent text-ink-secondary hover:text-ink',
           )}
-        </MenuRadioGroup>
-      </MenuContent>
-    </Menu>
+        >
+          {t(`dentition.stage.${option}`)}
+        </button>
+      ))}
+    </div>
   );
 }

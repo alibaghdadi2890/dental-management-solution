@@ -1,10 +1,10 @@
 import { visitListKeys } from './visits-list/visits-list-api';
 import type {
   AddServiceInput,
+  AnswerUnfinishedInput,
   PlanTreatmentInput,
   RecordDiagnosisInput,
   StartVisitInput,
-  ToothPresence,
   UpdateServiceInput,
   Visit,
   VisitDiscountInput,
@@ -16,21 +16,24 @@ import { invalidatePatientData } from '@/features/patients/patients-api';
 import { actingTenantId, useActingTenantId } from '@/features/platform/acting-tenant';
 import {
   addService,
+  answerUnfinished,
   cancelPlan,
   clinicalKeys,
   completeVisit,
   discardVisit,
+  markServiceUnfinished,
   pauseVisit,
   performPlan,
   planTreatment,
   recordDiagnosis,
+  recordSession,
   removeDiagnosis,
   removePlan,
   removeService,
+  removeSession,
   reopenDiagnosis,
   resolveDiagnosis,
   resumeVisit,
-  setToothPresence,
   setVisitDiscount,
   startVisit,
   updateService,
@@ -266,6 +269,38 @@ export function visitMutations(
       mutationFn: (planId: string) => performPlan(visitId, planId, tenant),
       onSuccess: charting,
     }),
+    /** Unfinished services (ADR-0032): marking one, the visit's answer about earlier ones,
+     * continuing one and undoing that. */
+    markUnfinished: mutationOptions({
+      ...base,
+      mutationFn: (serviceId: string) => markServiceUnfinished(visitId, serviceId, tenant),
+      onSuccess: charting,
+    }),
+    /** A refused answer may name a service cancelled meanwhile: the chart is refetched too. */
+    answerUnfinished: mutationOptions({
+      ...base,
+      mutationFn: (input: AnswerUnfinishedInput) => answerUnfinished(visitId, input, tenant),
+      onSuccess: charting,
+      onError: () => {
+        const patientId = queryClient.getQueryData<Visit>(mutationKey)?.patientId;
+        return Promise.all([
+          refetchVisit(queryClient, mutationKey),
+          patientId === undefined
+            ? undefined
+            : invalidate(queryClient, chartingKeys(tenantId, patientId)),
+        ]);
+      },
+    }),
+    recordSession: mutationOptions({
+      ...base,
+      mutationFn: (planId: string) => recordSession(visitId, planId, { note: null }, tenant),
+      onSuccess: charting,
+    }),
+    removeSession: mutationOptions({
+      ...base,
+      mutationFn: (planId: string) => removeSession(visitId, planId, tenant),
+      onSuccess: charting,
+    }),
     cancelPlan: mutationOptions({
       ...base,
       mutationFn: (planId: string) => cancelPlan(visitId, planId, tenant),
@@ -274,11 +309,6 @@ export function visitMutations(
     removePlan: mutationOptions({
       ...base,
       mutationFn: (planId: string) => removePlan(visitId, planId, tenant),
-      onSuccess: charting,
-    }),
-    setToothPresence: mutationOptions({
-      ...base,
-      mutationFn: (input: ToothPresence) => setToothPresence(visitId, input, tenant),
       onSuccess: charting,
     }),
   };

@@ -152,6 +152,11 @@ export function checkoutDiscount(visitId: string, input: CheckoutDiscountInput) 
   });
 }
 
+/** Closes a completed visit's checkout without a payment (`payment:write`, ADR-0033). */
+export function checkOutVisit(visitId: string) {
+  return apiFetch(`/visits/${visitId}/checkout`, visitResultSchema, { method: 'POST' });
+}
+
 export function voidVisit(visitId: string, input: VoidVisitInput) {
   return apiFetch(`/visits/${visitId}/void`, visitResultSchema, { method: 'POST', json: input });
 }

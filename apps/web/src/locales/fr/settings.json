@@ -59,21 +59,16 @@
     },
     "dentition": {
       "title": "Denture",
-      "intro": "Ce n’est pas un réglage — le schéma suit automatiquement l’âge de chaque patient, pour que personne n’ait à penser à changer de mode avant d’examiner un enfant. Un seul schéma couvre les trois stades : chaque colonne est une position anatomique qui affiche la dent réellement présente.",
+      "intro": "Ce n’est pas un réglage. Chaque patient a deux schémas, dents temporaires et dents permanentes, avec une bascule entre les deux. Le schéma qui s’ouvre en premier suit l’âge du patient ; le choix est mémorisé pour ce patient.",
       "primary": {
-        "stage": "Denture temporaire",
-        "age": "0–5 ans",
-        "body": "Vingt dents temporaires, lettrées de A à T. Les positions des molaires permanentes apparaissent comme non encore sorties."
-      },
-      "mixed": {
-        "stage": "Denture mixte",
-        "age": "6–12 ans",
-        "body": "Incisives et premières molaires permanentes aux côtés des canines et molaires temporaires, dans un seul schéma. Chaque position affiche la dent réellement présente."
+        "stage": "Dents temporaires",
+        "age": "0–12 ans",
+        "body": "Vingt dents temporaires, notées A–T."
       },
       "permanent": {
-        "stage": "Denture permanente",
-        "age": "13 ans et plus",
-        "body": "Trente-deux dents permanentes, numérotées de 1 à 32."
+        "stage": "Dents permanentes",
+        "age": "13 ans et +",
+        "body": "Trente-deux dents permanentes, numérotées 1–32."
       }
     }
   }

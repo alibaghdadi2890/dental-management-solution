@@ -183,6 +183,7 @@ export const EMPTY_CHART: PatientChart = {
   toothStatus: [],
   diagnoses: [],
   plans: [],
+  planGroups: [],
   history: [],
   liveVisitId: null,
   voidedVisitIds: [],

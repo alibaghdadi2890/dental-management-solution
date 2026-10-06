@@ -240,7 +240,7 @@ describe('PatientFormPanel — create', () => {
     expect(field('Phone').getAttribute('aria-required')).toBe('true');
 
     type('Date of birth', dobYearsAgo(7));
-    expect(screen.getByText('7 yrs · mixed dentition')).toBeTruthy();
+    expect(screen.getByText('7 yrs · primary dentition')).toBeTruthy();
     expect(field('Phone').getAttribute('aria-required')).toBeNull();
     // Contacts replace the guardian and emergency-contact text fields (J1–J3 add their UI).
     expect(screen.queryByRole('textbox', { name: /Guardian/ })).toBeNull();

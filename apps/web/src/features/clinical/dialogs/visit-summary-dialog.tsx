@@ -7,7 +7,12 @@ import { Button } from '@/components/ui/button';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useChartSettings, useSurfaceLabel, useToothLabel } from '../chart/use-chart-settings';
+import {
+  useChartSettings,
+  useLevelLabel,
+  useSurfaceLabel,
+  useToothLabel,
+} from '../chart/use-chart-settings';
 import { useFlushSaveGroups, useLocalValues } from '../save-groups-context';
 import { useVisitTimer } from '../use-visit-timer';
 import { useVisitMutations, useVisitMutationsSettled } from '../visit-mutations';
@@ -15,6 +20,7 @@ import { servicePriceKey } from '../workspace/charting-actions';
 import { DiscountControl } from '../workspace/discount-control';
 import { NOTES_KEY } from '../workspace/notes-card';
 import { plansTotal } from '../workspace/tooth-panel/tooth-records';
+import { unfinishedWork } from '../workspace/unfinished';
 import { type PriceDraft, priceDraftOf, priceOf } from '../workspace/tooth-panel/service-price';
 import { useLiveMoney, useVisitDiscount } from '../workspace/visit-discount';
 
@@ -143,9 +149,7 @@ function SummaryContent({
         <Dialog.Title className="m-0 mb-[3px] text-[16.5px] leading-[1.2] font-semibold tracking-[-0.01em]">
           {t('summary.title')}
         </Dialog.Title>
-        <Dialog.Description className="m-0 text-[12.5px] leading-[1.45] text-ink-muted">
-          {t('summary.subtitle')}
-        </Dialog.Description>
+        <Dialog.Description className="sr-only">{t('summary.subtitle')}</Dialog.Description>
       </div>
       <div className="max-h-[56vh] overflow-auto px-[22px] py-[18px]">
         <dl className="m-0 mb-[18px] grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
@@ -168,6 +172,7 @@ function SummaryContent({
         <TeethTreated visit={visit} />
         <Services visit={visit} />
         <FinancialBlock visit={visit} readOnly={recording} />
+        {chart && <UnfinishedToday visit={visit} chart={chart} />}
         {chart && <RecordedForLater visit={visit} chart={chart} />}
         <h3 className={cn(MICRO, 'mb-2 text-ink-muted')}>{t('summary.notes')}</h3>
         <p
@@ -256,13 +261,14 @@ function TeethTreated({ visit }: { visit: Visit }) {
   );
 }
 
-/** Each service with its target (`#16 · O · D`, or "Jaw") and its final price as it stands now:
+/** Each service with its target (`#16 · O · D`, or its jaw or "Whole mouth") and its final price as it stands now:
  * a price still being typed in the tooth panel counts (its `service:<id>` group). */
 function Services({ visit }: { visit: Visit }) {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const { mode } = useChartSettings();
   const label = useToothLabel();
+  const levelLabel = useLevelLabel();
   const surfaceLabel = useSurfaceLabel();
   const titleId = useId();
   const typed = useLocalValues<PriceDraft>(
@@ -278,7 +284,7 @@ function Services({ visit }: { visit: Visit }) {
           {visit.services.map((service, index) => {
             const target =
               service.toothCode === null
-                ? t('summary.jaw')
+                ? levelLabel(service.jaw)
                 : [
                     label(service.toothCode),
                     ...(mode === 'surface' && service.surfaces.length > 0
@@ -365,19 +371,62 @@ function FinancialBlock({ visit, readOnly }: { visit: Visit; readOnly: boolean }
           {format(money.total)}
         </span>
       </div>
-      <p className="m-0 mt-[9px] text-[12.5px] leading-normal text-ink-muted">
-        {t('summary.discountNote')}
-      </p>
     </div>
   );
 }
 
-/** The diagnoses and the still-open plans this visit recorded (the standing record once it
- * completes), with the plan estimate; nothing when it recorded none. */
+/** The services this visit worked on without finishing them (ADR-0032): they continue in a later
+ * visit and are charged by the one that completes them. Nothing when there is none. */
+function UnfinishedToday({ visit, chart }: { visit: Visit; chart: PatientChart }) {
+  const { t, i18n } = useTranslation('clinical');
+  const locale = i18n.resolvedLanguage ?? 'en';
+  const label = useToothLabel();
+  const levelLabel = useLevelLabel();
+  const titleId = useId();
+  const { workedHere } = unfinishedWork(chart.plans, visit.id);
+  if (workedHere.length === 0) return null;
+  return (
+    <section
+      aria-labelledby={titleId}
+      className="mb-[18px] rounded-[9px] border border-warning-border bg-warning-bg px-4 py-3.5"
+    >
+      <div className="mb-2.5 flex flex-wrap items-baseline gap-[9px]">
+        <h3 id={titleId} className={cn(MICRO, 'text-warning')}>
+          {t('summary.unfinished')}
+        </h3>
+        <span className="ms-auto text-[12.5px] leading-none text-warning">
+          {t('summary.notBilled')}
+        </span>
+      </div>
+      <ul className="m-0 list-none p-0">
+        {workedHere.map((plan) => (
+          <li key={plan.id} className="flex items-baseline gap-[9px] py-[5px]">
+            <span className="min-w-0 flex-1 text-[12.5px] leading-[1.35]">
+              {t('summary.session', { name: plan.name, number: plan.sessions.length })}
+            </span>
+            <span
+              dir="ltr"
+              className="font-mono text-[12.5px] leading-none font-medium text-ink-secondary"
+            >
+              {plan.toothCode === null ? levelLabel(plan.jaw) : label(plan.toothCode)}
+            </span>
+            <span dir="ltr" className={cn(FIGURE, 'text-[12.5px] text-ink-muted')}>
+              {formatMoney(plan.price, locale)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The diagnoses and the plans this visit recorded (the standing record once it completes), with
+ * the plan estimate; nothing when there is none. */
 function RecordedForLater({ visit, chart }: { visit: Visit; chart: PatientChart }) {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const label = useToothLabel();
+  const levelLabel = useLevelLabel();
   const titleId = useId();
   const diagnoses = chart.diagnoses.filter((record) => record.recordedInVisitId === visit.id);
   const plans = chart.plans.filter(
@@ -423,7 +472,7 @@ function RecordedForLater({ visit, chart }: { visit: Visit; chart: PatientChart 
               dir="ltr"
               className="font-mono text-[12.5px] leading-none font-medium text-ink-secondary"
             >
-              {plan.toothCode === null ? t('summary.jaw') : label(plan.toothCode)}
+              {plan.toothCode === null ? levelLabel(plan.jaw) : label(plan.toothCode)}
             </span>
             <span dir="ltr" className={cn(FIGURE, 'w-16 text-end text-[12.5px] font-medium')}>
               {formatMoney(plan.price, locale)}

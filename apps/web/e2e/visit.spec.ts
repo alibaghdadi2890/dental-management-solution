@@ -101,14 +101,19 @@ async function registerPatient(
 }
 
 /** Record header → Start visit → the popover (the owner is the branch's dentist, pre-selected)
- * with the given room → the workspace. */
-async function startVisit(page: Page, room: 'Room 1' | 'Room 2' | 'Room 3') {
+ * with the given room → the workspace. `asked`: the visit opens under the unfinished services
+ * question, which hides the rest of the page from the accessibility tree until it is answered. */
+async function startVisit(page: Page, room: 'Room 1' | 'Room 2' | 'Room 3', asked = false) {
   await page.getByRole('main').getByRole('button', { name: 'Start visit' }).click();
   const popover = page.getByRole('dialog', { name: 'Start visit' });
   await expect(popover.getByRole('combobox', { name: 'Dentist' })).toHaveValue(/.+/);
   await popover.getByRole('combobox', { name: 'Room' }).selectOption({ label: room });
   await popover.getByRole('button', { name: 'Start visit' }).click();
   await expect(page).toHaveURL(/\/visits\/[0-9a-f-]{36}$/);
+  if (asked) {
+    await expect(page.getByRole('dialog', { name: 'Unfinished services' })).toBeVisible();
+    return;
+  }
   await expect(page.getByRole('timer', { name: 'Visit time' })).toHaveText(/^\d{2}:\d{2}$/);
 }
 
@@ -247,13 +252,13 @@ test('the same user resumes a live visit from another browser and the timer carr
   }
 });
 
-test('Universal notation relabels the charts; a dentition override changes the chart, not the records', async ({
+test('Universal notation relabels the charts; the chart toggle switches between primary and permanent teeth', async ({
   page,
 }) => {
   test.slow();
   await signInAsOwner(page);
   const adultPath = await registerPatient(page, { name: 'Nadim Aoun', phone: '03 555 303' });
-  // A date of birth mid-March eight years back: a child in the mixed dentition whatever today is.
+  // A date of birth mid-March eight years back: a child, so the primary chart opens first.
   const childDob = `15/03/${String(new Date().getFullYear() - 8)}`;
   const childPath = await registerPatient(page, { name: 'Maya Aoun', dateOfBirth: childDob });
 
@@ -281,7 +286,7 @@ test('Universal notation relabels the charts; a dentition override changes the c
       await expect(tooth(childChart, 'A')).toHaveAccessibleName(/primary tooth/);
     });
 
-    await test.step('Permanent relabels the column; Back to auto finds the record again', async () => {
+    await test.step('Permanent shows the other chart; Primary finds the record again', async () => {
       await startVisit(page, 'Room 2');
       const chart = chartCard(page);
       await tooth(chart, 'A').click();
@@ -292,21 +297,20 @@ test('Universal notation relabels the charts; a dentition override changes the c
       await pickFromDrawer(page, 'Add diagnosis', 'Dental caries');
       await expect(tooth(chart, 'A')).toHaveAccessibleName(/Dental caries/);
 
-      await chart.getByRole('button', { name: /^Dentition: Auto · Mixed/ }).click();
-      await page.getByRole('menuitemradio', { name: 'Permanent' }).click();
-      await expect(
-        page.getByRole('status').filter({ hasText: 'Dentition set to Permanent' }),
-      ).toBeVisible();
+      // The other chart: the same column holds the permanent tooth, with nothing recorded.
+      await chart.getByRole('button', { name: 'Permanent', exact: true }).click();
       await expect(chart.locator('[data-column="15"]')).toHaveAccessibleName(
         /^#4 · .*no recorded treatment$/,
       );
       await expect(tooth(chart, 'A')).toHaveCount(0);
+      // The switch is remembered on the patient.
+      await page.reload();
+      await expect(chart.getByRole('button', { name: 'Permanent', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
 
-      await chart.getByRole('button', { name: /^Dentition: Permanent · set manually/ }).click();
-      await page.getByRole('menuitemradio', { name: 'Back to auto' }).click();
-      await expect(
-        page.getByRole('status').filter({ hasText: 'Dentition back to automatic' }),
-      ).toBeVisible();
+      await chart.getByRole('button', { name: 'Primary', exact: true }).click();
       await expect(tooth(chart, 'A')).toHaveAccessibleName(/Dental caries/);
     });
   } finally {
@@ -400,5 +404,105 @@ test('a completed visit is amended with a reason, then voided, from the Visits s
     await expect(page.getByRole('region', { name: 'Balance' })).toContainText(
       /Total outstanding\s*\$0/,
     );
+  });
+});
+
+test('a service not finished in one visit is continued in the next and billed by the visit that completes it', async ({
+  page,
+}) => {
+  test.slow();
+  await signInAsOwner(page);
+  await registerPatient(page, { name: 'Hadi Nassar', phone: '03 555 505' });
+
+  await test.step('the Dental chart tab plans a crown on #36 without a visit', async () => {
+    await page.getByRole('tab', { name: 'Dental chart' }).click();
+    const chart = chartCard(page);
+    await tooth(chart, '#36').click();
+    await page
+      .getByRole('complementary', { name: 'Selected tooth' })
+      .getByRole('button', { name: 'Add planned treatment', exact: true })
+      .click();
+    await pickFromDrawer(page, 'Add planned treatment', 'Zircon crown');
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Zircon crown planned' }),
+    ).toBeVisible();
+    await expect(tooth(chart, '#36')).toHaveAccessibleName(/planned: Zircon crown/);
+  });
+
+  const board = page.getByRole('region', { name: 'Treatment plan' });
+  const today = page.getByRole('region', { name: "Today's services" });
+  const question = page.getByRole('dialog', { name: 'Unfinished services' });
+  const complete = async () => {
+    await page.getByRole('button', { name: 'Review & complete' }).click();
+    const summary = page.getByRole('dialog', { name: 'Complete visit' });
+    return summary;
+  };
+  const record = async (summary: Locator, total: RegExp) => {
+    await summary.getByRole('button', { name: 'Complete visit' }).click();
+    const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
+    await expect(recorded.getByRole('region', { name: 'This visit' })).toContainText(total);
+    return recorded;
+  };
+
+  await test.step('first visit: the crown is not finished, a whole-mouth scaling is charged', async () => {
+    await startVisit(page, 'Room 3');
+    await board.getByRole('button', { name: 'Perform now: Zircon crown' }).click();
+    await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$350');
+    await today.getByRole('button', { name: 'Actions: Zircon crown' }).click();
+    await page.getByRole('menuitem', { name: 'Not finished' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Zircon crown marked not finished' }),
+    ).toBeVisible();
+    await expect(today.getByText('Not finished')).toBeVisible();
+    await expect(tooth(chartCard(page), '#36')).toHaveAccessibleName(/not finished: Zircon crown/);
+
+    await chartCard(page)
+      .getByRole('button', { name: /^Whole mouth/ })
+      .click();
+    const area = page.getByRole('complementary', { name: 'Selected tooth' });
+    await expect(area.getByRole('heading', { name: 'Whole mouth' })).toBeVisible();
+    await area.getByRole('button', { name: 'Add completed service', exact: true }).click();
+    await pickFromDrawer(page, 'Add completed service', 'Scaling & polishing');
+    await expect(today).toContainText('Scaling & polishing');
+    await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$60');
+
+    const summary = await complete();
+    await expect(summary).toContainText('Zircon crown · visit 1');
+    await expect(summary).toContainText(/Total due\s*\$60/);
+    const recorded = await record(summary, /Visit total\s*\$60/);
+    await recorded.getByRole('button', { name: 'Done' }).click();
+    await expect(recorded).toBeHidden();
+  });
+
+  await test.step('second visit: asked as it opens, continued, and nothing is charged', async () => {
+    await startVisit(page, 'Room 3', true);
+    await expect(question).toContainText('Zircon crown');
+    await question.getByRole('button', { name: 'Continue' }).click();
+    await expect(question).toBeHidden();
+    await expect(today).toContainText('2 visits');
+
+    const summary = await complete();
+    await expect(summary).toContainText('Zircon crown · visit 2');
+    await expect(summary).toContainText(/Total due\s*\$0/);
+    const recorded = await record(summary, /Visit total\s*\$0/);
+    await recorded.getByRole('button', { name: 'Done' }).click();
+    await expect(recorded).toBeHidden();
+  });
+
+  await test.step('third visit: "Not today", then continued from the card and completed', async () => {
+    await startVisit(page, 'Room 3', true);
+    await question.getByRole('button', { name: 'Not today' }).click();
+    await expect(question).toBeHidden();
+    await expect(today.getByText('To continue · 1')).toBeVisible();
+    await today.getByRole('button', { name: 'Actions: Zircon crown' }).click();
+    await page.getByRole('menuitem', { name: 'Continue' }).click();
+    await today.getByRole('button', { name: 'Complete: Zircon crown' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Zircon crown performed' }),
+    ).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$350');
+
+    const recorded = await record(await complete(), /Visit total\s*\$350/);
+    await expect(recorded).toContainText(/Total outstanding[\s\S]*\$410/);
   });
 });

@@ -8,7 +8,7 @@ import { id, json, sessionWith } from '@/features/patients/patients.test-utils';
 import { diagnosesQuery, servicesQuery } from '../catalog/catalog-api';
 import { CatalogDrawer } from './catalog-drawer';
 import { type ChartingActions, ChartingActionsContext, type DrawerMode } from './charting-actions';
-import { type ToothSelection, ToothSelectionContext } from './tooth-selection';
+import { type ChartArea, type ToothSelection, ToothSelectionContext } from './tooth-selection';
 import {
   chart,
   DENTIST_WRITE,
@@ -25,7 +25,8 @@ import {
 const SERVICES: ServiceItem[] = [
   serviceItem(40, 'Composite filling', { frequent: true }),
   serviceItem(41, 'Amalgam filling'),
-  serviceItem(42, 'Scaling', { chargeUnit: 'per_jaw', category: 'Periodontal' }),
+  serviceItem(42, 'Scaling', { chargeUnit: 'per_mouth', category: 'Periodontal' }),
+  serviceItem(46, 'Whitening', { chargeUnit: 'per_jaw', category: 'Periodontal' }),
   serviceItem(43, 'Retired crown', { active: false }),
 ];
 const DIAGNOSES: DiagnosisItem[] = [
@@ -35,10 +36,15 @@ const DIAGNOSES: DiagnosisItem[] = [
 
 function actionsMock(): ChartingActions {
   return {
+    scope: { kind: 'visit', visitId: VISIT_ID },
     addService: vi.fn(),
     planTreatment: vi.fn(),
     recordDiagnosis: vi.fn(),
     performPlan: vi.fn(),
+    markUnfinished: vi.fn(),
+    continuePlan: vi.fn(),
+    undoSession: vi.fn(),
+    removeUnfinished: vi.fn(),
     removeService: vi.fn(),
     removing: new Set(),
     saveServicePrice: vi.fn(),
@@ -47,14 +53,17 @@ function actionsMock(): ChartingActions {
     removeDiagnosis: vi.fn(),
     removePlan: vi.fn(),
     cancelPlan: vi.fn(),
-    setToothPresence: vi.fn(),
   };
 }
 
 /** The drawer alone, over a seeded catalog, a selection and mocked actions. */
 function renderDrawer(
   mode: DrawerMode,
-  { tooth = null, surfaces = [] }: { tooth?: ToothCode | null; surfaces?: SurfaceKey[] } = {},
+  {
+    tooth = null,
+    surfaces = [],
+    area = null,
+  }: { tooth?: ToothCode | null; surfaces?: SurfaceKey[]; area?: ChartArea | null } = {},
 ) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(sessionQueryOptions().queryKey, sessionWith(DENTIST_WRITE));
@@ -62,8 +71,10 @@ function renderDrawer(
   client.setQueryData(diagnosesQuery().queryKey, DIAGNOSES);
   const selection: ToothSelection = {
     tooth,
+    area,
     surfaces,
     select: vi.fn(),
+    selectArea: vi.fn(),
     ensureSelected: vi.fn(),
     toggleSurface: vi.fn(),
   };
@@ -90,33 +101,14 @@ describe('CatalogDrawer', () => {
   });
 
   it.each([
-    [
-      'service',
-      'Add completed service',
-      'Search services…',
-      'Adds the service to this visit and bills it now — price and discount stay editable in the tooth panel.',
-    ],
-    [
-      'plan',
-      'Add planned treatment',
-      'Search treatments to plan…',
-      'Planned treatment is recorded on the tooth and is not billed until it is performed.',
-    ],
-    [
-      'diagnosis',
-      'Add diagnosis',
-      'Search diagnoses…',
-      'A diagnosis records what you found. Add a planned treatment next to say what you intend to do about it.',
-    ],
-  ] as const)(
-    '%s mode: its title, autofocused search and footer',
-    (mode, title, placeholder, footer) => {
-      renderDrawer(mode, { tooth: '16' });
-      expect(screen.getByRole('dialog', { name: title })).toBeTruthy();
-      expect(document.activeElement).toBe(screen.getByPlaceholderText(placeholder));
-      expect(screen.getByText(footer)).toBeTruthy();
-    },
-  );
+    ['service', 'Add completed service', 'Search services…'],
+    ['plan', 'Add planned treatment', 'Search treatments to plan…'],
+    ['diagnosis', 'Add diagnosis', 'Search diagnoses…'],
+  ] as const)('%s mode: its title and autofocused search', (mode, title, placeholder) => {
+    renderDrawer(mode, { tooth: '16' });
+    expect(screen.getByRole('dialog', { name: title })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByPlaceholderText(placeholder));
+  });
 
   it('names the target: the tooth, its name and the pending surfaces', () => {
     renderDrawer('service', { tooth: '16', surfaces: ['O', 'D'] });
@@ -151,23 +143,60 @@ describe('CatalogDrawer', () => {
     expect(screen.queryByText('Composite filling')).toBeNull();
   });
 
-  it('without a tooth, per-jaw rows are allowed and per-tooth rows disabled', () => {
+  it('without a tooth, whole-mouth rows are allowed and per-tooth rows disabled', () => {
     const { actions, onClose } = renderDrawer('service');
-    expect(screen.getByText('No tooth selected — jaw-level services only')).toBeTruthy();
+    expect(screen.getByText('No tooth selected')).toBeTruthy();
     expect(row(/^Composite filling/).disabled).toBe(true);
     expect(within(row(/^Composite filling/)).getByText('Per tooth')).toBeTruthy();
     const scaling = row(/^Scaling/);
     expect(scaling.disabled).toBe(false);
-    expect(within(scaling).getByText('Per jaw')).toBeTruthy();
+    expect(within(scaling).getByText('Whole mouth')).toBeTruthy();
 
     fireEvent.click(scaling);
-    expect(actions.addService).toHaveBeenCalledWith(SERVICES[2], { tooth: null, surfaces: [] });
+    expect(actions.addService).toHaveBeenCalledWith(SERVICES[2], {
+      tooth: null,
+      surfaces: [],
+      jaw: undefined,
+    });
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it('a per-jaw row commits on its Upper or Lower button, in either mode', () => {
+    const { actions, onClose } = renderDrawer('plan', { tooth: '16' });
+    expect(screen.queryByRole('button', { name: /^Whitening/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Add Whitening to the Upper jaw' }));
+    expect(actions.planTreatment).toHaveBeenCalledWith(SERVICES[3], {
+      tooth: '16',
+      surfaces: [],
+      jaw: 'upper',
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('with a jaw selected lists the per-jaw services and commits on that jaw in one click', () => {
+    const { actions } = renderDrawer('service', { area: 'lower' });
+    expect(screen.getByText('Lower jaw')).toBeTruthy();
+    expect(screen.queryByText('Composite filling')).toBeNull();
+    expect(screen.queryByText('Scaling')).toBeNull();
+    fireEvent.click(row(/^Whitening/));
+    expect(actions.addService).toHaveBeenCalledWith(SERVICES[3], {
+      tooth: null,
+      surfaces: [],
+      jaw: 'lower',
+    });
+  });
+
+  it('with the whole mouth selected lists the whole-mouth services only', () => {
+    renderDrawer('plan', { area: 'mouth' });
+    expect(screen.getByText('Whole mouth', { selector: 'p' })).toBeTruthy();
+    expect(screen.getByText('Scaling')).toBeTruthy();
+    expect(screen.queryByText('Whitening')).toBeNull();
+    expect(screen.queryByText('Composite filling')).toBeNull();
   });
 
   it('a diagnosis needs a tooth', () => {
     renderDrawer('diagnosis');
-    expect(screen.getByText('No tooth selected — select a tooth first')).toBeTruthy();
+    expect(screen.getByText('No tooth selected')).toBeTruthy();
     expect(row(/^Dental caries/).disabled).toBe(true);
     expect(row(/^Pulpitis/).disabled).toBe(true);
   });
@@ -227,7 +256,7 @@ describe('CatalogDrawer — in the workspace', () => {
       dentistName: 'Dr. Ana Reyes',
       recordedBy: state.visit.startedBy,
       recordedInVisitId: VISIT_ID,
-      recordedInVisitDate: '2026-09-04',
+      recordedDate: '2026-09-04',
       recordedAt: '2026-09-04T09:05:00.000Z',
       resolvedInVisitId: null,
       resolvedAt: null,
@@ -257,7 +286,7 @@ describe('CatalogDrawer — in the workspace', () => {
     await openFor(/^#16 · /, 'Add diagnosis');
     fireEvent.click((await screen.findAllByRole('button', { name: /^Dental caries/ }))[0]!);
     expect(await screen.findByText('Dental caries recorded')).toBeTruthy();
-    expect(screen.getByText('Tooth #16 · add a planned treatment next')).toBeTruthy();
+    expect(screen.getByText('Tooth #16')).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Plan treatment' }));
     const planDrawer = await screen.findByRole('dialog', { name: 'Add planned treatment' });
@@ -267,7 +296,7 @@ describe('CatalogDrawer — in the workspace', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add completed service' }));
     fireEvent.click(await screen.findByRole('button', { name: /^Scaling/ }));
     expect(await screen.findByText('Scaling added')).toBeTruthy();
-    expect(screen.getByText('Jaw-level service')).toBeTruthy();
+    expect(screen.getAllByText('Whole mouth').length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     await waitFor(() => {
       expect(sent(fetchMock, 'DELETE', `/visits/${VISIT_ID}/services/${added.id}`)).toBeNull();
@@ -291,8 +320,7 @@ describe('CatalogDrawer — in the workspace', () => {
     ).toBe('true');
     expect(within(drawer).getByText('Tooth #16 · Upper right first molar')).toBeTruthy();
 
-    const rows = within(drawer).getAllByRole('button', { name: /Scaling/ });
-    const last = rows.at(-1)!;
+    const last = within(drawer).getByRole('button', { name: 'Add Whitening to the Lower jaw' });
     last.focus();
     fireEvent.keyDown(last, { key: 'Tab' });
     expect(drawer.contains(document.activeElement)).toBe(true);
@@ -316,7 +344,7 @@ describe('CatalogDrawer — in the workspace', () => {
       dentistName: 'Dr. Ana Reyes',
       recordedBy: current.startedBy,
       recordedInVisitId: VISIT_ID,
-      recordedInVisitDate: '2026-09-04',
+      recordedDate: '2026-09-04',
       recordedAt: '2026-09-04T09:05:00.000Z',
       resolvedInVisitId: null,
       resolvedAt: null,

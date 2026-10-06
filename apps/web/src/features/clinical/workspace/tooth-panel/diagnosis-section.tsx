@@ -2,26 +2,25 @@ import type { DiagnosisRecord } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { formatCalendarDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useChartingActions } from '../charting-actions';
+import { madeHere, useChartingActions } from '../charting-actions';
 import { Badge, EmptyBlock, LinkButton, PanelSection } from './panel-section';
 import { SurfaceTag } from './surface-tag';
 
 /**
  * The Diagnosis stage (spec §Selected Tooth Panel → Body 1): per record a dot (danger while
  * active), the name (struck through once resolved) with a Resolved badge, the note, then the
- * date and dentist with **Resolve / Reopen** and — only for a record added in this visit —
- * **Remove** (older ones are resolved, never deleted: W13). Read-only without `visit:write`.
+ * date and dentist with **Resolve / Reopen** (in a visit only) and — only for a record added
+ * where the charting happens, this visit or the patient record — **Remove** (others are
+ * resolved, never deleted: W13, ADR-0031). Read-only without the scope's write permission.
  */
 export function DiagnosisSection({
   diagnoses,
-  visitId,
   canWrite,
   open,
   onToggle,
   onAdd,
 }: {
   diagnoses: readonly DiagnosisRecord[];
-  visitId: string;
   canWrite: boolean;
   open: boolean;
   onToggle: () => void;
@@ -54,7 +53,6 @@ export function DiagnosisSection({
       {diagnoses.length === 0 ? (
         <EmptyBlock
           title={t('panel.diagnosis.emptyTitle')}
-          body={canWrite ? t('panel.diagnosis.emptyBody') : undefined}
           action={canWrite ? { label: t('panel.diagnosis.addCta'), onClick: onAdd } : undefined}
         />
       ) : (
@@ -95,12 +93,12 @@ export function DiagnosisSection({
               )}
               <div className="ms-[15px] mt-[7px] flex flex-wrap items-center gap-2.5">
                 <span className="font-mono text-[12.5px] leading-[1.4] text-ink-muted">
-                  {formatCalendarDate(record.recordedInVisitDate, locale)}
+                  {formatCalendarDate(record.recordedDate, locale)}
                 </span>
                 <span className="text-[12.5px] leading-[1.4] text-ink-muted">
                   {record.dentistName}
                 </span>
-                {canWrite && (
+                {canWrite && actions.scope.kind === 'visit' && (
                   <LinkButton
                     className="ms-auto"
                     label={t(isActive ? 'panel.diagnosis.resolve' : 'panel.diagnosis.reopen')}
@@ -116,16 +114,18 @@ export function DiagnosisSection({
                     }}
                   />
                 )}
-                {canWrite && record.recordedInVisitId === visitId && (
-                  <LinkButton
-                    tone="danger"
-                    label={t('panel.remove')}
-                    name={t('panel.removeNamed', { name: record.name })}
-                    onClick={() => {
-                      actions.removeDiagnosis(record.id);
-                    }}
-                  />
-                )}
+                {canWrite &&
+                  madeHere(actions.scope, record) &&
+                  (actions.scope.kind === 'visit' || isActive) && (
+                    <LinkButton
+                      tone="danger"
+                      label={t('panel.remove')}
+                      name={t('panel.removeNamed', { name: record.name })}
+                      onClick={() => {
+                        actions.removeDiagnosis(record.id);
+                      }}
+                    />
+                  )}
               </div>
             </div>
           );

@@ -32,7 +32,8 @@ declare module '@tanstack/react-router' {
  * Its body and actions are the visit's checkout (`visit-checkout.tsx`). With `visit:discount`, on
  * the visit's day and while the visit owes, the Discount row has **Edit**
  * (`CheckoutDiscountEditor`). The Today board opens the same dialog, under its own `title`, for a
- * visit someone else completed.
+ * visit someone else completed, and there **Done** closes the visit's checkout (`onDone`,
+ * ADR-0033); after a completion it only closes the dialog, leaving the visit to the front desk.
  *
  * A modal: focus is trapped and `Esc` closes it. After a completion nothing opened it, so on
  * close focus goes where `onCloseAutoFocus` puts it (the record's heading).
@@ -40,12 +41,15 @@ declare module '@tanstack/react-router' {
 export function PostVisitSummaryDialog({
   visitId,
   title,
+  onDone,
   onClose,
   onCloseAutoFocus,
 }: {
   visitId: string;
   /** Instead of "Visit recorded" (the Today board's "Checkout · <patient>"). */
   title?: string | undefined;
+  /** **Done** was chosen, as opposed to `Esc` or a recorded payment; the dialog then closes. */
+  onDone?: (() => void) | undefined;
   onClose: () => void;
   onCloseAutoFocus?: (event: Event) => void;
 }) {
@@ -62,7 +66,7 @@ export function PostVisitSummaryDialog({
           {...(onCloseAutoFocus ? { onCloseAutoFocus } : {})}
           className="fixed start-1/2 top-1/2 z-50 w-[calc(100%-48px)] flex max-h-[calc(100%-48px)] max-w-[540px] -translate-x-1/2 -translate-y-1/2 animate-popin flex-col overflow-hidden rounded-xl bg-surface shadow-[0_18px_48px_rgba(27,26,31,.2)] rtl:translate-x-1/2"
         >
-          <PostVisitContent visitId={visitId} title={title} onDone={onClose} />
+          <PostVisitContent visitId={visitId} title={title} onDone={onDone} onPaid={onClose} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -73,11 +77,13 @@ function PostVisitContent({
   visitId,
   title,
   onDone,
+  onPaid,
 }: {
   visitId: string;
   title: string | undefined;
+  onDone: (() => void) | undefined;
   /** Closes the dialog: a recorded payment ends the checkout, like Done. */
-  onDone: () => void;
+  onPaid: () => void;
 }) {
   const { t, i18n } = useTranslation(['clinical', 'billing']);
   const locale = i18n.resolvedLanguage ?? 'en';
@@ -125,7 +131,7 @@ function PostVisitContent({
       </div>
       {paymentStep && visit ? (
         <RecordPaymentForm
-          options={{ patientId: visit.patientId, contextVisitId: visitId, onRecorded: onDone }}
+          options={{ patientId: visit.patientId, contextVisitId: visitId, onRecorded: onPaid }}
           tenant={paymentStep}
           onClose={() => {
             setPaying(false);
@@ -139,7 +145,11 @@ function PostVisitContent({
           <div className="flex flex-none items-center gap-2.5 border-t border-inner-divider bg-sunken px-[22px] py-3.5">
             {checkout.settled ? (
               <Dialog.Close asChild>
-                <Button variant="secondary" className="h-10 px-[15px] text-[13px]">
+                <Button
+                  variant="secondary"
+                  className="h-10 px-[15px] text-[13px]"
+                  {...(onDone ? { onClick: onDone } : {})}
+                >
                   {t('postVisit.done')}
                 </Button>
               </Dialog.Close>

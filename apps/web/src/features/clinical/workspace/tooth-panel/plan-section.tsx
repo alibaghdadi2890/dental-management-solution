@@ -1,24 +1,22 @@
 import type { DiagnosisRecord, TreatmentPlan } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
-import { useConfirm } from '@/components/ui/confirm-context';
-import { useToast } from '@/components/ui/toast-context';
 import { formatDate, formatMoney } from '@/lib/format';
-import { useChartingActions } from '../charting-actions';
+import { madeHere, useChartingActions } from '../charting-actions';
 import { Badge, EmptyBlock, LinkButton, PanelSection } from './panel-section';
 import { SurfaceTag } from './surface-tag';
 import { plansTotal } from './tooth-records';
+import { useCancelPlan } from './use-cancel-plan';
 
 /**
  * The Treatment plan stage (spec §Selected Tooth Panel → Body 2): per open plan the name, surface
- * tag and price, a Planned badge, "for `<diagnosis>`" when linked, the date, **Perform now**,
- * and **Remove** for a plan recorded in this visit or **Cancel** for an older one (W13). A plan
- * performed in this visit is shown by its completed service below, so it leaves only the
- * one-line "performed — see below" note.
+ * tag and price, a Planned badge, "for `<diagnosis>`" when linked, the date, **Perform now** (in a
+ * visit only) and `PlanDismiss`. A plan performed in this visit is shown by its completed service
+ * below, so it leaves only the one-line "performed — see below" note; one whose work is not
+ * finished (ADR-0032) is shown there too, as an unfinished service.
  */
 export function PlanSection({
   plans,
   diagnoses,
-  visitId,
   timeZone,
   canWrite,
   open,
@@ -29,7 +27,6 @@ export function PlanSection({
   plans: readonly TreatmentPlan[];
   /** The patient's diagnoses, to name the one a plan is for. */
   diagnoses: readonly DiagnosisRecord[];
-  visitId: string;
   timeZone: string;
   canWrite: boolean;
   open: boolean;
@@ -37,10 +34,9 @@ export function PlanSection({
   onAdd: () => void;
 }) {
   const { t, i18n } = useTranslation('clinical');
-  const confirm = useConfirm();
-  const toast = useToast();
   const locale = i18n.resolvedLanguage ?? 'en';
   const actions = useChartingActions();
+  const visitId = actions.scope.kind === 'visit' ? actions.scope.visitId : null;
   const openPlans = plans.filter((plan) => plan.status === 'planned');
   const performedHere = plans.filter(
     (plan) => plan.status === 'performed' && plan.performedInVisitId === visitId,
@@ -100,7 +96,7 @@ export function PlanSection({
               <span className="font-mono text-[12.5px] leading-[1.4] text-ink-muted">
                 {formatDate(plan.recordedAt, { timeZone, locale })}
               </span>
-              {canWrite && (
+              {canWrite && visitId !== null && (
                 <button
                   type="button"
                   title={t('panel.plan.performTitle', { price })}
@@ -110,43 +106,12 @@ export function PlanSection({
                   }}
                   className="ms-auto flex h-7 flex-none cursor-pointer items-center gap-1.5 rounded-md border-0 bg-primary px-[11px] text-[12.5px] leading-none font-semibold text-primary-foreground hover:bg-primary-hover"
                 >
-                  <span>{t('panel.plan.perform')}</span>
-                  <span className="text-primary-tint-border">{t('panel.plan.toToday')}</span>
+                  {t('panel.plan.perform')}
                 </button>
               )}
-              {canWrite &&
-                (plan.recordedInVisitId === visitId ? (
-                  <LinkButton
-                    tone="danger"
-                    label={t('panel.remove')}
-                    name={t('panel.removeNamed', { name: plan.name })}
-                    onClick={() => {
-                      actions.removePlan(plan.id);
-                    }}
-                  />
-                ) : (
-                  <LinkButton
-                    tone="danger"
-                    label={t('panel.plan.cancel')}
-                    name={t('panel.plan.cancelNamed', { name: plan.name })}
-                    onClick={() => {
-                      // A plan from an earlier visit: confirm first (4a follow-up), then say so.
-                      confirm({
-                        title: t('panel.plan.cancelTitle', { name: plan.name }),
-                        body: t('panel.plan.cancelBody'),
-                        okLabel: t('panel.plan.cancelOk'),
-                        cancelLabel: t('panel.plan.keep'),
-                        tone: 'warn',
-                        onConfirm: () => {
-                          actions.cancelPlan(plan.id);
-                          toast(t('panel.plan.cancelled', { name: plan.name }), {
-                            tone: 'success',
-                          });
-                        },
-                      });
-                    }}
-                  />
-                ))}
+              {canWrite && (
+                <PlanDismiss plan={plan} className={visitId === null ? 'ms-auto' : ''} />
+              )}
             </div>
           </div>
         );
@@ -162,10 +127,49 @@ export function PlanSection({
       {openPlans.length === 0 && performedHere.length === 0 && (
         <EmptyBlock
           title={t('panel.plan.emptyTitle')}
-          body={canWrite ? t('panel.plan.emptyBody') : undefined}
           action={canWrite ? { label: t('panel.plan.addCta'), onClick: onAdd } : undefined}
         />
       )}
     </PanelSection>
+  );
+}
+
+/**
+ * **Remove** for a plan recorded where the charting happens (this visit, or the patient record),
+ * else **Cancel**, which asks first and then says so (W13, ADR-0031).
+ */
+export function PlanDismiss({ plan, className }: { plan: TreatmentPlan; className?: string }) {
+  const { t } = useTranslation('clinical');
+  const actions = useChartingActions();
+  if (madeHere(actions.scope, plan)) {
+    return (
+      <LinkButton
+        tone="danger"
+        className={className}
+        label={t('panel.remove')}
+        name={t('panel.removeNamed', { name: plan.name })}
+        onClick={() => {
+          actions.removePlan(plan.id);
+        }}
+      />
+    );
+  }
+  return <PlanCancel plan={plan} className={className} />;
+}
+
+/** **Cancel** an open plan: asks first, then says so (`useCancelPlan`). */
+export function PlanCancel({ plan, className }: { plan: TreatmentPlan; className?: string }) {
+  const { t } = useTranslation('clinical');
+  const cancel = useCancelPlan();
+  return (
+    <LinkButton
+      tone="danger"
+      className={className}
+      label={t('panel.plan.cancel')}
+      name={t('panel.plan.cancelNamed', { name: plan.name })}
+      onClick={() => {
+        cancel(plan);
+      }}
+    />
   );
 }

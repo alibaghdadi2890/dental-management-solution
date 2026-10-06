@@ -2,6 +2,7 @@ import {
   anatomicalName,
   type ChartMode,
   type ChartOrientation,
+  type Jaw,
   type SurfaceKey,
   TENANT_DEFAULTS,
   type ToothCode,
@@ -51,6 +52,13 @@ export function useToothName(): (code: ToothCode) => string {
     },
     [t],
   );
+}
+
+/** `(jaw) => 'Upper jaw' | 'Lower jaw'`, or `'Whole mouth'` without one: what a service or plan
+ * that isn't on a tooth shows where the tooth label would be. */
+export function useLevelLabel(): (jaw: Jaw | null | undefined) => string {
+  const { t } = useTranslation('clinical');
+  return useCallback((jaw: Jaw | null | undefined) => t(`level.${jaw ?? 'mouth'}`), [t]);
 }
 
 export interface SurfaceLabel {

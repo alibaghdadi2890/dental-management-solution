@@ -49,7 +49,8 @@
     "recordedServices_one": "{{count}} soin enregistré",
     "recordedServices_other": "{{count}} soins enregistrés",
     "treatedToday": "traitée pendant cette visite",
-    "noRecordedTreatment": "aucun soin enregistré"
+    "noRecordedTreatment": "aucun soin enregistré",
+    "inProgress": "non terminé : {{names}}"
   },
   "chart": {
     "upperArch": "Arcade supérieure",
@@ -62,16 +63,13 @@
   "legend": {
     "treatment": "Soins",
     "markers": "Repères",
-    "none": "Aucun soin",
     "treatedSurface": "Face traitée",
     "wholeTooth": "Dent entière",
     "treated": "Traitée",
     "treatedToday": "Traitée aujourd’hui",
     "diagnosis": "Diagnostic",
     "planned": "Prévu",
-    "selected": "Sélectionnée",
-    "primary": "Temporaire",
-    "notErupted": "Pas sortie"
+    "inProgress": "Non terminé"
   },
   "workspace": {
     "loading": "Chargement de la visite…",
@@ -103,8 +101,6 @@
       "done": "Visite abandonnée"
     },
     "chartFailed": "Impossible de charger le schéma dentaire.",
-    "today": "Visite du jour",
-    "todayHint": "Ce que vous faites maintenant",
     "toothPanel": "Dent sélectionnée",
     "money": "Montants de la visite",
     "completedElsewhere": "Terminée par {{name}} à {{time}}.",
@@ -112,24 +108,32 @@
     "viewSummary": "Voir le récapitulatif"
   },
   "chartCard": {
-    "title": "Schéma dentaire",
-    "hint": "Cliquez sur une dent pour l’examiner · ← → pour vous déplacer, Échap pour désélectionner"
+    "title": "Schéma dentaire"
   },
   "planBoard": {
     "title": "Plan de traitement",
-    "subtitle": "Travaux à venir · non facturés avant réalisation",
     "countLine": "{{teeth}} · {{procedures}}",
     "teeth_one": "{{count}} dent",
     "teeth_other": "{{count}} dents",
     "procedures_one": "{{count}} acte",
     "procedures_other": "{{count}} actes",
-    "jaw": "Arcade",
     "noDiagnosis": "Aucun diagnostic enregistré",
     "selectTooth": "Afficher {{label}} dans le panneau de la dent",
     "estimate": "Estimation du plan",
     "emptyTitle": "Rien de planifié pour l’instant",
-    "emptyBody": "Sélectionnez une dent, notez vos constatations, puis planifiez le traitement. Vous pouvez terminer cette visite comme un simple examen, sans rien facturer.",
-    "quote": "Devis du plan"
+    "quote": "Devis du plan",
+    "newPlan": "Nouveau plan",
+    "other": "Autres traitements planifiés",
+    "rename": "Renommer",
+    "delete": "Supprimer",
+    "renameNamed": "Renommer {{title}}",
+    "deleteNamed": "Supprimer {{title}}",
+    "deleteTitle": "Supprimer « {{title}} » ?",
+    "deleteBody": "Ses traitements planifiés restent sur le patient, sans plan nommé.",
+    "deleteOk": "Supprimer le plan",
+    "moveTo": "Plan nommé pour {{name}}",
+    "noGroup": "Aucun plan nommé",
+    "emptyGroup": "Rien n’est encore planifié dans ce plan."
   },
   "notes": {
     "title": "Notes cliniques",
@@ -158,21 +162,14 @@
     "draftFailedBody": "Certaines modifications n’ont pas pu être enregistrées. Réessayez-les, puis enregistrez à nouveau le brouillon.",
     "review": "Vérifier et terminer",
     "capped": "La remise dépasse le sous-total — plafonnée à 100 %",
-    "openPlans": "Plans ouverts {{amount}} · hors total du jour"
+    "openPlans": "Plans ouverts {{amount}}"
   },
   "dentition": {
-    "label": "Denture : {{value}}",
+    "label": "Schéma",
     "stage": {
-      "primary": "Temporaire",
-      "mixed": "Mixte",
-      "permanent": "Permanente"
+      "primary": "Temporaires",
+      "permanent": "Permanentes"
     },
-    "auto": "Auto · {{stage}}",
-    "autoAge": "Auto · {{stage}} ({{age}} ans)",
-    "manual": "{{stage}} · définie manuellement",
-    "backToAuto": "Revenir en auto",
-    "setDone": "Denture définie : {{stage}}",
-    "backToAutoDone": "Denture de nouveau automatique",
     "failed": "Impossible de modifier la denture : {{reason}}"
   },
   "startVisit": {
@@ -200,17 +197,18 @@
   "actions": {
     "failed": "Impossible d’enregistrer la modification : {{reason}}",
     "tooth": "Dent {{label}}",
-    "jawLevel": "Niveau arcade",
-    "jawLevelService": "Acte au niveau de l’arcade",
     "undo": "Annuler",
     "serviceAdded": "{{name}} ajouté",
     "diagnosed": "{{name}} enregistré",
-    "diagnosedBody": "{{tooth}} · planifiez ensuite un traitement",
+    "diagnosedBody": "{{tooth}}",
     "planTreatment": "Planifier un traitement",
     "planned": "{{name}} planifié",
-    "plannedBody": "{{target}} · {{price}} — non facturé avant réalisation",
+    "plannedBody": "{{target}} · {{price}}",
     "performed": "{{name}} réalisé",
-    "performedBody": "Transféré du plan de traitement vers cette visite à {{price}}"
+    "performedBody": "{{price}}",
+    "continued": "{{name}} poursuivi",
+    "unfinished": "{{name}} marqué non terminé",
+    "unsavedPrice": "le prix n’a pas pu être enregistré"
   },
   "succession": {
     "successor": "Successeur permanent",
@@ -234,14 +232,11 @@
   },
   "panel": {
     "emptyTitle": "Aucune dent sélectionnée",
-    "emptyBody": "Cliquez sur une dent du schéma pour voir son historique et noter le traitement du jour.",
     "upper": "Haut",
     "lower": "Bas",
     "primary": "Temporaire",
-    "hintSurface": "Touchez une face pour cibler le prochain acte",
     "hintSelected": "Faces sélectionnées : {{surfaces}}",
-    "hintSimple": "Notation par dent entière · la vue par faces est désactivée",
-    "plannedStrip": "Planifié : {{names}} · {{total}} — non facturé avant réalisation",
+    "plannedStrip": "Planifié : {{names}} · {{total}}",
     "add": "+ Ajouter",
     "remove": "Retirer",
     "removeNamed": "Retirer {{name}}",
@@ -252,7 +247,6 @@
       "none": "aucun enregistré",
       "allResolved": "tous résolus",
       "emptyTitle": "Aucun diagnostic enregistré pour cette dent",
-      "emptyBody": "Notez ce que vous avez constaté avant de planifier un traitement.",
       "resolved": "Résolu",
       "resolve": "Résoudre",
       "reopen": "Rouvrir",
@@ -269,15 +263,13 @@
       "planned": "Planifié",
       "for": "pour {{name}}",
       "perform": "Réaliser",
-      "toToday": "→ aujourd’hui",
       "performNamed": "Réaliser : {{name}}",
       "performTitle": "Ajoute {{price}} à la visite du jour comme acte réalisé",
       "cancel": "Annuler le plan",
       "cancelNamed": "Annuler {{name}}",
       "performedNote_one": "Un traitement planifié a été réalisé — voir ci-dessous.",
       "performedNote_other": "{{count}} traitements planifiés ont été réalisés — voir ci-dessous.",
-      "emptyTitle": "Aucun traitement planifié pour cette dent",
-      "emptyBody": "Planifiez maintenant et facturez à la réalisation — lors de cette visite ou d’une prochaine.",
+      "emptyTitle": "Aucun traitement planifié",
       "cancelTitle": "Annuler {{name}} ?",
       "cancelBody": "Le plan reste dans l’historique de la dent comme annulé.",
       "cancelOk": "Annuler le plan",
@@ -298,28 +290,25 @@
       "final": "Final",
       "previousLabel": "Auparavant",
       "fullHistory": "Historique complet de la dent →",
-      "emptyTitle": "Aucun traitement enregistré pour cette dent",
-      "emptyBody": "Son historique commence avec ce que vous notez aujourd’hui."
-    }
+      "emptyTitle": "Aucun traitement enregistré"
+    },
+    "levels": "Niveau"
   },
   "drawer": {
     "service": {
       "title": "Ajouter un acte réalisé",
-      "placeholder": "Rechercher un acte…",
-      "footer": "Ajoute l’acte à cette visite et le facture maintenant — le prix et la remise restent modifiables dans le panneau de la dent."
+      "placeholder": "Rechercher un acte…"
     },
     "plan": {
       "title": "Ajouter un traitement planifié",
-      "placeholder": "Rechercher un traitement à planifier…",
-      "footer": "Le traitement planifié est noté sur la dent et n’est facturé qu’une fois réalisé."
+      "placeholder": "Rechercher un traitement à planifier…"
     },
     "diagnosis": {
       "title": "Ajouter un diagnostic",
-      "placeholder": "Rechercher un diagnostic…",
-      "footer": "Un diagnostic note ce que vous avez constaté. Ajoutez ensuite un traitement planifié pour dire ce que vous comptez faire."
+      "placeholder": "Rechercher un diagnostic…"
     },
-    "noTooth": "Aucune dent sélectionnée — actes au niveau de l’arcade uniquement",
-    "noToothDiagnosis": "Aucune dent sélectionnée — sélectionnez d’abord une dent",
+    "noTooth": "Aucune dent sélectionnée",
+    "noToothDiagnosis": "Aucune dent sélectionnée",
     "all": "Tous",
     "frequent": "Fréquemment utilisés",
     "uncategorized": "Autres",
@@ -334,7 +323,9 @@
     "emptyBody": "Ajoutez d’abord des éléments dans l’écran Catalogue.",
     "loading": "Chargement du catalogue…",
     "failedTitle": "Impossible de charger le catalogue",
-    "failedBody": "Une erreur est survenue lors du chargement du catalogue."
+    "failedBody": "Une erreur est survenue lors du chargement du catalogue.",
+    "perMouth": "Bouche entière",
+    "addTo": "Ajouter {{name}} à l’{{jaw}}"
   },
   "history": {
     "title": "Dent {{label}}",
@@ -355,7 +346,7 @@
     "chartIt": "La noter dans cette visite",
     "startVisit": "Commencer une visite",
     "chartFailed": "Impossible de charger le schéma : cette dent ne peut pas être notée d’ici.",
-    "notShown": "Le schéma affiche {{label}} à cette position : notez-la, ou indiquez quelle dent est présente depuis son panneau dans la visite."
+    "in_progress": "Non terminé"
   },
   "summary": {
     "title": "Terminer la visite",
@@ -367,11 +358,9 @@
     "noTeeth": "Aucune dent notée dans cette visite.",
     "services": "Actes",
     "noServices": "Aucun acte dans cette visite — elle est enregistrée comme un examen.",
-    "jaw": "Arcade",
     "subtotal": "Sous-total",
     "discount": "Remise sur la visite",
     "totalDue": "Total à payer",
-    "discountNote": "Modifier la remise ici met à jour la visite — c’est la même commande que dans le pied de l’espace de travail.",
     "later": "Enregistré pour plus tard",
     "notBilled": "Non facturé dans cette visite",
     "diagnosis": "Diagnostic · {{name}}",
@@ -384,7 +373,9 @@
     "complete": "Terminer la visite",
     "recording": "Enregistrement…",
     "unsaved": "Certaines modifications n’ont pas pu être enregistrées, la visite n’a donc pas été terminée. Réessayez-les, puis terminez à nouveau la visite.",
-    "failed": "Impossible de terminer la visite : {{reason}}"
+    "failed": "Impossible de terminer la visite : {{reason}}",
+    "session": "{{name}} · visite {{number}}",
+    "unfinished": "Non terminé · à poursuivre"
   },
   "postVisit": {
     "title": "Visite enregistrée",
@@ -441,20 +432,79 @@
       "amend_plan_linked": "Un acte ayant réalisé un plan peut être retiré, pas déplacé.",
       "has_payments": "Cette visite a des paiements : remboursez-les ou déplacez-les avant de l’annuler.",
       "invalid_cursor": "La liste a changé ; reprenez à la première page.",
-      "checkout_closed": "La remise ne peut être définie qu’à l’encaissement, le jour de la visite. Demandez à un dentiste de corriger la visite."
+      "checkout_closed": "La remise ne peut être définie qu’à l’encaissement, le jour de la visite. Demandez à un dentiste de corriger la visite.",
+      "not_completed": "Seule une visite terminée peut être encaissée.",
+      "jaw_required": "Choisissez l’arcade supérieure ou inférieure.",
+      "jaw_not_allowed": "Cet acte ne s’enregistre pas sur une arcade."
     },
     "record": {
       "not_removable": "Seuls les éléments saisis dans cette visite peuvent être retirés.",
-      "not_found": "Cet élément n’est plus dans le dossier de ce patient."
+      "not_found": "Cet élément n’est plus dans le dossier de ce patient.",
+      "dentist_required": "Choisissez le dentiste concerné par cet enregistrement."
     },
     "plan": {
       "not_open": "Ce plan n’est plus ouvert.",
-      "not_cancellable": "Un plan créé dans cette visite se retire, il ne s’annule pas."
+      "not_cancellable": "Un plan créé dans cette visite se retire, il ne s’annule pas.",
+      "not_in_progress": "Ce traitement n’est pas en cours."
     },
     "catalog": {
       "not_found": "Cet élément du catalogue n’existe plus.",
       "in_use": "Cet élément du catalogue est utilisé.",
       "inactive": "Cet élément du catalogue est inactif."
     }
+  },
+  "level": {
+    "upper": "Arcade supérieure",
+    "lower": "Arcade inférieure",
+    "mouth": "Bouche entière"
+  },
+  "planGroup": {
+    "newTitle": "Nouveau plan nommé",
+    "editTitle": "Renommer le plan",
+    "title": "Titre",
+    "titlePlaceholder": "p. ex. Réhabilitation complète",
+    "note": "Note",
+    "create": "Créer le plan",
+    "save": "Enregistrer",
+    "cancel": "Annuler"
+  },
+  "recordChart": {
+    "dentist": "Enregistré pour",
+    "chooseDentist": "Choisir un dentiste…",
+    "liveVisit": "Ce patient a une visite en cours.",
+    "openVisit": "Ouvrir la visite"
+  },
+  "todayServices": {
+    "title": "Actes du jour",
+    "count_one": "{{count}} acte",
+    "count_other": "{{count}} actes",
+    "charged": "Facturé aujourd’hui",
+    "carried": "Reporté"
+  },
+  "unfinished": {
+    "badge": "Non terminé",
+    "started": "Commencé le {{date}}",
+    "visits_one": "{{count}} visite",
+    "visits_other": "{{count}} visites",
+    "mark": "Non terminé",
+    "complete": "Terminer",
+    "completeNamed": "Terminer : {{name}}",
+    "continue": "Poursuivre",
+    "notToday": "Pas aujourd’hui",
+    "remove": "Retirer",
+    "cancel": "Abandonner",
+    "toContinue": "À poursuivre · {{count}}",
+    "count_one": "{{count}} non terminé",
+    "count_other": "{{count}} non terminés",
+    "dialogTitle": "Actes non terminés",
+    "dialogQuestion": "En poursuivre aujourd’hui ?",
+    "dialogContinue": "Poursuivre",
+    "dialogFailed": "Impossible d’enregistrer la réponse : {{reason}}",
+    "recordTitle": "Actes non terminés",
+    "noCharge": "Non facturé",
+    "session": "Séance {{number}}"
+  },
+  "rowMenu": {
+    "label": "Actions : {{name}}"
   }
 }

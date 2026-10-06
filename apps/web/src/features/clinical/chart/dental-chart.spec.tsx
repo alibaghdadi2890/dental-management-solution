@@ -4,7 +4,6 @@ import type {
   Session,
   ToothCode,
   ToothNotation,
-  ToothPresence,
   ToothState,
 } from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -81,7 +80,6 @@ function chart(
   return {
     teeth: new Map(),
     dentition: 'permanent',
-    toothStatus: [],
     size: 12,
     ...props,
   };
@@ -106,37 +104,33 @@ describe('DentalChart', () => {
   afterEach(cleanup);
 
   it('labels teeth in FDI or Universal notation', () => {
-    renderWith(<DentalChart {...chart({ dentition: 'mixed' })} />, { notation: 'fdi' });
+    renderWith(<DentalChart {...chart()} />, { notation: 'fdi' });
     expect(numberOf('16')?.textContent).toBe('16');
-    expect(numberOf('15')?.textContent).toBe('55');
     expect(column('16').getAttribute('aria-label')).toMatch(/^#16 · Upper right first molar · /);
     cleanup();
 
-    renderWith(<DentalChart {...chart({ dentition: 'mixed' })} />, { notation: 'universal' });
+    renderWith(<DentalChart {...chart()} />, { notation: 'universal' });
     expect(numberOf('16')?.textContent).toBe('3');
-    expect(numberOf('15')?.textContent).toBe('A');
     expect(column('16').getAttribute('aria-label')).toMatch(/^#3 · Upper right first molar · /);
+    cleanup();
+
+    renderWith(<DentalChart {...chart({ dentition: 'primary' })} />, { notation: 'universal' });
+    expect(numberOf('15')?.textContent).toBe('A');
     expect(column('15').getAttribute('aria-label')).toMatch(
       /^A · Upper right primary second molar · primary tooth · /,
     );
   });
 
-  it('resolves each column to the tooth present for an 8-year-old', () => {
-    renderWith(<DentalChart {...chart({ dentition: 'mixed' })} />);
-
-    expect(numberOf('15')?.textContent).toBe('55');
-    expect(numberOf('16')?.textContent).toBe('16');
-    expect(numberOf('17')?.className).toContain('italic');
-    expect(numberOf('16')?.className).not.toContain('italic');
-    expect(column('17').getAttribute('aria-label')).toContain('not yet erupted');
-  });
-
-  it('applies the per-position presence record over the dentition stage', () => {
-    const toothStatus: ToothPresence[] = [{ position: '15', present: 'permanent' }];
-    renderWith(<DentalChart {...chart({ dentition: 'mixed', toothStatus })} />);
-
+  it('the permanent chart has 32 teeth, the primary chart its 20', () => {
+    renderWith(<DentalChart {...chart()} />);
+    expect(document.querySelectorAll('[data-column]')).toHaveLength(32);
     expect(numberOf('15')?.textContent).toBe('15');
-    expect(numberOf('25')?.textContent).toBe('65');
+    cleanup();
+
+    renderWith(<DentalChart {...chart({ dentition: 'primary' })} />);
+    expect(document.querySelectorAll('[data-column]')).toHaveLength(20);
+    expect(numberOf('15')?.textContent).toBe('55');
+    expect(document.querySelector('[data-column="16"]')).toBeNull();
   });
 
   it('flips the column order and the R/L markers with the orientation', () => {
@@ -308,56 +302,48 @@ describe('ChartLegend', () => {
   afterEach(cleanup);
 
   it('lists the surface legend in precedence order', () => {
-    renderWith(<ChartLegend dentition="permanent" />);
+    renderWith(<ChartLegend />);
     expect(legendItems()).toEqual([
-      'No treatment',
       'Treated surface',
       'Whole tooth',
       'Treated today',
       'Diagnosis',
       'Planned',
-      'Selected',
+      'Not finished',
     ]);
   });
 
-  it('collapses the fill items in simple mode', () => {
-    renderWith(<ChartLegend dentition="permanent" />, { mode: 'simple' });
+  it('collapses the fill items in simple mode, and leaves Treated today out outside a visit', () => {
+    renderWith(<ChartLegend />, { mode: 'simple' });
     expect(legendItems()).toEqual([
-      'No treatment',
       'Treated',
       'Treated today',
       'Diagnosis',
       'Planned',
-      'Selected',
+      'Not finished',
     ]);
+    cleanup();
+    renderWith(<ChartLegend showToday={false} />, { mode: 'simple' });
+    expect(legendItems()).toEqual(['Treated', 'Diagnosis', 'Planned', 'Not finished']);
   });
 
-  it('draws compact rings on the planned and selected swatches, clear of their labels', () => {
-    renderWith(<ChartLegend dentition="permanent" />);
+  it('draws a compact ring on the planned swatch, clear of its label', () => {
+    renderWith(<ChartLegend />);
     const swatchOf = (label: string) =>
       [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].find(
         (item) => item.textContent === label,
       )?.firstElementChild?.className ?? '';
-
-    expect(swatchOf('Selected')).toContain('shadow-[0_0_0_2px_var(--color-primary)]');
-    expect(swatchOf('Selected')).toContain('m-[2px]');
-    expect(swatchOf('Selected')).not.toContain('5px');
     expect(swatchOf('Planned')).toContain('shadow-[0_0_0_1.5px_var(--color-planned-border)]');
     expect(swatchOf('Planned')).toContain('m-[1.5px]');
   });
 
   it('gives every legend item the same height, so both groups line up', () => {
-    renderWith(<ChartLegend dentition="mixed" />);
+    renderWith(<ChartLegend />);
     const heights = new Set(
       [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].map((item) =>
         item.className.split(' ').find((name) => name.startsWith('h-')),
       ),
     );
     expect([...heights]).toEqual(['h-[15px]']);
-  });
-
-  it('adds the primary and not-erupted markers for a child’s dentition', () => {
-    renderWith(<ChartLegend dentition="mixed" />, { notation: 'universal' });
-    expect(legendItems().slice(-2)).toEqual(['APrimary', 'Not erupted']);
   });
 });

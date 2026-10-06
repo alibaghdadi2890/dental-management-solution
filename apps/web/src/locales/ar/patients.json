@@ -271,7 +271,6 @@
     "ageLine": "{{age}} · {{stage}}",
     "dentition": {
       "primary": "أسنان لبنية",
-      "mixed": "أسنان مختلطة",
       "permanent": "أسنان دائمة"
     },
     "duplicate": {
@@ -464,7 +463,6 @@
       "minutes": "{{minutes, number}} د",
       "services": "الخدمات",
       "chip": "{{name}} · {{target}}",
-      "jaw": "الفك",
       "none": "لا زيارات مسجلة بعد.",
       "loading": "جارٍ تحميل آخر زيارة…",
       "failed": "تعذّر تحميل آخر زيارة",

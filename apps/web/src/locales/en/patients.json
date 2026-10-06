@@ -239,7 +239,6 @@
     "ageLine": "{{age}} · {{stage}}",
     "dentition": {
       "primary": "primary dentition",
-      "mixed": "mixed dentition",
       "permanent": "permanent dentition"
     },
     "duplicate": {
@@ -424,7 +423,6 @@
       "minutes": "{{minutes, number}} min",
       "services": "Services",
       "chip": "{{name}} · {{target}}",
-      "jaw": "Jaw",
       "none": "No visits recorded yet.",
       "loading": "Loading the last visit…",
       "failed": "Couldn’t load the last visit",

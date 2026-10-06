@@ -20,7 +20,8 @@ import { useStaffNames } from '@/features/users/use-staff-names';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useToothLabel, useSurfaceLabel } from '../chart/use-chart-settings';
+import { useLevelLabel, useToothLabel, useSurfaceLabel } from '../chart/use-chart-settings';
+import { VisitUnfinishedLines } from '../visit-unfinished-lines';
 import {
   amendInput,
   type AmendDraft,
@@ -94,6 +95,7 @@ export function VisitDetailPanel({
   const canAudit = usePermission('audit:read');
   const { names } = useStaffNames();
   const toothLabel = useToothLabel();
+  const levelLabel = useLevelLabel();
   const surfaceLabel = useSurfaceLabel();
   const [draft, setDraft] = useState<AmendDraft | null>(null);
   const [badTeeth, setBadTeeth] = useState<ReadonlySet<string>>(new Set());
@@ -307,7 +309,7 @@ export function VisitDetailPanel({
                 <span className="min-w-0 flex-1">{service.name}</span>
                 <span className="font-mono text-ink-muted" dir="ltr">
                   {service.toothCode === null
-                    ? t('panel.jaw')
+                    ? levelLabel(service.jaw)
                     : [toothLabel(service.toothCode), surfaceLabel.format(service.surfaces)]
                         .filter(Boolean)
                         .join(' ')}
@@ -318,6 +320,7 @@ export function VisitDetailPanel({
               </li>
             ))}
           </ul>
+          <VisitUnfinishedLines patientId={visit.patient.id} visitId={visit.id} />
         </section>
       )}
       <section className="flex flex-col border-t border-inner-divider pt-3">

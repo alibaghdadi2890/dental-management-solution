@@ -9,17 +9,17 @@ import {
   startDefaultsSchema,
   startVisitResultSchema,
   toothHistorySchema,
-  toothPresenceResultSchema,
   visitResultSchema,
   visitStatSchema,
   visitSchema,
   type AddServiceInput,
   type LiveVisitQuery,
+  type AnswerUnfinishedInput,
   type PlanTreatmentInput,
+  type RecordSessionInput,
   type RecordDiagnosisInput,
   type StartVisitInput,
   type ToothCode,
-  type ToothPresence,
   type UpdateServiceInput,
   type VisitDiscountInput,
   type VisitNotesInput,
@@ -206,6 +206,16 @@ export const updateService = (
 export const removeService = (visitId: string, serviceId: string, tenantId?: string) =>
   visitCall(serviceResultSchema, 'DELETE', visitId, `services/${serviceId}`, { tenantId });
 
+/** Not finished: the service becomes work in progress; `record` is its plan. */
+export const markServiceUnfinished = (visitId: string, serviceId: string, tenantId?: string) =>
+  visitCall(planResultSchema, 'POST', visitId, `services/${serviceId}/unfinished`, { tenantId });
+/** Which unfinished services this visit continues; none is "Not today". */
+export const answerUnfinished = (
+  visitId: string,
+  input: AnswerUnfinishedInput,
+  tenantId?: string,
+) => visitCall(visitResultSchema, 'POST', visitId, 'unfinished-answer', { json: input, tenantId });
+
 export const recordDiagnosis = (visitId: string, input: RecordDiagnosisInput, tenantId?: string) =>
   visitCall(diagnosisResultSchema, 'POST', visitId, 'diagnoses', { json: input, tenantId });
 export const resolveDiagnosis = (visitId: string, recordId: string, tenantId?: string) =>
@@ -223,17 +233,16 @@ export const planTreatment = (visitId: string, input: PlanTreatmentInput, tenant
   visitCall(planResultSchema, 'POST', visitId, 'plans', { json: input, tenantId });
 export const performPlan = (visitId: string, planId: string, tenantId?: string) =>
   visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/perform`, { tenantId });
+export const recordSession = (
+  visitId: string,
+  planId: string,
+  input: RecordSessionInput,
+  tenantId?: string,
+) =>
+  visitCall(planResultSchema, 'PUT', visitId, `plans/${planId}/session`, { json: input, tenantId });
+export const removeSession = (visitId: string, planId: string, tenantId?: string) =>
+  visitCall(planResultSchema, 'DELETE', visitId, `plans/${planId}/session`, { tenantId });
 export const cancelPlan = (visitId: string, planId: string, tenantId?: string) =>
   visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/cancel`, { tenantId });
 export const removePlan = (visitId: string, planId: string, tenantId?: string) =>
   visitCall(planResultSchema, 'DELETE', visitId, `plans/${planId}`, { tenantId });
-
-export const setToothPresence = (
-  visitId: string,
-  { position, present }: ToothPresence,
-  tenantId?: string,
-) =>
-  visitCall(toothPresenceResultSchema, 'PUT', visitId, `teeth/${position}`, {
-    json: { present },
-    tenantId,
-  });

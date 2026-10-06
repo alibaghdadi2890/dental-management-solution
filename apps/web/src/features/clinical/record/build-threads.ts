@@ -1,20 +1,22 @@
-import type {
-  DiagnosisRecord,
-  HistoryService,
-  PatientChart,
-  SurfaceKey,
-  ToothCode,
-  TreatmentPlan,
+import {
+  type DiagnosisRecord,
+  type HistoryService,
+  type PatientChart,
+  type SurfaceKey,
+  type ToothCode,
+  type TreatmentPlan,
+  isOpenPlan,
 } from '@dcm/contracts';
 
 export type StepKind = 'diagnosed' | 'planned' | 'performed' | 'cancelled' | 'resolved';
 
-/** One dated step of a thread, and the visit it happened in. */
+/** One dated step of a thread, and the visit it happened in — none for a diagnosis or plan
+ * recorded, or a plan cancelled, on the patient record (ADR-0031). */
 export interface ThreadStep {
   kind: StepKind;
   /** An ISO date or timestamp. */
   at: string;
-  visitId: string;
+  visitId: string | null;
   /** The step's visit was voided (D6): it stays, struck through. */
   voided: boolean;
   /** The plan's name, on plan steps. */
@@ -55,7 +57,7 @@ export interface Threads {
 const byTooth = (a: ToothCode | null, b: ToothCode | null) =>
   a === b ? 0 : a === null ? 1 : b === null ? -1 : a.localeCompare(b);
 
-function planSteps(plan: TreatmentPlan, voided: (id: string) => boolean): ThreadStep[] {
+function planSteps(plan: TreatmentPlan, voided: (id: string | null) => boolean): ThreadStep[] {
   const steps: ThreadStep[] = [
     {
       kind: 'planned',
@@ -74,7 +76,7 @@ function planSteps(plan: TreatmentPlan, voided: (id: string) => boolean): Thread
       name: plan.name,
     });
   }
-  if (plan.cancelledInVisitId !== null && plan.cancelledAt !== null) {
+  if (plan.cancelledAt !== null) {
     steps.push({
       kind: 'cancelled',
       at: plan.cancelledAt,
@@ -96,7 +98,7 @@ const latest = (thread: Thread) =>
  */
 export function buildThreads(chart: PatientChart): Threads {
   const voidedIds = new Set(chart.voidedVisitIds);
-  const voided = (id: string) => voidedIds.has(id);
+  const voided = (id: string | null) => id !== null && voidedIds.has(id);
   const diagnosisIds = new Set(chart.diagnoses.map((record) => record.id));
   const threads: Thread[] = [];
 
@@ -105,7 +107,7 @@ export function buildThreads(chart: PatientChart): Threads {
     const steps: ThreadStep[] = [
       {
         kind: 'diagnosed',
-        at: diagnosis.recordedInVisitDate,
+        at: diagnosis.recordedDate,
         visitId: diagnosis.recordedInVisitId,
         voided: voided(diagnosis.recordedInVisitId),
       },
@@ -129,7 +131,7 @@ export function buildThreads(chart: PatientChart): Threads {
       diagnosis,
       plans,
       steps: steps.sort((a, b) => a.at.localeCompare(b.at)),
-      open: active || plans.some((plan) => plan.status === 'planned'),
+      open: active || plans.some(isOpenPlan),
       needsPlan: active && !plans.some((plan) => plan.status !== 'cancelled'),
     });
   }
@@ -145,7 +147,7 @@ export function buildThreads(chart: PatientChart): Threads {
       diagnosis: null,
       plans: [plan],
       steps: planSteps(plan, voided),
-      open: plan.status === 'planned',
+      open: isOpenPlan(plan),
       needsPlan: false,
     });
   }
@@ -172,6 +174,6 @@ export type ThreadFilter = 'active' | 'planned' | 'resolved';
 /** The status chips: an active diagnosis, a plan still planned, a resolved diagnosis. */
 export function matchesFilter(thread: Thread, filter: ThreadFilter): boolean {
   if (filter === 'active') return thread.diagnosis?.status === 'active';
-  if (filter === 'planned') return thread.plans.some((plan) => plan.status === 'planned');
+  if (filter === 'planned') return thread.plans.some(isOpenPlan);
   return thread.diagnosis?.status === 'resolved';
 }

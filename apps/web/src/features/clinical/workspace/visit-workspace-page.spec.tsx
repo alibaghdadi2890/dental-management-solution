@@ -9,6 +9,7 @@ import {
   RANA,
   renderWorkspace,
   sent,
+  treatmentPlan,
   visit,
   VISIT_ID,
 } from './workspace.test-utils';
@@ -17,10 +18,6 @@ import {
 const chartCard = async () => {
   await screen.findByRole('group', { name: 'Upper arch' });
   return screen.getByRole('region', { name: 'Dental chart' });
-};
-
-const openDentition = async (name: RegExp | string) => {
-  fireEvent.pointerDown(await screen.findByRole('button', { name }), { button: 0, ctrlKey: false });
 };
 
 describe('VisitWorkspacePage', () => {
@@ -33,9 +30,8 @@ describe('VisitWorkspacePage', () => {
     mockWorkspace();
     renderWorkspace();
     const card = await chartCard();
-    expect(within(card).getByText('Click a tooth to examine it · ← → to move, Esc to deselect'));
-    expect(screen.getByText("Today's visit")).toBeTruthy();
-    expect(screen.getByText('What you are doing now')).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Upper jaw' })).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Whole mouth' })).toBeTruthy();
     expect(within(card).getByRole('group', { name: 'Upper arch' })).toBeTruthy();
     expect(within(card).getByText('Treatment')).toBeTruthy();
     expect(screen.getByRole('complementary', { name: 'Selected tooth' })).toBeTruthy();
@@ -93,15 +89,18 @@ describe('VisitWorkspacePage', () => {
     expect(router.state.location.pathname).toBe(`/visits/${VISIT_ID}`);
   });
 
-  it('selects nothing when ?tooth= names a tooth the chart does not show', async () => {
-    mockWorkspace({ chart: chart({ toothStatus: [{ position: '14', present: 'permanent' }] }) });
+  it('?tooth= naming a tooth of the other chart brings that chart', async () => {
+    mockWorkspace();
     const { router } = renderWorkspace({ search: '?tooth=54' });
-    await chartCard();
+    const card = await chartCard();
     await waitFor(() => {
       expect(router.state.location.search).toEqual({});
     });
     const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
-    expect(within(aside).getByText('No tooth selected')).toBeTruthy();
+    expect(await within(aside).findByRole('heading', { name: '#54' })).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Primary' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
   });
 
   it('"Chart it in this visit" selects the tooth here, without navigating', async () => {
@@ -199,52 +198,62 @@ describe('VisitWorkspacePage', () => {
     expect(screen.getByText('No tooth selected')).toBeTruthy();
   });
 
-  it('shows the automatic dentition and sets another one, with a toast', async () => {
-    const fetchMock = mockWorkspace();
-    renderWorkspace();
-    await chartCard();
-    await openDentition('Dentition: Auto · Mixed (age 8)');
-    expect(screen.queryByRole('menuitemradio', { name: 'Back to auto' })).toBeNull();
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Primary' }));
-
-    expect(await screen.findByText('Dentition set to Primary')).toBeTruthy();
-    expect(sent(fetchMock, 'PUT', `/patients/${RANA.id}/dentition`)).toEqual({
-      override: 'primary',
-    });
-    // The chart is refetched for the new stage.
-    await waitFor(() => {
-      const chartReads = fetchMock.mock.calls.filter(
-        ([url]) => url === `/api/v1/clinical/patients/${RANA.id}/chart`,
-      );
-      expect(chartReads.length).toBe(2);
-    });
-    expect(await screen.findByRole('button', { name: 'Dentition: Primary · set manually' }));
-  });
-
-  it('goes back to the automatic dentition', async () => {
+  it('opens on the chart of the patient’s age and switches to the other, remembered on the patient', async () => {
     const fetchMock = mockWorkspace({
-      patient: { ...RANA, dentitionOverride: 'permanent' },
-      chart: chart({ dentition: { stage: 'permanent', source: 'override', ageYears: 8 } }),
+      chart: chart({ dentition: { stage: 'primary', source: 'auto', ageYears: 8 } }),
     });
     renderWorkspace();
-    await chartCard();
-    await openDentition('Dentition: Permanent · set manually');
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Back to auto' }));
-    expect(await screen.findByText('Dentition back to automatic')).toBeTruthy();
-    expect(sent(fetchMock, 'PUT', `/patients/${RANA.id}/dentition`)).toEqual({ override: null });
+    const card = await chartCard();
+    const toggle = within(card).getByRole('group', { name: 'Chart' });
+    const primary = within(toggle).getByRole('button', { name: 'Primary' });
+    const permanent = within(toggle).getByRole('button', { name: 'Permanent' });
+    expect(primary.getAttribute('aria-pressed')).toBe('true');
+    expect(card.querySelectorAll('[data-column]')).toHaveLength(20);
+    expect(within(card).getByRole('button', { name: /^#55 · / })).toBeTruthy();
+
+    fireEvent.click(permanent);
+    expect(permanent.getAttribute('aria-pressed')).toBe('true');
+    expect(card.querySelectorAll('[data-column]')).toHaveLength(32);
+    await waitFor(() => {
+      expect(sent(fetchMock, 'PUT', `/patients/${RANA.id}/dentition`)).toEqual({
+        override: 'permanent',
+      });
+    });
   });
 
-  it('is read-only for front desk: the dentition is shown, not a control', async () => {
-    mockWorkspace();
+  it('switching chart lets go of the selected tooth; selecting a tooth of the other chart brings it', async () => {
+    mockWorkspace({
+      chart: chart({ plans: [treatmentPlan(20, 'Pulpotomy', '55')] }),
+    });
+    renderWorkspace();
+    const card = await chartCard();
+    const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
+    fireEvent.click(within(card).getByRole('button', { name: /^#16 · / }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Primary' }));
+    expect(within(aside).getByText('No tooth selected')).toBeTruthy();
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Permanent' }));
+    // The plan board's link to a primary tooth brings the primary chart.
+    const board = screen.getByRole('region', { name: 'Treatment plan' });
+    fireEvent.click(within(board).getByRole('button', { name: '#55' }));
+    expect(within(aside).getByRole('heading', { name: '#55' })).toBeTruthy();
+    expect(within(card).getByRole('button', { name: 'Primary' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('front desk switches the chart for themselves: nothing is saved', async () => {
+    const fetchMock = mockWorkspace();
     renderWorkspace({ permissions: FRONT_DESK });
     const card = await chartCard();
-    expect(within(card).getByText('Dentition: Auto · Mixed (age 8)')).toBeTruthy();
-    expect(within(card).queryByRole('button', { name: /^Dentition/ })).toBeNull();
+    fireEvent.click(within(card).getByRole('button', { name: 'Primary' }));
+    expect(card.querySelectorAll('[data-column]')).toHaveLength(20);
+    expect(sent(fetchMock, 'PUT', `/patients/${RANA.id}/dentition`)).toBeUndefined();
     // Looking is allowed: a tooth can still be selected.
-    fireEvent.click(within(card).getByRole('button', { name: /^#16 · / }));
+    fireEvent.click(within(card).getByRole('button', { name: /^#55 · / }));
     expect(
       within(screen.getByRole('complementary', { name: 'Selected tooth' })).getByRole('heading', {
-        name: '#16',
+        name: '#55',
       }),
     ).toBeTruthy();
   });

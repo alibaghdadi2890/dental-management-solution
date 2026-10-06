@@ -1,5 +1,4 @@
 import type { AuditEntry } from '@dcm/contracts';
-import { dentitionStageSchema } from '@dcm/contracts';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useId } from 'react';
@@ -36,12 +35,15 @@ const isKnown = (action: string): action is KnownAction =>
  * (`null` back to auto, else the stage it was set to) rather than a single static string like
  * every other known action.
  */
+/** Every stage an entry may name: `mixed` was one until the two-chart toggle replaced it. */
+const HISTORIC_STAGES = ['primary', 'mixed', 'permanent'] as const;
+
 function dentitionLabel(entry: AuditEntry, t: TFunction<'patients'>): string {
   const after = entry.after as { dentitionOverride?: unknown } | null;
-  const stage = dentitionStageSchema.safeParse(after?.dentitionOverride);
-  return stage.success
+  const stage = HISTORIC_STAGES.find((known) => known === after?.dentitionOverride);
+  return stage
     ? t('activity.actions.patient.dentition.set', {
-        stage: t(`activity.actions.patient.dentition.stage.${stage.data}`),
+        stage: t(`activity.actions.patient.dentition.stage.${stage}`),
       })
     : t('activity.actions.patient.dentition.auto');
 }

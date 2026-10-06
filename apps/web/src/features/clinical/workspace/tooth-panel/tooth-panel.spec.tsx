@@ -10,6 +10,7 @@ import {
   historyLine,
   mockWorkspace,
   OLDER_VISIT_ID,
+  pickRowAction,
   renderWorkspace,
   sent,
   serviceItem,
@@ -124,11 +125,6 @@ describe('ToothPanel', () => {
     renderWorkspace();
     const panel = await screen.findByRole('complementary', { name: 'Selected tooth' });
     expect(await within(panel).findByText('No tooth selected')).toBeTruthy();
-    expect(
-      within(aside()).getByText(
-        'Click any tooth in the chart to see its history and chart today’s treatment.',
-      ),
-    ).toBeTruthy();
   });
 
   it('shows the header: label, Upper, name and the surface hint', async () => {
@@ -138,7 +134,7 @@ describe('ToothPanel', () => {
     expect(within(aside()).getByRole('heading', { name: '#16' })).toBeTruthy();
     expect(within(aside()).getByText('Upper')).toBeTruthy();
     expect(within(aside()).getByText('Upper right first molar')).toBeTruthy();
-    expect(within(aside()).getByText('Tap a surface to scope the next service')).toBeTruthy();
+    expect(within(aside()).queryByText(/^Surfaces selected/)).toBeNull();
   });
 
   it('builds the pending surface scope from the glyph, and adding a service clears it', async () => {
@@ -167,7 +163,7 @@ describe('ToothPanel', () => {
         surfaces: ['O', 'D'],
       });
     });
-    expect(within(aside()).getByText('Tap a surface to scope the next service')).toBeTruthy();
+    expect(within(aside()).queryByText(/^Surfaces selected/)).toBeNull();
     expect(await screen.findByText('Composite filling added')).toBeTruthy();
     expect(screen.getByText('Tooth #16')).toBeTruthy();
   });
@@ -192,9 +188,7 @@ describe('ToothPanel', () => {
     expect(within(section('Treatment plan')).getByText('Zircon crown · $400')).toBeTruthy();
     expect(within(section('Completed')).getByText('1 this visit · 2 previously')).toBeTruthy();
     // The planned strip stays above the stages.
-    expect(
-      within(aside()).getByText('Planned: Zircon crown · $400 — not billed until performed'),
-    ).toBeTruthy();
+    expect(within(aside()).getByText('Planned: Zircon crown · $400')).toBeTruthy();
 
     // A closed stage stays closed on another tooth, where it summarises that tooth.
     await selectTooth(/^#17 · /);
@@ -233,7 +227,7 @@ describe('ToothPanel', () => {
     await selectTooth(/^#17 · /);
     expect(within(section('Treatment plan')).getByText('nothing planned')).toBeTruthy();
     fireEvent.click(within(section('Treatment plan')).getByRole('button', { expanded: false }));
-    expect(within(section('Treatment plan')).getByText('No planned treatment for this tooth'));
+    expect(within(section('Treatment plan')).getByText('No planned treatment'));
   });
 
   it('offers Remove only on records of this visit; older ones are resolved or cancelled', async () => {
@@ -329,7 +323,7 @@ describe('ToothPanel', () => {
     fireEvent.change(within(section('Completed')).getByLabelText('Base price'), {
       target: { value: '95' },
     });
-    fireEvent.click(within(aside()).getByRole('button', { name: 'Remove Composite filling' }));
+    await pickRowAction(within(aside()), 'Composite filling', 'Remove');
     await act(async () => {
       await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS * 2);
     });
@@ -337,7 +331,7 @@ describe('ToothPanel', () => {
       expect(sent(fetchMock, 'DELETE', `/visits/${VISIT_ID}/services/${id(30)}`)).toBeNull();
     });
     expect(sent(fetchMock, 'PATCH', `/visits/${VISIT_ID}/services/${id(30)}`)).toBeUndefined();
-    expect(within(section('Completed')).getByText('No treatment recorded for this tooth'));
+    expect(within(section('Completed')).getByText('No treatment recorded'));
   });
 
   it('forgets a price edit whose service someone else removed, so Complete can go ahead', async () => {
@@ -356,7 +350,7 @@ describe('ToothPanel', () => {
       await vi.advanceTimersByTimeAsync(SAVE_DEBOUNCE_MS);
     });
     await waitFor(() => {
-      expect(within(section('Completed')).getByText('No treatment recorded for this tooth'));
+      expect(within(section('Completed')).getByText('No treatment recorded'));
     });
     expect(sent(fetchMock, 'PATCH', `/visits/${VISIT_ID}/services/${id(30)}`)).toEqual({
       baseAmount: '95',
@@ -373,7 +367,7 @@ describe('ToothPanel', () => {
     expect(patches).toHaveLength(1);
   });
 
-  it('removes a service once, and a service already gone is no error', async () => {
+  it('removes a service from its menu, and a service already gone is no error', async () => {
     const { state, fetchMock } = fakeClinic({
       visit: visit({ services: [visitService(30, 'Composite filling', '16')] }),
     });
@@ -381,11 +375,9 @@ describe('ToothPanel', () => {
     await selectTooth(/^#16 · /);
     // Someone else removed it already: the server answers 404.
     state.visit = { ...state.visit, services: [] };
-    const remove = within(aside()).getByRole('button', { name: 'Remove Composite filling' });
-    fireEvent.click(remove);
-    fireEvent.click(remove);
+    await pickRowAction(within(aside()), 'Composite filling', 'Remove');
     await waitFor(() => {
-      expect(within(section('Completed')).getByText('No treatment recorded for this tooth'));
+      expect(within(section('Completed')).getByText('No treatment recorded'));
     });
     const deletes = fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE');
     expect(deletes).toHaveLength(1);
@@ -402,32 +394,7 @@ describe('ToothPanel', () => {
     expect(completed.getByText('Previously')).toBeTruthy();
     expect(completed.getByText('Sealant')).toBeTruthy();
     expect(completed.getByText('$60')).toBeTruthy();
-    expect(completed.queryByText('No treatment recorded for this tooth')).toBeNull();
-  });
-
-  it('the succession row marks a primary tooth exfoliated, then selects its successor', async () => {
-    const { fetchMock } = fakeClinic();
-    renderWorkspace();
-    // Aged 8 (mixed): the first premolar's column shows the primary first molar, 54.
-    await selectTooth(/^#54 · /);
-    expect(within(aside()).getByText('Permanent successor')).toBeTruthy();
-    expect(within(aside()).getByText('· not yet erupted')).toBeTruthy();
-
-    fireEvent.click(within(aside()).getByRole('button', { name: 'Mark exfoliated' }));
-    expect(await screen.findByText('Primary tooth recorded as exfoliated')).toBeTruthy();
-    expect(sent(fetchMock, 'PUT', `/visits/${VISIT_ID}/teeth/14`)).toEqual({
-      present: 'permanent',
-    });
-    expect(within(aside()).getByRole('heading', { name: '#14' })).toBeTruthy();
-    expect(within(aside()).getByText('Primary predecessor')).toBeTruthy();
-    await waitFor(() => {
-      expect(within(aside()).getByRole('button', { name: 'Still present' })).toBeTruthy();
-    });
-
-    fireEvent.click(within(aside()).getByRole('button', { name: 'Still present' }));
-    expect(await screen.findByText('Primary tooth recorded as present')).toBeTruthy();
-    expect(sent(fetchMock, 'PUT', `/visits/${VISIT_ID}/teeth/14`)).toEqual({ present: 'primary' });
-    expect(within(aside()).getByRole('heading', { name: '#54' })).toBeTruthy();
+    expect(completed.queryByText('No treatment recorded')).toBeNull();
   });
 
   it('is read-only for front desk: no add, remove, perform or surface toggles', async () => {

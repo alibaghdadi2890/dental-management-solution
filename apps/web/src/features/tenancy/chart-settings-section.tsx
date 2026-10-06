@@ -270,7 +270,7 @@ export function ChartSettingsSection() {
           {t('chart.dentition.intro')}
         </p>
         <div className="rounded-[10px] border border-border bg-surface px-4 py-1">
-          {(['primary', 'mixed', 'permanent'] as const).map((stage) => (
+          {(['primary', 'permanent'] as const).map((stage) => (
             <div
               key={stage}
               className="flex flex-wrap gap-x-3 gap-y-1 border-b border-row-divider py-[11px] last:border-b-0"

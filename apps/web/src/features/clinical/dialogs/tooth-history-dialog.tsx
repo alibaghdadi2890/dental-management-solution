@@ -7,6 +7,7 @@ import {
   successorOf,
   type ToothCode,
   type TreatmentPlan,
+  isOpenPlan,
 } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
@@ -19,7 +20,6 @@ import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { formatCalendarDate, formatDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { shownTooth } from '../chart/shown-tooth';
 import { ToothGlyph } from '../chart/tooth-glyph';
 import {
   useChartSettings,
@@ -279,7 +279,7 @@ function Stages({
                   {t(record.status === 'active' ? 'history.active' : 'history.resolved')}
                 </Badge>
                 <span className="flex-none font-mono text-[12.5px] leading-[1.4] text-ink-muted">
-                  {formatCalendarDate(record.recordedInVisitDate, locale)}
+                  {formatCalendarDate(record.recordedDate, locale)}
                 </span>
               </div>
               <div className="text-[12.5px] leading-normal text-ink-secondary">
@@ -302,11 +302,7 @@ function Stages({
               <SurfaceTag surfaces={plan.surfaces} className="text-warning" />
               <Badge
                 tone={
-                  plan.status === 'planned'
-                    ? 'warning'
-                    : plan.status === 'performed'
-                      ? 'success'
-                      : 'neutral'
+                  isOpenPlan(plan) ? 'warning' : plan.status === 'performed' ? 'success' : 'neutral'
                 }
               >
                 {t(`history.${plan.status}`)}
@@ -415,7 +411,6 @@ function EmptyHistory({
 }) {
   const { t } = useTranslation('clinical');
   const canWrite = usePermission('visit:write');
-  const label = useToothLabel();
   const navigate = useNavigate();
 
   let action: ReactNode = null;
@@ -424,30 +419,25 @@ function EmptyHistory({
   if (canWrite && chartFailed) {
     note = t('history.chartFailed');
   } else if (canWrite && chart && (onChartIt || liveVisitId)) {
-    const shown = shownTooth(code, chart.dentition.stage, chart.toothStatus);
-    if (shown !== code) {
-      note = t('history.notShown', { label: label(shown) });
-    } else {
-      action = (
-        <Button
-          variant="primary"
-          onClick={() => {
-            onLeave();
-            if (onChartIt) {
-              onChartIt(code);
-            } else if (liveVisitId) {
-              void navigate({
-                to: '/visits/$visitId',
-                params: { visitId: liveVisitId },
-                search: { tooth: code },
-              });
-            }
-          }}
-        >
-          {t('history.chartIt')}
-        </Button>
-      );
-    }
+    action = (
+      <Button
+        variant="primary"
+        onClick={() => {
+          onLeave();
+          if (onChartIt) {
+            onChartIt(code);
+          } else if (liveVisitId) {
+            void navigate({
+              to: '/visits/$visitId',
+              params: { visitId: liveVisitId },
+              search: { tooth: code },
+            });
+          }
+        }}
+      >
+        {t('history.chartIt')}
+      </Button>
+    );
   } else if (canWrite && chart && canStart) {
     action = (
       <StartVisitPopover patientId={patientId}>

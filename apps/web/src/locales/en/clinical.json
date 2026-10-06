@@ -49,7 +49,8 @@
     "recordedServices_one": "{{count}} recorded service",
     "recordedServices_other": "{{count}} recorded services",
     "treatedToday": "treated in this visit",
-    "noRecordedTreatment": "no recorded treatment"
+    "noRecordedTreatment": "no recorded treatment",
+    "inProgress": "not finished: {{names}}"
   },
   "chart": {
     "upperArch": "Upper arch",
@@ -62,16 +63,13 @@
   "legend": {
     "treatment": "Treatment",
     "markers": "Markers",
-    "none": "No treatment",
     "treatedSurface": "Treated surface",
     "wholeTooth": "Whole tooth",
     "treated": "Treated",
     "treatedToday": "Treated today",
     "diagnosis": "Diagnosis",
     "planned": "Planned",
-    "selected": "Selected",
-    "primary": "Primary",
-    "notErupted": "Not erupted"
+    "inProgress": "Not finished"
   },
   "workspace": {
     "loading": "Loading visit…",
@@ -103,8 +101,6 @@
       "done": "Visit discarded"
     },
     "chartFailed": "Couldn't load the chart.",
-    "today": "Today's visit",
-    "todayHint": "What you are doing now",
     "toothPanel": "Selected tooth",
     "money": "Visit money",
     "completedElsewhere": "Completed by {{name}} at {{time}}.",
@@ -112,24 +108,32 @@
     "viewSummary": "View summary"
   },
   "chartCard": {
-    "title": "Dental chart",
-    "hint": "Click a tooth to examine it · ← → to move, Esc to deselect"
+    "title": "Dental chart"
   },
   "planBoard": {
     "title": "Treatment plan",
-    "subtitle": "Future work · not billed until performed",
     "countLine": "{{teeth}} · {{procedures}}",
     "teeth_one": "{{count}} tooth",
     "teeth_other": "{{count}} teeth",
     "procedures_one": "{{count}} procedure",
     "procedures_other": "{{count}} procedures",
-    "jaw": "Jaw",
     "noDiagnosis": "No diagnosis recorded",
     "selectTooth": "Show {{label}} in the tooth panel",
     "estimate": "Plan estimate",
     "emptyTitle": "Nothing planned yet",
-    "emptyBody": "Select a tooth, record what you found, then plan the treatment. You can complete this visit as an examination without billing anything.",
-    "quote": "Plan quote"
+    "quote": "Plan quote",
+    "newPlan": "New plan",
+    "other": "Other planned treatment",
+    "rename": "Rename",
+    "delete": "Delete",
+    "renameNamed": "Rename {{title}}",
+    "deleteNamed": "Delete {{title}}",
+    "deleteTitle": "Delete “{{title}}”?",
+    "deleteBody": "Its planned treatments stay on the patient, without a named plan.",
+    "deleteOk": "Delete plan",
+    "moveTo": "Named plan for {{name}}",
+    "noGroup": "No named plan",
+    "emptyGroup": "Nothing planned in this plan yet."
   },
   "notes": {
     "title": "Clinical notes",
@@ -158,21 +162,14 @@
     "draftFailedBody": "Some changes couldn't be saved. Retry them, then save the draft again.",
     "review": "Review & complete",
     "capped": "Discount exceeds the subtotal — capped at 100%",
-    "openPlans": "Open plans {{amount}} · not in today’s total"
+    "openPlans": "Open plans {{amount}}"
   },
   "dentition": {
-    "label": "Dentition: {{value}}",
+    "label": "Chart",
     "stage": {
       "primary": "Primary",
-      "mixed": "Mixed",
       "permanent": "Permanent"
     },
-    "auto": "Auto · {{stage}}",
-    "autoAge": "Auto · {{stage}} (age {{age}})",
-    "manual": "{{stage}} · set manually",
-    "backToAuto": "Back to auto",
-    "setDone": "Dentition set to {{stage}}",
-    "backToAutoDone": "Dentition back to automatic",
     "failed": "Couldn't change the dentition: {{reason}}"
   },
   "startVisit": {
@@ -200,17 +197,18 @@
   "actions": {
     "failed": "Couldn't save the change: {{reason}}",
     "tooth": "Tooth {{label}}",
-    "jawLevel": "Jaw-level",
-    "jawLevelService": "Jaw-level service",
     "undo": "Undo",
     "serviceAdded": "{{name}} added",
     "diagnosed": "{{name}} recorded",
-    "diagnosedBody": "{{tooth}} · add a planned treatment next",
+    "diagnosedBody": "{{tooth}}",
     "planTreatment": "Plan treatment",
     "planned": "{{name}} planned",
-    "plannedBody": "{{target}} · {{price}} — not billed until performed",
+    "plannedBody": "{{target}} · {{price}}",
     "performed": "{{name}} performed",
-    "performedBody": "Moved from the treatment plan into this visit at {{price}}"
+    "performedBody": "{{price}}",
+    "continued": "{{name}} continued",
+    "unfinished": "{{name}} marked not finished",
+    "unsavedPrice": "the price couldn't be saved"
   },
   "succession": {
     "successor": "Permanent successor",
@@ -234,14 +232,11 @@
   },
   "panel": {
     "emptyTitle": "No tooth selected",
-    "emptyBody": "Click any tooth in the chart to see its history and chart today’s treatment.",
     "upper": "Upper",
     "lower": "Lower",
     "primary": "Primary",
-    "hintSurface": "Tap a surface to scope the next service",
     "hintSelected": "Surfaces selected: {{surfaces}}",
-    "hintSimple": "Whole-tooth charting · surface view is off",
-    "plannedStrip": "Planned: {{names}} · {{total}} — not billed until performed",
+    "plannedStrip": "Planned: {{names}} · {{total}}",
     "add": "+ Add",
     "remove": "Remove",
     "removeNamed": "Remove {{name}}",
@@ -252,7 +247,6 @@
       "none": "none recorded",
       "allResolved": "all resolved",
       "emptyTitle": "No diagnosis recorded for this tooth",
-      "emptyBody": "Record what you found before planning treatment.",
       "resolved": "Resolved",
       "resolve": "Resolve",
       "reopen": "Reopen",
@@ -269,15 +263,13 @@
       "planned": "Planned",
       "for": "for {{name}}",
       "perform": "Perform now",
-      "toToday": "→ today",
       "performNamed": "Perform now: {{name}}",
       "performTitle": "Adds {{price}} to today’s visit as a completed service",
       "cancel": "Cancel",
       "cancelNamed": "Cancel {{name}}",
       "performedNote_one": "One planned treatment performed — see below.",
       "performedNote_other": "{{count}} planned treatments performed — see below.",
-      "emptyTitle": "No planned treatment for this tooth",
-      "emptyBody": "Plan work now and bill it when it is performed — this visit or a later one.",
+      "emptyTitle": "No planned treatment",
       "cancelTitle": "Cancel {{name}}?",
       "cancelBody": "The plan stays in the tooth’s history as cancelled.",
       "cancelOk": "Cancel plan",
@@ -298,28 +290,25 @@
       "final": "Final",
       "previousLabel": "Previously",
       "fullHistory": "Full tooth history →",
-      "emptyTitle": "No treatment recorded for this tooth",
-      "emptyBody": "Its history starts with whatever you chart today."
-    }
+      "emptyTitle": "No treatment recorded"
+    },
+    "levels": "Level"
   },
   "drawer": {
     "service": {
       "title": "Add completed service",
-      "placeholder": "Search services…",
-      "footer": "Adds the service to this visit and bills it now — price and discount stay editable in the tooth panel."
+      "placeholder": "Search services…"
     },
     "plan": {
       "title": "Add planned treatment",
-      "placeholder": "Search treatments to plan…",
-      "footer": "Planned treatment is recorded on the tooth and is not billed until it is performed."
+      "placeholder": "Search treatments to plan…"
     },
     "diagnosis": {
       "title": "Add diagnosis",
-      "placeholder": "Search diagnoses…",
-      "footer": "A diagnosis records what you found. Add a planned treatment next to say what you intend to do about it."
+      "placeholder": "Search diagnoses…"
     },
-    "noTooth": "No tooth selected — jaw-level services only",
-    "noToothDiagnosis": "No tooth selected — select a tooth first",
+    "noTooth": "No tooth selected",
+    "noToothDiagnosis": "No tooth selected",
     "all": "All",
     "frequent": "Frequently used",
     "uncategorized": "Other",
@@ -334,7 +323,9 @@
     "emptyBody": "Add items on the Catalog screen first.",
     "loading": "Loading the catalog…",
     "failedTitle": "Couldn’t load the catalog",
-    "failedBody": "Something went wrong while loading the catalog."
+    "failedBody": "Something went wrong while loading the catalog.",
+    "perMouth": "Whole mouth",
+    "addTo": "Add {{name}} to the {{jaw}}"
   },
   "history": {
     "title": "Tooth {{label}}",
@@ -355,7 +346,7 @@
     "chartIt": "Chart it in this visit",
     "startVisit": "Start a visit",
     "chartFailed": "Couldn’t load the chart, so this tooth can’t be charted from here.",
-    "notShown": "The chart shows {{label}} in this position: chart it there, or record which tooth is present from its panel in the visit."
+    "in_progress": "Not finished"
   },
   "summary": {
     "title": "Complete visit",
@@ -367,11 +358,9 @@
     "noTeeth": "No teeth charted in this visit.",
     "services": "Services",
     "noServices": "No services in this visit — it is recorded as an examination.",
-    "jaw": "Jaw",
     "subtotal": "Subtotal",
     "discount": "Visit discount",
     "totalDue": "Total due",
-    "discountNote": "Adjusting the discount here updates the visit — the same control as the workspace footer.",
     "later": "Recorded for later",
     "notBilled": "Not billed in this visit",
     "diagnosis": "Diagnosis · {{name}}",
@@ -384,7 +373,9 @@
     "complete": "Complete visit",
     "recording": "Recording…",
     "unsaved": "Some changes couldn't be saved, so the visit wasn't completed. Retry them, then complete the visit again.",
-    "failed": "Couldn't complete the visit: {{reason}}"
+    "failed": "Couldn't complete the visit: {{reason}}",
+    "session": "{{name}} · visit {{number}}",
+    "unfinished": "Not finished · continues next visit"
   },
   "postVisit": {
     "title": "Visit recorded",
@@ -441,20 +432,79 @@
       "amend_plan_linked": "A service that performed a plan can be removed, not moved.",
       "has_payments": "This visit has payments: refund or move them before voiding it.",
       "invalid_cursor": "The list moved on; start again from the first page.",
-      "checkout_closed": "The discount can only be set at checkout on the day of the visit. Ask a dentist to amend the visit."
+      "checkout_closed": "The discount can only be set at checkout on the day of the visit. Ask a dentist to amend the visit.",
+      "not_completed": "Only a completed visit can be checked out.",
+      "jaw_required": "Choose the upper or the lower jaw.",
+      "jaw_not_allowed": "This item isn’t recorded on a jaw."
     },
     "record": {
       "not_removable": "Only records made in this visit can be removed.",
-      "not_found": "That record isn’t on this patient any more."
+      "not_found": "That record isn’t on this patient any more.",
+      "dentist_required": "Choose the dentist this record is for."
     },
     "plan": {
       "not_open": "This plan is no longer open.",
-      "not_cancellable": "A plan made in this visit is removed, not cancelled."
+      "not_cancellable": "A plan made in this visit is removed, not cancelled.",
+      "not_in_progress": "This treatment is not in progress."
     },
     "catalog": {
       "not_found": "That catalog item no longer exists.",
       "in_use": "That catalog item is in use.",
       "inactive": "That catalog item is inactive."
     }
+  },
+  "level": {
+    "upper": "Upper jaw",
+    "lower": "Lower jaw",
+    "mouth": "Whole mouth"
+  },
+  "planGroup": {
+    "newTitle": "New named plan",
+    "editTitle": "Rename plan",
+    "title": "Title",
+    "titlePlaceholder": "e.g. Full rehabilitation",
+    "note": "Note",
+    "create": "Create plan",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "recordChart": {
+    "dentist": "Recording for",
+    "chooseDentist": "Choose a dentist…",
+    "liveVisit": "This patient has a visit in progress.",
+    "openVisit": "Open the visit"
+  },
+  "todayServices": {
+    "title": "Today's services",
+    "count_one": "{{count}} service",
+    "count_other": "{{count}} services",
+    "charged": "Charged today",
+    "carried": "Carried forward"
+  },
+  "unfinished": {
+    "badge": "Not finished",
+    "started": "Started {{date}}",
+    "visits_one": "{{count}} visit",
+    "visits_other": "{{count}} visits",
+    "mark": "Not finished",
+    "complete": "Complete",
+    "completeNamed": "Complete: {{name}}",
+    "continue": "Continue",
+    "notToday": "Not today",
+    "remove": "Remove",
+    "cancel": "Cancel",
+    "toContinue": "To continue · {{count}}",
+    "count_one": "{{count}} not finished",
+    "count_other": "{{count}} not finished",
+    "dialogTitle": "Unfinished services",
+    "dialogQuestion": "Continue any of these today?",
+    "dialogContinue": "Continue",
+    "dialogFailed": "Couldn't save the answer: {{reason}}",
+    "recordTitle": "Unfinished services",
+    "noCharge": "No charge",
+    "session": "Session {{number}}"
+  },
+  "rowMenu": {
+    "label": "Actions: {{name}}"
   }
 }

@@ -1,4 +1,4 @@
-import type { ToothCode } from '@dcm/contracts';
+import { isOpenPlan, type ToothCode } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -43,15 +43,21 @@ function Step({
       <span className="text-ink-secondary">
         {t(`clinical.step.${step.kind}`, { name: step.name ?? '' })}
       </span>
-      <button
-        type="button"
-        onClick={() => {
-          onVisit(step.visitId);
-        }}
-        className="cursor-pointer font-mono text-primary hover:underline"
-      >
-        {formatCalendarDate(step.at.slice(0, 10), locale)}
-      </button>
+      {step.visitId === null ? (
+        <span className="font-mono text-ink-muted">
+          {formatCalendarDate(step.at.slice(0, 10), locale)}
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            if (step.visitId !== null) onVisit(step.visitId);
+          }}
+          className="cursor-pointer font-mono text-primary hover:underline"
+        >
+          {formatCalendarDate(step.at.slice(0, 10), locale)}
+        </button>
+      )}
       {step.voided && (
         <span className="text-[11px] text-ink-muted">{t('clinical.voidedVisit')}</span>
       )}
@@ -73,7 +79,7 @@ function ThreadRow({
   const { t } = useTranslation('visits');
   const toothLabel = useToothLabel();
   const surfaceLabel = useSurfaceLabel();
-  const openPlan = thread.plans.find((plan) => plan.status === 'planned');
+  const openPlan = thread.plans.find(isOpenPlan);
   return (
     <li className="border-t border-inner-divider px-4 py-3 first:border-t-0">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">

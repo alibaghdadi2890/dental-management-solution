@@ -35,8 +35,14 @@ function mockBoard(board: {
   chair: VisitListItem[];
   /** What was already paid on a visit, by visit id; nothing by default. */
   paid?: Record<string, string>;
+  /** Answers `POST /visits/:id/checkout`; unanswered by default. */
+  onCheckOut?: (visitId: string) => Response;
 }) {
   return mockApi({
+    mutation: (method, path) => {
+      const [, visitId] = /^\/visits\/([^/]+)\/checkout$/.exec(path) ?? [];
+      return method === 'POST' && visitId ? board.onCheckOut?.(visitId) : undefined;
+    },
     get: (path) => {
       if (path.startsWith('/billing/visits/unpaid?')) {
         return json({ items: board.waiting, nextCursor: null });
@@ -138,6 +144,55 @@ describe('TodayPage', () => {
       expect(screen.queryByRole('dialog')).toBeNull();
     });
     expect(router.state.location.search).toEqual({});
+    expect(await lane(/^Ready for checkout · 1$/)).toBeTruthy();
+  });
+
+  it('Done on a waiting visit closes its checkout: the card leaves the lane unpaid', async () => {
+    const closed: string[] = [];
+    const board = {
+      waiting: [KARIM, RANA],
+      chair: [] as VisitListItem[],
+      onCheckOut: (visitId: string) => {
+        closed.push(visitId);
+        board.waiting = [KARIM, { ...RANA, checkedOutAt: '2026-09-04T09:50:00.000Z' }];
+        return json({ visit: visit({ status: 'completed' }) });
+      },
+    };
+    mockBoard(board);
+    renderShell({ url: '/today', session: sessionWith(FRONT_DESK) });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Check out Rana Haddad' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Checkout · Rana Haddad' }));
+    fireEvent.click(await dialog.findByRole('button', { name: 'Done' }));
+
+    expect(await lane(/^Ready for checkout · 1$/)).toBeTruthy();
+    expect(closed).toEqual([VISIT_ID]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Check out Rana Haddad' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Check out Karim Saleh' })).toBeTruthy();
+  });
+
+  it('Esc only closes the dialog: the visit keeps waiting', async () => {
+    const closed: string[] = [];
+    mockBoard({
+      waiting: [RANA],
+      chair: [],
+      onCheckOut: (visitId) => {
+        closed.push(visitId);
+        return json({ visit: visit({ status: 'completed' }) });
+      },
+    });
+    renderShell({ url: '/today', session: sessionWith(FRONT_DESK) });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Check out Rana Haddad' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Checkout · Rana Haddad' });
+    await within(dialog).findByRole('button', { name: 'Done' });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull();
+    });
+    expect(closed).toEqual([]);
     expect(await lane(/^Ready for checkout · 1$/)).toBeTruthy();
   });
 

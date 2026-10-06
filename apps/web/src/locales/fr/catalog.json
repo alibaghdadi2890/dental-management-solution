@@ -29,7 +29,8 @@
   },
   "chargeUnit": {
     "per_tooth": "Par dent",
-    "per_jaw": "Par arcade"
+    "per_jaw": "Par arcade",
+    "per_mouth": "Bouche entière"
   },
   "frequent": {
     "on": "Fréquemment utilisé",

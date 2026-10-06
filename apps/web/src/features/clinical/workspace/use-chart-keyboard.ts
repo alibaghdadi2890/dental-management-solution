@@ -5,16 +5,15 @@ import {
   positionKey,
   presentTooth,
   type ToothCode,
-  type ToothPresence,
 } from '@dcm/contracts';
 import { useEffect } from 'react';
 
 export interface ChartKeyboardOptions {
   orientation: ChartOrientation;
   dentition: DentitionStage;
-  /** Per-position presence records (W5): which tooth a column holds, as the chart shows it. */
-  toothStatus: readonly ToothPresence[];
   selected: ToothCode | null;
+  /** A jaw or the whole mouth is selected: `Esc` deselects it; the arrows walk teeth only. */
+  areaSelected?: boolean;
   /** The next tooth, or `null` to deselect. */
   onSelect: (code: ToothCode | null) => void;
   /** Set while a layer is open over the workspace (the catalog drawer): `Esc` closes it (this
@@ -33,19 +32,18 @@ function ignoredTarget(target: EventTarget | null): boolean {
 
 /**
  * The tooth one step from `selected` along `keyboardOrder` (upper row left to right, then the
- * lower row, wrapping), resolved to the tooth actually present in that column.
+ * lower row, wrapping), as the chart on screen shows that column.
  */
 function step(
   selected: ToothCode,
   direction: 1 | -1,
-  { orientation, dentition, toothStatus }: Omit<ChartKeyboardOptions, 'selected' | 'onSelect'>,
+  { orientation, dentition }: Pick<ChartKeyboardOptions, 'orientation' | 'dentition'>,
 ): ToothCode {
-  const order = keyboardOrder(orientation);
+  const order = keyboardOrder(orientation, dentition);
   const index = order.findIndex((column) => column === positionKey(selected));
   const column = order[(index + direction + order.length) % order.length];
   if (column === undefined) return selected;
-  const presence = toothStatus.find((record) => record.position === column)?.present;
-  return presentTooth(column, dentition, presence).code;
+  return presentTooth(column, dentition).code;
 }
 
 /**
@@ -60,13 +58,13 @@ function step(
 export function useChartKeyboard({
   orientation,
   dentition,
-  toothStatus,
   selected,
+  areaSelected = false,
   onSelect,
   onEscape,
 }: ChartKeyboardOptions): void {
   useEffect(() => {
-    if (selected === null && !onEscape) return;
+    if (selected === null && !areaSelected && !onEscape) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
       if (ignoredTarget(event.target)) return;
@@ -79,11 +77,11 @@ export function useChartKeyboard({
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
       event.preventDefault();
       const direction = event.key === 'ArrowRight' ? 1 : -1;
-      onSelect(step(selected, direction, { orientation, dentition, toothStatus }));
+      onSelect(step(selected, direction, { orientation, dentition }));
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [orientation, dentition, toothStatus, selected, onSelect, onEscape]);
+  }, [orientation, dentition, selected, areaSelected, onSelect, onEscape]);
 }

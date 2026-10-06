@@ -2,7 +2,6 @@ import {
   cellMark,
   type ChartMode,
   type ChartOrientation,
-  isPrimary,
   type SurfaceKey,
   surfaceCells,
   type ToothCode,
@@ -53,11 +52,6 @@ const RING = {
   selected: cn('rounded-[4px]', SELECTED_SHADOW),
   planned: cn('rounded-[4px]', PLANNED_SHADOW),
 } as const;
-
-/** Primary teeth draw at 0.78× (never under 6 px) so the dentition reads at a glance. */
-function chartCellSize(code: ToothCode, size: number): number {
-  return isPrimary(code) ? Math.max(6, Math.round(size * 0.78)) : size;
-}
 
 interface Paint {
   mark: ToothVisualState;
@@ -125,7 +119,7 @@ function ChartGlyph({
   return (
     <GlyphGrid
       {...rest}
-      cell={chartCellSize(rest.code, size)}
+      cell={size}
       gap={CHART_GLYPH_GAP}
       padding={CHART_GLYPH_PADDING}
       ring={ring}

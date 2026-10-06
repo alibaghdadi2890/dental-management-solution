@@ -59,19 +59,14 @@
     },
     "dentition": {
       "title": "Dentition",
-      "intro": "Not a setting — the chart follows each patient's age automatically, so no one has to remember to switch modes before examining a child. One chart serves all three stages: every column is an anatomical position holding whichever tooth is actually present.",
+      "intro": "Not a setting. Every patient has two charts, primary teeth and permanent teeth, with a toggle between them. The chart that opens first follows the patient's age; switching is remembered for that patient.",
       "primary": {
-        "stage": "Primary dentition",
-        "age": "Age 0–5",
-        "body": "Twenty primary teeth, lettered A–T. Permanent molar positions show as not yet erupted."
-      },
-      "mixed": {
-        "stage": "Mixed dentition",
-        "age": "Age 6–12",
-        "body": "Permanent incisors and first molars alongside primary canines and molars, in one chart. Each position shows the tooth actually present."
+        "stage": "Primary teeth",
+        "age": "Age 0–12",
+        "body": "Twenty primary teeth, lettered A–T."
       },
       "permanent": {
-        "stage": "Permanent dentition",
+        "stage": "Permanent teeth",
         "age": "Age 13+",
         "body": "Thirty-two permanent teeth, numbered 1–32."
       }

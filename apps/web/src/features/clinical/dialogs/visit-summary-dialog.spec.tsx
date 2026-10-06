@@ -165,7 +165,7 @@ describe('VisitSummaryDialog', () => {
     expect(rows).toEqual([
       ['Composite filling', '#26 · O · D', '$80'],
       ['Fissure sealant', '#16', '$40'],
-      ['Scaling', 'Jaw', '$60'],
+      ['Scaling', 'Whole mouth', '$60'],
     ]);
 
     expect(figureOf(dialog, 'Subtotal')).toBe('$180');

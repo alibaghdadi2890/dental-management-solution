@@ -9,6 +9,7 @@ export const CELL_MAP = [null, 1, null, 0, 3, 2, null, 4, null] as const;
 const FILL: Record<ToothVisualState, string> = {
   treated_today: 'bg-primary',
   treated: 'bg-primary-tint-border',
+  in_progress: 'bg-warning-border',
   planned: 'bg-planned-bg',
   none: 'bg-surface',
 };
@@ -16,6 +17,7 @@ const FILL: Record<ToothVisualState, string> = {
 const EDGE: Record<ToothVisualState, string> = {
   treated_today: 'border-primary',
   treated: 'border-primary-tint-strong',
+  in_progress: 'border-warning',
   planned: 'border-planned-border',
   none: 'border-border-control',
 };

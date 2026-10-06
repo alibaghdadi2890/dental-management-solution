@@ -53,7 +53,8 @@
     "recordedServices_many": "{{count}} خدمة مسجلة",
     "recordedServices_other": "{{count}} خدمة مسجلة",
     "treatedToday": "عولجت في هذه الزيارة",
-    "noRecordedTreatment": "لا علاج مسجل"
+    "noRecordedTreatment": "لا علاج مسجل",
+    "inProgress": "غير منتهية: {{names}}"
   },
   "chart": {
     "upperArch": "الفك العلوي",
@@ -66,16 +67,13 @@
   "legend": {
     "treatment": "العلاج",
     "markers": "العلامات",
-    "none": "بلا علاج",
     "treatedSurface": "سطح معالَج",
     "wholeTooth": "السن كاملة",
     "treated": "معالَجة",
     "treatedToday": "عولجت اليوم",
     "diagnosis": "تشخيص",
     "planned": "مخطط",
-    "selected": "محددة",
-    "primary": "لبنية",
-    "notErupted": "لم تبزغ"
+    "inProgress": "غير منتهية"
   },
   "workspace": {
     "loading": "جارٍ تحميل الزيارة…",
@@ -107,8 +105,6 @@
       "done": "أُلغيت الزيارة"
     },
     "chartFailed": "تعذّر تحميل مخطط الأسنان.",
-    "today": "زيارة اليوم",
-    "todayHint": "ما تقوم به الآن",
     "toothPanel": "السن المحددة",
     "money": "مبالغ الزيارة",
     "completedElsewhere": "أكملها {{name}} الساعة {{time}}.",
@@ -116,12 +112,10 @@
     "viewSummary": "عرض الملخص"
   },
   "chartCard": {
-    "title": "مخطط الأسنان",
-    "hint": "انقر على سن لفحصها · ← → للتنقل، Esc لإلغاء التحديد"
+    "title": "مخطط الأسنان"
   },
   "planBoard": {
     "title": "خطة العلاج",
-    "subtitle": "أعمال لاحقة · لا تُفوتر حتى تُنفَّذ",
     "countLine": "{{teeth}} · {{procedures}}",
     "teeth_zero": "لا أسنان",
     "teeth_one": "سن واحدة",
@@ -135,13 +129,23 @@
     "procedures_few": "{{count}} إجراءات",
     "procedures_many": "{{count}} إجراءً",
     "procedures_other": "{{count}} إجراء",
-    "jaw": "الفك",
     "noDiagnosis": "لا تشخيص مسجّل",
     "selectTooth": "عرض {{label}} في لوحة السن",
     "estimate": "تقدير الخطة",
     "emptyTitle": "لا شيء مخطط بعد",
-    "emptyBody": "اختر سنًا، وسجّل ما وجدته، ثم خطّط للعلاج. يمكنك إكمال هذه الزيارة كفحص دون فوترة أي شيء.",
-    "quote": "عرض سعر الخطة"
+    "quote": "عرض سعر الخطة",
+    "newPlan": "خطة جديدة",
+    "other": "علاجات مخططة أخرى",
+    "rename": "إعادة تسمية",
+    "delete": "حذف",
+    "renameNamed": "إعادة تسمية {{title}}",
+    "deleteNamed": "حذف {{title}}",
+    "deleteTitle": "حذف «{{title}}»؟",
+    "deleteBody": "تبقى علاجاتها المخططة لدى المريض من دون خطة مسماة.",
+    "deleteOk": "حذف الخطة",
+    "moveTo": "الخطة المسماة لـ {{name}}",
+    "noGroup": "بدون خطة مسماة",
+    "emptyGroup": "لا شيء مخطط في هذه الخطة بعد."
   },
   "notes": {
     "title": "الملاحظات السريرية",
@@ -178,21 +182,14 @@
     "draftFailedBody": "تعذّر حفظ بعض التغييرات. أعد محاولة حفظها، ثم احفظ المسودة مجددًا.",
     "review": "مراجعة وإكمال",
     "capped": "الخصم يتجاوز المجموع — حُدّد عند 100%",
-    "openPlans": "خطط مفتوحة {{amount}} · خارج إجمالي اليوم"
+    "openPlans": "الخطط المفتوحة {{amount}}"
   },
   "dentition": {
-    "label": "التسنين: {{value}}",
+    "label": "المخطط",
     "stage": {
-      "primary": "لبني",
-      "mixed": "مختلط",
-      "permanent": "دائم"
+      "primary": "اللبنية",
+      "permanent": "الدائمة"
     },
-    "auto": "تلقائي · {{stage}}",
-    "autoAge": "تلقائي · {{stage}} (العمر {{age}})",
-    "manual": "{{stage}} · محدد يدويًا",
-    "backToAuto": "العودة إلى التلقائي",
-    "setDone": "تم ضبط التسنين على: {{stage}}",
-    "backToAutoDone": "عاد التسنين إلى الوضع التلقائي",
     "failed": "تعذّر تغيير التسنين: {{reason}}"
   },
   "startVisit": {
@@ -220,17 +217,18 @@
   "actions": {
     "failed": "تعذّر حفظ التغيير: {{reason}}",
     "tooth": "السن {{label}}",
-    "jawLevel": "على مستوى الفك",
-    "jawLevelService": "خدمة على مستوى الفك",
     "undo": "تراجع",
     "serviceAdded": "أُضيفت {{name}}",
     "diagnosed": "سُجّل {{name}}",
-    "diagnosedBody": "{{tooth}} · أضف علاجًا مخططًا بعد ذلك",
+    "diagnosedBody": "{{tooth}}",
     "planTreatment": "خطّط للعلاج",
     "planned": "خُطّط {{name}}",
-    "plannedBody": "{{target}} · {{price}} — لا يُفوتر حتى يُنفَّذ",
+    "plannedBody": "{{target}} · {{price}}",
     "performed": "نُفّذ {{name}}",
-    "performedBody": "نُقل من خطة العلاج إلى هذه الزيارة بسعر {{price}}"
+    "performedBody": "{{price}}",
+    "continued": "تمت متابعة {{name}}",
+    "unfinished": "تم تعليم {{name}} كغير منتهية",
+    "unsavedPrice": "تعذّر حفظ السعر"
   },
   "succession": {
     "successor": "السن الدائمة الخلف",
@@ -266,14 +264,11 @@
   },
   "panel": {
     "emptyTitle": "لا سن محددة",
-    "emptyBody": "انقر على أي سن في المخطط لرؤية تاريخها وتسجيل علاج اليوم.",
     "upper": "علوي",
     "lower": "سفلي",
     "primary": "لبنية",
-    "hintSurface": "انقر على سطح لتحديد نطاق الخدمة التالية",
     "hintSelected": "الأسطح المحددة: {{surfaces}}",
-    "hintSimple": "تسجيل على مستوى السن كاملة · عرض الأسطح متوقف",
-    "plannedStrip": "مخطط: {{names}} · {{total}} — لا يُفوتر حتى يُنفَّذ",
+    "plannedStrip": "مخطط: {{names}} · {{total}}",
     "add": "+ إضافة",
     "remove": "إزالة",
     "removeNamed": "إزالة {{name}}",
@@ -284,7 +279,6 @@
       "none": "لا شيء مسجل",
       "allResolved": "كلها محلولة",
       "emptyTitle": "لا تشخيص مسجل لهذه السن",
-      "emptyBody": "سجّل ما وجدته قبل التخطيط للعلاج.",
       "resolved": "محلول",
       "resolve": "حلّ",
       "reopen": "إعادة فتح",
@@ -301,7 +295,6 @@
       "planned": "مخطط",
       "for": "لـ {{name}}",
       "perform": "نفّذ الآن",
-      "toToday": "← اليوم",
       "performNamed": "نفّذ الآن: {{name}}",
       "performTitle": "يضيف {{price}} إلى زيارة اليوم كخدمة منفذة",
       "cancel": "إلغاء",
@@ -312,8 +305,7 @@
       "performedNote_few": "نُفّذت {{count}} علاجات مخططة — انظر أدناه.",
       "performedNote_many": "نُفّذ {{count}} علاجًا مخططًا — انظر أدناه.",
       "performedNote_other": "نُفّذ {{count}} علاج مخطط — انظر أدناه.",
-      "emptyTitle": "لا علاج مخطط لهذه السن",
-      "emptyBody": "خطّط للعمل الآن وافوتره عند تنفيذه — في هذه الزيارة أو في زيارة لاحقة.",
+      "emptyTitle": "لا يوجد علاج مخطط",
       "cancelTitle": "إلغاء {{name}}؟",
       "cancelBody": "تبقى الخطة في سجل السن كملغاة.",
       "cancelOk": "إلغاء الخطة",
@@ -342,28 +334,25 @@
       "final": "النهائي",
       "previousLabel": "سابقًا",
       "fullHistory": "التاريخ الكامل للسن ←",
-      "emptyTitle": "لا علاج مسجل لهذه السن",
-      "emptyBody": "يبدأ تاريخها بما تسجله اليوم."
-    }
+      "emptyTitle": "لا يوجد علاج مسجل"
+    },
+    "levels": "المستوى"
   },
   "drawer": {
     "service": {
       "title": "إضافة خدمة منجزة",
-      "placeholder": "ابحث في الخدمات…",
-      "footer": "تُضاف الخدمة إلى هذه الزيارة وتُفوتر الآن — يبقى السعر والخصم قابلين للتعديل في لوحة السن."
+      "placeholder": "ابحث في الخدمات…"
     },
     "plan": {
       "title": "إضافة علاج مخطط",
-      "placeholder": "ابحث عن علاج للتخطيط له…",
-      "footer": "يُسجَّل العلاج المخطط على السن ولا يُفوتر حتى يُنفَّذ."
+      "placeholder": "ابحث عن علاج للتخطيط له…"
     },
     "diagnosis": {
       "title": "إضافة تشخيص",
-      "placeholder": "ابحث في التشخيصات…",
-      "footer": "يسجّل التشخيص ما وجدته. أضف بعده علاجًا مخططًا لتقول ما تنوي فعله."
+      "placeholder": "ابحث في التشخيصات…"
     },
-    "noTooth": "لا سن محددة — خدمات على مستوى الفك فقط",
-    "noToothDiagnosis": "لا سن محددة — اختر سنًّا أولًا",
+    "noTooth": "لم يتم اختيار سن",
+    "noToothDiagnosis": "لم يتم اختيار سن",
     "all": "الكل",
     "frequent": "الأكثر استخدامًا",
     "uncategorized": "أخرى",
@@ -382,7 +371,9 @@
     "emptyBody": "أضف عناصر في شاشة الكتالوج أولًا.",
     "loading": "جارٍ تحميل الكتالوج…",
     "failedTitle": "تعذّر تحميل الكتالوج",
-    "failedBody": "حدث خطأ أثناء تحميل الكتالوج."
+    "failedBody": "حدث خطأ أثناء تحميل الكتالوج.",
+    "perMouth": "الفم كاملاً",
+    "addTo": "إضافة {{name}} إلى {{jaw}}"
   },
   "history": {
     "title": "السن {{label}}",
@@ -403,7 +394,7 @@
     "chartIt": "سجّلها في هذه الزيارة",
     "startVisit": "ابدأ زيارة",
     "chartFailed": "تعذّر تحميل المخطط، لذا لا يمكن تسجيل هذه السن من هنا.",
-    "notShown": "يُظهر المخطط {{label}} في هذا الموضع: سجّلها، أو حدّد السن الموجودة من لوحتها في الزيارة."
+    "in_progress": "غير منتهية"
   },
   "summary": {
     "title": "إكمال الزيارة",
@@ -415,11 +406,9 @@
     "noTeeth": "لم تُسجَّل أي سن في هذه الزيارة.",
     "services": "الخدمات",
     "noServices": "لا خدمات في هذه الزيارة — تُسجَّل كفحص.",
-    "jaw": "الفك",
     "subtotal": "المجموع الفرعي",
     "discount": "خصم الزيارة",
     "totalDue": "الإجمالي المستحق",
-    "discountNote": "تعديل الخصم هنا يحدّث الزيارة — إنه نفس عنصر التحكم الموجود في تذييل مساحة العمل.",
     "later": "مسجَّل لوقت لاحق",
     "notBilled": "لا يُفوتر في هذه الزيارة",
     "diagnosis": "تشخيص · {{name}}",
@@ -432,7 +421,9 @@
     "complete": "إكمال الزيارة",
     "recording": "جارٍ التسجيل…",
     "unsaved": "تعذّر حفظ بعض التغييرات، لذا لم تُكمَل الزيارة. أعد محاولة حفظها، ثم أكمل الزيارة مجددًا.",
-    "failed": "تعذّر إكمال الزيارة: {{reason}}"
+    "failed": "تعذّر إكمال الزيارة: {{reason}}",
+    "session": "{{name}} · الزيارة {{number}}",
+    "unfinished": "غير منتهية · تُتابَع في الزيارة القادمة"
   },
   "postVisit": {
     "title": "سُجّلت الزيارة",
@@ -489,20 +480,91 @@
       "amend_plan_linked": "يمكن إزالة خدمة نفّذت خطة، لا نقلها.",
       "has_payments": "لدى هذه الزيارة مدفوعات: استردها أو انقلها قبل إلغائها.",
       "invalid_cursor": "تغيّرت القائمة؛ ابدأ من الصفحة الأولى.",
-      "checkout_closed": "لا يمكن تحديد الخصم إلا عند الدفع في يوم الزيارة. اطلب من طبيب الأسنان تصحيح الزيارة."
+      "checkout_closed": "لا يمكن تحديد الخصم إلا عند الدفع في يوم الزيارة. اطلب من طبيب الأسنان تصحيح الزيارة.",
+      "not_completed": "لا يمكن إنهاء الدفع إلا لزيارة مكتملة.",
+      "jaw_required": "اختر الفك العلوي أو السفلي.",
+      "jaw_not_allowed": "هذا البند لا يُسجَّل على فك."
     },
     "record": {
       "not_removable": "يمكن إزالة السجلات المُدخلة في هذه الزيارة فقط.",
-      "not_found": "لم يعد هذا السجل لدى هذا المريض."
+      "not_found": "لم يعد هذا السجل لدى هذا المريض.",
+      "dentist_required": "اختر الطبيب الذي يخصه هذا السجل."
     },
     "plan": {
       "not_open": "لم تعد هذه الخطة مفتوحة.",
-      "not_cancellable": "الخطة المُنشأة في هذه الزيارة تُزال ولا تُلغى."
+      "not_cancellable": "الخطة المُنشأة في هذه الزيارة تُزال ولا تُلغى.",
+      "not_in_progress": "هذا العلاج ليس قيد التنفيذ."
     },
     "catalog": {
       "not_found": "لم يعد بند الكتالوج هذا موجودًا.",
       "in_use": "بند الكتالوج هذا قيد الاستخدام.",
       "inactive": "بند الكتالوج هذا غير نشط."
     }
+  },
+  "level": {
+    "upper": "الفك العلوي",
+    "lower": "الفك السفلي",
+    "mouth": "الفم كاملاً"
+  },
+  "planGroup": {
+    "newTitle": "خطة مسماة جديدة",
+    "editTitle": "إعادة تسمية الخطة",
+    "title": "العنوان",
+    "titlePlaceholder": "مثال: إعادة تأهيل كاملة",
+    "note": "ملاحظة",
+    "create": "إنشاء الخطة",
+    "save": "حفظ",
+    "cancel": "إلغاء"
+  },
+  "recordChart": {
+    "dentist": "التسجيل باسم",
+    "chooseDentist": "اختر طبيباً…",
+    "liveVisit": "لدى هذا المريض زيارة جارية.",
+    "openVisit": "فتح الزيارة"
+  },
+  "todayServices": {
+    "title": "خدمات اليوم",
+    "count_zero": "{{count}} خدمة",
+    "count_one": "خدمة واحدة",
+    "count_two": "خدمتان",
+    "count_few": "{{count}} خدمات",
+    "count_many": "{{count}} خدمة",
+    "count_other": "{{count}} خدمة",
+    "charged": "محسوب اليوم",
+    "carried": "مُرحَّل"
+  },
+  "unfinished": {
+    "badge": "غير منتهية",
+    "started": "بدأت في {{date}}",
+    "visits_zero": "{{count}} زيارة",
+    "visits_one": "زيارة واحدة",
+    "visits_two": "زيارتان",
+    "visits_few": "{{count}} زيارات",
+    "visits_many": "{{count}} زيارة",
+    "visits_other": "{{count}} زيارة",
+    "mark": "غير منتهية",
+    "complete": "إنهاء",
+    "completeNamed": "إنهاء: {{name}}",
+    "continue": "متابعة",
+    "notToday": "ليس اليوم",
+    "remove": "إزالة",
+    "cancel": "إلغاء",
+    "toContinue": "للمتابعة · {{count}}",
+    "count_zero": "{{count}} غير منتهية",
+    "count_one": "خدمة غير منتهية",
+    "count_two": "خدمتان غير منتهيتين",
+    "count_few": "{{count}} غير منتهية",
+    "count_many": "{{count}} غير منتهية",
+    "count_other": "{{count}} غير منتهية",
+    "dialogTitle": "خدمات غير منتهية",
+    "dialogQuestion": "هل ستتابع أيًّا منها اليوم؟",
+    "dialogContinue": "متابعة",
+    "dialogFailed": "تعذّر حفظ الإجابة: {{reason}}",
+    "recordTitle": "خدمات غير منتهية",
+    "noCharge": "بلا رسوم",
+    "session": "الجلسة {{number}}"
+  },
+  "rowMenu": {
+    "label": "إجراءات: {{name}}"
   }
 }

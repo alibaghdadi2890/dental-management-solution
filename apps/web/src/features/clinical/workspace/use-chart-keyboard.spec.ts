@@ -15,12 +15,11 @@ function setup({
   selected,
   orientation = 'patient_right_on_right',
   dentition = 'permanent',
-  toothStatus = [],
   onEscape,
 }: Setup) {
   const onSelect = vi.fn<(code: ToothCode | null) => void>();
   renderHook(() => {
-    useChartKeyboard({ orientation, dentition, toothStatus, selected, onSelect, onEscape });
+    useChartKeyboard({ orientation, dentition, selected, onSelect, onEscape });
   });
   return onSelect;
 }
@@ -76,34 +75,16 @@ describe('useChartKeyboard', () => {
     expect(upperEnd).toHaveBeenLastCalledWith('48');
   });
 
-  it('lands on the tooth actually present in a mixed dentition', () => {
+  it('walks the primary chart’s twenty teeth, wrapping', () => {
     const onSelect = setup({
-      selected: '16',
-      orientation: 'patient_right_on_left',
-      dentition: 'mixed',
-    });
-    press('ArrowRight');
-    expect(onSelect).toHaveBeenLastCalledWith('55');
-
-    cleanup();
-    const fromPrimary = setup({
       selected: '55',
       orientation: 'patient_right_on_left',
-      dentition: 'mixed',
+      dentition: 'primary',
     });
     press('ArrowRight');
-    expect(fromPrimary).toHaveBeenLastCalledWith('54');
-  });
-
-  it('applies a per-position presence record', () => {
-    const onSelect = setup({
-      selected: '16',
-      orientation: 'patient_right_on_left',
-      dentition: 'mixed',
-      toothStatus: [{ position: '15', present: 'permanent' }],
-    });
-    press('ArrowRight');
-    expect(onSelect).toHaveBeenLastCalledWith('15');
+    expect(onSelect).toHaveBeenLastCalledWith('54');
+    press('ArrowLeft');
+    expect(onSelect).toHaveBeenLastCalledWith('75');
   });
 
   it('does nothing with the arrows while no tooth is selected', () => {

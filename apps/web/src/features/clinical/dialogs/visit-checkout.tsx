@@ -6,6 +6,7 @@ import { CardSkeleton } from '@/components/ui/card';
 import { openPrintable, printPath } from '@/features/billing/payments-api';
 import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { VisitUnfinishedLines } from '../visit-unfinished-lines';
 import { CheckoutDiscountEditor } from './checkout-discount-editor';
 import type { VisitCheckout } from './use-visit-checkout';
 
@@ -207,6 +208,7 @@ function Figures({
             }}
           />
         )}
+        <VisitUnfinishedLines patientId={visit.patientId} visitId={visit.id} className="mt-2" />
       </section>
       <section aria-labelledby={previousId} className="mb-4">
         <h3 id={previousId} className={cn(MICRO, 'mb-2.5 text-ink-muted')}>

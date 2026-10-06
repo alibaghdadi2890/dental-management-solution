@@ -1,4 +1,4 @@
-import { formatQuoteNumber, fromCents, toCents } from '@dcm/contracts';
+import { formatQuoteNumber, fromCents, isOpenPlan, toCents } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '@/features/auth/session';
@@ -30,7 +30,7 @@ export function QuoteDocument({ patientId }: { patientId: string }) {
   const patient = useQuery(patientQuery(patientId));
   const chart = useQuery(chartQuery(patientId));
   const today = session?.tenant ? todayIn(session.tenant.timeZone) : '';
-  const plans = (chart.data?.plans ?? []).filter((plan) => plan.status === 'planned');
+  const plans = (chart.data?.plans ?? []).filter(isOpenPlan);
   const currency = plans[0]?.price.currency ?? session?.tenant?.currency ?? 'USD';
   const total = plans.reduce((sum, plan) => sum + toCents(plan.price.amount), 0n);
   const dentists = [...new Set(plans.map((plan) => plan.dentistName))];

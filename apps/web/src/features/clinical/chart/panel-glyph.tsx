@@ -29,16 +29,18 @@ const CELL = 24;
 /** The simple-mode panel glyph is a fixed 52×64 cell (spec §Selected Tooth Panel). */
 const SIMPLE = { width: 52, height: 64, radius: 8 } as const;
 
-/** The panel shows what was done to each surface, not the plan wash: planned reads as untreated. */
+/** The panel shows what was done to each surface, not the plan wash: planned and in-progress
+ * read as untreated. */
 function panelMark(tooth: ToothState | undefined, surface: SurfaceKey): ToothVisualState {
   const mark = cellMark(tooth, surface);
-  return mark === 'planned' ? 'none' : mark;
+  return mark === 'planned' || mark === 'in_progress' ? 'none' : mark;
 }
 
 const SURFACE_CLASS: Record<'pending' | ToothVisualState, string> = {
   pending: 'border-primary-hover bg-primary text-primary-foreground',
   treated_today: 'border-primary-tint-strong bg-primary text-primary-foreground',
   treated: 'border-primary-tint-strong bg-primary-tint-border text-ink-secondary',
+  in_progress: 'border-border-control bg-surface text-ink-secondary',
   planned: 'border-border-control bg-surface text-ink-secondary',
   none: 'border-border-control bg-surface text-ink-secondary',
 };

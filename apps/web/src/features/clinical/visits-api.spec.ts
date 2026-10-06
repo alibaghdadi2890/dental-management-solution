@@ -209,13 +209,6 @@ describe('writes', () => {
       'DELETE',
       `/visits/${VISIT_ID}/plans/${RECORD_ID}`,
     ],
-    [
-      'tooth presence',
-      () => api.setToothPresence(VISIT_ID, { position: '14', present: 'primary' }),
-      'PUT',
-      `/visits/${VISIT_ID}/teeth/14`,
-      { present: 'primary' },
-    ],
   ] as [string, () => Promise<unknown>, string, string, unknown?][])(
     '%s calls its route',
     async (_name, call, method, path, json) => {

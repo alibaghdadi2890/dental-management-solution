@@ -22,7 +22,7 @@ type Tenant = NonNullable<Session['tenant']>;
 /**
  * Whether the visit has put nothing on the record yet, as far as the client can tell (the
  * discard rule, spec §Discard): no services and no notes on the visit, and no diagnosis or plan
- * recorded, resolved, performed or cancelled in it per the chart. A tooth presence change isn't
+ * recorded, resolved, started, continued, performed or cancelled in it per the chart. A tooth presence change isn't
  * visible here, so the server's 409 `visit.not_empty` stays the last word.
  */
 function looksEmpty(visit: Visit, chart: PatientChart): boolean {
@@ -37,14 +37,15 @@ function looksEmpty(visit: Visit, chart: PatientChart): boolean {
       (plan) =>
         inThisVisit(plan.recordedInVisitId) ||
         inThisVisit(plan.performedInVisitId) ||
-        inThisVisit(plan.cancelledInVisitId),
+        inThisVisit(plan.cancelledInVisitId) ||
+        plan.sessions.some((session) => inThisVisit(session.visitId)),
     )
   );
 }
 
 /**
  * The workspace header band (spec §Visit Workspace → Visit header): the patient chip back to the
- * record, the compact alert chips, then the status and date block, the timer chip (running or
+ * record, the red alert chips, then the status and date block, the timer chip (running or
  * paused), Pause / Resume and — while the visit is still empty, unsaved edits included — a menu
  * with **Discard visit**. Without `visit:write` (front desk, W18) it shows a View only badge
  * instead of the controls.
@@ -125,24 +126,24 @@ export function VisitHeader({
   };
 
   return (
-    <header className="flex flex-none flex-wrap items-center gap-4 border-b border-border bg-surface px-[22px] py-3">
+    <header className="flex flex-none flex-wrap items-center gap-4 border-b border-border bg-surface px-[26px] py-5">
       <Link
         to="/patients/$patientId"
         params={{ patientId: visit.patientId }}
-        className="flex min-w-0 items-center gap-2 text-start hover:opacity-70"
+        className="flex min-w-0 items-center gap-4 text-start hover:opacity-70"
       >
         <span
           aria-hidden
-          className="grid size-[34px] flex-none place-items-center rounded-[8px] border border-primary-tint-border bg-primary-tint text-[12.5px] leading-none font-semibold text-primary"
+          className="grid size-[52px] flex-none place-items-center rounded-[10px] border border-primary-tint-border bg-primary-tint text-[18px] leading-none font-semibold text-primary"
         >
           {patient ? initials(patient.fullName) : ''}
         </span>
         {patient ? (
           <span className="min-w-0">
-            <span className="block text-[14px] leading-[1.2] font-semibold text-ink">
+            <span className="mb-[5px] block text-[22px] leading-[1.15] font-semibold tracking-[-0.02em] text-ink">
               {patient.fullName}
             </span>
-            <span className="block font-mono text-[12.5px] leading-[1.3] text-ink-muted">
+            <span className="block font-mono text-[12.5px] leading-none text-ink-muted">
               {t('workspace.patientLine', { number: patient.displayNumber, age })}
             </span>
           </span>
@@ -155,11 +156,11 @@ export function VisitHeader({
       </Link>
 
       {patient && patient.medicalAlerts.length > 0 && (
-        <ul aria-label={t('workspace.alerts')} className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+        <ul aria-label={t('workspace.alerts')} className="m-0 flex list-none flex-wrap gap-2 p-0">
           {patient.medicalAlerts.map((alert) => (
             <li
               key={alert}
-              className="rounded-[5px] border border-warning-border bg-warning-bg px-2 py-1 text-[11px] leading-none font-medium text-warning"
+              className="rounded-md border border-danger-border bg-danger-bg px-2.5 py-1.5 text-[14px] leading-none font-semibold text-danger"
             >
               {alert}
             </li>

@@ -1,5 +1,4 @@
 import {
-  type DentitionStage,
   isPrimary,
   isUpper,
   type PatientChart,
@@ -19,11 +18,11 @@ import {
 } from '../../chart/use-chart-settings';
 import type { DrawerMode } from '../charting-actions';
 import { useToothSelection } from '../tooth-selection';
+import { AreaPanel } from './area-panel';
 import { CompletedSection } from './completed-section';
 import { DiagnosisSection } from './diagnosis-section';
 import { Badge } from './panel-section';
 import { PlanSection } from './plan-section';
-import { SuccessionRow } from './succession-row';
 import { plansTotal, toothRecords } from './tooth-records';
 
 type SectionKey = 'diagnosis' | 'plan' | 'completed';
@@ -32,11 +31,11 @@ type SectionKey = 'diagnosis' | 'plan' | 'completed';
 const GHOST = [false, true, false, true, true, true, false, true, false];
 
 export interface ToothPanelProps {
-  visit: Visit;
+  /** The live visit; null on the patient record, where only diagnoses and plans are charted. */
+  visit: Visit | null;
   chart: PatientChart;
   /** `deriveChart` over the chart and this visit's services (the chart card's own map). */
   teeth: ReadonlyMap<ToothCode, ToothState>;
-  dentition: DentitionStage;
   canWrite: boolean;
   timeZone: string;
   onOpenDrawer: (mode: DrawerMode) => void;
@@ -45,14 +44,15 @@ export interface ToothPanelProps {
 }
 
 /**
- * The selected-tooth panel (spec §Selected Tooth Panel): with no tooth, the empty state; else a
+ * The selected-tooth panel (spec §Selected Tooth Panel): with a jaw or the whole mouth selected,
+ * `AreaPanel`; with nothing, the empty state; else a
  * header (the enlarged glyph — its surfaces scope the next record in surface mode — the label,
- * Upper/Lower, the name, the succession row and a live hint), the planned strip, then the three
+ * Upper/Lower, the name and the pending surfaces), the planned strip, then the three
  * stages, each collapsible and open by default. Read-only without `visit:write` (W18): no add,
  * remove or perform controls and no surface toggles.
  */
 export function ToothPanel(props: ToothPanelProps) {
-  const { tooth } = useToothSelection();
+  const { tooth, area } = useToothSelection();
   // The open state belongs to the panel, not the tooth: it survives a change of selection.
   const [closed, setClosed] = useState<ReadonlySet<SectionKey>>(() => new Set());
   const toggle = (key: SectionKey) => () => {
@@ -70,7 +70,11 @@ export function ToothPanel(props: ToothPanelProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-surface">
       {tooth === null ? (
-        <EmptyPanel />
+        area === null ? (
+          <EmptyPanel />
+        ) : (
+          <AreaPanel {...props} area={area} sections={sections} />
+        )
       ) : (
         <SelectedTooth {...props} code={tooth} sections={sections} />
       )}
@@ -93,10 +97,7 @@ function EmptyPanel() {
           />
         ))}
       </div>
-      <h3 className="m-0 mb-[5px] text-[14px] leading-[1.3] font-semibold">
-        {t('panel.emptyTitle')}
-      </h3>
-      <p className="m-0 text-[12.5px] leading-[1.55] text-ink-muted">{t('panel.emptyBody')}</p>
+      <h3 className="m-0 text-[14px] leading-[1.3] font-semibold">{t('panel.emptyTitle')}</h3>
     </div>
   );
 }
@@ -105,7 +106,6 @@ function SelectedTooth({
   visit,
   chart,
   teeth,
-  dentition,
   canWrite,
   timeZone,
   onOpenDrawer,
@@ -126,17 +126,16 @@ function SelectedTooth({
   const records = toothRecords(code, chart, visit);
   const openPlans = records.plans.filter((plan) => plan.status === 'planned');
   const openTotal = plansTotal(openPlans);
+  // Services are charted in a visit only.
+  const canChartVisit = canWrite && visit !== null;
 
+  // The pending surface scope, while there is one.
   const hint =
-    mode === 'simple'
-      ? t('panel.hintSimple')
-      : selection.surfaces.length > 0
-        ? t('panel.hintSelected', {
-            surfaces: selection.surfaces.map(surfaceLabel.name).join(t('title.listSeparator')),
-          })
-        : canWrite
-          ? t('panel.hintSurface')
-          : null;
+    mode === 'surface' && selection.surfaces.length > 0
+      ? t('panel.hintSelected', {
+          surfaces: selection.surfaces.map(surfaceLabel.name).join(t('title.listSeparator')),
+        })
+      : null;
 
   return (
     <>
@@ -165,14 +164,6 @@ function SelectedTooth({
           <div className="mb-[7px] text-[12.5px] leading-[1.45] text-ink-tertiary">
             {name(code)}
           </div>
-          <SuccessionRow
-            code={code}
-            chart={chart}
-            visit={visit}
-            dentition={dentition}
-            canWrite={canWrite}
-            onSelect={selection.select}
-          />
           {hint && (
             <p role="status" className="m-0 text-[12.5px] leading-[1.4] text-ink-muted">
               {hint}
@@ -191,7 +182,6 @@ function SelectedTooth({
       <div className="px-4 py-[15px]">
         <DiagnosisSection
           diagnoses={records.diagnoses}
-          visitId={visit.id}
           canWrite={canWrite}
           open={sections.isOpen('diagnosis')}
           onToggle={sections.toggle('diagnosis')}
@@ -202,7 +192,6 @@ function SelectedTooth({
         <PlanSection
           plans={records.plans}
           diagnoses={chart.diagnoses}
-          visitId={visit.id}
           timeZone={timeZone}
           canWrite={canWrite}
           open={sections.isOpen('plan')}
@@ -214,8 +203,10 @@ function SelectedTooth({
         <CompletedSection
           code={code}
           services={records.services}
+          unfinished={records.plans.filter((plan) => plan.status === 'in_progress')}
           history={records.history}
-          canWrite={canWrite}
+          canWrite={canChartVisit}
+          canWriteUnfinished={canWrite}
           open={sections.isOpen('completed')}
           onToggle={sections.toggle('completed')}
           onAdd={() => {

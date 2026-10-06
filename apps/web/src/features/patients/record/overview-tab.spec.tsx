@@ -209,8 +209,8 @@ describe('OverviewTab', () => {
           durationMinutes: 45,
           total: { amount: '140.00', currency: 'USD' },
           services: [
-            { name: 'Composite filling', toothCode: '16' },
-            { name: 'Scaling', toothCode: null },
+            { name: 'Composite filling', toothCode: '16', jaw: null },
+            { name: 'Scaling', toothCode: null, jaw: null },
           ],
           notes: 'Occlusal caries on 16, restored.',
         },
@@ -230,7 +230,7 @@ describe('OverviewTab', () => {
       within(chips)
         .getAllByRole('listitem')
         .map((chip) => chip.textContent),
-    ).toEqual(['Composite filling · #16', 'Scaling · Jaw']);
+    ).toEqual(['Composite filling · #16', 'Scaling · Whole mouth']);
     expect(within(last).getByText('Occlusal caries on 16, restored.').tagName).toBe('BLOCKQUOTE');
     expect(within(last).getByRole('button', { name: /All visits/ })).toBeTruthy();
   });
