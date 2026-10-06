@@ -26,7 +26,7 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0019](0019-contacts-are-people.md)                                | Contacts are people; ledgers stay per patient                | Accepted                           |
 | [0020](0020-dentists-referenced-by-staff-profile-id.md)            | Dentists referenced by staff profile id                      | Accepted (amends 0016)             |
 | [0021](0021-canonical-fdi-tooth-codes.md)                          | Canonical FDI codes; chart settings are display-only         | Accepted                           |
-| [0022](0022-records-on-the-tooth-dated-by-visit.md)                | Clinical records live on the tooth, dated by visit           | Accepted                           |
+| [0022](0022-records-on-the-tooth-dated-by-visit.md)                | Clinical records live on the tooth, dated by visit           | Accepted (amended by 0031)         |
 | [0023](0023-live-visit-concurrency.md)                             | Live-visit concurrency, rooms and discard                    | Accepted                           |
 | [0024](0024-visit-charges-in-the-completion-transaction.md)        | Visit charges in the completion transaction                  | Accepted                           |
 | [0025](0025-visit-amendments-are-append-only-snapshots.md)         | Visit amendments are append-only snapshots                   | Accepted                           |
@@ -34,3 +34,7 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0027](0027-payments-are-account-level-with-stored-allocations.md) | Payments are account-level, with stored derived allocations  | Accepted                           |
 | [0028](0028-household-payments.md)                                 | Household payments are one row per account under one receipt | Accepted                           |
 | [0029](0029-credit-is-applied-immediately.md)                      | Credit is applied immediately                                | Accepted                           |
+| [0030](0030-checkout-discount-is-a-silent-same-day-amendment.md)   | A checkout discount is a silent, same-day amendment          | Accepted                           |
+| [0031](0031-records-without-a-visit.md)                            | Diagnoses and plans may be recorded without a visit          | Accepted (amends 0022)             |
+| [0032](0032-multi-visit-work-is-charged-when-done.md)              | Work over several visits is charged when it is done          | Accepted                           |
+| [0033](0033-closing-a-checkout-without-a-payment-is-stored.md)     | Closing a checkout without a payment is stored on the visit  | Accepted (amends 0030)             |

@@ -19,6 +19,7 @@ there is no UI or API to create them yet. Permissions come from the catalog in `
 | `visit:write`                           | ✓     | ✓       | ✓         | –         |
 | `visit:void`, `visit:amend`             | ✓     | ✓       | –         | –         |
 | `visit:discount`                        | ✓     | ✓       | –         | ✓         |
+| `chart:write`                           | ✓     | ✓       | –         | –         |
 | `catalog:read`                          | ✓     | ✓       | ✓         | ✓         |
 | `catalog:write`, `import:run`           | ✓     | –       | –         | –         |
 | `payment:read`                          | ✓     | ✓       | ✓         | ✓         |
@@ -29,6 +30,9 @@ there is no UI or API to create them yet. Permissions come from the catalog in `
 re-checked in `VisitsService` (feature 4b); the SPA shows front desk "Request a change" instead.
 `visit:discount` is the visit discount at checkout, on the visit's day (ADR-0030); migration
 `0026_checkout_discount` grants it to the system roles of tenants seeded before it.
+`chart:write` is charting on the patient record, outside a visit (ADR-0031): diagnoses, plans and
+named plans; in-visit charting stays on `visit:write`. Migration `0028_records_without_visit`
+grants it likewise.
 
 `platform:admin` is never granted by a role (platform admins are decided by rule, ADR-0008). The
 matrix is the pure constant `domain/system-roles.ts`; a unit test pins it per role. Renaming a

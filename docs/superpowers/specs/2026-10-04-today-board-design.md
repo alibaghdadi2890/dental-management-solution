@@ -92,6 +92,12 @@ upcoming appointments (scheduling).
 - Recording a payment from the checkout dialog closes it (like Done); Cancel goes back to the
   figures. The dialog keeps its size when the payment step opens.
 
+- Changed 2026-10-05 (ADR-0033): **Done on a waiting visit closes its checkout without a
+  payment** (`POST /visits/:id/checkout`): the card leaves the lane and the amount stays a
+  receivable. This is the stored "left unpaid" outcome listed as out of scope above. `Esc` only
+  closes the dialog, and Done in the completer's "Visit recorded" dialog still leaves the visit
+  waiting.
+
 ## Tests
 
 - `today-page.spec.tsx`: both lanes and their order, the empty states, Check out opens the panel
