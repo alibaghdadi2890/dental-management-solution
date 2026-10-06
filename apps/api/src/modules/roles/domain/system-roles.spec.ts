@@ -17,6 +17,7 @@ const D5 = {
     'visit:void',
     'visit:amend',
     'visit:discount',
+    'chart:write',
     'catalog:read',
     'payment:read',
     'payment:write',

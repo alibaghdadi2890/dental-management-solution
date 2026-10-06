@@ -13,6 +13,7 @@ export type NewTreatmentPlan = Pick<
   StoredTreatmentPlan,
   | 'patientId'
   | 'toothCode'
+  | 'jaw'
   | 'surfaces'
   | 'procedureId'
   | 'code'
@@ -27,17 +28,24 @@ export type NewTreatmentPlan = Pick<
   | 'recordedBy'
   | 'recordedInVisitId'
   | 'recordedAt'
+  | 'groupId'
 >;
 
-/** Perform (and its undo), cancel or the soft delete; each status pair is set or cleared together. */
+/** Start (and its undo), perform (and its undo), cancel, a move between named plans, a note edit
+ * or the soft delete. */
 export type TreatmentPlanPatch = Partial<
   Pick<
     StoredTreatmentPlan,
     | 'status'
+    | 'priceAmount'
+    | 'startedInVisitId'
+    | 'startedAt'
     | 'performedInVisitId'
     | 'performedAt'
     | 'cancelledInVisitId'
     | 'cancelledAt'
+    | 'groupId'
+    | 'note'
     | 'deletedAt'
   >
 >;
@@ -123,6 +131,21 @@ export class TreatmentPlansRepository {
         .returning({ id: treatmentPlans.id }),
     );
     return rows.length;
+  }
+
+  /**
+   * Takes the patient's plans out of a named plan being removed (removed plans included, so none
+   * points at it); returns the ids of the plans that were in it.
+   */
+  async ungroup(patientId: string, groupId: string): Promise<string[]> {
+    const rows = await this.db.run((tx) =>
+      tx
+        .update(treatmentPlans)
+        .set({ groupId: null })
+        .where(and(eq(treatmentPlans.patientId, patientId), eq(treatmentPlans.groupId, groupId)))
+        .returning({ id: treatmentPlans.id }),
+    );
+    return rows.map((row) => row.id);
   }
 
   /**

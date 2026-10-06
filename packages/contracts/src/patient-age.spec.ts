@@ -26,10 +26,9 @@ describe('ageOn', () => {
 });
 
 describe('dentitionStage', () => {
-  it('maps age to primary/mixed/permanent at the 5/6 and 12/13 boundaries', () => {
-    expect(dentitionStage(5)).toBe('primary');
-    expect(dentitionStage(6)).toBe('mixed');
-    expect(dentitionStage(12)).toBe('mixed');
+  it('opens the primary chart up to 12 and the permanent chart from 13', () => {
+    expect(dentitionStage(0)).toBe('primary');
+    expect(dentitionStage(12)).toBe('primary');
     expect(dentitionStage(13)).toBe('permanent');
   });
 });

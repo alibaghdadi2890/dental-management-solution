@@ -48,15 +48,14 @@ export function ageOn(dob: string, today: string): number {
   return age;
 }
 
-export const DENTITION_STAGES = ['primary', 'mixed', 'permanent'] as const;
+/** The two charts every patient has: the primary (baby) teeth and the permanent teeth. */
+export const DENTITION_STAGES = ['primary', 'permanent'] as const;
 export type DentitionStage = (typeof DENTITION_STAGES)[number];
 export const dentitionStageSchema = z.enum(DENTITION_STAGES);
 
-/** `primary` 0–5, `mixed` 6–12, `permanent` 13+ (README §Patients age·sex column). */
+/** The chart a patient's record opens on by default: `primary` up to 12, `permanent` from 13. */
 export function dentitionStage(age: number): DentitionStage {
-  if (age <= 5) return 'primary';
-  if (age <= 12) return 'mixed';
-  return 'permanent';
+  return age <= 12 ? 'primary' : 'permanent';
 }
 
 const ADULT_AGE = 18;

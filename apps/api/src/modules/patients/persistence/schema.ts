@@ -26,7 +26,7 @@ import {
 /** Stable, not tenant-extendable (CLAUDE.md §7). */
 export const patientSex = pgEnum('patient_sex', ['female', 'male', 'other', 'unknown']);
 
-/** The chart's dentition-stage override (spec W14): `primary`, `mixed` or `permanent`. */
+/** The chart a patient was switched to by hand, `primary` or `permanent`; null follows the age. */
 export const dentition = pgEnum('dentition', DENTITION_STAGES);
 
 /** The contact's relation *to the patient* (design addendum C2); stable, not tenant-extendable. */

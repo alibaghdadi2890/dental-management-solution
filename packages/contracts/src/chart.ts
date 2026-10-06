@@ -1,9 +1,10 @@
-import type {
-  DiagnosisRecord,
-  HistoryService,
-  ToothState,
-  ToothVisualState,
-  TreatmentPlan,
+import {
+  type DiagnosisRecord,
+  type HistoryService,
+  isOpenPlan,
+  type ToothState,
+  type ToothVisualState,
+  type TreatmentPlan,
 } from './clinical-records.js';
 import type { SurfaceKey, ToothCode } from './tooth.js';
 import type { VisitService } from './visits.js';
@@ -11,15 +12,20 @@ import type { VisitService } from './visits.js';
 /** Any non-'none' mark a tooth's overall `state` can carry. */
 type ToothMark = Exclude<ToothVisualState, 'none'>;
 
-/** The marks a completed or live *service* leaves on `surfaces`/`wholeTooth` — never 'planned',
- * which only ever shows through `state` (see `cellMark`). */
-type ServiceMark = Exclude<ToothMark, 'planned'>;
+/** The marks a completed or live *service* leaves on `surfaces`/`wholeTooth` — never 'planned'
+ * or 'in_progress', which only ever show through `state` (see `cellMark`). */
+type ServiceMark = Exclude<ToothMark, 'planned' | 'in_progress'>;
 
-/** Precedence order (spec: "treated_today > treated > planned > none"), used to resolve a
- * single surface, the whole tooth, or the tooth's overall state when touched by more than one
- * source — e.g. a live service overriding a historic one on the same surface. Higher wins; a
- * mark never downgrades. */
-const MARK_RANK: Record<ToothMark, number> = { treated_today: 3, treated: 2, planned: 1 };
+/** Precedence order (spec: "treated_today > in_progress > treated > planned > none"; work in
+ * progress outranks older treatment, ADR-0032), used to resolve a single surface, the whole tooth,
+ * or the tooth's overall state when touched by more than one source — e.g. a live service
+ * overriding a historic one on the same surface. Higher wins; a mark never downgrades. */
+const MARK_RANK: Record<ToothMark, number> = {
+  treated_today: 4,
+  in_progress: 3,
+  treated: 2,
+  planned: 1,
+};
 
 function strongerMark<T extends ToothMark>(current: T | undefined, candidate: T): T {
   if (current === undefined) return candidate;
@@ -35,6 +41,8 @@ interface ToothBuilder {
   wholeTooth: ServiceMark | null;
   hasActiveDiagnosis: boolean;
   openPlanIds: string[];
+  /** An open plan on the tooth has been started. */
+  inProgress: boolean;
   diagnosisNames: string[];
   planNames: string[];
   historyCount: number;
@@ -46,6 +54,7 @@ function newBuilder(): ToothBuilder {
     wholeTooth: null,
     hasActiveDiagnosis: false,
     openPlanIds: [],
+    inProgress: false,
     diagnosisNames: [],
     planNames: [],
     historyCount: 0,
@@ -87,7 +96,9 @@ function overallState(builder: ToothBuilder): ToothVisualState {
   for (const mark of Object.values(builder.surfaces)) {
     strongest = strongerMark(strongest, mark);
   }
-  if (builder.openPlanIds.length > 0) strongest = strongerMark(strongest, 'planned');
+  if (builder.openPlanIds.length > 0) {
+    strongest = strongerMark(strongest, builder.inProgress ? 'in_progress' : 'planned');
+  }
   return strongest ?? 'none';
 }
 
@@ -106,7 +117,7 @@ export interface DeriveChartInput {
  * rendering from one source of truth.
  *
  * Callers pre-filter only soft-deleted rows; `deriveChart` itself is what drops a resolved
- * diagnosis, a performed/cancelled plan, or a jaw-level record (`toothCode: null`) — none of
+ * diagnosis, a performed/cancelled plan, or a jaw- or mouth-level record (`toothCode: null`) — none of
  * those contribute to any tooth.
  *
  * Returns one entry per tooth that has *something* recorded — an active diagnosis, an open plan,
@@ -125,10 +136,11 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
   }
 
   for (const record of input.plans) {
-    if (record.status !== 'planned') continue;
+    if (!isOpenPlan(record)) continue;
     if (record.toothCode === null) continue;
     const builder = builderFor(builders, record.toothCode);
     builder.openPlanIds.push(record.id);
+    if (record.status === 'in_progress') builder.inProgress = true;
     builder.planNames.push(record.name);
   }
 
@@ -167,9 +179,9 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
 
 /**
  * The precedence-resolved mark for one tooth's surface — the stronger of that surface's own
- * service mark and the tooth's whole-tooth service mark, else 'planned' when the tooth's overall
- * `state` is planned (an open plan washes every surface that carries no service mark of its own,
- * mirroring the POC's `toothCells`), else 'none'. `tooth` is `undefined` for a tooth absent from
+ * service mark and the tooth's whole-tooth service mark, else 'planned' or 'in_progress' when that
+ * is the tooth's overall `state` (an open plan washes every surface that carries no service mark of
+ * its own, mirroring the POC's `toothCells`), else 'none'. `tooth` is `undefined` for a tooth absent from
  * `deriveChart`'s map, which is always 'none'. Callers (the surface-mode glyph) use this instead
  * of re-deriving the precedence themselves.
  */
@@ -178,5 +190,5 @@ export function cellMark(tooth: ToothState | undefined, surface: SurfaceKey): To
   let mark: ServiceMark | undefined = tooth.surfaces[surface];
   if (tooth.wholeTooth) mark = strongerMark(mark, tooth.wholeTooth);
   if (mark) return mark;
-  return tooth.state === 'planned' ? 'planned' : 'none';
+  return tooth.state === 'planned' || tooth.state === 'in_progress' ? tooth.state : 'none';
 }

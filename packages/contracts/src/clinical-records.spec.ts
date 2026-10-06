@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  answerUnfinishedSchema,
   diagnosisResultSchema,
   patientChartSchema,
   planResultSchema,
@@ -54,6 +55,17 @@ describe('planTreatmentSchema', () => {
     expect(
       planTreatmentSchema.safeParse({ procedureId: ID, toothCode: 'ZZ', surfaces: [] }).success,
     ).toBe(false);
+  });
+});
+
+describe('answerUnfinishedSchema', () => {
+  const PLAN = '0198c0de-0000-7000-8000-000000000001';
+
+  it('takes the plans a visit continues, none for "not today", each once', () => {
+    expect(answerUnfinishedSchema.safeParse({ continue: [PLAN] }).success).toBe(true);
+    expect(answerUnfinishedSchema.safeParse({ continue: [] }).success).toBe(true);
+    expect(answerUnfinishedSchema.safeParse({ continue: [PLAN, PLAN] }).success).toBe(false);
+    expect(answerUnfinishedSchema.safeParse({}).success).toBe(false);
   });
 });
 
@@ -146,7 +158,7 @@ const CHART = {
       dentistName: 'Dr. Amal Karim',
       recordedBy: ID,
       recordedInVisitId: ID_2,
-      recordedInVisitDate: '2026-09-29',
+      recordedDate: '2026-09-29',
       recordedAt: '2026-09-29T10:00:00Z',
       resolvedInVisitId: null,
       resolvedAt: null,
@@ -157,6 +169,7 @@ const CHART = {
       id: ID,
       patientId: ID,
       toothCode: '16',
+      jaw: null,
       surfaces: [],
       procedureId: ID,
       code: 'EXT',
@@ -172,12 +185,17 @@ const CHART = {
       recordedBy: ID,
       recordedInVisitId: ID_2,
       recordedAt: '2026-09-29T10:05:00Z',
+      groupId: null,
+      startedInVisitId: null,
+      startedAt: null,
+      sessions: [],
       performedInVisitId: null,
       performedAt: null,
       cancelledInVisitId: null,
       cancelledAt: null,
     },
   ],
+  planGroups: [],
   history: [
     {
       id: ID,
@@ -187,11 +205,14 @@ const CHART = {
       code: 'CMP',
       name: 'Composite filling',
       toothCode: '16',
+      jaw: null,
       surfaces: ['O'],
       final: { amount: '45.00', currency: 'USD' },
+      planId: null,
     },
   ],
   liveVisitId: ID_2,
+  voidedVisitIds: [],
   teeth: [
     {
       code: '16',
@@ -217,6 +238,7 @@ describe('patientChartSchema', () => {
 describe('charting route results', () => {
   const visit = {
     id: ID_2,
+    displayNumber: 12,
     patientId: ID,
     branchId: ID,
     roomId: null,
@@ -228,6 +250,8 @@ describe('charting route results', () => {
     pausedAt: null,
     pausedSeconds: 0,
     completedAt: null,
+    completedBy: null,
+    unfinishedAnsweredAt: null,
     durationMinutes: null,
     notes: '',
     discountMode: 'amount',
@@ -235,6 +259,9 @@ describe('charting route results', () => {
     currency: 'USD',
     services: [],
     money: { subtotal: '0.00', discount: '0.00', total: '0.00', capped: false },
+    voidedAt: null,
+    voidReason: null,
+    updatedAt: '2026-09-29T10:05:00Z',
     serverNow: '2026-09-29T10:10:00Z',
   };
   const [diagnosis] = CHART.diagnoses;

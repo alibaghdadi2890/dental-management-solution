@@ -9,10 +9,18 @@ export const CATALOG_KINDS = ['service', 'diagnosis'] as const;
 export const catalogKindSchema = z.enum(CATALOG_KINDS);
 export type CatalogKind = z.infer<typeof catalogKindSchema>;
 
-/** Whether a service is charged for each tooth it is performed on or once per jaw. */
-export const CHARGE_UNITS = ['per_tooth', 'per_jaw'] as const;
+/**
+ * The level a service is performed and charged at: each tooth, one jaw, or the whole mouth. The
+ * catalog sets it; a record's target follows it (a tooth, a `Jaw`, or neither).
+ */
+export const CHARGE_UNITS = ['per_tooth', 'per_jaw', 'per_mouth'] as const;
 export const chargeUnitSchema = z.enum(CHARGE_UNITS);
 export type ChargeUnit = z.infer<typeof chargeUnitSchema>;
+
+/** The target of a `per_jaw` service or plan; both jaws are two records. */
+export const JAWS = ['upper', 'lower'] as const;
+export const jawSchema = z.enum(JAWS);
+export type Jaw = z.infer<typeof jawSchema>;
 
 /** Codes are upper-case (the POC upper-cases while typing) and unique per tenant and catalog. */
 export const catalogCodeSchema = z

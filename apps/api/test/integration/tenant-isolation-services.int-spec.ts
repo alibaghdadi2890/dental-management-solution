@@ -5,6 +5,7 @@ import type {
   DiagnosisItem,
   OpeningBalanceResult,
   Patient,
+  PatientChartResult,
   PatientPage,
   Role,
   Room,
@@ -305,7 +306,7 @@ describe('tenant isolation through the public services', () => {
         ownerA
           .post('/api/v1/patients/merge')
           .send({ keepId: id, dropId: a.patient.id, reason: 'Hijack' }),
-        ownerA.put(`/api/v1/patients/${id}/dentition`).send({ override: 'mixed' }),
+        ownerA.put(`/api/v1/patients/${id}/dentition`).send({ override: 'primary' }),
       ];
       for (const response of await Promise.all(attempts)) {
         expect(response.status).toBe(404);
@@ -478,8 +479,8 @@ describe('tenant isolation through the public services', () => {
 
     it("visits: B's completed visit, its charge and its summary are not found for A", async () => {
       const { profileId, services } = await bOwnerDentist();
-      const item = services.find((service) => service.chargeUnit === 'per_jaw');
-      if (!item) throw new Error("B's catalog has no per-jaw service");
+      const item = services.find((service) => service.chargeUnit === 'per_mouth');
+      if (!item) throw new Error("B's catalog has no whole-mouth service");
       const started = await ownerB.post('/api/v1/visits').send({
         patientId: b.patient.id,
         dentistId: profileId,
@@ -515,6 +516,7 @@ describe('tenant isolation through the public services', () => {
           expectedUpdatedAt: correction.expectedUpdatedAt,
           discount: { mode: 'percent', value: '5' },
         }),
+        ownerA.post(`/api/v1/visits/${visitId}/checkout`),
       ];
       for (const response of await Promise.all(attempts)) {
         expect(response.status).toBe(404);
@@ -585,6 +587,20 @@ describe('tenant isolation through the public services', () => {
           .send({ procedureId: perTooth.id, toothCode: '16' }),
       );
       await inB(ownerB.put(`/api/v1/visits/${visitId}/teeth/15`).send({ present: 'permanent' }));
+      // A named plan made on the record, and work in progress (ADR-0031, ADR-0032).
+      const grouped = await ownerB
+        .post(`/api/v1/clinical/patients/${bPatient.id}/plan-groups`)
+        .send({ title: 'Bravo phase 1' });
+      expect(grouped.status, JSON.stringify(grouped.body)).toBe(201);
+      const groupId = (grouped.body as PatientChartResult).chart.planGroups[0]?.id ?? '';
+      const unfinishedServiceId = await inB(
+        ownerB
+          .post(`/api/v1/visits/${visitId}/services`)
+          .send({ procedureId: perTooth.id, toothCode: '17' }),
+      );
+      const startedPlanId = await inB(
+        ownerB.post(`/api/v1/visits/${visitId}/services/${unfinishedServiceId}/unfinished`),
+      );
 
       const clinicalTables = [
         'visits',
@@ -592,6 +608,8 @@ describe('tenant isolation through the public services', () => {
         'patient_diagnoses',
         'treatment_plans',
         'tooth_status',
+        'plan_groups',
+        'treatment_plan_sessions',
       ];
       const snapshot = () =>
         Promise.all(
@@ -607,7 +625,8 @@ describe('tenant isolation through the public services', () => {
         );
       const before = await snapshot();
       // B's completed visit from the test before, and its service, are in there too.
-      expect(before.map((rows) => rows.length)).toEqual([2, 2, 1, 1, 1]);
+      // The service marked not finished stays as a removed row.
+      expect(before.map((rows) => rows.length)).toEqual([2, 3, 1, 2, 1, 1, 1]);
 
       const visit = `/api/v1/visits/${visitId}`;
       const visitRoutes = [
@@ -625,6 +644,10 @@ describe('tenant isolation through the public services', () => {
         ownerA.delete(`${visit}/diagnoses/${diagnosisRecordId}`),
         ownerA.post(`${visit}/plans`).send({ procedureId: perTooth.id, toothCode: '36' }),
         ownerA.post(`${visit}/plans/${planId}/perform`),
+        ownerA.post(`${visit}/services/${serviceId}/unfinished`),
+        ownerA.post(`${visit}/unfinished-answer`).send({ continue: [startedPlanId] }),
+        ownerA.put(`${visit}/plans/${startedPlanId}/session`).send({}),
+        ownerA.delete(`${visit}/plans/${startedPlanId}/session`),
         ownerA.post(`${visit}/plans/${planId}/cancel`),
         ownerA.delete(`${visit}/plans/${planId}`),
         ownerA.put(`${visit}/teeth/15`).send({ present: 'primary' }),
@@ -639,6 +662,16 @@ describe('tenant isolation through the public services', () => {
         ownerA.get(`${chart}/teeth/16/history`),
         ownerA.get(`${chart}/last-visit`),
         ownerA.get(`${chart}/summary`),
+        // Charting on the patient record (ADR-0031): the patient is not A's.
+        ownerA.post(`${chart}/diagnoses`).send({ diagnosisId: newId(), toothCode: '16' }),
+        ownerA.post(`${chart}/plans`).send({ procedureId: newId(), toothCode: '16' }),
+        ownerA.post(`${chart}/plans/${planId}/cancel`),
+        ownerA.delete(`${chart}/plans/${planId}`),
+        ownerA.delete(`${chart}/diagnoses/${diagnosisRecordId}`),
+        ownerA.post(`${chart}/plan-groups`).send({ title: 'Not yours' }),
+        ownerA.patch(`${chart}/plans/${planId}`).send({ groupId: null }),
+        ownerA.patch(`${chart}/plan-groups/${groupId}`).send({ title: 'Renamed' }),
+        ownerA.delete(`${chart}/plan-groups/${groupId}`),
       ];
       for (const response of await Promise.all(chartRoutes)) {
         expect(response.status, JSON.stringify(response.body)).toBe(404);
@@ -961,6 +994,8 @@ describe('tenant isolation through the public services', () => {
       'visit_services',
       'patient_diagnoses',
       'treatment_plans',
+      'plan_groups',
+      'treatment_plan_sessions',
       'tooth_status',
       'visit_counters',
       'visit_amendments',

@@ -479,21 +479,21 @@ describe('patientSchema', () => {
 
   it('requires dentitionOverride (spec W14), accepting a stage or null', () => {
     expect(patientSchema.parse(record).dentitionOverride).toBeNull();
-    expect(patientSchema.parse({ ...record, dentitionOverride: 'mixed' }).dentitionOverride).toBe(
-      'mixed',
+    expect(patientSchema.parse({ ...record, dentitionOverride: 'primary' }).dentitionOverride).toBe(
+      'primary',
     );
     const { dentitionOverride: _omitted, ...withoutOverride } = record;
     expect(patientSchema.safeParse(withoutOverride).success).toBe(false);
   });
 
   it('rejects an unknown dentition stage', () => {
-    expect(patientSchema.safeParse({ ...record, dentitionOverride: 'baby' }).success).toBe(false);
+    expect(patientSchema.safeParse({ ...record, dentitionOverride: 'mixed' }).success).toBe(false);
   });
 });
 
 describe('dentitionOverrideSchema', () => {
   it('accepts each dentition stage and null (back to auto)', () => {
-    expect(dentitionOverrideSchema.parse({ override: 'mixed' }).override).toBe('mixed');
+    expect(dentitionOverrideSchema.parse({ override: 'primary' }).override).toBe('primary');
     expect(dentitionOverrideSchema.parse({ override: null }).override).toBeNull();
   });
 

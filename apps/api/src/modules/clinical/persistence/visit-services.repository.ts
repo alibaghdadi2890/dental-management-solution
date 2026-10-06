@@ -19,6 +19,7 @@ export type NewVisitService = Pick<
   | 'category'
   | 'chargeUnit'
   | 'toothCode'
+  | 'jaw'
   | 'surfaces'
   | 'baseAmount'
   | 'planId'

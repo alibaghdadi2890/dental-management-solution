@@ -4,6 +4,7 @@ import type {
   DiagnosisResult,
   LiveVisitRef,
   Patient,
+  PatientChartResult,
   PatientChart,
   PlanResult,
   ServiceItem,
@@ -270,6 +271,7 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
           visits: 1,
           diagnoses: 1,
           plans: 1,
+          planGroups: 0,
           toothStatusMoved: 1,
           toothStatusDropped: 1,
         },
@@ -327,6 +329,29 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
 
     await merged(owner, kept, dropped);
     expect(await owned(kept)).toEqual({ visits: 1, diagnoses: 1, plans: 0, toothStatus: 1 });
+  });
+
+  it('moves the named plans and the plans made without a visit', async () => {
+    const kept = await createPatient('Merge Kept Named');
+    const dropped = await createPatient('Merge Dropped Named');
+    const records = `/api/v1/clinical/patients/${dropped.id}`;
+    const { chart: grouped } = await post<PatientChartResult>(`${records}/plan-groups`, {
+      title: 'Phase 1',
+    });
+    const groupId = grouped.planGroups[0]?.id;
+    await post(`${records}/plans`, { procedureId: fill.id, toothCode: '46', groupId });
+
+    await merged(owner, kept, dropped);
+
+    const response = await dentist.agent.get(`/api/v1/clinical/patients/${kept.id}/chart`);
+    const chart = response.body as PatientChart;
+    expect(chart.planGroups).toMatchObject([{ id: groupId, patientId: kept.id }]);
+    expect(chart.plans).toMatchObject([{ groupId, recordedInVisitId: null, patientId: kept.id }]);
+    expect(await repointAudit(kept)).toEqual([
+      expect.objectContaining({
+        after: expect.objectContaining({ plans: 1, planGroups: 1 }) as unknown,
+      }),
+    ]);
   });
 
   it('lets front desk merge (no visit:write): the records follow', async () => {

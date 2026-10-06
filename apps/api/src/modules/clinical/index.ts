@@ -2,6 +2,7 @@
 export { ClinicalModule } from './clinical.module';
 export { CatalogService } from './application/catalog.service';
 export { ChartService } from './application/chart.service';
+export { PatientRecordsService } from './application/patient-records.service';
 export { VisitRecordsService } from './application/visit-records.service';
 export {
   type VisitChargeFacts,
@@ -28,9 +29,11 @@ export {
   TREATMENT_CANCELLED,
   TREATMENT_PERFORMED,
   TREATMENT_PLANNED,
+  TREATMENT_STARTED,
   type TreatmentCancelled,
   type TreatmentPerformed,
   type TreatmentPlanned,
+  type TreatmentStarted,
 } from './events/record-events';
 export {
   VISIT_AMENDED,

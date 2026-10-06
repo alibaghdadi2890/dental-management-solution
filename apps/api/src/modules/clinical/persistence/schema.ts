@@ -1,6 +1,8 @@
 import {
+  CHARGE_UNITS,
   DIAGNOSIS_STATUSES,
   DISCOUNT_MODES,
+  JAWS,
   PLAN_STATUSES,
   SURFACES,
   TOOTH_PRESENCE_VALUES,
@@ -35,7 +37,9 @@ import {
 import { LIVE_VISIT_STATUSES } from '../domain/visit-lifecycle';
 
 /** Stable and not tenant-extendable, hence a Postgres enum (CLAUDE.md §7). */
-export const chargeUnit = pgEnum('charge_unit', ['per_tooth', 'per_jaw']);
+export const chargeUnit = pgEnum('charge_unit', CHARGE_UNITS);
+/** The target of a `per_jaw` service or plan. */
+export const jaw = pgEnum('jaw', JAWS);
 
 /**
  * The service catalog ("procedures", ADR-0002). Prices are money in the tenant currency at the
@@ -127,6 +131,11 @@ const toothCodeCheck = (name: string, column: AnyColumn) =>
   check(name, sql`${column} ~ '^([1-4][1-8]|[5-8][1-5])$'`);
 
 /** Surface keys only (`SURFACES`); duplicates and per-tooth validity are the service's checks. */
+/** A record's target follows its unit: a tooth iff `per_tooth`, a jaw iff `per_jaw`, neither for
+ * `per_mouth`. The unit is compared as text (the enum grew in an earlier migration, see 0019). */
+const jawMatchesUnit = (name: string, jawColumn: AnyColumn, unit: AnyColumn) =>
+  check(name, sql`(${jawColumn} is not null) = (${unit}::text = 'per_jaw')`);
+
 const surfacesCheck = (name: string, column: AnyColumn) =>
   check(name, sql`${column} <@ ${sql.raw(`ARRAY[${quotedList(SURFACES)}]::text[]`)}`);
 
@@ -162,6 +171,10 @@ export const visits = pgTable(
     pausedSeconds: integer().notNull().default(0),
     completedAt: instant(),
     completedBy: uuid(),
+    unfinishedAnsweredAt: instant(),
+    /** The checkout was closed without a payment (ADR-0033): the visit left the checkout queue. */
+    checkedOutAt: instant(),
+    checkedOutBy: uuid(),
     discardedAt: instant(),
     discardedBy: uuid(),
     voidedAt: instant(),
@@ -209,6 +222,10 @@ export const visits = pgTable(
     check(
       'visits_completed_fields',
       sql`${table.status}::text not in ${FINISHED_STATUS_LIST} or (${table.completedAt} is not null and ${table.completedBy} is not null and ${table.durationMinutes} is not null and ${table.subtotal} is not null and ${table.discountAmount} is not null and ${table.total} is not null)`,
+    ),
+    check(
+      'visits_checked_out_fields',
+      sql`(${table.checkedOutAt} is null) = (${table.checkedOutBy} is null) and (${table.checkedOutAt} is null or ${table.status}::text in ${FINISHED_STATUS_LIST})`,
     ),
     check(
       'visits_discarded_fields',
@@ -292,7 +309,8 @@ export const visitAmendments = pgTable(
 
 /**
  * A diagnosis recorded on a patient's tooth (W9: `diagnoses` is the catalog). It belongs to the
- * patient and is dated by the visit that recorded it; a later visit may resolve it. The catalog
+ * patient and is dated by `recorded_at`; the visit it was recorded in is null when it was recorded
+ * on the patient record without one (ADR-0031). A visit may resolve it. The catalog
  * item's code, name and category are snapshots, so later catalog edits never change the record.
  */
 export const patientDiagnoses = pgTable(
@@ -311,7 +329,8 @@ export const patientDiagnoses = pgTable(
     note: text(),
     dentistId: uuid().notNull(),
     recordedBy: uuid().notNull(),
-    recordedInVisitId: uuid().notNull(),
+    /** Null when recorded on the patient record, outside a visit (ADR-0031). */
+    recordedInVisitId: uuid(),
     recordedAt: instant().notNull(),
     resolvedInVisitId: uuid(),
     resolvedAt: instant(),
@@ -354,8 +373,35 @@ export const patientDiagnoses = pgTable(
 );
 
 /**
- * One planned procedure on a patient (W9), recorded in a visit and performed or cancelled in the
- * same or a later one. The catalog item and its price are snapshots taken when it was planned.
+ * A named plan: a title over some of a patient's planned procedures (`treatment_plans.group_id`).
+ * It carries no status and no money; removing it ungroups its plans.
+ */
+export const planGroups = pgTable(
+  'plan_groups',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    patientId: uuid().notNull(),
+    title: text().notNull(),
+    note: text(),
+    createdBy: uuid().notNull(),
+    deletedAt: deletedAtColumn(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('plan_groups_tenant_idx').on(table.tenantId),
+    // Target of the treatment_plans composite foreign key.
+    unique('plan_groups_tenant_id_unique').on(table.tenantId, table.id),
+    index('plan_groups_patient_idx').on(table.tenantId, table.patientId),
+    check('plan_groups_title_length', sql`char_length(${table.title}) between 1 and 120`),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/**
+ * One planned procedure on a patient (W9), recorded in a visit or on the patient record without
+ * one (ADR-0031), performed in a visit and cancelled in one or from the record. The catalog item
+ * and its price are snapshots taken when it was planned.
  */
 export const treatmentPlans = pgTable(
   'treatment_plans',
@@ -365,6 +411,8 @@ export const treatmentPlans = pgTable(
     patientId: uuid().notNull(),
     /** Set iff `charge_unit` is `per_tooth` (W11). */
     toothCode: text(),
+    /** Set iff `charge_unit` is `per_jaw`. */
+    jaw: jaw(),
     surfaces: surfacesColumn(),
     procedureId: uuid().notNull(),
     code: text().notNull(),
@@ -379,8 +427,14 @@ export const treatmentPlans = pgTable(
     note: text(),
     dentistId: uuid().notNull(),
     recordedBy: uuid().notNull(),
-    recordedInVisitId: uuid().notNull(),
+    /** Null when planned on the patient record, outside a visit (ADR-0031). */
+    recordedInVisitId: uuid(),
     recordedAt: instant().notNull(),
+    /** The named plan it belongs to, if any. */
+    groupId: uuid(),
+    /** The visit that started the work (ADR-0032); both set once started, kept when done. */
+    startedInVisitId: uuid(),
+    startedAt: instant(),
     performedInVisitId: uuid(),
     performedAt: instant(),
     cancelledInVisitId: uuid(),
@@ -404,8 +458,18 @@ export const treatmentPlans = pgTable(
       foreignColumns: [patientDiagnoses.tenantId, patientDiagnoses.id],
     }),
     foreignKey({
+      name: 'treatment_plans_group_fk',
+      columns: [table.tenantId, table.groupId],
+      foreignColumns: [planGroups.tenantId, planGroups.id],
+    }),
+    foreignKey({
       name: 'treatment_plans_recorded_visit_fk',
       columns: [table.tenantId, table.recordedInVisitId],
+      foreignColumns: [visits.tenantId, visits.id],
+    }),
+    foreignKey({
+      name: 'treatment_plans_started_visit_fk',
+      columns: [table.tenantId, table.startedInVisitId],
       foreignColumns: [visits.tenantId, visits.id],
     }),
     foreignKey({
@@ -424,16 +488,61 @@ export const treatmentPlans = pgTable(
       'treatment_plans_tooth_matches_unit',
       sql`(${table.toothCode} is not null) = (${table.chargeUnit} = 'per_tooth')`,
     ),
+    jawMatchesUnit('treatment_plans_jaw_matches_unit', table.jaw, table.chargeUnit),
     check('treatment_plans_price_non_negative', sql`${table.priceAmount} >= 0`),
-    // Perform stamps both fields and its undo clears both; cancel likewise.
+    // Start stamps both fields; undoing the first session clears both. Work in progress was
+    // started. The status is compared as text (the enum grew in this migration, see 0019).
+    check(
+      'treatment_plans_started_fields',
+      sql`(${table.startedInVisitId} is null) = (${table.startedAt} is null) and (${table.status}::text <> 'in_progress' or ${table.startedAt} is not null)`,
+    ),
+    // Perform stamps both fields and its undo clears both. Cancel stamps the time, and the visit
+    // when it happened in one (ADR-0031).
     check(
       'treatment_plans_performed_fields',
       sql`case when ${table.status} = 'performed' then ${table.performedInVisitId} is not null and ${table.performedAt} is not null else ${table.performedInVisitId} is null and ${table.performedAt} is null end`,
     ),
     check(
       'treatment_plans_cancelled_fields',
-      sql`case when ${table.status} = 'cancelled' then ${table.cancelledInVisitId} is not null and ${table.cancelledAt} is not null else ${table.cancelledInVisitId} is null and ${table.cancelledAt} is null end`,
+      sql`case when ${table.status} = 'cancelled' then ${table.cancelledAt} is not null else ${table.cancelledInVisitId} is null and ${table.cancelledAt} is null end`,
     ),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/**
+ * One visit's work on a plan in progress (ADR-0032): the first is the visit that started it, each
+ * later one a visit that continued it. No money: the plan is charged once, by the visit service of
+ * the visit that marks it done. At most one per plan and visit; removed by a soft delete.
+ */
+export const treatmentPlanSessions = pgTable(
+  'treatment_plan_sessions',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    planId: uuid().notNull(),
+    visitId: uuid().notNull(),
+    note: text(),
+    recordedBy: uuid().notNull(),
+    deletedAt: deletedAtColumn(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('treatment_plan_sessions_tenant_idx').on(table.tenantId),
+    uniqueIndex('treatment_plan_sessions_unique')
+      .on(table.tenantId, table.planId, table.visitId)
+      .where(sql`${table.deletedAt} is null`),
+    index('treatment_plan_sessions_visit_idx').on(table.tenantId, table.visitId),
+    foreignKey({
+      name: 'treatment_plan_sessions_plan_fk',
+      columns: [table.tenantId, table.planId],
+      foreignColumns: [treatmentPlans.tenantId, treatmentPlans.id],
+    }),
+    foreignKey({
+      name: 'treatment_plan_sessions_visit_fk',
+      columns: [table.tenantId, table.visitId],
+      foreignColumns: [visits.tenantId, visits.id],
+    }),
     tenantIsolationPolicy(),
   ],
 );
@@ -456,6 +565,8 @@ export const visitServices = pgTable(
     chargeUnit: chargeUnit().notNull(),
     /** Set iff `charge_unit` is `per_tooth` (W11). */
     toothCode: text(),
+    /** Set iff `charge_unit` is `per_jaw`. */
+    jaw: jaw(),
     surfaces: surfacesColumn(),
     baseAmount: money().notNull(),
     discountAmount: money().notNull().default('0'),
@@ -492,6 +603,7 @@ export const visitServices = pgTable(
       'visit_services_tooth_matches_unit',
       sql`(${table.toothCode} is not null) = (${table.chargeUnit} = 'per_tooth')`,
     ),
+    jawMatchesUnit('visit_services_jaw_matches_unit', table.jaw, table.chargeUnit),
     check(
       'visit_services_discount_within_base',
       sql`${table.discountAmount} >= 0 and ${table.discountAmount} <= ${table.baseAmount}`,

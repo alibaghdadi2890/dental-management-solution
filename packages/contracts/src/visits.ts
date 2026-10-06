@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nonNegativeAmountSchema, chargeUnitSchema } from './catalog.js';
+import { nonNegativeAmountSchema, chargeUnitSchema, jawSchema } from './catalog.js';
 import {
   aggregateAmountSchema,
   blankToUndefined,
@@ -62,6 +62,8 @@ export const visitServiceSchema = z.object({
   chargeUnit: chargeUnitSchema,
   /** Set iff `chargeUnit` is `per_tooth`. */
   toothCode: toothCodeSchema.nullable(),
+  /** Set iff `chargeUnit` is `per_jaw`. */
+  jaw: jawSchema.nullable(),
   surfaces: surfacesSchema,
   base: moneySchema,
   discount: moneySchema,
@@ -94,6 +96,8 @@ export const visitSchema = z.object({
   completedAt: isoDateTimeSchema.nullable(),
   /** The auth user id who completed it (W10); the workspace tells others it was done elsewhere. */
   completedBy: idSchema.nullable(),
+  /** When the visit answered which unfinished services it continues (unfinished spec U5). */
+  unfinishedAnsweredAt: isoDateTimeSchema.nullable(),
   /** Set only once the visit is completed. */
   durationMinutes: z.number().int().positive().nullable(),
   notes: z.string(),
@@ -138,6 +142,7 @@ export type VisitDiscountInput = z.infer<typeof visitDiscountSchema>;
 export const addServiceSchema = z.object({
   procedureId: idSchema,
   toothCode: toothCodeSchema.optional(),
+  jaw: jawSchema.optional(),
   surfaces: surfacesSchema.default([]),
 });
 export type AddServiceInput = z.infer<typeof addServiceSchema>;

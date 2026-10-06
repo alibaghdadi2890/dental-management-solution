@@ -291,17 +291,6 @@ describe('slotFor', () => {
     for (let p = 1; p <= 5; p++) expect(slotFor('primary', p)).toBe('primary');
     for (let p = 6; p <= 8; p++) expect(slotFor('primary', p)).toBe('not_erupted');
   });
-
-  it('mixed stage: 1-2 permanent, 3-5 primary, 6 permanent, 7-8 not erupted', () => {
-    expect(slotFor('mixed', 1)).toBe('permanent');
-    expect(slotFor('mixed', 2)).toBe('permanent');
-    expect(slotFor('mixed', 3)).toBe('primary');
-    expect(slotFor('mixed', 4)).toBe('primary');
-    expect(slotFor('mixed', 5)).toBe('primary');
-    expect(slotFor('mixed', 6)).toBe('permanent');
-    expect(slotFor('mixed', 7)).toBe('not_erupted');
-    expect(slotFor('mixed', 8)).toBe('not_erupted');
-  });
 });
 
 describe('effectiveDentition', () => {
@@ -311,7 +300,7 @@ describe('effectiveDentition', () => {
 
   it('derives the stage from age when there is no override', () => {
     expect(effectiveDentition(4, null)).toEqual({ stage: 'primary', source: 'auto' });
-    expect(effectiveDentition(8, null)).toEqual({ stage: 'mixed', source: 'auto' });
+    expect(effectiveDentition(8, null)).toEqual({ stage: 'primary', source: 'auto' });
     expect(effectiveDentition(20, null)).toEqual({ stage: 'permanent', source: 'auto' });
   });
 
@@ -322,32 +311,25 @@ describe('effectiveDentition', () => {
 });
 
 describe('presentTooth', () => {
-  it('resolves the primary tooth for a mixed-stage column in the primary band', () => {
-    expect(presentTooth('14', 'mixed')).toEqual({ code: '54', notErupted: false });
-  });
-
-  it('an explicit presence override wins over the slot', () => {
-    expect(presentTooth('14', 'mixed', 'permanent')).toEqual({ code: '14', notErupted: false });
-  });
-
-  it('reports not-erupted for a not-yet-through permanent molar', () => {
-    expect(presentTooth('17', 'mixed')).toEqual({ code: '17', notErupted: true });
-  });
-
-  it('resolves straight through for the permanent stage', () => {
+  it('the permanent chart shows the column itself', () => {
     expect(presentTooth('11', 'permanent')).toEqual({ code: '11', notErupted: false });
+    expect(presentTooth('17', 'permanent')).toEqual({ code: '17', notErupted: false });
   });
 
-  it('resolves the primary tooth for the primary stage', () => {
+  it('the primary chart shows the primary predecessor of positions 1–5', () => {
     expect(presentTooth('44', 'primary')).toEqual({ code: '84', notErupted: false });
+    expect(presentTooth('14', 'primary')).toEqual({ code: '54', notErupted: false });
   });
+});
 
-  it('a presence override beyond position 5 has no effect (molars have no primary slot)', () => {
-    expect(presentTooth('16', 'permanent', 'primary')).toEqual({ code: '16', notErupted: false });
-  });
-
-  it('a presence override still applies within positions 1-5 in the permanent stage', () => {
-    expect(presentTooth('14', 'permanent', 'primary')).toEqual({ code: '54', notErupted: false });
+describe('archColumns by chart', () => {
+  it('the permanent chart has 16 columns a jaw, the primary chart 10', () => {
+    const permanent = archColumns('patient_right_on_left');
+    expect(permanent.upper).toHaveLength(16);
+    const primary = archColumns('patient_right_on_left', 'primary');
+    expect(primary.upper).toEqual(['15', '14', '13', '12', '11', '21', '22', '23', '24', '25']);
+    expect(primary.lower).toEqual(['45', '44', '43', '42', '41', '31', '32', '33', '34', '35']);
+    expect(keyboardOrder('patient_right_on_left', 'primary')).toHaveLength(20);
   });
 });
 

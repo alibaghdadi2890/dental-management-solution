@@ -20,7 +20,14 @@ import type { DiscardFacts } from '../domain/discard-rule';
 import type { VisitCursorPosition } from '../domain/visit-cursor';
 import { isLive, LIVE_VISIT_STATUSES } from '../domain/visit-lifecycle';
 import { RoomBusyError, VisitNotFoundError, VisitNotLiveError } from '../domain/visit-errors';
-import { patientDiagnoses, toothStatus, treatmentPlans, visits, visitServices } from './schema';
+import {
+  patientDiagnoses,
+  toothStatus,
+  treatmentPlans,
+  treatmentPlanSessions,
+  visits,
+  visitServices,
+} from './schema';
 import { scopeCondition, type VisitCriteria, whereFor } from './visit-search.sql';
 
 type VisitRow = typeof visits.$inferSelect;
@@ -58,6 +65,9 @@ export type VisitPatch = Partial<
     | 'voidReason'
     | 'completedAt'
     | 'completedBy'
+    | 'unfinishedAnsweredAt'
+    | 'checkedOutAt'
+    | 'checkedOutBy'
     | 'durationMinutes'
     | 'subtotal'
     | 'discountAmount'
@@ -313,7 +323,7 @@ export class VisitsRepository {
     const counts = {
       visits: sql`select count(*) from ${visits} where ${visits.patientId} = ${patientId} and ${visits.status} in ${COUNTED_STATUS_LIST}`,
       activeDiagnoses: sql`select count(*) from ${patientDiagnoses} where ${patientDiagnoses.patientId} = ${patientId} and ${patientDiagnoses.status} = 'active' and ${isNull(patientDiagnoses.deletedAt)}`,
-      plannedProcedures: sql`select count(*) from ${treatmentPlans} where ${treatmentPlans.patientId} = ${patientId} and ${treatmentPlans.status} = 'planned' and ${isNull(treatmentPlans.deletedAt)}`,
+      plannedProcedures: sql`select count(*) from ${treatmentPlans} where ${treatmentPlans.patientId} = ${patientId} and ${treatmentPlans.status}::text in ('planned', 'in_progress') and ${isNull(treatmentPlans.deletedAt)}`,
       // count(distinct …) skips null tooth codes: jaw-level services treat no tooth.
       teethTreated: sql`select count(distinct ${visitServices.toothCode}) ${completedServices}`,
       servicesPerformed: sql`select count(*) ${completedServices}`,
@@ -472,6 +482,9 @@ export class VisitsRepository {
           ),
           plansCancelled: fact(
             sql`select 1 from ${treatmentPlans} where ${treatmentPlans.patientId} = ${visits.patientId} and ${treatmentPlans.cancelledInVisitId} = ${visits.id} and ${isNull(treatmentPlans.deletedAt)}`,
+          ),
+          planSessions: fact(
+            sql`select 1 from ${treatmentPlanSessions} where ${treatmentPlanSessions.visitId} = ${visits.id} and ${isNull(treatmentPlanSessions.deletedAt)}`,
           ),
           toothChanges: fact(
             sql`select 1 from ${toothStatus} where ${toothStatus.patientId} = ${visits.patientId} and ${toothStatus.changedInVisitId} = ${visits.id}`,

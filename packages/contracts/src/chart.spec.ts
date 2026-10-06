@@ -29,7 +29,7 @@ function diagnosis(
     dentistName: 'Dr. Smith',
     recordedBy: ID,
     recordedInVisitId: VISIT_ID,
-    recordedInVisitDate: '2026-09-30',
+    recordedDate: '2026-09-30',
     recordedAt: '2026-09-30T10:00:00.000Z',
     resolvedInVisitId: null,
     resolvedAt: null,
@@ -41,6 +41,7 @@ function plan(overrides: Partial<TreatmentPlan> & { toothCode: ToothCode | null 
   return {
     id: ID,
     patientId: ID,
+    jaw: null,
     surfaces: [],
     procedureId: ID,
     code: 'D2740',
@@ -56,6 +57,10 @@ function plan(overrides: Partial<TreatmentPlan> & { toothCode: ToothCode | null 
     recordedBy: ID,
     recordedInVisitId: VISIT_ID,
     recordedAt: '2026-09-30T10:00:00.000Z',
+    groupId: null,
+    startedInVisitId: null,
+    startedAt: null,
+    sessions: [],
     performedInVisitId: null,
     performedAt: null,
     cancelledInVisitId: null,
@@ -74,6 +79,7 @@ function history(
     dentistName: 'Dr. Smith',
     code: 'D2140',
     name: 'Amalgam Filling',
+    jaw: null,
     surfaces: [],
     final: MONEY,
     planId: null,
@@ -91,6 +97,7 @@ function liveService(
     name: 'Amalgam Filling',
     category: null,
     chargeUnit: 'per_tooth',
+    jaw: null,
     surfaces: [],
     base: MONEY,
     discount: { amount: '0.00', currency: 'USD' },
@@ -153,6 +160,24 @@ describe('deriveChart', () => {
     });
     expect(chart.get('16')?.state).toBe('treated_today');
     expect(chart.get('16')?.wholeTooth).toBe('treated_today');
+  });
+
+  it('a started plan shows as in progress, above earlier treatment and below today’s', () => {
+    const started = plan({ toothCode: '16', status: 'in_progress' });
+    const tooth = (extra: Partial<Parameters<typeof deriveChart>[0]> = {}) =>
+      deriveChart({ diagnoses: [], plans: [started], history: [], liveServices: [], ...extra }).get(
+        '16',
+      );
+    expect(tooth()?.state).toBe('in_progress');
+    expect(tooth()?.openPlanIds).toEqual([started.id]);
+    expect(tooth({ history: [history({ toothCode: '16' })] })?.state).toBe('in_progress');
+    expect(tooth({ liveServices: [liveService({ toothCode: '16' })] })?.state).toBe(
+      'treated_today',
+    );
+    // One started plan among several open ones is enough.
+    expect(tooth({ plans: [plan({ toothCode: '16', id: ID_2 }), started] })?.state).toBe(
+      'in_progress',
+    );
   });
 
   it('planned outranks none (no other records)', () => {
@@ -406,6 +431,17 @@ describe('cellMark', () => {
     // still falls back to the whole-tooth 'treated' mark.
     expect(cellMark(chart.get('16'), 'M')).toBe('treated_today');
     expect(cellMark(chart.get('16'), 'D')).toBe('treated');
+  });
+
+  it('washes a cell in progress when the tooth state is, and the cell has no service mark', () => {
+    const chart = deriveChart({
+      diagnoses: [],
+      plans: [plan({ toothCode: '16', status: 'in_progress' })],
+      history: [history({ toothCode: '16', surfaces: ['O'] })],
+      liveServices: [],
+    });
+    expect(cellMark(chart.get('16'), 'M')).toBe('in_progress');
+    expect(cellMark(chart.get('16'), 'O')).toBe('treated');
   });
 
   it('washes a cell planned when the tooth state is planned and the cell has no service mark', () => {

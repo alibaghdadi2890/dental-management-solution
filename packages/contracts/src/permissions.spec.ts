@@ -35,6 +35,7 @@ describe('phase 1 catalog', () => {
       'visit:void',
       'visit:amend',
       'visit:discount',
+      'chart:write',
       'payment:read',
       'payment:write',
       'payment:refund',

@@ -3,6 +3,7 @@ import { OnDomainEventInTransaction } from '../../../platform/events/event-bus';
 import { AuditService } from '../../audit';
 import { PATIENTS_MERGED, type PatientsMerged } from '../../patients';
 import { PatientDiagnosesRepository } from '../persistence/patient-diagnoses.repository';
+import { PlanGroupsRepository } from '../persistence/plan-groups.repository';
 import { ToothStatusRepository } from '../persistence/tooth-status.repository';
 import { TreatmentPlansRepository } from '../persistence/treatment-plans.repository';
 import { VisitsRepository } from '../persistence/visits.repository';
@@ -14,7 +15,7 @@ import { VisitsRepository } from '../persistence/visits.repository';
  * therefore always a live patient, and a charge posted at completion lands on the kept one.
  *
  * Visits move first: their row locks serialise the re-point against charting in flight (see
- * `VisitsRepository.repointPatient`). Then diagnoses, plans and tooth status, where the kept
+ * `VisitsRepository.repointPatient`). Then diagnoses, plans, named plans and tooth status, where the kept
  * patient's row wins at a shared position (the dropped rows it replaces are the audit's
  * `before`). A merge chain (A into B, then B into C) needs nothing
  * more: each merge re-points in its own transaction. Audited as `clinical.repoint` on the kept
@@ -30,6 +31,7 @@ export class MergeClinicalSubscriber {
     private readonly visits: VisitsRepository,
     private readonly diagnoses: PatientDiagnosesRepository,
     private readonly plans: TreatmentPlansRepository,
+    private readonly groups: PlanGroupsRepository,
     private readonly teeth: ToothStatusRepository,
   ) {}
 
@@ -39,11 +41,13 @@ export class MergeClinicalSubscriber {
     const visits = await this.visits.repointPatient(droppedId, keptId);
     const diagnoses = await this.diagnoses.repointPatient(droppedId, keptId);
     const plans = await this.plans.repointPatient(droppedId, keptId);
+    const planGroups = await this.groups.repointPatient(droppedId, keptId);
     const teeth = await this.teeth.mergeInto(droppedId, keptId);
     const counts = {
       visits,
       diagnoses,
       plans,
+      planGroups,
       toothStatusMoved: teeth.moved,
       toothStatusDropped: teeth.dropped.length,
     };

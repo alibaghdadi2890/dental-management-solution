@@ -267,30 +267,40 @@ function quadrantColumn(base: 1 | 2 | 3 | 4, order: 'desc' | 'asc'): PermanentTo
 }
 
 /**
- * The 16 upper and 16 lower permanent codes, screen left to right.
+ * The upper and lower columns of a chart, as permanent codes, screen left to right: 16 a jaw on
+ * the permanent chart, 10 on the primary one.
  * `patient_right_on_left` (textbook, facing the patient): upper `18…11, 21…28`, lower
  * `48…41, 31…38`. `patient_right_on_right`: each row reversed.
  */
-export function archColumns(orientation: ChartOrientation): {
+export function archColumns(
+  orientation: ChartOrientation,
+  stage: DentitionStage = 'permanent',
+): {
   upper: PermanentToothCode[];
   lower: PermanentToothCode[];
 } {
+  // The primary chart has five teeth a quadrant: the columns of positions 1–5.
+  const shown = (columns: PermanentToothCode[]) =>
+    stage === 'primary' ? columns.filter((column) => position(column) <= 5) : columns;
   if (orientation === 'patient_right_on_left') {
     return {
-      upper: [...quadrantColumn(1, 'desc'), ...quadrantColumn(2, 'asc')],
-      lower: [...quadrantColumn(4, 'desc'), ...quadrantColumn(3, 'asc')],
+      upper: shown([...quadrantColumn(1, 'desc'), ...quadrantColumn(2, 'asc')]),
+      lower: shown([...quadrantColumn(4, 'desc'), ...quadrantColumn(3, 'asc')]),
     };
   }
   return {
-    upper: [...quadrantColumn(2, 'desc'), ...quadrantColumn(1, 'asc')],
-    lower: [...quadrantColumn(3, 'desc'), ...quadrantColumn(4, 'asc')],
+    upper: shown([...quadrantColumn(2, 'desc'), ...quadrantColumn(1, 'asc')]),
+    lower: shown([...quadrantColumn(3, 'desc'), ...quadrantColumn(4, 'asc')]),
   };
 }
 
-/** Upper row left to right, then lower row left to right: 32 unique permanent codes. Wrapping
+/** Upper row left to right, then lower row left to right: the chart's columns, once each. Wrapping
  * past either end (e.g. arrow-key navigation) is the caller's job. */
-export function keyboardOrder(orientation: ChartOrientation): PermanentToothCode[] {
-  const { upper, lower } = archColumns(orientation);
+export function keyboardOrder(
+  orientation: ChartOrientation,
+  stage: DentitionStage = 'permanent',
+): PermanentToothCode[] {
+  const { upper, lower } = archColumns(orientation, stage);
   return [...upper, ...lower];
 }
 
@@ -381,19 +391,15 @@ export function anatomicalName(code: ToothCode): {
 
 // Dentition and what actually occupies a chart column.
 
-/** Which dentition occupies a chart column at a position, for a given stage (POC `slotFor`).
- * `permanent`: every position is permanent. `primary`: 1–5 primary, 6–8 not erupted. `mixed`:
- * 1–2 permanent, 3–5 primary, 6 permanent, 7–8 not erupted. */
+/** Which dentition occupies a chart column at a position, on a given chart. `permanent`: every
+ * position is permanent. `primary`: 1–5 primary; a primary dentition has no positions 6–8, so the
+ * primary chart leaves those columns out (`archColumns`). */
 export function slotFor(
   stage: DentitionStage,
   positionValue: number,
 ): 'permanent' | 'primary' | 'not_erupted' {
   if (stage === 'permanent') return 'permanent';
-  if (stage === 'primary') return positionValue <= 5 ? 'primary' : 'not_erupted';
-  if (positionValue <= 2) return 'permanent';
-  if (positionValue <= 5) return 'primary';
-  if (positionValue === 6) return 'permanent';
-  return 'not_erupted';
+  return positionValue <= 5 ? 'primary' : 'not_erupted';
 }
 
 /** The dentition stage that actually applies: an explicit override always wins; otherwise it's
@@ -408,22 +414,16 @@ export function effectiveDentition(
 }
 
 /**
- * The tooth actually present in a chart column. `column` is a permanent code. An optional
- * per-position `presence` overrides the slot for positions 1–5 (elsewhere it has no effect).
- * Primary slot → the primary predecessor; not-erupted → the permanent code flagged as such;
- * otherwise the permanent code itself.
+ * The tooth a chart shows in a column. `column` is a permanent code: the permanent chart shows it,
+ * the primary chart its primary predecessor (positions 1–5; the primary chart has no others).
  */
 export function presentTooth(
   column: PermanentToothCode,
   stage: DentitionStage,
-  presence?: 'primary' | 'permanent',
 ): { code: ToothCode; notErupted: boolean } {
-  const p = position(column);
-  const slot = presence && p <= 5 ? presence : slotFor(stage, p);
+  const slot = slotFor(stage, position(column));
   if (slot === 'primary') {
-    // `predecessorOf` is total for positions 1–5, which is the only way `slot` can be 'primary'
-    // (see `slotFor`) — but that invariant spans two functions, so the type stays nullable and
-    // this fallback stays as the (unreachable in practice) type-safe default.
+    // `predecessorOf` is total for positions 1–5, the only ones `slotFor` calls primary.
     return { code: predecessorOf(column) ?? column, notErupted: false };
   }
   return { code: column, notErupted: slot === 'not_erupted' };

@@ -102,6 +102,7 @@ describe('liveVisitQuerySchema', () => {
 
 const VISIT = {
   id: ID,
+  displayNumber: 12,
   patientId: ID,
   branchId: ID,
   roomId: ID_2,
@@ -113,6 +114,8 @@ const VISIT = {
   pausedAt: null,
   pausedSeconds: 0,
   completedAt: null,
+  completedBy: null,
+  unfinishedAnsweredAt: null,
   durationMinutes: null,
   notes: 'Patient reports sensitivity on #16.',
   discountMode: 'percent',
@@ -127,6 +130,7 @@ const VISIT = {
       category: 'Restorative',
       chargeUnit: 'per_tooth',
       toothCode: '16',
+      jaw: null,
       surfaces: ['O'],
       base: { amount: '45.00', currency: 'USD' },
       discount: { amount: '0.00', currency: 'USD' },
@@ -137,6 +141,9 @@ const VISIT = {
     },
   ],
   money: { subtotal: '45.00', discount: '4.50', total: '40.50', capped: false },
+  voidedAt: null,
+  voidReason: null,
+  updatedAt: '2026-09-29T10:05:00Z',
   serverNow: '2026-09-29T10:10:00Z',
 };
 

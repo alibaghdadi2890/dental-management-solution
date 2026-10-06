@@ -19,6 +19,7 @@ export const PERMISSIONS = [
   'visit:void',
   'visit:amend',
   'visit:discount',
+  'chart:write',
   'catalog:read',
   'catalog:write',
   'payment:read',

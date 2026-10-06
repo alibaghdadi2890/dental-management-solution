@@ -7,6 +7,7 @@ import {
   type HistoryService,
   type LastVisit,
   type PatientChart,
+  type PlanGroup,
   successionPositionSchema,
   toothCodeSchema,
   type ToothCode,
@@ -23,11 +24,18 @@ import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
 import { PatientDiagnosesRepository } from '../persistence/patient-diagnoses.repository';
+import { PlanGroupsRepository } from '../persistence/plan-groups.repository';
+import { PlanSessionsRepository } from '../persistence/plan-sessions.repository';
 import { ToothStatusRepository } from '../persistence/tooth-status.repository';
 import { TreatmentPlansRepository } from '../persistence/treatment-plans.repository';
 import { VisitServicesRepository } from '../persistence/visit-services.repository';
 import { VisitsRepository } from '../persistence/visits.repository';
-import { toDiagnosisRecord, toHistoryService, toTreatmentPlan } from './record-mapping';
+import {
+  toDiagnosisRecord,
+  toHistoryService,
+  toPlanGroup,
+  toTreatmentPlan,
+} from './record-mapping';
 import { toVisitService } from './visit-mapping';
 
 /** A patient's diagnoses, plans and finished services, with the dentists' names resolved, and
@@ -61,6 +69,8 @@ export class ChartService {
     private readonly services: VisitServicesRepository,
     private readonly diagnoses: PatientDiagnosesRepository,
     private readonly plans: TreatmentPlansRepository,
+    private readonly groups: PlanGroupsRepository,
+    private readonly sessions: PlanSessionsRepository,
     private readonly teeth: ToothStatusRepository,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -79,7 +89,10 @@ export class ChartService {
       // A birth date on the tenant's tomorrow (allowed at entry) is a newborn.
       const ageYears =
         patient.dateOfBirth === null ? null : Math.max(0, ageOn(patient.dateOfBirth, today));
-      const { voidedVisitIds, ...records } = await this.records(patient.id);
+      const { voidedVisitIds, ...records } = await this.records(patient.id, timeZone);
+      const planGroups: PlanGroup[] = (await this.groups.listForPatient(patient.id)).map(
+        toPlanGroup,
+      );
       const liveVisit = (await this.visits.liveRefs({ patientId: patient.id })).at(-1);
       const liveServices = liveVisit
         ? (await this.services.listForVisit(liveVisit.id)).map((service) =>
@@ -94,6 +107,7 @@ export class ChartService {
           present: row.present,
         })),
         ...records,
+        planGroups,
         liveVisitId: liveVisit?.id ?? null,
         voidedVisitIds,
         teeth: [...deriveChart({ ...records, liveServices }).values()],
@@ -109,8 +123,10 @@ export class ChartService {
   toothHistory(patientId: string, toothCode: ToothCode): Promise<ToothHistory> {
     return this.read(async () => {
       const patient = await this.patients.get(patientId);
+      const { timeZone } = await this.tenancy.currentTenant();
       const { diagnoses, plans, history, voidedVisitIds } = await this.records(
         patient.id,
+        timeZone,
         toothCode,
       );
       return { toothCode, diagnoses, plans, services: history, voidedVisitIds };
@@ -142,6 +158,7 @@ export class ChartService {
         services: services.map((service) => ({
           name: service.name,
           toothCode: service.toothCode === null ? null : toothCodeSchema.parse(service.toothCode),
+          jaw: service.jaw,
         })),
         notes: visit.notes,
       };
@@ -161,8 +178,15 @@ export class ChartService {
     return this.tenantDb.run(work);
   }
 
-  /** The patient's records (one tooth's when `toothCode` is given), dentist names included. */
-  private async records(patientId: string, toothCode?: ToothCode): Promise<Records> {
+  /**
+   * The patient's records (one tooth's when `toothCode` is given), dentist names included. A
+   * diagnosis recorded without a visit is dated by `recordedAt` in the tenant's time zone.
+   */
+  private async records(
+    patientId: string,
+    timeZone: string,
+    toothCode?: ToothCode,
+  ): Promise<Records> {
     const diagnoses = await this.diagnoses.listForPatient(patientId, toothCode);
     const plans = await this.plans.listForPatient(patientId, toothCode);
     const history = await this.services.finishedForPatient(patientId, toothCode);
@@ -172,11 +196,22 @@ export class ChartService {
       ...history.map((line) => line.dentistId),
     ]);
     const nameOf = (profileId: string) => names.get(profileId) ?? '';
+    const sessions = await this.sessions.listForPlans(plans.map((plan) => plan.id));
+    const sessionsOf = (planId: string) =>
+      sessions
+        .filter((session) => session.planId === planId)
+        .map(({ visitId, date, note }) => ({ visitId, date, note }));
     return {
-      diagnoses: diagnoses.map(({ record, recordedInVisitDate }) =>
-        toDiagnosisRecord(record, recordedInVisitDate, nameOf(record.dentistId)),
+      diagnoses: diagnoses.map(({ record, visitDate }) =>
+        toDiagnosisRecord(
+          record,
+          visitDate ?? localDate(record.recordedAt, timeZone),
+          nameOf(record.dentistId),
+        ),
       ),
-      plans: plans.map((plan) => toTreatmentPlan(plan, nameOf(plan.dentistId))),
+      plans: plans.map((plan) =>
+        toTreatmentPlan(plan, nameOf(plan.dentistId), sessionsOf(plan.id)),
+      ),
       history: history.map((line) => toHistoryService(line, nameOf(line.dentistId))),
       voidedVisitIds: await this.visits.voidedIdsForPatient(patientId),
     };

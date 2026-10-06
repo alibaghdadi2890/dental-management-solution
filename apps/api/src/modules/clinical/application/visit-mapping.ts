@@ -22,6 +22,7 @@ export function toVisitService(service: StoredVisitService, currency: string): V
     chargeUnit: service.chargeUnit,
     // The table's CHECKs admit exactly the contract's codes and surface keys.
     toothCode: service.toothCode === null ? null : toothCodeSchema.parse(service.toothCode),
+    jaw: service.jaw,
     surfaces: surfacesSchema.parse(service.surfaces),
     base: { amount: service.baseAmount, currency },
     discount: { amount: service.discountAmount, currency },
@@ -70,6 +71,7 @@ export function toVisit(visit: StoredVisit, services: StoredVisitService[], now:
     pausedSeconds: visit.pausedSeconds,
     completedAt: visit.completedAt?.toISOString() ?? null,
     completedBy: visit.completedBy,
+    unfinishedAnsweredAt: visit.unfinishedAnsweredAt?.toISOString() ?? null,
     durationMinutes: visit.durationMinutes,
     notes: visit.notes,
     discountMode: visit.discountMode,

@@ -65,7 +65,7 @@ export const DEFAULT_SERVICES: readonly DefaultService[] = [
   service('ONL', 'Onlay / inlay', 'Prosthetic', 'per_tooth', '250'),
   service('MCC', 'Metal-ceramic crown', 'Prosthetic', 'per_tooth', '250'),
   service('ZIR', 'Zircon crown', 'Prosthetic', 'per_tooth', '350', { frequent: true }),
-  service('SCL', 'Scaling & polishing', 'Periodontal', 'per_jaw', '60'),
+  service('SCL', 'Scaling & polishing', 'Periodontal', 'per_mouth', '60'),
   service('XRY', 'Periapical X-ray', 'Diagnostic', 'per_tooth', '20', { active: false }),
 ];
 

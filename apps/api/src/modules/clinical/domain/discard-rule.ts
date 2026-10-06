@@ -1,7 +1,8 @@
 /**
  * What a visit has put on the record, counted by the service from the rows that point at it:
  * non-deleted services; non-deleted diagnoses and plans recorded in it; diagnoses resolved and
- * plans performed or cancelled in it; `tooth_status` rows changed in it; and its notes.
+ * plans performed or cancelled in it; sessions of plans in progress (ADR-0032) that aren't
+ * removed; `tooth_status` rows changed in it; and its notes.
  */
 export interface DiscardFacts {
   services: number;
@@ -10,6 +11,7 @@ export interface DiscardFacts {
   plansRecorded: number;
   plansPerformed: number;
   plansCancelled: number;
+  planSessions: number;
   toothChanges: number;
   notes: string;
 }
@@ -27,6 +29,7 @@ export function isDiscardable(facts: DiscardFacts): boolean {
     facts.plansRecorded === 0 &&
     facts.plansPerformed === 0 &&
     facts.plansCancelled === 0 &&
+    facts.planSessions === 0 &&
     facts.toothChanges === 0 &&
     facts.notes.trim() === ''
   );

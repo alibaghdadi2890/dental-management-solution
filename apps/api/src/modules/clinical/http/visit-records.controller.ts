@@ -1,15 +1,18 @@
 import {
   addServiceSchema,
+  answerUnfinishedSchema,
   diagnosisResultSchema,
   idSchema,
   planResultSchema,
   planTreatmentSchema,
   recordDiagnosisSchema,
+  recordSessionSchema,
   serviceResultSchema,
   setToothPresenceSchema,
   successionPositionSchema,
   toothPresenceResultSchema,
   updateServiceSchema,
+  visitResultSchema,
 } from '@dcm/contracts';
 import {
   Body,
@@ -31,6 +34,9 @@ class AddServiceDto extends createZodDto(addServiceSchema) {}
 class UpdateServiceDto extends createZodDto(updateServiceSchema) {}
 class RecordDiagnosisDto extends createZodDto(recordDiagnosisSchema) {}
 class PlanTreatmentDto extends createZodDto(planTreatmentSchema) {}
+class AnswerUnfinishedDto extends createZodDto(answerUnfinishedSchema) {}
+class VisitResultDto extends createZodDto(visitResultSchema) {}
+class RecordSessionDto extends createZodDto(recordSessionSchema) {}
 class SetToothPresenceDto extends createZodDto(setToothPresenceSchema) {}
 class ServiceResultDto extends createZodDto(serviceResultSchema) {}
 class DiagnosisResultDto extends createZodDto(diagnosisResultSchema) {}
@@ -75,6 +81,24 @@ export class VisitRecordsController {
   @ZodResponse({ type: ServiceResultDto })
   removeService(@Param() params: ServiceParamsDto) {
     return this.records.removeService(params.id, params.serviceId);
+  }
+
+  /** Not finished: the service becomes work in progress; the answer's record is its plan. */
+  @Post(':id/services/:serviceId/unfinished')
+  @RequirePermission('visit:write')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: PlanResultDto })
+  markServiceUnfinished(@Param() params: ServiceParamsDto) {
+    return this.records.markServiceUnfinished(params.id, params.serviceId);
+  }
+
+  /** Which unfinished services this visit continues; none is "Not today". */
+  @Post(':id/unfinished-answer')
+  @RequirePermission('visit:write')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: VisitResultDto })
+  answerUnfinished(@Param() params: VisitParamsDto, @Body() body: AnswerUnfinishedDto) {
+    return this.records.answerUnfinished(params.id, body);
   }
 
   // --- Diagnoses ---
@@ -125,6 +149,22 @@ export class VisitRecordsController {
   @ZodResponse({ type: PlanResultDto })
   performPlan(@Param() params: PlanParamsDto) {
     return this.records.performPlan(params.id, params.planId);
+  }
+
+  /** Continue today: this visit's session on a plan in progress. */
+  @Put(':id/plans/:planId/session')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: PlanResultDto })
+  recordSession(@Param() params: PlanParamsDto, @Body() body: RecordSessionDto) {
+    return this.records.recordSession(params.id, params.planId, body);
+  }
+
+  /** Not today: the Undo of Continue, or of Not finished in the visit that first worked on it. */
+  @Delete(':id/plans/:planId/session')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: PlanResultDto })
+  removeSession(@Param() params: PlanParamsDto) {
+    return this.records.removeSession(params.id, params.planId);
   }
 
   @Post(':id/plans/:planId/cancel')

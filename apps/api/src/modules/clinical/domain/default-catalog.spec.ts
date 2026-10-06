@@ -24,7 +24,7 @@ describe('default catalog template', () => {
       ['ONL', 'Onlay / inlay', 'Prosthetic', 'per_tooth', '250'],
       ['MCC', 'Metal-ceramic crown', 'Prosthetic', 'per_tooth', '250'],
       ['ZIR', 'Zircon crown', 'Prosthetic', 'per_tooth', '350'],
-      ['SCL', 'Scaling & polishing', 'Periodontal', 'per_jaw', '60'],
+      ['SCL', 'Scaling & polishing', 'Periodontal', 'per_mouth', '60'],
       ['XRY', 'Periapical X-ray', 'Diagnostic', 'per_tooth', '20'],
     ]);
   });

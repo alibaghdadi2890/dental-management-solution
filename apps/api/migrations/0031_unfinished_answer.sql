@@ -1,0 +1,1 @@
+ALTER TABLE "visits" ADD COLUMN "unfinished_answered_at" timestamp with time zone;

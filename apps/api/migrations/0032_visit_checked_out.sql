@@ -1,0 +1,3 @@
+ALTER TABLE "visits" ADD COLUMN "checked_out_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "visits" ADD COLUMN "checked_out_by" uuid;--> statement-breakpoint
+ALTER TABLE "visits" ADD CONSTRAINT "visits_checked_out_fields" CHECK (("visits"."checked_out_at" is null) = ("visits"."checked_out_by" is null) and ("visits"."checked_out_at" is null or "visits"."status"::text in ('completed', 'amended', 'voided')));

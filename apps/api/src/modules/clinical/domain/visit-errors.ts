@@ -53,7 +53,8 @@ export class VisitNotEmptyError extends DomainError {
   readonly kind = 'conflict';
 }
 
-/** Only records made in this visit can be removed; older ones are resolved or cancelled (W13). */
+/** Only records made in this visit can be removed from it, and only records made outside a visit
+ * from the patient record; others are resolved or cancelled (W13, ADR-0031). */
 export class RecordNotRemovableError extends DomainError {
   readonly code = 'record.not_removable';
   readonly kind = 'conflict';
@@ -68,9 +69,21 @@ export class RecordNotFoundError extends DomainError {
   readonly kind = 'not_found';
 }
 
-/** Performing, cancelling or removing a plan that is no longer `planned`. */
+/** A record made outside a visit names no dentist and the caller isn't one (ADR-0031, P4). */
+export class RecordDentistRequiredError extends DomainError {
+  readonly code = 'record.dentist_required';
+  readonly kind = 'invalid';
+}
+
+/** Starting, performing, cancelling or removing a plan in a status that doesn't allow it. */
 export class PlanNotOpenError extends DomainError {
   readonly code = 'plan.not_open';
+  readonly kind = 'conflict';
+}
+
+/** Continuing, or undoing a session of, a plan that isn't in progress (ADR-0032). */
+export class PlanNotInProgressError extends DomainError {
+  readonly code = 'plan.not_in_progress';
   readonly kind = 'conflict';
 }
 
@@ -110,9 +123,21 @@ export class ToothRequiredError extends DomainError {
   readonly kind = 'invalid';
 }
 
-/** A `per_jaw` item recorded on a tooth (spec W11). */
+/** A `per_jaw` or `per_mouth` item recorded on a tooth (spec W11). */
 export class ToothNotAllowedError extends DomainError {
   readonly code = 'visit.tooth_not_allowed';
+  readonly kind = 'invalid';
+}
+
+/** A `per_jaw` item recorded without its jaw (levels, L2). */
+export class JawRequiredError extends DomainError {
+  readonly code = 'visit.jaw_required';
+  readonly kind = 'invalid';
+}
+
+/** A jaw given for a `per_tooth` or `per_mouth` item (levels, L2). */
+export class JawNotAllowedError extends DomainError {
+  readonly code = 'visit.jaw_not_allowed';
   readonly kind = 'invalid';
 }
 
@@ -164,6 +189,12 @@ export class AmendUnknownServiceError extends DomainError {
 export class AmendPlanLinkedError extends DomainError {
   readonly code = 'visit.amend_plan_linked';
   readonly kind = 'invalid';
+}
+
+/** Only a completed or amended visit has a checkout to close (ADR-0033). */
+export class VisitNotCompletedError extends DomainError {
+  readonly code = 'visit.not_completed';
+  readonly kind = 'conflict';
 }
 
 /** A checkout discount after the visit's day (checkout handoff, C5): amend the visit instead. */

@@ -98,6 +98,11 @@ describe('ledgerEntryKindSchema', () => {
       'opening_balance',
       'adjustment',
       'visit_charge',
+      'visit_charge_adjustment',
+      'visit_charge_reversal',
+      'payment',
+      'payment_refund',
+      'payment_void',
     ]);
   });
 });
@@ -109,6 +114,7 @@ describe('visitFinancialSummarySchema', () => {
     visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
     previous: '40.00',
     totalOutstanding: '157.00',
+    payments: [],
   };
 
   it('carries the visit, previous and total amounts in the visit currency', () => {

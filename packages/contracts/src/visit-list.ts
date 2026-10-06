@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { reasonSchema } from './audit.js';
-import { chargeUnitSchema, nonNegativeAmountSchema } from './catalog.js';
+import { chargeUnitSchema, jawSchema, nonNegativeAmountSchema } from './catalog.js';
 import {
   aggregateAmountSchema,
   blankToUndefined,
@@ -65,6 +65,7 @@ export const visitListServiceSchema = z.object({
   name: z.string(),
   chargeUnit: chargeUnitSchema,
   toothCode: toothCodeSchema.nullable(),
+  jaw: jawSchema.nullable(),
   surfaces: surfacesSchema,
   /** Set when the service performed a treatment plan: amend can remove it but not re-tooth it. */
   planId: idSchema.nullable(),
@@ -96,6 +97,8 @@ export const visitListItemSchema = z.object({
   discountAmount: aggregateAmountSchema,
   total: aggregateAmountSchema,
   amendmentCount: z.number().int().nonnegative(),
+  /** When the checkout was closed without a payment (ADR-0033): it no longer waits at the desk. */
+  checkedOutAt: isoDateTimeSchema.nullable(),
   voidedAt: isoDateTimeSchema.nullable(),
   voidReason: z.string().nullable(),
   updatedAt: isoDateTimeSchema,

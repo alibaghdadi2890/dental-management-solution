@@ -46,6 +46,7 @@ import {
   RoomRequiredError,
   VisitCheckoutClosedError,
   VisitMovedError,
+  VisitNotCompletedError,
   VisitNotEmptyError,
   VisitNotFoundError,
   VisitStaleError,
@@ -88,6 +89,7 @@ const toAmendable = (service: StoredVisitService): AmendableService => ({
   name: service.name,
   chargeUnit: service.chargeUnit,
   toothCode: service.toothCode === null ? null : toothCodeSchema.parse(service.toothCode),
+  jaw: service.jaw,
   surfaces: surfacesSchema.parse(service.surfaces),
   baseAmount: service.baseAmount,
   discountAmount: service.discountAmount,
@@ -588,6 +590,36 @@ export class VisitsService {
   }
 
   /**
+   * Closes a completed or amended visit's checkout without a payment (ADR-0033) with
+   * `payment:write`: whoever collects has seen the patient out and the amount stays a receivable.
+   * Stamps `checked_out_at` and `checked_out_by` once (a second call changes nothing), which takes
+   * the visit out of the checkout queue; the status and the money are untouched. Audited
+   * `visit.checkout`; no event. A live visit → 409 `visit.not_completed`.
+   */
+  async checkOut(id: string): Promise<VisitResult> {
+    this.context.requirePermission('payment:write');
+    return this.tenantDb.run(async () => {
+      const before = await this.visits.lockForCorrection(id);
+      if (before.status !== 'completed' && before.status !== 'amended') {
+        throw new VisitNotCompletedError(`Visit is ${before.status}; it has no checkout to close`);
+      }
+      if (before.checkedOutAt !== null) return { visit: await this.toVisit(before) };
+      const after = await this.visits.update(id, {
+        checkedOutAt: this.clock.now(),
+        checkedOutBy: this.context.requireUserId(),
+      });
+      await this.audit.record({
+        action: 'visit.checkout',
+        resourceType: 'visit',
+        resourceId: id,
+        before: { checkedOutAt: null },
+        after: { checkedOutAt: after.checkedOutAt, checkedOutBy: after.checkedOutBy },
+      });
+      return { visit: await this.toVisit(after) };
+    });
+  }
+
+  /**
    * Voids a completed or amended visit (4b, D4, D6) with `visit:void`: it keeps its services,
    * money and records but counts nowhere. Same locks and staleness check as `amend`; audits
    * `visit.void` with the reason and publishes `VisitVoided` inside the transaction — `billing`
@@ -977,6 +1009,7 @@ export class VisitsService {
             name: line.name,
             chargeUnit: line.chargeUnit,
             toothCode: line.toothCode,
+            jaw: line.jaw,
             surfaces: line.surfaces,
             planId: line.planId,
             final: line.final,
@@ -989,6 +1022,7 @@ export class VisitsService {
         discountAmount: money.discount,
         total: money.total,
         amendmentCount: amendmentCounts.get(visit.id) ?? 0,
+        checkedOutAt: visit.checkedOutAt?.toISOString() ?? null,
         voidedAt: visit.voidedAt?.toISOString() ?? null,
         voidReason: visit.voidReason,
         updatedAt: visit.updatedAt.toISOString(),

@@ -8,6 +8,7 @@ const empty: DiscardFacts = {
   plansRecorded: 0,
   plansPerformed: 0,
   plansCancelled: 0,
+  planSessions: 0,
   toothChanges: 0,
   notes: '',
 };
@@ -24,6 +25,7 @@ describe('isDiscardable', () => {
     'plansRecorded',
     'plansPerformed',
     'plansCancelled',
+    'planSessions',
     'toothChanges',
   ])('refuses when %s alone is non-zero', (fact) => {
     expect(isDiscardable({ ...empty, [fact]: 1 })).toBe(false);

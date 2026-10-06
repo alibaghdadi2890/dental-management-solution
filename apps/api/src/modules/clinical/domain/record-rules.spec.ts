@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
-import { assertCurrency, assertLinePrice, assertTarget } from './record-rules';
+import {
+  assertCurrency,
+  assertLinePrice,
+  assertTarget,
+  isRemovableOutsideVisit,
+} from './record-rules';
 import {
   CurrencyMismatchError,
+  JawNotAllowedError,
+  JawRequiredError,
   SurfacesInvalidError,
   ToothNotAllowedError,
   ToothRequiredError,
@@ -24,13 +31,34 @@ describe('assertTarget', () => {
     }).not.toThrow();
   });
 
-  it('accepts a per-jaw item with no tooth and no surfaces', () => {
+  it('accepts a per-jaw item on a jaw, and a whole-mouth item with no target', () => {
+    expect(() => {
+      assertTarget('per_jaw', null, [], 'upper');
+    }).not.toThrow();
+    expect(() => {
+      assertTarget('per_jaw', undefined, [], 'lower');
+    }).not.toThrow();
+    expect(() => {
+      assertTarget('per_mouth', null, []);
+    }).not.toThrow();
+    expect(() => {
+      assertTarget('per_mouth', undefined, [], null);
+    }).not.toThrow();
+  });
+
+  it('422 visit.jaw_required: a per-jaw item without its jaw', () => {
     expect(() => {
       assertTarget('per_jaw', null, []);
-    }).not.toThrow();
+    }).toThrow(JawRequiredError);
+  });
+
+  it('422 visit.jaw_not_allowed: a jaw on a per-tooth or whole-mouth item', () => {
     expect(() => {
-      assertTarget('per_jaw', undefined, []);
-    }).not.toThrow();
+      assertTarget('per_tooth', '16', [], 'upper');
+    }).toThrow(JawNotAllowedError);
+    expect(() => {
+      assertTarget('per_mouth', null, [], 'lower');
+    }).toThrow(JawNotAllowedError);
   });
 
   it('422 visit.tooth_required: a per-tooth item without a tooth', () => {
@@ -42,15 +70,21 @@ describe('assertTarget', () => {
     }).toThrow(ToothRequiredError);
   });
 
-  it('422 visit.tooth_not_allowed: a per-jaw item on a tooth', () => {
+  it('422 visit.tooth_not_allowed: a per-jaw or whole-mouth item on a tooth', () => {
     expect(() => {
-      assertTarget('per_jaw', '16', []);
+      assertTarget('per_jaw', '16', [], 'upper');
+    }).toThrow(ToothNotAllowedError);
+    expect(() => {
+      assertTarget('per_mouth', '16', []);
     }).toThrow(ToothNotAllowedError);
   });
 
-  it('422 visit.surfaces_invalid: surfaces on a per-jaw item', () => {
+  it('422 visit.surfaces_invalid: surfaces on a per-jaw or whole-mouth item', () => {
     expect(() => {
-      assertTarget('per_jaw', null, ['O']);
+      assertTarget('per_jaw', null, ['O'], 'upper');
+    }).toThrow(SurfacesInvalidError);
+    expect(() => {
+      assertTarget('per_mouth', null, ['O']);
     }).toThrow(SurfacesInvalidError);
   });
 
@@ -61,6 +95,13 @@ describe('assertTarget', () => {
     expect(() => {
       assertTarget('per_tooth', '16', ['I']);
     }).toThrow(SurfacesInvalidError);
+  });
+});
+
+describe('isRemovableOutsideVisit', () => {
+  it('is true only for a record made without a visit', () => {
+    expect(isRemovableOutsideVisit({ recordedInVisitId: null })).toBe(true);
+    expect(isRemovableOutsideVisit({ recordedInVisitId: 'visit-1' })).toBe(false);
   });
 });
 

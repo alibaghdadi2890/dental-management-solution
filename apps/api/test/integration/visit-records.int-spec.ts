@@ -49,7 +49,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
   let dentist: Staff;
   let assistant: Staff;
   let frontdesk: Staff;
-  let service: Record<'fill' | 'crown' | 'clean' | 'retired' | 'foreign', ServiceItem>;
+  let service: Record<'fill' | 'crown' | 'clean' | 'whiten' | 'retired' | 'foreign', ServiceItem>;
   let diagnosis: Record<'caries' | 'fracture' | 'retired', DiagnosisItem>;
 
   const createStaff = async (role: 'dentist' | 'assistant' | 'frontdesk'): Promise<Staff> => {
@@ -199,9 +199,10 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
       items: [
         { code: 'ZFILL', name: 'Test filling', chargeUnit: 'per_tooth', price: '50' },
         { code: 'ZCROWN', name: 'Test crown', chargeUnit: 'per_tooth', price: '120' },
-        { code: 'ZCLEAN', name: 'Test cleaning', chargeUnit: 'per_jaw', price: '30' },
+        { code: 'ZCLEAN', name: 'Test cleaning', chargeUnit: 'per_mouth', price: '30' },
+        { code: 'ZWHITE', name: 'Test whitening', chargeUnit: 'per_jaw', price: '70' },
         { code: 'ZOLD', name: 'Retired', chargeUnit: 'per_tooth', price: '10', active: false },
-        { code: 'ZEUR', name: 'Priced in euros', chargeUnit: 'per_jaw', price: '40' },
+        { code: 'ZEUR', name: 'Priced in euros', chargeUnit: 'per_mouth', price: '40' },
       ],
     });
     expect(services.status, JSON.stringify(services.body)).toBe(200);
@@ -214,6 +215,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
       fill: byCode('ZFILL'),
       crown: byCode('ZCROWN'),
       clean: byCode('ZCLEAN'),
+      whiten: byCode('ZWHITE'),
       retired: byCode('ZOLD'),
       foreign: byCode('ZEUR'),
     };
@@ -285,7 +287,12 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
       expect(after.money).toMatchObject({ subtotal: '50.00', total: '50.00' });
 
       const jaw = await addedService(dentist.agent, visit.id, { procedureId: service.clean.id });
-      expect(jaw.record).toMatchObject({ toothCode: null, surfaces: [], chargeUnit: 'per_jaw' });
+      expect(jaw.record).toMatchObject({
+        toothCode: null,
+        jaw: null,
+        surfaces: [],
+        chargeUnit: 'per_mouth',
+      });
       expect(jaw.visit.money.subtotal).toBe('80.00');
 
       expect(await actionsOn('visit_service', record.id)).toEqual(['visit_service.create']);
@@ -412,6 +419,78 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
     });
   });
 
+  describe('levels', () => {
+    it('records a per-jaw service on each jaw as its own line, and a whole-mouth one with no target', async () => {
+      const patient = await createPatient('Jaw Levels');
+      const visit = await startVisit(patient);
+      const upper = await addedService(dentist.agent, visit.id, {
+        procedureId: service.whiten.id,
+        jaw: 'upper',
+      });
+      expect(upper.record).toMatchObject({ chargeUnit: 'per_jaw', jaw: 'upper', toothCode: null });
+      const lower = await addedService(dentist.agent, visit.id, {
+        procedureId: service.whiten.id,
+        jaw: 'lower',
+      });
+      expect(lower.record.jaw).toBe('lower');
+      const mouth = await addedService(dentist.agent, visit.id, { procedureId: service.clean.id });
+      expect(mouth.visit.services.map((item) => item.jaw)).toEqual(['upper', 'lower', null]);
+      expect(mouth.visit.money.subtotal).toBe('170.00');
+    });
+
+    it('performs a per-jaw plan into a service on the same jaw', async () => {
+      const patient = await createPatient('Jaw Plan');
+      const visit = await startVisit(patient);
+      const { record: plan } = await planned(dentist.agent, visit.id, {
+        procedureId: service.whiten.id,
+        jaw: 'lower',
+      });
+      expect(plan).toMatchObject({ chargeUnit: 'per_jaw', jaw: 'lower', toothCode: null });
+      const performed = await ok<PlanResult>(
+        dentist.agent.post(path(visit.id, `plans/${plan.id}/perform`)),
+      );
+      expect(performed.visit.services).toMatchObject([{ planId: plan.id, jaw: 'lower' }]);
+    });
+
+    it('refuses a target that does not follow the unit (422)', async () => {
+      const patient = await createPatient('Jaw Rules');
+      const visit = await startVisit(patient);
+      await expectProblem(
+        addService(dentist.agent, visit.id, { procedureId: service.whiten.id }),
+        422,
+        'visit.jaw_required',
+      );
+      await expectProblem(
+        addService(dentist.agent, visit.id, { procedureId: service.clean.id, jaw: 'upper' }),
+        422,
+        'visit.jaw_not_allowed',
+      );
+      await expectProblem(
+        addService(dentist.agent, visit.id, {
+          procedureId: service.fill.id,
+          toothCode: '16',
+          jaw: 'upper',
+        }),
+        422,
+        'visit.jaw_not_allowed',
+      );
+      await expectProblem(
+        addService(dentist.agent, visit.id, {
+          procedureId: service.whiten.id,
+          jaw: 'upper',
+          toothCode: '16',
+        }),
+        422,
+        'visit.tooth_not_allowed',
+      );
+      await expectProblem(
+        dentist.agent.post(path(visit.id, 'plans')).send({ procedureId: service.whiten.id }),
+        422,
+        'visit.jaw_required',
+      );
+    });
+  });
+
   describe('diagnoses', () => {
     it('records, resolves and reopens a diagnosis, with events', async () => {
       const patient = await createPatient('Diagnosis Flow');
@@ -435,7 +514,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         dentistName: dentist.user.displayName,
         recordedBy: assistant.user.id,
         recordedInVisitId: visit.id,
-        recordedInVisitDate: TODAY,
+        recordedDate: TODAY,
         recordedAt: new Date(NOON).toISOString(),
         resolvedInVisitId: null,
         resolvedAt: null,
@@ -551,7 +630,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         id: older,
         status: 'resolved',
         recordedInVisitId: earlier,
-        recordedInVisitDate: EARLIER,
+        recordedDate: EARLIER,
         resolvedInVisitId: visit.id,
       });
     });

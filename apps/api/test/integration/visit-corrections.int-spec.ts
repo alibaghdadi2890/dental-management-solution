@@ -577,6 +577,54 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
     });
   });
 
+  describe('closing the checkout without a payment (ADR-0033)', () => {
+    type Listed = { items: { id: string; status: string; checkedOutAt: string | null }[] };
+    const listed = async (patientId: string, visitId: string) =>
+      (await ok<Listed>(owner.get(`/api/v1/visits?range=all&patientId=${patientId}`))).items.find(
+        (item) => item.id === visitId,
+      );
+    const checkOut = (agent: TestAgent, visitId: string) =>
+      agent.post(`/api/v1/visits/${visitId}/checkout`);
+
+    it('front desk closes it once: the visit stays completed and still owes', async () => {
+      const patient = await patientOwing('Checkout Closed', '1');
+      const { visit } = await completedVisit(patient);
+      expect(await listed(patient.id, visit.id)).toMatchObject({ checkedOutAt: null });
+
+      await ok(checkOut(frontdesk.agent, visit.id));
+      const closed = await listed(patient.id, visit.id);
+      expect(closed).toMatchObject({
+        status: 'completed',
+        checkedOutAt: new Date(NOON).toISOString(),
+      });
+      expect(await balanceOf(patient.id)).toEqual([{ amount: '118.00', currency: 'USD' }]);
+      const [latest] = await auditOf(visit.id);
+      expect(latest).toMatchObject({
+        action: 'visit.checkout',
+        after: { checkedOutBy: frontdesk.user.id },
+      });
+
+      // A second Done (another desk) changes and audits nothing.
+      await ok(checkOut(dentist.agent, visit.id));
+      expect(await listed(patient.id, visit.id)).toEqual(closed);
+      expect(
+        (await auditOf(visit.id)).filter((row) => row.action === 'visit.checkout'),
+      ).toHaveLength(1);
+    });
+
+    it('is refused without payment:write and on a live visit', async () => {
+      const patient = await patientOwing('Checkout Not Closed', '1');
+      const { visit } = await completedVisit(patient);
+      expect((await checkOut(assistant.agent, visit.id)).status).toBe(403);
+
+      const live = await startVisit(await patientOwing('Checkout Still Live', '1'));
+      const notDone = await checkOut(frontdesk.agent, live.id);
+      expect(notDone.status).toBe(409);
+      expect(problem(notDone.body).code).toBe('visit.not_completed');
+      expect(await listed(patient.id, visit.id)).toMatchObject({ checkedOutAt: null });
+    });
+  });
+
   it('keeps amendments append-only for the runtime role', async () => {
     const patient = await patientOwing('Append Only', '1');
     const { visit, fillingId } = await completedVisit(patient);

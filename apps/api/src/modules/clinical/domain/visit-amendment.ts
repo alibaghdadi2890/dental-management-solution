@@ -6,6 +6,7 @@ import {
   type AmendVisitInput,
   type ChargeUnit,
   type DiscountMode,
+  type Jaw,
   type SurfaceKey,
   type ToothCode,
 } from '@dcm/contracts';
@@ -19,6 +20,7 @@ export interface AmendableService {
   name: string;
   chargeUnit: ChargeUnit;
   toothCode: ToothCode | null;
+  jaw: Jaw | null;
   surfaces: SurfaceKey[];
   baseAmount: string;
   discountAmount: string;
@@ -38,6 +40,8 @@ export interface AmendmentSnapshot {
     code: string;
     name: string;
     toothCode: ToothCode | null;
+    /** Absent on snapshots taken before service levels. */
+    jaw?: Jaw | null;
     surfaces: SurfaceKey[];
     final: string;
   }[];
@@ -78,6 +82,7 @@ function snapshot(
       code: service.code,
       name: service.name,
       toothCode: service.toothCode,
+      jaw: service.jaw,
       surfaces: service.surfaces,
       final: lineFinal({ base: service.baseAmount, discount: service.discountAmount }),
     })),
@@ -132,7 +137,7 @@ export function planAmendment(
         `${service.name} performed a treatment plan; remove it instead of moving it`,
       );
     }
-    assertTarget(service.chargeUnit, toothCode, surfaces);
+    assertTarget(service.chargeUnit, toothCode, surfaces, service.jaw);
     if (changed) edited.push({ id: service.id, toothCode, surfaces });
     kept.push({ ...service, toothCode, surfaces });
   }

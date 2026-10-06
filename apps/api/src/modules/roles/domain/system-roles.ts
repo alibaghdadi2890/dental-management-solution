@@ -28,6 +28,7 @@ export const SYSTEM_ROLES: readonly SystemRole[] = [
       'visit:void',
       'visit:amend',
       'visit:discount',
+      'chart:write',
       'catalog:read',
       'payment:read',
       'payment:write',

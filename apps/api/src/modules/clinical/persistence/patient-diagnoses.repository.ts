@@ -25,6 +25,13 @@ export type NewDiagnosisRecord = Pick<
   | 'recordedAt'
 >;
 
+/** A record with the local date of the visit that recorded it; null when none did (ADR-0031):
+ * the service then dates it by `recordedAt` in the tenant's time zone. */
+export interface DatedDiagnosisRecord {
+  record: StoredDiagnosisRecord;
+  visitDate: string | null;
+}
+
 /** Resolve, reopen (the pair is set or cleared together) or the soft delete. */
 export type DiagnosisRecordPatch = Partial<
   Pick<StoredDiagnosisRecord, 'status' | 'resolvedInVisitId' | 'resolvedAt' | 'deletedAt'>
@@ -53,17 +60,14 @@ export class PatientDiagnosesRepository {
 
   /**
    * The patient's diagnosis (not removed) `FOR UPDATE` in the caller's transaction, with the local
-   * date of the visit that recorded it; else 404 `record.not_found`.
+   * date of the visit that recorded it, if one did; else 404 `record.not_found`.
    */
-  lockForPatient(
-    id: string,
-    patientId: string,
-  ): Promise<{ record: StoredDiagnosisRecord; recordedInVisitDate: string }> {
+  lockForPatient(id: string, patientId: string): Promise<DatedDiagnosisRecord> {
     return this.db.run(async (tx) => {
       const [row] = await tx
-        .select({ ...diagnosisColumns, recordedInVisitDate: visits.localDate })
+        .select({ ...diagnosisColumns, visitDate: visits.localDate })
         .from(patientDiagnoses)
-        .innerJoin(visits, eq(visits.id, patientDiagnoses.recordedInVisitId))
+        .leftJoin(visits, eq(visits.id, patientDiagnoses.recordedInVisitId))
         .where(
           and(
             eq(patientDiagnoses.id, id),
@@ -73,25 +77,22 @@ export class PatientDiagnosesRepository {
         )
         .for('update', { of: patientDiagnoses });
       if (!row) throw new RecordNotFoundError('Diagnosis not found for this patient');
-      const { recordedInVisitDate, ...record } = row;
-      return { record, recordedInVisitDate };
+      const { visitDate, ...record } = row;
+      return { record, visitDate };
     });
   }
 
   /**
    * The patient's diagnoses that aren't removed, active and resolved, in the order they were
-   * recorded, each with the local date of the visit that recorded it; only one tooth's when
+   * recorded, each with the local date of the visit that recorded it, if one did; only one tooth's when
    * `toothCode` is given.
    */
-  listForPatient(
-    patientId: string,
-    toothCode?: string,
-  ): Promise<{ record: StoredDiagnosisRecord; recordedInVisitDate: string }[]> {
+  listForPatient(patientId: string, toothCode?: string): Promise<DatedDiagnosisRecord[]> {
     return this.db.run(async (tx) => {
       const rows = await tx
-        .select({ ...diagnosisColumns, recordedInVisitDate: visits.localDate })
+        .select({ ...diagnosisColumns, visitDate: visits.localDate })
         .from(patientDiagnoses)
-        .innerJoin(visits, eq(visits.id, patientDiagnoses.recordedInVisitId))
+        .leftJoin(visits, eq(visits.id, patientDiagnoses.recordedInVisitId))
         .where(
           and(
             eq(patientDiagnoses.patientId, patientId),
@@ -100,7 +101,7 @@ export class PatientDiagnosesRepository {
           ),
         )
         .orderBy(asc(patientDiagnoses.recordedAt), asc(patientDiagnoses.id));
-      return rows.map(({ recordedInVisitDate, ...record }) => ({ record, recordedInVisitDate }));
+      return rows.map(({ visitDate, ...record }) => ({ record, visitDate }));
     });
   }
 

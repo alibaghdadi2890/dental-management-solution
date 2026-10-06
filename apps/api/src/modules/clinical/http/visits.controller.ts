@@ -164,6 +164,15 @@ export class VisitsController {
     return this.visits.setCheckoutDiscount(params.id, body);
   }
 
+  /** `{ visit }` out of the checkout queue: its checkout was closed without a payment (ADR-0033). */
+  @Post(':id/checkout')
+  @RequirePermission('payment:write')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: VisitResultDto })
+  checkOut(@Param() params: VisitParamsDto) {
+    return this.visits.checkOut(params.id);
+  }
+
   /** `{ visit }` voided; `billing` has reversed its charge in the same transaction (4b). */
   @Post(':id/void')
   @RequirePermission('visit:void')

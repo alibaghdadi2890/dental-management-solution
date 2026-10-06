@@ -250,7 +250,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       items: [
         { code: 'ZFILL', name: 'Test filling', chargeUnit: 'per_tooth', price: '50' },
         { code: 'ZCROWN', name: 'Test crown', chargeUnit: 'per_tooth', price: '120' },
-        { code: 'ZCLEAN', name: 'Test cleaning', chargeUnit: 'per_jaw', price: '30' },
+        { code: 'ZCLEAN', name: 'Test cleaning', chargeUnit: 'per_mouth', price: '30' },
       ],
     });
     expect(services.status, JSON.stringify(services.body)).toBe(200);
@@ -293,10 +293,11 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       const child = await createPatient('Chart Child', '2018-01-15');
       const auto = await chartOf(child);
       expect(auto).toEqual({
-        dentition: { stage: 'mixed', source: 'auto', ageYears: 8 },
+        dentition: { stage: 'primary', source: 'auto', ageYears: 8 },
         toothStatus: [],
         diagnoses: [],
         plans: [],
+        planGroups: [],
         history: [],
         liveVisitId: null,
         voidedVisitIds: [],
@@ -319,7 +320,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       testApp.clock.set(new Date('2026-06-09T22:00:00Z'));
       const child = await createPatient('Chart Sixth Birthday', '2020-06-10');
       expect((await chartOf(child)).dentition).toEqual({
-        stage: 'mixed',
+        stage: 'primary',
         source: 'auto',
         ageYears: 6,
       });
@@ -408,7 +409,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       expect(chart.diagnoses.map((record) => record.id)).toEqual([older, caries.record.id]);
       expect(chart.diagnoses[0]).toMatchObject({
         recordedInVisitId: earlier,
-        recordedInVisitDate: EARLIER,
+        recordedDate: EARLIER,
         dentistName: dentist.user.displayName,
       });
       expect(chart.plans).toEqual([plan.record]);
@@ -421,6 +422,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
           code: 'ZCLEAN',
           name: 'Test cleaning',
           toothCode: null,
+          jaw: null,
           surfaces: [],
           final: { amount: '30.00', currency: 'USD' },
           planId: null,
@@ -433,6 +435,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
           code: 'ZFILL',
           name: 'Test filling',
           toothCode: '16',
+          jaw: null,
           surfaces: ['O'],
           final: { amount: '45.00', currency: 'USD' },
           planId: null,
@@ -564,7 +567,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         expect.objectContaining({
           id: finding.record.id,
           recordedInVisitId: first.id,
-          recordedInVisitDate: EARLIER,
+          recordedDate: EARLIER,
         }),
       ]);
       expect(history.plans).toEqual([
@@ -645,8 +648,8 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         durationMinutes: 42,
         total: { amount: '75.00', currency: 'USD' },
         services: [
-          { name: 'Test filling', toothCode: '16' },
-          { name: 'Test cleaning', toothCode: null },
+          { name: 'Test filling', toothCode: '16', jaw: null },
+          { name: 'Test cleaning', toothCode: null, jaw: null },
         ],
         notes: 'Check again in six months',
       });
@@ -705,8 +708,8 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
     it('refuses to delete a catalog row a record uses (409 catalog.in_use) until it is removed', async () => {
       const catalog = await owner.put('/api/v1/catalog/services').send({
         items: [
-          { code: 'ZUSED', name: 'Used service', chargeUnit: 'per_jaw', price: '10' },
-          { code: 'ZFREE', name: 'Unused service', chargeUnit: 'per_jaw', price: '10' },
+          { code: 'ZUSED', name: 'Used service', chargeUnit: 'per_mouth', price: '10' },
+          { code: 'ZFREE', name: 'Unused service', chargeUnit: 'per_mouth', price: '10' },
         ],
       });
       expect(catalog.status, JSON.stringify(catalog.body)).toBe(200);

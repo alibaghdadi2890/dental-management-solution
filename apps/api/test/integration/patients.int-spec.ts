@@ -900,16 +900,16 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       const dentist = await createStaff(main, { displayName: 'Dr. Denti' });
       const agent = await signInAndSetPassword(testApp.app, dentist.email, TEMPORARY);
 
-      const set = await setDentition(agent, patient.id, 'mixed');
+      const set = await setDentition(agent, patient.id, 'primary');
       expect(set.status, JSON.stringify(set.body)).toBe(200);
-      expect(set.body).toMatchObject({ id: patient.id, dentitionOverride: 'mixed' });
-      expect((await getPatient(main.owner, patient.id)).dentitionOverride).toBe('mixed');
+      expect(set.body).toMatchObject({ id: patient.id, dentitionOverride: 'primary' });
+      expect((await getPatient(main.owner, patient.id)).dentitionOverride).toBe('primary');
 
       const [entry] = await auditOf(main.owner, `resourceId=${patient.id}`);
       expect(entry).toMatchObject({
         action: 'patient.dentition',
         before: { dentitionOverride: null },
-        after: { dentitionOverride: 'mixed' },
+        after: { dentitionOverride: 'primary' },
       });
 
       // Back to auto.
@@ -929,7 +929,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     });
 
     it('returns 404 patient.not_found for an unknown patient', async () => {
-      const response = await setDentition(main.owner, newId(), 'mixed');
+      const response = await setDentition(main.owner, newId(), 'primary');
       expect(response.status).toBe(404);
       expect(response.body).toMatchObject({ code: 'patient.not_found' });
     });
@@ -966,7 +966,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         phone: '71000052',
       });
       await main.owner.post('/api/v1/patients/archive').send({ ids: [patient.id] });
-      const response = await setDentition(main.owner, patient.id, 'mixed');
+      const response = await setDentition(main.owner, patient.id, 'primary');
       expect(response.status).toBe(409);
       expect(response.body).toMatchObject({ code: 'patient.archived' });
     });
@@ -983,7 +983,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       await main.owner
         .post('/api/v1/patients/merge')
         .send({ keepId: kept.id, dropId: dropped.id, reason: 'Duplicate' });
-      const response = await setDentition(main.owner, dropped.id, 'mixed');
+      const response = await setDentition(main.owner, dropped.id, 'primary');
       expect(response.status).toBe(409);
       expect(response.body).toMatchObject({ code: 'patient.merged' });
     });
@@ -1000,7 +1000,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
           { requestId: newId(), actorKind: 'user', tenantId: main.tenant.id, userId: newId() },
           () => {
             context.setPermissions(['patient:write']);
-            return service.setDentition(patient.id, { override: 'mixed' });
+            return service.setDentition(patient.id, { override: 'primary' });
           },
         ),
       ).rejects.toBeInstanceOf(PermissionDeniedError);
@@ -1019,7 +1019,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
           { requestId: newId(), actorKind: 'user', tenantId: main.tenant.id, userId: newId() },
           () => {
             context.setPermissions(['visit:write']);
-            return service.setDentition(patient.id, { override: 'mixed' });
+            return service.setDentition(patient.id, { override: 'primary' });
           },
         ),
       ).rejects.toBeInstanceOf(PermissionDeniedError);
