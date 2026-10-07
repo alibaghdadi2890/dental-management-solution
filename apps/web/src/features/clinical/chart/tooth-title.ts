@@ -1,4 +1,4 @@
-import type { ToothState } from '@dcm/contracts';
+import type { ToothPresenceState, ToothState } from '@dcm/contracts';
 import type { TFunction } from 'i18next';
 
 export interface ToothTitleInput {
@@ -7,7 +7,8 @@ export interface ToothTitleInput {
   /** The translated anatomical name. */
   name: string;
   primary: boolean;
-  notErupted: boolean;
+  /** What is at the position; a natural tooth that is simply there adds nothing. */
+  presence: ToothPresenceState;
   /** Absent when nothing is recorded on the tooth (`deriveChart`'s map is sparse). */
   tooth: ToothState | undefined;
 }
@@ -19,6 +20,8 @@ const SEPARATOR = ' · ';
  * `#3 · Upper right first molar · Dental caries · planned: Zircon Crown · 2 recorded services`,
  * assembled from whichever of diagnosis / plan / history exist, else "no recorded treatment".
  * Work charted in the live visit is named too, so a tooth treated today never reads as untouched.
+ * A missing, not-erupted or implant position says so first (feature 7): the name is how a screen
+ * reader, and a test, tells them apart.
  */
 export function toothTitle(t: TFunction<'clinical'>, input: ToothTitleInput): string {
   const diagnoses = input.tooth?.titleParts.diagnoses ?? [];
@@ -31,7 +34,7 @@ export function toothTitle(t: TFunction<'clinical'>, input: ToothTitleInput): st
 
   const bits: string[] = [];
   if (input.primary) bits.push(t('title.primary'));
-  if (input.notErupted) bits.push(t('title.notErupted'));
+  if (input.presence !== 'present') bits.push(t(`title.presence.${input.presence}`));
   if (diagnoses.length > 0) bits.push(list(diagnoses));
   if (plans.length > 0) {
     const key = input.tooth?.state === 'in_progress' ? 'title.inProgress' : 'title.planned';

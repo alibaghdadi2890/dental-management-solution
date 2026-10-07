@@ -264,6 +264,7 @@
     "title": "Paramètres du cabinet",
     "body": "Le fuseau horaire, la devise et la langue s’appliquent à tous les utilisateurs de ce cabinet.",
     "saved": "Paramètres enregistrés",
-    "failed": "Impossible d’enregistrer les paramètres."
+    "failed": "Impossible d’enregistrer les paramètres.",
+    "currencyLocked": "Verrouillée — ce cabinet a des soldes enregistrés en {{currency}}."
   }
 }

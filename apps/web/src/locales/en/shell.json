@@ -22,7 +22,8 @@
     "platform": "Platform",
     "tenants": "Tenants",
     "payments": "Payments",
-    "today": "Today"
+    "today": "Today",
+    "activity": "Activity"
   },
   "breadcrumb": "Breadcrumb",
   "platformCrumb": "Platform",

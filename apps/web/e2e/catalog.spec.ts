@@ -31,7 +31,7 @@ test('a new clinic starts with the default catalog, which its owner edits', asyn
 
   await page.getByText(clinic.name).click();
   await expect(page.getByRole('heading', { level: 1, name: clinic.name })).toBeVisible();
-  await expect(page.getByText('11 active of 12')).toBeVisible();
+  await expect(page.getByText('12 active of 13')).toBeVisible();
   await expect(page.getByText('13 active of 14')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Seed default catalog' })).toBeHidden();
   await page.getByRole('button', { name: 'Sign out' }).click();

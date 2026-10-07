@@ -27,6 +27,7 @@ const service = (n: number, code: string, name: string, category: string, active
     price: { amount: '30.00', currency: 'USD' },
     frequent: false,
     active,
+    toothEffect: 'none',
   }) satisfies ServiceItem;
 
 const SERVICES = [
@@ -184,6 +185,7 @@ describe('CatalogPage', () => {
           price: '30',
           frequent: true,
           active: true,
+          toothEffect: 'none',
         },
       ],
     });

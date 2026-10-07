@@ -1,4 +1,4 @@
-import type { PatientChart, ToothCode, Visit } from '@dcm/contracts';
+import type { PatientChart, ToothCode, ToothPresenceState, Visit } from '@dcm/contracts';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { id, json } from '@/features/patients/patients.test-utils';
@@ -11,6 +11,7 @@ import {
   mockWorkspace,
   OLDER_VISIT_ID,
   pickRowAction,
+  presenceRecord,
   renderWorkspace,
   sent,
   serviceItem,
@@ -84,12 +85,11 @@ function fakeClinic(initial: { visit?: Visit; chart?: PatientChart } = {}) {
         state.visit = { ...state.visit, services: [...state.visit.services, added] };
         return json({ visit: state.visit, record: added });
       }
-      const position = /\/teeth\/(\d+)$/.exec(path)?.[1];
-      if (method === 'PUT' && position) {
-        const { present } = body as { present: 'primary' | 'permanent' };
-        const record = { position: position as '14', present };
-        const others = state.chart.toothStatus.filter((row) => row.position !== position);
-        state.chart = { ...state.chart, toothStatus: [...others, record] };
+      const presenceOf = /\/teeth\/(\d+)\/presence$/.exec(path)?.[1];
+      if (method === 'PUT' && presenceOf) {
+        const { presence } = body as { presence: ToothPresenceState };
+        const record = presenceRecord(70, presenceOf as ToothCode, presence);
+        state.chart = { ...state.chart, presence: [...state.chart.presence, record] };
         return json({ visit: state.visit, record });
       }
       return undefined;
@@ -135,6 +135,39 @@ describe('ToothPanel', () => {
     expect(within(aside()).getByText('Upper')).toBeTruthy();
     expect(within(aside()).getByText('Upper right first molar')).toBeTruthy();
     expect(within(aside()).queryByText(/^Surfaces selected/)).toBeNull();
+  });
+
+  it('marks a tooth missing from the Presence menu at once, with an Undo toast (feature 7, H1)', async () => {
+    const { fetchMock } = fakeClinic();
+    renderWorkspace();
+    await selectTooth(/^#36 · /);
+    const menu = within(aside()).getByRole('button', { name: 'Presence of tooth 36: Present' });
+    fireEvent.pointerDown(menu, { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Missing' }));
+
+    await waitFor(() => {
+      expect(sent(fetchMock, 'PUT', `/visits/${VISIT_ID}/teeth/36/presence`)).toEqual({
+        presence: 'missing',
+      });
+    });
+    const toast = await screen.findByText('Tooth 36 marked missing');
+    expect(
+      within(toast.closest('[role="status"]') as HTMLElement).getByRole('button', { name: 'Undo' }),
+    ).toBeTruthy();
+    // The chart, the menu and the banner all say so; the tooth stays chartable (H3).
+    await waitFor(() => {
+      expect(
+        within(aside()).getByRole('button', { name: 'Presence of tooth 36: Missing' }),
+      ).toBeTruthy();
+    });
+    const banner = aside().querySelector('[data-presence-banner]')?.textContent ?? '';
+    expect(banner).toMatch(/^Missing since 29 Sep/);
+    expect(banner).toContain('visit V-000045 · recorded by Dr. Amal Karim');
+    const card = screen.getByRole('region', { name: 'Dental chart' });
+    expect(within(card).getByRole('button', { name: /^#36 · .* · missing · / })).toBeTruthy();
+    expect(
+      within(aside()).getAllByRole('button', { name: 'Add diagnosis' }).length,
+    ).toBeGreaterThan(0);
   });
 
   it('builds the pending surface scope from the glyph, and adding a service clears it', async () => {

@@ -10,6 +10,8 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatMoney } from '@/lib/format';
 import { PanelGlyph } from '../../chart/panel-glyph';
+import { PresenceMenu } from '../../presence/presence-menu';
+import { latestPresence, presenceBanner } from '../../presence/presence-text';
 import {
   useChartSettings,
   useSurfaceLabel,
@@ -23,6 +25,7 @@ import { CompletedSection } from './completed-section';
 import { DiagnosisSection } from './diagnosis-section';
 import { Badge } from './panel-section';
 import { PlanSection } from './plan-section';
+import { QuickAdd } from './quick-add';
 import { plansTotal, toothRecords } from './tooth-records';
 
 type SectionKey = 'diagnosis' | 'plan' | 'completed';
@@ -47,7 +50,9 @@ export interface ToothPanelProps {
  * The selected-tooth panel (spec §Selected Tooth Panel): with a jaw or the whole mouth selected,
  * `AreaPanel`; with nothing, the empty state; else a
  * header (the enlarged glyph — its surfaces scope the next record in surface mode — the label,
- * Upper/Lower, the name and the pending surfaces), the planned strip, then the three
+ * Upper/Lower, the Presence control and its one-line banner (feature 7: a missing, not-erupted
+ * or implant position is charted like any other), the name and the pending surfaces), in a visit
+ * the quick add (`QuickAdd`), the planned strip, then the three
  * stages, each collapsible and open by default. Read-only without `visit:write` (W18): no add,
  * remove or perform controls and no surface toggles.
  */
@@ -125,6 +130,9 @@ function SelectedTooth({
   const surfaceLabel = useSurfaceLabel();
   const records = toothRecords(code, chart, visit);
   const openPlans = records.plans.filter((plan) => plan.status === 'planned');
+  // What the chart knows is at this position, and the row that says so (feature 7, H1).
+  const presence = teeth.get(code)?.presence ?? 'present';
+  const presenceRow = latestPresence(chart, code);
   const openTotal = plansTotal(openPlans);
   // Services are charted in a visit only.
   const canChartVisit = canWrite && visit !== null;
@@ -143,6 +151,7 @@ function SelectedTooth({
         <PanelGlyph
           code={code}
           tooth={teeth.get(code)}
+          presence={presence}
           mode={mode}
           orientation={orientation}
           pendingSurfaces={selection.surfaces}
@@ -160,10 +169,25 @@ function SelectedTooth({
               {t(isUpper(code) ? 'panel.upper' : 'panel.lower')}
             </span>
             {isPrimary(code) && <Badge tone="neutral">{t('panel.primary')}</Badge>}
+            {canWrite ? (
+              <PresenceMenu code={code} presence={presence} />
+            ) : (
+              presence !== 'present' && (
+                <Badge tone="neutral">{t(`presence.states.${presence}`)}</Badge>
+              )
+            )}
           </div>
           <div className="mb-[7px] text-[12.5px] leading-[1.45] text-ink-tertiary">
             {name(code)}
           </div>
+          {presence !== 'present' && presenceRow && (
+            <p
+              data-presence-banner
+              className="m-0 mb-[7px] text-[12.5px] leading-[1.4] text-ink-muted"
+            >
+              {presenceBanner(t, presenceRow, locale)}
+            </p>
+          )}
           {hint && (
             <p role="status" className="m-0 text-[12.5px] leading-[1.4] text-ink-muted">
               {hint}
@@ -171,6 +195,13 @@ function SelectedTooth({
           )}
         </div>
       </div>
+      {canChartVisit && (
+        <QuickAdd
+          onOpen={() => {
+            onOpenDrawer('service');
+          }}
+        />
+      )}
       {openTotal && (
         <div className="border-b border-planned-strip-border bg-planned-strip px-4 py-[9px] text-[11.5px] leading-[1.4] font-medium text-warning">
           {t('panel.plannedStrip', {

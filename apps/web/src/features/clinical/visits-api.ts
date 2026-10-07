@@ -5,6 +5,7 @@ import {
   liveVisitRefSchema,
   patientChartSchema,
   planResultSchema,
+  presenceResultSchema,
   serviceResultSchema,
   startDefaultsSchema,
   startVisitResultSchema,
@@ -18,6 +19,7 @@ import {
   type PlanTreatmentInput,
   type RecordSessionInput,
   type RecordDiagnosisInput,
+  type SetPresenceInVisitInput,
   type StartVisitInput,
   type ToothCode,
   type UpdateServiceInput,
@@ -246,3 +248,16 @@ export const cancelPlan = (visitId: string, planId: string, tenantId?: string) =
   visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/cancel`, { tenantId });
 export const removePlan = (visitId: string, planId: string, tenantId?: string) =>
   visitCall(planResultSchema, 'DELETE', visitId, `plans/${planId}`, { tenantId });
+/** Tooth presence in a visit (feature 7): `record` is null when the tooth already had it. */
+export const setPresence = (
+  visitId: string,
+  toothCode: ToothCode,
+  input: SetPresenceInVisitInput,
+  tenantId?: string,
+) =>
+  visitCall(presenceResultSchema, 'PUT', visitId, `teeth/${toothCode}/presence`, {
+    json: input,
+    tenantId,
+  });
+export const removePresence = (visitId: string, presenceId: string, tenantId?: string) =>
+  visitCall(presenceResultSchema, 'DELETE', visitId, `presence/${presenceId}`, { tenantId });

@@ -1,9 +1,12 @@
 import type { PatientChart, Visit, VisitService } from '@dcm/contracts';
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { useLevelLabel, useToothLabel } from '../chart/use-chart-settings';
 import { ServiceMenu } from './row-menu';
+import { ShortcutHint } from './tooth-panel/quick-add';
 import { useToothSelection } from './tooth-selection';
 import { unfinishedWork } from './unfinished';
 import { UnfinishedRow } from './unfinished-row';
@@ -17,31 +20,40 @@ const SUB_HEAD =
  * worked on, so they are seen as the visit opens; then the visit's services in the order added,
  * and the unfinished services it did work on. A row's target selects it on the chart; a service's
  * three-dot menu holds **Not finished** and **Remove**. The header counts and totals what the
- * visit charges; the footer sets that beside what is carried forward. Nothing is shown while the
- * visit has no service and the patient no unfinished one.
+ * visit charges and, for who may chart, holds **Add service** (the catalog drawer, on whatever the
+ * chart has selected); the footer sets what is charged beside what is carried forward. A visit
+ * with nothing yet says how to add; read-only, an empty card is left out.
  */
 export function TodaysServices({
   visit,
   chart,
   canWrite,
+  onAdd,
 }: {
   visit: Visit;
   /** For the unfinished services; none are shown until it loads. */
   chart: PatientChart | undefined;
   canWrite: boolean;
+  onAdd: () => void;
 }) {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const titleId = useId();
   const { toContinue, workedHere, carried } = unfinishedWork(chart?.plans ?? [], visit.id);
-  if (visit.services.length === 0 && carried === null) return null;
+  const empty = visit.services.length === 0 && carried === null;
+  if (empty && !canWrite) return null;
   const charged = formatMoney({ amount: visit.money.subtotal, currency: visit.currency }, locale);
   return (
     <section
       aria-labelledby={titleId}
       className="mb-4 overflow-hidden rounded-xl border border-primary-tint-border bg-surface"
     >
-      <div className="flex flex-wrap items-baseline gap-[9px] border-b border-primary-tint-border bg-selected px-4 py-3.5">
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-[9px] border-b border-primary-tint-border bg-selected px-4',
+          canWrite ? 'py-2.5' : 'py-3.5',
+        )}
+      >
         <h2 id={titleId} className="m-0 text-[14px] leading-none font-semibold text-primary">
           {t('todayServices.title')}
         </h2>
@@ -51,7 +63,18 @@ export function TodaysServices({
         <span dir="ltr" className="font-mono text-[15px] leading-none font-bold tabular-nums">
           {charged}
         </span>
+        {canWrite && (
+          <Button variant="primary" size="sm" className="ms-1.5" onClick={onAdd}>
+            {t('quickAdd.add')}
+            <ShortcutHint />
+          </Button>
+        )}
       </div>
+      {empty && (
+        <p className="m-0 px-4 py-3.5 text-[12.5px] leading-[1.45] text-ink-muted">
+          {t('todayServices.empty')}
+        </p>
+      )}
       {toContinue.length > 0 && (
         <>
           <h3 className={SUB_HEAD}>{t('unfinished.toContinue', { count: toContinue.length })}</h3>

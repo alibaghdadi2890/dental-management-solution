@@ -6,6 +6,7 @@ import { ToothGlyph } from './tooth-glyph';
 
 function tooth(overrides: Partial<ToothState> & Pick<ToothState, 'code'>): ToothState {
   return {
+    presence: 'present',
     state: 'none',
     surfaces: {},
     wholeTooth: null,
@@ -176,40 +177,102 @@ describe('ToothGlyph', () => {
     expect(glyphBox(container).style.gridTemplateRows).toBe('32px');
   });
 
-  it('draws not-yet-erupted positions as dashed outlines', () => {
+  it('draws a not-erupted position as one dotted box, with no surfaces and no cross', () => {
+    for (const mode of ['surface', 'simple'] as const) {
+      const { container } = render(
+        <ToothGlyph
+          variant="chart"
+          code="17"
+          tooth={undefined}
+          mode={mode}
+          orientation="patient_right_on_right"
+          size={12}
+          presence="not_erupted"
+        />,
+      );
+      expect(container.querySelector('[data-glyph]')?.getAttribute('data-presence')).toBe(
+        'not_erupted',
+      );
+      expect(container.querySelectorAll('[data-surface]')).toHaveLength(0);
+      const [box, ...others] = container.querySelectorAll<HTMLElement>('[data-mark]');
+      expect(others).toHaveLength(0);
+      expect(box?.className).toContain('border-dotted');
+      expect(container.querySelector('[data-presence-cross]')).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('draws a missing tooth as a faded dashed box with a cross, keeping a planned wash', () => {
     const { container } = render(
       <ToothGlyph
         variant="chart"
-        code="17"
+        code="36"
+        tooth={tooth({ code: '36', presence: 'missing', state: 'planned', openPlanIds: ['p'] })}
+        mode="surface"
+        orientation="patient_right_on_right"
+        size={12}
+      />,
+    );
+    const glyph = container.querySelector<HTMLElement>('[data-glyph]');
+    expect(glyph?.getAttribute('data-presence')).toBe('missing');
+    // An implant planned on a gap still shows: the ring and the wash stay.
+    expect(glyph?.getAttribute('data-ring')).toBe('planned');
+    expect(container.querySelectorAll('[data-surface]')).toHaveLength(0);
+    const box = container.querySelector<HTMLElement>('[data-mark]');
+    expect(box?.getAttribute('data-mark')).toBe('planned');
+    expect(box?.className).toContain('border-dashed');
+    expect(box?.className).toContain('bg-planned-bg');
+    expect(box?.parentElement?.className).toContain('opacity-60');
+    expect(container.querySelector('[data-presence-cross]')).not.toBeNull();
+  });
+
+  it('draws an implant as the normal glyph, at full opacity, inside a second outline with a post', () => {
+    for (const mode of ['surface', 'simple'] as const) {
+      const { container } = render(
+        <ToothGlyph
+          variant="chart"
+          code="46"
+          tooth={tooth({
+            code: '46',
+            presence: 'implant',
+            state: 'treated',
+            wholeTooth: 'treated',
+          })}
+          mode={mode}
+          orientation="patient_right_on_right"
+          size={12}
+        />,
+      );
+      const glyph = container.querySelector<HTMLElement>('[data-glyph]');
+      expect(glyph?.getAttribute('data-presence')).toBe('implant');
+      expect(glyph?.className).toContain('outline-ink');
+      expect(glyph?.className).not.toContain('opacity-60');
+      // The crown on it still reads: the cells keep their treated marks.
+      expect(container.querySelectorAll('[data-mark="treated"]').length).toBe(
+        mode === 'surface' ? 5 : 1,
+      );
+      // A lower tooth's root is below it.
+      expect(container.querySelector<SVGElement>('[data-implant-post]')?.style.bottom).not.toBe('');
+      cleanup();
+    }
+  });
+
+  it('leaves a plain natural tooth without any presence mark', () => {
+    const { container } = render(
+      <ToothGlyph
+        variant="chart"
+        code="16"
         tooth={undefined}
         mode="surface"
         orientation="patient_right_on_right"
         size={12}
-        notErupted
       />,
     );
-
-    const cells = [...container.querySelectorAll<HTMLElement>('[data-surface]')];
-    expect(cells).toHaveLength(5);
-    for (const cell of cells) expect(cell.className).toContain('border-dashed');
-  });
-
-  it('draws a not-yet-erupted position as one dashed cell in simple mode', () => {
-    const { container } = render(
-      <ToothGlyph
-        variant="chart"
-        code="17"
-        tooth={undefined}
-        mode="simple"
-        orientation="patient_right_on_right"
-        size={12}
-        notErupted
-      />,
-    );
-
-    const cells = container.querySelectorAll<HTMLElement>('[data-mark]');
-    expect(cells).toHaveLength(1);
-    expect(cells[0]?.className).toContain('border-dashed');
+    const glyph = container.querySelector<HTMLElement>('[data-glyph]');
+    expect(glyph?.getAttribute('data-presence')).toBe('present');
+    expect(glyph?.className).not.toContain('outline-ink');
+    expect(container.querySelector('[data-implant-post], [data-presence-cross]')).toBeNull();
+    expect(container.querySelectorAll('[data-surface]')).toHaveLength(5);
   });
 
   it('edges a selected tooth’s untreated cells in the accent, keeping treated edges', () => {

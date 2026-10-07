@@ -53,6 +53,7 @@ function actionsMock(): ChartingActions {
     removeDiagnosis: vi.fn(),
     removePlan: vi.fn(),
     cancelPlan: vi.fn(),
+    setPresence: vi.fn(),
   };
 }
 

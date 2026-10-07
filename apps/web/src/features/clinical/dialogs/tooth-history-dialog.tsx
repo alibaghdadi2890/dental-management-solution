@@ -8,7 +8,9 @@ import {
   type ToothCode,
   type TreatmentPlan,
   isOpenPlan,
+  type ToothPresenceRecord,
 } from '@dcm/contracts';
+import { presenceEntry } from '../presence/presence-text';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Dialog } from 'radix-ui';
@@ -195,6 +197,7 @@ function HistoryContent({
       <div className="max-h-[52vh] overflow-auto px-5 pt-4 pb-5">
         {history.data ? (
           <Stages
+            presence={history.data.presence}
             diagnoses={history.data.diagnoses}
             plans={history.data.plans}
             services={history.data.services}
@@ -243,11 +246,13 @@ function successionOf(
 }
 
 function Stages({
+  presence,
   diagnoses,
   plans,
   services,
   empty,
 }: {
+  presence: readonly ToothPresenceRecord[];
   diagnoses: readonly DiagnosisRecord[];
   plans: readonly TreatmentPlan[];
   services: readonly HistoryService[];
@@ -259,10 +264,37 @@ function Stages({
   const { mode } = useChartSettings();
   const surfaceLabel = useSurfaceLabel();
 
-  if (diagnoses.length + plans.length + services.length === 0) return empty;
+  if (presence.length + diagnoses.length + plans.length + services.length === 0) return empty;
 
   return (
     <>
+      {presence.length > 0 && (
+        <Stage title={t('presence.history.title')} tone="text-ink-secondary">
+          {presence.map((row) => {
+            const entry = presenceEntry(t, row);
+            return (
+              <li
+                key={row.id}
+                className="mb-[7px] rounded-lg border border-border bg-surface px-3 py-2.5"
+              >
+                <div className="mb-1 flex items-baseline gap-[9px]">
+                  <span className="min-w-0 flex-1 text-[13px] leading-[1.35] font-semibold">
+                    {entry.title}
+                  </span>
+                  {row.occurredOn !== null && (
+                    <span className="flex-none font-mono text-[12.5px] leading-[1.4] text-ink-muted">
+                      {formatCalendarDate(row.occurredOn, locale)}
+                    </span>
+                  )}
+                </div>
+                <div className="text-[12.5px] leading-normal text-ink-secondary">
+                  {entry.detail}
+                </div>
+              </li>
+            );
+          })}
+        </Stage>
+      )}
       {diagnoses.length > 0 && (
         <Stage title={t('history.diagnosis')} tone="text-danger">
           {diagnoses.map((record) => (

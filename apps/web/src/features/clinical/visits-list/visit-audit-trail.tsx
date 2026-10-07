@@ -2,6 +2,7 @@ import type { AuditEntry } from '@dcm/contracts';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useId } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { SHIMMER } from '@/components/ui/list';
@@ -79,7 +80,8 @@ function actorOf(
  * The detail panel's audit trail (D13: `audit:read` only): the visit's entries newest first, a
  * page at a time behind "Show more"; the latest dot filled. Amend and void read with their reason
  * (and an amendment with its before → after total); a checkout discount with its totals, and its
- * reason when one was given.
+ * reason when one was given. It ends with "View all activity": the Activity screen narrowed to
+ * this visit (H7).
  */
 export function VisitAuditTrail({
   visitId,
@@ -94,7 +96,7 @@ export function VisitAuditTrail({
   timeZone: string;
   locale: string;
 }) {
-  const { t } = useTranslation(['visits', 'common']);
+  const { t } = useTranslation(['visits', 'common', 'activity']);
   const headingId = useId();
   const audit = useInfiniteQuery(visitAuditQuery(visitId));
   const entries = audit.data?.pages.flatMap((page) => page.items) ?? [];
@@ -172,6 +174,13 @@ export function VisitAuditTrail({
         {t('trail.title')}
       </h3>
       {body}
+      <Link
+        to="/activity"
+        search={{ visit: visitId, range: 'all' }}
+        className="mt-1 self-start text-[12.5px] leading-none font-medium text-primary hover:underline"
+      >
+        {t('activity:viewAll')}
+      </Link>
     </section>
   );
 }

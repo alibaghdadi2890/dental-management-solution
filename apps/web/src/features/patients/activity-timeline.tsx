@@ -2,6 +2,7 @@ import type { AuditEntry } from '@dcm/contracts';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useId } from 'react';
+import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { SHIMMER } from '@/components/ui/list';
@@ -68,7 +69,7 @@ function actorOf(
  * failed "Show more" keeps the entries already shown and offers a retry in its place; the full
  * error only replaces the list when there is nothing to show. Actors
  * are named from the staff list; jobs and the system read "System", a platform admin "Platform
- * admin".
+ * admin". It ends with "View all activity": the Activity screen narrowed to this patient (H7).
  */
 export function ActivityTimeline({
   patientId,
@@ -81,7 +82,7 @@ export function ActivityTimeline({
   timeZone: string;
   locale: string;
 }) {
-  const { t } = useTranslation(['patients', 'common']);
+  const { t } = useTranslation(['patients', 'common', 'activity']);
   const headingId = useId();
   const audit = useInfiniteQuery(patientAuditQuery(patientId));
   const entries = audit.data?.pages.flatMap((page) => page.items) ?? [];
@@ -166,6 +167,13 @@ export function ActivityTimeline({
         {t('activity.title')}
       </h3>
       {body}
+      <Link
+        to="/activity"
+        search={{ patient: patientId, range: 'all' }}
+        className="mt-1 self-start text-[12.5px] leading-none font-medium text-primary hover:underline"
+      >
+        {t('activity:viewAll')}
+      </Link>
     </section>
   );
 }

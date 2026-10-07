@@ -22,6 +22,7 @@ import { z } from 'zod';
 import { billingKeys } from '@/features/billing/billing-api';
 import { actingTenantId } from '@/features/platform/acting-tenant';
 import { apiFetch } from '@/lib/api';
+import { IDEMPOTENCY_HEADER } from '@/lib/idempotency';
 import { downloadCsv } from '@/lib/download';
 import { toSearch } from './list-query';
 
@@ -155,9 +156,16 @@ export function patientAuditQuery(id: string, tenantId?: string) {
   });
 }
 
-/** `POST /patients`: the fields plus contacts linked in the same transaction (addendum C4). */
-export function createPatient(input: PatientCreateInput) {
-  return apiFetch('/patients', patientSchema, { method: 'POST', json: input });
+/**
+ * `POST /patients`: the fields plus contacts linked in the same transaction (addendum C4). A
+ * retry with the same `idempotencyKey` and input answers with the first patient (H5).
+ */
+export function createPatient(input: PatientCreateInput, idempotencyKey: string) {
+  return apiFetch('/patients', patientSchema, {
+    method: 'POST',
+    json: input,
+    headers: { [IDEMPOTENCY_HEADER]: idempotencyKey },
+  });
 }
 
 export function updatePatient(id: string, patch: PatientPatch) {

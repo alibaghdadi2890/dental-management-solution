@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes } from 'react';
+import type { ButtonHTMLAttributes, Ref } from 'react';
 import { cn } from '@/lib/utils';
 import { Spinner } from './spinner';
 
@@ -62,7 +62,10 @@ export function IconButton({
   className,
   type = 'button',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { 'aria-label': string }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  'aria-label': string;
+  ref?: Ref<HTMLButtonElement>;
+}) {
   return (
     <button
       type={type}

@@ -7,6 +7,7 @@ const t = i18n.getFixedT('en', 'clinical');
 
 function tooth(overrides: Partial<ToothState> & Pick<ToothState, 'code'>): ToothState {
   return {
+    presence: 'present',
     state: 'none',
     surfaces: {},
     wholeTooth: null,
@@ -18,7 +19,12 @@ function tooth(overrides: Partial<ToothState> & Pick<ToothState, 'code'>): Tooth
   };
 }
 
-const base = { label: '#3', name: 'Upper right first molar', primary: false, notErupted: false };
+const base = {
+  label: '#3',
+  name: 'Upper right first molar',
+  primary: false,
+  presence: 'present',
+} as const;
 
 describe('toothTitle', () => {
   it('assembles the POC tooltip from the diagnosis, the plan and the history', () => {
@@ -64,13 +70,31 @@ describe('toothTitle', () => {
     );
   });
 
+  it('says what is at a position that is not a plain natural tooth (feature 7)', () => {
+    expect(toothTitle(t, { ...base, presence: 'missing', tooth: undefined })).toBe(
+      '#3 · Upper right first molar · missing · no recorded treatment',
+    );
+    // An implant is charted like any tooth: its diagnosis and treatment follow its state.
+    const state = tooth({
+      code: '16',
+      presence: 'implant',
+      state: 'treated',
+      hasActiveDiagnosis: true,
+      historyCount: 1,
+      titleParts: { diagnoses: ['Peri-implantitis'], plans: [], historyCount: 1 },
+    });
+    expect(toothTitle(t, { ...base, presence: 'implant', tooth: state })).toBe(
+      '#3 · Upper right first molar · implant · Peri-implantitis · 1 recorded service',
+    );
+  });
+
   it('flags primary and not-yet-erupted teeth first', () => {
     expect(
       toothTitle(t, {
         label: 'A',
         name: 'Upper right primary second molar',
         primary: true,
-        notErupted: false,
+        presence: 'present',
         tooth: undefined,
       }),
     ).toBe('A · Upper right primary second molar · primary tooth · no recorded treatment');
@@ -80,9 +104,9 @@ describe('toothTitle', () => {
         label: '#17',
         name: 'Upper right second molar',
         primary: false,
-        notErupted: true,
+        presence: 'not_erupted',
         tooth: undefined,
       }),
-    ).toBe('#17 · Upper right second molar · not yet erupted · no recorded treatment');
+    ).toBe('#17 · Upper right second molar · not erupted · no recorded treatment');
   });
 });

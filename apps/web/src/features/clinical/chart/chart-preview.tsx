@@ -27,6 +27,7 @@ const NOTATION_PREVIEW_CODES: readonly ToothCode[] = ['11', '16', '55'];
 function previewTooth(code: ToothCode): ToothState {
   return {
     code,
+    presence: 'present',
     state: 'treated',
     surfaces: { O: 'treated', B: 'treated' },
     wholeTooth: null,

@@ -44,13 +44,17 @@
   "title": {
     "listSeparator": ", ",
     "primary": "primary tooth",
-    "notErupted": "not yet erupted",
     "planned": "planned: {{names}}",
     "recordedServices_one": "{{count}} recorded service",
     "recordedServices_other": "{{count}} recorded services",
     "treatedToday": "treated in this visit",
     "noRecordedTreatment": "no recorded treatment",
-    "inProgress": "not finished: {{names}}"
+    "inProgress": "not finished: {{names}}",
+    "presence": {
+      "missing": "missing",
+      "not_erupted": "not erupted",
+      "implant": "implant"
+    }
   },
   "chart": {
     "upperArch": "Upper arch",
@@ -69,7 +73,11 @@
     "treatedToday": "Treated today",
     "diagnosis": "Diagnosis",
     "planned": "Planned",
-    "inProgress": "Not finished"
+    "inProgress": "Not finished",
+    "presence": "Tooth",
+    "missing": "Missing",
+    "notErupted": "Not erupted",
+    "implant": "Implant"
   },
   "workspace": {
     "loading": "Loading visit…",
@@ -108,7 +116,9 @@
     "viewSummary": "View summary"
   },
   "chartCard": {
-    "title": "Dental chart"
+    "title": "Dental chart",
+    "expand": "Expand chart",
+    "collapse": "Collapse chart"
   },
   "planBoard": {
     "title": "Treatment plan",
@@ -212,23 +222,7 @@
   },
   "succession": {
     "successor": "Permanent successor",
-    "predecessor": "Primary predecessor",
-    "hasRecords": "· has records",
-    "notErupted": "· not yet erupted",
-    "noRecords": "· no records",
-    "counts": "· {{counts}}",
-    "services_one": "{{count}} service",
-    "services_other": "{{count}} services",
-    "diagnoses_one": "{{count}} diagnosis",
-    "diagnoses_other": "{{count}} diagnoses",
-    "planned_one": "{{count}} planned",
-    "planned_other": "{{count}} planned",
-    "markExfoliated": "Mark exfoliated",
-    "stillPresent": "Still present",
-    "exfoliated": "Primary tooth recorded as exfoliated",
-    "exfoliatedBody": "The position now charts as the permanent successor. Its primary history stays on record.",
-    "retained": "Primary tooth recorded as present",
-    "retainedBody": "The position charts as the primary tooth again."
+    "predecessor": "Primary predecessor"
   },
   "panel": {
     "emptyTitle": "No tooth selected",
@@ -474,7 +468,14 @@
     "liveVisit": "This patient has a visit in progress.",
     "openVisit": "Open the visit"
   },
+  "quickAdd": {
+    "add": "Add service",
+    "frequent": "Frequently used",
+    "addNamed": "Add {{name}}",
+    "chip": "+ {{name}}"
+  },
   "todayServices": {
+    "empty": "Nothing added yet. Select a tooth, a jaw or the whole mouth on the chart, then add what was done.",
     "title": "Today's services",
     "count_one": "{{count}} service",
     "count_other": "{{count}} services",
@@ -506,5 +507,73 @@
   },
   "rowMenu": {
     "label": "Actions: {{name}}"
+  },
+  "presence": {
+    "label": "Presence",
+    "states": {
+      "present": "Present",
+      "missing": "Missing",
+      "not_erupted": "Not erupted",
+      "implant": "Implant"
+    },
+    "menuLabel": "Presence of tooth {{label}}: {{state}}",
+    "marked": {
+      "present": "Tooth {{label}} marked present",
+      "missing": "Tooth {{label}} marked missing",
+      "not_erupted": "Tooth {{label}} marked not erupted",
+      "implant": "Tooth {{label}} marked as implant"
+    },
+    "markedMany_one": "{{count}} tooth updated",
+    "markedMany_other": "{{count}} teeth updated",
+    "unchanged": "Nothing to change: the chart already says so",
+    "suffix": {
+      "present": "tooth marked present",
+      "missing": "tooth marked missing",
+      "not_erupted": "tooth marked not erupted",
+      "implant": "marked as implant"
+    },
+    "banner": {
+      "since": "{{state}} since {{date}}",
+      "beforeFirstVisit": "before first visit",
+      "visit": "visit {{number}}",
+      "service": "{{name}}, visit {{number}}",
+      "recordedBy": "recorded by {{name}}"
+    },
+    "popover": {
+      "title": "Mark tooth {{label}} {{state}}",
+      "titleMany_one": "Save {{count}} change",
+      "titleMany_other": "Save {{count}} changes",
+      "body": "Say when this came about. If the date isn’t known, leave it at “Before first visit”.",
+      "when": "When",
+      "beforeFirstVisit": "Before first visit",
+      "onDate": "On a date",
+      "date": "Date",
+      "chooseDate": "Choose the date",
+      "reason": "Reason",
+      "reasonPlaceholder": "Accident, lost elsewhere, congenitally missing…",
+      "dentist": "Dentist",
+      "chooseDentist": "Choose a dentist…",
+      "save": "Save",
+      "optional": "Optional"
+    },
+    "edit": {
+      "start": "Edit presence",
+      "toolbar": "Mark teeth as",
+      "hint": "Click teeth to mark them",
+      "changes_one": "{{count}} change",
+      "changes_other": "{{count}} changes",
+      "done": "Done",
+      "active": "Marking teeth — click a tooth to mark it {{state}}"
+    },
+    "history": {
+      "title": "Presence",
+      "marked": {
+        "present": "Marked present",
+        "missing": "Marked missing",
+        "not_erupted": "Marked not erupted",
+        "implant": "Marked implant"
+      },
+      "service": "{{name}} ({{code}}), visit {{number}}"
+    }
   }
 }

@@ -18,6 +18,7 @@ import { usePermission } from '@/features/auth/use-permission';
 import { patientQuery } from '@/features/patients/patients-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { ApiError } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
 import { UnfinishedDialog } from '../dialogs/unfinished-dialog';
@@ -42,6 +43,7 @@ import { TodaysServices } from './todays-services';
 import { unfinishedWork } from './unfinished';
 import { ToothPanel } from './tooth-panel/tooth-panel';
 import { ToothSelectionContext, useToothSelectionState } from './tooth-selection';
+import { useChartExpansion } from './use-chart-expansion';
 import { useChartKeyboard } from './use-chart-keyboard';
 import { useChartStage } from './use-chart-stage';
 import { VisitHeader } from './visit-header';
@@ -148,7 +150,8 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
  * financial bar. Read-only without `visit:write`
  * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
  * the chart, the tooth panel and the drawer; the drawer opens over a scrim. `?tooth=` selects
- * its tooth (the tooth history's "Chart it in this visit"), then leaves the URL. The tooth
+ * its tooth (the tooth history's "Chart it in this visit"), then leaves the URL. Add service is
+ * offered at the top of the tooth panel, on Today's services and with the `S` key. The tooth
  * panel's "Full tooth history →" opens the tooth history dialog, and the financial bar's
  * **Review & complete** the visit summary. A visit of a patient with unfinished services opens
  * with the question which of them it continues (`UnfinishedDialog`). The price groups of services no longer on the visit
@@ -175,6 +178,9 @@ function Workspace({
   const [drawer, setDrawer] = useState<DrawerMode | null>(null);
   const closeDrawer = useCallback(() => {
     setDrawer(null);
+  }, []);
+  const addService = useCallback(() => {
+    setDrawer('service');
   }, []);
   const [historyTooth, setHistoryTooth] = useState<ToothCode | null>(null);
   const [reviewing, setReviewing] = useState(false);
@@ -228,7 +234,22 @@ function Workspace({
     onSelect: selection.select,
     // The summary dialog handles its own keys; while it is open the chart takes none.
     onEscape: drawer !== null ? closeDrawer : reviewing ? closeReview : undefined,
+    onAddService: canWrite ? addService : undefined,
   });
+
+  const expansion = useChartExpansion();
+  const chartCard =
+    chart.data && patient.data && stage ? (
+      <ChartCard
+        teeth={teeth}
+        patient={patient.data}
+        stage={stage}
+        onStageChange={setStage}
+        canWrite={canWrite}
+        areaCounts={areaCounts}
+        expansion={expansion}
+      />
+    ) : null;
 
   return (
     <ToothSelectionContext.Provider value={selection}>
@@ -273,16 +294,19 @@ function Workspace({
             </div>
           )}
           <div className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-auto">
-            <div className="min-w-0 flex-[1_1_600px] px-5 pt-[18px] pb-5">
-              {chart.data && patient.data && stage ? (
-                <ChartCard
-                  teeth={teeth}
-                  patient={patient.data}
-                  stage={stage}
-                  onStageChange={setStage}
-                  canWrite={canWrite}
-                  areaCounts={areaCounts}
-                />
+            {/* Expanded, the chart card leaves its column for a row of its own across the page;
+                the services, the plans and the tooth panel follow under it. */}
+            {expansion.expanded && chartCard && (
+              <div className="min-w-0 basis-full px-5 pt-[18px]">{chartCard}</div>
+            )}
+            <div
+              className={cn(
+                'min-w-0 flex-[1_1_600px] px-5 pb-5',
+                !(expansion.expanded && chartCard) && 'pt-[18px]',
+              )}
+            >
+              {chartCard ? (
+                !expansion.expanded && chartCard
               ) : (
                 <ChartCardFrame>
                   {chart.error || patient.error ? (
@@ -299,13 +323,21 @@ function Workspace({
                   )}
                 </ChartCardFrame>
               )}
-              <TodaysServices visit={visit} chart={chart.data} canWrite={canWrite} />
+              <TodaysServices
+                visit={visit}
+                chart={chart.data}
+                canWrite={canWrite}
+                onAdd={addService}
+              />
               {chart.data && <PlanBoard chart={chart.data} canWrite={canWrite} />}
               <NotesCard visit={visit} canWrite={canWrite} />
             </div>
             <aside
               aria-label={t('workspace.toothPanel')}
-              className="min-w-0 flex-[1_1_340px] border-s border-border bg-surface p-4"
+              className={cn(
+                'min-w-0 flex-[1_1_340px] border-s border-border bg-surface p-4',
+                expansion.expanded && chartCard && 'rounded-ss-xl border-t',
+              )}
             >
               {chart.data ? (
                 <ToothPanel
@@ -369,6 +401,7 @@ function useVisitTeeth(
             plans: chart.plans,
             history: chart.history,
             liveServices: visit.services,
+            presence: chart.presence,
           })
         : new Map<ToothCode, ToothState>(),
     [chart, visit.services],

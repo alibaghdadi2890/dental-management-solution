@@ -14,6 +14,8 @@ import i18n from '@/lib/i18n';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { ChartLegend } from './chart-legend';
 import { DentalChart } from './dental-chart';
+import { chartWidth } from './fit-cell-size';
+import { FittedChart } from './fitted-chart';
 
 const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
 
@@ -60,6 +62,7 @@ function renderWith(ui: ReactNode, settings: Settings = {}) {
 
 function tooth(overrides: Partial<ToothState> & Pick<ToothState, 'code'>): ToothState {
   return {
+    presence: 'present',
     state: 'none',
     surfaces: {},
     wholeTooth: null,
@@ -298,8 +301,86 @@ describe('DentalChart', () => {
   });
 });
 
+describe('FittedChart', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  /** A `ResizeObserver` that reports `width` once, as a browser does on `observe`. */
+  const observeWidth = (width: number) => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {}
+        observe() {
+          this.callback(
+            [{ contentRect: { width } } as ResizeObserverEntry],
+            this as unknown as ResizeObserver,
+          );
+        }
+        disconnect() {
+          return undefined;
+        }
+      },
+    );
+  };
+  const sizeIn = (expanded: boolean) => {
+    renderWith(
+      <FittedChart expanded={expanded} dentition="permanent" withAreas={false}>
+        {(size) => <span data-testid="size">{size}</span>}
+      </FittedChart>,
+    );
+    return Number(screen.getByTestId('size').textContent);
+  };
+
+  it('hands the full chart its 12 px cells', () => {
+    observeWidth(2000);
+    expect(sizeIn(false)).toBe(12);
+  });
+
+  it('expanded, hands the largest cell at which a jaw fits the space', () => {
+    observeWidth(chartWidth({ mode: 'surface', columns: 16, withAreas: false, size: 16 }));
+    expect(sizeIn(true)).toBe(16);
+  });
+
+  it('expanded, stays at 12 px where the space cannot be measured', () => {
+    expect(sizeIn(true)).toBe(12);
+  });
+
+  it('draws the expanded chart’s numbers larger, with its glyphs', () => {
+    renderWith(<DentalChart {...chart({ size: 18 })} />);
+    const number = document.querySelector('[data-column="16"] [data-number]');
+    expect(number?.className).toContain('text-[14px]');
+    // Still the full chart: the R and L markers are there.
+    expect(screen.getByTitle("Patient's right")).toBeTruthy();
+  });
+});
+
 describe('ChartLegend', () => {
   afterEach(cleanup);
+
+  it('as a key, lists the same items under their three groups, one to a line', () => {
+    renderWith(<ChartLegend layout="key" />);
+    expect(document.querySelector('[data-legend-key]')).toBeTruthy();
+    expect(screen.getAllByRole('group').map((group) => group.getAttribute('aria-label'))).toEqual([
+      'Treatment',
+      'Markers',
+      'Tooth',
+    ]);
+    expect(legendItems()).toEqual([
+      'Treated surface',
+      'Whole tooth',
+      'Treated today',
+      'Diagnosis',
+      'Planned',
+      'Not finished',
+      'Missing',
+      'Not erupted',
+      'Implant',
+    ]);
+    expect(screen.getAllByRole('listitem')).toHaveLength(9);
+  });
 
   it('lists the surface legend in precedence order', () => {
     renderWith(<ChartLegend />);
@@ -310,6 +391,9 @@ describe('ChartLegend', () => {
       'Diagnosis',
       'Planned',
       'Not finished',
+      'Missing',
+      'Not erupted',
+      'Implant',
     ]);
   });
 
@@ -321,10 +405,21 @@ describe('ChartLegend', () => {
       'Diagnosis',
       'Planned',
       'Not finished',
+      'Missing',
+      'Not erupted',
+      'Implant',
     ]);
     cleanup();
     renderWith(<ChartLegend showToday={false} />, { mode: 'simple' });
-    expect(legendItems()).toEqual(['Treated', 'Diagnosis', 'Planned', 'Not finished']);
+    expect(legendItems()).toEqual([
+      'Treated',
+      'Diagnosis',
+      'Planned',
+      'Not finished',
+      'Missing',
+      'Not erupted',
+      'Implant',
+    ]);
   });
 
   it('draws a compact ring on the planned swatch, clear of its label', () => {

@@ -13,6 +13,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PrintRouteImport } from './routes/print'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppActivityRouteImport } from './routes/_app/activity'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
@@ -47,6 +48,11 @@ const PrintRoute = PrintRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppActivityRoute = AppActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
   getParentRoute: () => AppRoute,
 } as any)
 const AppCatalogRoute = AppCatalogRouteImport.update({
@@ -135,6 +141,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/print': typeof PrintRouteWithChildren
+  '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
   '/today': typeof AppTodayRoute
@@ -155,6 +162,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/print': typeof PrintRouteWithChildren
+  '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
   '/today': typeof AppTodayRoute
@@ -178,6 +186,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/print': typeof PrintRouteWithChildren
+  '/_app/activity': typeof AppActivityRoute
   '/_app/catalog': typeof AppCatalogRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/today': typeof AppTodayRoute
@@ -202,6 +211,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/print'
+    | '/activity'
     | '/catalog'
     | '/settings'
     | '/today'
@@ -222,6 +232,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/print'
+    | '/activity'
     | '/catalog'
     | '/settings'
     | '/today'
@@ -244,6 +255,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/print'
+    | '/_app/activity'
     | '/_app/catalog'
     | '/_app/settings'
     | '/_app/today'
@@ -297,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/activity': {
+      id: '/_app/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof AppActivityRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/catalog': {
@@ -415,6 +434,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AppRouteChildren {
+  AppActivityRoute: typeof AppActivityRoute
   AppCatalogRoute: typeof AppCatalogRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTodayRoute: typeof AppTodayRoute
@@ -430,6 +450,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppActivityRoute: AppActivityRoute,
   AppCatalogRoute: AppCatalogRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTodayRoute: AppTodayRoute,

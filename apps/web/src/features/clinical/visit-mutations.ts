@@ -9,6 +9,7 @@ import type {
   Visit,
   VisitDiscountInput,
   VisitNotesInput,
+  ToothPresenceChange,
 } from '@dcm/contracts';
 import { hashKey, mutationOptions, type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
@@ -29,11 +30,13 @@ import {
   recordSession,
   removeDiagnosis,
   removePlan,
+  removePresence,
   removeService,
   removeSession,
   reopenDiagnosis,
   resolveDiagnosis,
   resumeVisit,
+  setPresence,
   setVisitDiscount,
   startVisit,
   updateService,
@@ -309,6 +312,18 @@ export function visitMutations(
     removePlan: mutationOptions({
       ...base,
       mutationFn: (planId: string) => removePlan(visitId, planId, tenant),
+      onSuccess: charting,
+    }),
+    /** What is at a tooth position (feature 7): the chart, its histories and the summary. */
+    setPresence: mutationOptions({
+      ...base,
+      mutationFn: (change: ToothPresenceChange) =>
+        setPresence(visitId, change.toothCode, { presence: change.presence }, tenant),
+      onSuccess: charting,
+    }),
+    removePresence: mutationOptions({
+      ...base,
+      mutationFn: (presenceId: string) => removePresence(visitId, presenceId, tenant),
       onSuccess: charting,
     }),
   };

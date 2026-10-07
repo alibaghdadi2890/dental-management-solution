@@ -1,4 +1,4 @@
-import { CHARGE_UNITS } from '@dcm/contracts';
+import { CHARGE_UNITS, TOOTH_EFFECTS } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -90,6 +90,34 @@ export function CatalogRow({
           onChange({ frequent: !row.frequent });
         }}
       />
+      {tab === 'services' &&
+        (row.chargeUnit === 'per_tooth' ? (
+          <select
+            aria-label={t('columns.toothEffect')}
+            title={t('toothEffectHint')}
+            disabled={readOnly}
+            value={row.toothEffect}
+            onChange={(event) => {
+              const effect = TOOTH_EFFECTS.find((candidate) => candidate === event.target.value);
+              if (effect) onChange({ toothEffect: effect });
+            }}
+            className={cn(
+              cell(readOnly),
+              'text-[12.5px] leading-none disabled:opacity-100',
+              readOnly && 'appearance-none',
+              row.toothEffect === 'none' && 'text-ink-muted',
+            )}
+          >
+            {TOOTH_EFFECTS.map((effect) => (
+              <option key={effect} value={effect}>
+                {t(`toothEffect.${effect}`)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          // A service on a jaw or the whole mouth changes no tooth: nothing to choose.
+          <span role="presentation" />
+        ))}
       <input
         aria-label={t('columns.category')}
         readOnly={readOnly}

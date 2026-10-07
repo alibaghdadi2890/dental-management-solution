@@ -36,6 +36,9 @@ const entry = (n: number, extra: Partial<AuditEntry>): AuditEntry => ({
   reason: null,
   requestId: null,
   occurredAt: '2026-09-01T07:05:00.000Z',
+  patientId: RANA.id,
+  visitId: null,
+  area: 'patients',
   ...extra,
 });
 

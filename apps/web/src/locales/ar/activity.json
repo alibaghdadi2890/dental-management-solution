@@ -1,0 +1,249 @@
+{
+  "title": "النشاط",
+  "subtitle": "من فعل ماذا في هذه العيادة",
+  "loading": "جارٍ تحميل النشاط",
+  "more": "تحميل المزيد",
+  "moreFailed": "تعذّر تحميل المزيد.",
+  "clear": "مسح عوامل التصفية",
+  "yes": "نعم",
+  "no": "لا",
+  "becomes": "أصبح",
+  "noChanges": "لم تُسجَّل تغييرات في الحقول",
+  "expand": "إظهار ما تغيّر",
+  "collapse": "إخفاء ما تغيّر",
+  "system": "النظام",
+  "platformAdmin": "مسؤول المنصة",
+  "adminBadge": "مسؤول المنصة",
+  "formerStaff": "موظف سابق",
+  "viewAll": "عرض كل النشاط",
+  "empty": {
+    "title": "لم يحدث شيء في هذه الفترة",
+    "body": "جرّب فترة أطول، أو امسح عوامل التصفية."
+  },
+  "noMatch": {
+    "title": "لا شيء يطابق «{{q}}»",
+    "body": "ابحث برقم مريض أو زيارة أو إيصال (P-12، V-45، RCT-3)، أو باسم شخص."
+  },
+  "error": {
+    "title": "تعذّر تحميل النشاط",
+    "body": "لم يستجب الخادم."
+  },
+  "search": {
+    "label": "البحث في النشاط",
+    "placeholder": "رقم P- أو V- أو RCT- أو اسم"
+  },
+  "columns": {
+    "when": "متى",
+    "who": "من",
+    "what": "ماذا",
+    "reason": "السبب",
+    "details": "التفاصيل"
+  },
+  "filters": {
+    "area": "المجال",
+    "person": "الشخص",
+    "anyone": "الجميع",
+    "date": "التاريخ",
+    "patient": "المريض",
+    "visit": "الزيارة",
+    "removeRecord": "عرض كل السجلات"
+  },
+  "areas": {
+    "all": "الكل",
+    "patients": "المرضى",
+    "visits": "الزيارات",
+    "payments": "المدفوعات",
+    "catalog": "الكتالوج",
+    "users": "المستخدمون",
+    "settings": "الإعدادات",
+    "contacts": "جهات الاتصال"
+  },
+  "ranges": {
+    "today": "اليوم",
+    "7d": "7 أيام",
+    "30d": "30 يومًا",
+    "90d": "90 يومًا",
+    "all": "كل الوقت"
+  },
+  "actions": {
+    "fallback": "{{action}} {{subject}}",
+    "patient": {
+      "create": "سجّل المريض {{subject}}",
+      "update": "عدّل بيانات المريض {{subject}}",
+      "dentition": "غيّر مخطط أسنان {{subject}}",
+      "archive": "أرشف المريض {{subject}}",
+      "restore": "استعاد المريض {{subject}}",
+      "merge": "دمج سجلًا مكررًا في {{subject}}"
+    },
+    "contact": {
+      "link": "أضاف {{name}} كجهة اتصال لـ {{subject}}",
+      "roles": "غيّر صفة {{name}} لدى {{subject}}",
+      "unlink": "أزال {{name}} من جهات اتصال {{subject}}",
+      "merge": "نقل جهات اتصال سجل مدموج إلى {{subject}}",
+      "update": "عدّل جهة الاتصال {{subject}}"
+    },
+    "visit": {
+      "start": "بدأ الزيارة {{subject}}",
+      "pause": "أوقف الزيارة {{subject}} مؤقتًا",
+      "resume": "استأنف الزيارة {{subject}}",
+      "notes": "عدّل ملاحظات الزيارة {{subject}}",
+      "discount_live": "غيّر خصم الزيارة {{subject}}",
+      "discard": "تجاهل الزيارة {{subject}}",
+      "complete": "أنهى الزيارة {{subject}}",
+      "amend": "صحّح الزيارة {{subject}}",
+      "discount": "غيّر خصم الزيارة {{subject}} عند الدفع",
+      "checkout": "أغلق تحصيل الزيارة {{subject}}",
+      "void": "ألغى الزيارة {{subject}}",
+      "unfinished_answered": "حدّد الأعمال غير المنتهية التي تتابعها الزيارة {{subject}}"
+    },
+    "visit_service": {
+      "create": "أضاف {{name}} إلى الزيارة {{subject}}",
+      "update": "غيّر سعر خدمة في الزيارة {{subject}}",
+      "delete": "أزال {{name}} من الزيارة {{subject}}",
+      "unfinished": "علّم {{name}} كغير منتهٍ في الزيارة {{subject}}"
+    },
+    "diagnosis_record": {
+      "create": "سجّل {{name}} لـ {{subject}}",
+      "delete": "أزال التشخيص {{name}} لـ {{subject}}",
+      "resolve": "أغلق تشخيصًا لـ {{subject}}",
+      "reopen": "أعاد فتح تشخيص لـ {{subject}}"
+    },
+    "treatment_plan": {
+      "create": "خطّط {{name}} لـ {{subject}}",
+      "update": "عدّل علاجًا مخططًا لـ {{subject}}",
+      "start": "بدأ علاجًا مخططًا لـ {{subject}}",
+      "cancel": "ألغى علاجًا مخططًا لـ {{subject}}",
+      "perform": "نفّذ علاجًا مخططًا لـ {{subject}}",
+      "unperform": "أعاد علاجًا منفَّذًا إلى الخطة لـ {{subject}}",
+      "session": "سجّل عملًا على علاج غير منتهٍ لـ {{subject}}",
+      "session_delete": "أزال عمل زيارة على علاج غير منتهٍ لـ {{subject}}",
+      "reprice": "غيّر سعر علاج مخطط لـ {{subject}}",
+      "delete": "أزال العلاج المخطط {{name}} لـ {{subject}}"
+    },
+    "plan_group": {
+      "create": "أنشأ الخطة «{{name}}» لـ {{subject}}",
+      "update": "عدّل الخطة «{{name}}» لـ {{subject}}",
+      "delete": "حذف الخطة «{{name}}» لـ {{subject}}"
+    },
+    "tooth_status": {
+      "set": "غيّر سنًّا في مخطط {{subject}}"
+    },
+    "tooth_presence": {
+      "set": "غيّر الأسنان الموجودة لدى {{subject}}",
+      "remove": "تراجع عن تغيير في وجود سنّ لدى {{subject}}"
+    },
+    "clinical": {
+      "repoint": "نقل السجل السريري لسجل مدموج إلى {{subject}}"
+    },
+    "ledger_entry": {
+      "opening": "سجّل رصيدًا افتتاحيًا بقيمة {{amount}} لـ {{subject}}",
+      "less": "خفّض رصيد {{subject}} بمقدار {{amount}}",
+      "more": "أضاف {{amount}} إلى رصيد {{subject}}",
+      "repoint": "نقل رصيد سجل مدموج إلى {{subject}}"
+    },
+    "payment": {
+      "create": "سجّل الدفعة {{subject}} · {{amount}} {{method}}",
+      "refund": "ردّ {{amount}} من الدفعة {{subject}}",
+      "void": "ألغى الدفعة {{subject}}"
+    },
+    "catalog": {
+      "service": {
+        "create": "أضاف خدمة الكتالوج {{subject}}",
+        "update": "عدّل خدمة الكتالوج {{subject}}",
+        "price": "غيّر سعر خدمة الكتالوج {{subject}}",
+        "deactivate": "عطّل خدمة الكتالوج {{subject}}",
+        "delete": "حذف خدمة الكتالوج {{subject}}"
+      },
+      "diagnosis": {
+        "create": "أضاف تشخيص الكتالوج {{subject}}",
+        "update": "عدّل تشخيص الكتالوج {{subject}}",
+        "deactivate": "عطّل تشخيص الكتالوج {{subject}}",
+        "delete": "حذف تشخيص الكتالوج {{subject}}"
+      }
+    },
+    "user": {
+      "create": "أضاف المستخدم {{subject}}",
+      "update": "عدّل المستخدم {{subject}}",
+      "deactivate": "عطّل المستخدم {{subject}}",
+      "reactivate": "أعاد تفعيل المستخدم {{subject}}",
+      "reset_password": "أعاد تعيين كلمة مرور {{subject}}",
+      "password_change": "غيّر كلمة مروره",
+      "roles_assign": "غيّر أدوار {{subject}}"
+    },
+    "role": {
+      "create": "أنشأ الدور {{subject}}"
+    },
+    "tenant": {
+      "provision": "أنشأ العيادة",
+      "update": "غيّر إعدادات العيادة",
+      "suspend": "علّق العيادة",
+      "reactivate": "أعاد تفعيل العيادة"
+    },
+    "branch": {
+      "create": "أضاف الفرع {{subject}}",
+      "update": "عدّل الفرع {{subject}}"
+    },
+    "room": {
+      "create": "أضاف الغرفة {{subject}}",
+      "update": "عدّل الغرفة {{subject}}"
+    }
+  },
+  "fields": {
+    "fullName": "الاسم",
+    "displayName": "الاسم",
+    "name": "الاسم",
+    "title": "اللقب",
+    "code": "الرمز",
+    "category": "الفئة",
+    "phone": "الهاتف",
+    "email": "البريد الإلكتروني",
+    "dateOfBirth": "تاريخ الميلاد",
+    "sex": "الجنس",
+    "address": "العنوان",
+    "insurance": "التأمين",
+    "medicalAlerts": "تنبيهات طبية",
+    "notes": "ملاحظات",
+    "note": "ملاحظة",
+    "status": "الحالة",
+    "presence": "وجود السنّ",
+    "toothCode": "السنّ",
+    "surfaces": "الأسطح",
+    "relationship": "صلة القرابة",
+    "isGuardian": "وليّ أمر",
+    "isBillingContact": "جهة الفوترة",
+    "isEmergencyContact": "جهة اتصال للطوارئ",
+    "chargeUnit": "طريقة الاحتساب",
+    "toothEffect": "الأثر على السنّ",
+    "price": "السعر",
+    "priceAmount": "السعر",
+    "baseAmount": "السعر",
+    "discountAmount": "الخصم",
+    "discountMode": "نوع الخصم",
+    "discountValue": "الخصم",
+    "discount": "الخصم",
+    "subtotal": "المجموع الفرعي",
+    "total": "الإجمالي",
+    "durationMinutes": "المدة (بالدقائق)",
+    "amount": "المبلغ",
+    "method": "الطريقة",
+    "paidAt": "تاريخ الدفع",
+    "effectiveDate": "تاريخ السريان",
+    "reference": "المرجع",
+    "frequent": "كثير الاستخدام",
+    "active": "مفعّل",
+    "practitionerType": "النوع",
+    "roles": "الأدوار",
+    "timeZone": "المنطقة الزمنية",
+    "currency": "العملة",
+    "locale": "اللغة",
+    "country": "البلد",
+    "chartMode": "تفاصيل المخطط",
+    "toothNotation": "ترقيم الأسنان",
+    "chartOrientation": "اتجاه المخطط",
+    "dentitionOverride": "المخطط"
+  },
+  "noAccess": {
+    "title": "لا يمكنك فتح سجل النشاط",
+    "body": "اطلب من مالك العيادة أو من طبيب أسنان."
+  }
+}

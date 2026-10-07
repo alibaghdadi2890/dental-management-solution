@@ -2,6 +2,7 @@ import {
   type BranchCreate,
   type BranchPatch,
   branchSchema,
+  currencyLockSchema,
   type PlatformTenantQuery,
   platformTenantSchema,
   type ProvisionTenantRequestInput,
@@ -30,6 +31,7 @@ export const platformKeys = {
   rooms: (tenantId: string) => ['platform', 'tenant', tenantId, 'rooms'] as const,
   users: (tenantId: string) => ['platform', 'tenant', tenantId, 'users'] as const,
   roles: (tenantId: string) => ['platform', 'tenant', tenantId, 'roles'] as const,
+  currencyLock: (tenantId: string) => ['platform', 'tenant', tenantId, 'currency-lock'] as const,
 };
 
 export const tenantsQuery = (query: PlatformTenantQuery = {}) =>
@@ -95,6 +97,13 @@ export function setTenantStatus(tenantId: string, status: TenantStatus, reason: 
 export function updateTenantSettings(patch: TenantSettingsPatch, tenantId?: string) {
   return apiFetch('/tenant', tenantSchema, { method: 'PATCH', json: patch, tenantId });
 }
+
+/** Whether the clinic's currency can still change: not once it has ledger entries (H6). */
+export const currencyLockQuery = (tenantId: string) =>
+  queryOptions({
+    queryKey: platformKeys.currencyLock(tenantId),
+    queryFn: () => apiFetch('/billing/currency-lock', currencyLockSchema, { tenantId }),
+  });
 
 export function createBranch(tenantId: string, branch: BranchCreate) {
   return apiFetch('/branches', branchSchema, { method: 'POST', json: branch, tenantId });

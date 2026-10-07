@@ -8,6 +8,7 @@ import { usePermission } from '@/features/auth/use-permission';
 import { lastVisitQuery } from '@/features/clinical/visits-api';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { AdjustBalanceButton, AdjustBalanceMenu } from './adjust/adjust-entry';
 import { balanceQuery, visitSummaryQuery } from './billing-api';
 import { owedBalances } from './owed-balances';
 import { useRecordPayment } from './payments/payment-dialog-context';
@@ -34,8 +35,9 @@ const amountClass = 'font-mono text-[14px] leading-none font-semibold tabular-nu
  * tenant currency (or, when nothing is owed in it, by the first currency that is); any other
  * currency is listed under it. Total outstanding is danger-toned while anything is owed and
  * success-toned when clear, and a credit (a negative total) gets its note. With `payment:write`,
- * Record payment while anything is owed (feature 5). Without `visit:read` there is no split,
- * only the ledger balance.
+ * Record payment while anything is owed (feature 5). Adjust balance (feature 7, H4) is a
+ * secondary button on the detailed card and a ⋯ menu on the compact one. Without `visit:read`
+ * there is no split, only the ledger balance.
  */
 export function BalanceCard({
   patientId,
@@ -174,9 +176,20 @@ export function BalanceCard({
             {t('balance.record')}
           </Button>
         )}
+        {detailed && <AdjustBalanceButton patientId={patientId} className="mt-2" />}
       </>
     );
   }
 
-  return <Card title={t('balance.title')}>{body}</Card>;
+  return (
+    <Card
+      title={t('balance.title')}
+      // The tab's card has the button; the Overview's compact one keeps the action in a menu.
+      action={
+        detailed ? undefined : <AdjustBalanceMenu patientId={patientId} label={t('adjust.menu')} />
+      }
+    >
+      {body}
+    </Card>
+  );
 }

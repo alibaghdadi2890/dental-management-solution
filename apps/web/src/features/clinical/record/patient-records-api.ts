@@ -1,6 +1,8 @@
 import {
   patientChartResultSchema,
   type PatientChartResult,
+  patientPresenceResultSchema,
+  type SetPresenceOnPatientInput,
   type PlanGroupInput,
   type PlanPatientTreatmentInput,
   type RecordPatientDiagnosisInput,
@@ -14,7 +16,7 @@ import { clinicalKeys } from '../visits-api';
 
 /**
  * Charting on the patient record, outside a visit (ADR-0031): `clinical`'s
- * `/clinical/patients/:id/{diagnoses,plans,plan-groups}` routes. Each answers `{ chart }`, the
+ * `/clinical/patients/:id/{diagnoses,plans,plan-groups,presence}` routes. Each answers `{ chart }`, the
  * chart as it now is.
  */
 function call(
@@ -100,6 +102,21 @@ export function patientRecordMutations(
       ...base,
       mutationFn: (groupId: string) =>
         call('DELETE', patientId, `plan-groups/${groupId}`, { tenantId: tenant }),
+    }),
+    /** Tooth presence on the record (feature 7): answers the rows written, for the Undo. */
+    setPresence: mutationOptions({
+      ...base,
+      mutationFn: (input: SetPresenceOnPatientInput) =>
+        apiFetch(`/clinical/patients/${patientId}/presence`, patientPresenceResultSchema, {
+          method: 'POST',
+          json: input,
+          ...(tenant === undefined ? {} : { tenantId: tenant }),
+        }),
+    }),
+    removePresence: mutationOptions({
+      ...base,
+      mutationFn: (ids: readonly string[]) =>
+        call('DELETE', patientId, `presence?ids=${ids.join(',')}`, { tenantId: tenant }),
     }),
   };
 }

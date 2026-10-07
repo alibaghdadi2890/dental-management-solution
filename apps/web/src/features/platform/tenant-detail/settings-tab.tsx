@@ -1,13 +1,18 @@
 import { LOCALES, type Tenant, type TenantSettingsPatch } from '@dcm/contracts';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, Select, TextInput } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast-context';
 import { CountrySelect } from '@/features/platform/country-select';
-import { platformKeys, updateTenantSettings } from '@/features/platform/platform-api';
+import {
+  currencyLockQuery,
+  platformKeys,
+  updateTenantSettings,
+} from '@/features/platform/platform-api';
 import { CURRENCIES, TIME_ZONES } from '@/features/platform/tenant-options';
+import { ApiError } from '@/lib/api';
 
 type SettingsForm = Pick<Tenant, 'name' | 'timeZone' | 'currency' | 'locale' | 'country'>;
 
@@ -31,6 +36,9 @@ export function SettingsTab({ tenant }: { tenant: Tenant }) {
   const patch = changed(tenant, form);
   const dirty = Object.keys(patch).length > 0;
   const mutation = useMutation({ mutationFn: () => updateTenantSettings(patch, tenant.id) });
+  const lock = useQuery(currencyLockQuery(tenant.id));
+  const currencyLocked = lock.data?.locked === true;
+  const lockedText = t('settings.currencyLocked', { currency: tenant.currency });
 
   const set = (key: keyof SettingsForm) => (value: string) => {
     setForm((current) => ({ ...current, [key]: value }));
@@ -45,7 +53,14 @@ export function SettingsTab({ tenant }: { tenant: Tenant }) {
       setForm(updated);
       setSaved(true);
       toast(t('settings.saved'));
-    } catch {
+    } catch (error) {
+      // The server is the guarantee (H6): a stale tab learns the currency is locked here.
+      if (error instanceof ApiError && error.code === 'tenant.currency_locked') {
+        setForm((current) => ({ ...current, currency: tenant.currency }));
+        await queryClient.invalidateQueries({ queryKey: platformKeys.currencyLock(tenant.id) });
+        toast(lockedText, { tone: 'danger' });
+        return;
+      }
       toast(t('settings.failed'), { tone: 'danger' });
     }
   };
@@ -99,6 +114,8 @@ export function SettingsTab({ tenant }: { tenant: Tenant }) {
             {(props) => (
               <Select
                 {...props}
+                disabled={currencyLocked}
+                {...(currencyLocked ? { 'aria-describedby': 'currency-locked' } : {})}
                 value={form.currency}
                 onChange={(event) => {
                   set('currency')(event.target.value);
@@ -130,6 +147,11 @@ export function SettingsTab({ tenant }: { tenant: Tenant }) {
             )}
           </Field>
         </div>
+        {currencyLocked && (
+          <p id="currency-locked" className="-mt-2 text-xs leading-snug text-ink-tertiary">
+            {lockedText}
+          </p>
+        )}
         <CountrySelect
           label={t('newTenant.fields.country')}
           value={form.country}

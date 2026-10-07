@@ -75,11 +75,72 @@ describe('Today’s services and the chart’s jaw and whole-mouth areas', () =>
     expect(panel().getByRole('heading', { name: '#46' })).toBeTruthy();
   });
 
-  it('is absent while the visit has no service and the patient no unfinished one', async () => {
+  it('an empty visit says how to add; read-only, the card is left out', async () => {
     mockWorkspace();
     renderWorkspace();
     await chartCard();
+    const card = within(screen.getByRole('region', { name: "Today's services" }));
+    expect(card.getByText(/^Nothing added yet/)).toBeTruthy();
+    cleanup();
+
+    mockWorkspace();
+    renderWorkspace({ permissions: FRONT_DESK });
+    await chartCard();
     expect(screen.queryByRole('region', { name: "Today's services" })).toBeNull();
+  });
+
+  it('opens Add service from the card and with the S key', async () => {
+    mockWorkspace({ services: SERVICES });
+    renderWorkspace();
+    await chartCard();
+    const card = within(screen.getByRole('region', { name: "Today's services" }));
+    fireEvent.click(card.getByRole('button', { name: 'Add service' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Add completed service' });
+    fireEvent.keyDown(drawer, { key: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Add completed service' })).toBeNull();
+    });
+
+    // Not while typing in a field (the visit notes).
+    fireEvent.keyDown(screen.getByRole('textbox', { name: /notes/i }), { key: 's', code: 'KeyS' });
+    expect(screen.queryByRole('dialog', { name: 'Add completed service' })).toBeNull();
+    fireEvent.keyDown(document.body, { key: 's', code: 'KeyS' });
+    expect(await screen.findByRole('dialog', { name: 'Add completed service' })).toBeTruthy();
+  });
+
+  it('adds a frequently used service to the selected tooth in one click', async () => {
+    const fetchMock = mockWorkspace({
+      services: [
+        serviceItem(40, 'Composite filling', { frequent: true }),
+        serviceItem(46, 'Zircon crown'),
+        serviceItem(42, 'Polishing', { chargeUnit: 'per_mouth', frequent: true }),
+      ],
+    });
+    renderWorkspace();
+    const card = await chartCard();
+    fireEvent.click(card.getByRole('button', { name: /^#16 · / }));
+    // Only the frequent services of the selection's level are offered.
+    const quick = within(await panel().findByRole('group', { name: 'Frequently used' }));
+    expect(quick.getAllByRole('button').map((chip) => chip.textContent)).toEqual([
+      '+ Composite filling',
+    ]);
+    fireEvent.click(quick.getByRole('button', { name: 'Add Composite filling' }));
+    await waitFor(() => {
+      expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/services`)).toEqual({
+        procedureId: id(40),
+        toothCode: '16',
+        surfaces: [],
+      });
+    });
+
+    fireEvent.click(card.getByRole('button', { name: /^Whole mouth/ }));
+    fireEvent.click(await panel().findByRole('button', { name: 'Add Polishing' }));
+    await waitFor(() => {
+      expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/services`)).toEqual({
+        procedureId: id(42),
+        surfaces: [],
+      });
+    });
   });
 
   it('puts unfinished services first, and offers each what its state allows', async () => {

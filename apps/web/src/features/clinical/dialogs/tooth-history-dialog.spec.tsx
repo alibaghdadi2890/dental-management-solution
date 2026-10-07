@@ -88,6 +88,7 @@ describe('ToothHistoryDialog', () => {
           {
             toothCode: '16',
             voidedVisitIds: [],
+            presence: [],
             diagnoses: [
               diagnosisRecord(20, 'Dental caries', '16', {
                 recordedDate: '2026-05-04',

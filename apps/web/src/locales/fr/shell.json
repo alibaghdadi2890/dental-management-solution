@@ -22,7 +22,8 @@
     "platform": "Plateforme",
     "tenants": "Cabinets",
     "payments": "Paiements",
-    "today": "Aujourd’hui"
+    "today": "Aujourd’hui",
+    "activity": "Activité"
   },
   "breadcrumb": "Fil d’Ariane",
   "platformCrumb": "Plateforme",

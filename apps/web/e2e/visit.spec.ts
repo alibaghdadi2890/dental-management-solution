@@ -175,8 +175,8 @@ test('the owner charts a visit, completes it and sees its figures with the openi
     await surfaces.getByRole('button', { name: 'Occlusal (O)' }).click();
     await surfaces.getByRole('button', { name: 'Distal (D)' }).click();
     await expect(panel.getByText('Surfaces selected: Occlusal, Distal')).toBeVisible();
-    await panel.getByRole('button', { name: 'Add completed service', exact: true }).click();
-    await pickFromDrawer(page, 'Add completed service', 'Composite');
+    // A frequently used service is one click away at the top of the panel.
+    await panel.getByRole('button', { name: 'Add Composite', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Composite added' })).toBeVisible();
     await expect(surfaces.getByRole('button', { name: /^Occlusal \(O\) · treated/ })).toBeVisible();
     await expect(surfaces.getByRole('button', { name: /^Distal \(D\) · treated/ })).toBeVisible();

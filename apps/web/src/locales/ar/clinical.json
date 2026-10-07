@@ -44,7 +44,6 @@
   "title": {
     "listSeparator": "، ",
     "primary": "سن لبنية",
-    "notErupted": "لم تبزغ بعد",
     "planned": "مخطط: {{names}}",
     "recordedServices_zero": "لا خدمات مسجلة",
     "recordedServices_one": "خدمة واحدة مسجلة",
@@ -54,7 +53,12 @@
     "recordedServices_other": "{{count}} خدمة مسجلة",
     "treatedToday": "عولجت في هذه الزيارة",
     "noRecordedTreatment": "لا علاج مسجل",
-    "inProgress": "غير منتهية: {{names}}"
+    "inProgress": "غير منتهية: {{names}}",
+    "presence": {
+      "missing": "مفقودة",
+      "not_erupted": "لم تبزغ",
+      "implant": "زرعة"
+    }
   },
   "chart": {
     "upperArch": "الفك العلوي",
@@ -73,7 +77,11 @@
     "treatedToday": "عولجت اليوم",
     "diagnosis": "تشخيص",
     "planned": "مخطط",
-    "inProgress": "غير منتهية"
+    "inProgress": "غير منتهية",
+    "presence": "السنّ",
+    "missing": "مفقودة",
+    "notErupted": "لم تبزغ",
+    "implant": "زرعة"
   },
   "workspace": {
     "loading": "جارٍ تحميل الزيارة…",
@@ -112,7 +120,9 @@
     "viewSummary": "عرض الملخص"
   },
   "chartCard": {
-    "title": "مخطط الأسنان"
+    "title": "مخطط الأسنان",
+    "expand": "تكبير المخطط",
+    "collapse": "تصغير المخطط"
   },
   "planBoard": {
     "title": "خطة العلاج",
@@ -232,35 +242,7 @@
   },
   "succession": {
     "successor": "السن الدائمة الخلف",
-    "predecessor": "السن اللبنية السابقة",
-    "hasRecords": "· لها سجلات",
-    "notErupted": "· لم تبزغ بعد",
-    "noRecords": "· لا سجلات",
-    "counts": "· {{counts}}",
-    "services_zero": "لا خدمات",
-    "services_one": "خدمة واحدة",
-    "services_two": "خدمتان",
-    "services_few": "{{count}} خدمات",
-    "services_many": "{{count}} خدمة",
-    "services_other": "{{count}} خدمة",
-    "diagnoses_zero": "لا تشخيصات",
-    "diagnoses_one": "تشخيص واحد",
-    "diagnoses_two": "تشخيصان",
-    "diagnoses_few": "{{count}} تشخيصات",
-    "diagnoses_many": "{{count}} تشخيصًا",
-    "diagnoses_other": "{{count}} تشخيص",
-    "planned_zero": "لا شيء مخطط",
-    "planned_one": "واحد مخطط",
-    "planned_two": "اثنان مخططان",
-    "planned_few": "{{count}} مخططة",
-    "planned_many": "{{count}} مخططًا",
-    "planned_other": "{{count}} مخطط",
-    "markExfoliated": "تسجيل سقوطها",
-    "stillPresent": "لا تزال موجودة",
-    "exfoliated": "سُجّلت السن اللبنية ساقطة",
-    "exfoliatedBody": "يظهر هذا الموضع الآن بالسن الدائمة الخلف. يبقى تاريخ السن اللبنية محفوظًا.",
-    "retained": "سُجّلت السن اللبنية موجودة",
-    "retainedBody": "يظهر هذا الموضع بالسن اللبنية مجددًا."
+    "predecessor": "السن اللبنية السابقة"
   },
   "panel": {
     "emptyTitle": "لا سن محددة",
@@ -522,7 +504,14 @@
     "liveVisit": "لدى هذا المريض زيارة جارية.",
     "openVisit": "فتح الزيارة"
   },
+  "quickAdd": {
+    "add": "إضافة خدمة",
+    "frequent": "الأكثر استخدامًا",
+    "addNamed": "إضافة {{name}}",
+    "chip": "+ {{name}}"
+  },
   "todayServices": {
+    "empty": "لم تُضف أي خدمة بعد. اختر سناً أو فكاً أو الفم كاملاً من المخطط، ثم أضف ما تم عمله.",
     "title": "خدمات اليوم",
     "count_zero": "{{count}} خدمة",
     "count_one": "خدمة واحدة",
@@ -566,5 +555,85 @@
   },
   "rowMenu": {
     "label": "إجراءات: {{name}}"
+  },
+  "presence": {
+    "label": "الوجود",
+    "states": {
+      "present": "موجودة",
+      "missing": "مفقودة",
+      "not_erupted": "لم تبزغ",
+      "implant": "زرعة"
+    },
+    "menuLabel": "وجود السنّ {{label}}: {{state}}",
+    "marked": {
+      "present": "سُجّلت السنّ {{label}} موجودة",
+      "missing": "سُجّلت السنّ {{label}} مفقودة",
+      "not_erupted": "سُجّلت السنّ {{label}} غير بازغة",
+      "implant": "سُجّلت السنّ {{label}} كزرعة"
+    },
+    "markedMany_zero": "لم تُحدَّث أي سنّ",
+    "markedMany_one": "حُدِّثت سنّ واحدة",
+    "markedMany_two": "حُدِّثت سنّان",
+    "markedMany_few": "حُدِّثت {{count}} أسنان",
+    "markedMany_many": "حُدِّثت {{count}} سنًّا",
+    "markedMany_other": "حُدِّثت {{count}} سنّ",
+    "unchanged": "لا شيء يتغيّر: المخطط يقول ذلك أصلًا",
+    "suffix": {
+      "present": "سُجّلت السنّ موجودة",
+      "missing": "سُجّلت السنّ مفقودة",
+      "not_erupted": "سُجّلت السنّ غير بازغة",
+      "implant": "سُجّلت كزرعة"
+    },
+    "banner": {
+      "since": "{{state}} منذ {{date}}",
+      "beforeFirstVisit": "قبل الزيارة الأولى",
+      "visit": "الزيارة {{number}}",
+      "service": "{{name}}، الزيارة {{number}}",
+      "recordedBy": "سجّلها {{name}}"
+    },
+    "popover": {
+      "title": "تسجيل السنّ {{label}}: {{state}}",
+      "titleMany_zero": "حفظ التغييرات",
+      "titleMany_one": "حفظ تغيير واحد",
+      "titleMany_two": "حفظ تغييرين",
+      "titleMany_few": "حفظ {{count}} تغييرات",
+      "titleMany_many": "حفظ {{count}} تغييرًا",
+      "titleMany_other": "حفظ {{count}} تغيير",
+      "body": "اذكر متى حدث ذلك. إن لم يكن التاريخ معروفًا فاتركه على «قبل الزيارة الأولى».",
+      "when": "متى",
+      "beforeFirstVisit": "قبل الزيارة الأولى",
+      "onDate": "في تاريخ محدّد",
+      "date": "التاريخ",
+      "chooseDate": "اختر التاريخ",
+      "reason": "السبب",
+      "reasonPlaceholder": "حادث، فُقدت في مكان آخر، غياب خلقي…",
+      "dentist": "طبيب الأسنان",
+      "chooseDentist": "اختر طبيب أسنان…",
+      "save": "حفظ",
+      "optional": "اختياري"
+    },
+    "edit": {
+      "start": "تعديل الوجود",
+      "toolbar": "تسجيل الأسنان كـ",
+      "hint": "انقر على الأسنان لتسجيلها",
+      "changes_zero": "لا تغييرات",
+      "changes_one": "تغيير واحد",
+      "changes_two": "تغييران",
+      "changes_few": "{{count}} تغييرات",
+      "changes_many": "{{count}} تغييرًا",
+      "changes_other": "{{count}} تغيير",
+      "done": "تم",
+      "active": "وضع التسجيل — انقر على سنّ لتسجيلها: {{state}}"
+    },
+    "history": {
+      "title": "الوجود",
+      "marked": {
+        "present": "سُجّلت موجودة",
+        "missing": "سُجّلت مفقودة",
+        "not_erupted": "سُجّلت غير بازغة",
+        "implant": "سُجّلت زرعة"
+      },
+      "service": "{{name}} ({{code}})، الزيارة {{number}}"
+    }
   }
 }

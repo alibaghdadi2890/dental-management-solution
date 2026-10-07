@@ -22,7 +22,8 @@ const visitOnly = () => undefined;
  * The patient record's charting writes (ADR-0031): the same `ChartingActions` the visit workspace
  * provides, bound to the patient instead of a visit. A diagnosis and a plan are recorded with no
  * visit, for `dentistId` (left out when the caller is the dentist); a record made here is removed,
- * a plan made in a visit cancelled. Performing, resolving, services and tooth presence need a
+ * a plan made in a visit cancelled. Tooth presence is set here too, with when and why (feature
+ * 7). Performing, resolving and services need a
  * visit: `scope.kind` is `patient`, so the shared components leave those controls out.
  */
 export function usePatientChartingActions({
@@ -126,6 +127,38 @@ export function usePatientChartingActions({
       },
       cancelPlan: (planId) => {
         fire(mutations.cancelPlan, planId);
+      },
+      setPresence: async (teeth, details) => {
+        if (!details) return;
+        try {
+          const { presenceIds } = await run(mutations.setPresence, {
+            teeth: [...teeth],
+            when: details.when,
+            reason: details.reason,
+            // The dialog's own choice first, else the tab's "Recording for".
+            ...(details.dentistId === undefined ? forDentist : { dentistId: details.dentistId }),
+          });
+          const [only] = teeth;
+          if (presenceIds.length === 0) {
+            toast(t('presence.unchanged'));
+            return;
+          }
+          const text =
+            teeth.length === 1 && only
+              ? t(`presence.marked.${only.presence}`, {
+                  label: toothLabel(only.toothCode).replace(/^#/, ''),
+                })
+              : t('presence.markedMany', { count: presenceIds.length });
+          toast(text, {
+            actionLabel: t('actions.undo'),
+            onAction: () => {
+              fire(mutations.removePresence, presenceIds);
+            },
+          });
+        } catch (error) {
+          failed(error);
+          throw error;
+        }
       },
       groups: {
         create: (input) => run(mutations.createGroup, input).then(visitOnly),

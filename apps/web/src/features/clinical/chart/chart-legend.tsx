@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { PLANNED_SHADOW } from './glyph-style';
+import { AbsentBox } from './presence-glyph';
+import { IMPLANT_OUTLINE } from './presence-style';
 import { useChartSettings } from './use-chart-settings';
 
 interface LegendItem {
@@ -39,18 +41,26 @@ function MiniGlyph({ filled }: { filled: 'centre' | 'all' }) {
 }
 
 /**
- * The chart legend (spec §Interactions → Legend), in two labelled groups: what the tooth's fill
- * says (its treatment), then the markers layered on top, each in precedence order. Simple mode
+ * The chart legend (spec §Interactions → Legend), in labelled groups: what the tooth's fill
+ * says (its treatment), the markers layered on top, each in precedence order, then what is at
+ * the position when it is not a plain natural tooth: missing, not erupted, implant (feature 7). Simple mode
  * collapses "Treated surface" and "Whole tooth" into "Treated"; outside a visit "Treated today" is
  * left out. It is the same for the primary and the permanent chart, so switching between them
  * moves nothing. Every item is one fixed height, so both groups are too. Wraps and aligns to the
  * inline end.
+ *
+ * `layout="key"` is the expanded chart's legend, where there is room to read it like a map key:
+ * each group is a titled list, one item to a line, its swatch in a column of its own. The groups
+ * stand side by side under the chart, and stack into a rail beside it once the chart card's
+ * `@container/chart` is wide enough for both.
  */
 export function ChartLegend({
   showToday = true,
+  layout = 'inline',
 }: {
   /** "Treated today" means nothing outside a visit (the record's chart tab, 4b D17). */
   showToday?: boolean;
+  layout?: 'inline' | 'key';
 }) {
   const { t } = useTranslation('clinical');
   const { mode } = useChartSettings();
@@ -92,6 +102,30 @@ export function ChartLegend({
     },
   ];
 
+  // What is at a position (feature 7, H1), drawn as on the chart: outline style, cross and
+  // second outline, none of which needs colour to be told apart.
+  const absent = (presence: 'missing' | 'not_erupted') => (
+    <span aria-hidden className="flex-none">
+      <AbsentBox presence={presence} width={11} height={11} radius={2} mark="none" />
+    </span>
+  );
+  const presence: LegendItem[] = [
+    { label: t('legend.missing'), swatch: absent('missing') },
+    { label: t('legend.notErupted'), swatch: absent('not_erupted') },
+    {
+      label: t('legend.implant'),
+      swatch: (
+        <span
+          aria-hidden
+          className={cn(
+            'mx-[3px] size-[7px] flex-none rounded-[1.5px] border border-border-control bg-surface',
+            IMPLANT_OUTLINE,
+          )}
+        />
+      ),
+    },
+  ];
+
   const group = (title: string, items: LegendItem[]) => (
     <div className="inline-flex flex-wrap items-center gap-[9px] rounded-[7px] border border-inner-divider bg-faint px-[9px] py-1">
       <span className="text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase">
@@ -110,10 +144,42 @@ export function ChartLegend({
     </div>
   );
 
+  const keyGroup = (title: string, items: LegendItem[]) => (
+    <div role="group" aria-label={title} className="min-w-[148px]">
+      <p className="m-0 mb-2 text-[12.5px] leading-none font-semibold text-ink">{title}</p>
+      <ul className="m-0 flex list-none flex-col gap-[7px] p-0">
+        {items.map((item) => (
+          <li
+            key={item.label}
+            data-legend-item
+            className="flex h-[18px] items-center gap-2 text-[13px] leading-none whitespace-nowrap text-ink-secondary"
+          >
+            <span className="grid w-[18px] flex-none place-items-center">{item.swatch}</span>
+            {item.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+
+  if (layout === 'key') {
+    return (
+      <div
+        data-legend-key
+        className="flex flex-wrap gap-x-10 gap-y-5 @min-[1080px]/chart:flex-col @min-[1080px]/chart:flex-nowrap"
+      >
+        {keyGroup(t('legend.treatment'), fills)}
+        {keyGroup(t('legend.markers'), markers)}
+        {keyGroup(t('legend.presence'), presence)}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-wrap justify-end gap-3">
       {group(t('legend.treatment'), fills)}
       {group(t('legend.markers'), markers)}
+      {group(t('legend.presence'), presence)}
     </div>
   );
 }

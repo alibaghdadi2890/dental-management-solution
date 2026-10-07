@@ -384,7 +384,8 @@
       "services": "Actes réalisés",
       "billed": "Total facturé",
       "loading": "Chargement du résumé des soins…",
-      "failed": "Impossible de charger le résumé des soins"
+      "failed": "Impossible de charger le résumé des soins",
+      "presence": "Dents absentes : {{missing}} · Implants : {{implants}}"
     },
     "info": {
       "title": "Informations patient",

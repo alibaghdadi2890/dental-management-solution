@@ -44,13 +44,17 @@
   "title": {
     "listSeparator": ", ",
     "primary": "dent temporaire",
-    "notErupted": "pas encore sortie",
     "planned": "prévu : {{names}}",
     "recordedServices_one": "{{count}} soin enregistré",
     "recordedServices_other": "{{count}} soins enregistrés",
     "treatedToday": "traitée pendant cette visite",
     "noRecordedTreatment": "aucun soin enregistré",
-    "inProgress": "non terminé : {{names}}"
+    "inProgress": "non terminé : {{names}}",
+    "presence": {
+      "missing": "absente",
+      "not_erupted": "non sortie",
+      "implant": "implant"
+    }
   },
   "chart": {
     "upperArch": "Arcade supérieure",
@@ -69,7 +73,11 @@
     "treatedToday": "Traitée aujourd’hui",
     "diagnosis": "Diagnostic",
     "planned": "Prévu",
-    "inProgress": "Non terminé"
+    "inProgress": "Non terminé",
+    "presence": "Dent",
+    "missing": "Absente",
+    "notErupted": "Non sortie",
+    "implant": "Implant"
   },
   "workspace": {
     "loading": "Chargement de la visite…",
@@ -108,7 +116,9 @@
     "viewSummary": "Voir le récapitulatif"
   },
   "chartCard": {
-    "title": "Schéma dentaire"
+    "title": "Schéma dentaire",
+    "expand": "Agrandir le schéma",
+    "collapse": "Réduire le schéma"
   },
   "planBoard": {
     "title": "Plan de traitement",
@@ -212,23 +222,7 @@
   },
   "succession": {
     "successor": "Successeur permanent",
-    "predecessor": "Prédécesseur temporaire",
-    "hasRecords": "· a des enregistrements",
-    "notErupted": "· pas encore sortie",
-    "noRecords": "· aucun enregistrement",
-    "counts": "· {{counts}}",
-    "services_one": "{{count}} acte",
-    "services_other": "{{count}} actes",
-    "diagnoses_one": "{{count}} diagnostic",
-    "diagnoses_other": "{{count}} diagnostics",
-    "planned_one": "{{count}} planifié",
-    "planned_other": "{{count}} planifiés",
-    "markExfoliated": "Marquer comme exfoliée",
-    "stillPresent": "Toujours présente",
-    "exfoliated": "Dent temporaire enregistrée comme exfoliée",
-    "exfoliatedBody": "La position est désormais celle du successeur permanent. L’historique de la dent temporaire est conservé.",
-    "retained": "Dent temporaire enregistrée comme présente",
-    "retainedBody": "La position est de nouveau celle de la dent temporaire."
+    "predecessor": "Prédécesseur temporaire"
   },
   "panel": {
     "emptyTitle": "Aucune dent sélectionnée",
@@ -474,7 +468,14 @@
     "liveVisit": "Ce patient a une visite en cours.",
     "openVisit": "Ouvrir la visite"
   },
+  "quickAdd": {
+    "add": "Ajouter un acte",
+    "frequent": "Fréquemment utilisés",
+    "addNamed": "Ajouter {{name}}",
+    "chip": "+ {{name}}"
+  },
   "todayServices": {
+    "empty": "Rien pour l’instant. Sélectionnez une dent, une arcade ou toute la bouche sur le schéma, puis ajoutez ce qui a été fait.",
     "title": "Actes du jour",
     "count_one": "{{count}} acte",
     "count_other": "{{count}} actes",
@@ -506,5 +507,73 @@
   },
   "rowMenu": {
     "label": "Actions : {{name}}"
+  },
+  "presence": {
+    "label": "Présence",
+    "states": {
+      "present": "Présente",
+      "missing": "Absente",
+      "not_erupted": "Non sortie",
+      "implant": "Implant"
+    },
+    "menuLabel": "Présence de la dent {{label}} : {{state}}",
+    "marked": {
+      "present": "Dent {{label}} notée présente",
+      "missing": "Dent {{label}} notée absente",
+      "not_erupted": "Dent {{label}} notée non sortie",
+      "implant": "Dent {{label}} notée comme implant"
+    },
+    "markedMany_one": "{{count}} dent mise à jour",
+    "markedMany_other": "{{count}} dents mises à jour",
+    "unchanged": "Rien à changer : le schéma l’indique déjà",
+    "suffix": {
+      "present": "dent notée présente",
+      "missing": "dent notée absente",
+      "not_erupted": "dent notée non sortie",
+      "implant": "notée comme implant"
+    },
+    "banner": {
+      "since": "{{state}} depuis le {{date}}",
+      "beforeFirstVisit": "avant la première visite",
+      "visit": "visite {{number}}",
+      "service": "{{name}}, visite {{number}}",
+      "recordedBy": "noté par {{name}}"
+    },
+    "popover": {
+      "title": "Noter la dent {{label}} : {{state}}",
+      "titleMany_one": "Enregistrer {{count}} changement",
+      "titleMany_other": "Enregistrer {{count}} changements",
+      "body": "Indiquez quand cela s’est produit. Si la date n’est pas connue, laissez « Avant la première visite ».",
+      "when": "Quand",
+      "beforeFirstVisit": "Avant la première visite",
+      "onDate": "À une date",
+      "date": "Date",
+      "chooseDate": "Choisir la date",
+      "reason": "Motif",
+      "reasonPlaceholder": "Accident, perdue ailleurs, agénésie…",
+      "dentist": "Dentiste",
+      "chooseDentist": "Choisir un dentiste…",
+      "save": "Enregistrer",
+      "optional": "Facultatif"
+    },
+    "edit": {
+      "start": "Modifier la présence",
+      "toolbar": "Noter les dents comme",
+      "hint": "Cliquez sur les dents à noter",
+      "changes_one": "{{count}} changement",
+      "changes_other": "{{count}} changements",
+      "done": "Terminer",
+      "active": "Marquage en cours — cliquez sur une dent pour la noter : {{state}}"
+    },
+    "history": {
+      "title": "Présence",
+      "marked": {
+        "present": "Notée présente",
+        "missing": "Notée absente",
+        "not_erupted": "Notée non sortie",
+        "implant": "Notée implant"
+      },
+      "service": "{{name}} ({{code}}), visite {{number}}"
+    }
   }
 }

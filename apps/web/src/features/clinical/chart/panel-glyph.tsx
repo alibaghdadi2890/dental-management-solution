@@ -5,12 +5,15 @@ import {
   type SurfaceKey,
   surfaceCells,
   type ToothCode,
+  type ToothPresenceState,
   type ToothState,
   type ToothVisualState,
 } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { CELL_MAP, cellClass, gridStyle } from './glyph-style';
+import { ImplantPost } from './presence-glyph';
+import { IMPLANT_OUTLINE, isAbsent, rootSide } from './presence-style';
 import { useSurfaceLabel } from './use-chart-settings';
 
 export interface PanelGlyphProps {
@@ -23,6 +26,9 @@ export interface PanelGlyphProps {
   pendingSurfaces?: readonly SurfaceKey[];
   /** Toggles a surface in the pending scope. Without it the surfaces are read-only (W18). */
   onSurfaceClick?: (surface: SurfaceKey) => void;
+  /** What is at the position (feature 7). The surfaces stay workable whatever it is (H3): a
+   * crown is charted on an implant, a pontic on a gap. */
+  presence?: ToothPresenceState;
 }
 
 const CELL = 24;
@@ -58,9 +64,38 @@ export function PanelGlyph({
   orientation,
   pendingSurfaces = [],
   onSurfaceClick,
+  presence = 'present',
 }: PanelGlyphProps) {
   const { t } = useTranslation('clinical');
   const surfaceLabel = useSurfaceLabel();
+  const absent = isAbsent(presence);
+  // Missing: dashed and faded; not erupted: dotted; implant: a second outline and its post.
+  const presenceClass = cn(
+    'relative',
+    presence === 'implant' && cn('rounded-[5px]', IMPLANT_OUTLINE),
+    presence === 'missing' && 'opacity-60',
+  );
+  const cellBorder =
+    presence === 'missing' ? 'border-dashed' : presence === 'not_erupted' ? 'border-dotted' : '';
+  const overlay = (
+    <>
+      {presence === 'implant' && <ImplantPost side={rootSide(code)} size={CELL} />}
+      {presence === 'missing' && (
+        <svg
+          aria-hidden
+          data-presence-cross
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.9"
+          strokeLinecap="round"
+          className="pointer-events-none absolute inset-0 m-auto size-[26px] text-ink-muted"
+        >
+          <path d="m2 2 6 6M8 2 2 8" />
+        </svg>
+      )}
+    </>
+  );
 
   if (mode === 'simple') {
     // The panel's tooth is the selected one, so its outline is the accent (as in the POC).
@@ -69,14 +104,16 @@ export function PanelGlyph({
       <span
         aria-hidden
         data-glyph
-        className="grid flex-none"
+        data-presence={presence}
+        className={cn('grid flex-none', presenceClass)}
         style={{ gridTemplateColumns: `${SIMPLE.width}px`, gridTemplateRows: `${SIMPLE.height}px` }}
       >
         <span
           data-mark={mark}
-          className={cellClass(mark, true)}
+          className={cn(cellClass(absent ? 'none' : mark, true), cellBorder)}
           style={{ borderRadius: SIMPLE.radius }}
         />
+        {overlay}
       </span>
     );
   }
@@ -87,7 +124,8 @@ export function PanelGlyph({
       role="group"
       aria-label={t('glyph.surfaces')}
       data-glyph
-      className="grid flex-none"
+      data-presence={presence}
+      className={cn('grid flex-none', presenceClass)}
       style={gridStyle(CELL, 2, 0)}
     >
       {CELL_MAP.map((index, position) => {
@@ -107,6 +145,7 @@ export function PanelGlyph({
         const className = cn(
           'grid place-items-center rounded-[2px] border p-0 text-[12.5px] leading-none font-semibold',
           SURFACE_CLASS[pending ? 'pending' : mark],
+          cellBorder,
         );
 
         if (!onSurfaceClick) {
@@ -142,6 +181,7 @@ export function PanelGlyph({
           </button>
         );
       })}
+      {overlay}
     </div>
   );
 }

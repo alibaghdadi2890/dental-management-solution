@@ -25,7 +25,8 @@
     "category": "Catégorie",
     "charged": "Facturé",
     "price": "Prix",
-    "active": "Actif"
+    "active": "Actif",
+    "toothEffect": "Effet sur la dent"
   },
   "chargeUnit": {
     "per_tooth": "Par dent",
@@ -78,5 +79,11 @@
     "body": "Le supprimer casserait ces dossiers de consultation. Marquez-le plutôt comme inactif : il reste sur les consultations passées mais ne peut plus être ajouté aux nouvelles.",
     "ok": "Marquer inactif",
     "done": "{{name}} marqué inactif"
-  }
+  },
+  "toothEffect": {
+    "none": "Aucun",
+    "removes": "Retire la dent",
+    "implant": "Pose un implant"
+  },
+  "toothEffectHint": "Ce que la réalisation de cet acte fait à la dent sur le schéma : une extraction la note absente, une pose d’implant la note comme implant."
 }

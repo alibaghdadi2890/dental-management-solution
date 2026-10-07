@@ -32,6 +32,7 @@ const service = (n: number, code: string, name: string, category: string | null)
   price: { amount: '30.00', currency: 'USD' },
   frequent: false,
   active: true,
+  toothEffect: 'none',
 });
 
 const diagnosis = (n: number, code: string, name: string, category: string): DiagnosisItem => ({
@@ -70,6 +71,24 @@ describe('catalog draft', () => {
     expect(row(draft, 'services', id(3)).category).toBe('');
   });
 
+  it('tracks the effect on the tooth, sends it, and drops it when the row stops being per tooth (H2)', () => {
+    let draft = editRow(fresh(), 'services', id(1), { toothEffect: 'removes' });
+    expect(changeCount(draft)).toBe(1);
+    expect(batchOf('services', changedRows(draft, 'services')).items[0]).toMatchObject({
+      code: 'EXT',
+      toothEffect: 'removes',
+    });
+    draft = editRow(draft, 'services', id(1), { chargeUnit: 'per_jaw' });
+    expect(row(draft, 'services', id(1))).toMatchObject({
+      chargeUnit: 'per_jaw',
+      toothEffect: 'none',
+    });
+    // Back to per tooth: the effect does not come back by itself.
+    draft = editRow(draft, 'services', id(1), { chargeUnit: 'per_tooth' });
+    expect(row(draft, 'services', id(1)).toothEffect).toBe('none');
+    expect(changeCount(draft)).toBe(0);
+  });
+
   it('marks an edited row dirty, and clean again when the edit is undone', () => {
     let draft = editRow(fresh(), 'services', id(1), { name: 'Simple extraction' });
     expect(isRowChanged(draft, 'services', row(draft, 'services', id(1)))).toBe(true);
@@ -96,6 +115,7 @@ describe('catalog draft', () => {
       currency: null,
       frequent: false,
       active: true,
+      toothEffect: 'none',
     });
     expect(addRow(fresh(), 'diagnoses', 'new-2', '').rows.diagnoses[0]?.code).toBe('DX-');
   });
@@ -151,6 +171,7 @@ describe('catalog draft', () => {
           price: '0',
           frequent: false,
           active: true,
+          toothEffect: 'none',
         },
         {
           id: id(2),
@@ -161,6 +182,7 @@ describe('catalog draft', () => {
           price: '55.5',
           frequent: false,
           active: true,
+          toothEffect: 'none',
         },
       ],
     });

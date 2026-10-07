@@ -180,7 +180,7 @@ export const problem = (
 /** A permanent dentition with nothing charted and no live visit. */
 export const EMPTY_CHART: PatientChart = {
   dentition: { stage: 'permanent', source: 'auto', ageYears: 36 },
-  toothStatus: [],
+  presence: [],
   diagnoses: [],
   plans: [],
   planGroups: [],
@@ -196,6 +196,8 @@ export const NO_COUNTS: ClinicalSummary = {
   plannedProcedures: 0,
   teethTreated: 0,
   servicesPerformed: 0,
+  missingTeeth: 0,
+  implants: 0,
 };
 
 export interface MockApi {
@@ -356,7 +358,16 @@ export function mockApi({
       if (read === 'summary') return Promise.resolve(json(summaries[patientId] ?? NO_COUNTS));
       const history = toothHistories[patientId]?.find((tooth) => tooth.toothCode === toothCode);
       return Promise.resolve(
-        json(history ?? { toothCode, diagnoses: [], plans: [], services: [], voidedVisitIds: [] }),
+        json(
+          history ?? {
+            toothCode,
+            presence: [],
+            diagnoses: [],
+            plans: [],
+            services: [],
+            voidedVisitIds: [],
+          },
+        ),
       );
     }
     const detail = /^\/patients\/([^/]+)$/.exec(bare)?.[1];

@@ -70,7 +70,8 @@
     "refund": "Refund",
     "void": "Void payment",
     "askDentist": "Ask a dentist to refund",
-    "takePayment": "Take payment"
+    "takePayment": "Take payment",
+    "more": "More actions for {{name}}"
   },
   "refund": {
     "title": "Refund {{receipt}}",

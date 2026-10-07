@@ -36,6 +36,7 @@ import { ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { AdjustBalanceMenu } from '../adjust/adjust-entry';
 import { useRecordPayment } from '../payments/payment-dialog-context';
 import {
   agingQuery,
@@ -63,7 +64,7 @@ const SEARCH_DEBOUNCE_MS = 250;
 
 const TRANSACTION_COLUMNS =
   '92px 100px minmax(170px,1.3fr) 140px minmax(100px,1fr) 128px 100px 256px';
-const OUTSTANDING_COLUMNS = 'minmax(200px,1.5fr) 128px 80px 112px 120px 132px';
+const OUTSTANDING_COLUMNS = 'minmax(200px,1.5fr) 128px 80px 112px 120px 168px';
 
 /** POC aging colours: 0–30 → 90+. */
 const BUCKET_COLOURS: Record<AgingBucket, string> = {
@@ -841,7 +842,7 @@ function OutstandingTable({
                 >
                   {formatMoney({ amount: item.balance, currency: item.currency }, locale)}
                 </span>
-                <span role="cell" className="text-end">
+                <span role="cell" className="flex items-center justify-end gap-1">
                   {openPayment && (
                     <Button
                       variant="outline"
@@ -861,6 +862,13 @@ function OutstandingTable({
                     >
                       {t('actions.takePayment')}
                     </Button>
+                  )}
+                  {/* An adjustment is on one account: a family row has no single one. */}
+                  {!family && (
+                    <AdjustBalanceMenu
+                      patientId={item.patient.id}
+                      label={t('actions.more', { name: item.patient.fullName })}
+                    />
                   )}
                 </span>
               </div>

@@ -10,6 +10,7 @@ import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-ch
 import { usePermission } from '@/features/auth/use-permission';
 import { createWithOpeningBalance } from '@/features/billing/billing-api';
 import { formatCalendarDate, todayIn } from '@/lib/format';
+import { useIdempotencyKeys } from '@/lib/idempotency';
 import { ContactDraftContext, useContactDrafts } from '../contact-drafts';
 import { type PatientPanel, parsePatientsSearch } from '../list-query';
 import {
@@ -205,6 +206,8 @@ function PatientForm({
     today,
   });
 
+  // H5: a retry of the same form resends its key, so the server never creates a second patient.
+  const keyFor = useIdempotencyKeys();
   const mutation = useMutation({
     mutationFn: async (): Promise<string> => {
       if (patient) {
@@ -214,13 +217,10 @@ function PatientForm({
       }
       const input = toCreatePayload(values);
       if (showAccount && wantsOpeningBalance(values)) {
-        const result = await createWithOpeningBalance({
-          patient: input,
-          openingBalance: toOpeningBalance(values, today),
-        });
-        return result.patient.id;
+        const body = { patient: input, openingBalance: toOpeningBalance(values, today) };
+        return (await createWithOpeningBalance(body, keyFor(body))).patient.id;
       }
-      return (await createPatient(input)).id;
+      return (await createPatient(input, keyFor(input))).id;
     },
   });
 

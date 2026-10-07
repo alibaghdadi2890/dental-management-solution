@@ -1,0 +1,249 @@
+{
+  "title": "Activity",
+  "subtitle": "Who did what in this clinic",
+  "loading": "Loading activity",
+  "more": "Load more",
+  "moreFailed": "Couldn’t load more.",
+  "clear": "Clear filters",
+  "yes": "Yes",
+  "no": "No",
+  "becomes": "changed to",
+  "noChanges": "No field changes recorded",
+  "expand": "Show what changed",
+  "collapse": "Hide what changed",
+  "system": "System",
+  "platformAdmin": "Platform admin",
+  "adminBadge": "Platform admin",
+  "formerStaff": "Former staff member",
+  "viewAll": "View all activity",
+  "empty": {
+    "title": "Nothing happened in this period",
+    "body": "Try a longer period, or clear the filters."
+  },
+  "noMatch": {
+    "title": "Nothing matches “{{q}}”",
+    "body": "Search a patient, visit or receipt number (P-12, V-45, RCT-3), or a person’s name."
+  },
+  "error": {
+    "title": "Couldn’t load the activity",
+    "body": "The server didn’t respond."
+  },
+  "search": {
+    "label": "Search activity",
+    "placeholder": "P-, V-, RCT- number or a name"
+  },
+  "columns": {
+    "when": "When",
+    "who": "Who",
+    "what": "What",
+    "reason": "Reason",
+    "details": "Details"
+  },
+  "filters": {
+    "area": "Area",
+    "person": "Person",
+    "anyone": "Anyone",
+    "date": "Date",
+    "patient": "Patient",
+    "visit": "Visit",
+    "removeRecord": "Show every record"
+  },
+  "areas": {
+    "all": "All",
+    "patients": "Patients",
+    "visits": "Visits",
+    "payments": "Payments",
+    "catalog": "Catalog",
+    "users": "Users",
+    "settings": "Settings",
+    "contacts": "Contacts"
+  },
+  "ranges": {
+    "today": "Today",
+    "7d": "7 days",
+    "30d": "30 days",
+    "90d": "90 days",
+    "all": "All time"
+  },
+  "actions": {
+    "fallback": "{{action}} {{subject}}",
+    "patient": {
+      "create": "Registered patient {{subject}}",
+      "update": "Updated patient {{subject}}",
+      "dentition": "Changed which chart {{subject}} is on",
+      "archive": "Archived patient {{subject}}",
+      "restore": "Restored patient {{subject}}",
+      "merge": "Merged a duplicate record into {{subject}}"
+    },
+    "contact": {
+      "link": "Added {{name}} as a contact of {{subject}}",
+      "roles": "Changed what {{name}} is for {{subject}}",
+      "unlink": "Removed {{name}} as a contact of {{subject}}",
+      "merge": "Moved a merged record’s contacts to {{subject}}",
+      "update": "Updated contact {{subject}}"
+    },
+    "visit": {
+      "start": "Started visit {{subject}}",
+      "pause": "Paused visit {{subject}}",
+      "resume": "Resumed visit {{subject}}",
+      "notes": "Edited the notes of visit {{subject}}",
+      "discount_live": "Changed the discount of visit {{subject}}",
+      "discard": "Discarded visit {{subject}}",
+      "complete": "Completed visit {{subject}}",
+      "amend": "Amended visit {{subject}}",
+      "discount": "Changed the discount of visit {{subject}} at checkout",
+      "checkout": "Closed the checkout of visit {{subject}}",
+      "void": "Voided visit {{subject}}",
+      "unfinished_answered": "Answered which unfinished work visit {{subject}} continues"
+    },
+    "visit_service": {
+      "create": "Added {{name}} to visit {{subject}}",
+      "update": "Changed a service price in visit {{subject}}",
+      "delete": "Removed {{name}} from visit {{subject}}",
+      "unfinished": "Marked {{name}} not finished in visit {{subject}}"
+    },
+    "diagnosis_record": {
+      "create": "Recorded {{name}} for {{subject}}",
+      "delete": "Removed the diagnosis {{name}} for {{subject}}",
+      "resolve": "Resolved a diagnosis for {{subject}}",
+      "reopen": "Reopened a diagnosis for {{subject}}"
+    },
+    "treatment_plan": {
+      "create": "Planned {{name}} for {{subject}}",
+      "update": "Edited a planned treatment for {{subject}}",
+      "start": "Started a planned treatment for {{subject}}",
+      "cancel": "Cancelled a planned treatment for {{subject}}",
+      "perform": "Performed a planned treatment for {{subject}}",
+      "unperform": "Put a performed treatment back in the plan for {{subject}}",
+      "session": "Recorded work on an unfinished treatment for {{subject}}",
+      "session_delete": "Removed a visit’s work on an unfinished treatment for {{subject}}",
+      "reprice": "Changed the price of a planned treatment for {{subject}}",
+      "delete": "Removed the planned {{name}} for {{subject}}"
+    },
+    "plan_group": {
+      "create": "Created the plan “{{name}}” for {{subject}}",
+      "update": "Edited the plan “{{name}}” for {{subject}}",
+      "delete": "Deleted the plan “{{name}}” for {{subject}}"
+    },
+    "tooth_status": {
+      "set": "Changed a tooth on the chart of {{subject}}"
+    },
+    "tooth_presence": {
+      "set": "Changed which teeth are present for {{subject}}",
+      "remove": "Undid a change of tooth presence for {{subject}}"
+    },
+    "clinical": {
+      "repoint": "Moved a merged record’s clinical history to {{subject}}"
+    },
+    "ledger_entry": {
+      "opening": "Recorded an opening balance of {{amount}} for {{subject}}",
+      "less": "Reduced the balance of {{subject}} by {{amount}}",
+      "more": "Added {{amount}} to the balance of {{subject}}",
+      "repoint": "Moved a merged record’s balance to {{subject}}"
+    },
+    "payment": {
+      "create": "Recorded payment {{subject}} · {{amount}} {{method}}",
+      "refund": "Refunded {{amount}} of payment {{subject}}",
+      "void": "Voided payment {{subject}}"
+    },
+    "catalog": {
+      "service": {
+        "create": "Added catalog service {{subject}}",
+        "update": "Edited catalog service {{subject}}",
+        "price": "Changed catalog service {{subject}} price",
+        "deactivate": "Marked catalog service {{subject}} inactive",
+        "delete": "Deleted catalog service {{subject}}"
+      },
+      "diagnosis": {
+        "create": "Added catalog diagnosis {{subject}}",
+        "update": "Edited catalog diagnosis {{subject}}",
+        "deactivate": "Marked catalog diagnosis {{subject}} inactive",
+        "delete": "Deleted catalog diagnosis {{subject}}"
+      }
+    },
+    "user": {
+      "create": "Added user {{subject}}",
+      "update": "Edited user {{subject}}",
+      "deactivate": "Deactivated user {{subject}}",
+      "reactivate": "Reactivated user {{subject}}",
+      "reset_password": "Reset the password of {{subject}}",
+      "password_change": "Changed their own password",
+      "roles_assign": "Changed the roles of {{subject}}"
+    },
+    "role": {
+      "create": "Created the role {{subject}}"
+    },
+    "tenant": {
+      "provision": "Set up the clinic",
+      "update": "Changed the clinic settings",
+      "suspend": "Suspended the clinic",
+      "reactivate": "Reactivated the clinic"
+    },
+    "branch": {
+      "create": "Added branch {{subject}}",
+      "update": "Edited branch {{subject}}"
+    },
+    "room": {
+      "create": "Added room {{subject}}",
+      "update": "Edited room {{subject}}"
+    }
+  },
+  "fields": {
+    "fullName": "Name",
+    "displayName": "Name",
+    "name": "Name",
+    "title": "Title",
+    "code": "Code",
+    "category": "Category",
+    "phone": "Phone",
+    "email": "Email",
+    "dateOfBirth": "Date of birth",
+    "sex": "Sex",
+    "address": "Address",
+    "insurance": "Insurance",
+    "medicalAlerts": "Medical alerts",
+    "notes": "Notes",
+    "note": "Note",
+    "status": "Status",
+    "presence": "Tooth presence",
+    "toothCode": "Tooth",
+    "surfaces": "Surfaces",
+    "relationship": "Relationship",
+    "isGuardian": "Guardian",
+    "isBillingContact": "Billing contact",
+    "isEmergencyContact": "Emergency contact",
+    "chargeUnit": "Charged",
+    "toothEffect": "Effect on tooth",
+    "price": "Price",
+    "priceAmount": "Price",
+    "baseAmount": "Price",
+    "discountAmount": "Discount",
+    "discountMode": "Discount type",
+    "discountValue": "Discount",
+    "discount": "Discount",
+    "subtotal": "Subtotal",
+    "total": "Total",
+    "durationMinutes": "Duration (minutes)",
+    "amount": "Amount",
+    "method": "Method",
+    "paidAt": "Paid on",
+    "effectiveDate": "Effective date",
+    "reference": "Reference",
+    "frequent": "Frequently used",
+    "active": "Active",
+    "practitionerType": "Type",
+    "roles": "Roles",
+    "timeZone": "Time zone",
+    "currency": "Currency",
+    "locale": "Language",
+    "country": "Country",
+    "chartMode": "Chart detail",
+    "toothNotation": "Tooth notation",
+    "chartOrientation": "Chart orientation",
+    "dentitionOverride": "Chart"
+  },
+  "noAccess": {
+    "title": "You can’t open the activity log",
+    "body": "Ask the clinic owner or a dentist."
+  }
+}

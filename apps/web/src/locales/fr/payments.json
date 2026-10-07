@@ -71,7 +71,8 @@
     "refund": "Rembourser",
     "void": "Annuler le paiement",
     "askDentist": "Demandez à un dentiste de rembourser",
-    "takePayment": "Encaisser"
+    "takePayment": "Encaisser",
+    "more": "Autres actions pour {{name}}"
   },
   "refund": {
     "title": "Rembourser {{receipt}}",

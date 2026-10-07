@@ -20,6 +20,7 @@ import {
 import { queryOptions } from '@tanstack/react-query';
 import { actingTenantId } from '@/features/platform/acting-tenant';
 import { apiFetch } from '@/lib/api';
+import { IDEMPOTENCY_HEADER } from '@/lib/idempotency';
 import { downloadCsv } from '@/lib/download';
 import { billingKeys } from './billing-api';
 
@@ -97,7 +98,7 @@ export function recordPayment(input: PaymentRequest, key: string) {
   return apiFetch('/billing/payments', recordPaymentResultSchema, {
     method: 'POST',
     json: input,
-    headers: { 'Idempotency-Key': key },
+    headers: { [IDEMPOTENCY_HEADER]: key },
   });
 }
 

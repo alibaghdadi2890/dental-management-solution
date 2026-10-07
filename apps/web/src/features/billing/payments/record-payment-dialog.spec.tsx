@@ -35,6 +35,7 @@ const ACCOUNT: PatientAccount = {
   household: null,
   payerFor: null,
   history: [],
+  adjustments: [],
 };
 
 const RESULT: RecordPaymentResult = {

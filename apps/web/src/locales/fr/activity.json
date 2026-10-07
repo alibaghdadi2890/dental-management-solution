@@ -1,0 +1,249 @@
+{
+  "title": "Activité",
+  "subtitle": "Qui a fait quoi dans ce cabinet",
+  "loading": "Chargement de l’activité",
+  "more": "Charger plus",
+  "moreFailed": "Impossible de charger la suite.",
+  "clear": "Effacer les filtres",
+  "yes": "Oui",
+  "no": "Non",
+  "becomes": "devient",
+  "noChanges": "Aucun changement de champ enregistré",
+  "expand": "Afficher ce qui a changé",
+  "collapse": "Masquer ce qui a changé",
+  "system": "Système",
+  "platformAdmin": "Administrateur de la plateforme",
+  "adminBadge": "Admin plateforme",
+  "formerStaff": "Ancien membre de l’équipe",
+  "viewAll": "Voir toute l’activité",
+  "empty": {
+    "title": "Rien ne s’est passé sur cette période",
+    "body": "Essayez une période plus longue, ou effacez les filtres."
+  },
+  "noMatch": {
+    "title": "Aucun résultat pour « {{q}} »",
+    "body": "Cherchez un numéro de patient, de visite ou de reçu (P-12, V-45, RCT-3), ou le nom d’une personne."
+  },
+  "error": {
+    "title": "Impossible de charger l’activité",
+    "body": "Le serveur n’a pas répondu."
+  },
+  "search": {
+    "label": "Rechercher dans l’activité",
+    "placeholder": "Numéro P-, V-, RCT- ou un nom"
+  },
+  "columns": {
+    "when": "Quand",
+    "who": "Qui",
+    "what": "Quoi",
+    "reason": "Motif",
+    "details": "Détails"
+  },
+  "filters": {
+    "area": "Domaine",
+    "person": "Personne",
+    "anyone": "Tout le monde",
+    "date": "Date",
+    "patient": "Patient",
+    "visit": "Visite",
+    "removeRecord": "Afficher tous les dossiers"
+  },
+  "areas": {
+    "all": "Tout",
+    "patients": "Patients",
+    "visits": "Visites",
+    "payments": "Paiements",
+    "catalog": "Catalogue",
+    "users": "Utilisateurs",
+    "settings": "Paramètres",
+    "contacts": "Contacts"
+  },
+  "ranges": {
+    "today": "Aujourd’hui",
+    "7d": "7 jours",
+    "30d": "30 jours",
+    "90d": "90 jours",
+    "all": "Depuis toujours"
+  },
+  "actions": {
+    "fallback": "{{action}} {{subject}}",
+    "patient": {
+      "create": "A enregistré le patient {{subject}}",
+      "update": "A modifié le patient {{subject}}",
+      "dentition": "A changé le schéma dentaire de {{subject}}",
+      "archive": "A archivé le patient {{subject}}",
+      "restore": "A restauré le patient {{subject}}",
+      "merge": "A fusionné un doublon dans {{subject}}"
+    },
+    "contact": {
+      "link": "A ajouté {{name}} comme contact de {{subject}}",
+      "roles": "A changé le rôle de {{name}} pour {{subject}}",
+      "unlink": "A retiré {{name}} des contacts de {{subject}}",
+      "merge": "A déplacé les contacts d’un dossier fusionné vers {{subject}}",
+      "update": "A modifié le contact {{subject}}"
+    },
+    "visit": {
+      "start": "A commencé la visite {{subject}}",
+      "pause": "A mis en pause la visite {{subject}}",
+      "resume": "A repris la visite {{subject}}",
+      "notes": "A modifié les notes de la visite {{subject}}",
+      "discount_live": "A changé la remise de la visite {{subject}}",
+      "discard": "A abandonné la visite {{subject}}",
+      "complete": "A terminé la visite {{subject}}",
+      "amend": "A corrigé la visite {{subject}}",
+      "discount": "A changé la remise de la visite {{subject}} à l’encaissement",
+      "checkout": "A clôturé l’encaissement de la visite {{subject}}",
+      "void": "A annulé la visite {{subject}}",
+      "unfinished_answered": "A indiqué quels soins non terminés la visite {{subject}} poursuit"
+    },
+    "visit_service": {
+      "create": "A ajouté {{name}} à la visite {{subject}}",
+      "update": "A changé le prix d’un acte dans la visite {{subject}}",
+      "delete": "A retiré {{name}} de la visite {{subject}}",
+      "unfinished": "A marqué {{name}} comme non terminé dans la visite {{subject}}"
+    },
+    "diagnosis_record": {
+      "create": "A noté {{name}} pour {{subject}}",
+      "delete": "A retiré le diagnostic {{name}} pour {{subject}}",
+      "resolve": "A résolu un diagnostic pour {{subject}}",
+      "reopen": "A rouvert un diagnostic pour {{subject}}"
+    },
+    "treatment_plan": {
+      "create": "A planifié {{name}} pour {{subject}}",
+      "update": "A modifié un soin planifié pour {{subject}}",
+      "start": "A commencé un soin planifié pour {{subject}}",
+      "cancel": "A annulé un soin planifié pour {{subject}}",
+      "perform": "A réalisé un soin planifié pour {{subject}}",
+      "unperform": "A remis un soin réalisé dans le plan pour {{subject}}",
+      "session": "A noté un travail sur un soin non terminé pour {{subject}}",
+      "session_delete": "A retiré le travail d’une visite sur un soin non terminé pour {{subject}}",
+      "reprice": "A changé le prix d’un soin planifié pour {{subject}}",
+      "delete": "A retiré le soin planifié {{name}} pour {{subject}}"
+    },
+    "plan_group": {
+      "create": "A créé le plan « {{name}} » pour {{subject}}",
+      "update": "A modifié le plan « {{name}} » pour {{subject}}",
+      "delete": "A supprimé le plan « {{name}} » pour {{subject}}"
+    },
+    "tooth_status": {
+      "set": "A changé une dent sur le schéma de {{subject}}"
+    },
+    "tooth_presence": {
+      "set": "A changé les dents présentes de {{subject}}",
+      "remove": "A annulé un changement de présence dentaire pour {{subject}}"
+    },
+    "clinical": {
+      "repoint": "A déplacé l’historique clinique d’un dossier fusionné vers {{subject}}"
+    },
+    "ledger_entry": {
+      "opening": "A enregistré un solde d’ouverture de {{amount}} pour {{subject}}",
+      "less": "A réduit le solde de {{subject}} de {{amount}}",
+      "more": "A ajouté {{amount}} au solde de {{subject}}",
+      "repoint": "A déplacé le solde d’un dossier fusionné vers {{subject}}"
+    },
+    "payment": {
+      "create": "A enregistré le paiement {{subject}} · {{amount}} {{method}}",
+      "refund": "A remboursé {{amount}} du paiement {{subject}}",
+      "void": "A annulé le paiement {{subject}}"
+    },
+    "catalog": {
+      "service": {
+        "create": "A ajouté l’acte {{subject}} au catalogue",
+        "update": "A modifié l’acte {{subject}} du catalogue",
+        "price": "A changé le prix de l’acte {{subject}} du catalogue",
+        "deactivate": "A désactivé l’acte {{subject}} du catalogue",
+        "delete": "A supprimé l’acte {{subject}} du catalogue"
+      },
+      "diagnosis": {
+        "create": "A ajouté le diagnostic {{subject}} au catalogue",
+        "update": "A modifié le diagnostic {{subject}} du catalogue",
+        "deactivate": "A désactivé le diagnostic {{subject}} du catalogue",
+        "delete": "A supprimé le diagnostic {{subject}} du catalogue"
+      }
+    },
+    "user": {
+      "create": "A ajouté l’utilisateur {{subject}}",
+      "update": "A modifié l’utilisateur {{subject}}",
+      "deactivate": "A désactivé l’utilisateur {{subject}}",
+      "reactivate": "A réactivé l’utilisateur {{subject}}",
+      "reset_password": "A réinitialisé le mot de passe de {{subject}}",
+      "password_change": "A changé son propre mot de passe",
+      "roles_assign": "A changé les rôles de {{subject}}"
+    },
+    "role": {
+      "create": "A créé le rôle {{subject}}"
+    },
+    "tenant": {
+      "provision": "A créé le cabinet",
+      "update": "A changé les paramètres du cabinet",
+      "suspend": "A suspendu le cabinet",
+      "reactivate": "A réactivé le cabinet"
+    },
+    "branch": {
+      "create": "A ajouté le site {{subject}}",
+      "update": "A modifié le site {{subject}}"
+    },
+    "room": {
+      "create": "A ajouté la salle {{subject}}",
+      "update": "A modifié la salle {{subject}}"
+    }
+  },
+  "fields": {
+    "fullName": "Nom",
+    "displayName": "Nom",
+    "name": "Nom",
+    "title": "Titre",
+    "code": "Code",
+    "category": "Catégorie",
+    "phone": "Téléphone",
+    "email": "E-mail",
+    "dateOfBirth": "Date de naissance",
+    "sex": "Sexe",
+    "address": "Adresse",
+    "insurance": "Assurance",
+    "medicalAlerts": "Alertes médicales",
+    "notes": "Notes",
+    "note": "Note",
+    "status": "Statut",
+    "presence": "Présence de la dent",
+    "toothCode": "Dent",
+    "surfaces": "Faces",
+    "relationship": "Lien",
+    "isGuardian": "Responsable légal",
+    "isBillingContact": "Contact de facturation",
+    "isEmergencyContact": "Contact d’urgence",
+    "chargeUnit": "Facturé",
+    "toothEffect": "Effet sur la dent",
+    "price": "Prix",
+    "priceAmount": "Prix",
+    "baseAmount": "Prix",
+    "discountAmount": "Remise",
+    "discountMode": "Type de remise",
+    "discountValue": "Remise",
+    "discount": "Remise",
+    "subtotal": "Sous-total",
+    "total": "Total",
+    "durationMinutes": "Durée (minutes)",
+    "amount": "Montant",
+    "method": "Mode",
+    "paidAt": "Payé le",
+    "effectiveDate": "Date d’effet",
+    "reference": "Référence",
+    "frequent": "Souvent utilisé",
+    "active": "Actif",
+    "practitionerType": "Type",
+    "roles": "Rôles",
+    "timeZone": "Fuseau horaire",
+    "currency": "Devise",
+    "locale": "Langue",
+    "country": "Pays",
+    "chartMode": "Détail du schéma",
+    "toothNotation": "Notation dentaire",
+    "chartOrientation": "Orientation du schéma",
+    "dentitionOverride": "Schéma"
+  },
+  "noAccess": {
+    "title": "Vous ne pouvez pas ouvrir le journal d’activité",
+    "body": "Demandez au propriétaire du cabinet ou à un dentiste."
+  }
+}

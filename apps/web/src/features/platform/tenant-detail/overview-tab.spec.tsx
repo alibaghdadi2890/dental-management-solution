@@ -32,6 +32,7 @@ const extraction: ServiceItem = {
   price: { amount: '30.00', currency: 'USD' },
   frequent: true,
   active: true,
+  toothEffect: 'none',
 };
 
 const json = (body: unknown) =>

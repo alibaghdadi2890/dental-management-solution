@@ -19,8 +19,9 @@ export interface DentalChartProps {
   /** `deriveChart`'s sparse map: a tooth absent from it has no recorded treatment. */
   teeth: ReadonlyMap<ToothCode, ToothState>;
   dentition: DentitionStage;
-  /** 12 px cells for the full chart, 8 px for the compact one. */
-  size: 12 | 8;
+  /** 8 px cells for the compact chart, 12 px for the full one, and up to 20 px for the full
+   * chart expanded across the page (`FittedChart`). */
+  size: number;
   /** The selected tooth. Passing it (even `null`) makes each tooth a toggle with `aria-pressed`;
    * a chart without selection (the compact one) leaves it out. */
   selected?: ToothCode | null;
@@ -64,7 +65,9 @@ export function DentalChart({
   const { mode, notation, orientation } = useChartSettings();
   const toothName = useToothName();
   const { upper, lower } = archColumns(orientation, dentition);
-  const full = size === 12;
+  const full = size >= 12;
+  // The expanded chart: its numbers and dots grow with its glyphs.
+  const large = size >= 16;
 
   // Primary glyphs are smaller, so each sits in a constant-height box aligned to the occlusal
   // plane, and every column is exactly the full glyph's width (never wider, whatever its number
@@ -74,13 +77,17 @@ export function DentalChart({
   const renderTooth = (column: PermanentToothCode, arch: Arch) => {
     const { code, notErupted } = presentTooth(column, dentition);
     const tooth = teeth.get(code);
+    // What the dentist recorded (feature 7); without a record, a position the dentition has not
+    // reached reads as not erupted.
+    const recorded = tooth?.presence ?? 'present';
+    const presence = recorded === 'present' && notErupted ? 'not_erupted' : recorded;
     const isSelected = selected === code;
     const label = toothLabel(code, notation);
     const title = toothTitle(t, {
       label,
       name: toothName(code),
       primary: isPrimary(code),
-      notErupted,
+      presence,
       tooth,
     });
 
@@ -92,9 +99,9 @@ export function DentalChart({
         dir="ltr"
         className={cn(
           'relative font-mono leading-none tabular-nums',
-          full ? 'text-[12.5px]' : 'text-[11.5px]',
+          large ? 'text-[14px]' : full ? 'text-[12.5px]' : 'text-[11.5px]',
           isSelected ? 'font-semibold text-primary' : 'font-medium text-ink-muted',
-          notErupted && 'italic',
+          presence !== 'present' && presence !== 'implant' && 'italic',
         )}
       >
         {label.replace(/^#/, '')}
@@ -103,7 +110,7 @@ export function DentalChart({
             data-diagnosis-dot
             className={cn(
               'absolute start-full top-1/2 -translate-y-1/2 rounded-full bg-danger',
-              full ? 'ms-[3px] size-1' : 'ms-[2px] size-[3px]',
+              large ? 'ms-[3px] size-[5px]' : full ? 'ms-[3px] size-1' : 'ms-[2px] size-[3px]',
             )}
           />
         )}
@@ -123,14 +130,14 @@ export function DentalChart({
           orientation={orientation}
           size={size}
           selected={isSelected}
-          notErupted={notErupted}
+          presence={presence}
         />
       </span>
     );
 
     const columnClass = cn(
       'flex flex-none flex-col items-center',
-      full ? 'gap-[5px]' : 'gap-[3px]',
+      large ? 'gap-[7px]' : full ? 'gap-[5px]' : 'gap-[3px]',
     );
     const content = (
       <>
@@ -190,7 +197,10 @@ export function DentalChart({
       aria-hidden
       dir={textDir}
       title={t(side === 'right' ? 'chart.rightTitle' : 'chart.leftTitle')}
-      className="min-w-[14px] text-center font-mono text-[11.5px] leading-none font-medium text-ink-muted"
+      className={cn(
+        'min-w-[14px] text-center font-mono leading-none font-medium text-ink-muted',
+        large ? 'text-[13px]' : 'text-[11.5px]',
+      )}
     >
       {t(side === 'right' ? 'chart.right' : 'chart.left')}
     </span>

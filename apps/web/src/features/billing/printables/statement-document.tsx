@@ -5,6 +5,7 @@ import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { statementQuery } from '../payments-api';
 import { ItemsTable, Parties, PrintSheet, Totals } from './print-sheet';
 import { useTenantToday } from './use-tenant-today';
+import { useAdjustmentReasonLabel } from '../adjust/reason-label';
 
 /**
  * A patient's account statement (B9): every entry from the opening balance on — charges, their
@@ -45,11 +46,13 @@ export function StatementDocument({ patientId }: { patientId: string }) {
 export function StatementLines({ statement, locale }: { statement: Statement; locale: string }) {
   const { t } = useTranslation(['printables', 'billing']);
   const money = (amount: string) => formatMoney({ amount, currency: statement.currency }, locale);
+  const reasonLabel = useAdjustmentReasonLabel();
   const describe = (line: Statement['lines'][number]) => {
     const parts = [t(`statement.kind.${line.kind}`)];
     if (line.visitNumber !== null) parts.push(formatVisitNumber(line.visitNumber));
     if (line.receiptNumber !== null) parts.push(formatReceiptNumber(line.receiptNumber));
     if (line.method) parts.push(t(`billing:methods.${line.method}`));
+    if (line.reason) parts.push(reasonLabel(line.reason));
     if (line.note) parts.push(line.note);
     return parts.join(' · ');
   };

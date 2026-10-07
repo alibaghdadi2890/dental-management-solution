@@ -264,6 +264,7 @@
     "title": "Clinic settings",
     "body": "Time zone, currency and language apply to every user of this clinic.",
     "saved": "Settings saved",
-    "failed": "Couldn’t save the settings."
+    "failed": "Couldn’t save the settings.",
+    "currencyLocked": "Locked — this clinic has recorded balances in {{currency}}."
   }
 }

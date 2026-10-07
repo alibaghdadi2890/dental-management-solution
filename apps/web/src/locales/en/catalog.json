@@ -25,7 +25,8 @@
     "category": "Category",
     "charged": "Charged",
     "price": "Price",
-    "active": "Active"
+    "active": "Active",
+    "toothEffect": "Effect on tooth"
   },
   "chargeUnit": {
     "per_tooth": "Per tooth",
@@ -78,5 +79,11 @@
     "body": "Deleting it would break those visit records. Mark it inactive instead — it stays on past visits but can't be added to new ones.",
     "ok": "Mark inactive",
     "done": "{{name}} marked inactive"
-  }
+  },
+  "toothEffect": {
+    "none": "None",
+    "removes": "Removes the tooth",
+    "implant": "Places an implant"
+  },
+  "toothEffectHint": "What performing this service does to the tooth on the chart: an extraction marks it missing, an implant placement marks it as an implant."
 }

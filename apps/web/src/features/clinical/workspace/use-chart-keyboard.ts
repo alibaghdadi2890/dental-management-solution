@@ -20,6 +20,8 @@ export interface ChartKeyboardOptions {
    * callback) instead of deselecting, even with focus outside it, and the arrows do nothing, so
    * the selection can't move under the layer. */
   onEscape?: (() => void) | undefined;
+  /** `S` opens the Add service drawer (who may chart), unless a layer is open. */
+  onAddService?: (() => void) | undefined;
 }
 
 /** Keys typed here belong to the field or the layer, never to the chart. */
@@ -51,7 +53,8 @@ function step(
  * ← and → walk the arch in the clinic's orientation, wrapping — the chart is never mirrored
  * (W17), so the arrows follow the screen even in an RTL layout. `Esc` closes the topmost layer
  * first: a dialog or menu (the drawer included) handles it itself while focus is inside it, the
- * drawer otherwise through `onEscape`; only then does it deselect. Keys are left alone while
+ * drawer otherwise through `onEscape`; only then does it deselect. `S` (the key's position, so
+ * it answers on any layout) opens the Add service drawer. Keys are left alone while
  * focus is in a field or inside a dialog or menu, with a modifier held, and — the arrows — while
  * a layer is open.
  */
@@ -62,15 +65,21 @@ export function useChartKeyboard({
   areaSelected = false,
   onSelect,
   onEscape,
+  onAddService,
 }: ChartKeyboardOptions): void {
   useEffect(() => {
-    if (selected === null && !areaSelected && !onEscape) return;
+    if (selected === null && !areaSelected && !onEscape && !onAddService) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey) return;
       if (ignoredTarget(event.target)) return;
       if (event.key === 'Escape') {
         if (onEscape) onEscape();
         else onSelect(null);
+        return;
+      }
+      if (event.code === 'KeyS' && onAddService && !onEscape && !event.shiftKey) {
+        event.preventDefault();
+        onAddService();
         return;
       }
       if (selected === null || onEscape) return;
@@ -83,5 +92,5 @@ export function useChartKeyboard({
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [orientation, dentition, selected, areaSelected, onSelect, onEscape]);
+  }, [orientation, dentition, selected, areaSelected, onSelect, onEscape, onAddService]);
 }

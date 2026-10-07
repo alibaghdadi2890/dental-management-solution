@@ -33,6 +33,7 @@ const ACCOUNT: PatientAccount = {
   },
   payerFor: null,
   history: [],
+  adjustments: [],
 };
 
 const draft = (patch: Partial<ReturnType<typeof initialDraft>> = {}) => ({

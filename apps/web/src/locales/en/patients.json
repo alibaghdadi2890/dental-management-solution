@@ -384,7 +384,8 @@
       "services": "Services performed",
       "billed": "Lifetime billed",
       "loading": "Loading the treatment summary…",
-      "failed": "Couldn’t load the treatment summary"
+      "failed": "Couldn’t load the treatment summary",
+      "presence": "Missing teeth: {{missing}} · Implants: {{implants}}"
     },
     "info": {
       "title": "Patient information",

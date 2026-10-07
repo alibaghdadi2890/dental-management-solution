@@ -40,6 +40,46 @@ describe('VisitWorkspacePage', () => {
     expect(screen.getByRole('contentinfo', { name: 'Visit money' })).toBeTruthy();
   });
 
+  it('expands the chart card across the page, with the legend as a key, and collapses it', async () => {
+    mockWorkspace();
+    renderWorkspace();
+    const card = await chartCard();
+    const column = card.parentElement;
+    expect(card.querySelector('[data-legend-key]')).toBeNull();
+
+    const expand = within(card).getByRole('button', { name: 'Expand chart' });
+    expect(expand.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(expand);
+
+    // A row of its own, ahead of the column it left; the rest of the page is still there.
+    const expanded = await chartCard();
+    expect(expanded.parentElement).not.toBe(column);
+    expect(expanded.parentElement?.className).toContain('basis-full');
+    expect(expanded.querySelector('[data-legend-key]')).toBeTruthy();
+    expect(within(expanded).getAllByRole('listitem').length).toBeGreaterThan(0);
+    expect(screen.getByRole('complementary', { name: 'Selected tooth' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Treatment plan' })).toBeTruthy();
+
+    // The new card's toggle has the focus the old one had, and the chart still charts.
+    const collapse = within(expanded).getByRole('button', { name: 'Collapse chart' });
+    expect(collapse.getAttribute('aria-pressed')).toBe('true');
+    expect(document.activeElement).toBe(collapse);
+    fireEvent.click(within(expanded).getByRole('button', { name: /^#16 · / }));
+    const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
+    expect(await within(aside).findByRole('heading', { name: '#16' })).toBeTruthy();
+
+    fireEvent.click(collapse);
+    const collapsed = await chartCard();
+    expect(collapsed.querySelector('[data-legend-key]')).toBeNull();
+    expect(collapsed.parentElement?.className).not.toContain('basis-full');
+    // The selection survives the move.
+    expect(
+      within(collapsed)
+        .getByRole('button', { name: /^#16 · / })
+        .getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+
   it('Review & complete opens the visit summary over the workspace', async () => {
     mockWorkspace();
     renderWorkspace();
@@ -130,6 +170,7 @@ describe('VisitWorkspacePage', () => {
         {
           toothCode: '16',
           voidedVisitIds: [],
+          presence: [],
           diagnoses: [],
           plans: [],
           services: [historyLine(40, 'Composite filling', '16')],

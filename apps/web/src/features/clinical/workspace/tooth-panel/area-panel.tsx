@@ -5,6 +5,7 @@ import { useLevelLabel } from '../../chart/use-chart-settings';
 import { CHART_AREAS, type ChartArea, useToothSelection } from '../tooth-selection';
 import { CompletedSection } from './completed-section';
 import { PlanSection } from './plan-section';
+import { QuickAdd } from './quick-add';
 import type { ToothPanelProps } from './tooth-panel';
 
 type SectionKey = 'diagnosis' | 'plan' | 'completed';
@@ -15,7 +16,7 @@ const inArea = (record: { toothCode: unknown; jaw: 'upper' | 'lower' | null }, a
 
 /**
  * The panel of a selected jaw or of the whole mouth: the level's name, the three levels as tabs
- * (the same selection the chart's bars and pill make), then its treatment plan and its treatment —
+ * (the same selection the chart's bars and pill make), in a visit the quick add, then its treatment plan and its treatment —
  * this visit's services with their prices, and what earlier visits did. The stages are the tooth
  * panel's own, so they act and gate the same way; a diagnosis is always on a tooth, so there is
  * none here.
@@ -71,6 +72,13 @@ export function AreaPanel({
           ))}
         </div>
       </div>
+      {canWrite && visit !== null && (
+        <QuickAdd
+          onOpen={() => {
+            onOpenDrawer('service');
+          }}
+        />
+      )}
       <div className="px-4 py-[15px]">
         <PlanSection
           plans={plans.filter((plan) => isOpenPlan(plan) || plan.status === 'performed')}

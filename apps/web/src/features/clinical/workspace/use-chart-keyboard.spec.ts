@@ -1,4 +1,4 @@
-import type { ChartOrientation, DentitionStage, ToothCode, ToothPresence } from '@dcm/contracts';
+import type { ChartOrientation, DentitionStage, ToothCode } from '@dcm/contracts';
 import { cleanup, fireEvent, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useChartKeyboard } from './use-chart-keyboard';
@@ -7,7 +7,6 @@ interface Setup {
   selected: ToothCode | null;
   orientation?: ChartOrientation;
   dentition?: DentitionStage;
-  toothStatus?: ToothPresence[];
   onEscape?: () => void;
 }
 

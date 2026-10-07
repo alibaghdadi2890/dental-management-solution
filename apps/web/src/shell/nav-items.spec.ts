@@ -53,6 +53,19 @@ describe('visibleNav', () => {
     expect(keys(nav.admin)).toEqual(['catalog', 'settings']);
   });
 
+  it('shows Activity between Catalog and Settings to whoever reads the audit log (H7)', () => {
+    const owner = visibleNav({
+      ...base,
+      permissions: ['catalog:read', 'audit:read', 'tenant:write'],
+    });
+    expect(keys(owner.admin)).toEqual(['catalog', 'activity', 'settings']);
+    // A dentist reads the log but not the settings; an assistant reads neither.
+    expect(
+      keys(visibleNav({ ...base, permissions: ['catalog:read', 'audit:read'] }).admin),
+    ).toEqual(['catalog', 'activity']);
+    expect(keys(visibleNav({ ...base, permissions: ['catalog:read'] }).admin)).toEqual(['catalog']);
+  });
+
   it('shows a platform admin outside a clinic only the platform group', () => {
     const nav = visibleNav({
       ...base,

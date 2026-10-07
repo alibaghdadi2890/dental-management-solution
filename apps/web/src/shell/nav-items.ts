@@ -16,9 +16,11 @@ export const MAIN_NAV = [
   { key: 'payments', to: '/payments', permission: 'payment:read' },
 ] as const satisfies readonly NavEntry<string, string>[];
 
-/** Every clinic role reads the catalog; only `catalog:write` edits it (read-only screen otherwise). */
+/** Every clinic role reads the catalog; only `catalog:write` edits it (read-only screen otherwise).
+ * Activity is the audit log, for whoever may read it (owner, dentist; feature 7, H7). */
 export const ADMIN_NAV = [
   { key: 'catalog', to: '/catalog', permission: 'catalog:read' },
+  { key: 'activity', to: '/activity', permission: 'audit:read' },
   { key: 'settings', to: '/settings', permission: 'tenant:write' },
 ] as const satisfies readonly NavEntry<string, string>[];
 

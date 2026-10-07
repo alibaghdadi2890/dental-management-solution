@@ -44,7 +44,8 @@
     "refunded": "{{amount}} remboursé",
     "voided": "Annulé",
     "receipt": "Reçu",
-    "loading": "Chargement des paiements"
+    "loading": "Chargement des paiements",
+    "adjustment": "Ajustement"
   },
   "methods": {
     "cash": "Espèces",
@@ -111,6 +112,9 @@
       "not_reversible": "Ce paiement ne peut plus être remboursé ni annulé.",
       "not_found": "Ce paiement n’existe plus.",
       "idempotency_mismatch": "Ce paiement a déjà été enregistré autrement. Fermez et recommencez."
+    },
+    "ledger": {
+      "idempotency_mismatch": "Ce formulaire a déjà été envoyé avec d’autres informations. Fermez-le et recommencez."
     }
   },
   "family": {
@@ -121,5 +125,44 @@
     "total": "Reste dû de la famille",
     "record": "Encaisser pour la famille",
     "statement": "Relevé de la famille"
+  },
+  "adjust": {
+    "eyebrow": "Solde",
+    "title": "Ajuster le solde",
+    "menu": "Actions sur le solde",
+    "askDentist": "Demandez à un dentiste d’ajuster",
+    "current": "Solde actuel",
+    "credit": "Avoir {{amount}}",
+    "direction": "Ce qui change",
+    "directions": {
+      "less": "Le patient doit moins",
+      "more": "Le patient doit plus"
+    },
+    "directionHint": {
+      "less": "Un abandon de créance, un geste commercial ou une correction en faveur du patient.",
+      "more": "Des frais sans visite, ou la correction d’un montant saisi trop bas."
+    },
+    "amount": "Montant",
+    "reason": "Motif",
+    "chooseReason": "Choisir un motif…",
+    "reasons": {
+      "write_off": "Abandon de créance",
+      "courtesy": "Geste commercial",
+      "opening_balance_correction": "Correction du solde d’ouverture",
+      "charge_without_visit": "Frais sans visite",
+      "other": "Autre"
+    },
+    "note": "Note",
+    "noteRequired": "Dites pourquoi, en quelques mots",
+    "date": "Date d’effet",
+    "chooseDate": "Choisir la date d’effet",
+    "afterLabel": "Solde après",
+    "after": "Solde après : {{amount}}",
+    "submit": "Ajuster le solde",
+    "submitDirection": {
+      "less": "Réduire le solde de {{amount}}",
+      "more": "Ajouter {{amount}} au solde"
+    },
+    "saved": "Solde ajusté"
   }
 }

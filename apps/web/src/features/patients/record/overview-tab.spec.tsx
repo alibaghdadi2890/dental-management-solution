@@ -151,6 +151,8 @@ describe('OverviewTab', () => {
           plannedProcedures: 1,
           teethTreated: 4,
           servicesPerformed: 1250,
+          missingTeeth: 4,
+          implants: 1,
         },
       },
       charged: {
@@ -172,6 +174,8 @@ describe('OverviewTab', () => {
         ['Lifetime billed', '$1,480.50'],
       ]);
     });
+    // Feature 7: shown only when either is above zero.
+    expect(within(summary).getByText('Missing teeth: 4 · Implants: 1')).toBeTruthy();
   });
 
   it('bills $0 over a lifetime without visit charges, and leaves the row out without payment:read', async () => {

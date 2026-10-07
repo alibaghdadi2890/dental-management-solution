@@ -1,8 +1,9 @@
 import type { CatalogTab } from './catalog-draft';
 
-/** POC column templates plus the Frequent star between Name and Category. */
+/** POC column templates plus the Frequent star between Name and Category, and for services the
+ * Effect on tooth select after it (feature 7, H2). */
 export const CATALOG_GRID: Record<CatalogTab, string> = {
-  services: '96px minmax(200px,1fr) 44px 140px 112px 104px 52px 64px',
+  services: '96px minmax(200px,1fr) 44px 156px 140px 112px 104px 52px 64px',
   diagnoses: '112px minmax(220px,1fr) 44px 150px 52px 64px',
 };
 

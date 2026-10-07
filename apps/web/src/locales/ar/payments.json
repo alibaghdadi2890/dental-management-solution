@@ -74,7 +74,8 @@
     "refund": "استرداد",
     "void": "إلغاء الدفعة",
     "askDentist": "اطلب من طبيب الأسنان الاسترداد",
-    "takePayment": "استلام دفعة"
+    "takePayment": "استلام دفعة",
+    "more": "إجراءات أخرى لـ {{name}}"
   },
   "refund": {
     "title": "استرداد {{receipt}}",

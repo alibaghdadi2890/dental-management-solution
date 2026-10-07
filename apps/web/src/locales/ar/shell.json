@@ -22,7 +22,8 @@
     "platform": "المنصة",
     "tenants": "العيادات",
     "payments": "المدفوعات",
-    "today": "اليوم"
+    "today": "اليوم",
+    "activity": "النشاط"
   },
   "breadcrumb": "مسار التنقل",
   "platformCrumb": "المنصة",

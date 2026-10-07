@@ -3,11 +3,13 @@ import {
   patientBalanceSchema,
   patientBalancesSchema,
   visitFinancialSummarySchema,
+  type AdjustmentRequest,
   type CreateWithOpeningBalanceInput,
 } from '@dcm/contracts';
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import { actingTenantId } from '@/features/platform/acting-tenant';
 import { apiFetch } from '@/lib/api';
+import { IDEMPOTENCY_HEADER } from '@/lib/idempotency';
 
 /**
  * Balances for the patients list/record (design "Frontend" §Patients list, §Right panel). Opening
@@ -77,9 +79,25 @@ export function useVisitSummary(visitId: string) {
 
 /** `POST /billing/opening-balances` (design Q1): one transaction, `PatientsService.create` then
  * the ledger entry. Used instead of `createPatient` only when `wantsOpeningBalance` is true. */
-export function createWithOpeningBalance(input: CreateWithOpeningBalanceInput) {
+export function createWithOpeningBalance(
+  input: CreateWithOpeningBalanceInput,
+  idempotencyKey: string,
+) {
   return apiFetch('/billing/opening-balances', openingBalanceResultSchema, {
     method: 'POST',
     json: input,
+    headers: { [IDEMPOTENCY_HEADER]: idempotencyKey },
+  });
+}
+
+/**
+ * `POST /billing/patients/:id/adjustments` (H4): a signed, reasoned correction of the balance,
+ * for callers with `payment:refund`. A retry with the same `idempotencyKey` records nothing new.
+ */
+export function adjustBalance(patientId: string, input: AdjustmentRequest, idempotencyKey: string) {
+  return apiFetch(`/billing/patients/${patientId}/adjustments`, patientBalanceSchema, {
+    method: 'POST',
+    json: input,
+    headers: { [IDEMPOTENCY_HEADER]: idempotencyKey },
   });
 }

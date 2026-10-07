@@ -5,6 +5,7 @@ import type {
   ProblemDetails,
   ServiceBatch,
   ServiceItem,
+  ToothEffect,
 } from '@dcm/contracts';
 import { sanitizeAmountInput } from '@/lib/amount';
 
@@ -30,10 +31,15 @@ export interface DraftRow {
   currency: string | null;
   frequent: boolean;
   active: boolean;
+  /** What performing the service does to the tooth (H2); `none` unless it is charged per tooth. */
+  toothEffect: ToothEffect;
 }
 
 export type RowPatch = Partial<
-  Pick<DraftRow, 'code' | 'name' | 'category' | 'chargeUnit' | 'price' | 'frequent' | 'active'>
+  Pick<
+    DraftRow,
+    'code' | 'name' | 'category' | 'chargeUnit' | 'price' | 'frequent' | 'active' | 'toothEffect'
+  >
 >;
 
 /** The server snapshot (`base`) and the rows being edited, per tab. */
@@ -62,6 +68,7 @@ function rowFrom(item: Item): DraftRow {
     currency: service?.price.currency ?? null,
     frequent: item.frequent,
     active: item.active,
+    toothEffect: service?.toothEffect ?? 'none',
   };
 }
 
@@ -90,7 +97,12 @@ export function editRow(
   patch: RowPatch,
 ): CatalogDraft {
   return updateTab(draft, tab, (rows) =>
-    rows.map((row) => (row.key === key ? { ...row, ...patch } : row)),
+    rows.map((row) => {
+      if (row.key !== key) return row;
+      const next = { ...row, ...patch };
+      // Only a per-tooth service changes a tooth: a row that stops being one loses its effect.
+      return next.chargeUnit === 'per_tooth' ? next : { ...next, toothEffect: 'none' };
+    }),
   );
 }
 
@@ -111,6 +123,7 @@ export function addRow(
     currency: null,
     frequent: false,
     active: true,
+    toothEffect: 'none',
   };
   return updateTab(draft, tab, (rows) => [row, ...rows]);
 }
@@ -140,7 +153,12 @@ export function isRowChanged(draft: CatalogDraft, tab: CatalogTab, row: DraftRow
     saved.frequent !== row.frequent ||
     saved.active !== row.active;
   if (tab === 'diagnoses') return common;
-  return common || saved.chargeUnit !== row.chargeUnit || !sameAmount(saved.price, row.price);
+  return (
+    common ||
+    saved.chargeUnit !== row.chargeUnit ||
+    saved.toothEffect !== row.toothEffect ||
+    !sameAmount(saved.price, row.price)
+  );
 }
 
 export function changedRows(draft: CatalogDraft, tab: CatalogTab): DraftRow[] {
@@ -220,6 +238,7 @@ export function batchOf(tab: CatalogTab, rows: readonly DraftRow[]): ServiceBatc
       price: row.price.replace(/\.$/, '') || '0',
       frequent: row.frequent,
       active: row.active,
+      toothEffect: row.toothEffect,
     })),
   };
 }

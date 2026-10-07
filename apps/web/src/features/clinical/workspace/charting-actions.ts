@@ -6,6 +6,7 @@ import type {
   ServiceItem,
   SurfaceKey,
   ToothCode,
+  ToothPresenceChange,
   TreatmentPlan,
   UpdateServiceInput,
   Visit,
@@ -23,6 +24,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { ApiError } from '@/lib/api';
 import { formatMoney } from '@/lib/format';
 import { useLevelLabel, useToothLabel } from '../chart/use-chart-settings';
+import type { PresenceDetails } from '../presence/presence-dialog';
 import { useDropSaveGroup, useFlushSaveGroups } from '../save-groups-context';
 import { useVisitMutations } from '../visit-mutations';
 import type { ToothSelection } from './tooth-selection';
@@ -95,6 +97,13 @@ export interface ChartingActions {
   removeDiagnosis: (recordId: string) => void;
   removePlan: (planId: string) => void;
   cancelPlan: (planId: string) => void;
+  /**
+   * Sets what is at one or several tooth positions (feature 7, H1). In a visit it applies at
+   * once, dated by the visit, and `details` is not used. On the patient record `details` says
+   * when, why and for which dentist. Either way a toast offers Undo. Rejects when the save
+   * failed (the failure has been shown).
+   */
+  setPresence: (teeth: readonly ToothPresenceChange[], details?: PresenceDetails) => Promise<void>;
 }
 
 /** Runs one of `visitMutations`' options outside a component's lifecycle: the drawer closes on
@@ -161,6 +170,9 @@ export function useChartingActionsState({
     const tooth = (code: ToothCode) => t('actions.tooth', { label: toothLabel(code) });
     const targetOf = (record: { toothCode: ToothCode | null; jaw: Jaw | null }) =>
       record.toothCode === null ? levelLabel(record.jaw) : tooth(record.toothCode);
+    /** "Tooth #46 · tooth marked missing": what a service did to its tooth, said with it. */
+    const withPresence = (body: string, change: ToothPresenceChange | null | undefined) =>
+      change ? `${body} · ${t(`presence.suffix.${change.presence}`)}` : body;
 
     const removeService = (serviceId: string) => {
       if (removingRef.current.has(serviceId)) return;
@@ -188,9 +200,10 @@ export function useChartingActionsState({
       removeService,
       addService: (item, target) => {
         run(mutations.addService, { procedureId: item.id, ...scopeOf(item.chargeUnit, target) })
-          .then(({ record }) => {
+          .then(({ record, presenceChange }) => {
             toast(t('actions.serviceAdded', { name: item.name }), {
-              body: targetOf(record),
+              // Undo removes the service, and with it what it did to the tooth (H2).
+              body: withPresence(targetOf(record), presenceChange),
               actionLabel: t('actions.undo'),
               onAction: () => {
                 removeService(record.id);
@@ -279,10 +292,13 @@ export function useChartingActionsState({
       },
       performPlan: (plan) => {
         run(mutations.performPlan, plan.id)
-          .then(({ visit: updated }) => {
+          .then(({ visit: updated, presenceChange }) => {
             const service = updated.services.find((line) => line.planId === plan.id);
             toast(t('actions.performed', { name: plan.name }), {
-              body: t('actions.performedBody', { price: formatMoney(plan.price, locale) }),
+              body: withPresence(
+                t('actions.performedBody', { price: formatMoney(plan.price, locale) }),
+                presenceChange,
+              ),
               ...(service && {
                 actionLabel: t('actions.undo'),
                 onAction: () => {
@@ -308,6 +324,27 @@ export function useChartingActionsState({
       },
       cancelPlan: (planId) => {
         fire(mutations.cancelPlan, planId);
+      },
+      setPresence: async (teeth) => {
+        for (const change of teeth) {
+          try {
+            const { record } = await run(mutations.setPresence, change);
+            const label = toothLabel(change.toothCode).replace(/^#/, '');
+            if (record === null) {
+              toast(t('presence.unchanged'));
+              continue;
+            }
+            toast(t(`presence.marked.${change.presence}`, { label }), {
+              actionLabel: t('actions.undo'),
+              onAction: () => {
+                fire(mutations.removePresence, record.id);
+              },
+            });
+          } catch (error) {
+            failed(error);
+            throw error;
+          }
+        }
       },
     } satisfies ChartingActions;
   }, [

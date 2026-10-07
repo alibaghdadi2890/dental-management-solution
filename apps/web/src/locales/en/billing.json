@@ -43,7 +43,8 @@
     "refunded": "Refunded {{amount}}",
     "voided": "Voided",
     "receipt": "Receipt",
-    "loading": "Loading payments"
+    "loading": "Loading payments",
+    "adjustment": "Adjustment"
   },
   "methods": {
     "cash": "Cash",
@@ -109,6 +110,9 @@
       "not_reversible": "This payment can no longer be refunded or voided.",
       "not_found": "This payment no longer exists.",
       "idempotency_mismatch": "This payment was already recorded differently. Close and start again."
+    },
+    "ledger": {
+      "idempotency_mismatch": "This form was already submitted with different details. Close it and start again."
     }
   },
   "family": {
@@ -119,5 +123,44 @@
     "total": "Family outstanding",
     "record": "Record family payment",
     "statement": "Family statement"
+  },
+  "adjust": {
+    "eyebrow": "Balance",
+    "title": "Adjust balance",
+    "menu": "Balance actions",
+    "askDentist": "Ask a dentist to adjust",
+    "current": "Current balance",
+    "credit": "Credit {{amount}}",
+    "direction": "What changes",
+    "directions": {
+      "less": "Patient owes less",
+      "more": "Patient owes more"
+    },
+    "directionHint": {
+      "less": "A write-off, a courtesy, or a correction in the patient’s favour.",
+      "more": "A charge that has no visit, or a correction of an amount entered too low."
+    },
+    "amount": "Amount",
+    "reason": "Reason",
+    "chooseReason": "Choose a reason…",
+    "reasons": {
+      "write_off": "Write-off",
+      "courtesy": "Courtesy / goodwill",
+      "opening_balance_correction": "Correction of opening balance",
+      "charge_without_visit": "Charge without a visit",
+      "other": "Other"
+    },
+    "note": "Note",
+    "noteRequired": "Say why, in a few words",
+    "date": "Effective date",
+    "chooseDate": "Choose effective date",
+    "afterLabel": "Balance after",
+    "after": "Balance after: {{amount}}",
+    "submit": "Adjust balance",
+    "submitDirection": {
+      "less": "Reduce balance by {{amount}}",
+      "more": "Add {{amount}} to balance"
+    },
+    "saved": "Balance adjusted"
   }
 }

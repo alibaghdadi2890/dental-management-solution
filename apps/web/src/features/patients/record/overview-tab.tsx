@@ -47,7 +47,8 @@ const SUMMARY_ROWS = [
 /**
  * The Treatment summary (spec W8): `clinical`'s five counts, then _Lifetime billed_ — the
  * patient's visit charges in the tenant currency, from the balance (`payment:read`; the row is
- * left out without it, and reads "—" until the balance is in).
+ * left out without it, and reads "—" until the balance is in). Under them, "Missing teeth: n ·
+ * Implants: m" when either is above zero (feature 7).
  */
 function TreatmentSummary({
   patientId,
@@ -108,6 +109,14 @@ function TreatmentSummary({
           </div>
         ))}
       </dl>
+      {(counts.missingTeeth > 0 || counts.implants > 0) && (
+        <p className="m-0 mt-2.5 text-[12.5px] leading-[1.3] text-ink-secondary">
+          {t('record.summary.presence', {
+            missing: number.format(counts.missingTeeth),
+            implants: number.format(counts.implants),
+          })}
+        </p>
+      )}
     </Card>
   );
 }

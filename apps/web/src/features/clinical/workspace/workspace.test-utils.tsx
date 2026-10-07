@@ -8,6 +8,8 @@ import type {
   ServiceItem,
   ToothCode,
   ToothHistory,
+  ToothPresenceRecord,
+  ToothPresenceState,
   TreatmentPlan,
   Visit,
   VisitFinancialSummary,
@@ -78,6 +80,7 @@ export function serviceItem(
     price: usd('80.00'),
     frequent: false,
     active: true,
+    toothEffect: 'none',
     ...extra,
   };
 }
@@ -252,7 +255,7 @@ export function visit(extra: Partial<Visit> = {}): Visit {
 export function chart(extra: Partial<PatientChart> = {}): PatientChart {
   return {
     dentition: { stage: 'permanent', source: 'auto', ageYears: 34 },
-    toothStatus: [],
+    presence: [],
     diagnoses: [],
     plans: [],
     planGroups: [],
@@ -334,7 +337,16 @@ export function mockWorkspace({
     if (toothCode) {
       const history = toothHistories.find((tooth) => tooth.toothCode === toothCode);
       return Promise.resolve(
-        json(history ?? { toothCode, diagnoses: [], plans: [], services: [], voidedVisitIds: [] }),
+        json(
+          history ?? {
+            toothCode,
+            presence: [],
+            diagnoses: [],
+            plans: [],
+            services: [],
+            voidedVisitIds: [],
+          },
+        ),
       );
     }
     if (visitSummary && path === `/billing/visits/${visitSummary.visitId}/summary`) {
@@ -439,4 +451,30 @@ export function renderWorkspace({
     </QueryClientProvider>,
   );
   return { router, client };
+}
+
+/** A presence row as the chart answers it: set by hand in the fixture visit unless `extra` says
+ * otherwise. */
+export function presenceRecord(
+  n: number,
+  toothCode: ToothCode,
+  presence: ToothPresenceState,
+  extra: Partial<ToothPresenceRecord> = {},
+): ToothPresenceRecord {
+  return {
+    id: id(n),
+    toothCode,
+    presence,
+    occurredOn: '2026-09-29',
+    reason: null,
+    dentistId: id(2),
+    dentistName: 'Dr. Amal Karim',
+    visitId: VISIT_ID,
+    visitNumber: 45,
+    serviceId: null,
+    serviceCode: null,
+    serviceName: null,
+    recordedAt: '2026-09-29T09:10:00.000Z',
+    ...extra,
+  };
 }

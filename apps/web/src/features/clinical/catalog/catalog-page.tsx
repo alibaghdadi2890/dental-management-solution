@@ -49,7 +49,7 @@ import {
 import { CATALOG_GRID, STAR_PATH } from './catalog-layout';
 import { CatalogRow } from './catalog-row';
 
-const MIN_WIDTH = 800;
+const MIN_WIDTH = 940;
 
 /** Header, tabs and table frame shared by the loading/error states and the editor. */
 function CatalogFrame({
@@ -111,6 +111,17 @@ function TableFrame({ tab, children }: { tab: CatalogTab; children: ReactNode })
         </svg>
       ),
     },
+    ...(tab === 'services'
+      ? [
+          {
+            label: (
+              <span title={t('toothEffectHint')} className="cursor-help">
+                {t('columns.toothEffect')}
+              </span>
+            ),
+          },
+        ]
+      : []),
     { label: t('columns.category') },
     ...(tab === 'services'
       ? [{ label: t('columns.charged') }, { label: t('columns.price'), end: true }]

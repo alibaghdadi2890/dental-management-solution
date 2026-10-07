@@ -82,17 +82,22 @@ describe('visitSummaryQuery', () => {
 });
 
 describe('createWithOpeningBalance', () => {
-  it('posts to /billing/opening-balances', async () => {
+  it('posts to /billing/opening-balances with the submission key', async () => {
     apiFetchMock.mockResolvedValueOnce({ patient: {}, balance: {} });
     const input = {
       patient: { fullName: 'Jane', phone: '03123456' },
       openingBalance: { amount: '50', asOf: '2026-09-27', note: null },
     };
-    await createWithOpeningBalance(input);
+    const key = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
+    await createWithOpeningBalance(input, key);
     expect(apiFetchMock).toHaveBeenCalledWith(
       '/billing/opening-balances',
       expect.anything(),
-      expect.objectContaining({ method: 'POST', json: input }),
+      expect.objectContaining({
+        method: 'POST',
+        json: input,
+        headers: { 'Idempotency-Key': key },
+      }),
     );
   });
 });
