@@ -1,6 +1,7 @@
 # ADR-0015: Catalog prices are money in the tenant currency; `clinical` reads `tenancy`
 
-- Status: Accepted
+- Status: Accepted; amended by ADR-0035 (the currency can't change once the tenant has ledger
+  entries)
 - Date: 2026-09-27
 - Amends: ADR-0002 (dependencies of `clinical`)
 

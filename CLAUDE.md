@@ -109,11 +109,11 @@ modules/<name>/
 | `users`         | app-level user/staff profile (name, title, practitioner type, contact), branch assignments, staff user creation, `GET /session` | auth, tenancy, roles |
 | `roles`         | role definitions per tenant, system roles, role → permission assignments, user → role assignments (keyed by auth user id) | tenancy |
 | `authorization` | resolves the caller's permissions into CLS, `can(actor, permission, resource)`, global session + permission guards, agent tool guard | auth, roles |
-| `audit`         | append-only audit log (who/what/when/tenant/before/after), query API | — (consumes events from all) |
+| `audit`         | append-only audit log (who/what/when/tenant/before/after, and the patient, visit and area a row is about — ADR-0037), query API, the Activity feed | — (consumes events from all) |
 | `patients`      | `patients` (records: demographics, phone (optional for minors), insurance text, medical alerts/allergies, primary dentist by staff profile id, notes, the chart's dentition override; archive = soft delete; merge), `patient_counters` (the per-tenant display-number sequence), `contacts` and `patient_contacts` (guardians, billing and emergency contacts, who may themselves be patients; ADR-0019) | tenancy (country, time zone), users (practitioners, ADR-0016, ADR-0020) |
 | `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
-| `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, timer, services performed, notes, discount, status; amend and void, ADR-0025; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, `treatment_plans`, `tooth_status`; recorded in a visit or on the patient record, ADR-0031; named plans, `plan_groups`; work over several visits, `treatment_plan_sessions`, charged when done, ADR-0032) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
-| `billing`       | patient ledger (`ledger_entries`: opening balances, adjustments, visit charges and their adjustments and reversals, payments, refunds, voids; `ledger_entry_lines`), payments (`payments`, `payment_counters`, `payment_allocations`: account-level payments with stored derived allocations, households, credit; ADR-0027 to ADR-0029), balances, receivables, the visit summary, the patient and visit views that need them, the printables' data; later stored invoices, price lists | patients, tenancy (currency, time zone), users (dentist names in the export); clinical from 4a (reacts to `VisitCompleted`, `VisitAmended` and `VisitVoided` in the transaction, ADR-0024 to ADR-0026); reacts to `PatientsMerged` (ADR-0017) |
+| `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, timer, services performed, notes, discount, status; amend and void, ADR-0025; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, `treatment_plans`; recorded in a visit or on the patient record, ADR-0031; what is at each tooth position — missing, not erupted, implant — `tooth_presences`, ADR-0034; named plans, `plan_groups`; work over several visits, `treatment_plan_sessions`, charged when done, ADR-0032) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
+| `billing`       | patient ledger (`ledger_entries`: opening balances, adjustments, visit charges and their adjustments and reversals, payments, refunds, voids; `ledger_entry_lines`), payments (`payments`, `payment_counters`, `payment_allocations`: account-level payments with stored derived allocations, households, credit; ADR-0027 to ADR-0029), balances, receivables, the visit summary, the patient and visit views that need them, the printables' data; later stored invoices, price lists | patients, tenancy (currency, time zone), users (dentist names in the export); clinical from 4a (reacts to `VisitCompleted`, `VisitAmended` and `VisitVoided` in the transaction, ADR-0024 to ADR-0026); reacts to `PatientsMerged` in the merge transaction (ADR-0036) and vetoes a currency change once there is money (`TenantCurrencyChanged`, ADR-0035) |
 | `files`         | S3 object metadata, upload/download signed URLs, attachment links   | tenancy               |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
 | `imports`       | import jobs: uploaded file, column mapping, staged rows + validation, preview, commit progress; writes only through `patients` and `clinical` services | patients, clinical, tenancy |
@@ -254,8 +254,11 @@ Rules:
 - Append-only table, no updates, no deletes, RLS-scoped.
 - Fields: `id, tenant_id, actor_user_id, actor_kind (user|agent|system|job), actor_platform_admin,
   action, resource_type, resource_id, before (jsonb), after (jsonb), reason, request_id,
-  occurred_at`. A platform admin acting in a tenant is `actor_kind = 'user'` with
-  `actor_platform_admin = true` (ADR-0008); `reason` holds the text of reason dialogs.
+  occurred_at, patient_id, visit_id, area`. A platform admin acting in a tenant is
+  `actor_kind = 'user'` with `actor_platform_admin = true` (ADR-0008); `reason` holds the text of
+  reason dialogs. `patient_id` / `visit_id` say what the row is about and `area` files it for the
+  Activity screen (null = not shown there); a service sets the first two once with
+  `AuditService.about()` (ADR-0037).
 - Every mutation through application services produces an audit entry. Agent tool calls produce
   an entry with `actor_kind = 'agent'` plus the originating user id and the tool arguments.
 
@@ -289,6 +292,10 @@ Even in phase 1, write application services so they can be exposed as tools late
   reference lists and for the patients list (ADR-0018: its pager needs `total` and page numbers,
   and patients per tenant are bounded — thousands, not millions).
 - Idempotency: mutations that clients may retry (booking, payment) accept an `Idempotency-Key`.
+  Today: `POST /billing/payments`, `POST /billing/opening-balances`,
+  `POST /billing/patients/:id/adjustments` and `POST /patients` require one (a uuid). The key and
+  a hash of the request are stored on the row it creates; the same key with the same request
+  returns the first result, with another request 409 `…idempotency_mismatch` (ADR-0037).
 
 ## 13. Frontend conventions
 

@@ -8,7 +8,9 @@ charting in a visit (services, diagnoses, plans, tooth presence), the patient's 
 and the record's history and chart tabs (feature 4b, spec
 `2026-10-01-visits-list-amend-void-design.md`); service levels, charting on the patient record
 and work over several visits (spec
-`2026-10-04-service-levels-patient-planning-multi-visit-design.md`, ADR-0031, ADR-0032).
+`2026-10-04-service-levels-patient-planning-multi-visit-design.md`, ADR-0031, ADR-0032); tooth
+presence — missing, not erupted, implant — and the catalog's effect on the tooth (feature 7, spec
+`2026-10-06-mvp-hardening-design.md`, ADR-0034).
 
 ## Purpose
 
@@ -21,8 +23,8 @@ Clinical work on a patient:
   record).
 - **The clinical record**: diagnoses and treatment plans on the patient's teeth, jaws and mouth,
   recorded in a visit or on the patient record (ADR-0031), optionally grouped under named plans;
-  work that takes several visits (ADR-0032); and which tooth is present at each succession
-  position (feature 4a).
+  work that takes several visits (ADR-0032); and what is at each tooth position: the natural
+  tooth, nothing, a tooth that has not erupted, or an implant (ADR-0034).
 
 Teeth are stored as canonical FDI codes (`11`–`48`, primary `51`–`85`); FDI or Universal
 notation, the orientation and the chart detail are tenant display settings (ADR-0021). This
@@ -31,7 +33,9 @@ module was renamed from `treatments` (ADR-0001) and owns the catalogs (ADR-0002)
 ### Catalogs
 
 - Every tenant starts with the POC's default template (`domain/default-catalog.ts`: 12 services
-  with prices, 14 diagnoses, the workspace spec's "Frequently used" rows). It is seeded
+  with prices, 14 diagnoses, the workspace spec's "Frequently used" rows), plus `IMP` "Implant
+  placement" at price 0 for the clinic to set (feature 7). `EXT` removes the tooth and `IMP`
+  places an implant (see [Tooth presence](#tooth-presence)). It is seeded
   on `TenantProvisioned` by a system task (ADR-0014) and by the idempotent
   `POST /catalog/seed-default`, which seeds only while both catalogs are empty. Seeded rows are
   ordinary rows.
@@ -51,7 +55,8 @@ module was renamed from `treatments` (ADR-0001) and owns the catalogs (ADR-0002)
 
 - `procedures`: the service catalog. Tenant RLS. `code`, `name`, `category?`, `charge_unit`
   (enum `per_tooth | per_jaw | per_mouth`), `price_amount numeric(12,2) ≥ 0`, `price_currency char(3)`,
-  `frequent`, `active`, `deleted_at?`. Unique `(tenant_id, lower(code)) where deleted_at is null`.
+  `frequent`, `active`, `tooth_effect` (enum `none | removes | implant`, `none` unless
+  `per_tooth`; ADR-0034), `deleted_at?`. Unique `(tenant_id, lower(code)) where deleted_at is null`.
 - `diagnoses`: the diagnosis catalog. Tenant RLS. `code`, `name`, `category?`, `frequent`,
   `active`, `deleted_at?`. Same unique rule.
 
@@ -92,8 +97,12 @@ codes), `surfaces text[]` is a subset of `M D B L O I`.
 - `plan_groups`: named plans (`patient_id`, `title` 1–120, `note?`, `created_by`), soft delete.
 - `treatment_plan_sessions`: one visit's work on a plan in progress (`plan_id`, `visit_id`,
   `note?`, `recorded_by`), unique per plan and visit among live rows, soft delete (ADR-0032).
-- `tooth_status`: `primary | permanent` per succession position (W5), changed in a visit;
-  `tooth_status_position_unique` on `(tenant_id, patient_id, position)`.
+- `tooth_presences` (ADR-0034): one row each time a tooth's presence is set — `seq` (identity:
+  the last row of a tooth wins), `patient_id`, `tooth_code`, `presence` (enum
+  `present | missing | not_erupted | implant`), `occurred_on?` (the visit's date, or the date
+  entered; null = before first visit), `reason?`, `dentist_id`, `recorded_in_visit_id?`,
+  `service_id?` (the visit service that caused it; no FK, only ever with its visit),
+  `recorded_by`, soft delete. Index `(tenant_id, patient_id, tooth_code)`.
 
 The pure rules are in `domain/`: `visit-lifecycle.ts` (state machine, and `correct` for amend
 and void), `visit-timer.ts`, `discard-rule.ts`, `plan-lifecycle.ts` (continue, done,
@@ -209,10 +218,43 @@ performed or cancelled them (ADR-0022).
   is not.
 - A plan made on a tooth links the tooth's most recent active diagnosis
   (`diagnosis_record_id`), or none.
-- **Tooth presence** (W5, W15; no longer used by the SPA since the two-chart toggle, kept in
-  the API until it is retired): `primary | permanent` at a succession position (a permanent
-  code at position 1–5), upserted on `(tenant_id, patient_id, position)` and stamped with the
-  visit that changed it. Setting the value it already has changes nothing.
+- **Tooth presence**: see [Tooth presence](#tooth-presence) below. Set by hand
+  (`setPresence`), or by a service whose catalog entry has an effect on the tooth.
+
+### Tooth presence
+
+What is at a tooth position (feature 7, H1–H3; ADR-0034): `present` (the default, with no row),
+`missing` (extracted, lost or never formed), `not_erupted`, or `implant`. It is a record like a
+diagnosis — a date, a dentist, an optional reason, a history — and is never overwritten: every
+set adds a `tooth_presences` row, and the tooth's presence is its latest live row.
+
+- **In a visit** (`VisitRecordsService.setPresence`, `visit:write`): applied at once, dated by
+  the visit's local date, for the visit's dentist. Setting what the tooth already has writes
+  nothing (`record: null`). `removePresence` is the Undo: only a row set by hand in this visit
+  (409 `record.not_removable` otherwise).
+- **On the patient record** (`PatientRecordsService.setPresence`, `chart:write`): one or
+  several teeth at once (intake, a tooth lost between visits), with one _When_ — "before first
+  visit" (no date: it is not known and is not invented) or a date not after the tenant's today
+  (422 `validation_failed` at `when.date`) — one optional reason and one dentist (the rule of
+  diagnoses outside a visit). It answers the chart and the ids written; `removePresence` undoes
+  rows made on the record.
+- **By a service** (H2): a per-tooth catalog service has `toothEffect` `none`, `removes` or
+  `implant`. Recording it (`addService`, `performPlan`) sets the tooth `missing` or `implant`,
+  and the row names the service; the row is written even when the tooth is already so (re-work
+  on an implant, an extraction on a gap), so the tooth stays in that state while any such
+  service stands. `removeService`, `markServiceUnfinished`, an amendment that removes it, and a
+  void soft-delete that row, so the latest row left applies again; an amendment that moves the
+  service to another tooth moves its effect. The results of `addService`, `removeService` and
+  `performPlan` carry `presenceChange` when the chart changed, for the toast.
+- **Every state stays chartable** (H3): services, plans and diagnoses are recorded on a missing,
+  not-erupted or implant position exactly as on a present one.
+- **A presence set by hand in a voided visit stays**; only what the visit's services did is
+  restored. A presence set in a visit is visit content: the visit cannot be discarded.
+- Both dentitions: a primary code can be missing too. The summary's `missingTeeth` and
+  `implants` count the teeth of the chart the patient is on.
+- The pure rule (`currentPresence`, the last row of a tooth wins) and the per-tooth `presence`
+  of `deriveChart` are in `packages/contracts/src/chart.ts`; `PresenceWriter` is the one write
+  path, shared by the two services, amend and void.
 
 ### Records on the patient, outside a visit
 
@@ -227,8 +269,8 @@ performed or cancelled them (ADR-0022).
   open plan between them. A plan made in a visit may name a group too.
 
 Each call locks the patient `FOR SHARE` (`lockForDependentWrite`): unknown → 404, merged → 409
-`patient.merged`, archived → 409 `patient.archived`. It answers `{ chart }`. Resolving, performing,
-services and tooth presence stay in a visit. Inside a visit a record made without one is an older
+`patient.merged`, archived → 409 `patient.archived`. It answers `{ chart }`. Tooth presence is
+set here too ([Tooth presence](#tooth-presence)). Resolving, performing and services stay in a visit. Inside a visit a record made without one is an older
 record: resolved or cancelled, never removed.
 
 ### Reads
@@ -244,16 +286,18 @@ from one `practitionersByProfileIds` call per read.
 - **Chart**: which of the patient's two charts opens, primary or permanent teeth
   (`effectiveDentition`: the chart the patient was switched to, else primary up to age 12 on the
   tenant's today, else permanent), the
-  `tooth_status` rows, every diagnosis and plan (each plan with its sessions), the named plans,
+  presence rows in the order recorded (each with its dentist's name, its visit's number and its
+  service's code and name), every diagnosis and plan (each plan with its sessions), the named plans,
   the history (most recent visit first, with the
   visit date and dentist), the patient's most recent live visit, and `teeth`: the entries of
   `deriveChart`, which counts that live visit's services as treated today.
-- **Tooth history**: one code's diagnoses and plans in the order recorded, then its completed
-  services, most recent first. Only that code; the modal links the predecessor or successor.
+- **Tooth history**: one code's presence rows, diagnoses and plans in the order recorded, then
+  its completed services, most recent first. Only that code; the modal links the predecessor or successor.
 - **Last visit**: the most recently completed visit (`completed_at`): its local date, dentist,
   duration, frozen total, services as `{ name, toothCode }` chips, and notes; `null` without one.
 - **Summary** (W8): completed visits, active diagnoses, open plans (planned or in progress),
-  distinct teeth and the number of services over completed visits' services, in one query.
+  distinct teeth and the number of services over completed visits' services, in one query; and
+  `missingTeeth` and `implants` from the presence rows, among the teeth of the patient's chart.
 
 ### Merge re-point
 
@@ -270,12 +314,11 @@ completion lands on the kept one. In order:
    and re-reads the visit. Neither order can deadlock.
 2. `patient_diagnoses`, then `treatment_plans` (removed rows too; their sessions follow them),
    then `plan_groups`.
-3. `tooth_status`: where both patients have a row at a position, the kept one wins and the
-   dropped one is deleted (a state row, not history); the other rows move.
+3. `tooth_presences`: every row moves (they are history, ADR-0034); the row recorded last on a
+   tooth, whichever record it came from, is that tooth's presence on the kept patient.
 4. Audit `clinical.repoint` on the kept patient (resource type `patient`, after =
-   `{ droppedId, visits, diagnoses, plans, planGroups, toothStatusMoved, toothStatusDropped }`; before = the
-   deleted tooth-status rows `{ position, present, changedInVisitId }`, when there are any), only
-   when something changed.
+   `{ droppedId, visits, diagnoses, plans, planGroups, toothPresences }`), only when something
+   changed.
 
 It isn't permission-gated: the merge needs `patient:write`, and front desk merges without
 `visit:write`. A merge chain (A into B, then B into C) ends on C, because each merge re-points in
@@ -290,7 +333,7 @@ its own transaction. The kept patient may then have two live visits; both stay u
 `CatalogChanged`, `VisitStarted`, `VisitPaused`, `VisitResumed`, `VisitDiscarded`,
 `VisitCompleted`, `DiagnosisRecorded`, `DiagnosisResolved`, `DiagnosisReopened`,
 `TreatmentPlanned`, `TreatmentStarted`, `TreatmentPerformed`, `TreatmentCancelled` and
-`ToothStatusChanged`.
+`ToothPresenceChanged`.
 
 `CatalogService`:
 
@@ -324,7 +367,7 @@ transaction). They return `{ visit }` with the updated `Visit`.
 | `get(id)`                                  | `visit:read`  | The `Visit`: services, money, timer fields and `serverNow`. Unknown or discarded → 404 `visit.not_found`.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `chargeFacts(visitId)`                     | `visit:read`  | For `billing`'s in-transaction `VisitCompleted` handler (ADR-0024): `{ patientId, currency, total, localDate, lines }` of a completed visit, the lines being its services that aren't removed, in order (`code`, `name`, `toothCode`, `surfaces`, `amount` = base − line discount). Reads through the open transaction. A visit that isn't completed throws (a caller bug).                                                                                                                                                               |
 | `visitMoney(visitId)`                      | `visit:read`  | For `billing`'s visit summary: `{ visitId, patientId, status, currency, subtotal, discount, total, completedAt, durationMinutes, serviceCount }`, the money computed while live and frozen once completed. Unknown or discarded → 404.                                                                                                                                                                                                                                                                                                    |
-| `numbersFor(visitIds)`                     | `visit:read`  | For `billing`'s receipts, payment history and statements (feature 5): `{ visitId, displayNumber, localDate }` of each visit, any status, in no particular order; unknown ids are absent.                                                                                                                                                                                                                                                                                                                                                  |
+| `numbersFor(visitIds)`                     | `visit:read`  | Also `GET /visits/numbers` (the Activity screen, feature 7). For `billing`'s receipts, payment history and statements (feature 5): `{ visitId, displayNumber, localDate }` of each visit, any status, in no particular order; unknown ids are absent.                                                                                                                                                                                                                                                                                     |
 | `live({ patientId?, mine? })`              | `visit:read`  | `LiveVisitRef[]`, oldest first, with the patient's and dentist's names and `serverNow`. `mine` (W18): the caller's staff profile (`UsersService.profileIdOf`) is the dentist, or the caller started it; a platform admin (no staff profile) matches only their own starts.                                                                                                                                                                                                                                                                |
 
 `VisitRecordsService` (see [Records in a visit](#records-in-a-visit)). Every method needs
@@ -349,21 +392,24 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 | `performPlan(visitId, planId)`                                                         | `visit_service.create` and `treatment_plan.perform`                                                                 | An open plan (409 `plan.not_open`); currency must match. `TreatmentPerformed`.                                                                                                              |
 | `cancelPlan(visitId, planId)`                                                          | `treatment_plan.cancel`                                                                                             | Not made in this visit (409 `plan.not_cancellable`), open (409 `plan.not_open`). `TreatmentCancelled`.                                                                                      |
 | `removePlan(visitId, planId)`                                                          | `treatment_plan.delete`                                                                                             | Made in this visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`). Soft delete. No event.                                                                                 |
-| `setToothPresence(visitId, position, { present })`                                     | `tooth_status.set` (`tooth_status`)                                                                                 | Upsert; no-op when unchanged. `ToothStatusChanged`.                                                                                                                                         |
+| `setPresence(visitId, toothCode, { presence })`                                        | `tooth_presence.set` (`tooth_presence`)                                                                             | Adds a row dated by the visit; nothing when unchanged (`record: null`). `ToothPresenceChanged`.                                                                                             |
+| `removePresence(visitId, presenceId)`                                                  | `tooth_presence.remove`                                                                                             | A row set by hand in this visit (409 `record.not_removable`); the presence before it applies again. `ToothPresenceChanged`.                                                                 |
 
 `PatientRecordsService` (see [Records on the patient](#records-on-the-patient-outside-a-visit)).
 Every method needs `chart:write`, runs in one transaction, locks the patient `FOR SHARE`, is
 audited like its in-visit twin and answers `{ chart }`.
 
-| Method                                                      | Audit action              | Notes                                                                                  |
-| ----------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------- |
-| `recordDiagnosis(patientId, { …, dentistId? })`             | `diagnosis_record.create` | `DiagnosisRecorded` with `visitId: null`.                                              |
-| `removeDiagnosis(patientId, recordId)`                      | `diagnosis_record.delete` | Recorded without a visit only (409 `record.not_removable`). Unlinks its plans.         |
-| `planTreatment(patientId, { …, groupId?, dentistId? })`     | `treatment_plan.create`   | `TreatmentPlanned` with `visitId: null`.                                               |
-| `updatePlan(patientId, planId, { groupId?, note? })`        | `treatment_plan.update`   | An open plan (409 `plan.not_open`); no-op when unchanged.                              |
-| `cancelPlan(patientId, planId)`                             | `treatment_plan.cancel`   | An open plan, wherever it was made. `TreatmentCancelled` with `visitId: null`.         |
-| `removePlan(patientId, planId)`                             | `treatment_plan.delete`   | Made without a visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`). |
-| `createGroup` / `updateGroup` / `deleteGroup(patientId, …)` | `plan_group.create        | update                                                                                 | delete` | Delete ungroups its plans, then soft-deletes. |
+| Method                                                         | Audit action              | Notes                                                                                  |
+| -------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------- |
+| `recordDiagnosis(patientId, { …, dentistId? })`                | `diagnosis_record.create` | `DiagnosisRecorded` with `visitId: null`.                                              |
+| `removeDiagnosis(patientId, recordId)`                         | `diagnosis_record.delete` | Recorded without a visit only (409 `record.not_removable`). Unlinks its plans.         |
+| `planTreatment(patientId, { …, groupId?, dentistId? })`        | `treatment_plan.create`   | `TreatmentPlanned` with `visitId: null`.                                               |
+| `updatePlan(patientId, planId, { groupId?, note? })`           | `treatment_plan.update`   | An open plan (409 `plan.not_open`); no-op when unchanged.                              |
+| `cancelPlan(patientId, planId)`                                | `treatment_plan.cancel`   | An open plan, wherever it was made. `TreatmentCancelled` with `visitId: null`.         |
+| `removePlan(patientId, planId)`                                | `treatment_plan.delete`   | Made without a visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`). |
+| `createGroup` / `updateGroup` / `deleteGroup(patientId, …)`    | `plan_group.create        | update                                                                                 | delete` | Delete ungroups its plans, then soft-deletes. |
+| `setPresence(patientId, { teeth, when, reason?, dentistId? })` | `tooth_presence.set`      | One row per tooth that changes; answers `{ chart, presenceIds }`.                      |
+| `removePresence(patientId, ids)`                               | `tooth_presence.remove`   | Rows set on the record (409 `record.not_removable`); unknown id → 404.                 |
 
 `ChartService` (see [Reads](#reads)). Every method needs `visit:read`; an unknown patient → 404
 `patient.not_found`.
@@ -393,7 +439,8 @@ audited like its in-visit twin and answers `{ chart }`.
 | `POST /visits/:id/services` → 201, `PATCH` / `DELETE /visits/:id/services/:serviceId` → `{ visit, record: VisitService }`; `POST /visits/:id/services/:serviceId/unfinished` → `{ visit, record: TreatmentPlan }`; `POST /visits/:id/unfinished-answer` `{ continue }` → `{ visit }` | `visit:write`    |
 | `POST /visits/:id/diagnoses` → 201, `POST /visits/:id/diagnoses/:recordId/{resolve,reopen}`, `DELETE /visits/:id/diagnoses/:recordId` → `{ visit, record: DiagnosisRecord }`                                                                                                         | `visit:write`    |
 | `POST /visits/:id/plans` → 201, `POST /visits/:id/plans/:planId/{perform,cancel}`, `PUT` / `DELETE /visits/:id/plans/:planId/session`, `DELETE /visits/:id/plans/:planId` → `{ visit, record: TreatmentPlan }`                                                                       | `visit:write`    |
-| `PUT /visits/:id/teeth/:position` `{ present }` → `{ visit, record: { position, present } }`; a position that is not a succession position → 400 `validation_failed`                                                                                                                 | `visit:write`    |
+| `PUT /visits/:id/teeth/:toothCode/presence` `{ presence }`, `DELETE /visits/:id/presence/:presenceId` → `{ visit, record: ToothPresenceRecord \| null }`; a code that is not one of the 52 FDI codes → 400 `validation_failed`                                                       | `visit:write`    |
+| `GET /visits/numbers?ids=` (1–100) → `VisitNumber[]` (registered before `:id`)                                                                                                                                                                                                       | `visit:read`     |
 | `GET /clinical/patients/:id/chart` → `PatientChart`, `GET /clinical/patients/:id/summary` → `ClinicalSummary`                                                                                                                                                                        | `visit:read`     |
 | `GET /clinical/patients/:id/last-visit` → `LastVisit` or JSON `null`                                                                                                                                                                                                                 | `visit:read`     |
 | `GET /clinical/patients/:id/teeth/:toothCode/history` → `ToothHistory`; a code that is not one of the 52 FDI codes → 400 `validation_failed`                                                                                                                                         | `visit:read`     |
@@ -407,6 +454,7 @@ audited like its in-visit twin and answers `{ chart }`.
 | `POST /clinical/patients/:id/diagnoses` → 201, `DELETE /clinical/patients/:id/diagnoses/:recordId` → `{ chart }`                                                                                                                                                                     | `chart:write`    |
 | `POST /clinical/patients/:id/plans` → 201, `PATCH` / `DELETE /clinical/patients/:id/plans/:planId`, `POST /clinical/patients/:id/plans/:planId/cancel` → `{ chart }`                                                                                                                 | `chart:write`    |
 | `POST /clinical/patients/:id/plan-groups` → 201, `PATCH` / `DELETE /clinical/patients/:id/plan-groups/:groupId` → `{ chart }`                                                                                                                                                        | `chart:write`    |
+| `POST /clinical/patients/:id/presence` → 201 `{ chart, presenceIds }`, `DELETE /clinical/patients/:id/presence?ids=` → `{ chart }`                                                                                                                                                   | `chart:write`    |
 
 ## Events
 
@@ -426,7 +474,8 @@ audited like its in-visit twin and answers `{ chart }`.
     `TreatmentCancelled { planId, visitId, patientId, toothCode }`. `visitId` is null on
     `DiagnosisRecorded`, `TreatmentPlanned` and `TreatmentCancelled` for a change made on the
     patient record (ADR-0031).
-  - `ToothStatusChanged { visitId, patientId, position, present }`.
+  - `ToothPresenceChanged { patientId, visitId, toothCode, presence }`: the presence the tooth
+    has now, after a set or after a row was taken back; `visitId` null on the patient record.
   - Notes and discount changes, service adds, edits and removes, record removals, sessions, named
     plans and the undo of a perform are audited directly and emit no event.
   - `VisitAmended { visitId, patientId, amendmentId, currency, delta, reason }` (also for a

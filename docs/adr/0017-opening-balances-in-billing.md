@@ -1,6 +1,7 @@
 # ADR-0017: Opening balances and balance-aware patient views live in `billing`
 
-- Status: Accepted
+- Status: Accepted; decision 5 and the after-commit window below are replaced by ADR-0036 (the
+  re-point runs in the merge transaction, and the job is gone)
 - Date: 2026-09-27
 - Amends: ADR-0008, ADR-0010 (platform-admin authority applies only in the admin's own request)
 

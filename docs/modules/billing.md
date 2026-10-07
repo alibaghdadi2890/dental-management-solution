@@ -2,7 +2,9 @@
 
 **Status:** implemented for feature 3: the patient ledger, opening balances, adjustments,
 balances, the patient views that need a balance (Owes balance, sort by balance, CSV export) and
-the job that moves ledger entries after a patient merge. Feature 4a adds the visit charge, posted
+the ledger re-point of a patient merge (in the merge transaction since feature 7, ADR-0036).
+Feature 7 also adds the Adjust balance screen, retry safety on opening balances and adjustments,
+and the currency lock (ADR-0035). Feature 4a adds the visit charge, posted
 in the completion's transaction, and a completed visit's financial summary (ADR-0024). Feature 5 adds payments, refunds and voids on the patient account, their stored allocations,
 receivables (KPIs, aging, outstanding) and the data of the printables (ADR-0027 to ADR-0029).
 Stored invoices and price lists come later.
@@ -37,8 +39,8 @@ ADR-0017).
 - **Locking against merges:** every ledger write first calls
   `PatientsService.lockForDependentWrite` (named `lockForLedger` before feature 4a, W22), which
   reads the patient `FOR SHARE` in the same transaction as the insert. A merge locks both records
-  `FOR UPDATE`, so it waits for in-flight ledger writes, and the re-point job then finds their
-  entries. A merged-away patient refuses new entries: 409 `patient.merged` (the entry
+  `FOR UPDATE`, so it waits for in-flight ledger writes, and the re-point, which runs in the
+  merge transaction, then finds their entries. A merged-away patient refuses new entries: 409 `patient.merged` (the entry
   belongs on the kept record). An archived patient that was not merged accepts them, for
   example to write off a debt.
 
@@ -49,7 +51,9 @@ ADR-0017).
   `visit_charge_adjustment`, `visit_charge_reversal`, and the payment kinds `payment` (negative),
   `payment_refund` and `payment_void` (positive), one per `payments` row), `amount numeric(12,2)` (signed; check
   `amount <> 0`), `currency char(3)`, `effective_date date`, `note?`, `reason?`, `created_by`
-  (the actor's auth user id), `visit_id?`, `amendment_id?`, timestamps.
+  (the actor's auth user id), `visit_id?`, `amendment_id?`, `idempotency_key?` and
+  `idempotency_hash?` (the request that recorded an opening balance or an adjustment, H5; unique
+  per tenant where set), timestamps.
   - `patient_id` has no foreign key, because `patients` owns that table. Existence is always
     checked through `PatientsService`: `lockForDependentWrite` for writes, `getMany` for reads.
   - `visit_id` is the visit a visit-kind entry is about, set iff the kind is one of the three
@@ -63,7 +67,7 @@ ADR-0017).
     enum's text cast isn't.)
   - Indexes: `tenant_id`, `(tenant_id, patient_id)`, `(tenant_id, visit_id)` where set, the unique
     index above, and the unique `(tenant_id, id)` that `ledger_entry_lines` references.
-  - Entries are never edited or deleted. The merge job is the only writer that updates a row,
+  - Entries are never edited or deleted. The merge re-point is the only writer that updates a row,
     and it changes `patient_id` (and `updated_at`) only; `created_by`, `visit_id` and the amount
     stay. Enforced by grants (migration `0011_ledger_append_only`, like `audit_log`): the runtime
     roles have no `DELETE` or `TRUNCATE`, and only `dcm_app` may `UPDATE`, on those two columns.
@@ -101,23 +105,64 @@ ADR-0017).
 
 `BillingService`: inputs are the contract's Zod output, and results are plain data.
 
-| Method                                                               | Access                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| -------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `createWithOpeningBalance({ patient, openingBalance })`              | `payment:write` + `patient:write` | One `TenantDb` transaction. `asOf` is checked before anything is written (path `openingBalance.asOf`). Then `PatientsService.create`, which is `patient`'s whole create schema — including `contacts` (linked in the same transaction, design addendum C4) and `linkContactId` — and the `opening_balance` entry; the new patient is not re-read. The patient, its display number, any contact links, and the `opening_balance` entry, with their audit entries and events, commit or roll back together (a failed link or a failed entry leaves nothing: no patient, no contact, no link, no entry, and the display-number counter is not advanced). The patient's field errors (contacts included) come back under `patient.` (e.g. `patient.phone`, `patient.contacts.0.target.contactId`, `patient.linkContactId`). Returns `{ patient, balance }`. |
-| `recordOpeningBalance(patientId, { amount, asOf, note? })`           | `payment:write`                   | A building block for the feature 6 import. Checks `asOf` (path `asOf`) and locks the patient. Unknown patient → 404 `patient.not_found`; merged away → 409 `patient.merged`. Returns the patient's balance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `adjustBalance(patientId, { amount, effectiveDate, reason, note? })` | `payment:write`                   | The amount is signed and non-zero. A reason is required and is written to the entry and the audit entry. Locks the patient: unknown → 404, merged away → 409 `patient.merged`, archived allowed. Returns the balance after the entry. There is no UI for it in feature 3.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| `balanceOf(patientId)`                                               | `payment:read`                    | `{ patientId, balances, charged }`; `charged` is Σ the visit kinds (charges, adjustments, reversals) per currency (_Lifetime billed_, W8), non-zero currencies only. Unknown patient → 404.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `balancesFor(patientIds)`                                            | `payment:read`                    | Returned in input order, de-duplicated, each with `balances` and `charged`. Ids the tenant can't see are omitted. Patients without entries get `balances: []` and `charged: []`. One aggregate query for all ids.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `patientIdsOwing()`                                                  | `payment:read`                    | Ids of the patients owing in any currency, archived ones included, in id order. One SQL aggregate. A building block for `billing`'s patient views.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| `visitSummary(visitId)`                                              | `payment:read`                    | A completed visit's figures, in the visit currency: `visit.total` = Σ its visit entries, `visit.paid` = Σ allocated to it (every source), `outstanding`, `previous` = the balance less this visit's outstanding, `totalOutstanding` = the balance, and `payments` (the payments covering it, for the invoice). Also requires `visit:read`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `balancesForVisits(visitIds)`                                        | `payment:read`                    | Per visit, in input order: `{ visitId, currency, charged, paid, outstanding }`; `paid` = Σ allocated to it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| `paidOn(visitId)`                                                    | none (internal)                   | Σ the **payment**-sourced allocations on the visit (P8): what vetoes a void (ADR-0026). Read in the void transaction under the account lock.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| `repointMergedEntries(keptId, droppedId)`                            | none (job only)                   | The merge re-point, run by `MergeLedgerWorker`: moves the dropped patient's entries **and payments** to the survivor, audits `ledger_entry.repoint` (after `{ droppedId, keptId, count, payments }`) and settles the survivor (P15).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Method                                                                     | Access                            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `createWithOpeningBalance({ patient, openingBalance }, key?)`              | `payment:write` + `patient:write` | Idempotent with a key (see [Retry safety](#retry-safety-feature-7-h5)). One `TenantDb` transaction. `asOf` is checked before anything is written (path `openingBalance.asOf`). Then `PatientsService.create`, which is `patient`'s whole create schema — including `contacts` (linked in the same transaction, design addendum C4) and `linkContactId` — and the `opening_balance` entry; the new patient is not re-read. The patient, its display number, any contact links, and the `opening_balance` entry, with their audit entries and events, commit or roll back together (a failed link or a failed entry leaves nothing: no patient, no contact, no link, no entry, and the display-number counter is not advanced). The patient's field errors (contacts included) come back under `patient.` (e.g. `patient.phone`, `patient.contacts.0.target.contactId`, `patient.linkContactId`). Returns `{ patient, balance }`. |
+| `recordOpeningBalance(patientId, { amount, asOf, note? })`                 | `payment:write`                   | A building block for the feature 6 import. Checks `asOf` (path `asOf`) and locks the patient. Unknown patient → 404 `patient.not_found`; merged away → 409 `patient.merged`. Returns the patient's balance.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `adjustBalance(patientId, { amount, effectiveDate, reason, note? }, key?)` | `payment:refund`                  | See [Balance adjustments](#balance-adjustments-feature-7-h4). The amount is signed and non-zero. `reason` is one of `ADJUSTMENT_REASONS`; the note is required for `other`. Locks the patient: unknown → 404, merged away → 409 `patient.merged`, archived allowed. Returns the balance after the entry. Idempotent with a key.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `balanceOf(patientId)`                                                     | `payment:read`                    | `{ patientId, balances, charged }`; `charged` is Σ the visit kinds (charges, adjustments, reversals) per currency (_Lifetime billed_, W8), non-zero currencies only. Unknown patient → 404.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `balancesFor(patientIds)`                                                  | `payment:read`                    | Returned in input order, de-duplicated, each with `balances` and `charged`. Ids the tenant can't see are omitted. Patients without entries get `balances: []` and `charged: []`. One aggregate query for all ids.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `patientIdsOwing()`                                                        | `payment:read`                    | Ids of the patients owing in any currency, archived ones included, in id order. One SQL aggregate. A building block for `billing`'s patient views.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `visitSummary(visitId)`                                                    | `payment:read`                    | A completed visit's figures, in the visit currency: `visit.total` = Σ its visit entries, `visit.paid` = Σ allocated to it (every source), `outstanding`, `previous` = the balance less this visit's outstanding, `totalOutstanding` = the balance, and `payments` (the payments covering it, for the invoice). Also requires `visit:read`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `balancesForVisits(visitIds)`                                              | `payment:read`                    | Per visit, in input order: `{ visitId, currency, charged, paid, outstanding }`; `paid` = Σ allocated to it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `paidOn(visitId)`                                                          | none (internal)                   | Σ the **payment**-sourced allocations on the visit (P8): what vetoes a void (ADR-0026). Read in the void transaction under the account lock.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `currencyLock()`                                                           | `tenant:read`                     | `{ locked, currency }`: locked once any ledger entry exists (ADR-0035).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 
 Every write goes through the internal `LedgerWriter`: it records the entry (and a visit charge's
 lines) and audits `ledger_entry.create` (resource type `ledger_entry`, after = the entry — with
 its `lines` for a visit charge — reason for adjustments) in the same transaction. It emits
-`LedgerEntryRecorded` after commit.
+`LedgerEntryRecorded` after commit. The audit row of an opening balance or an adjustment is an
+action of its own on the Activity screen; the row of a payment's or a visit change's entry only
+shadows that action and is kept out of the feed (`hidden`, ADR-0037).
+
+### Balance adjustments (feature 7, H4)
+
+A signed, reasoned, dated correction of what a patient owes: negative = owes less (write-off,
+courtesy, correction), positive = owes more (a charge that has no visit, correction). It is a
+sensitive money action, so it needs **`payment:refund`** (owner, dentist), the trust level of a
+refund; front desk sees the action, explained ("Ask a dentist to adjust").
+
+- `reason` is one of `write_off`, `courtesy`, `opening_balance_correction`,
+  `charge_without_visit`, `other` (`ADJUSTMENT_REASONS`), stored as text in the entry's `reason`
+  and on its audit row; entries older than the list hold free text, so reads type it as a
+  string. `other` needs a note of at least 3 characters.
+- A write-off is a source and is allocated like a payment (ADR-0027); a positive adjustment is a
+  target that ages from its `effective_date`.
+- It shows at once in the account's `adjustments` (the Payment history card: its own row type,
+  labelled by reason, the amount coloured by direction, with the running Remaining), the
+  statement (`kind: 'adjustment'`, with `reason`), Outstanding and aging. The Visits list is
+  untouched: an adjustment is on the account, not on a visit.
+- SPA: the **Adjust balance** right panel (`features/billing/adjust/`), opened from the balance
+  card of the Balance & payments tab, the Overview balance card's ⋯ menu and an Outstanding
+  row's ⋯ menu.
+
+### Retry safety (feature 7, H5)
+
+`POST /billing/opening-balances` and `POST /billing/patients/:id/adjustments` require an
+`Idempotency-Key` (a uuid; 422 without), like `POST /billing/payments`. The key and a SHA-256 of
+the validated request (`platform/kernel/request-hash.ts`; the adjustment's includes the patient)
+are stored on the entry. A request whose key is already on an entry: the same fingerprint → the
+first result, re-read (201 again; the patient and the balance as they are now); another → 409
+`ledger.idempotency_mismatch`. Requests sharing a key run one at a time (an advisory lock on the
+key), so a double click creates one patient with one opening balance. The opening balance's key
+is on the entry only: the patient and the entry commit together, so finding the entry is finding
+both. `POST /patients` has its own (`docs/modules/patients.md`).
+
+### Currency lock (feature 7, H6, ADR-0035)
+
+`CurrencyLockSubscriber` handles `tenancy`'s `TenantCurrencyChanged` inside the settings
+transaction and throws 422 `tenant.currency_locked` when any ledger entry exists, which rolls the
+change back. `GET /billing/currency-lock` tells the admin Settings tab to disable the select.
 
 ### Payments (feature 5, ADR-0027 to ADR-0029)
 
@@ -150,7 +195,8 @@ Spec `docs/superpowers/specs/2026-10-02-payments-design.md` (P1–P16).
   `receivables` (Collected and Refunds over the last 30 days, Outstanding, aging buckets of the
   unpaid remainders), `outstanding` (owing patients, oldest unpaid first, bucket of the oldest,
   cursor on `(oldest, patient id)`; `group=payer` groups owing patients into families by primary billing contact, the cursor on `(oldest, group key)`), `family` and `familyStatement` (a billing contact's family, ADR-0028 seen from the payer), `account` (balance card, credit, open charges, payer, payers,
-  household, history with the running Remaining), `receipt` and `statement`.
+  household, history with the running Remaining, the balance adjustments), `receipt` and
+  `statement`.
 - Errors: 422 `payment.over_outstanding`, `payment.nothing_outstanding`, `payment.invalid_target`,
   `payment.invalid_payer`, `payment.invalid_cursor`; 404 `payment.not_found`; 409
   `payment.over_refund`, `payment.has_refunds`, `payment.not_reversible`,
@@ -273,44 +319,24 @@ today, takes the **snapshot** — the ids to export, in order — and returns `{
   the query's `lang` if given, else `Accept-Language` (the supported primary tag with the highest
   quality), else `en`.
 
-### Merge re-point (design Q9, ADR-0017)
+### Merge re-point (ADR-0036)
 
-- `MergeLedgerSubscriber` handles `PatientsMerged` (dispatched after the merge commits). In the
-  event's context (tenant, actor, platform-admin flag, request id) it enqueues `merge-ledger` on
-  the `billing` queue with `{ keptId, droppedId }` and job id `merge_<droppedId>`
-  (tenant-prefixed by `TenantJobs`), so a repeated event enqueues nothing new while the job is
-  kept (24 hours or the last 1,000 completed jobs). The enqueue is **not awaited**: with Redis
-  unreachable, ioredis queues commands offline and the add would not settle, and the merge
-  request and the audit subscriber (both after-commit hooks) would wait for it. A failed enqueue
-  is logged with ids only.
-- `MergeLedgerWorker` (a `TenantWorker`: the job's tenant, actor kind `job`, the merging user as
-  the actor user, the platform-admin flag carried in the job envelope for the audit only — it
-  grants the job nothing, ADR-0017) calls `repointMergedEntries(keptId, droppedId)`. One
-  transaction:
-  - resolves the **survivor** of the kept patient (`PatientsService.survivorOf`: the kept patient
-    itself, or the end of its `mergedIntoId` chain if it has been merged away since), holding it
-    `FOR SHARE` so it can't be merged away before the transaction commits;
-  - checks that the dropped patient resolves to the same survivor (`survivorOf(droppedId)`), i.e.
-    it really was merged into the kept patient's chain; otherwise it moves nothing and logs the
-    ids (a malformed or forged job cannot move a live patient's entries);
-  - moves every entry of the dropped patient to the survivor;
-  - when anything moved, audits `ledger_entry.repoint` (resource type `patient`, resource id =
-    the survivor, so it shows in that patient's history; after `{ droppedId, keptId, count }`).
+`MergeLedgerSubscriber` handles `PatientsMerged` **in the merge transaction**
+(`@OnDomainEventInTransaction`), which already holds both patients `FOR UPDATE`. In order:
 
-  So the jobs of a merge chain (A into B, then B into C) end on C whatever order they run in. An
-  unknown kept patient (or another tenant's) moves nothing. Idempotent; retried with backoff,
-  then dead-lettered (CLAUDE.md §9).
+1. the two accounts' advisory locks, in patient id order (`Settlement.lock`), after the patient
+   locks — the order every ledger writer uses;
+2. every entry and every payment of the dropped patient moves to the kept one;
+3. when anything moved: audit `ledger_entry.repoint` (resource type `patient`, resource id = the
+   kept patient, after `{ droppedId, keptId, count, payments }`, the merging user as the actor),
+   then a settle of the kept account (P15: the credit of one side meets the open charges of the
+   other).
 
-- Ledger writes hold the patient row `FOR SHARE` and a merge locks it `FOR UPDATE`, so an entry
-  written during a merge commits first and the job moves it too.
-- **When a re-point does not happen**, the dropped (archived) record keeps its entries and the
-  survivor's balance is short by them. There is no automatic reconciliation. Recovery:
-  - **The job was never enqueued** (a crash between the merge commit and the enqueue, or Redis
-    refused it; the log has the ids): enqueue `merge-ledger` again with the same payload and job
-    id. This works because no job with that id exists.
-  - **The job failed** (retries exhausted, it is in the queue's failed set and in the
-    dead-letter queue): retry that job (`job.retry()`), or replay the dead letter. Enqueueing
-    again with the same id does nothing while the failed job is kept.
+The kept patient's balance is right when the merge answers; a failure rolls the merge back. A
+ledger write holds the patient `FOR SHARE`, so one in flight commits first and is moved, and one
+that arrives later finds the patient merged (409 `patient.merged`). A merge chain (A into B, then
+B into C) needs nothing more: each merge re-points in its own transaction. Not permission-gated:
+the merge already required `patient:write`.
 
 ### Pure rules (`domain/`)
 
@@ -335,10 +361,11 @@ today, takes the **snapshot** — the ids to export, in order — and returns `{
 
 | Route                                        | Access           | Notes                                                                                                                                                                                                                                                                                                                                    |
 | -------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /billing/opening-balances`             | `payment:write`  | Body `{ patient, openingBalance }`; `patient` is the patients create schema, so its `contacts` and `linkContactId` are applied in the same transaction (errors under `patient.`). The service also requires `patient:write`. 201 `{ patient, balance }`.                                                                                 |
+| `POST /billing/opening-balances`             | `payment:write`  | Requires `Idempotency-Key`. Body `{ patient, openingBalance }`; `patient` is the patients create schema, so its `contacts` and `linkContactId` are applied in the same transaction (errors under `patient.`). The service also requires `patient:write`. 201 `{ patient, balance }`.                                                     |
 | `GET /billing/balances?patientIds=`          | `payment:read`   | 1–100 comma-separated ids, de-duplicated. 200 `PatientBalance[]`.                                                                                                                                                                                                                                                                        |
 | `GET /billing/patients/:id/balance`          | `payment:read`   | 200 `{ patientId, balances, charged }`.                                                                                                                                                                                                                                                                                                  |
-| `POST /billing/patients/:id/adjustments`     | `payment:write`  | Body `{ amount, effectiveDate, reason, note? }`. 201 with the balance.                                                                                                                                                                                                                                                                   |
+| `POST /billing/patients/:id/adjustments`     | `payment:refund` | Requires `Idempotency-Key`. Body `{ amount, effectiveDate, reason, note? }`. 201 with the balance.                                                                                                                                                                                                                                       |
+| `GET /billing/currency-lock`                 | `tenant:read`    | 200 `{ locked, currency }`.                                                                                                                                                                                                                                                                                                              |
 | `GET /billing/visits/:visitId/summary`       | `payment:read`   | 200 `VisitFinancialSummary` (`visitFinancialSummarySchema`). The service also requires `visit:read`. A live visit → 409 `visit.not_live`; unknown or discarded → 404 `visit.not_found`.                                                                                                                                                  |
 | `GET /billing/patients`                      | `payment:read`   | The `GET /patients` query (`view=owing` and `sort=balance` included). 200 `PatientPage`. The service also requires `patient:read`.                                                                                                                                                                                                       |
 | `GET /billing/patients/owing-count`          | `payment:read`   | 200 `{ count }` (`owingCountSchema`). The service also requires `patient:read`.                                                                                                                                                                                                                                                          |
@@ -380,8 +407,6 @@ pipe a `Readable`: stream callbacks run outside the request's async context, whe
 
 ## Known gaps
 
-- `POST /billing/payments` takes an `Idempotency-Key` (stored on the payment, P11); opening
-  balances and adjustments still don't: a retried one records twice.
 - Payments are in the tenant currency only, and settle only pairs sources and targets of the same
   currency (multi-currency payments are out of scope).
 - `visitSummary` and `balanceOf`/`balancesFor` only ever report the visit's (or the tenant's)
@@ -399,18 +424,14 @@ patientIds, householdGroupId, amount, currency, allocations }`, `PaymentRefunded
 refundId, patientId, amount, currency, releases }`, `PaymentVoided { receiptNumber, paymentIds,
 voidIds, patientIds }`, `CreditApplied { patientId, currency, allocations }`.
 - Consumes:
-  - `PatientsMerged { keptId, droppedId }` (from `patients`), after commit, to re-point the
-    dropped patient's entries through the `merge-ledger` job (design Q9).
+  - `PatientsMerged { keptId, droppedId }` (from `patients`), **in the merge transaction**, to
+    re-point the dropped patient's entries and payments (ADR-0036).
+  - `TenantCurrencyChanged { from, to }` (from `tenancy`), **in the settings transaction**, to
+    refuse a currency change once there is money (ADR-0035).
   - `VisitCompleted { visitId, patientId, currency, total, localDate }` (from `clinical`),
     **in the completion's transaction**, to post the visit charge (ADR-0024).
   - `VisitAmended` and `VisitVoided` (from `clinical`), **in the amend or void transaction**, to
     post the adjustment or the reversal, or to veto the void (ADR-0025, ADR-0026).
-
-## Jobs
-
-- Queue `billing`, job `merge-ledger`, payload `{ keptId, droppedId }`, job id
-  `merge_<droppedId>` (BullMQ refuses `:` in custom ids). Default retries and backoff
-  (`platform/queue`), dead-lettered on the last failure.
 
 ## Depends on
 
@@ -418,8 +439,9 @@ voidIds, patientIds }`, `CreditApplied { patientId, currency, allocations }`.
   (`listItemsByIds`, design addendum C14, resolved per C7), the ledger-write lock
   (`lockForDependentWrite`), `create` for the opening-balance create (contacts and
   `linkContactId` included), `search` and `searchIds` with their internal options for the patient
-  views and the export, `survivorOf` for the merge re-point; the `PatientsMerged` event.
-- `tenancy`: currency, time zone and country (`currentTenant`).
+  views and the export; the `PatientsMerged` event.
+- `tenancy`: currency, time zone and country (`currentTenant`); the `TenantCurrencyChanged`
+  event.
 - `users`: dentist display names in the export (`practitionersByProfileIds`, by staff profile
   id); "Recorded by" names (`namesByUserIds`, feature 5).
 - `patients` (feature 5): `ContactsService.contactsOf` and `patientsBilledBy` for the payer and the
@@ -437,7 +459,7 @@ None of them imports `billing` (ADR-0017, ADR-0024).
 
 - `payment:read`: owner, dentist, assistant, front desk.
 - `payment:write`: owner, dentist, front desk. The assistant does not have it.
-- `payment:refund` (refund and void a payment): owner, dentist.
+- `payment:refund` (refund and void a payment; adjust a balance, feature 7): owner, dentist.
 - A platform admin acting in the tenant holds both.
 - Completing a visit needs no `payment:*` permission (ADR-0024), but it does need `visit:read` and
   `patient:read` on top of `visit:write`: `VisitChargeSubscriber` calls `VisitsService.chargeFacts`

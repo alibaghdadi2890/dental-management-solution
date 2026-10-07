@@ -41,7 +41,8 @@ Branches and rooms are deactivated, never deleted. Rooms never move between bran
 - Platform (`platform:admin`, cross-tenant): `createTenant`, `discardTenant` (provisioning
   compensation), `listTenants` (with branch counts).
 - Current tenant: `currentTenant`, `currentTenantStatus` (session guard), `updateSettings`
-  (`tenant:write`; the chart settings included; audited `tenant.update` with before/after),
+  (`tenant:write`; the chart settings included; audited `tenant.update` with before/after; a
+  currency change is announced in the transaction and may be refused, see below),
   `setStatus` (`platform:admin`, with reason).
 - Branches: `listBranches`, `createBranch`, `updateBranch` (`tenant:write`), `activeBranches(ids)`,
   `branchesByIds(ids)` (any status, for staff records), `allActiveBranches()`.
@@ -49,6 +50,17 @@ Branches and rooms are deactivated, never deleted. Rooms never move between bran
   `saveRooms(batch)` (`tenant:write`, atomic, names may be swapped within a batch).
 
 Errors: `TenantNotFoundError`, `TenantSuspendedError` (exported); `branch.*`, `room.*` codes.
+
+### Currency lock (feature 7, H6, ADR-0035)
+
+A tenant's currency can change only while the tenant has no money recorded. `tenancy` cannot
+read the ledger (`billing` depends on it, not the reverse), so `updateSettings` publishes
+`TenantCurrencyChanged { from, to }` inside its transaction when the stored currency really
+changes, and `billing` refuses it with 422 `tenant.currency_locked` once any ledger entry
+exists; the whole settings change rolls back. A platform admin is refused too. The admin Settings
+tab reads `GET /billing/currency-lock` and shows the select disabled with "Locked — this clinic
+has recorded balances in USD." Changing the currency of a clinic with money is a support
+operation outside the product.
 
 ## HTTP
 
@@ -66,7 +78,9 @@ The tenant always comes from the session, or `X-Tenant-Id` for platform admins (
 
 ## Events
 
-- Emits: — (`TenantProvisioned` is emitted by `provisioning`).
+- Emits: `TenantCurrencyChanged { from, to }`, inside the settings transaction (`billing` may
+  veto it); stored by the audit subscriber once committed. (`TenantProvisioned` is emitted by
+  `provisioning`.)
 - Consumes: —
 
 ## Depends on

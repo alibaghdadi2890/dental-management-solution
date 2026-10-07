@@ -14,8 +14,13 @@ admin-plugin role `platform_admin` = back-office operator, ban = deactivate.
 
 The identity plane (ADR-0011): `auth_users`, `auth_sessions`, `auth_accounts`,
 `auth_verifications`, `auth_organizations`, `auth_members`, `auth_teams`, `auth_team_members`,
-`auth_invitations` (unused), `auth_sign_in_throttle`. Global, no `tenant_id`, no RLS; written
+`auth_invitations` (intentionally dormant, see below), `auth_sign_in_throttle`. Global, no `tenant_id`, no RLS; written
 inside the caller's transaction through `IdentityDb`.
+
+`auth_invitations` is intentionally dormant: better-auth's organization plugin needs the table
+to exist, but nothing writes it. Staff accounts are created by an owner or a platform admin with
+a temporary password (ADR-0012); there is no invitation flow, and none should be built on this
+table without a decision first.
 
 ## Request pipeline
 
