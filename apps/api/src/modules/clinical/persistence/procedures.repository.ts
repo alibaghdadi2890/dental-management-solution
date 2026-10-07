@@ -1,4 +1,4 @@
-import type { ServiceItem } from '@dcm/contracts';
+import type { ServiceItem, ToothEffect } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -22,6 +22,7 @@ function toService(row: ProcedureRow): ServiceItem {
     price: { amount: row.priceAmount, currency: row.priceCurrency },
     frequent: row.frequent,
     active: row.active,
+    toothEffect: row.toothEffect,
   };
 }
 
@@ -35,6 +36,7 @@ function toRow(item: ServiceItem) {
     priceCurrency: item.price.currency,
     frequent: item.frequent,
     active: item.active,
+    toothEffect: item.toothEffect,
   };
 }
 
@@ -55,6 +57,18 @@ export class ProceduresRepository implements CatalogStore<ServiceItem> {
           .orderBy(asc(procedures.createdAt), asc(procedures.id))
       ).map(toService),
     );
+  }
+
+  /**
+   * What performing the service does to a tooth (H2), read for a visit service that is being
+   * recorded or performed from a plan. A service removed from the catalog since still answers:
+   * the record keeps pointing at its row.
+   */
+  async toothEffectOf(id: string): Promise<ToothEffect> {
+    const [row] = await this.db.run((tx) =>
+      tx.select({ effect: procedures.toothEffect }).from(procedures).where(eq(procedures.id, id)),
+    );
+    return row?.effect ?? 'none';
   }
 
   byId(id: string, lock?: CatalogRowLock): Promise<ServiceItem | undefined> {

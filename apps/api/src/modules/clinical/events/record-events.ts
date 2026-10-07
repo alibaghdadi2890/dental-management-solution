@@ -1,4 +1,4 @@
-import type { ToothPresenceValue } from '@dcm/contracts';
+import type { ToothPresenceState } from '@dcm/contracts';
 import type { DomainEvent } from '../../../platform/events/domain-event';
 
 /**
@@ -71,9 +71,13 @@ export type TreatmentCancelled = DomainEvent<
   { planId: string; visitId: string | null; patientId: string; toothCode: string | null }
 >;
 
-/** Which tooth is present at a succession position changed (W5, W15). */
-export const TOOTH_STATUS_CHANGED = 'ToothStatusChanged';
-export type ToothStatusChanged = DomainEvent<
-  typeof TOOTH_STATUS_CHANGED,
-  { visitId: string; patientId: string; position: string; present: ToothPresenceValue }
+/**
+ * What is at a tooth position changed (feature 7, H1): set by hand or by a service, or taken
+ * back. `presence` is what the tooth has now; `visitId` is null for a change on the patient
+ * record.
+ */
+export const TOOTH_PRESENCE_CHANGED = 'ToothPresenceChanged';
+export type ToothPresenceChanged = DomainEvent<
+  typeof TOOTH_PRESENCE_CHANGED,
+  { patientId: string; visitId: string | null; toothCode: string; presence: ToothPresenceState }
 >;

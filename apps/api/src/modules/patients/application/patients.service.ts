@@ -10,6 +10,7 @@ import {
   type PatientListItem,
   type PatientListQuery,
   type PatientMerge,
+  type PatientName,
   type PatientPage,
   type PatientPatch,
   type PatientRestore,
@@ -22,6 +23,7 @@ import { TenantDb } from '../../../platform/db/tenant-db';
 import { EventBus } from '../../../platform/events/event-bus';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
+import { requestHash } from '../../../platform/kernel/request-hash';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { AuditService } from '../../audit';
 import { TenancyService } from '../../tenancy';
@@ -35,6 +37,7 @@ import type { DomainPatient } from '../domain/patient';
 import {
   MergeSameError,
   PatientArchivedError,
+  PatientIdempotencyMismatchError,
   PatientMergedError,
   PatientNotFoundError,
   UnknownDentistError,
@@ -92,9 +95,6 @@ const MAX_INTERNAL_PAGE_SIZE = 500;
 /** A list query without paging: what `searchIds` (and the filters and order) depend on. */
 type UnpagedQuery = Omit<PatientListQuery, 'page' | 'size'>;
 
-/** How many merges `survivorOf` follows before assuming a cycle (a chain is never this long). */
-const MAX_MERGE_CHAIN = 100;
-
 const NOT_FOUND = 'Patient not found';
 
 const ARCHIVED_MERGE = 'Archived patients cannot be merged; restore them first';
@@ -127,10 +127,30 @@ export class PatientsService {
    * `contacts` are linked and `linkContactId` becomes this patient in the same transaction
    * (addendum C4; `ContactLinks.link`), audited after `patient.create`: any failing link rolls
    * the whole create back. Errors about a link point at `contacts.<i>.target…`.
+   *
+   * With an `idempotencyKey` (`POST /patients`, feature 7 H5) a retry of the same request answers
+   * with the patient the first one created, as it is now, and creates nothing; another request
+   * under the key → 409 `patient.idempotency_mismatch`. Requests sharing a key run one at a time.
    */
-  async create(input: PatientCreate): Promise<Patient> {
+  async create(input: PatientCreate, options: { idempotencyKey?: string } = {}): Promise<Patient> {
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
+      const idempotency =
+        options.idempotencyKey === undefined
+          ? null
+          : { key: options.idempotencyKey, hash: requestHash(input) };
+      if (idempotency) {
+        await this.patients.lockIdempotencyKey(idempotency.key);
+        const first = await this.patients.findByIdempotencyKey(idempotency.key);
+        if (first) {
+          if (first.hash !== idempotency.hash) {
+            throw new PatientIdempotencyMismatchError(
+              'This Idempotency-Key was already used for a different patient',
+            );
+          }
+          return toPatient(first.patient);
+        }
+      }
       const tenant = await this.tenancy.currentTenant();
       const normalized = normalizeFields(input, tenant.country, this.today(tenant), null);
       if (normalized.phone === undefined) throw new Error('create: phone was not normalised');
@@ -153,6 +173,7 @@ export class PatientsService {
           primaryDentistId: input.primaryDentistId,
           // The import key is set only by the import (feature 6).
           externalId: null,
+          idempotency,
         }),
       );
       await this.audit.record({
@@ -262,6 +283,18 @@ export class PatientsService {
   }
 
   /**
+   * `GET /patients/names`: the name and display number of the patients among `ids`, archived
+   * and merged-away ones included (a log names people as they were), in no particular order.
+   */
+  async names(ids: readonly string[]): Promise<PatientName[]> {
+    return (await this.getMany(ids)).map(({ id, fullName, displayNumber }) => ({
+      id,
+      fullName,
+      displayNumber,
+    }));
+  }
+
+  /**
    * For other modules' services (e.g. `billing`'s export rows, design addendum C14): the list
    * items — with the resolved primary guardian, C14 (resolved per C7) — among `ids`, archived
    * ones included, in no particular order (one `listRowsByIds` query; a caller that needs a
@@ -276,9 +309,9 @@ export class PatientsService {
   /**
    * For a dependent module's write on this patient (`billing`'s ledger writes; `clinical`'s
    * visit start, W22): reads the patient `FOR SHARE` inside the caller's open transaction, so a
-   * merge (which locks `FOR UPDATE`) waits until the write is committed and the re-point then
-   * finds it: `clinical`'s in the merge transaction, `billing`'s ledger job after commit. Unknown → 404; merged away → 409 `patient.merged` (the write belongs on the kept
-   * record). Archived-but-not-merged is allowed (e.g. writing off a debt). Throws when no
+   * merge (which locks `FOR UPDATE`) waits until the write is committed and the re-points, which
+   * run in the merge transaction (`clinical`'s and `billing`'s), then find it. Unknown → 404;
+   * merged away → 409 `patient.merged` (the write belongs on the kept record). Archived-but-not-merged is allowed (e.g. writing off a debt). Throws when no
    * transaction is open: the lock would be released before the caller's write.
    */
   async lockForDependentWrite(id: string): Promise<Patient> {
@@ -292,38 +325,6 @@ export class PatientsService {
       throw new PatientMergedError('This record was merged into another one; use the kept record');
     }
     return toPatient(patient);
-  }
-
-  /**
-   * For system work that follows a merge (`billing`'s ledger re-point): the patient that `id`
-   * finally lives on — `id` itself unless it was merged away, else the end of its
-   * `mergedIntoId` chain (A merged into B, B into C → C). Each record on the way is read
-   * `FOR SHARE` in the caller's open transaction (throws when none is open), so the survivor
-   * cannot be merged away until the caller commits; a merge that committed meanwhile is seen and
-   * followed. `null` when `id` (or a link) is not a patient of this tenant.
-   *
-   * Not permission-gated — a job actor holds no permissions — but only a job or system task may
-   * call it (throws otherwise). A chain longer than 100 links, or a cycle, throws.
-   */
-  async survivorOf(id: string): Promise<string | null> {
-    const actorKind = this.context.actorKind;
-    if (actorKind !== 'job' && actorKind !== 'system') {
-      throw new Error('survivorOf runs only in a job or system task');
-    }
-    if (!this.tenantDb.currentTransaction()) {
-      throw new Error('survivorOf must run inside a transaction');
-    }
-    const seen = new Set<string>();
-    let current = id;
-    while (seen.size < MAX_MERGE_CHAIN) {
-      if (seen.has(current)) throw new Error('survivorOf: merge chain has a cycle');
-      seen.add(current);
-      const patient = await this.patients.findForShare(current);
-      if (!patient) return null;
-      if (patient.mergedIntoId === null) return patient.id;
-      current = patient.mergedIntoId;
-    }
-    throw new Error(`survivorOf: merge chain longer than ${String(MAX_MERGE_CHAIN)}`);
   }
 
   // --- The Patients list ---
@@ -450,9 +451,8 @@ export class PatientsService {
       throw new MergeSameError('A patient cannot be merged into itself');
     }
     return this.tenantDb.run(async () => {
-      // Fail fast, unlocked: an archived or merged-away record is refused before any row lock,
-      // so a doomed merge never queues behind (or deadlocks with) the merge re-point job's
-      // `FOR SHARE` walk of that record's chain. The check after the lock stays authoritative.
+      // Fail fast, unlocked: an archived or merged-away record is refused before any row lock.
+      // The check after the lock stays authoritative.
       const current = await this.patients.findByIds([input.keepId, input.dropId]);
       if (current.some((patient) => patient.deletedAt !== null)) {
         throw new PatientArchivedError(ARCHIVED_MERGE);

@@ -38,6 +38,7 @@ function newPatient(overrides: Partial<NewPatient> = {}): NewPatient {
     medicalAlerts: [],
     primaryDentistId: null,
     externalId: null,
+    idempotency: null,
     ...overrides,
   };
 }

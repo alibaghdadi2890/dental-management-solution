@@ -2,15 +2,16 @@ import {
   type AddServiceInput,
   type AnswerUnfinishedInput,
   type DiagnosisResult,
-  type PermanentToothCode,
   type PlanResult,
+  type PresenceResult,
   type PlanTreatmentInput,
   type RecordDiagnosisInput,
   type RecordSessionInput,
   type ServiceResult,
-  type SetToothPresenceInput,
+  type SetPresenceInVisitInput,
   toCents,
-  type ToothPresenceResult,
+  type ToothCode,
+  type ToothPresenceChange,
   type UpdateServiceInput,
   type Visit,
   type VisitResult,
@@ -39,8 +40,6 @@ import {
   DIAGNOSIS_RESOLVED,
   type DiagnosisReopened,
   type DiagnosisResolved,
-  TOOTH_STATUS_CHANGED,
-  type ToothStatusChanged,
   TREATMENT_CANCELLED,
   TREATMENT_PERFORMED,
   TREATMENT_STARTED,
@@ -54,7 +53,10 @@ import {
   type StoredDiagnosisRecord,
 } from '../persistence/patient-diagnoses.repository';
 import { PlanSessionsRepository } from '../persistence/plan-sessions.repository';
-import { ToothStatusRepository } from '../persistence/tooth-status.repository';
+import {
+  type StoredToothPresence,
+  ToothPresenceRepository,
+} from '../persistence/tooth-presence.repository';
 import {
   type StoredTreatmentPlan,
   TreatmentPlansRepository,
@@ -66,8 +68,9 @@ import {
 import { type StoredVisit, VisitsRepository } from '../persistence/visits.repository';
 import { CatalogService } from './catalog.service';
 import { PlanUnperformer, planStatusOf } from './plan-unperformer';
+import { type PresenceContext, PresenceWriter } from './presence-writer';
 import { type RecordContext, RecordWriter } from './record-writer';
-import { toDiagnosisRecord, toTreatmentPlan } from './record-mapping';
+import { toDiagnosisRecord, toPresenceRecord, toTreatmentPlan } from './record-mapping';
 import { toVisit, toVisitService } from './visit-mapping';
 
 /** What one charting change sees: the live visit (locked), the actor and the clock. */
@@ -76,6 +79,15 @@ interface Change {
   userId: string;
   now: Date;
 }
+
+/** A presence set in a visit is dated by the visit and is its dentist's. */
+const presenceContext = ({ visit, userId }: Change): PresenceContext => ({
+  patientId: visit.patientId,
+  visitId: visit.id,
+  occurredOn: visit.localDate,
+  dentistId: visit.dentistId,
+  userId,
+});
 
 const DIAGNOSIS = 'diagnosis_record';
 const PLAN = 'treatment_plan';
@@ -95,7 +107,7 @@ const priceOf = ({ baseAmount, discountAmount }: StoredVisitService) => ({
 
 /**
  * Charting inside a live visit (docs/modules/clinical.md, spec §VisitRecordsService): services,
- * diagnoses, plans and tooth presence. Every method re-checks `visit:write`, runs in one
+ * diagnoses, plans and tooth presence (missing, not erupted, implant; feature 7). Every method re-checks `visit:write`, runs in one
  * `TenantDb` transaction, locks the visit `FOR UPDATE` and refuses unless it is live (409
  * `visit.not_live`), and answers with the updated `Visit` plus the affected record. The patient is
  * always the visit's; records of another patient read as not found. Catalog items must be active
@@ -118,7 +130,8 @@ export class VisitRecordsService {
     private readonly diagnoses: PatientDiagnosesRepository,
     private readonly plans: TreatmentPlansRepository,
     private readonly sessions: PlanSessionsRepository,
-    private readonly teeth: ToothStatusRepository,
+    private readonly presences: ToothPresenceRepository,
+    private readonly presence: PresenceWriter,
     private readonly unperformer: PlanUnperformer,
     private readonly writer: RecordWriter,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -127,8 +140,10 @@ export class VisitRecordsService {
   // --- Services ---
 
   /** A catalog service at its catalog price, no line discount (W11, W12). */
-  addService(visitId: string, input: AddServiceInput): Promise<ServiceResult> {
-    return this.inVisit(visitId, async ({ visit, userId }) => {
+  async addService(visitId: string, input: AddServiceInput): Promise<ServiceResult> {
+    let presenceChange: ToothPresenceChange | null = null;
+    const result = await this.inVisit(visitId, async (change) => {
+      const { visit, userId } = change;
       const item = await this.catalog.getServiceForRecord(input.procedureId);
       if (!item.active) throw new CatalogItemInactiveError(`${item.name} is inactive`);
       assertTarget(item.chargeUnit, input.toothCode, input.surfaces, input.jaw);
@@ -153,8 +168,10 @@ export class VisitRecordsService {
         resourceId: service.id,
         after: service,
       });
+      presenceChange = await this.presence.applyService(presenceContext(change), service);
       return toVisitService(service, visit.currency);
     });
+    return { ...result, presenceChange };
   }
 
   /**
@@ -197,8 +214,9 @@ export class VisitRecordsService {
    * worked on it, else to `planned` — work that only this visit worked on goes with its service
    * (`dropWorkStartedHere`), so a removed service never comes back as an unfinished one.
    */
-  removeService(visitId: string, serviceId: string): Promise<ServiceResult> {
-    return this.inVisit(visitId, async (change) => {
+  async removeService(visitId: string, serviceId: string): Promise<ServiceResult> {
+    let presenceChange: ToothPresenceChange | null = null;
+    const result = await this.inVisit(visitId, async (change) => {
       const { visit, now } = change;
       const before = await this.services.lockInVisit(serviceId, visitId);
       const after = await this.services.update(serviceId, { deletedAt: now });
@@ -209,12 +227,15 @@ export class VisitRecordsService {
         before,
         after: { deletedAt: after.deletedAt },
       });
+      // What the service did to its tooth goes with it (H2).
+      presenceChange = await this.presence.revertService(serviceId, now);
       if (before.planId !== null) {
         await this.unperformer.unperform(before.planId, visit);
         await this.dropWorkStartedHere(before.planId, change);
       }
       return toVisitService(after, visit.currency);
     });
+    return { ...result, presenceChange };
   }
 
   // --- Diagnoses ---
@@ -308,6 +329,8 @@ export class VisitRecordsService {
         before: service,
         after: { deletedAt: removed.deletedAt },
       });
+      // The work is not done: the tooth is as it was (H2).
+      await this.presence.revertService(serviceId, now);
       let plan: StoredTreatmentPlan;
       if (service.planId === null) {
         plan = await this.writer.planFromService(
@@ -367,6 +390,7 @@ export class VisitRecordsService {
           action: `${PLAN}.session`,
           resourceType: PLAN,
           resourceId: planId,
+          patientId: before.patientId,
           after: { visitId, note: null },
         });
       }
@@ -377,6 +401,7 @@ export class VisitRecordsService {
           action: 'visit.unfinished_answered',
           resourceType: 'visit',
           resourceId: visitId,
+          patientId: before.patientId,
           after: { continued: input.continue },
         });
       }
@@ -451,8 +476,10 @@ export class VisitRecordsService {
    * plan's currency must be the visit's (W12). `TreatmentPerformed`; the new service is in the
    * answer's visit.
    */
-  performPlan(visitId: string, planId: string): Promise<PlanResult> {
-    return this.inVisit(visitId, async ({ visit, userId, now }) => {
+  async performPlan(visitId: string, planId: string): Promise<PlanResult> {
+    let presenceChange: ToothPresenceChange | null = null;
+    const result = await this.inVisit(visitId, async (change) => {
+      const { visit, userId, now } = change;
       const before = await this.plans.lockForPatient(planId, visit.patientId);
       assertOpen(before);
       assertCurrency(visit.currency, before.priceCurrency);
@@ -496,8 +523,10 @@ export class VisitRecordsService {
         toothCode: after.toothCode,
       });
       await this.events.publish(event);
+      presenceChange = await this.presence.applyService(presenceContext(change), service);
       return this.treatmentPlan(after);
     });
+    return { ...result, presenceChange };
   }
 
   /**
@@ -565,41 +594,40 @@ export class VisitRecordsService {
   // --- Tooth presence ---
 
   /**
-   * Which tooth is present at a succession position (W5), changed in this visit (W15): an upsert
-   * on `(patient, position)`. An unchanged value changes, audits and emits nothing.
-   * `ToothStatusChanged`.
+   * What is at a tooth position, as seen in this visit (feature 7, H1): `missing`, `not_erupted`,
+   * `implant`, or `present` again. Applied at once and dated by the visit; nothing is written
+   * when the tooth already has that presence (`record: null`). `ToothPresenceChanged`.
    */
-  setToothPresence(
+  setPresence(
     visitId: string,
-    position: PermanentToothCode,
-    input: SetToothPresenceInput,
-  ): Promise<ToothPresenceResult> {
-    return this.inVisit(visitId, async ({ visit, userId }) => {
-      const before = await this.teeth.lockAt(visit.patientId, position);
-      if (before?.present !== input.present) {
-        const after = await this.teeth.upsert({
-          patientId: visit.patientId,
-          position,
-          present: input.present,
-          changedInVisitId: visitId,
-          changedBy: userId,
-        });
-        await this.audit.record({
-          action: 'tooth_status.set',
-          resourceType: 'tooth_status',
-          resourceId: after.id,
-          before: before && { position, present: before.present },
-          after: { position, present: after.present },
-        });
-        const event: ToothStatusChanged = this.events.create(TOOTH_STATUS_CHANGED, {
-          visitId,
-          patientId: visit.patientId,
-          position,
-          present: after.present,
-        });
-        await this.events.publish(event);
+    toothCode: ToothCode,
+    input: SetPresenceInVisitInput,
+  ): Promise<PresenceResult> {
+    return this.inVisit(visitId, async (change) => {
+      const row = await this.presence.set(presenceContext(change), {
+        toothCode,
+        presence: input.presence,
+      });
+      return row && this.presenceRecord(row, change.visit);
+    });
+  }
+
+  /**
+   * The Undo of `setPresence`: a row set by hand in this visit (409 `record.not_removable` for
+   * one from another visit or the patient record, or one a service caused — remove the service).
+   * The tooth goes back to what it was before.
+   */
+  removePresence(visitId: string, presenceId: string): Promise<PresenceResult> {
+    return this.inVisit(visitId, async ({ visit, now }) => {
+      const [row] = await this.presences.findLive(visit.patientId, [presenceId]);
+      if (!row) throw new RecordNotFoundError('Presence record not found');
+      if (row.recordedInVisitId !== visitId || row.serviceId !== null) {
+        throw new RecordNotRemovableError(
+          'Only a presence set by hand in this visit can be undone here',
+        );
       }
-      return { position, present: input.present };
+      await this.presence.remove([row], now);
+      return this.presenceRecord(row, visit);
     });
   }
 
@@ -618,7 +646,9 @@ export class VisitRecordsService {
     return this.tenantDb.run(async () => {
       const visit = await this.visits.lockLive(visitId);
       const now = this.clock.now();
-      const record = await work({ visit, userId, now });
+      const record = await this.audit.about({ patientId: visit.patientId, visitId }, () =>
+        work({ visit, userId, now }),
+      );
       return { visit: toVisit(visit, await this.services.listForVisit(visitId), now), record };
     });
   }
@@ -760,5 +790,14 @@ export class VisitRecordsService {
     });
     await this.events.publish(event);
     return after;
+  }
+
+  /** A presence row of this visit as the API answers it (no service: it was set by hand). */
+  private async presenceRecord(row: StoredToothPresence, visit: StoredVisit) {
+    const [dentist] = await this.users.practitionersByProfileIds([row.dentistId]);
+    return toPresenceRecord(
+      { row, visitNumber: visit.displayNumber, serviceCode: null, serviceName: null },
+      dentist?.displayName ?? '',
+    );
   }
 }

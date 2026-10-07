@@ -82,6 +82,12 @@ export const patients = pgTable(
      * or change an archived record's `externalId` before reusing it, never reassign it silently.
      */
     externalId: text(),
+    /**
+     * The `Idempotency-Key` of the create request and the fingerprint of its body (feature 7,
+     * H5): a retry finds this row instead of creating a second patient.
+     */
+    idempotencyKey: uuid(),
+    idempotencyHash: text(),
     mergedIntoId: uuid(),
     deletedAt: deletedAtColumn(),
     ...timestamps(),
@@ -94,6 +100,9 @@ export const patients = pgTable(
     uniqueIndex('patients_external_id_unique')
       .on(table.tenantId, table.externalId)
       .where(sql`${table.externalId} is not null`),
+    uniqueIndex('patients_idempotency_key_unique')
+      .on(table.tenantId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
     // Duplicate detection: active rows sharing a name + date of birth (`duplicateRows`, `findTwins`).
     index('patients_name_key_dob_idx')
       .on(table.tenantId, table.nameKey, table.dateOfBirth)

@@ -2,6 +2,7 @@ import {
   adjustmentInputSchema,
   balancesQuerySchema,
   createWithOpeningBalanceSchema,
+  currencyLockSchema,
   idSchema,
   openingBalanceResultSchema,
   outstandingPageSchema,
@@ -15,9 +16,11 @@ import {
   payerQuerySchema,
   visitFinancialSummarySchema,
 } from '@dcm/contracts';
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common';
+import { ApiHeader } from '@nestjs/swagger';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
+import { idempotencyKey } from '../../../platform/http/idempotency-key';
 import { RequirePermission } from '../../../platform/http/route-access';
 import { BillingService } from '../application/billing.service';
 import { PaymentViewsService } from '../application/payment-views.service';
@@ -38,6 +41,7 @@ class StatementDto extends createZodDto(statementSchema) {}
 class PayerQueryDto extends createZodDto(payerQuerySchema) {}
 class FamilyDto extends createZodDto(familySchema) {}
 class FamilyStatementDto extends createZodDto(familyStatementSchema) {}
+class CurrencyLockDto extends createZodDto(currencyLockSchema) {}
 class ContactParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 
 /**
@@ -98,12 +102,27 @@ export class BillingController {
     return this.payments.statement(params.id);
   }
 
-  /** `patient:write` is re-checked by the service (it creates the patient). */
+  /** Whether the clinic's currency can still change (the admin Settings tab, H6). */
+  @Get('currency-lock')
+  @RequirePermission('tenant:read')
+  @ZodResponse({ type: CurrencyLockDto })
+  currencyLock() {
+    return this.billing.currencyLock();
+  }
+
+  /**
+   * `patient:write` is re-checked by the service (it creates the patient). A retry with the same
+   * `Idempotency-Key` and body answers with the first patient and its balance (H5).
+   */
   @Post('opening-balances')
   @RequirePermission('payment:write')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ZodResponse({ status: 201, type: OpeningBalanceResultDto })
-  createWithOpeningBalance(@Body() body: CreateWithOpeningBalanceDto) {
-    return this.billing.createWithOpeningBalance(body);
+  createWithOpeningBalance(
+    @Body() body: CreateWithOpeningBalanceDto,
+    @Headers('idempotency-key') key: string | undefined,
+  ) {
+    return this.billing.createWithOpeningBalance(body, idempotencyKey(key));
   }
 
   @Get('balances')
@@ -120,11 +139,17 @@ export class BillingController {
     return this.billing.balanceOf(params.id);
   }
 
+  /** A retry with the same `Idempotency-Key` and body records nothing new (H5). */
   @Post('patients/:id/adjustments')
-  @RequirePermission('payment:write')
+  @RequirePermission('payment:refund')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ZodResponse({ status: 201, type: PatientBalanceDto })
-  adjust(@Param() params: PatientParamsDto, @Body() body: AdjustmentInputDto) {
-    return this.billing.adjustBalance(params.id, body);
+  adjust(
+    @Param() params: PatientParamsDto,
+    @Body() body: AdjustmentInputDto,
+    @Headers('idempotency-key') key: string | undefined,
+  ) {
+    return this.billing.adjustBalance(params.id, body, idempotencyKey(key));
   }
 
   /** `visit:read` is re-checked by the service (the visit's money comes from `clinical`). */

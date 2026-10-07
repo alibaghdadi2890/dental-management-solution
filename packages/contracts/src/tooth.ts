@@ -133,17 +133,6 @@ export function position(code: ToothCode): number {
   return Number(code[1]);
 }
 
-/** The 20 permanent codes at positions 1–5 — the only chart columns with a primary predecessor,
- * i.e. the valid targets of `PUT /visits/:id/teeth/:position` (`setToothPresence`, spec W5/W15). */
-export const SUCCESSION_POSITIONS: readonly PermanentToothCode[] = PERMANENT_CODES.filter(
-  (code) => position(code) <= 5,
-);
-
-/** `SUCCESSION_POSITIONS` as a `z.enum`, for the path param schema. */
-export const successionPositionSchema = z.enum(
-  SUCCESSION_POSITIONS as [PermanentToothCode, ...PermanentToothCode[]],
-);
-
 /** A code is primary iff its first digit is 5–8. */
 export function isPrimary(code: ToothCode): code is PrimaryToothCode {
   return Number(code[0]) >= 5;
@@ -428,3 +417,21 @@ export function presentTooth(
   }
   return { code: column, notErupted: slot === 'not_erupted' };
 }
+
+/**
+ * What is in the mouth at a tooth position (feature 7, H1; ADR-0034): the natural tooth
+ * (`present`, the default when nothing is recorded), nothing (`missing`: extracted, lost or never
+ * formed), a tooth that has not come through (`not_erupted`), or an `implant` standing where the
+ * natural tooth was. Every state stays chartable (H3).
+ */
+export const TOOTH_PRESENCE_STATES = ['present', 'missing', 'not_erupted', 'implant'] as const;
+export const toothPresenceStateSchema = z.enum(TOOTH_PRESENCE_STATES);
+export type ToothPresenceState = z.infer<typeof toothPresenceStateSchema>;
+
+/** A tooth and the presence it now has: what a presence change, or a service that causes one,
+ * answers with. */
+export const toothPresenceChangeSchema = z.object({
+  toothCode: toothCodeSchema,
+  presence: toothPresenceStateSchema,
+});
+export type ToothPresenceChange = z.infer<typeof toothPresenceChangeSchema>;

@@ -4,7 +4,7 @@ import { AuditService } from '../../audit';
 import { PATIENTS_MERGED, type PatientsMerged } from '../../patients';
 import { PatientDiagnosesRepository } from '../persistence/patient-diagnoses.repository';
 import { PlanGroupsRepository } from '../persistence/plan-groups.repository';
-import { ToothStatusRepository } from '../persistence/tooth-status.repository';
+import { ToothPresenceRepository } from '../persistence/tooth-presence.repository';
 import { TreatmentPlansRepository } from '../persistence/treatment-plans.repository';
 import { VisitsRepository } from '../persistence/visits.repository';
 
@@ -15,9 +15,8 @@ import { VisitsRepository } from '../persistence/visits.repository';
  * therefore always a live patient, and a charge posted at completion lands on the kept one.
  *
  * Visits move first: their row locks serialise the re-point against charting in flight (see
- * `VisitsRepository.repointPatient`). Then diagnoses, plans, named plans and tooth status, where the kept
- * patient's row wins at a shared position (the dropped rows it replaces are the audit's
- * `before`). A merge chain (A into B, then B into C) needs nothing
+ * `VisitsRepository.repointPatient`). Then diagnoses, plans, named plans and the tooth presence
+ * rows (feature 7: history, so all of them move). A merge chain (A into B, then B into C) needs nothing
  * more: each merge re-points in its own transaction. Audited as `clinical.repoint` on the kept
  * patient, with the counts, when anything changed.
  *
@@ -32,7 +31,7 @@ export class MergeClinicalSubscriber {
     private readonly diagnoses: PatientDiagnosesRepository,
     private readonly plans: TreatmentPlansRepository,
     private readonly groups: PlanGroupsRepository,
-    private readonly teeth: ToothStatusRepository,
+    private readonly presences: ToothPresenceRepository,
   ) {}
 
   @OnDomainEventInTransaction(PATIENTS_MERGED)
@@ -42,22 +41,15 @@ export class MergeClinicalSubscriber {
     const diagnoses = await this.diagnoses.repointPatient(droppedId, keptId);
     const plans = await this.plans.repointPatient(droppedId, keptId);
     const planGroups = await this.groups.repointPatient(droppedId, keptId);
-    const teeth = await this.teeth.mergeInto(droppedId, keptId);
-    const counts = {
-      visits,
-      diagnoses,
-      plans,
-      planGroups,
-      toothStatusMoved: teeth.moved,
-      toothStatusDropped: teeth.dropped.length,
-    };
+    // History, not state: every row moves, and the last one recorded on a tooth, whichever
+    // record it came from, is that tooth's presence on the kept patient.
+    const toothPresences = await this.presences.repointPatient(droppedId, keptId);
+    const counts = { visits, diagnoses, plans, planGroups, toothPresences };
     if (Object.values(counts).every((count) => count === 0)) return;
     await this.audit.record({
       action: 'clinical.repoint',
       resourceType: 'patient',
       resourceId: keptId,
-      // The dropped patient's tooth status lost on a clash is gone; the audit keeps it.
-      before: teeth.dropped.length > 0 ? { toothStatusDropped: teeth.dropped } : undefined,
       after: { droppedId, ...counts },
     });
   }

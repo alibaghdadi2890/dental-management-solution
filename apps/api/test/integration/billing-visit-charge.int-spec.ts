@@ -15,11 +15,8 @@ import type {
   VisitFinancialSummary,
   VisitResult,
 } from '@dcm/contracts';
-import { getQueueToken } from '@nestjs/bullmq';
-import type { Queue } from 'bullmq';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { BILLING_QUEUE } from '../../src/modules/billing/application/merge-ledger.worker';
 import { LedgerEntriesRepository } from '../../src/modules/billing/persistence/ledger-entries.repository';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
@@ -88,17 +85,23 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
   };
 
   const createPatient = async (fullName: string): Promise<Patient> => {
-    const response = await owner.post('/api/v1/patients').send({ fullName, phone: '71 000 000' });
+    const response = await owner
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send({ fullName, phone: '71 000 000' });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
 
   /** A patient carried over with an opening balance of `amount`, as of today. */
   const patientOwing = async (fullName: string, amount: string): Promise<Patient> => {
-    const response = await owner.post('/api/v1/billing/opening-balances').send({
-      patient: { fullName, phone: '71 000 000' },
-      openingBalance: { amount, asOf: TODAY },
-    });
+    const response = await owner
+      .post('/api/v1/billing/opening-balances')
+      .set('Idempotency-Key', newId())
+      .send({
+        patient: { fullName, phone: '71 000 000' },
+        openingBalance: { amount, asOf: TODAY },
+      });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as OpeningBalanceResult).patient;
   };
@@ -392,7 +395,8 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
     const visit = await chargeableVisit(patient, assistant.agent);
     const refused = await assistant.agent
       .post(`/api/v1/billing/patients/${patient.id}/adjustments`)
-      .send({ amount: '5', effectiveDate: TODAY, reason: 'Checking the assistant' });
+      .set('Idempotency-Key', newId())
+      .send({ amount: '5', effectiveDate: TODAY, reason: 'courtesy' });
     expect(refused.status).toBe(403);
 
     await completed(assistant.agent, visit.id);
@@ -460,12 +464,10 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
     expect((await summary(visit.id)).totalOutstanding).toBe('117.00');
   });
 
-  it('sums both patients while a charge posted before the merge still awaits the merge-ledger job', async () => {
-    // The reverse order from the test above: the visit completes (and charges) before the
-    // merge, so `clinical`'s in-transaction re-point moves the *visit* to the kept patient
-    // immediately, but the *charge* stays on the dropped patient until the async
-    // `merge-ledger` job re-points the ledger entry (design Q9). Pausing the queue holds that
-    // job so the test can read the summary inside the window.
+  it('moves a charge posted before the merge with the merge, so the summary is right at once', async () => {
+    // The reverse order from the test above: the visit completes (and charges) before the merge.
+    // Both re-points run in the merge transaction (H8): the visit and its charge are on the kept
+    // patient when the merge answers.
     const kept = await createPatient('Charge Window Kept');
     const dropped = await patientOwing('Charge Window Dropped', '40');
     const visit = await chargeableVisit(dropped);
@@ -474,31 +476,10 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
       expect.objectContaining({ patient_id: dropped.id, amount: '117.00' }),
     ]);
 
-    const queue = testApp.app.get<Queue>(getQueueToken(BILLING_QUEUE));
-    await queue.pause();
-    try {
-      await merge(kept.id, dropped.id);
-      // The visit itself was re-pointed to the kept patient in the merge transaction (E3); its
-      // charge is still on the dropped patient because the job hasn't run.
-      expect(await chargesOf(visit.id)).toEqual([
-        expect.objectContaining({ patient_id: dropped.id, amount: '117.00' }),
-      ]);
-      expect(await summary(visit.id)).toEqual({
-        visitId: visit.id,
-        currency: 'USD',
-        visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
-        previous: '40.00',
-        totalOutstanding: '157.00',
-        payments: [],
-      });
-    } finally {
-      await queue.resume();
-    }
-
-    // Once the job has moved the charge onto the kept patient, the figures are unchanged.
-    await expect
-      .poll(async () => await chargesOf(visit.id))
-      .toEqual([expect.objectContaining({ patient_id: kept.id, amount: '117.00' })]);
+    await merge(kept.id, dropped.id);
+    expect(await chargesOf(visit.id)).toEqual([
+      expect.objectContaining({ patient_id: kept.id, amount: '117.00' }),
+    ]);
     expect(await summary(visit.id)).toEqual({
       visitId: visit.id,
       currency: 'USD',

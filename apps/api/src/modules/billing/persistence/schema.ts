@@ -38,7 +38,7 @@ const money = () => numeric({ precision: 12, scale: 2 });
  * The patient ledger (feature 3). `amount` is signed — positive means the patient owes — and
  * stamped with the tenant currency at write time (ADR-0015: a currency change converts nothing).
  * `patient_id` has no foreign key: `patients` owns that table (CLAUDE.md §4 rule 1). Entries are
- * never edited or deleted; only the merge job re-points `patient_id` (design Q9).
+ * never edited or deleted; only the merge re-point changes `patient_id` (ADR-0036).
  *
  * The visit kinds (`VISIT_LEDGER_KINDS`) name their visit in `visit_id` — no foreign key either,
  * `clinical` owns `visits`: the `visit_charge` (feature 4a, ADR-0024), then any number of
@@ -66,10 +66,20 @@ export const ledgerEntries = pgTable(
     visitId: uuid(),
     /** The amendment a `visit_charge_adjustment` posts; set iff the kind is that (4b). */
     amendmentId: uuid(),
+    /**
+     * The `Idempotency-Key` of the request that recorded an opening balance or an adjustment, and
+     * the fingerprint of that request (feature 7, H5): a retry finds this entry instead of
+     * recording a second one.
+     */
+    idempotencyKey: uuid(),
+    idempotencyHash: text(),
     ...timestamps(),
   },
   (table) => [
     index('ledger_entries_tenant_idx').on(table.tenantId),
+    uniqueIndex('ledger_entries_idempotency_key_unique')
+      .on(table.tenantId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
     index('ledger_entries_patient_idx').on(table.tenantId, table.patientId),
     // Target of the composite foreign key from `ledger_entry_lines`.
     unique('ledger_entries_tenant_id_unique').on(table.tenantId, table.id),
@@ -163,7 +173,7 @@ export const allocationKind = pgEnum('allocation_kind', [
  * Payments, refunds and voids on a patient's account (feature 5, spec P1–P11). Each row posts one
  * ledger entry (`ledger_entry_id`: `payment` negative, `payment_refund` / `payment_void`
  * positive), so the ledger stays the balance. Append-only like the ledger: corrections are new
- * rows (`reverses_payment_id`); only the merge job may re-point `patient_id`.
+ * rows (`reverses_payment_id`); only the merge re-point may change `patient_id`.
  *
  * A household payment (B5) is one row per paid account sharing `receipt_number` and
  * `household_group_id`. Refunds and voids carry their payment's receipt number. A replayed

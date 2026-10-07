@@ -279,6 +279,25 @@ export const paymentHistoryItemSchema = transactionSchema.extend({
 });
 export type PaymentHistoryItem = z.infer<typeof paymentHistoryItemSchema>;
 
+/**
+ * A balance adjustment in the account's history (feature 7, H4): its own row beside the
+ * payments. `amount` is signed (negative = the patient owes less); `reason` is one of
+ * `ADJUSTMENT_REASONS`, or free text on entries older than that list.
+ */
+export const accountAdjustmentSchema = z.object({
+  id: idSchema,
+  date: isoDateSchema,
+  amount: balanceAmountSchema,
+  currency: currencySchema,
+  reason: z.string().nullable(),
+  note: z.string().nullable(),
+  recordedBy: z.string().nullable(),
+  recordedAt: z.string(),
+  /** The account's balance right after it, as the payments' Remaining. */
+  remaining: balanceAmountSchema,
+});
+export type AccountAdjustment = z.infer<typeof accountAdjustmentSchema>;
+
 /** The payer's household (B5, Q4): their own account if they are a patient, and every account
  * they are the billing contact for; owing ones count toward `total`. */
 export const householdSchema = z.object({
@@ -315,6 +334,8 @@ export const patientAccountSchema = z.object({
   /** This patient as a payer: the contact that is them, when they bill for anyone (a parent). */
   payerFor: payerSchema.nullable(),
   history: z.array(paymentHistoryItemSchema),
+  /** Balance adjustments in the tenant currency, newest first (H4). */
+  adjustments: z.array(accountAdjustmentSchema),
 });
 export type PatientAccount = z.infer<typeof patientAccountSchema>;
 
@@ -397,6 +418,8 @@ export const statementSchema = z.object({
       visitNumber: z.number().int().positive().nullable(),
       receiptNumber: z.number().int().positive().nullable(),
       method: paymentMethodSchema.nullable(),
+      /** An adjustment's reason (`ADJUSTMENT_REASONS`, or older free text); null on other lines. */
+      reason: z.string().nullable(),
       note: z.string().nullable(),
       /** Signed: positive = owed. */
       amount: balanceAmountSchema,

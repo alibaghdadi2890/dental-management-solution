@@ -6,10 +6,12 @@ import {
   type PlanSession,
   surfacesSchema,
   toothCodeSchema,
+  type ToothPresenceRecord,
   type TreatmentPlan,
 } from '@dcm/contracts';
 import type { StoredDiagnosisRecord } from '../persistence/patient-diagnoses.repository';
 import type { StoredPlanGroup } from '../persistence/plan-groups.repository';
+import type { ToothPresenceLine } from '../persistence/tooth-presence.repository';
 import type { StoredTreatmentPlan } from '../persistence/treatment-plans.repository';
 import type { FinishedService } from '../persistence/visit-services.repository';
 
@@ -107,5 +109,27 @@ export function toHistoryService(
       currency,
     },
     planId: service.planId,
+  };
+}
+
+/** A presence row as the API answers it: the row plus who, which visit and which service. */
+export function toPresenceRecord(
+  { row, visitNumber, serviceCode, serviceName }: ToothPresenceLine,
+  dentistName: string,
+): ToothPresenceRecord {
+  return {
+    id: row.id,
+    toothCode: toothCodeSchema.parse(row.toothCode),
+    presence: row.presence,
+    occurredOn: row.occurredOn,
+    reason: row.reason,
+    dentistId: row.dentistId,
+    dentistName,
+    visitId: row.recordedInVisitId,
+    visitNumber,
+    serviceId: row.serviceId,
+    serviceCode,
+    serviceName,
+    recordedAt: row.createdAt.toISOString(),
   };
 }

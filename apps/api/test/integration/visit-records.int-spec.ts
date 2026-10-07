@@ -13,7 +13,6 @@ import type {
   StaffUser,
   StartVisitResult,
   Tenant,
-  ToothPresenceResult,
   Visit,
   VisitResult,
 } from '@dcm/contracts';
@@ -68,7 +67,10 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
   };
 
   const createPatient = async (fullName: string): Promise<Patient> => {
-    const response = await owner.post('/api/v1/patients').send({ fullName, phone: '71 000 000' });
+    const response = await owner
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send({ fullName, phone: '71 000 000' });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
@@ -945,80 +947,6 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
     });
   });
 
-  describe('tooth presence', () => {
-    it('upserts the tooth at a succession position, with an event', async () => {
-      const patient = await createPatient('Tooth Presence');
-      const visit = await startVisit(patient);
-      const first = await ok<ToothPresenceResult>(
-        dentist.agent.put(path(visit.id, 'teeth/14')).send({ present: 'primary' }),
-      );
-      expect(first.record).toEqual({ position: '14', present: 'primary' });
-      const second = await ok<ToothPresenceResult>(
-        dentist.agent.put(path(visit.id, 'teeth/14')).send({ present: 'permanent' }),
-      );
-      expect(second.record).toEqual({ position: '14', present: 'permanent' });
-
-      const rows = await database.ownerPool.query<{
-        id: string;
-        present: string;
-        changed_in_visit_id: string;
-        changed_by: string;
-      }>(
-        'select id, present, changed_in_visit_id, changed_by from tooth_status where patient_id = $1',
-        [patient.id],
-      );
-      expect(rows.rows).toHaveLength(1);
-      const [row] = rows.rows;
-      expect(row).toMatchObject({
-        present: 'permanent',
-        changed_in_visit_id: visit.id,
-        changed_by: dentist.user.id,
-      });
-      if (!row) throw new Error('no tooth_status row');
-      const audit = await auditOf(`resourceType=tooth_status&resourceId=${row.id}`);
-      expect(audit.map((entry) => entry.after)).toEqual(
-        expect.arrayContaining([
-          { position: '14', present: 'primary' },
-          { position: '14', present: 'permanent' },
-        ]),
-      );
-      expect(audit.every((entry) => entry.action === 'tooth_status.set')).toBe(true);
-      await eventsFor('visitId', visit.id, ['ToothStatusChanged', 'ToothStatusChanged']);
-    });
-
-    it('changes, audits and publishes nothing when the tooth already has that value', async () => {
-      const patient = await createPatient('Tooth Unchanged');
-      const visit = await startVisit(patient);
-      const set = () =>
-        ok<ToothPresenceResult>(
-          dentist.agent.put(path(visit.id, 'teeth/24')).send({ present: 'primary' }),
-        );
-      expect((await set()).record).toEqual({ position: '24', present: 'primary' });
-      expect((await set()).record).toEqual({ position: '24', present: 'primary' });
-
-      const rows = await database.ownerPool.query<{ id: string }>(
-        'select id from tooth_status where patient_id = $1',
-        [patient.id],
-      );
-      const [row] = rows.rows;
-      if (!row) throw new Error('no tooth_status row');
-      expect(await actionsOn('tooth_status', row.id)).toEqual(['tooth_status.set']);
-      await eventsFor('visitId', visit.id, ['ToothStatusChanged']);
-    });
-
-    it('refuses a position that is not a permanent position 1–5 (400 validation_failed)', async () => {
-      const patient = await createPatient('Tooth Invalid');
-      const visit = await startVisit(patient);
-      for (const position of ['16', '54', '19', 'x']) {
-        const response = await dentist.agent
-          .put(path(visit.id, `teeth/${position}`))
-          .send({ present: 'primary' });
-        expect(response.status, position).toBe(400);
-        expect(problem(response.body).errors?.[0]?.path).toBe('position');
-      }
-    });
-  });
-
   describe('access and lifecycle', () => {
     it('refuses front desk on every record route (403)', async () => {
       const patient = await createPatient('Records Front Desk');
@@ -1042,7 +970,8 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         frontdesk.agent.post(path(visit.id, `plans/${id}/perform`)),
         frontdesk.agent.post(path(visit.id, `plans/${id}/cancel`)),
         frontdesk.agent.delete(path(visit.id, `plans/${id}`)),
-        frontdesk.agent.put(path(visit.id, 'teeth/14')).send({ present: 'primary' }),
+        frontdesk.agent.put(path(visit.id, 'teeth/14/presence')).send({ presence: 'missing' }),
+        frontdesk.agent.delete(path(visit.id, `presence/${id}`)),
       ];
       for (const response of await Promise.all(attempts)) {
         expect(response.status, JSON.stringify(response.body)).toBe(403);
@@ -1058,7 +987,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         'visit.not_live',
       );
       await expectProblem(
-        dentist.agent.put(path(earlier, 'teeth/14')).send({ present: 'primary' }),
+        dentist.agent.put(path(earlier, 'teeth/14/presence')).send({ presence: 'missing' }),
         409,
         'visit.not_live',
       );

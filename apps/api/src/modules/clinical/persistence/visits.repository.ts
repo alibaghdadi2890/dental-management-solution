@@ -22,7 +22,7 @@ import { isLive, LIVE_VISIT_STATUSES } from '../domain/visit-lifecycle';
 import { RoomBusyError, VisitNotFoundError, VisitNotLiveError } from '../domain/visit-errors';
 import {
   patientDiagnoses,
-  toothStatus,
+  toothPresences,
   treatmentPlans,
   treatmentPlanSessions,
   visits,
@@ -91,6 +91,9 @@ const counted = inArray(visits.status, [...COUNTED_VISIT_STATUSES]);
 const COUNTED_STATUS_LIST = sql.raw(
   `(${COUNTED_VISIT_STATUSES.map((status) => `'${status}'`).join(', ')})`,
 );
+
+/** The counts of the treatment summary that one query over visits and records answers. */
+export type ClinicalCounts = Omit<ClinicalSummary, 'missingTeeth' | 'implants'>;
 
 /**
  * The tenant's `visits` (RLS through `TenantDb`; `tenant_id` is never passed — CLAUDE.md §5). The
@@ -316,9 +319,10 @@ export class VisitsRepository {
   /**
    * The Record overview's treatment counts (W8) in one query of scalar subqueries: counted
    * visits (completed or amended, never voided — D18); active diagnoses and `planned` plans that aren't removed; and, over the services of
-   * counted visits that aren't removed, the distinct teeth and the number of services.
+   * counted visits that aren't removed, the distinct teeth and the number of services. The
+   * missing teeth and implants come from the presence rows (`ChartService.summary`).
    */
-  async clinicalSummary(patientId: string): Promise<ClinicalSummary> {
+  async clinicalSummary(patientId: string): Promise<ClinicalCounts> {
     const completedServices = sql`from ${visitServices} join ${visits} on ${visits.id} = ${visitServices.visitId} where ${visits.patientId} = ${patientId} and ${visits.status} in ${COUNTED_STATUS_LIST} and ${isNull(visitServices.deletedAt)}`;
     const counts = {
       visits: sql`select count(*) from ${visits} where ${visits.patientId} = ${patientId} and ${visits.status} in ${COUNTED_STATUS_LIST}`,
@@ -327,7 +331,7 @@ export class VisitsRepository {
       // count(distinct …) skips null tooth codes: jaw-level services treat no tooth.
       teethTreated: sql`select count(distinct ${visitServices.toothCode}) ${completedServices}`,
       servicesPerformed: sql`select count(*) ${completedServices}`,
-    } satisfies Record<keyof ClinicalSummary, SQL>;
+    } satisfies Record<keyof ClinicalCounts, SQL>;
     const columns = sql.join(
       Object.entries(counts).map(
         ([name, subquery]) => sql`(${subquery})::int as ${sql.identifier(name)}`,
@@ -336,7 +340,7 @@ export class VisitsRepository {
     );
     const {
       rows: [row],
-    } = await this.db.run((tx) => tx.execute<ClinicalSummary>(sql`select ${columns}`));
+    } = await this.db.run((tx) => tx.execute<ClinicalCounts>(sql`select ${columns}`));
     if (!row) throw new Error('clinical summary returned no row');
     return row;
   }
@@ -487,7 +491,7 @@ export class VisitsRepository {
             sql`select 1 from ${treatmentPlanSessions} where ${treatmentPlanSessions.visitId} = ${visits.id} and ${isNull(treatmentPlanSessions.deletedAt)}`,
           ),
           toothChanges: fact(
-            sql`select 1 from ${toothStatus} where ${toothStatus.patientId} = ${visits.patientId} and ${toothStatus.changedInVisitId} = ${visits.id}`,
+            sql`select 1 from ${toothPresences} where ${toothPresences.patientId} = ${visits.patientId} and ${toothPresences.recordedInVisitId} = ${visits.id} and ${isNull(toothPresences.deletedAt)}`,
           ),
         })
         .from(visits)

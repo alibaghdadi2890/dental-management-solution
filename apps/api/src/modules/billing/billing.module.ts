@@ -1,4 +1,3 @@
-import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit';
 import { ClinicalModule } from '../clinical';
@@ -7,9 +6,9 @@ import { TenancyModule } from '../tenancy';
 import { UsersModule } from '../users';
 import { BillingService } from './application/billing.service';
 import { ChargeLabels } from './application/charge-labels';
+import { CurrencyLockSubscriber } from './application/currency-lock.subscriber';
 import { MergeLedgerSubscriber } from './application/merge-ledger.subscriber';
 import { LedgerWriter } from './application/ledger-writer';
-import { BILLING_QUEUE, MergeLedgerWorker } from './application/merge-ledger.worker';
 import { PatientExportService } from './application/patient-export.service';
 import { PatientViewsService } from './application/patient-views.service';
 import { PaymentViewsService } from './application/payment-views.service';
@@ -29,18 +28,11 @@ import { PaymentsRepository } from './persistence/payments.repository';
  * See docs/modules/billing.md, ADR-0017 and ADR-0024. Depends on `patients` (existence, create
  * with an opening balance, the list it composes views on), `tenancy` (currency, time zone),
  * `users` (dentist names in the export) and `clinical` (a visit's charge facts and money, W21);
- * none of them imports `billing`. Consumes `PatientsMerged`, and `VisitCompleted`,
- * `VisitAmended` and `VisitVoided` in their transactions. Payments (feature 5): ADR-0027–0029.
+ * none of them imports `billing`. Consumes `PatientsMerged`, `VisitCompleted`, `VisitAmended`,
+ * `VisitVoided` and `TenantCurrencyChanged` in their transactions. Payments (feature 5): ADR-0027–0029.
  */
 @Module({
-  imports: [
-    AuditModule,
-    ClinicalModule,
-    PatientsModule,
-    TenancyModule,
-    UsersModule,
-    BullModule.registerQueue({ name: BILLING_QUEUE }),
-  ],
+  imports: [AuditModule, ClinicalModule, PatientsModule, TenancyModule, UsersModule],
   // The static `patients/...` and `visits/...` paths first (docs/modules/billing.md, HTTP).
   controllers: [
     BillingPatientsController,
@@ -61,8 +53,8 @@ import { PaymentsRepository } from './persistence/payments.repository';
     PatientViewsService,
     PatientExportService,
     MergeLedgerSubscriber,
-    MergeLedgerWorker,
     VisitChargeSubscriber,
+    CurrencyLockSubscriber,
     VisitViewsService,
   ],
   exports: [BillingService],

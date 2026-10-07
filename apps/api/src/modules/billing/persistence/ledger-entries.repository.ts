@@ -12,7 +12,10 @@ import { ledgerEntries, ledgerEntryLines } from './schema';
 
 type LedgerEntryRow = typeof ledgerEntries.$inferSelect;
 
-export type NewLedgerEntry = Omit<LedgerEntry, 'id' | 'createdAt' | 'updatedAt'>;
+export type NewLedgerEntry = Omit<LedgerEntry, 'id' | 'createdAt' | 'updatedAt'> & {
+  /** The request's `Idempotency-Key` and fingerprint, for the routes that take one (H5). */
+  idempotency?: { key: string; hash: string };
+};
 
 function toDomain(row: LedgerEntryRow): LedgerEntry {
   return {
@@ -35,16 +38,45 @@ function toDomain(row: LedgerEntryRow): LedgerEntry {
 /**
  * The tenant's `ledger_entries` (RLS-scoped through `TenantDb`; `tenant_id` is never passed —
  * CLAUDE.md §5). Entries are never edited or deleted; the one update is `repointPatient`, which
- * only the merge job calls (design Q9).
+ * only the merge re-point calls (ADR-0036).
  */
 @Injectable()
 export class LedgerEntriesRepository {
   constructor(private readonly db: TenantDb) {}
 
-  async insert(entry: NewLedgerEntry): Promise<LedgerEntry> {
-    const [row] = await this.db.run((tx) => tx.insert(ledgerEntries).values(entry).returning());
+  async insert({ idempotency, ...entry }: NewLedgerEntry): Promise<LedgerEntry> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .insert(ledgerEntries)
+        .values({
+          ...entry,
+          idempotencyKey: idempotency?.key ?? null,
+          idempotencyHash: idempotency?.hash ?? null,
+        })
+        .returning(),
+    );
     if (!row) throw new Error('ledger entry insert returned no row');
     return toDomain(row);
+  }
+
+  /**
+   * Serialises requests that share an `Idempotency-Key` (H5): a transaction advisory lock, so a
+   * retry waits for the first request and then finds its entry.
+   */
+  async lockIdempotencyKey(key: string): Promise<void> {
+    await this.db.run((tx) =>
+      tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`ledger-key:${key}`}, 0))`),
+    );
+  }
+
+  /** The entry a request with this `Idempotency-Key` recorded, with the request's fingerprint. */
+  async findByIdempotencyKey(
+    key: string,
+  ): Promise<{ entry: LedgerEntry; hash: string | null } | undefined> {
+    const [row] = await this.db.run((tx) =>
+      tx.select().from(ledgerEntries).where(eq(ledgerEntries.idempotencyKey, key)).limit(1),
+    );
+    return row ? { entry: toDomain(row), hash: row.idempotencyHash } : undefined;
   }
 
   /** The lines of a `visit_charge` entry just inserted in this transaction (spec V7). */
@@ -64,6 +96,14 @@ export class LedgerEntriesRepository {
     await this.db.run((tx) =>
       tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`account:${patientId}`}, 0))`),
     );
+  }
+
+  /** Whether the tenant has any ledger entry at all (the currency lock, ADR-0035). */
+  async any(): Promise<boolean> {
+    const rows = await this.db.run((tx) =>
+      tx.select({ id: ledgerEntries.id }).from(ledgerEntries).limit(1),
+    );
+    return rows.length > 0;
   }
 
   /** Every entry of `patientId`, oldest first (the statement, the running Remaining). */

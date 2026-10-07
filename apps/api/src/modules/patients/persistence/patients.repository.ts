@@ -165,6 +165,8 @@ export interface NewPatient {
   medicalAlerts: string[];
   primaryDentistId: string | null;
   externalId: string | null;
+  /** The create request's `Idempotency-Key` and body fingerprint, when it sent a key (H5). */
+  idempotency: { key: string; hash: string } | null;
 }
 
 /**
@@ -219,11 +221,33 @@ export class PatientsRepository {
           medicalAlerts: input.medicalAlerts,
           primaryDentistId: input.primaryDentistId,
           externalId: input.externalId,
+          idempotencyKey: input.idempotency?.key ?? null,
+          idempotencyHash: input.idempotency?.hash ?? null,
         })
         .returning();
       if (!row) throw new Error('patient insert returned no row');
       return toDomain(row);
     });
+  }
+
+  /**
+   * Serialises create requests that share an `Idempotency-Key` (H5): a transaction advisory lock,
+   * so a retry waits for the first request and then finds its row.
+   */
+  async lockIdempotencyKey(key: string): Promise<void> {
+    await this.db.run((tx) =>
+      tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`patient-key:${key}`}, 0))`),
+    );
+  }
+
+  /** The patient a create request with this `Idempotency-Key` made, with its body fingerprint. */
+  async findByIdempotencyKey(
+    key: string,
+  ): Promise<{ patient: DomainPatient; hash: string | null } | undefined> {
+    const [row] = await this.db.run((tx) =>
+      tx.select().from(patients).where(eq(patients.idempotencyKey, key)).limit(1),
+    );
+    return row ? { patient: toDomain(row), hash: row.idempotencyHash } : undefined;
   }
 
   update(id: string, patch: PatientPatch): Promise<DomainPatient | undefined> {

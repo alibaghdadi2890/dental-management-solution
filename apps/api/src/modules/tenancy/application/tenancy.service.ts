@@ -14,6 +14,7 @@ import { RequestContext } from '../../../platform/cls/request-context';
 import { PlatformAdminDb } from '../../../platform/db/platform-admin-db';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { isUniqueViolation } from '../../../platform/db/unique-violation';
+import { EventBus } from '../../../platform/events/event-bus';
 import { newId } from '../../../platform/kernel/id';
 import { AuditService } from '../../audit';
 import { assertUniqueRooms } from '../domain/room-batch';
@@ -24,6 +25,7 @@ import {
   TenantNotFoundError,
   TenantSlugTakenError,
 } from '../domain/tenancy-errors';
+import { TENANT_CURRENCY_CHANGED, type TenantCurrencyChanged } from '../events/tenant-events';
 import { BranchesRepository } from '../persistence/branches.repository';
 import { RoomsRepository } from '../persistence/rooms.repository';
 import { type NewTenant, TenantsRepository } from '../persistence/tenants.repository';
@@ -44,6 +46,7 @@ export class TenancyService {
     private readonly tenants: TenantsRepository,
     private readonly branches: BranchesRepository,
     private readonly rooms: RoomsRepository,
+    private readonly events: EventBus,
   ) {}
 
   // --- Platform administration (cross-tenant) ---
@@ -97,11 +100,23 @@ export class TenancyService {
     return (await this.tenants.current())?.status ?? null;
   }
 
+  /**
+   * A currency change is announced inside the transaction: a module that holds money in the old
+   * currency refuses it by throwing (422 `tenant.currency_locked`, ADR-0035).
+   */
   async updateSettings(patch: TenantSettingsPatch): Promise<Tenant> {
     this.context.requirePermission('tenant:write');
     return this.tenantDb.run(async () => {
       const before = await this.requireCurrent();
       const after = await this.tenants.update(before.id, patch);
+      if (after.currency !== before.currency) {
+        await this.events.publish(
+          this.events.create(TENANT_CURRENCY_CHANGED, {
+            from: before.currency,
+            to: after.currency,
+          }) satisfies TenantCurrencyChanged,
+        );
+      }
       await this.audit.record({
         action: 'tenant.update',
         resourceType: 'tenant',

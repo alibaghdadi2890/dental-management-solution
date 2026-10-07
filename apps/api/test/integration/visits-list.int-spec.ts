@@ -54,7 +54,13 @@ describe('clinical + billing: the visits list, its summary and the visit-based p
   };
 
   const createPatient = (fullName: string) =>
-    ok<Patient>(owner.post('/api/v1/patients').send({ fullName, phone: '71 000 000' }), 201);
+    ok<Patient>(
+      owner
+        .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
+        .send({ fullName, phone: '71 000 000' }),
+      201,
+    );
 
   const start = async (patient: Patient, roomId?: string) =>
     (

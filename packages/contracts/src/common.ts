@@ -190,3 +190,9 @@ export const problemDetailsSchema = z.object({
   lockedUntil: isoDateTimeSchema.optional(),
 });
 export type ProblemDetails = z.infer<typeof problemDetailsSchema>;
+
+/** Query-string booleans arrive as text; wrap in `blankToUndefined` so blank means "not set". */
+export const queryBooleanSchema = z
+  .enum(['true', 'false'])
+  .transform((value) => value === 'true')
+  .optional();

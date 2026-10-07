@@ -16,13 +16,13 @@ import {
   presentTooth,
   quadrant,
   slotFor,
-  successionPositionSchema,
-  SUCCESSION_POSITIONS,
   successorOf,
   surfaceCells,
   surfacesSchema,
   toothCodeSchema,
   toothLabel,
+  toothPresenceStateSchema,
+  TOOTH_PRESENCE_STATES,
   toUniversal,
   validSurfaces,
   type PermanentToothCode,
@@ -349,18 +349,11 @@ describe('toothCodeSchema', () => {
   });
 });
 
-describe('SUCCESSION_POSITIONS / successionPositionSchema', () => {
-  it('is exactly the 20 permanent codes at positions 1–5', () => {
-    expect(SUCCESSION_POSITIONS).toHaveLength(20);
-    expect(SUCCESSION_POSITIONS.every((code) => position(code) <= 5)).toBe(true);
-    expect(SUCCESSION_POSITIONS).toContain('14');
-    expect(SUCCESSION_POSITIONS).not.toContain('16');
-  });
-
-  it('rejects a position beyond 5 and a primary code', () => {
-    expect(successionPositionSchema.safeParse('14').success).toBe(true);
-    expect(successionPositionSchema.safeParse('16').success).toBe(false);
-    expect(successionPositionSchema.safeParse('54').success).toBe(false);
+describe('toothPresenceStateSchema', () => {
+  it('knows the four states and nothing else', () => {
+    expect(TOOTH_PRESENCE_STATES).toEqual(['present', 'missing', 'not_erupted', 'implant']);
+    expect(toothPresenceStateSchema.safeParse('implant').success).toBe(true);
+    expect(toothPresenceStateSchema.safeParse('primary').success).toBe(false);
   });
 });
 

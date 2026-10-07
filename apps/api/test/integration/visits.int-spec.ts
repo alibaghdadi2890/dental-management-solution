@@ -102,6 +102,7 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
   const createPatient = async (clinic: Clinic, fullName: string): Promise<Patient> => {
     const response = await clinic.owner
       .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
       .send({ fullName, phone: '71 000 000' });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
@@ -741,18 +742,20 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
         [visit.id],
       );
       await database.ownerPool.query(
-        `insert into tooth_status (id, tenant_id, patient_id, position, present,
-                                   changed_in_visit_id, changed_by)
-         values ($1, $2, $3, '14', 'permanent', $4, $5)`,
-        [newId(), main.tenant.id, patient.id, visit.id, main.ownerUserId],
+        `insert into tooth_presences (id, tenant_id, patient_id, tooth_code, presence,
+                                      dentist_id, recorded_in_visit_id, recorded_by)
+         values ($1, $2, $3, '14', 'missing', $4, $5, $6)`,
+        [newId(), main.tenant.id, patient.id, visit.dentistId, visit.id, main.ownerUserId],
       );
       const withTooth = await act(main.owner, visit.id, 'discard');
       expect(withTooth.status).toBe(409);
       expect(problem(withTooth.body).code).toBe('visit.not_empty');
 
-      await database.ownerPool.query('delete from tooth_status where changed_in_visit_id = $1', [
-        visit.id,
-      ]);
+      // Taken back (an Undo): the visit is empty again.
+      await database.ownerPool.query(
+        'update tooth_presences set deleted_at = now() where recorded_in_visit_id = $1',
+        [visit.id],
+      );
       expect((await acted(main.owner, visit.id, 'discard')).status).toBe('discarded');
     });
   });

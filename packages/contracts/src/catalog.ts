@@ -40,6 +40,15 @@ export const nonNegativeAmountSchema = decimalAmountSchema.refine(
   'Must not be negative',
 );
 
+/**
+ * What performing a per-tooth service does to the tooth's presence on the chart (feature 7, H2):
+ * nothing, it takes the tooth out (`removes`: extractions), or it puts an implant there
+ * (`implant`: implant placement). Always `none` for a service that is not per tooth.
+ */
+export const TOOTH_EFFECTS = ['none', 'removes', 'implant'] as const;
+export const toothEffectSchema = z.enum(TOOTH_EFFECTS);
+export type ToothEffect = z.infer<typeof toothEffectSchema>;
+
 export const serviceItemSchema = z.object({
   id: idSchema,
   code: z.string(),
@@ -50,6 +59,7 @@ export const serviceItemSchema = z.object({
   /** Listed under "Frequently used" at the top of the visit drawer. */
   frequent: z.boolean(),
   active: z.boolean(),
+  toothEffect: toothEffectSchema,
 });
 export type ServiceItem = z.infer<typeof serviceItemSchema>;
 
@@ -64,16 +74,27 @@ export const diagnosisItemSchema = z.object({
 export type DiagnosisItem = z.infer<typeof diagnosisItemSchema>;
 
 /** A row of a batch save: the whole row, `id` absent for a new one. */
-export const serviceItemInputSchema = z.object({
-  id: idSchema.optional(),
-  code: catalogCodeSchema,
-  name: nameSchema,
-  category: catalogCategorySchema,
-  chargeUnit: chargeUnitSchema,
-  price: nonNegativeAmountSchema,
-  frequent: z.boolean().default(false),
-  active: z.boolean().default(true),
-});
+export const serviceItemInputSchema = z
+  .object({
+    id: idSchema.optional(),
+    code: catalogCodeSchema,
+    name: nameSchema,
+    category: catalogCategorySchema,
+    chargeUnit: chargeUnitSchema,
+    price: nonNegativeAmountSchema,
+    frequent: z.boolean().default(false),
+    active: z.boolean().default(true),
+    toothEffect: toothEffectSchema.default('none'),
+  })
+  .superRefine((row, context) => {
+    if (row.toothEffect !== 'none' && row.chargeUnit !== 'per_tooth') {
+      context.addIssue({
+        code: 'custom',
+        path: ['toothEffect'],
+        message: 'Only a service charged per tooth can change a tooth',
+      });
+    }
+  });
 export type ServiceItemInput = z.infer<typeof serviceItemInputSchema>;
 
 export const diagnosisItemInputSchema = z.object({

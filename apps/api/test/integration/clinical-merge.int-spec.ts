@@ -19,7 +19,7 @@ import type { PoolClient } from 'pg';
 import type { Response } from 'supertest';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { ToothStatusRepository } from '../../src/modules/clinical/persistence/tooth-status.repository';
+import { ToothPresenceRepository } from '../../src/modules/clinical/persistence/tooth-presence.repository';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
@@ -40,7 +40,7 @@ interface Owned {
   visits: number;
   diagnoses: number;
   plans: number;
-  toothStatus: number;
+  toothPresences: number;
 }
 
 interface RepointAudit {
@@ -79,7 +79,10 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
   };
 
   const createPatient = async (fullName: string): Promise<Patient> => {
-    const response = await owner.post('/api/v1/patients').send({ fullName, phone: '71 000 000' });
+    const response = await owner
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send({ fullName, phone: '71 000 000' });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
@@ -109,12 +112,20 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
   const addFill = (visit: Visit, toothCode: string) =>
     post(visitPath(visit.id, 'services'), { procedureId: fill.id, toothCode });
 
-  const setTooth = async (visit: Visit, position: string, present: 'primary' | 'permanent') => {
+  const setTooth = async (visit: Visit, toothCode: string, presence: 'missing' | 'implant') => {
     const response = await dentist.agent
-      .put(visitPath(visit.id, `teeth/${position}`))
-      .send({ present });
+      .put(visitPath(visit.id, `teeth/${toothCode}/presence`))
+      .send({ presence });
     expect(response.status, JSON.stringify(response.body)).toBe(200);
   };
+
+  /** What is at each tooth that isn't simply present, from the chart. */
+  const presenceOf = async (patient: Patient) =>
+    Object.fromEntries(
+      (await chartOf(patient)).teeth
+        .filter((tooth) => tooth.presence !== 'present')
+        .map((tooth) => [tooth.code, tooth.presence]),
+    );
 
   const complete = (visit: Visit) => dentist.agent.post(visitPath(visit.id, 'complete'));
 
@@ -141,14 +152,14 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
       `select (select count(*) from visits where patient_id = $1)::int as visits,
               (select count(*) from patient_diagnoses where patient_id = $1)::int as diagnoses,
               (select count(*) from treatment_plans where patient_id = $1)::int as plans,
-              (select count(*) from tooth_status where patient_id = $1)::int as "toothStatus"`,
+              (select count(*) from tooth_presences where patient_id = $1)::int as "toothPresences"`,
       [patient.id],
     );
     if (!row) throw new Error('no counts');
     return row;
   };
 
-  const nothing: Owned = { visits: 0, diagnoses: 0, plans: 0, toothStatus: 0 };
+  const nothing: Owned = { visits: 0, diagnoses: 0, plans: 0, toothPresences: 0 };
 
   const repointAudit = async (patient: Patient) =>
     (
@@ -228,27 +239,30 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
     await database.close();
   });
 
-  it("moves the visits, diagnoses, plans and tooth status; the kept patient's tooth status wins", async () => {
+  it('moves the visits, diagnoses, plans and tooth presence; the row recorded last wins a tooth', async () => {
     const kept = await createPatient('Merge Kept Records');
     const dropped = await createPatient('Merge Dropped Records');
     const keptVisit = await startVisit(kept);
-    await setTooth(keptVisit, '14', 'permanent');
+    await setTooth(keptVisit, '14', 'missing');
     await completed(keptVisit);
     const droppedVisit = await startVisit(dropped);
     const finding = await diagnose(droppedVisit, '36');
     const planned = await plan(droppedVisit, '36');
-    await setTooth(droppedVisit, '14', 'primary');
-    await setTooth(droppedVisit, '15', 'primary');
+    await setTooth(droppedVisit, '14', 'implant');
+    await setTooth(droppedVisit, '15', 'missing');
     await completed(droppedVisit);
 
     await merged(owner, kept, dropped);
 
     expect(await owned(dropped)).toEqual(nothing);
-    expect(await owned(kept)).toEqual({ visits: 2, diagnoses: 1, plans: 1, toothStatus: 2 });
+    expect(await owned(kept)).toEqual({ visits: 2, diagnoses: 1, plans: 1, toothPresences: 3 });
+    // History, not state: both records' rows are kept, and 14 is what was recorded last.
+    expect(await presenceOf(kept)).toEqual({ '14': 'implant', '15': 'missing' });
     const chart = await chartOf(kept);
-    expect(chart.toothStatus).toEqual([
-      { position: '14', present: 'permanent' },
-      { position: '15', present: 'primary' },
+    expect(chart.presence.map((row) => [row.toothCode, row.presence])).toEqual([
+      ['14', 'missing'],
+      ['14', 'implant'],
+      ['15', 'missing'],
     ]);
     expect(chart.diagnoses.map((record) => record.id)).toEqual([finding.record.id]);
     expect(chart.plans.map((record) => record.id)).toEqual([planned.record.id]);
@@ -261,19 +275,14 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
         actor_user_id: session.user.id,
         resource_type: 'patient',
         resource_id: kept.id,
-        before: {
-          toothStatusDropped: [
-            { position: '14', present: 'primary', changedInVisitId: droppedVisit.id },
-          ],
-        },
+        before: null,
         after: {
           droppedId: dropped.id,
           visits: 1,
           diagnoses: 1,
           plans: 1,
           planGroups: 0,
-          toothStatusMoved: 1,
-          toothStatusDropped: 1,
+          toothPresences: 2,
         },
       },
     ]);
@@ -316,19 +325,19 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
     const dropped = await createPatient('Merge Dropped Failing');
     const visit = await startVisit(dropped);
     await diagnose(visit, '36');
-    await setTooth(visit, '14', 'primary');
-    const teeth = testApp.app.get(ToothStatusRepository, { strict: false });
-    vi.spyOn(teeth, 'mergeInto').mockRejectedValueOnce(new Error('re-point failed'));
+    await setTooth(visit, '14', 'missing');
+    const presences = testApp.app.get(ToothPresenceRepository, { strict: false });
+    vi.spyOn(presences, 'repointPatient').mockRejectedValueOnce(new Error('re-point failed'));
 
     const failed = await merge(owner, kept, dropped);
     expect(failed.status).toBe(500);
-    expect(await owned(dropped)).toEqual({ visits: 1, diagnoses: 1, plans: 0, toothStatus: 1 });
+    expect(await owned(dropped)).toEqual({ visits: 1, diagnoses: 1, plans: 0, toothPresences: 1 });
     expect(await owned(kept)).toEqual(nothing);
     const patient = await owner.get(`/api/v1/patients/${dropped.id}`);
     expect(patient.body).toMatchObject({ mergedIntoId: null, archivedAt: null });
 
     await merged(owner, kept, dropped);
-    expect(await owned(kept)).toEqual({ visits: 1, diagnoses: 1, plans: 0, toothStatus: 1 });
+    expect(await owned(kept)).toEqual({ visits: 1, diagnoses: 1, plans: 0, toothPresences: 1 });
   });
 
   it('moves the named plans and the plans made without a visit', async () => {
@@ -362,7 +371,7 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
 
     await merged(frontdesk.agent, kept, dropped);
 
-    expect(await owned(kept)).toEqual({ visits: 1, diagnoses: 0, plans: 1, toothStatus: 0 });
+    expect(await owned(kept)).toEqual({ visits: 1, diagnoses: 0, plans: 1, toothPresences: 0 });
     expect(await repointAudit(kept)).toEqual([
       expect.objectContaining({ actor_user_id: frontdesk.user.id }),
     ]);
@@ -374,7 +383,7 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
     const c = await createPatient('Merge Chain C');
     const first = await startVisit(a);
     await diagnose(first, '11');
-    await setTooth(first, '15', 'primary');
+    await setTooth(first, '15', 'missing');
     await completed(first);
     const second = await startVisit(b);
     await plan(second, '21');
@@ -384,7 +393,7 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
 
     expect(await owned(a)).toEqual(nothing);
     expect(await owned(b)).toEqual(nothing);
-    expect(await owned(c)).toEqual({ visits: 2, diagnoses: 1, plans: 1, toothStatus: 1 });
+    expect(await owned(c)).toEqual({ visits: 2, diagnoses: 1, plans: 1, toothPresences: 1 });
   });
 
   describe('locks (ADR-0023)', () => {
@@ -431,29 +440,36 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
       }
     };
 
-    it("waits for charting on the kept patient's live visit: its tooth status wins", async () => {
+    it("waits for charting on the kept patient's live visit: what it set last is the presence", async () => {
       const kept = await createPatient('Merge Kept Charting');
       const dropped = await createPatient('Merge Dropped Charting');
       const keptVisit = await startVisit(kept);
       const droppedVisit = await startVisit(dropped);
-      await setTooth(droppedVisit, '14', 'primary');
+      await setTooth(droppedVisit, '14', 'missing');
 
       // A charting change in flight on the kept visit: the visit locked, tooth 14 set.
       const response = await whileHolding(
         async (holder) => {
           await holder.query('select id from visits where id = $1 for update', [keptVisit.id]);
           await holder.query(
-            `insert into tooth_status (id, patient_id, position, present, changed_in_visit_id,
-                                       changed_by)
-             values ($1, $2, '14', 'permanent', $3, $4)`,
-            [newId(), kept.id, keptVisit.id, dentist.user.id],
+            `insert into tooth_presences (id, patient_id, tooth_code, presence, occurred_on,
+                                          dentist_id, recorded_in_visit_id, recorded_by)
+             values ($1, $2, '14', 'implant', $3, $4, $5, $6)`,
+            [
+              newId(),
+              kept.id,
+              keptVisit.localDate,
+              keptVisit.dentistId,
+              keptVisit.id,
+              dentist.user.id,
+            ],
           );
         },
         () => merge(owner, kept, dropped),
       );
 
       expect(response.status, JSON.stringify(response.body)).toBe(200);
-      expect((await chartOf(kept)).toothStatus).toEqual([{ position: '14', present: 'permanent' }]);
+      expect(await presenceOf(kept)).toEqual({ '14': 'implant' });
       expect(await owned(dropped)).toEqual(nothing);
     });
 
@@ -488,7 +504,7 @@ describe('clinical: the merge re-point, in the merge transaction (V10, W24)', ()
 
       expect(response.status, JSON.stringify(response.body)).toBe(200);
       expect(await owned(dropped)).toEqual(nothing);
-      expect(await owned(kept)).toEqual({ visits: 1, diagnoses: 1, plans: 0, toothStatus: 0 });
+      expect(await owned(kept)).toEqual({ visits: 1, diagnoses: 1, plans: 0, toothPresences: 0 });
     });
   });
 });

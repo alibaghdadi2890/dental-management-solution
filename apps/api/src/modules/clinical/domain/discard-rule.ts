@@ -2,7 +2,7 @@
  * What a visit has put on the record, counted by the service from the rows that point at it:
  * non-deleted services; non-deleted diagnoses and plans recorded in it; diagnoses resolved and
  * plans performed or cancelled in it; sessions of plans in progress (ADR-0032) that aren't
- * removed; `tooth_status` rows changed in it; and its notes.
+ * removed; tooth presence set in it, by hand or by a service (feature 7); and its notes.
  */
 export interface DiscardFacts {
   services: number;

@@ -1,9 +1,11 @@
-import type { AuditPage, AuditQuery } from '@dcm/contracts';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { areaOfAction, type AuditPage, type AuditQuery } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
 import { RequestContext } from '../../../platform/cls/request-context';
 import type { Clock } from '../../../platform/kernel/clock';
 import { decodeAuditCursor, encodeAuditCursor } from '../domain/audit-cursor';
+import { type AuditSubject, subjectOf } from '../domain/audit-subject';
 import { redactSecrets } from '../domain/redact-secrets';
 import { AuditRepository } from '../persistence/audit.repository';
 
@@ -16,6 +18,17 @@ export interface AuditRecord {
   after?: unknown;
   /** Why, when the UI asked for a reason (suspend, deactivate, void …). */
   reason?: string | undefined;
+  /**
+   * The patient and the visit the change is about (H7). Usually left out: they come from the
+   * surrounding `about()`, the resource itself, or the snapshots (`subjectOf`).
+   */
+  patientId?: string | undefined;
+  visitId?: string | undefined;
+  /**
+   * Kept out of the Activity screen: a row that only shadows another one of the same action
+   * (the ledger entry of a payment, of a visit charge). It is still in the log.
+   */
+  hidden?: boolean | undefined;
 }
 
 /**
@@ -24,14 +37,27 @@ export interface AuditRecord {
  */
 @Injectable()
 export class AuditService {
+  private readonly subject = new AsyncLocalStorage<AuditSubject>();
+
   constructor(
     private readonly repository: AuditRepository,
     private readonly context: RequestContext,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
+  /**
+   * Runs `work` as being about a patient, a visit, or both: every entry recorded inside it
+   * (by the caller, or by what it calls) carries them unless it names its own. A service sets it
+   * once where it locks the visit or the patient, instead of at every `record()`.
+   */
+  about<T>(subject: AuditSubject, work: () => Promise<T>): Promise<T> {
+    return this.subject.run({ ...this.subject.getStore(), ...subject }, work);
+  }
+
   async record(entry: AuditRecord): Promise<void> {
     await this.repository.insert({
+      ...subjectOf(entry, this.subject.getStore() ?? {}),
+      area: entry.hidden ? null : areaOfAction(entry.action),
       actorUserId: this.context.userId ?? null,
       actorKind: this.context.actorKind ?? 'system',
       actorPlatformAdmin: this.context.isPlatformAdmin,
@@ -51,6 +77,13 @@ export class AuditService {
     const items = await this.repository.list({
       resourceType: query.resourceType,
       resourceId: query.resourceId,
+      feed: query.feed,
+      area: query.area,
+      actorUserId: query.actorUserId,
+      platformAdmin: query.platformAdmin,
+      from: query.from === undefined ? undefined : new Date(query.from),
+      patientId: query.patientId,
+      visitId: query.visitId,
       after: query.cursor === undefined ? undefined : decodeAuditCursor(query.cursor),
       limit: query.limit + 1,
     });

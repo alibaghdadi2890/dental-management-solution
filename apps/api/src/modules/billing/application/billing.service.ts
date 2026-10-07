@@ -1,6 +1,7 @@
 import {
   type AdjustmentInput,
   type CreateWithOpeningBalance,
+  type CurrencyLock,
   fromCents,
   type LedgerEntryKind,
   type OpeningBalanceInput,
@@ -12,27 +13,33 @@ import {
   type VisitBalance,
   type VisitFinancialSummary,
 } from '@dcm/contracts';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
 import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
+import { requestHash } from '../../../platform/kernel/request-hash';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
-import { AuditService } from '../../audit';
 import { VisitNotLiveError, VisitsService } from '../../clinical';
 import { PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { patientBalance, sumBalances } from '../domain/balances';
 import type { LedgerEntry } from '../domain/ledger-entry';
+import { LedgerIdempotencyMismatchError } from '../domain/ledger-errors';
 import { AllocationsRepository } from '../persistence/allocations.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
-import { PaymentsRepository } from '../persistence/payments.repository';
 import { LedgerWriter } from './ledger-writer';
 import { Settlement } from './settlement';
 
 /** The fields a caller chooses; the kind, currency and creator are set by `append`. */
 type EntryFields = Pick<LedgerEntry, 'amount' | 'effectiveDate' | 'note' | 'reason'>;
+
+/** An `Idempotency-Key` with the fingerprint of the request it came with (H5). */
+interface Idempotency {
+  key: string;
+  hash: string;
+}
 
 /**
  * The patient ledger of the current tenant (docs/modules/billing.md): opening balances,
@@ -45,13 +52,10 @@ type EntryFields = Pick<LedgerEntry, 'amount' | 'effectiveDate' | 'note' | 'reas
  */
 @Injectable()
 export class BillingService {
-  private readonly logger = new Logger(BillingService.name);
-
   constructor(
     private readonly context: RequestContext,
     private readonly tenantDb: TenantDb,
     private readonly writer: LedgerWriter,
-    private readonly audit: AuditService,
     private readonly tenancy: TenancyService,
     private readonly patients: PatientsService,
     private readonly entries: LedgerEntriesRepository,
@@ -59,7 +63,6 @@ export class BillingService {
     private readonly visits: VisitsService,
     private readonly settlement: Settlement,
     private readonly allocations: AllocationsRepository,
-    private readonly payments: PaymentsRepository,
   ) {}
 
   /**
@@ -67,16 +70,35 @@ export class BillingService {
    * number and the `opening_balance` entry commit or roll back together. `asOf` is checked
    * against the tenant's today before anything is written; the patient's own field errors are
    * reported under `patient.` so they point into this request's body.
+   *
+   * With an `idempotencyKey` (the route, feature 7 H5) a retry of the same request answers with
+   * the patient the first one created and that patient's balance, as they are now; another
+   * request under the key → 409 `ledger.idempotency_mismatch`. The key is kept on the entry,
+   * which commits with the patient, so finding the entry is finding both.
    */
-  async createWithOpeningBalance(input: CreateWithOpeningBalance): Promise<OpeningBalanceResult> {
+  async createWithOpeningBalance(
+    input: CreateWithOpeningBalance,
+    idempotencyKey?: string,
+  ): Promise<OpeningBalanceResult> {
     this.context.requirePermission('payment:write');
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
+      const idempotency = this.idempotencyOf(idempotencyKey, input);
+      const first = await this.replayed(idempotency);
+      if (first) {
+        const patient = await this.patients.get(first.patientId);
+        return { patient, balance: await this.balanceIn(first.patientId) };
+      }
       const tenant = await this.tenancy.currentTenant();
       this.assertNotAfterToday(input.openingBalance.asOf, tenant, 'openingBalance.asOf');
       const patient = await this.createPatient(input.patient);
       // Just created in this transaction: nobody else can see, merge or archive it yet.
-      const entry = await this.appendOpeningBalance(patient.id, input.openingBalance, tenant);
+      const entry = await this.appendOpeningBalance(
+        patient.id,
+        input.openingBalance,
+        tenant,
+        idempotency,
+      );
       const balance = { patientId: patient.id, balances: sumBalances([entry]), charged: [] };
       return { patient, balance };
     });
@@ -103,28 +125,54 @@ export class BillingService {
   }
 
   /**
-   * A signed correction with a reason (no UI in feature 3). Archived patients are allowed (a
-   * write-off); merged-away ones are refused like in `recordOpeningBalance`. Returns the balance
-   * after the entry.
+   * A signed correction with a reason (feature 7, H4): a sensitive money action, so it needs
+   * `payment:refund`, the trust level of a refund. Archived patients are allowed (a write-off);
+   * merged-away ones are refused like in `recordOpeningBalance`. Returns the balance after the
+   * entry. With an `idempotencyKey` a retry records nothing new (H5).
    */
-  async adjustBalance(patientId: string, input: AdjustmentInput): Promise<PatientBalance> {
-    this.context.requirePermission('payment:write');
+  async adjustBalance(
+    patientId: string,
+    input: AdjustmentInput,
+    idempotencyKey?: string,
+  ): Promise<PatientBalance> {
+    this.context.requirePermission('payment:refund');
     return this.tenantDb.run(async () => {
+      const idempotency = this.idempotencyOf(idempotencyKey, { patientId, ...input });
+      const first = await this.replayed(idempotency);
+      if (first) return this.balanceIn(first.patientId);
       const tenant = await this.tenancy.currentTenant();
       this.assertNotAfterToday(input.effectiveDate, tenant, 'effectiveDate');
       await this.patients.lockForDependentWrite(patientId);
-      const entry = await this.append(patientId, 'adjustment', tenant, {
-        amount: input.amount,
-        effectiveDate: input.effectiveDate,
-        note: input.note ?? null,
-        reason: input.reason,
-      });
+      const entry = await this.append(
+        patientId,
+        'adjustment',
+        tenant,
+        {
+          amount: input.amount,
+          effectiveDate: input.effectiveDate,
+          note: input.note ?? null,
+          reason: input.reason,
+        },
+        idempotency,
+      );
       // A write-off (below zero) covers open charges oldest first; a debit takes any credit.
       await this.settlement.settle(
         patientId,
         toCents(entry.amount) < 0n ? new Set([entry.id]) : new Set<string>(),
       );
       return this.balanceIn(patientId);
+    });
+  }
+
+  /**
+   * Whether the tenant's currency is locked: any ledger entry exists (H6, ADR-0035). For the
+   * admin Settings tab; `CurrencyLockSubscriber` is the enforcement.
+   */
+  async currencyLock(): Promise<CurrencyLock> {
+    this.context.requirePermission('tenant:read');
+    return this.tenantDb.run(async () => {
+      const tenant = await this.tenancy.currentTenant();
+      return { locked: await this.entries.any(), currency: tenant.currency };
     });
   }
 
@@ -219,13 +267,6 @@ export class BillingService {
    * that cover it; _Previous_ = the balance less this visit's outstanding; the total = the balance. Needs `payment:read`, and `visit:read` for `VisitsService.visitMoney`:
    * unknown or discarded → 404 `visit.not_found`; a live visit → 409 `visit.not_live` (it has no
    * charge yet). Balances in other currencies are left out — known gap, `docs/modules/billing.md`.
-   *
-   * A visit entry's own `patientId` can differ from `visit.patientId` for a while: a merge
-   * re-points the visit in its own transaction, but entries posted before that merge still sit
-   * on the dropped patient until the async `merge-ledger` job moves them (design Q9, ADR-0024's
-   * "Consequences"). While that window is open the balance is summed over every patient id the
-   * visit's entries name (same currency) so _this visit_ / _previous_ / the total stay
-   * consistent.
    */
   async visitSummary(visitId: string): Promise<VisitFinancialSummary> {
     this.context.requirePermission('payment:read');
@@ -237,10 +278,7 @@ export class BillingService {
       const visitEntries = (await this.entries.listForVisit(visitId)).filter(
         (entry) => entry.currency === visit.currency,
       );
-      const patientIds = [
-        ...new Set([visit.patientId, ...visitEntries.map((entry) => entry.patientId)]),
-      ];
-      const sums = await this.entries.sumsByPatient(patientIds);
+      const sums = await this.entries.sumsByPatient([visit.patientId]);
       const chargeCents = visitEntries.reduce((total, entry) => total + toCents(entry.amount), 0n);
       const paidCents =
         (await this.allocations.allocatedToVisits([visitId])).get(visitId)?.all ?? 0n;
@@ -262,52 +300,6 @@ export class BillingService {
     });
   }
 
-  /**
-   * The merge re-point (design Q9), run by `MergeLedgerWorker`. In one transaction it moves
-   * every entry of the dropped patient to the patient the kept one finally lives on
-   * (`PatientsService.survivorOf`: the kept patient itself, or — when it has since been merged
-   * away too — the end of the chain), holding that survivor `FOR SHARE` so it cannot be merged
-   * away before this commits. Jobs of a merge chain may therefore run in any order and still end
-   * on the survivor. When anything moved it audits `ledger_entry.repoint` on the survivor (after =
-   * `{ droppedId, keptId, count }`) so it shows in that patient's history. Idempotent: a re-run
-   * finds nothing to move and records nothing. Returns the number of entries moved.
-   *
-   * It moves nothing (and logs the ids) unless the dropped patient really was merged into the
-   * kept patient's chain — `survivorOf(droppedId)` is the same survivor — so a malformed or
-   * forged job cannot move a live patient's entries, and an unknown kept patient (or another
-   * tenant's) moves nothing.
-   *
-   * Not permission-gated: it is the system's follow-up to a merge the user was allowed to make,
-   * and a job actor holds no permissions. It refuses to run outside a job or system task instead.
-   */
-  async repointMergedEntries(keptId: string, droppedId: string): Promise<number> {
-    const actorKind = this.context.actorKind;
-    if (actorKind !== 'job' && actorKind !== 'system') {
-      throw new Error('repointMergedEntries runs only in the merge job');
-    }
-    return this.tenantDb.run(async () => {
-      const survivorId = await this.patients.survivorOf(keptId);
-      if (survivorId === null || (await this.patients.survivorOf(droppedId)) !== survivorId) {
-        this.logger.warn({ keptId, droppedId }, 'ledger re-point skipped: not a merged pair');
-        return 0;
-      }
-      await this.settlement.lock([droppedId, survivorId]);
-      const count = await this.entries.repointPatient(droppedId, survivorId);
-      const payments = await this.payments.repointPatient(droppedId, survivorId);
-      if (count > 0 || payments > 0) {
-        await this.audit.record({
-          action: 'ledger_entry.repoint',
-          resourceType: 'patient',
-          resourceId: survivorId,
-          after: { droppedId, keptId, count, payments },
-        });
-        // P15: one account now — the credit of one side meets the open charges of the other.
-        await this.settlement.settle(survivorId);
-      }
-      return count;
-    });
-  }
-
   // --- Shared rules ---
 
   /** `PatientsService.create`, with its field errors re-pathed under `patient.`. */
@@ -323,18 +315,47 @@ export class BillingService {
     }
   }
 
+  private idempotencyOf(key: string | undefined, request: unknown): Idempotency | null {
+    return key === undefined ? null : { key, hash: requestHash(request) };
+  }
+
+  /**
+   * The entry a request with this key already recorded (H5), or undefined for a first request.
+   * Requests sharing a key run one at a time (an advisory lock held to the end of the
+   * transaction), so a retry waits for the first and then finds its entry. Another request under
+   * the key → 409 `ledger.idempotency_mismatch`.
+   */
+  private async replayed(idempotency: Idempotency | null): Promise<LedgerEntry | undefined> {
+    if (!idempotency) return undefined;
+    await this.entries.lockIdempotencyKey(idempotency.key);
+    const first = await this.entries.findByIdempotencyKey(idempotency.key);
+    if (first && first.hash !== idempotency.hash) {
+      throw new LedgerIdempotencyMismatchError(
+        'This Idempotency-Key was already used for a different request',
+      );
+    }
+    return first?.entry;
+  }
+
   /** No checks: callers have validated `asOf` and locked (or just created) the patient. */
   private appendOpeningBalance(
     patientId: string,
     input: OpeningBalanceInput,
     tenant: Tenant,
+    idempotency: Idempotency | null = null,
   ): Promise<LedgerEntry> {
-    return this.append(patientId, 'opening_balance', tenant, {
-      amount: input.amount,
-      effectiveDate: input.asOf,
-      note: input.note ?? null,
-      reason: null,
-    });
+    return this.append(
+      patientId,
+      'opening_balance',
+      tenant,
+      {
+        amount: input.amount,
+        effectiveDate: input.asOf,
+        note: input.note ?? null,
+        reason: null,
+      },
+      idempotency,
+    );
   }
 
   /** One entry in the tenant currency, through `LedgerWriter` (inserted, audited, published). */
@@ -343,6 +364,7 @@ export class BillingService {
     kind: LedgerEntryKind,
     tenant: Tenant,
     fields: EntryFields,
+    idempotency: Idempotency | null = null,
   ): Promise<LedgerEntry> {
     return this.writer.append({
       patientId,
@@ -352,6 +374,7 @@ export class BillingService {
       visitId: null,
       amendmentId: null,
       ...fields,
+      ...(idempotency ? { idempotency } : {}),
     });
   }
 

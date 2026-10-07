@@ -9,6 +9,7 @@ import { ChartService } from './application/chart.service';
 import { MergeClinicalSubscriber } from './application/merge-clinical.subscriber';
 import { PatientRecordsService } from './application/patient-records.service';
 import { PlanUnperformer } from './application/plan-unperformer';
+import { PresenceWriter } from './application/presence-writer';
 import { RecordWriter } from './application/record-writer';
 import { VisitRecordsService } from './application/visit-records.service';
 import { VisitsService } from './application/visits.service';
@@ -22,7 +23,7 @@ import { PatientDiagnosesRepository } from './persistence/patient-diagnoses.repo
 import { PlanGroupsRepository } from './persistence/plan-groups.repository';
 import { PlanSessionsRepository } from './persistence/plan-sessions.repository';
 import { ProceduresRepository } from './persistence/procedures.repository';
-import { ToothStatusRepository } from './persistence/tooth-status.repository';
+import { ToothPresenceRepository } from './persistence/tooth-presence.repository';
 import { TreatmentPlansRepository } from './persistence/treatment-plans.repository';
 import { VisitAmendmentsRepository } from './persistence/visit-amendments.repository';
 import { VisitCountersRepository } from './persistence/visit-counters.repository';
@@ -62,7 +63,8 @@ import { VisitsRepository } from './persistence/visits.repository';
     TreatmentPlansRepository,
     PlanGroupsRepository,
     PlanSessionsRepository,
-    ToothStatusRepository,
+    ToothPresenceRepository,
+    PresenceWriter,
     RecordWriter,
     PatientRecordsService,
     ChartService,

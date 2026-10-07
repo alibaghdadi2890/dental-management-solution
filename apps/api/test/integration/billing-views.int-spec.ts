@@ -9,17 +9,12 @@ import type {
   Tenant,
 } from '@dcm/contracts';
 import { patientExportQuerySchema } from '@dcm/contracts';
-import { getQueueToken } from '@nestjs/bullmq';
-import type { Queue } from 'bullmq';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { BillingService } from '../../src/modules/billing';
-import { BILLING_QUEUE } from '../../src/modules/billing/application/merge-ledger.worker';
 import { PatientExportService } from '../../src/modules/billing/application/patient-export.service';
+import { Settlement } from '../../src/modules/billing/application/settlement';
 import { exportLabels } from '../../src/modules/billing/http/export-headers';
-import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
-import { TenantJobs } from '../../src/platform/queue/tenant-jobs';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
@@ -114,10 +109,13 @@ describe('billing: patient views, CSV export and merge re-point', () => {
     patient: Record<string, unknown>,
     amount: string,
   ): Promise<Patient> => {
-    const response = await agent.post('/api/v1/billing/opening-balances').send({
-      patient: { phone: '71 000 000', ...patient },
-      openingBalance: { amount, asOf: TODAY },
-    });
+    const response = await agent
+      .post('/api/v1/billing/opening-balances')
+      .set('Idempotency-Key', newId())
+      .send({
+        patient: { phone: '71 000 000', ...patient },
+        openingBalance: { amount, asOf: TODAY },
+      });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as OpeningBalanceResult).patient;
   };
@@ -126,7 +124,10 @@ describe('billing: patient views, CSV export and merge re-point', () => {
     agent: TestAgent,
     patient: Record<string, unknown>,
   ): Promise<Patient> => {
-    const response = await agent.post('/api/v1/patients').send({ phone: '71 000 000', ...patient });
+    const response = await agent
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send({ phone: '71 000 000', ...patient });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
@@ -134,7 +135,8 @@ describe('billing: patient views, CSV export and merge re-point', () => {
   const adjust = async (agent: TestAgent, patientId: string, amount: string) => {
     const response = await agent
       .post(`/api/v1/billing/patients/${patientId}/adjustments`)
-      .send({ amount, effectiveDate: TODAY, reason: 'test adjustment' });
+      .set('Idempotency-Key', newId())
+      .send({ amount, effectiveDate: TODAY, reason: 'courtesy' });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
   };
 
@@ -675,7 +677,7 @@ describe('billing: patient views, CSV export and merge re-point', () => {
     });
   });
 
-  describe('merge re-point', () => {
+  describe('merge re-point (in the merge transaction, H8)', () => {
     const repointAudit = async (tenantId: string) =>
       (
         await database.ownerPool.query<{ resource_id: string; after: unknown }>(
@@ -687,76 +689,35 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         )
       ).rows;
 
-    it('moves the dropped patient’s entries to the kept one, as an audited job, once', async () => {
+    it('has the kept patient owe the sum of both opening balances when the merge answers', async () => {
       const clinic = await provision('Merge Ledger Clinic');
       const keep = await openWithBalance(clinic.owner, { fullName: 'Keep Kareem' }, '50.00');
       const drop = await openWithBalance(clinic.owner, { fullName: 'Drop Kareem' }, '100.00');
-      const billing = testApp.app.get(BillingService);
-      const repoint = vi.spyOn(billing, 'repointMergedEntries');
-      try {
-        expect((await merge(clinic.owner, keep.id, drop.id)).status).toBe(200);
-        await vi.waitFor(
-          async () => {
-            expect(await ledgerOwners(clinic.tenant.id)).toEqual([
-              { patient_id: keep.id, amount: '50.00' },
-              { patient_id: keep.id, amount: '100.00' },
-            ]);
-          },
-          { timeout: 15_000, interval: 100 },
-        );
-        expect(await balanceOf(clinic.owner, keep.id)).toEqual([
-          { amount: '150.00', currency: 'USD' },
-        ]);
-        expect(await balanceOf(clinic.owner, drop.id)).toEqual([]);
+      expect((await merge(clinic.owner, keep.id, drop.id)).status).toBe(200);
+      // No waiting: the entries moved before the merge committed.
+      expect(await ledgerOwners(clinic.tenant.id)).toEqual([
+        { patient_id: keep.id, amount: '50.00' },
+        { patient_id: keep.id, amount: '100.00' },
+      ]);
+      expect(await balanceOf(clinic.owner, keep.id)).toEqual([
+        { amount: '150.00', currency: 'USD' },
+      ]);
+      expect(await balanceOf(clinic.owner, drop.id)).toEqual([]);
 
-        const session = (await clinic.owner.get('/api/v1/session')).body as Session;
-        expect(await repointAudit(clinic.tenant.id)).toEqual([
-          {
-            actor_kind: 'job',
-            actor_user_id: session.user.id,
-            actor_platform_admin: false,
-            resource_type: 'patient',
-            resource_id: keep.id,
-            after: { droppedId: drop.id, keptId: keep.id, count: 1, payments: 0 },
-          },
-        ]);
-
-        // The same job again (a replayed event): the job id is taken, so nothing runs twice.
-        const queue = testApp.app.get<Queue>(getQueueToken(BILLING_QUEUE));
-        const job = await queue.getJob(`${clinic.tenant.id}_merge_${drop.id}`);
-        expect(job?.returnvalue).toEqual({ moved: 1 });
-        await testApp.app.get(RequestContext).run(
-          {
-            requestId: newId(),
-            actorKind: 'user',
-            tenantId: clinic.tenant.id,
-            userId: session.user.id,
-          },
-          () =>
-            testApp.app
-              .get(TenantJobs)
-              .enqueue(
-                queue,
-                'merge-ledger',
-                { keptId: keep.id, droppedId: drop.id },
-                { jobId: `merge_${drop.id}` },
-              ),
-        );
-        await vi.waitFor(
-          async () => {
-            const counts = await queue.getJobCounts('waiting', 'delayed', 'active');
-            expect(counts).toMatchObject({ waiting: 0, delayed: 0, active: 0 });
-          },
-          { timeout: 10_000 },
-        );
-        expect(repoint).toHaveBeenCalledOnce();
-        expect(repoint).toHaveBeenCalledWith(keep.id, drop.id);
-      } finally {
-        repoint.mockRestore();
-      }
+      const session = (await clinic.owner.get('/api/v1/session')).body as Session;
+      expect(await repointAudit(clinic.tenant.id)).toEqual([
+        {
+          actor_kind: 'user',
+          actor_user_id: session.user.id,
+          actor_platform_admin: false,
+          resource_type: 'patient',
+          resource_id: keep.id,
+          after: { droppedId: drop.id, keptId: keep.id, count: 1, payments: 0 },
+        },
+      ]);
     });
 
-    it("records a platform admin's merge as such on the job's audit entry", async () => {
+    it("records a platform admin's merge as such on the re-point's audit entry", async () => {
       const clinic = await provision('Admin Merge Clinic');
       const keep = await openWithBalance(clinic.owner, { fullName: 'Admin Keep' }, '5.00');
       const drop = await openWithBalance(clinic.owner, { fullName: 'Admin Drop' }, '6.00');
@@ -766,82 +727,62 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         .send({ keepId: keep.id, dropId: drop.id, reason: 'Support merge' });
       expect(merged.status, JSON.stringify(merged.body)).toBe(200);
       const adminId = ((await admin.get('/api/v1/session')).body as Session).user.id;
-      await vi.waitFor(
-        async () => {
-          expect(await repointAudit(clinic.tenant.id)).toEqual([
-            expect.objectContaining({
-              actor_kind: 'job',
-              actor_user_id: adminId,
-              actor_platform_admin: true,
-              resource_id: keep.id,
-            }),
-          ]);
-        },
-        { timeout: 15_000, interval: 100 },
-      );
+      expect(await repointAudit(clinic.tenant.id)).toEqual([
+        expect.objectContaining({
+          actor_kind: 'user',
+          actor_user_id: adminId,
+          actor_platform_admin: true,
+          resource_id: keep.id,
+        }),
+      ]);
     });
 
-    it('ends a merge chain on the survivor, whatever order its jobs run in', async () => {
+    it('ends a merge chain on the last kept patient', async () => {
       const clinic = await provision('Merge Chain Clinic');
       const a = await openWithBalance(clinic.owner, { fullName: 'Chain A' }, '10.00');
       const b = await openWithBalance(clinic.owner, { fullName: 'Chain B' }, '20.00');
       const c = await openWithBalance(clinic.owner, { fullName: 'Chain C' }, '30.00');
-      const queue = testApp.app.get<Queue>(getQueueToken(BILLING_QUEUE));
-      const billing = testApp.app.get(BillingService);
-      const asJob = <T>(fn: () => Promise<T>) =>
-        testApp.app
-          .get(RequestContext)
-          .run({ requestId: newId(), actorKind: 'job', tenantId: clinic.tenant.id }, fn);
-
-      await queue.pause();
-      try {
-        // J1: A merged into B. J2: B merged into C. Both wait in the paused queue.
-        expect((await merge(clinic.owner, b.id, a.id)).status).toBe(200);
-        expect((await merge(clinic.owner, c.id, b.id)).status).toBe(200);
-        // J2 first, then J1: J1's kept patient (B) is merged away by then; its survivor is C.
-        expect(await asJob(() => billing.repointMergedEntries(c.id, b.id))).toBe(1);
-        expect(await asJob(() => billing.repointMergedEntries(b.id, a.id))).toBe(1);
-      } finally {
-        await queue.resume();
-      }
+      expect((await merge(clinic.owner, b.id, a.id)).status).toBe(200);
+      expect((await merge(clinic.owner, c.id, b.id)).status).toBe(200);
       expect(await ledgerOwners(clinic.tenant.id)).toEqual([
         { patient_id: c.id, amount: '10.00' },
         { patient_id: c.id, amount: '20.00' },
         { patient_id: c.id, amount: '30.00' },
       ]);
       expect(await balanceOf(clinic.owner, c.id)).toEqual([{ amount: '60.00', currency: 'USD' }]);
-      const audit = await repointAudit(clinic.tenant.id);
-      expect(audit.map((entry) => entry.resource_id)).toEqual([c.id, c.id]);
-      expect(audit.map((entry) => entry.after)).toEqual([
-        { droppedId: b.id, keptId: c.id, count: 1, payments: 0 },
+      expect((await repointAudit(clinic.tenant.id)).map((entry) => entry.after)).toEqual([
         { droppedId: a.id, keptId: b.id, count: 1, payments: 0 },
+        { droppedId: b.id, keptId: c.id, count: 2, payments: 0 },
       ]);
-
-      // The queued jobs then run and find nothing left to move.
-      for (const dropped of [a.id, b.id]) {
-        await vi.waitFor(
-          async () => {
-            const job = await queue.getJob(`${clinic.tenant.id}_merge_${dropped}`);
-            expect(job?.returnvalue).toEqual({ moved: 0 });
-          },
-          { timeout: 15_000, interval: 100 },
-        );
-      }
-      expect(await balanceOf(clinic.owner, c.id)).toEqual([{ amount: '60.00', currency: 'USD' }]);
     });
 
-    it('moves nothing when the kept patient is not in this tenant', async () => {
-      const clinic = await provision('Merge Unknown Clinic');
-      const drop = await openWithBalance(clinic.owner, { fullName: 'Lonely Drop' }, '10.00');
-      const moved = await testApp.app
-        .get(RequestContext)
-        .run({ requestId: newId(), actorKind: 'job', tenantId: clinic.tenant.id }, () =>
-          testApp.app.get(BillingService).repointMergedEntries(newId(), drop.id),
-        );
-      expect(moved).toBe(0);
+    it('audits nothing when the dropped patient has no entries', async () => {
+      const clinic = await provision('Merge Empty Clinic');
+      const keep = await openWithBalance(clinic.owner, { fullName: 'Has Entries' }, '10.00');
+      const drop = await createPatient(clinic.owner, { fullName: 'No Entries' });
+      expect((await merge(clinic.owner, keep.id, drop.id)).status).toBe(200);
+      expect(await repointAudit(clinic.tenant.id)).toEqual([]);
+    });
+
+    it('rolls the merge back when the re-point fails: no merged patient with stranded entries', async () => {
+      const clinic = await provision('Merge Rollback Clinic');
+      const keep = await openWithBalance(clinic.owner, { fullName: 'Rollback Keep' }, '10.00');
+      const drop = await openWithBalance(clinic.owner, { fullName: 'Rollback Drop' }, '20.00');
+      const settle = vi
+        .spyOn(testApp.app.get(Settlement), 'settle')
+        .mockRejectedValueOnce(new Error('settle failed'));
+      try {
+        expect((await merge(clinic.owner, keep.id, drop.id)).status).toBe(500);
+      } finally {
+        settle.mockRestore();
+      }
       expect(await ledgerOwners(clinic.tenant.id)).toEqual([
-        { patient_id: drop.id, amount: '10.00' },
+        { patient_id: keep.id, amount: '10.00' },
+        { patient_id: drop.id, amount: '20.00' },
       ]);
+      const dropped = (await clinic.owner.get(`/api/v1/patients/${drop.id}`)).body as Patient;
+      expect(dropped.mergedIntoId).toBeNull();
+      expect(await repointAudit(clinic.tenant.id)).toEqual([]);
     });
 
     it('lets a merge wait for an in-flight ledger write, then moves that entry too', async () => {
@@ -883,34 +824,13 @@ describe('billing: patient views, CSV export and merge re-point', () => {
         writer.release();
       }
       expect((await merging).status).toBe(200);
-      await vi.waitFor(
-        async () => {
-          expect(await ledgerOwners(clinic.tenant.id)).toEqual([
-            { patient_id: keep.id, amount: '5.00' },
-            { patient_id: keep.id, amount: '100.00' },
-          ]);
-        },
-        { timeout: 15_000, interval: 100 },
-      );
+      expect(await ledgerOwners(clinic.tenant.id)).toEqual([
+        { patient_id: keep.id, amount: '5.00' },
+        { patient_id: keep.id, amount: '100.00' },
+      ]);
       expect(await balanceOf(clinic.owner, keep.id)).toEqual([
         { amount: '105.00', currency: 'USD' },
       ]);
-    });
-    it('moves nothing between two patients that were never merged', async () => {
-      const clinic = await provision('Merge Mismatch Clinic');
-      const kept = await openWithBalance(clinic.owner, { fullName: 'Live Kept' }, '10.00');
-      const other = await openWithBalance(clinic.owner, { fullName: 'Live Other' }, '20.00');
-      const moved = await testApp.app
-        .get(RequestContext)
-        .run({ requestId: newId(), actorKind: 'job', tenantId: clinic.tenant.id }, () =>
-          testApp.app.get(BillingService).repointMergedEntries(kept.id, other.id),
-        );
-      expect(moved).toBe(0);
-      expect(await ledgerOwners(clinic.tenant.id)).toEqual([
-        { patient_id: kept.id, amount: '10.00' },
-        { patient_id: other.id, amount: '20.00' },
-      ]);
-      expect(await repointAudit(clinic.tenant.id)).toEqual([]);
     });
   });
 

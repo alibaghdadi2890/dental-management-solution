@@ -17,6 +17,12 @@ export class PatientMergedError extends DomainError {
   readonly kind = 'conflict';
 }
 
+/** An `Idempotency-Key` replayed with a different request (feature 7, H5). */
+export class PatientIdempotencyMismatchError extends DomainError {
+  readonly code = 'patient.idempotency_mismatch';
+  readonly kind = 'conflict';
+}
+
 /** `keepId` and `dropId` are the same patient. */
 export class MergeSameError extends DomainError {
   readonly code = 'patient.merge_same';

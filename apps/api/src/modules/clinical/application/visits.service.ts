@@ -80,6 +80,7 @@ import {
 import type { VisitCriteria, VisitTextMatch } from '../persistence/visit-search.sql';
 import { type StoredVisit, VisitsRepository } from '../persistence/visits.repository';
 import { PlanUnperformer } from './plan-unperformer';
+import { PresenceWriter } from './presence-writer';
 import { computedMoney, moneyOf, toVisit, toVisitService } from './visit-mapping';
 
 /** A stored service as `planAmendment` sees it (the table's CHECKs admit the contract's values). */
@@ -182,6 +183,7 @@ export class VisitsService {
     private readonly counters: VisitCountersRepository,
     private readonly amendments: VisitAmendmentsRepository,
     private readonly unperformer: PlanUnperformer,
+    private readonly presence: PresenceWriter,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -281,6 +283,7 @@ export class VisitsService {
         action: 'visit.pause',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: timerOf(before),
         after: timerOf(after),
       });
@@ -313,6 +316,7 @@ export class VisitsService {
         action: 'visit.resume',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: timerOf(before),
         after: timerOf(after),
       });
@@ -334,6 +338,7 @@ export class VisitsService {
         action: 'visit.update',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: { notes: before.notes },
         after: { notes: after.notes },
       });
@@ -361,6 +366,7 @@ export class VisitsService {
         action: 'visit.update',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: { discountMode: before.discountMode, discountValue: before.discountValue },
         after: { discountMode: after.discountMode, discountValue: after.discountValue },
       });
@@ -389,6 +395,7 @@ export class VisitsService {
         action: 'visit.discard',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: { status: before.status, pausedAt: before.pausedAt },
         after: {
           status: after.status,
@@ -448,6 +455,7 @@ export class VisitsService {
         action: 'visit.complete',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: timerOf(before),
         after: {
           ...timerOf(after),
@@ -539,11 +547,22 @@ export class VisitsService {
         },
       );
       const now = this.clock.now();
+      // What a service did to its tooth follows the correction (feature 7, H2): gone with a
+      // removed service, moved with one that changes tooth.
+      const presenceContext = {
+        patientId: before.patientId,
+        visitId: id,
+        occurredOn: before.localDate,
+        dentistId: before.dentistId,
+        userId: this.context.requireUserId(),
+      };
       for (const service of plan.removed) {
         await this.services.update(service.id, { deletedAt: now });
+        await this.presence.revertService(service.id, now);
       }
       for (const { id: serviceId, toothCode, surfaces } of plan.edited) {
         await this.services.update(serviceId, { toothCode, surfaces });
+        await this.presence.moveService(presenceContext, { id: serviceId, toothCode }, now);
       }
       if (change.kind === 'amendment') {
         for (const planId of plan.plansToReopen) {
@@ -572,6 +591,7 @@ export class VisitsService {
         action: change.kind === 'amendment' ? 'visit.amend' : 'visit.discount',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: plan.before,
         after: plan.after,
         reason: change.reason ?? undefined,
@@ -612,6 +632,7 @@ export class VisitsService {
         action: 'visit.checkout',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: { checkedOutAt: null },
         after: { checkedOutAt: after.checkedOutAt, checkedOutBy: after.checkedOutBy },
       });
@@ -634,9 +655,12 @@ export class VisitsService {
       );
       const status = correct(before.status, 'void');
       assertFresh(before, input.expectedUpdatedAt);
+      const now = this.clock.now();
+      // The teeth its services took out or implanted are as they were before (H2).
+      await this.presence.revertVisit(id, now);
       const after = await this.visits.update(id, {
         status,
-        voidedAt: this.clock.now(),
+        voidedAt: now,
         voidedBy: this.context.requireUserId(),
         voidReason: input.reason,
       });
@@ -644,6 +668,7 @@ export class VisitsService {
         action: 'visit.void',
         resourceType: 'visit',
         resourceId: id,
+        patientId: before.patientId,
         before: { status: before.status },
         after: { status: after.status, voidedAt: after.voidedAt, voidedBy: after.voidedBy },
         reason: input.reason,

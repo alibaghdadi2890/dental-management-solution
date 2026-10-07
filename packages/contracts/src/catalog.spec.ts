@@ -50,7 +50,24 @@ describe('serviceItemInputSchema', () => {
       price: '30',
       frequent: false,
       active: true,
+      toothEffect: 'none',
     });
+  });
+
+  it('lets only a per-tooth service change a tooth (H2)', () => {
+    expect(serviceItemInputSchema.parse({ ...service, toothEffect: 'removes' }).toothEffect).toBe(
+      'removes',
+    );
+    const perJaw = serviceItemInputSchema.safeParse({
+      ...service,
+      chargeUnit: 'per_jaw',
+      toothEffect: 'implant',
+    });
+    expect(perJaw.success).toBe(false);
+    expect(perJaw.error?.issues[0]?.path).toEqual(['toothEffect']);
+    expect(serviceItemInputSchema.safeParse({ ...service, toothEffect: 'grows' }).success).toBe(
+      false,
+    );
   });
 
   it('treats a blank category as none', () => {
@@ -82,6 +99,7 @@ describe('serviceItemSchema', () => {
       price: { amount: '30.00', currency: 'USD' },
       frequent: true,
       active: true,
+      toothEffect: 'none',
     };
     expect(serviceItemSchema.parse(item)).toEqual(item);
   });

@@ -72,7 +72,7 @@ describe('billing: ledger, opening balances and balances', () => {
     return { tenant: response.body as Tenant, owner, branch };
   };
 
-  const staffAgent = async (clinic: Clinic, role: 'assistant' | 'frontdesk') => {
+  const staffAgent = async (clinic: Clinic, role: 'assistant' | 'frontdesk' | 'dentist') => {
     const email = uniqueEmail(role);
     const response = await clinic.owner.post('/api/v1/users').send({
       displayName: `The ${role}`,
@@ -86,6 +86,16 @@ describe('billing: ledger, opening balances and balances', () => {
     return signInAndSetPassword(testApp.app, email, TEMPORARY);
   };
 
+  /**
+   * A currency change on a tenant with money is a support operation outside the product (H6):
+   * done here in SQL, to keep the several-currencies rules covered.
+   */
+  const supportCurrencyChange = (tenantId: string, currency: string) =>
+    database.adminPool.query('update tenants set currency = $1 where id = $2', [
+      currency,
+      tenantId,
+    ]);
+
   const openWithBalance = async (
     agent: TestAgent,
     fullName: string,
@@ -94,19 +104,26 @@ describe('billing: ledger, opening balances and balances', () => {
   ): Promise<OpeningBalanceResult> => {
     const response = await agent
       .post('/api/v1/billing/opening-balances')
+      .set('Idempotency-Key', newId())
       .send({ patient: { fullName, phone: '71 000 000' }, openingBalance: { amount, asOf } });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as OpeningBalanceResult;
   };
 
   const createPatient = async (agent: TestAgent, fullName: string): Promise<Patient> => {
-    const response = await agent.post('/api/v1/patients').send({ fullName, phone: '71 000 000' });
+    const response = await agent
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send({ fullName, phone: '71 000 000' });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
 
   const createPatientWith = async (agent: TestAgent, body: Record<string, unknown>) => {
-    const response = await agent.post('/api/v1/patients').send(body);
+    const response = await agent
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send(body);
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
@@ -143,7 +160,10 @@ describe('billing: ledger, opening balances and balances', () => {
     ).rows[0];
 
   const adjust = (agent: TestAgent, patientId: string, body: Record<string, unknown>) =>
-    agent.post(`/api/v1/billing/patients/${patientId}/adjustments`).send(body);
+    agent
+      .post(`/api/v1/billing/patients/${patientId}/adjustments`)
+      .set('Idempotency-Key', newId())
+      .send(body);
 
   const balanceOf = async (agent: TestAgent, patientId: string) => {
     const response = await agent.get(`/api/v1/billing/patients/${patientId}/balance`);
@@ -247,10 +267,13 @@ describe('billing: ledger, opening balances and balances', () => {
       const clinic = await provision('Atomic Clinic');
       await openWithBalance(clinic.owner, 'First', '10.00');
 
-      const badPhone = await clinic.owner.post('/api/v1/billing/opening-balances').send({
-        patient: { fullName: 'Bad Phone', phone: '12' },
-        openingBalance: { amount: '10.00', asOf: TODAY },
-      });
+      const badPhone = await clinic.owner
+        .post('/api/v1/billing/opening-balances')
+        .set('Idempotency-Key', newId())
+        .send({
+          patient: { fullName: 'Bad Phone', phone: '12' },
+          openingBalance: { amount: '10.00', asOf: TODAY },
+        });
       expect(badPhone.status).toBe(422);
       expect(badPhone.body).toMatchObject({ code: 'validation_failed' });
       expect(firstPath(badPhone.body)).toBe('patient.phone');
@@ -259,10 +282,13 @@ describe('billing: ledger, opening balances and balances', () => {
         .spyOn(testApp.app.get(LedgerEntriesRepository), 'insert')
         .mockRejectedValueOnce(new Error('ledger unavailable'));
       try {
-        const failed = await clinic.owner.post('/api/v1/billing/opening-balances').send({
-          patient: { fullName: 'Lost Patient', phone: '71 000 001' },
-          openingBalance: { amount: '10.00', asOf: TODAY },
-        });
+        const failed = await clinic.owner
+          .post('/api/v1/billing/opening-balances')
+          .set('Idempotency-Key', newId())
+          .send({
+            patient: { fullName: 'Lost Patient', phone: '71 000 001' },
+            openingBalance: { amount: '10.00', asOf: TODAY },
+          });
         expect(failed.status).toBe(500);
         expect(insert).toHaveBeenCalledOnce();
       } finally {
@@ -289,10 +315,13 @@ describe('billing: ledger, opening balances and balances', () => {
       // 22:30 UTC on 1 March is already 2 March in Beirut (UTC+2 in winter).
       testApp.clock.set(new Date('2026-03-01T22:30:00Z'));
       try {
-        const tomorrow = await clinic.owner.post('/api/v1/billing/opening-balances').send({
-          patient: { fullName: 'Too Early', phone: '71 000 000' },
-          openingBalance: { amount: '10.00', asOf: '2026-03-03' },
-        });
+        const tomorrow = await clinic.owner
+          .post('/api/v1/billing/opening-balances')
+          .set('Idempotency-Key', newId())
+          .send({
+            patient: { fullName: 'Too Early', phone: '71 000 000' },
+            openingBalance: { amount: '10.00', asOf: '2026-03-03' },
+          });
         expect(tomorrow.status).toBe(422);
         expect(tomorrow.body).toMatchObject({ code: 'validation_failed' });
         expect(firstPath(tomorrow.body)).toBe('openingBalance.asOf');
@@ -323,7 +352,10 @@ describe('billing: ledger, opening balances and balances', () => {
         },
         { patient: { fullName: 'No Balance', phone: '71000000' } },
       ]) {
-        const response = await main.owner.post('/api/v1/billing/opening-balances').send(body);
+        const response = await main.owner
+          .post('/api/v1/billing/opening-balances')
+          .set('Idempotency-Key', newId())
+          .send(body);
         expect(response.status, JSON.stringify(body)).toBe(400);
       }
     });
@@ -332,19 +364,22 @@ describe('billing: ledger, opening balances and balances', () => {
   describe('create with an opening balance and contacts (design addendum C4, I1)', () => {
     it('creates the patient, a new guardian and the opening entry in one transaction', async () => {
       const clinic = await provision('Opening Contacts Clinic');
-      const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
-        patient: {
-          fullName: 'Karim Haddad',
-          dateOfBirth: CHILD_DOB,
-          contacts: [
-            linkInput(newContact('Rania Haddad', '71 600 001'), 'parent', {
-              isGuardian: true,
-              isBillingContact: true,
-            }),
-          ],
-        },
-        openingBalance: { amount: '75.00', asOf: TODAY },
-      });
+      const response = await clinic.owner
+        .post('/api/v1/billing/opening-balances')
+        .set('Idempotency-Key', newId())
+        .send({
+          patient: {
+            fullName: 'Karim Haddad',
+            dateOfBirth: CHILD_DOB,
+            contacts: [
+              linkInput(newContact('Rania Haddad', '71 600 001'), 'parent', {
+                isGuardian: true,
+                isBillingContact: true,
+              }),
+            ],
+          },
+          openingBalance: { amount: '75.00', asOf: TODAY },
+        });
       expect(response.status, JSON.stringify(response.body)).toBe(201);
       const { patient, balance } = response.body as OpeningBalanceResult;
       expect(patient).toMatchObject({ fullName: 'Karim Haddad', phone: null });
@@ -388,10 +423,13 @@ describe('billing: ledger, opening balances and balances', () => {
       const contactId = before?.contact.id;
       if (!contactId) throw new Error('no guardian');
 
-      const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
-        patient: { fullName: 'Huda Fares', phone: '71 700 002', linkContactId: contactId },
-        openingBalance: { amount: '15.00', asOf: TODAY },
-      });
+      const response = await clinic.owner
+        .post('/api/v1/billing/opening-balances')
+        .set('Idempotency-Key', newId())
+        .send({
+          patient: { fullName: 'Huda Fares', phone: '71 700 002', linkContactId: contactId },
+          openingBalance: { amount: '15.00', asOf: TODAY },
+        });
       expect(response.status, JSON.stringify(response.body)).toBe(201);
       const { patient } = response.body as OpeningBalanceResult;
       expect(patient.fullName).toBe('Huda Fares');
@@ -404,10 +442,13 @@ describe('billing: ledger, opening balances and balances', () => {
       const clinic = await provision('LinkContactId Rollback Clinic');
       const before = await counterOf(clinic.tenant.id);
 
-      const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
-        patient: { fullName: 'Ghost Link', phone: '71 700 003', linkContactId: newId() },
-        openingBalance: { amount: '10.00', asOf: TODAY },
-      });
+      const response = await clinic.owner
+        .post('/api/v1/billing/opening-balances')
+        .set('Idempotency-Key', newId())
+        .send({
+          patient: { fullName: 'Ghost Link', phone: '71 700 003', linkContactId: newId() },
+          openingBalance: { amount: '10.00', asOf: TODAY },
+        });
       expect(response.status).toBe(422);
       expect(problem(response.body)).toMatchObject({
         code: 'validation_failed',
@@ -427,14 +468,17 @@ describe('billing: ledger, opening balances and balances', () => {
       const clinic = await provision('Contacts Rollback Clinic');
       const before = await counterOf(clinic.tenant.id);
 
-      const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
-        patient: {
-          fullName: 'Never Billed',
-          dateOfBirth: CHILD_DOB,
-          contacts: [linkInput({ contactId: newId() }, 'parent')],
-        },
-        openingBalance: { amount: '10.00', asOf: TODAY },
-      });
+      const response = await clinic.owner
+        .post('/api/v1/billing/opening-balances')
+        .set('Idempotency-Key', newId())
+        .send({
+          patient: {
+            fullName: 'Never Billed',
+            dateOfBirth: CHILD_DOB,
+            contacts: [linkInput({ contactId: newId() }, 'parent')],
+          },
+          openingBalance: { amount: '10.00', asOf: TODAY },
+        });
       expect(response.status).toBe(422);
       expect(problem(response.body)).toMatchObject({
         code: 'validation_failed',
@@ -457,14 +501,17 @@ describe('billing: ledger, opening balances and balances', () => {
         .spyOn(testApp.app.get(LedgerEntriesRepository), 'insert')
         .mockRejectedValueOnce(new Error('ledger unavailable'));
       try {
-        const response = await clinic.owner.post('/api/v1/billing/opening-balances').send({
-          patient: {
-            fullName: 'Rolled Back Kid',
-            dateOfBirth: CHILD_DOB,
-            contacts: [linkInput(newContact('Rolled Guardian', '71 800 001'), 'parent')],
-          },
-          openingBalance: { amount: '10.00', asOf: TODAY },
-        });
+        const response = await clinic.owner
+          .post('/api/v1/billing/opening-balances')
+          .set('Idempotency-Key', newId())
+          .send({
+            patient: {
+              fullName: 'Rolled Back Kid',
+              dateOfBirth: CHILD_DOB,
+              contacts: [linkInput(newContact('Rolled Guardian', '71 800 001'), 'parent')],
+            },
+            openingBalance: { amount: '10.00', asOf: TODAY },
+          });
         expect(response.status).toBe(500);
         expect(insert).toHaveBeenCalledOnce();
       } finally {
@@ -556,7 +603,7 @@ describe('billing: ledger, opening balances and balances', () => {
       const response = await adjust(main.owner, patient.id, {
         amount: '-50.00',
         effectiveDate: TODAY,
-        reason: 'goodwill',
+        reason: 'courtesy',
         note: 'Loyal patient',
       });
       expect(response.status, JSON.stringify(response.body)).toBe(201);
@@ -574,8 +621,8 @@ describe('billing: ledger, opening balances and balances', () => {
       );
       expect(adjustment).toMatchObject({
         action: 'ledger_entry.create',
-        reason: 'goodwill',
-        after: { amount: '-50.00', reason: 'goodwill', note: 'Loyal patient' },
+        reason: 'courtesy',
+        after: { amount: '-50.00', reason: 'courtesy', note: 'Loyal patient' },
       });
     });
 
@@ -587,11 +634,41 @@ describe('billing: ledger, opening balances and balances', () => {
       });
       expect(noReason.status).toBe(400);
       expect(firstPath(noReason.body)).toBe('reason');
+      const freeText = await adjust(main.owner, patient.id, {
+        amount: '-5.00',
+        effectiveDate: TODAY,
+        reason: 'because',
+      });
+      expect(freeText.status).toBe(400);
+      expect(firstPath(freeText.body)).toBe('reason');
+      // "Other" has to say why (the rule of every reason dialog).
+      for (const note of [undefined, 'no']) {
+        const vague = await adjust(main.owner, patient.id, {
+          amount: '-5.00',
+          effectiveDate: TODAY,
+          reason: 'other',
+          ...(note === undefined ? {} : { note }),
+        });
+        expect(vague.status).toBe(400);
+        expect(firstPath(vague.body)).toBe('note');
+      }
+      const explained = await adjust(main.owner, patient.id, {
+        amount: '-1.00',
+        effectiveDate: TODAY,
+        reason: 'other',
+        note: 'Lab remake at our cost',
+      });
+      expect(explained.status).toBe(201);
+      await adjust(main.owner, patient.id, {
+        amount: '1.00',
+        effectiveDate: TODAY,
+        reason: 'opening_balance_correction',
+      });
       for (const amount of ['0', '0.00', '-0']) {
         const zero = await adjust(main.owner, patient.id, {
           amount,
           effectiveDate: TODAY,
-          reason: 'nothing',
+          reason: 'courtesy',
         });
         expect(zero.status, amount).toBe(400);
         expect(firstPath(zero.body)).toBe('amount');
@@ -599,7 +676,7 @@ describe('billing: ledger, opening balances and balances', () => {
       const future = await adjust(main.owner, patient.id, {
         amount: '5.00',
         effectiveDate: '2026-06-11',
-        reason: 'too early',
+        reason: 'courtesy',
       });
       expect(future.status).toBe(422);
       expect(firstPath(future.body)).toBe('effectiveDate');
@@ -607,7 +684,7 @@ describe('billing: ledger, opening balances and balances', () => {
       const unknown = await adjust(main.owner, newId(), {
         amount: '5.00',
         effectiveDate: TODAY,
-        reason: 'ghost',
+        reason: 'courtesy',
       });
       expect(unknown.status).toBe(404);
       expect(unknown.body).toMatchObject({ code: 'patient.not_found' });
@@ -620,13 +697,11 @@ describe('billing: ledger, opening balances and balances', () => {
     it('stamps the tenant currency at write time and keeps each currency apart', async () => {
       const clinic = await provision('Currency Clinic');
       const { patient } = await openWithBalance(clinic.owner, 'Two Currencies', '250.00');
-      expect((await clinic.owner.patch('/api/v1/tenant').send({ currency: 'EUR' })).status).toBe(
-        200,
-      );
+      await supportCurrencyChange(clinic.tenant.id, 'EUR');
       const response = await adjust(clinic.owner, patient.id, {
         amount: '30.00',
         effectiveDate: TODAY,
-        reason: 'late fee',
+        reason: 'courtesy',
       });
       expect(response.status).toBe(201);
       const expected = [
@@ -651,20 +726,15 @@ describe('billing: ledger, opening balances and balances', () => {
       const refused = await adjust(main.owner, dropped.id, {
         amount: '-80.00',
         effectiveDate: TODAY,
-        reason: 'late write-off',
+        reason: 'courtesy',
       });
       expect(refused.status).toBe(409);
       expect(refused.body).toMatchObject({ code: 'patient.merged' });
-      // The merge job moves the dropped record's entry to the kept one; the refused one never exists.
-      await vi.waitFor(
-        async () => {
-          expect(await balanceOf(main.owner, kept.id)).toMatchObject({
-            balances: [{ amount: '80.00', currency: 'USD' }],
-            charged: [],
-          });
-        },
-        { timeout: 15_000, interval: 100 },
-      );
+      // The merge moved the dropped record's entry to the kept one; the refused one never exists.
+      expect(await balanceOf(main.owner, kept.id)).toMatchObject({
+        balances: [{ amount: '80.00', currency: 'USD' }],
+        charged: [],
+      });
       expect(await balanceOf(main.owner, dropped.id)).toMatchObject({ balances: [] });
 
       const archived = (await openWithBalance(main.owner, 'Archived Debtor', '35.00')).patient;
@@ -674,7 +744,7 @@ describe('billing: ledger, opening balances and balances', () => {
       const writeOff = await adjust(main.owner, archived.id, {
         amount: '-35.00',
         effectiveDate: TODAY,
-        reason: 'bad debt write-off',
+        reason: 'courtesy',
       });
       expect(writeOff.status).toBe(201);
       expect(writeOff.body).toEqual({ patientId: archived.id, balances: [], charged: [] });
@@ -685,7 +755,7 @@ describe('billing: ledger, opening balances and balances', () => {
       const response = await adjust(main.owner, patient.id, {
         amount: '9999999999.99',
         effectiveDate: TODAY,
-        reason: 'second maximum entry',
+        reason: 'courtesy',
       });
       expect(response.status, JSON.stringify(response.body)).toBe(201);
       const wide = [{ amount: '19999999999.98', currency: 'USD' }];
@@ -701,8 +771,9 @@ describe('billing: ledger, opening balances and balances', () => {
       const adminId = ((await admin.get('/api/v1/session')).body as Session).user.id;
       const response = await admin
         .post(`/api/v1/billing/patients/${patient.id}/adjustments`)
+        .set('Idempotency-Key', newId())
         .set('X-Tenant-Id', main.tenant.id)
-        .send({ amount: '-20.00', effectiveDate: TODAY, reason: 'support correction' });
+        .send({ amount: '-20.00', effectiveDate: TODAY, reason: 'courtesy' });
       expect(response.status, JSON.stringify(response.body)).toBe(201);
 
       const entry = await database.ownerPool.query<{
@@ -724,6 +795,170 @@ describe('billing: ledger, opening balances and balances', () => {
           actor_kind: 'user',
         },
       ]);
+    });
+  });
+
+  describe('retry safety (feature 7, H5)', () => {
+    const KEY = 'Idempotency-Key';
+    const count = async (table: 'patients' | 'ledger_entries', tenantId: string) =>
+      (
+        await database.ownerPool.query<{ n: number }>(
+          `select count(*)::int as n from ${table} where tenant_id = $1`,
+          [tenantId],
+        )
+      ).rows[0]?.n;
+
+    it('requires the header on the three routes', async () => {
+      const clinic = await provision('Key Required Clinic');
+      const patient = await createPatient(clinic.owner, 'Key Holder');
+      const calls = [
+        clinic.owner.post('/api/v1/patients').send({ fullName: 'No Key', phone: '71 000 000' }),
+        clinic.owner.post('/api/v1/billing/opening-balances').send({
+          patient: { fullName: 'No Key', phone: '71 000 000' },
+          openingBalance: { amount: '5.00', asOf: TODAY },
+        }),
+        clinic.owner
+          .post(`/api/v1/billing/patients/${patient.id}/adjustments`)
+          .send({ amount: '5.00', effectiveDate: TODAY, reason: 'courtesy' }),
+        clinic.owner
+          .post('/api/v1/patients')
+          .set(KEY, 'not-a-uuid')
+          .send({ fullName: 'Bad Key', phone: '71 000 000' }),
+      ];
+      for (const call of calls) {
+        const response = await call;
+        expect(response.status).toBe(422);
+        expect(firstPath(response.body)).toBe('Idempotency-Key');
+      }
+      expect(await count('patients', clinic.tenant.id)).toBe(1);
+    });
+
+    it('creates one patient for a replayed create, and refuses another body under the key', async () => {
+      const clinic = await provision('Patient Key Clinic');
+      const key = newId();
+      const body = { fullName: 'Once Only', phone: '71 000 000' };
+      const send = (payload: object) =>
+        clinic.owner.post('/api/v1/patients').set(KEY, key).send(payload);
+      const first = await send(body);
+      expect(first.status).toBe(201);
+      const replay = await send(body);
+      expect(replay.status).toBe(201);
+      expect((replay.body as Patient).id).toBe((first.body as Patient).id);
+      expect((replay.body as Patient).displayNumber).toBe('P-000001');
+      expect(await count('patients', clinic.tenant.id)).toBe(1);
+      expect(await counterOf(clinic.tenant.id)).toBe(1);
+
+      const other = await send({ ...body, fullName: 'Someone Else' });
+      expect(other.status).toBe(409);
+      expect(problem(other.body).code).toBe('patient.idempotency_mismatch');
+      expect(await count('patients', clinic.tenant.id)).toBe(1);
+    });
+
+    it('creates one patient with one opening balance for a double submit, even at the same time', async () => {
+      const clinic = await provision('Opening Key Clinic');
+      const key = newId();
+      const body = {
+        patient: { fullName: 'Double Click', phone: '71 000 000' },
+        openingBalance: { amount: '120.00', asOf: TODAY },
+      };
+      const send = (payload: object) =>
+        clinic.owner.post('/api/v1/billing/opening-balances').set(KEY, key).send(payload);
+      const [a, b] = await Promise.all([send(body), send(body)]);
+      expect([a.status, b.status]).toEqual([201, 201]);
+      const created = a.body as OpeningBalanceResult;
+      expect((b.body as OpeningBalanceResult).patient.id).toBe(created.patient.id);
+      expect((b.body as OpeningBalanceResult).balance).toEqual(created.balance);
+      expect(await count('patients', clinic.tenant.id)).toBe(1);
+      expect(await count('ledger_entries', clinic.tenant.id)).toBe(1);
+      expect((await balanceOf(clinic.owner, created.patient.id)).balances).toEqual([
+        { amount: '120.00', currency: 'USD' },
+      ]);
+
+      const other = await send({ ...body, openingBalance: { amount: '121.00', asOf: TODAY } });
+      expect(other.status).toBe(409);
+      expect(problem(other.body).code).toBe('ledger.idempotency_mismatch');
+      expect(await count('ledger_entries', clinic.tenant.id)).toBe(1);
+    });
+
+    it('records one adjustment for a replay; the key is tied to the patient and the body', async () => {
+      const clinic = await provision('Adjust Key Clinic');
+      const { patient } = await openWithBalance(clinic.owner, 'Adjusted Once', '100.00');
+      const bystander = await createPatient(clinic.owner, 'Bystander');
+      const key = newId();
+      const body = { amount: '-20.00', effectiveDate: TODAY, reason: 'courtesy' };
+      const send = (patientId: string, payload: object) =>
+        clinic.owner
+          .post(`/api/v1/billing/patients/${patientId}/adjustments`)
+          .set(KEY, key)
+          .send(payload);
+      const first = await send(patient.id, body);
+      expect(first.status).toBe(201);
+      const replay = await send(patient.id, body);
+      expect(replay.status).toBe(201);
+      expect(replay.body).toEqual(first.body);
+      expect((await balanceOf(clinic.owner, patient.id)).balances).toEqual([
+        { amount: '80.00', currency: 'USD' },
+      ]);
+      expect(await count('ledger_entries', clinic.tenant.id)).toBe(2);
+
+      for (const other of [
+        await send(patient.id, { ...body, amount: '-25.00' }),
+        await send(bystander.id, body),
+      ]) {
+        expect(other.status).toBe(409);
+        expect(problem(other.body).code).toBe('ledger.idempotency_mismatch');
+      }
+      expect(await count('ledger_entries', clinic.tenant.id)).toBe(2);
+    });
+
+    it('keeps keys per tenant: the same key in another clinic is its own request', async () => {
+      const one = await provision('Key Tenant One');
+      const two = await provision('Key Tenant Two');
+      const key = newId();
+      const body = { fullName: 'Same Key', phone: '71 000 000' };
+      const inOne = await one.owner.post('/api/v1/patients').set(KEY, key).send(body);
+      const inTwo = await two.owner
+        .post('/api/v1/patients')
+        .set(KEY, key)
+        .send({ ...body, fullName: 'Other Clinic' });
+      expect([inOne.status, inTwo.status]).toEqual([201, 201]);
+      expect((inTwo.body as Patient).id).not.toBe((inOne.body as Patient).id);
+      expect((inTwo.body as Patient).fullName).toBe('Other Clinic');
+    });
+  });
+
+  describe('currency lock (feature 7, H6)', () => {
+    it('lets a tenant without ledger entries change currency, and locks it at the first entry', async () => {
+      const clinic = await provision('Lock Clinic');
+      const lock = () => clinic.owner.get('/api/v1/billing/currency-lock');
+      expect((await lock()).body).toEqual({ locked: false, currency: 'USD' });
+      const changed = await clinic.owner.patch('/api/v1/tenant').send({ currency: 'EUR' });
+      expect(changed.status).toBe(200);
+      expect((changed.body as Tenant).currency).toBe('EUR');
+
+      await openWithBalance(clinic.owner, 'First Entry', '10.00');
+      expect((await lock()).body).toEqual({ locked: true, currency: 'EUR' });
+      const refused = await clinic.owner.patch('/api/v1/tenant').send({ currency: 'USD' });
+      expect(refused.status).toBe(422);
+      expect(problem(refused.body).code).toBe('tenant.currency_locked');
+      expect(((await clinic.owner.get('/api/v1/tenant')).body as Tenant).currency).toBe('EUR');
+
+      // The other settings still change, and so does a patch naming the current currency.
+      const renamed = await clinic.owner
+        .patch('/api/v1/tenant')
+        .send({ name: 'Lock Clinic 2', currency: 'EUR' });
+      expect(renamed.status).toBe(200);
+    });
+
+    it('refuses a platform admin too', async () => {
+      const clinic = await provision('Admin Lock Clinic');
+      await openWithBalance(clinic.owner, 'Entry', '10.00');
+      const refused = await admin
+        .patch('/api/v1/tenant')
+        .set('X-Tenant-Id', clinic.tenant.id)
+        .send({ currency: 'EUR' });
+      expect(refused.status).toBe(422);
+      expect(problem(refused.body).code).toBe('tenant.currency_locked');
     });
   });
 
@@ -778,13 +1013,17 @@ describe('billing: ledger, opening balances and balances', () => {
         const response = await adjust(clinic.owner, patient.id, {
           amount,
           effectiveDate: TODAY,
-          reason: 'settle',
+          reason: 'courtesy',
         });
         expect(response.status).toBe(201);
       }
       // Mixed: USD -10.00 (credit) but EUR 2.00 owed.
-      await clinic.owner.patch('/api/v1/tenant').send({ currency: 'EUR' });
-      await adjust(clinic.owner, mixed.id, { amount: '2.00', effectiveDate: TODAY, reason: 'fee' });
+      await supportCurrencyChange(clinic.tenant.id, 'EUR');
+      await adjust(clinic.owner, mixed.id, {
+        amount: '2.00',
+        effectiveDate: TODAY,
+        reason: 'courtesy',
+      });
 
       const service = testApp.app.get(BillingService);
       const ids = await asPlatformAdminIn(testApp.app, clinic.tenant.id, () =>
@@ -806,15 +1045,18 @@ describe('billing: ledger, opening balances and balances', () => {
     });
 
     it('the assistant reads balances but cannot record entries', async () => {
-      const opening = await assistant.post('/api/v1/billing/opening-balances').send({
-        patient: { fullName: 'By Assistant', phone: '71000000' },
-        openingBalance: { amount: '10.00', asOf: TODAY },
-      });
+      const opening = await assistant
+        .post('/api/v1/billing/opening-balances')
+        .set('Idempotency-Key', newId())
+        .send({
+          patient: { fullName: 'By Assistant', phone: '71000000' },
+          openingBalance: { amount: '10.00', asOf: TODAY },
+        });
       expect(opening.status).toBe(403);
       const adjustment = await adjust(assistant, patient.id, {
         amount: '-5.00',
         effectiveDate: TODAY,
-        reason: 'not allowed',
+        reason: 'courtesy',
       });
       expect(adjustment.status).toBe(403);
 
@@ -827,15 +1069,28 @@ describe('billing: ledger, opening balances and balances', () => {
       expect(await patientNames(main.tenant.id)).not.toContain('By Assistant');
     });
 
-    it('front desk records opening balances and adjustments', async () => {
+    it('front desk records opening balances but cannot adjust a balance (H4: payment:refund)', async () => {
       const { balance } = await openWithBalance(frontdesk, 'By Front Desk', '15.00');
       expect(balance.balances).toEqual([{ amount: '15.00', currency: 'USD' }]);
       const adjustment = await adjust(frontdesk, patient.id, {
         amount: '-5.00',
         effectiveDate: TODAY,
-        reason: 'discount',
+        reason: 'courtesy',
       });
-      expect(adjustment.status).toBe(201);
+      expect(adjustment.status).toBe(403);
+      expect(await balanceOf(frontdesk, patient.id)).toMatchObject({
+        balances: [{ amount: '40.00', currency: 'USD' }],
+      });
+    });
+
+    it('a dentist adjusts a balance', async () => {
+      const dentist = await staffAgent(main, 'dentist');
+      const adjustment = await adjust(dentist, patient.id, {
+        amount: '-5.00',
+        effectiveDate: TODAY,
+        reason: 'courtesy',
+      });
+      expect(adjustment.status, JSON.stringify(adjustment.body)).toBe(201);
     });
   });
 });

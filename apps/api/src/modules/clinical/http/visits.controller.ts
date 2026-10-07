@@ -16,6 +16,8 @@ import {
   visitResultSchema,
   visitSchema,
   voidVisitSchema,
+  visitNumberSchema,
+  visitNumbersQuerySchema,
 } from '@dcm/contracts';
 import {
   Body,
@@ -52,6 +54,8 @@ class VisitListQueryDto extends createZodDto(visitListQuerySchema) {}
 class VisitPageDto extends createZodDto(visitPageSchema) {}
 class VisitFiltersDto extends createZodDto(visitFiltersSchema) {}
 class VisitListSummaryDto extends createZodDto(visitListSummarySchema) {}
+class VisitNumbersQueryDto extends createZodDto(visitNumbersQuerySchema) {}
+class VisitNumberDto extends createZodDto(visitNumberSchema) {}
 class VoidVisitDto extends createZodDto(voidVisitSchema) {}
 
 /**
@@ -104,6 +108,14 @@ export class VisitsController {
   @ZodResponse({ type: VisitListSummaryDto })
   summary(@Query() query: VisitFiltersDto) {
     return this.visits.summary(query);
+  }
+
+  /** Before `:id`, like the other static paths. */
+  @Get('numbers')
+  @RequirePermission('visit:read')
+  @ZodResponse({ type: [VisitNumberDto] })
+  numbers(@Query() query: VisitNumbersQueryDto) {
+    return this.visits.numbersFor(query.ids);
   }
 
   @Get(':id')

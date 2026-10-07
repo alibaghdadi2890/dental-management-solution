@@ -84,7 +84,10 @@ describe('patients: records, search, duplicates, archive and merge', () => {
   };
 
   const createPatient = async (agent: TestAgent, body: Record<string, unknown>) => {
-    const response = await agent.post('/api/v1/patients').send(body);
+    const response = await agent
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send(body);
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
@@ -182,6 +185,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     it('refuses a dentist who is not an active practitioner', async () => {
       const refused = await main.owner
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .send({ fullName: 'No Dentist', phone: '71 000 000', primaryDentistId: newId() });
       expect(refused.status).toBe(422);
       expect(refused.body).toMatchObject({ code: 'patient.unknown_dentist' });
@@ -204,6 +208,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
 
       const byUserId = await main.owner
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .send({ fullName: 'User Id Dentist', phone: '71000061', primaryDentistId: dentist.id });
       expect(byUserId.status).toBe(422);
       expect(byUserId.body).toMatchObject({ code: 'patient.unknown_dentist' });
@@ -285,6 +290,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     it('rejects an invalid phone at the field', async () => {
       const phone = await main.owner
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .send({ fullName: 'Bad Phone', phone: '12' });
       expect(phone.status).toBe(422);
       expect(phone.body).toMatchObject({ code: 'validation_failed' });
@@ -309,6 +315,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       await withClockAt('2026-03-01T22:30:00Z', async () => {
         const tomorrow = await main.owner
           .post('/api/v1/patients')
+          .set('Idempotency-Key', newId())
           .send({ fullName: 'Not Born Yet', phone: '71000000', dateOfBirth: '2026-03-03' });
         expect(tomorrow.status).toBe(422);
         expect(tomorrow.body).toMatchObject({ code: 'validation_failed' });
@@ -338,6 +345,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     it('requires a phone for an adult, and for a patient without a date of birth', async () => {
       const adult = await main.owner
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .send({ fullName: 'Phoneless Adult', dateOfBirth: '1990-01-01' });
       expect(adult.status).toBe(422);
       expect(adult.body).toMatchObject({ code: 'validation_failed' });
@@ -345,6 +353,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
 
       const noDob = await main.owner
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .send({ fullName: 'Phoneless Unknown Age', phone: '  ' });
       expect(noDob.status).toBe(422);
       expect(firstIssue(noDob.body)).toMatchObject(PHONE_REQUIRED);
@@ -356,6 +365,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       await withClockAt('2026-03-01T22:30:00Z', async () => {
         const turned18 = await main.owner
           .post('/api/v1/patients')
+          .set('Idempotency-Key', newId())
           .send({ fullName: 'Birthday Adult', dateOfBirth: '2008-03-02' });
         expect(turned18.status).toBe(422);
         expect(firstIssue(turned18.body)).toMatchObject(PHONE_REQUIRED);
@@ -1322,6 +1332,7 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect((await viewer.get('/api/v1/patients/counts')).status).toBe(403);
       const create = await viewer
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .send({ fullName: 'Refused', phone: '71000043' });
       expect(create.status).toBe(403);
     });

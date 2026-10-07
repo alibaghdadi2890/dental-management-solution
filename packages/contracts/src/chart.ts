@@ -6,7 +6,7 @@ import {
   type ToothVisualState,
   type TreatmentPlan,
 } from './clinical-records.js';
-import type { SurfaceKey, ToothCode } from './tooth.js';
+import type { SurfaceKey, ToothCode, ToothPresenceChange, ToothPresenceState } from './tooth.js';
 import type { VisitService } from './visits.js';
 
 /** Any non-'none' mark a tooth's overall `state` can carry. */
@@ -108,6 +108,20 @@ export interface DeriveChartInput {
   readonly plans: readonly TreatmentPlan[];
   readonly history: readonly HistoryService[];
   readonly liveServices: readonly VisitService[];
+  /** The patient's presence rows, in the order recorded (`PatientChart.presence`). */
+  readonly presence: readonly ToothPresenceChange[];
+}
+
+/**
+ * What is at each tooth that has a presence row (H1, D3): the row recorded last wins, whatever
+ * its date. A tooth absent from the map is `present`.
+ */
+export function currentPresence(
+  rows: readonly ToothPresenceChange[],
+): Map<ToothCode, ToothPresenceState> {
+  const current = new Map<ToothCode, ToothPresenceState>();
+  for (const row of rows) current.set(row.toothCode, row.presence);
+  return current;
 }
 
 /**
@@ -121,7 +135,8 @@ export interface DeriveChartInput {
  * those contribute to any tooth.
  *
  * Returns one entry per tooth that has *something* recorded — an active diagnosis, an open plan,
- * a completed service or a live one — never all 32/52 chart columns. A tooth absent from the map
+ * a completed service or a live one, or a presence other than `present` (feature 7) — never all
+ * 32/52 chart columns. A tooth absent from the map
  * carries no recorded treatment; callers (the compact chart, the workspace chart) render every
  * other column as the 'none' default without needing a lookup miss to mean anything else.
  */
@@ -157,10 +172,17 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
     applyService(builder, record.surfaces, 'treated_today');
   }
 
+  // A tooth that is not present has an entry even with nothing else recorded on it.
+  const presence = currentPresence(input.presence);
+  for (const [code, state] of presence) {
+    if (state !== 'present') builderFor(builders, code);
+  }
+
   const chart = new Map<ToothCode, ToothState>();
   for (const [code, builder] of builders) {
     chart.set(code, {
       code,
+      presence: presence.get(code) ?? 'present',
       state: overallState(builder),
       surfaces: builder.surfaces,
       wholeTooth: builder.wholeTooth,

@@ -95,7 +95,7 @@ describe('clinical: service and diagnosis catalogs', () => {
   describe('default template', () => {
     it('is seeded on provisioning, in POC order, in the tenant currency, by the system', async () => {
       const seeded = await services();
-      expect(seeded).toHaveLength(12);
+      expect(seeded).toHaveLength(13);
       expect(seeded.map((item) => item.code).slice(0, 4)).toEqual(['EXT', 'CLT', 'PARO', 'PARX']);
       expect(seeded[0]).toMatchObject({
         name: 'Extraction',
@@ -112,7 +112,7 @@ describe('clinical: service and diagnosis catalogs', () => {
       expect(dx[0]).toMatchObject({ code: 'DX-CAR', name: 'Dental caries', frequent: true });
 
       const created = await auditOf('resourceType=procedure');
-      expect(created.filter((entry) => entry.action === 'catalog.service.create')).toHaveLength(12);
+      expect(created.filter((entry) => entry.action === 'catalog.service.create')).toHaveLength(13);
       expect(created[0]).toMatchObject({ actorKind: 'system', actorPlatformAdmin: false });
     });
 
@@ -120,7 +120,7 @@ describe('clinical: service and diagnosis catalogs', () => {
       const response = await api.post('/catalog/seed-default');
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ services: 0, diagnoses: 0 } satisfies CatalogSeedResult);
-      expect(await services()).toHaveLength(12);
+      expect(await services()).toHaveLength(13);
     });
 
     it('seeds a tenant whose catalogs are empty', async () => {
@@ -138,8 +138,8 @@ describe('clinical: service and diagnosis catalogs', () => {
       }
 
       const seeded = await inOther.post('/catalog/seed-default');
-      expect(seeded.body).toEqual({ services: 12, diagnoses: 14 });
-      expect((await inOther.get('/catalog/services')).body).toHaveLength(12);
+      expect(seeded.body).toEqual({ services: 13, diagnoses: 14 });
+      expect((await inOther.get('/catalog/services')).body).toHaveLength(13);
     });
   });
 
@@ -160,7 +160,7 @@ describe('clinical: service and diagnosis catalogs', () => {
       });
       expect(response.status).toBe(200);
       const saved = response.body as ServiceItem[];
-      expect(saved).toHaveLength(13);
+      expect(saved).toHaveLength(14);
       expect(saved.at(-1)).toMatchObject({
         code: 'IMPL',
         name: 'Implant consult',

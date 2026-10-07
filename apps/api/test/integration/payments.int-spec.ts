@@ -74,15 +74,24 @@ describe('billing: payments, refunds, voids and credit (feature 5)', () => {
   };
 
   const newPatient = (fullName: string) =>
-    ok<Patient>(owner.post('/api/v1/patients').send({ fullName, phone: '71 000 000' }), 201);
+    ok<Patient>(
+      owner
+        .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
+        .send({ fullName, phone: '71 000 000' }),
+      201,
+    );
 
   const patientOwing = async (fullName: string, amount: string, asOf: string) =>
     (
       await ok<OpeningBalanceResult>(
-        owner.post('/api/v1/billing/opening-balances').send({
-          patient: { fullName, phone: '71 000 000' },
-          openingBalance: { amount, asOf },
-        }),
+        owner
+          .post('/api/v1/billing/opening-balances')
+          .set('Idempotency-Key', newId())
+          .send({
+            patient: { fullName, phone: '71 000 000' },
+            openingBalance: { amount, asOf },
+          }),
         201,
       )
     ).patient;
@@ -396,11 +405,115 @@ describe('billing: payments, refunds, voids and credit (feature 5)', () => {
     await ok(
       owner
         .post(`/api/v1/billing/patients/${patient.id}/adjustments`)
-        .send({ amount: '-90', effectiveDate: TODAY, reason: 'Hardship write-off' }),
+        .set('Idempotency-Key', newId())
+        .send({ amount: '-90', effectiveDate: TODAY, reason: 'courtesy' }),
       201,
     );
     expect(await visitBalances(visit)).toEqual(['50.00']);
     expect(await balanceOf(patient.id)).toEqual([{ amount: '50.00', currency: 'USD' }]);
+  });
+
+  it('puts a payment and a visit in the activity feed once each, about their patient (H7)', async () => {
+    const patient = await newPatient('Feed Patient');
+    const visit = await completedVisit(patient, '80', TODAY);
+    await paid(owner, { patientId: patient.id, amount: '80' });
+    const feed = await ok<AuditPage>(
+      owner.get(`/api/v1/audit?feed=true&patientId=${patient.id}&limit=100`),
+    );
+    const of = (action: string) => feed.items.filter((item) => item.action === action);
+    expect(of('payment.create')).toHaveLength(1);
+    expect(of('payment.create')[0]).toMatchObject({ area: 'payments', patientId: patient.id });
+    // The payment's and the charge's ledger entries are in the log, not in the feed.
+    expect(of('ledger_entry.create')).toEqual([]);
+    expect(feed.items.every((item) => item.resourceType !== 'event')).toBe(true);
+    for (const action of [
+      'visit.start',
+      'visit_service.create',
+      'visit_service.update',
+      'visit.complete',
+    ]) {
+      expect(of(action), action).toEqual([
+        expect.objectContaining({ area: 'visits', patientId: patient.id, visitId: visit.id }),
+      ]);
+    }
+    const payments = await ok<AuditPage>(
+      owner.get(`/api/v1/audit?feed=true&area=payments&visitId=${visit.id}`),
+    );
+    expect(payments.items).toEqual([]);
+  });
+
+  it('shows an adjustment at once in the history, statement, Outstanding and aging (H4)', async () => {
+    testApp.clock.set(at(TODAY));
+    const patient = await patientOwing('Adjusted Views', '120', TODAY);
+    const adjust = (body: object) =>
+      ok(
+        owner
+          .post(`/api/v1/billing/patients/${patient.id}/adjustments`)
+          .set('Idempotency-Key', newId())
+          .send(body),
+        201,
+      );
+    await adjust({ amount: '-20', effectiveDate: TODAY, reason: 'courtesy', note: 'Long wait' });
+    expect(await balanceOf(patient.id)).toEqual([{ amount: '100.00', currency: 'USD' }]);
+
+    const account = await ok<PatientAccount>(
+      owner.get(`/api/v1/billing/patients/${patient.id}/account`),
+    );
+    expect(account.balance).toBe('100.00');
+    expect(account.adjustments).toEqual([
+      expect.objectContaining({
+        date: TODAY,
+        amount: '-20.00',
+        reason: 'courtesy',
+        note: 'Long wait',
+        remaining: '100.00',
+      }),
+    ]);
+    expect(account.adjustments[0]?.recordedBy).toEqual(expect.any(String));
+
+    const statement = await ok<Statement>(
+      owner.get(`/api/v1/billing/patients/${patient.id}/statement`),
+    );
+    expect(
+      statement.lines.map(({ kind, reason, note, amount, balance }) => ({
+        kind,
+        reason,
+        note,
+        amount,
+        balance,
+      })),
+    ).toEqual([
+      { kind: 'opening_balance', reason: null, note: null, amount: '120.00', balance: '120.00' },
+      {
+        kind: 'adjustment',
+        reason: 'courtesy',
+        note: 'Long wait',
+        amount: '-20.00',
+        balance: '100.00',
+      },
+    ]);
+    expect(statement.outstanding).toBe('100.00');
+
+    const owing = async () =>
+      (
+        await ok<OutstandingPage>(owner.get('/api/v1/billing/outstanding?q=Adjusted%20Views'))
+      ).items.map((item) => ({ balance: item.balance, bucket: item.bucket }));
+    expect(await owing()).toEqual([{ balance: '100.00', bucket: 'd0_30' }]);
+
+    // A charge without a visit dated 90 days back (2026-03-12): it ages from its effective date.
+    const bucket = async () =>
+      (await ok<Receivables>(owner.get('/api/v1/billing/aging'))).buckets.find(
+        (item) => item.bucket === 'd61_90',
+      )?.amount;
+    const before = Number(await bucket());
+    await adjust({
+      amount: '35',
+      effectiveDate: '2026-03-12',
+      reason: 'charge_without_visit',
+      note: 'Lab fee carried over',
+    });
+    expect(Number(await bucket()) - before).toBe(35);
+    expect(await owing()).toEqual([{ balance: '135.00', bucket: 'd61_90' }]);
   });
 
   it('a household payment pays each account oldest charge first under one receipt (B5)', async () => {

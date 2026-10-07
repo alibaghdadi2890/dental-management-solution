@@ -71,7 +71,7 @@ function whereFor(criteria: TransactionCriteria): SQL | undefined {
 
 /**
  * The tenant's `payments` (RLS-scoped through `TenantDb`). Append-only: the one update is
- * `repointPatient`, which only the merge job calls (P15).
+ * `repointPatient`, which only the merge re-point calls (P15).
  */
 @Injectable()
 export class PaymentsRepository {

@@ -45,7 +45,7 @@ describe('openingBalanceInputSchema', () => {
 });
 
 describe('adjustmentInputSchema', () => {
-  const base = { effectiveDate: '2026-01-01', reason: 'Correcting a data entry error' };
+  const base = { amount: '-5', effectiveDate: '2026-01-01', reason: 'courtesy' };
 
   it('rejects a zero amount', () => {
     expect(adjustmentInputSchema.safeParse({ ...base, amount: '0' }).success).toBe(false);
@@ -54,9 +54,18 @@ describe('adjustmentInputSchema', () => {
 
   it('accepts a signed non-zero amount and requires a reason', () => {
     expect(adjustmentInputSchema.safeParse({ ...base, amount: '-30' }).success).toBe(true);
+    expect(adjustmentInputSchema.safeParse({ ...base, reason: 'because' }).success).toBe(false);
     expect(
       adjustmentInputSchema.safeParse({ amount: '-30', effectiveDate: '2026-01-01' }).success,
     ).toBe(false);
+  });
+
+  it('needs the note to explain an "other" adjustment (H4)', () => {
+    const other = { ...base, reason: 'other' };
+    expect(adjustmentInputSchema.safeParse(other).error?.issues[0]?.path).toEqual(['note']);
+    expect(adjustmentInputSchema.safeParse({ ...other, note: 'no' }).success).toBe(false);
+    expect(adjustmentInputSchema.safeParse({ ...other, note: 'Lab remake' }).success).toBe(true);
+    expect(adjustmentInputSchema.safeParse({ ...base, reason: 'write_off' }).success).toBe(true);
   });
 
   it('rejects an effectiveDate far in the future', () => {

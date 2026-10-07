@@ -3,13 +3,15 @@ import { nonNegativeAmountSchema, chargeUnitSchema, jawSchema } from './catalog.
 import {
   aggregateAmountSchema,
   blankToUndefined,
+  commaSeparatedIds,
   currencySchema,
   idSchema,
   isoDateSchema,
   isoDateTimeSchema,
   moneySchema,
+  queryBooleanSchema,
 } from './common.js';
-import { surfacesSchema, toothCodeSchema } from './tooth.js';
+import { surfacesSchema, toothCodeSchema, toothPresenceChangeSchema } from './tooth.js';
 import { DISCOUNT_MODES } from './visit-money.js';
 
 /**
@@ -164,7 +166,12 @@ export type VisitResult = z.infer<typeof visitResultSchema>;
 
 /** The service routes (add, price edit, remove): the updated visit plus the service itself, so
  * an Undo after an add has the new service's id. */
-export const serviceResultSchema = z.object({ visit: visitSchema, record: visitServiceSchema });
+export const serviceResultSchema = z.object({
+  visit: visitSchema,
+  record: visitServiceSchema,
+  /** The tooth's new presence, when recording or removing the service changed it (H2). */
+  presenceChange: toothPresenceChangeSchema.nullable().optional(),
+});
 export type ServiceResult = z.infer<typeof serviceResultSchema>;
 
 export const startVisitResultSchema = z.object({
@@ -189,13 +196,6 @@ export const liveVisitRefSchema = z.object({
 });
 export type LiveVisitRef = z.infer<typeof liveVisitRefSchema>;
 
-/** Query-string booleans arrive as text; blank/absent means "not set" (mirrors `blankToUndefined`
- * elsewhere in this package). */
-const queryBooleanSchema = z
-  .enum(['true', 'false'])
-  .transform((value) => value === 'true')
-  .optional();
-
 export const liveVisitQuerySchema = z.object({
   patientId: blankToUndefined(idSchema.optional()),
   mine: blankToUndefined(queryBooleanSchema),
@@ -209,3 +209,17 @@ export const startDefaultsSchema = z.object({
   roomId: idSchema.nullable(),
 });
 export type StartDefaults = z.infer<typeof startDefaultsSchema>;
+
+/** How many ids one lookup takes (`GET /visits/numbers`). */
+const MAX_NUMBER_IDS = 100;
+
+/** `GET /visits/numbers?ids=`: the display numbers of these visits (the Activity screen). */
+export const visitNumbersQuerySchema = z.object({ ids: commaSeparatedIds(MAX_NUMBER_IDS) });
+export type VisitNumbersQuery = z.infer<typeof visitNumbersQuerySchema>;
+
+export const visitNumberSchema = z.object({
+  visitId: idSchema,
+  displayNumber: z.number().int().positive(),
+  localDate: isoDateSchema,
+});
+export type VisitNumber = z.infer<typeof visitNumberSchema>;

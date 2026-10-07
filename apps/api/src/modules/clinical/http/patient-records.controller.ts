@@ -1,12 +1,15 @@
 import {
   idSchema,
   patientChartResultSchema,
+  patientPresenceResultSchema,
   planGroupInputSchema,
   planPatientTreatmentSchema,
   recordPatientDiagnosisSchema,
+  removePresenceQuerySchema,
+  setPresenceOnPatientSchema,
   updatePlanSchema,
 } from '@dcm/contracts';
-import { Body, Controller, Delete, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Param, Patch, Post, Query } from '@nestjs/common';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
@@ -17,6 +20,9 @@ class PlanPatientTreatmentDto extends createZodDto(planPatientTreatmentSchema) {
 class UpdatePlanDto extends createZodDto(updatePlanSchema) {}
 class PlanGroupInputDto extends createZodDto(planGroupInputSchema) {}
 class PatientChartResultDto extends createZodDto(patientChartResultSchema) {}
+class SetPresenceDto extends createZodDto(setPresenceOnPatientSchema) {}
+class RemovePresenceQueryDto extends createZodDto(removePresenceQuerySchema) {}
+class PatientPresenceResultDto extends createZodDto(patientPresenceResultSchema) {}
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class DiagnosisParamsDto extends createZodDto(z.object({ id: idSchema, recordId: idSchema })) {}
 class PlanParamsDto extends createZodDto(z.object({ id: idSchema, planId: idSchema })) {}
@@ -24,12 +30,28 @@ class GroupParamsDto extends createZodDto(z.object({ id: idSchema, groupId: idSc
 
 /**
  * Charting on the patient record, outside a visit (docs/modules/clinical.md, ADR-0031):
- * diagnoses, plans and named plans. Every route needs `chart:write` and answers `{ chart }`, the
+ * diagnoses, plans, named plans and tooth presence. Every route needs `chart:write` and answers `{ chart }`, the
  * patient's chart as it now is, so the client replaces its cache without a refetch.
  */
 @Controller('clinical/patients')
 export class PatientRecordsController {
   constructor(private readonly records: PatientRecordsService) {}
+
+  /** One or several teeth, with one When, reason and dentist (the menu, or Edit presence). */
+  @Post(':id/presence')
+  @RequirePermission('chart:write')
+  @ZodResponse({ status: 201, type: PatientPresenceResultDto })
+  setPresence(@Param() params: PatientParamsDto, @Body() body: SetPresenceDto) {
+    return this.records.setPresence(params.id, body);
+  }
+
+  /** The Undo of a presence set on the patient record. */
+  @Delete(':id/presence')
+  @RequirePermission('chart:write')
+  @ZodResponse({ type: PatientChartResultDto })
+  removePresence(@Param() params: PatientParamsDto, @Query() query: RemovePresenceQueryDto) {
+    return this.records.removePresence(params.id, query.ids);
+  }
 
   @Post(':id/diagnoses')
   @RequirePermission('chart:write')

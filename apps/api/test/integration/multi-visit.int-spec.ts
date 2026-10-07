@@ -43,7 +43,10 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
   let rootCanal: ServiceItem;
 
   const createPatient = async (fullName: string): Promise<Patient> => {
-    const response = await owner.post('/api/v1/patients').send({ fullName, phone: '71 000 000' });
+    const response = await owner
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send({ fullName, phone: '71 000 000' });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };

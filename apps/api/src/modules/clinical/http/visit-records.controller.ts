@@ -5,12 +5,12 @@ import {
   idSchema,
   planResultSchema,
   planTreatmentSchema,
+  presenceResultSchema,
   recordDiagnosisSchema,
   recordSessionSchema,
   serviceResultSchema,
-  setToothPresenceSchema,
-  successionPositionSchema,
-  toothPresenceResultSchema,
+  setPresenceInVisitSchema,
+  toothCodeSchema,
   updateServiceSchema,
   visitResultSchema,
 } from '@dcm/contracts';
@@ -37,19 +37,18 @@ class PlanTreatmentDto extends createZodDto(planTreatmentSchema) {}
 class AnswerUnfinishedDto extends createZodDto(answerUnfinishedSchema) {}
 class VisitResultDto extends createZodDto(visitResultSchema) {}
 class RecordSessionDto extends createZodDto(recordSessionSchema) {}
-class SetToothPresenceDto extends createZodDto(setToothPresenceSchema) {}
+class SetPresenceDto extends createZodDto(setPresenceInVisitSchema) {}
 class ServiceResultDto extends createZodDto(serviceResultSchema) {}
 class DiagnosisResultDto extends createZodDto(diagnosisResultSchema) {}
 class PlanResultDto extends createZodDto(planResultSchema) {}
-class ToothPresenceResultDto extends createZodDto(toothPresenceResultSchema) {}
+class PresenceResultDto extends createZodDto(presenceResultSchema) {}
 class VisitParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class ServiceParamsDto extends createZodDto(z.object({ id: idSchema, serviceId: idSchema })) {}
 class DiagnosisParamsDto extends createZodDto(z.object({ id: idSchema, recordId: idSchema })) {}
 class PlanParamsDto extends createZodDto(z.object({ id: idSchema, planId: idSchema })) {}
-/** A position that is not a succession position (a permanent code at position 1–5) → 400. */
-class ToothParamsDto extends createZodDto(
-  z.object({ id: idSchema, position: successionPositionSchema }),
-) {}
+/** A code that is not one of the 52 FDI codes → 400. */
+class ToothParamsDto extends createZodDto(z.object({ id: idSchema, toothCode: toothCodeSchema })) {}
+class PresenceParamsDto extends createZodDto(z.object({ id: idSchema, presenceId: idSchema })) {}
 
 /**
  * Charting inside a live visit (docs/modules/clinical.md, spec §HTTP). Every route answers with
@@ -184,10 +183,19 @@ export class VisitRecordsController {
 
   // --- Tooth presence ---
 
-  @Put(':id/teeth/:position')
+  /** Missing, not erupted, implant or present again; `record` is null when nothing changed. */
+  @Put(':id/teeth/:toothCode/presence')
   @RequirePermission('visit:write')
-  @ZodResponse({ type: ToothPresenceResultDto })
-  setToothPresence(@Param() params: ToothParamsDto, @Body() body: SetToothPresenceDto) {
-    return this.records.setToothPresence(params.id, params.position, body);
+  @ZodResponse({ type: PresenceResultDto })
+  setPresence(@Param() params: ToothParamsDto, @Body() body: SetPresenceDto) {
+    return this.records.setPresence(params.id, params.toothCode, body);
+  }
+
+  /** The Undo of a presence set by hand in this visit. */
+  @Delete(':id/presence/:presenceId')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: PresenceResultDto })
+  removePresence(@Param() params: PresenceParamsDto) {
+    return this.records.removePresence(params.id, params.presenceId);
   }
 }

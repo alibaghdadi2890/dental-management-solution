@@ -2,3 +2,4 @@
 export { TenancyModule } from './tenancy.module';
 export { TenancyService } from './application/tenancy.service';
 export { TenantNotFoundError, TenantSuspendedError } from './domain/tenancy-errors';
+export { TENANT_CURRENCY_CHANGED, type TenantCurrencyChanged } from './events/tenant-events';

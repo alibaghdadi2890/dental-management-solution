@@ -12,6 +12,8 @@ import {
   patientListItemSchema,
   patientListQuerySchema,
   patientMergeSchema,
+  patientNameSchema,
+  patientNamesQuerySchema,
   patientPageSchema,
   patientPatchSchema,
   patientRestoreSchema,
@@ -22,6 +24,7 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   HttpStatus,
   Param,
@@ -30,8 +33,10 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import { ApiHeader } from '@nestjs/swagger';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
+import { idempotencyKey } from '../../../platform/http/idempotency-key';
 import { RequirePermission } from '../../../platform/http/route-access';
 import { ContactsService } from '../application/contacts.service';
 import { PatientsService } from '../application/patients.service';
@@ -76,6 +81,8 @@ class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class PatientContactParamsDto extends createZodDto(
   z.object({ id: idSchema, contactId: idSchema }),
 ) {}
+class PatientNamesQueryDto extends createZodDto(patientNamesQuerySchema) {}
+class PatientNameDto extends createZodDto(patientNameSchema) {}
 class PatientContactDto extends createZodDto(patientContactSchema) {}
 class ContactLinkInputDto extends createZodDto(contactLinkInputSchema) {}
 class ContactLinkPatchDto extends createZodDto(contactLinkPatchSchema) {}
@@ -121,6 +128,14 @@ export class PatientsController {
     return this.patients.checkDuplicates(query);
   }
 
+  /** Before `:id`, like the other static paths. */
+  @Get('names')
+  @RequirePermission('patient:read')
+  @ZodResponse({ type: [PatientNameDto] })
+  names(@Query() query: PatientNamesQueryDto) {
+    return this.patients.names(query.ids);
+  }
+
   @Post('archive')
   @RequirePermission('patient:write')
   @HttpCode(HttpStatus.OK)
@@ -152,11 +167,13 @@ export class PatientsController {
     return this.patients.get(params.id);
   }
 
+  /** A retry with the same `Idempotency-Key` and body answers with the first patient (H5). */
   @Post()
   @RequirePermission('patient:write')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
   @ZodResponse({ status: 201, type: PatientDto })
-  create(@Body() body: PatientCreateDto) {
-    return this.patients.create(body);
+  create(@Body() body: PatientCreateDto, @Headers('idempotency-key') key: string | undefined) {
+    return this.patients.create(body, { idempotencyKey: idempotencyKey(key) });
   }
 
   @Patch(':id')

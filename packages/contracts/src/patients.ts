@@ -11,6 +11,7 @@ import {
   offsetPageSchema,
   optionalDate,
   optionalText,
+  commaSeparatedIds,
 } from './common.js';
 import { contactLinkInputSchema, matchedContactSchema, primaryGuardianSchema } from './contacts.js';
 import { AGE_BANDS, dentitionStageSchema } from './patient-age.js';
@@ -353,3 +354,17 @@ export function profileCompleteness(patient: {
   const reachable = Boolean(patient.email) && Boolean(patient.address);
   return reachable && (!patient.minor || patient.hasGuardian) ? 'complete' : 'partial';
 }
+
+/** How many ids one lookup takes (`GET /patients/names`). */
+const MAX_NAME_IDS = 100;
+
+/** `GET /patients/names?ids=`: who these ids are, for a screen that only holds ids (Activity). */
+export const patientNamesQuerySchema = z.object({ ids: commaSeparatedIds(MAX_NAME_IDS) });
+export type PatientNamesQuery = z.infer<typeof patientNamesQuerySchema>;
+
+export const patientNameSchema = z.object({
+  id: idSchema,
+  fullName: z.string(),
+  displayNumber: z.string(),
+});
+export type PatientName = z.infer<typeof patientNameSchema>;

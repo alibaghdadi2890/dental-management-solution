@@ -110,7 +110,10 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
   };
 
   const createPatient = async (agent: TestAgent, body: Record<string, unknown>) => {
-    const response = await agent.post('/api/v1/patients').send(body);
+    const response = await agent
+      .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
+      .send(body);
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
   };
@@ -236,25 +239,31 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
       await createPatient(clinic.owner, { fullName: 'First One', phone: '71 100 010' });
       const before = await counterOf(clinic.tenant.id);
 
-      const refused = await clinic.owner.post('/api/v1/patients').send({
-        fullName: 'Never Created',
-        dateOfBirth: CHILD_DOB,
-        contacts: [
-          linkInput(newContact('Ghost Guardian', '71 100 011'), 'parent'),
-          linkInput({ contactId: newId() }, 'other', { isEmergencyContact: true }),
-        ],
-      });
+      const refused = await clinic.owner
+        .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
+        .send({
+          fullName: 'Never Created',
+          dateOfBirth: CHILD_DOB,
+          contacts: [
+            linkInput(newContact('Ghost Guardian', '71 100 011'), 'parent'),
+            linkInput({ contactId: newId() }, 'other', { isEmergencyContact: true }),
+          ],
+        });
       expect(refused.status).toBe(422);
       expect(problem(refused.body)).toMatchObject({
         code: 'validation_failed',
         errors: [{ path: 'contacts.1.target.contactId', code: 'not_found' }],
       });
 
-      const invalidPhone = await clinic.owner.post('/api/v1/patients').send({
-        fullName: 'Never Created',
-        dateOfBirth: CHILD_DOB,
-        contacts: [linkInput(newContact('Bad Phone', '12'), 'parent')],
-      });
+      const invalidPhone = await clinic.owner
+        .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
+        .send({
+          fullName: 'Never Created',
+          dateOfBirth: CHILD_DOB,
+          contacts: [linkInput(newContact('Bad Phone', '12'), 'parent')],
+        });
       expect(invalidPhone.status).toBe(422);
       expect(problem(invalidPhone.body).errors?.[0]?.path).toBe(
         'contacts.0.target.newContact.phone',
@@ -283,14 +292,17 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
           linkInput({ patientId: mother.id }, 'parent'),
         )
       ).map((row) => row.contact);
-      const refused = await main.owner.post('/api/v1/patients').send({
-        fullName: 'Dup Child',
-        dateOfBirth: CHILD_DOB,
-        contacts: [
-          linkInput({ patientId: mother.id }, 'parent'),
-          linkInput({ contactId: sibling?.id }, 'parent', { isBillingContact: true }),
-        ],
-      });
+      const refused = await main.owner
+        .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
+        .send({
+          fullName: 'Dup Child',
+          dateOfBirth: CHILD_DOB,
+          contacts: [
+            linkInput({ patientId: mother.id }, 'parent'),
+            linkInput({ contactId: sibling?.id }, 'parent', { isBillingContact: true }),
+          ],
+        });
       expect(refused.status).toBe(422);
       expect(problem(refused.body).errors).toEqual([
         expect.objectContaining({ path: 'contacts.1', code: 'duplicate' }),
@@ -371,18 +383,21 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
       const offered = await lookup(main.owner, 'Nadia Saab-Aoun');
       expect(offered).toEqual([{ kind: 'contact', contact: after?.contact }]);
 
-      const again = await main.owner.post('/api/v1/patients').send({
+      const again = await main.owner.post('/api/v1/patients').set('Idempotency-Key', newId()).send({
         fullName: 'Someone Else',
         phone: '71 300 003',
         linkContactId: contactId,
       });
       expect(again.status).toBe(409);
       expect(again.body).toMatchObject({ code: 'contact.already_linked' });
-      const unknown = await main.owner.post('/api/v1/patients').send({
-        fullName: 'Someone Else',
-        phone: '71 300 003',
-        linkContactId: newId(),
-      });
+      const unknown = await main.owner
+        .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
+        .send({
+          fullName: 'Someone Else',
+          phone: '71 300 003',
+          linkContactId: newId(),
+        });
       expect(unknown.status).toBe(422);
       expect(problem(unknown.body).errors?.[0]).toMatchObject({
         path: 'linkContactId',
@@ -724,11 +739,14 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
       expect(problem(asTarget.body).errors).toEqual([
         expect.objectContaining({ path: 'target.patientId', code: 'merged' }),
       ]);
-      const onCreate = await main.owner.post('/api/v1/patients').send({
-        fullName: 'Gone Child',
-        dateOfBirth: CHILD_DOB,
-        contacts: [linkInput({ patientId: gone.id }, 'parent')],
-      });
+      const onCreate = await main.owner
+        .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
+        .send({
+          fullName: 'Gone Child',
+          dateOfBirth: CHILD_DOB,
+          contacts: [linkInput({ patientId: gone.id }, 'parent')],
+        });
       expect(onCreate.status).toBe(422);
       expect(problem(onCreate.body).errors).toEqual([
         expect.objectContaining({ path: 'contacts.0.target.patientId', code: 'merged' }),

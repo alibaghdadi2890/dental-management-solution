@@ -6,9 +6,9 @@ import {
   planResultSchema,
   planTreatmentSchema,
   recordDiagnosisSchema,
-  setToothPresenceSchema,
-  toothPresenceResultSchema,
-  toothPresenceSchema,
+  presenceResultSchema,
+  setPresenceInVisitSchema,
+  setPresenceOnPatientSchema,
   toothStateSchema,
 } from './clinical-records.js';
 
@@ -69,37 +69,54 @@ describe('answerUnfinishedSchema', () => {
   });
 });
 
-describe('setToothPresenceSchema', () => {
-  it('accepts primary or permanent', () => {
-    expect(setToothPresenceSchema.safeParse({ present: 'primary' }).success).toBe(true);
-    expect(setToothPresenceSchema.safeParse({ present: 'permanent' }).success).toBe(true);
+describe('presence inputs (feature 7, H1)', () => {
+  it('sets one state in a visit', () => {
+    expect(setPresenceInVisitSchema.safeParse({ presence: 'missing' }).success).toBe(true);
+    expect(setPresenceInVisitSchema.safeParse({ presence: 'primary' }).success).toBe(false);
   });
 
-  it('rejects anything else', () => {
-    expect(setToothPresenceSchema.safeParse({ present: 'missing' }).success).toBe(false);
+  it('sets several teeth on the patient record, each once, with one When', () => {
+    const base = {
+      teeth: [
+        { toothCode: '18', presence: 'missing' },
+        { toothCode: '36', presence: 'implant' },
+      ],
+      when: { kind: 'before_first_visit' },
+    };
+    expect(setPresenceOnPatientSchema.parse(base)).toEqual({ ...base, reason: null });
+    expect(
+      setPresenceOnPatientSchema.safeParse({
+        ...base,
+        when: { kind: 'date', date: '2026-06-03' },
+        reason: ' accident ',
+        dentistId: ID,
+      }).data,
+    ).toMatchObject({ when: { kind: 'date', date: '2026-06-03' }, reason: 'accident' });
   });
-});
 
-describe('toothPresenceSchema', () => {
-  it('accepts a permanent code at position 1–5', () => {
-    expect(toothPresenceSchema.safeParse({ position: '14', present: 'primary' }).success).toBe(
-      true,
-    );
-  });
-
-  it('rejects a position beyond 5 (no primary predecessor) and a primary code', () => {
-    expect(toothPresenceSchema.safeParse({ position: '16', present: 'primary' }).success).toBe(
+  it('refuses an empty batch, a tooth twice, a far-future date and a When without its date', () => {
+    const tooth = { toothCode: '18', presence: 'missing' };
+    const when = { kind: 'before_first_visit' };
+    expect(setPresenceOnPatientSchema.safeParse({ teeth: [], when }).success).toBe(false);
+    expect(setPresenceOnPatientSchema.safeParse({ teeth: [tooth, tooth], when }).success).toBe(
       false,
     );
-    expect(toothPresenceSchema.safeParse({ position: '54', present: 'primary' }).success).toBe(
-      false,
-    );
+    expect(
+      setPresenceOnPatientSchema.safeParse({
+        teeth: [tooth],
+        when: { kind: 'date', date: '2099-01-01' },
+      }).success,
+    ).toBe(false);
+    expect(
+      setPresenceOnPatientSchema.safeParse({ teeth: [tooth], when: { kind: 'date' } }).success,
+    ).toBe(false);
   });
 });
 
 describe('toothStateSchema', () => {
   const base = {
     code: '16',
+    presence: 'present',
     state: 'none',
     surfaces: {},
     wholeTooth: null,
@@ -141,7 +158,23 @@ describe('toothStateSchema', () => {
 
 const CHART = {
   dentition: { stage: 'permanent', source: 'auto', ageYears: 34 },
-  toothStatus: [{ position: '14', present: 'primary' }],
+  presence: [
+    {
+      id: ID,
+      toothCode: '36',
+      presence: 'missing',
+      occurredOn: null,
+      reason: 'accident',
+      dentistId: ID,
+      dentistName: 'Dr. Amal Karim',
+      visitId: null,
+      visitNumber: null,
+      serviceId: null,
+      serviceCode: null,
+      serviceName: null,
+      recordedAt: '2026-09-29T10:00:00Z',
+    },
+  ],
   diagnoses: [
     {
       id: ID,
@@ -216,6 +249,7 @@ const CHART = {
   teeth: [
     {
       code: '16',
+      presence: 'present',
       state: 'treated_today',
       surfaces: { O: 'treated_today' },
       wholeTooth: null,
@@ -270,9 +304,16 @@ describe('charting route results', () => {
   it('wraps the updated visit with the affected record', () => {
     expect(diagnosisResultSchema.safeParse({ visit, record: diagnosis }).success).toBe(true);
     expect(planResultSchema.safeParse({ visit, record: plan }).success).toBe(true);
+    const [presence] = CHART.presence;
+    expect(presenceResultSchema.safeParse({ visit, record: presence }).success).toBe(true);
+    // Nothing written: the tooth already had that presence.
+    expect(presenceResultSchema.safeParse({ visit, record: null }).success).toBe(true);
     expect(
-      toothPresenceResultSchema.safeParse({ visit, record: { position: '14', present: 'primary' } })
-        .success,
+      planResultSchema.safeParse({
+        visit,
+        record: plan,
+        presenceChange: { toothCode: '46', presence: 'implant' },
+      }).success,
     ).toBe(true);
   });
 

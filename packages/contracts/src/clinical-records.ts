@@ -1,18 +1,28 @@
 import { z } from 'zod';
 import { chargeUnitSchema, jawSchema } from './catalog.js';
-import { idSchema, isoDateSchema, isoDateTimeSchema, moneySchema, optionalText } from './common.js';
+import {
+  commaSeparatedIds,
+  idSchema,
+  isoDateSchema,
+  isoDateTimeSchema,
+  moneySchema,
+  notFutureDateSchema,
+  optionalText,
+} from './common.js';
 import { dentitionStageSchema } from './patient-age.js';
 import {
-  successionPositionSchema,
   surfaceKeySchema,
   surfacesSchema,
   toothCodeSchema,
+  toothPresenceChangeSchema,
+  toothPresenceStateSchema,
 } from './tooth.js';
 import { visitSchema } from './visits.js';
 
 /**
  * `clinical`'s charting records (spec §Data model / §Backend — clinical): diagnoses,
- * treatment plans, tooth presence, the patient chart and its supporting reads. `visits.ts` has
+ * treatment plans, tooth presence (missing, not erupted, implant; feature 7), the patient chart
+ * and its supporting reads. `visits.ts` has
  * the visit lifecycle and money shapes; `visit-money.ts` the pure arithmetic.
  * `dentitionStageSchema` lives in `patient-age.ts` (`patients` owns the override); this file
  * imports it.
@@ -133,16 +143,32 @@ export const planGroupInputSchema = z.object({
 });
 export type PlanGroupInput = z.infer<typeof planGroupInputSchema>;
 
-export const TOOTH_PRESENCE_VALUES = ['primary', 'permanent'] as const;
-export type ToothPresenceValue = (typeof TOOTH_PRESENCE_VALUES)[number];
-export const toothPresenceValueSchema = z.enum(TOOTH_PRESENCE_VALUES);
+/** A free-text reason on a presence set by hand ("accident", "congenitally missing"). */
+const PRESENCE_REASON_MAX = 200;
 
-/** One `tooth_status` row: an explicit override of what occupies a chart column (spec W5/W15). */
-export const toothPresenceSchema = z.object({
-  position: successionPositionSchema,
-  present: toothPresenceValueSchema,
+/**
+ * One `tooth_presences` row (feature 7, H1; ADR-0034): a time someone, or a service, set what
+ * is at a tooth position. A tooth's presence is its latest row; a tooth without one is
+ * `present`. `occurredOn` is the visit's date, or the date entered on the patient record —
+ * null there means "before first visit": the date is not known and is not invented (H3a).
+ * `serviceId` names the visit service that caused it (H2), with its code and name.
+ */
+export const toothPresenceRecordSchema = z.object({
+  id: idSchema,
+  toothCode: toothCodeSchema,
+  presence: toothPresenceStateSchema,
+  occurredOn: isoDateSchema.nullable(),
+  reason: z.string().nullable(),
+  dentistId: idSchema,
+  dentistName: z.string(),
+  visitId: idSchema.nullable(),
+  visitNumber: z.number().int().positive().nullable(),
+  serviceId: idSchema.nullable(),
+  serviceCode: z.string().nullable(),
+  serviceName: z.string().nullable(),
+  recordedAt: isoDateTimeSchema,
 });
-export type ToothPresence = z.infer<typeof toothPresenceSchema>;
+export type ToothPresenceRecord = z.infer<typeof toothPresenceRecordSchema>;
 
 export const recordDiagnosisSchema = z.object({
   diagnosisId: idSchema,
@@ -202,10 +228,41 @@ export const updatePlanSchema = z
   });
 export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
 
-export const setToothPresenceSchema = z.object({
-  present: toothPresenceValueSchema,
+/** `PUT /visits/:id/teeth/:toothCode/presence`: applied at once, dated by the visit (H1). */
+export const setPresenceInVisitSchema = z.object({ presence: toothPresenceStateSchema });
+export type SetPresenceInVisitInput = z.infer<typeof setPresenceInVisitSchema>;
+
+/** When a presence set on the patient record came about (H3a). */
+export const presenceWhenSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('before_first_visit') }),
+  z.object({ kind: z.literal('date'), date: notFutureDateSchema() }),
+]);
+export type PresenceWhen = z.infer<typeof presenceWhenSchema>;
+
+/** One tooth of each of the 52 codes at most. */
+const MAX_PRESENCE_TEETH = 52;
+
+/**
+ * `POST /clinical/patients/:id/presence` (`chart:write`): one or several teeth at once — the
+ * tooth panel's menu, or Edit presence at intake — with one When, reason and dentist for all.
+ */
+export const setPresenceOnPatientSchema = z.object({
+  teeth: z
+    .array(toothPresenceChangeSchema)
+    .min(1)
+    .max(MAX_PRESENCE_TEETH)
+    .refine((teeth) => new Set(teeth.map((tooth) => tooth.toothCode)).size === teeth.length, {
+      message: 'Each tooth once',
+    }),
+  when: presenceWhenSchema,
+  reason: optionalText(PRESENCE_REASON_MAX),
+  dentistId: idSchema.optional(),
 });
-export type SetToothPresenceInput = z.infer<typeof setToothPresenceSchema>;
+export type SetPresenceOnPatientInput = z.infer<typeof setPresenceOnPatientSchema>;
+
+/** `DELETE /clinical/patients/:id/presence?ids=`: the Undo of a set on the patient record. */
+export const removePresenceQuerySchema = z.object({ ids: commaSeparatedIds(MAX_PRESENCE_TEETH) });
+export type RemovePresenceQuery = z.infer<typeof removePresenceQuerySchema>;
 
 /** The charting routes answer with the updated visit plus the affected record (spec §HTTP). */
 export const diagnosisResultSchema = z.object({
@@ -214,14 +271,23 @@ export const diagnosisResultSchema = z.object({
 });
 export type DiagnosisResult = z.infer<typeof diagnosisResultSchema>;
 
-export const planResultSchema = z.object({ visit: visitSchema, record: treatmentPlanSchema });
+export const planResultSchema = z.object({
+  visit: visitSchema,
+  record: treatmentPlanSchema,
+  /** The tooth's new presence, when performing the plan (or undoing it) changed it (H2). */
+  presenceChange: toothPresenceChangeSchema.nullable().optional(),
+});
 export type PlanResult = z.infer<typeof planResultSchema>;
 
-export const toothPresenceResultSchema = z.object({
+/**
+ * The presence routes of a visit answer with the visit and the row written or removed; `record`
+ * is null when the tooth already had that presence (nothing was written).
+ */
+export const presenceResultSchema = z.object({
   visit: visitSchema,
-  record: toothPresenceSchema,
+  record: toothPresenceRecordSchema.nullable(),
 });
-export type ToothPresenceResult = z.infer<typeof toothPresenceResultSchema>;
+export type PresenceResult = z.infer<typeof presenceResultSchema>;
 
 /** One completed service in a patient's tooth or visit history: `visit_services` joined back to
  * its visit and dentist. */
@@ -260,6 +326,8 @@ const toothVisualStateSchema = z.enum(TOOTH_VISUAL_STATES);
  */
 export const toothStateSchema = z.object({
   code: toothCodeSchema,
+  /** What is at the position (H1); a tooth that is not `present` always has an entry. */
+  presence: toothPresenceStateSchema,
   state: toothVisualStateSchema,
   surfaces: z.partialRecord(surfaceKeySchema, serviceMarkSchema),
   wholeTooth: serviceMarkSchema.nullable(),
@@ -281,7 +349,8 @@ export const patientChartSchema = z.object({
     source: z.enum(['auto', 'override']),
     ageYears: z.number().int().nonnegative().nullable(),
   }),
-  toothStatus: z.array(toothPresenceSchema),
+  /** Every presence row of the patient, in the order recorded (the last one of a tooth wins). */
+  presence: z.array(toothPresenceRecordSchema),
   diagnoses: z.array(diagnosisRecordSchema),
   plans: z.array(treatmentPlanSchema),
   /** The patient's named plans, oldest first. */
@@ -300,9 +369,18 @@ export type PatientChart = z.infer<typeof patientChartSchema>;
 export const patientChartResultSchema = z.object({ chart: patientChartSchema });
 export type PatientChartResult = z.infer<typeof patientChartResultSchema>;
 
+/** What a presence set on the patient record answers with: the chart, and the rows it wrote
+ * (none for teeth that already had that presence), which is what its Undo removes. */
+export const patientPresenceResultSchema = patientChartResultSchema.extend({
+  presenceIds: z.array(idSchema),
+});
+export type PatientPresenceResult = z.infer<typeof patientPresenceResultSchema>;
+
 /** `GET /clinical/patients/:id/teeth/:toothCode/history`: the three stages, in order. */
 export const toothHistorySchema = z.object({
   toothCode: toothCodeSchema,
+  /** The tooth's presence rows, in the order recorded (H1). */
+  presence: z.array(toothPresenceRecordSchema),
   diagnoses: z.array(diagnosisRecordSchema),
   plans: z.array(treatmentPlanSchema),
   services: z.array(historyServiceSchema),
@@ -338,5 +416,8 @@ export const clinicalSummarySchema = z.object({
   plannedProcedures: z.number().int().nonnegative(),
   teethTreated: z.number().int().nonnegative(),
   servicesPerformed: z.number().int().nonnegative(),
+  /** Among the teeth of the chart the patient is on (H1, D8). */
+  missingTeeth: z.number().int().nonnegative(),
+  implants: z.number().int().nonnegative(),
 });
 export type ClinicalSummary = z.infer<typeof clinicalSummarySchema>;

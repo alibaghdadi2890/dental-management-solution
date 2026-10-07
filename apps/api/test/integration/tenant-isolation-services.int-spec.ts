@@ -15,12 +15,11 @@ import type {
   Tenant,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BillingService } from '../../src/modules/billing';
 import { ChartService, VisitsService } from '../../src/modules/clinical';
 import { ContactsService, PatientsService } from '../../src/modules/patients';
 import { UsersService } from '../../src/modules/users';
-import { RequestContext } from '../../src/platform/cls/request-context';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
@@ -65,7 +64,11 @@ describe('tenant isolation through the public services', () => {
     const inTenant = {
       get: (path: string) => admin.get(`/api/v1${path}`).set('X-Tenant-Id', tenant.id),
       post: (path: string, body: object) =>
-        admin.post(`/api/v1${path}`).set('X-Tenant-Id', tenant.id).send(body),
+        admin
+          .post(`/api/v1${path}`)
+          .set('X-Tenant-Id', tenant.id)
+          .set('Idempotency-Key', newId())
+          .send(body),
     };
     const [branch] = (await inTenant.get('/branches')).body as Branch[];
     if (!branch) throw new Error('provisioning created no branch');
@@ -158,10 +161,10 @@ describe('tenant isolation through the public services', () => {
         [b.tenant.id],
       );
       const foreignIds = new Set(foreign.rows.map((row) => row.id));
-      expect(foreignIds.size).toBe(26);
+      expect(foreignIds.size).toBe(27);
       const services = (await ownerA.get('/api/v1/catalog/services')).body as ServiceItem[];
       const diagnoses = (await ownerA.get('/api/v1/catalog/diagnoses')).body as DiagnosisItem[];
-      expect(services).toHaveLength(12);
+      expect(services).toHaveLength(13);
       expect(diagnoses).toHaveLength(14);
       expect([...services, ...diagnoses].filter((item) => foreignIds.has(item.id))).toEqual([]);
     });
@@ -338,8 +341,9 @@ describe('tenant isolation through the public services', () => {
     it("billing: B's patients have no balance for A, and B's ledger is left unchanged", async () => {
       const recorded = await admin
         .post(`/api/v1/billing/patients/${b.patient.id}/adjustments`)
+        .set('Idempotency-Key', newId())
         .set('X-Tenant-Id', b.tenant.id)
-        .send({ amount: '75.00', effectiveDate: '2026-01-15', reason: 'Carried over' });
+        .send({ amount: '75.00', effectiveDate: '2026-01-15', reason: 'courtesy' });
       expect(recorded.status).toBe(201);
       const bLedger = () =>
         database.ownerPool.query(
@@ -354,7 +358,8 @@ describe('tenant isolation through the public services', () => {
         ownerA.get(`/api/v1/billing/patients/${id}/balance`),
         ownerA
           .post(`/api/v1/billing/patients/${id}/adjustments`)
-          .send({ amount: '-75.00', effectiveDate: '2026-01-15', reason: 'Hijack' }),
+          .set('Idempotency-Key', newId())
+          .send({ amount: '-75.00', effectiveDate: '2026-01-15', reason: 'courtesy' }),
       ];
       for (const response of await Promise.all(attempts)) {
         expect(response.status).toBe(404);
@@ -388,6 +393,7 @@ describe('tenant isolation through the public services', () => {
       const bPatient = (
         await admin
           .post('/api/v1/billing/opening-balances')
+          .set('Idempotency-Key', newId())
           .set('X-Tenant-Id', b.tenant.id)
           .send({
             patient: { fullName: 'Bravo Payer', phone: '03 123 457' },
@@ -549,7 +555,7 @@ describe('tenant isolation through the public services', () => {
     it("visits: B's live visit, its records and B's charts are not found for A, and unchanged", async () => {
       // After the completed-visit test: this visit holds B's room until the suite ends.
       const bPatient = (
-        await ownerB.post('/api/v1/patients').send({
+        await ownerB.post('/api/v1/patients').set('Idempotency-Key', newId()).send({
           fullName: 'Bravo Charted',
           phone: '03 123 456',
           dateOfBirth: '2016-05-01',
@@ -586,7 +592,17 @@ describe('tenant isolation through the public services', () => {
           .post(`/api/v1/visits/${visitId}/plans`)
           .send({ procedureId: perTooth.id, toothCode: '16' }),
       );
-      await inB(ownerB.put(`/api/v1/visits/${visitId}/teeth/15`).send({ present: 'permanent' }));
+      const presenceId = await inB(
+        ownerB.put(`/api/v1/visits/${visitId}/teeth/15/presence`).send({ presence: 'missing' }),
+      );
+      // Recorded on the patient record too (feature 7): another row of B's.
+      const onRecord = await ownerB.post(`/api/v1/clinical/patients/${bPatient.id}/presence`).send({
+        teeth: [{ toothCode: '28', presence: 'implant' }],
+        when: { kind: 'before_first_visit' },
+        dentistId: profileId,
+      });
+      expect(onRecord.status, JSON.stringify(onRecord.body)).toBe(201);
+      const [recordPresenceId] = (onRecord.body as { presenceIds: string[] }).presenceIds;
       // A named plan made on the record, and work in progress (ADR-0031, ADR-0032).
       const grouped = await ownerB
         .post(`/api/v1/clinical/patients/${bPatient.id}/plan-groups`)
@@ -607,7 +623,7 @@ describe('tenant isolation through the public services', () => {
         'visit_services',
         'patient_diagnoses',
         'treatment_plans',
-        'tooth_status',
+        'tooth_presences',
         'plan_groups',
         'treatment_plan_sessions',
       ];
@@ -625,8 +641,9 @@ describe('tenant isolation through the public services', () => {
         );
       const before = await snapshot();
       // B's completed visit from the test before, and its service, are in there too.
-      // The service marked not finished stays as a removed row.
-      expect(before.map((rows) => rows.length)).toEqual([2, 3, 1, 2, 1, 1, 1]);
+      // The service marked not finished stays as a removed row. Tooth presence: the two set by
+      // hand, and the two the extractions caused (one taken back with its unfinished service).
+      expect(before.map((rows) => rows.length)).toEqual([2, 3, 1, 2, 4, 1, 1]);
 
       const visit = `/api/v1/visits/${visitId}`;
       const visitRoutes = [
@@ -650,7 +667,8 @@ describe('tenant isolation through the public services', () => {
         ownerA.delete(`${visit}/plans/${startedPlanId}/session`),
         ownerA.post(`${visit}/plans/${planId}/cancel`),
         ownerA.delete(`${visit}/plans/${planId}`),
-        ownerA.put(`${visit}/teeth/15`).send({ present: 'primary' }),
+        ownerA.put(`${visit}/teeth/15/presence`).send({ presence: 'present' }),
+        ownerA.delete(`${visit}/presence/${presenceId}`),
       ];
       for (const response of await Promise.all(visitRoutes)) {
         expect(response.status, JSON.stringify(response.body)).toBe(404);
@@ -672,6 +690,11 @@ describe('tenant isolation through the public services', () => {
         ownerA.patch(`${chart}/plans/${planId}`).send({ groupId: null }),
         ownerA.patch(`${chart}/plan-groups/${groupId}`).send({ title: 'Renamed' }),
         ownerA.delete(`${chart}/plan-groups/${groupId}`),
+        ownerA.post(`${chart}/presence`).send({
+          teeth: [{ toothCode: '28', presence: 'present' }],
+          when: { kind: 'before_first_visit' },
+        }),
+        ownerA.delete(`${chart}/presence?ids=${String(recordPresenceId)}`),
       ];
       for (const response of await Promise.all(chartRoutes)) {
         expect(response.status, JSON.stringify(response.body)).toBe(404);
@@ -708,10 +731,11 @@ describe('tenant isolation through the public services', () => {
       expect(await snapshot()).toEqual(before);
     });
 
-    it("billing views, export and the merge job never reach B's patients or ledger", async () => {
+    it("billing views, export and the merge re-point never reach B's patients or ledger", async () => {
       const inTenant = (tenant: Tenant, fullName: string, amount: string) =>
         admin
           .post('/api/v1/billing/opening-balances')
+          .set('Idempotency-Key', newId())
           .set('X-Tenant-Id', tenant.id)
           .send({
             patient: { fullName, phone: '03 123 456' },
@@ -768,30 +792,57 @@ describe('tenant isolation through the public services', () => {
         .post('/api/v1/patients/merge')
         .send({ keepId: aKeep.id, dropId: aDrop.id, reason: 'Same person' });
       expect(merged.status).toBe(200);
-      await vi.waitFor(
-        async () => {
-          const aEntries = await database.ownerPool.query<{ patient_id: string }>(
-            'select patient_id from ledger_entries where tenant_id = $1',
-            [a.tenant.id],
-          );
-          expect(aEntries.rows.map((row) => row.patient_id)).toEqual([aKeep.id, aKeep.id]);
-        },
-        { timeout: 15_000, interval: 100 },
+      const aEntries = await database.ownerPool.query<{ patient_id: string }>(
+        'select patient_id from ledger_entries where tenant_id = $1',
+        [a.tenant.id],
       );
-      // Even a job in A naming B's patient moves nothing: RLS scopes the update to A.
-      const moved = await testApp.app
-        .get(RequestContext)
-        .run({ requestId: newId(), actorKind: 'job', tenantId: a.tenant.id }, () =>
-          testApp.app.get(BillingService).repointMergedEntries(aKeep.id, bDebtor.id),
-        );
-      expect(moved).toBe(0);
+      expect(aEntries.rows.map((row) => row.patient_id)).toEqual([aKeep.id, aKeep.id]);
+      // A merge in A naming B's patient finds no such patient, so nothing of B's moves.
+      const foreignMerge = await ownerA
+        .post('/api/v1/patients/merge')
+        .send({ keepId: aKeep.id, dropId: bDebtor.id, reason: 'Not ours' });
+      expect(foreignMerge.status).toBe(404);
       expect(await bLedger()).toEqual(bBefore);
+    });
+
+    it("lookups and the activity feed never name B's patients, visits or rows for A (H7)", async () => {
+      const bVisit = (
+        await database.ownerPool.query<{ id: string }>(
+          'select id from visits where tenant_id = $1 limit 1',
+          [b.tenant.id],
+        )
+      ).rows[0]?.id;
+      expect(bVisit).toEqual(expect.any(String));
+      const names = await ownerA.get(`/api/v1/patients/names?ids=${a.patient.id},${b.patient.id}`);
+      expect(names.status).toBe(200);
+      expect(names.body).toEqual([
+        { id: a.patient.id, fullName: 'Alpha Patient', displayNumber: 'P-000001' },
+      ]);
+      const numbers = await ownerA.get(`/api/v1/visits/numbers?ids=${String(bVisit)}`);
+      expect(numbers.status).toBe(200);
+      expect(numbers.body).toEqual([]);
+      expect(
+        ((await ownerB.get(`/api/v1/visits/numbers?ids=${String(bVisit)}`)).body as unknown[])
+          .length,
+      ).toBe(1);
+
+      for (const filter of [`patientId=${b.patient.id}`, `visitId=${String(bVisit)}`]) {
+        const feed = await ownerA.get(`/api/v1/audit?feed=true&${filter}`);
+        expect(feed.status).toBe(200);
+        expect((feed.body as AuditPage).items).toEqual([]);
+      }
+      const own = (await ownerA.get('/api/v1/audit?feed=true&limit=100')).body as AuditPage;
+      const bIds = new Set([b.patient.id, String(bVisit)]);
+      expect(
+        own.items.some((item) => bIds.has(item.patientId ?? '') || bIds.has(item.visitId ?? '')),
+      ).toBe(false);
     });
 
     it("contacts: B's patients and contacts are not found on any contact route", async () => {
       // B: a child whose guardian is a new contact, and whose emergency contact is B's patient.
       const bChild = await admin
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .set('X-Tenant-Id', b.tenant.id)
         .send({
           fullName: 'Bravo Child',
@@ -868,7 +919,7 @@ describe('tenant isolation through the public services', () => {
         expect(refused.status).toBe(422);
         expect(refused.body).toMatchObject({ errors: [{ path, code: 'not_found' }] });
       }
-      const created = await ownerA.post('/api/v1/patients').send({
+      const created = await ownerA.post('/api/v1/patients').set('Idempotency-Key', newId()).send({
         fullName: 'Alpha Hijack',
         phone: '71 000 000',
         linkContactId: guardianId,
@@ -921,6 +972,7 @@ describe('tenant isolation through the public services', () => {
       if (aBefore === undefined || bBefore === undefined) throw new Error('no counters yet');
       const created = await ownerA
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .send({ fullName: 'Alpha Second', phone: '71 000 000' });
       expect(created.status).toBe(201);
       expect(await counter(a.tenant.id)).toBe(aBefore + 1);
@@ -996,7 +1048,7 @@ describe('tenant isolation through the public services', () => {
       'treatment_plans',
       'plan_groups',
       'treatment_plan_sessions',
-      'tooth_status',
+      'tooth_presences',
       'visit_counters',
       'visit_amendments',
       'payments',

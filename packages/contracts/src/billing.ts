@@ -10,7 +10,6 @@ import {
   notFutureDateSchema,
   optionalText,
 } from './common.js';
-import { reasonSchema } from './audit.js';
 import { patientCreateSchema, patientListQuerySchema, patientSchema } from './patients.js';
 import { VISIT_LIST_TABS, visitFiltersSchema } from './visit-list.js';
 
@@ -75,14 +74,47 @@ export type CreateWithOpeningBalance = z.infer<typeof createWithOpeningBalanceSc
 /** What a client sends (defaults such as `contacts: []` may be left out). */
 export type CreateWithOpeningBalanceInput = z.input<typeof createWithOpeningBalanceSchema>;
 
-/** No UI in this feature; a building block for corrections and feature 6 import. */
-export const adjustmentInputSchema = z.object({
-  amount: decimalAmountSchema.refine((amount) => Number(amount) !== 0, 'Must not be zero'),
-  effectiveDate: notFutureDateSchema(),
-  reason: reasonSchema,
-  note: optionalText(LEDGER_NOTE_MAX),
-});
+/**
+ * Why a balance was adjusted (feature 7, H4). Stored as text in the entry's `reason`; entries
+ * recorded before the list existed hold free text there, so reads type it as a string.
+ */
+export const ADJUSTMENT_REASONS = [
+  'write_off',
+  'courtesy',
+  'opening_balance_correction',
+  'charge_without_visit',
+  'other',
+] as const;
+export const adjustmentReasonSchema = z.enum(ADJUSTMENT_REASONS);
+export type AdjustmentReason = z.infer<typeof adjustmentReasonSchema>;
+
+/** The shortest note that explains an "other" adjustment: the rule of every reason dialog. */
+export const ADJUSTMENT_NOTE_MIN = 3;
+
+/**
+ * `POST /billing/patients/:id/adjustments`: a signed, reasoned, dated correction of what the
+ * patient owes: negative = owes less (write-off, courtesy, correction), positive = owes more
+ * (a charge without a visit, correction). "Other" needs the note to say why.
+ */
+export const adjustmentInputSchema = z
+  .object({
+    amount: decimalAmountSchema.refine((amount) => Number(amount) !== 0, 'Must not be zero'),
+    effectiveDate: notFutureDateSchema(),
+    reason: adjustmentReasonSchema,
+    note: optionalText(LEDGER_NOTE_MAX),
+  })
+  .superRefine((input, context) => {
+    if (input.reason === 'other' && (input.note ?? '').length < ADJUSTMENT_NOTE_MIN) {
+      context.addIssue({
+        code: 'custom',
+        path: ['note'],
+        message: `Say why in at least ${String(ADJUSTMENT_NOTE_MIN)} characters`,
+      });
+    }
+  });
 export type AdjustmentInput = z.infer<typeof adjustmentInputSchema>;
+/** What a client sends (the note may be left out). */
+export type AdjustmentRequest = z.input<typeof adjustmentInputSchema>;
 
 /** A ledger balance's amount: a sum of ledger entries, so `common.ts`'s `aggregateAmountSchema`
  * (not `decimalAmountSchema`, which is for one input bounded by a `numeric(12,2)` column). */
@@ -137,6 +169,13 @@ export type PatientExportQuery = z.infer<typeof patientExportQuerySchema>;
 /** `GET /billing/patients/owing-count`: active patients owing in any currency (the tab chip). */
 export const owingCountSchema = z.object({ count: z.number().int().nonnegative() });
 export type OwingCount = z.infer<typeof owingCountSchema>;
+
+/**
+ * `GET /billing/currency-lock`: the tenant currency is locked once any ledger entry exists
+ * (feature 7, H6); `currency` is the one it is locked in.
+ */
+export const currencyLockSchema = z.object({ locked: z.boolean(), currency: currencySchema });
+export type CurrencyLock = z.infer<typeof currencyLockSchema>;
 
 /** Result of `POST /billing/opening-balances`. */
 export const openingBalanceResultSchema = z.object({

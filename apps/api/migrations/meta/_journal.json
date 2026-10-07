@@ -232,6 +232,41 @@
       "when": 1791220954814,
       "tag": "0032_visit_checked_out",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791302789137,
+      "tag": "0033_owner_practitioner_type",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791303659518,
+      "tag": "0034_idempotency_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791305044497,
+      "tag": "0035_audit_context",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791306527486,
+      "tag": "0036_tooth_presence",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791306537292,
+      "tag": "0037_retire_tooth_status",
+      "breakpoints": true
     }
   ]
 }

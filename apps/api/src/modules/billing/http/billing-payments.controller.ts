@@ -27,8 +27,8 @@ import { ApiHeader, ApiProduces } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
+import { idempotencyKey } from '../../../platform/http/idempotency-key';
 import { RequirePermission } from '../../../platform/http/route-access';
-import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { PaymentViewsService } from '../application/payment-views.service';
 import { PaymentsService } from '../application/payments.service';
 import { exportLocale } from './export-headers';
@@ -49,18 +49,6 @@ class ReceiptDto extends createZodDto(receiptSchema) {}
 
 /** A download idle this long (no socket activity) is dropped. */
 const EXPORT_IDLE_TIMEOUT_MS = 60_000;
-
-/** P11: a client-generated uuid per payment attempt; a retry sends the same one. */
-function idempotencyKey(value: string | undefined): string {
-  const parsed = idSchema.safeParse(value);
-  if (!parsed.success) {
-    const message = 'An Idempotency-Key header (a uuid) is required';
-    throw new ValidationFailedError(message, [
-      { path: 'Idempotency-Key', code: 'idempotency_key', message },
-    ]);
-  }
-  return parsed.data;
-}
 
 /**
  * Payments (feature 5, docs/modules/billing.md): the Transactions list and export, receipts,

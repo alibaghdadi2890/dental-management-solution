@@ -83,10 +83,13 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
 
   /** A patient carried over owing `amount`, so "the pre-visit figure" is not zero. */
   const patientOwing = async (fullName: string, amount: string): Promise<Patient> => {
-    const response = await owner.post('/api/v1/billing/opening-balances').send({
-      patient: { fullName, phone: '71 000 000' },
-      openingBalance: { amount, asOf: TODAY },
-    });
+    const response = await owner
+      .post('/api/v1/billing/opening-balances')
+      .set('Idempotency-Key', newId())
+      .send({
+        patient: { fullName, phone: '71 000 000' },
+        openingBalance: { amount, asOf: TODAY },
+      });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as OpeningBalanceResult).patient;
   };

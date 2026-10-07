@@ -13,6 +13,7 @@ import {
   type PatientAccount,
   type PatientRef,
   type Payer,
+  type AccountAdjustment,
   type PaymentHistoryItem,
   type PaymentKind,
   type PaymentMethod,
@@ -400,6 +401,7 @@ export class PaymentViewsService {
         household: await this.household(patientId, payer, currency),
         payerFor: own && billsOthers ? this.payerOfContact(own) : null,
         history: await this.history(patientId),
+        adjustments: await this.adjustments(patientId, currency),
       };
     });
   }
@@ -505,7 +507,9 @@ export class PaymentViewsService {
           visitNumber: entry.visitId ? (numbers.get(entry.visitId) ?? null) : null,
           receiptNumber: entry.payment?.receiptNumber ?? null,
           method: entry.payment?.method ?? null,
-          note: entry.note ?? entry.reason,
+          reason: entry.kind === 'adjustment' ? entry.reason : null,
+          // An adjustment's reason has its own field; elsewhere it stands in for a missing note.
+          note: entry.kind === 'adjustment' ? entry.note : (entry.note ?? entry.reason),
           amount: fromCents(entry.amount),
           balance: fromCents(balance),
         })),
@@ -518,17 +522,19 @@ export class PaymentViewsService {
 
   // --- Building blocks ---
 
-  /** A patient's payments and refunds, newest first, with allocations and the running Remaining. */
-  private async history(patientId: string): Promise<PaymentHistoryItem[]> {
-    const rows = (await this.payments.forPatient(patientId)).filter((row) => row.kind !== 'void');
-    if (rows.length === 0) return [];
-    const voidedIds = this.voidedPaymentIds(await this.payments.forPatient(patientId));
+  /**
+   * The account's balance right after each ledger entry (the history's Remaining), by entry id;
+   * a voided payment and its void add nothing (P7).
+   */
+  private async remainingByEntry(patientId: string): Promise<Map<string, bigint>> {
+    const rows = await this.payments.forPatient(patientId);
+    const voidedIds = this.voidedPaymentIds(rows);
+    const paymentOf = new Map(rows.map((row) => [row.ledgerEntryId, row]));
     const entries = await this.entries.listForPatient(patientId);
-    const kindOf = new Map(rows.map((row) => [row.ledgerEntryId, row]));
-    const remaining = new Map(
+    return new Map(
       runningBalance(
         entries.map((entry) => {
-          const payment = kindOf.get(entry.id);
+          const payment = paymentOf.get(entry.id);
           return {
             id: entry.id,
             kind: entry.kind,
@@ -541,6 +547,36 @@ export class PaymentViewsService {
         }),
       ).map((line) => [line.entry.id, line.balance]),
     );
+  }
+
+  /** The account's balance adjustments in `currency`, newest first, each with its Remaining (H4). */
+  private async adjustments(patientId: string, currency: string): Promise<AccountAdjustment[]> {
+    const entries = (await this.entries.listForPatient(patientId)).filter(
+      (entry) => entry.kind === 'adjustment' && entry.currency === currency,
+    );
+    if (entries.length === 0) return [];
+    const remaining = await this.remainingByEntry(patientId);
+    const names = await this.users.namesByUserIds(entries.map((entry) => entry.createdBy));
+    return entries
+      .map((entry) => ({
+        id: entry.id,
+        date: entry.effectiveDate,
+        amount: fromCents(toCents(entry.amount)),
+        currency: entry.currency,
+        reason: entry.reason,
+        note: entry.note,
+        recordedBy: names.get(entry.createdBy) ?? null,
+        recordedAt: entry.createdAt.toISOString(),
+        remaining: fromCents(remaining.get(entry.id) ?? 0n),
+      }))
+      .reverse();
+  }
+
+  /** A patient's payments and refunds, newest first, with allocations and the running Remaining. */
+  private async history(patientId: string): Promise<PaymentHistoryItem[]> {
+    const rows = (await this.payments.forPatient(patientId)).filter((row) => row.kind !== 'void');
+    if (rows.length === 0) return [];
+    const remaining = await this.remainingByEntry(patientId);
     const transactions = await this.hydrate(rows);
     const lines = await this.allocations.linesOfSources(rows.map((row) => row.ledgerEntryId));
     const labelled = await this.labels.label(lines);

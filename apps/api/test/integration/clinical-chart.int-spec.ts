@@ -89,6 +89,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
   const createPatient = async (fullName: string, dateOfBirth?: string): Promise<Patient> => {
     const response = await owner
       .post('/api/v1/patients')
+      .set('Idempotency-Key', newId())
       .send({ fullName, phone: '71 000 000', ...(dateOfBirth && { dateOfBirth }) });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as Patient;
@@ -294,7 +295,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       const auto = await chartOf(child);
       expect(auto).toEqual({
         dentition: { stage: 'primary', source: 'auto', ageYears: 8 },
-        toothStatus: [],
+        presence: [],
         diagnoses: [],
         plans: [],
         planGroups: [],
@@ -399,13 +400,18 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         (await dentist.agent.delete(visitPath(visit.id, `diagnoses/${removed.record.id}`))).status,
       ).toBe(200);
       expect(
-        (await dentist.agent.put(visitPath(visit.id, 'teeth/14')).send({ present: 'primary' }))
-          .status,
+        (
+          await dentist.agent
+            .put(visitPath(visit.id, 'teeth/14/presence'))
+            .send({ presence: 'missing' })
+        ).status,
       ).toBe(200);
 
       const chart = await chartOf(patient);
       expect(chart.liveVisitId).toBe(visit.id);
-      expect(chart.toothStatus).toEqual([{ position: '14', present: 'primary' }]);
+      expect(chart.presence.map((row) => [row.toothCode, row.presence, row.visitId])).toEqual([
+        ['14', 'missing', visit.id],
+      ]);
       expect(chart.diagnoses.map((record) => record.id)).toEqual([older, caries.record.id]);
       expect(chart.diagnoses[0]).toMatchObject({
         recordedInVisitId: earlier,
@@ -700,6 +706,8 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         plannedProcedures: 1,
         teethTreated: 2,
         servicesPerformed: 4,
+        missingTeeth: 0,
+        implants: 0,
       });
     });
   });
@@ -758,6 +766,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       const otherOwner = await signInAndSetPassword(testApp.app, otherOwnerEmail, TEMPORARY);
       const theirs = await otherOwner
         .post('/api/v1/patients')
+        .set('Idempotency-Key', newId())
         .send({ fullName: 'Someone Else', phone: '71 000 001' });
       expect(theirs.status, JSON.stringify(theirs.body)).toBe(201);
       const theirId = (theirs.body as Patient).id;

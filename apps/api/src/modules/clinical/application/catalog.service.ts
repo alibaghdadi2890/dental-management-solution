@@ -93,6 +93,7 @@ export class CatalogService {
               : { amount: row.price, currency },
           frequent: row.frequent,
           active: row.active,
+          toothEffect: row.toothEffect,
         }),
       );
     });

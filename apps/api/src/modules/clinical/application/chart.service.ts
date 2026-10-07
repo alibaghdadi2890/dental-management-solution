@@ -1,17 +1,20 @@
 import {
   ageOn,
   type ClinicalSummary,
+  currentPresence,
   deriveChart,
   type DiagnosisRecord,
   effectiveDentition,
   type HistoryService,
   type LastVisit,
   type PatientChart,
+  PERMANENT_CODES,
   type PlanGroup,
-  successionPositionSchema,
+  PRIMARY_CODES,
   toothCodeSchema,
   type ToothCode,
   type ToothHistory,
+  type ToothPresenceRecord,
   type TreatmentPlan,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -26,7 +29,7 @@ import { UsersService } from '../../users';
 import { PatientDiagnosesRepository } from '../persistence/patient-diagnoses.repository';
 import { PlanGroupsRepository } from '../persistence/plan-groups.repository';
 import { PlanSessionsRepository } from '../persistence/plan-sessions.repository';
-import { ToothStatusRepository } from '../persistence/tooth-status.repository';
+import { ToothPresenceRepository } from '../persistence/tooth-presence.repository';
 import { TreatmentPlansRepository } from '../persistence/treatment-plans.repository';
 import { VisitServicesRepository } from '../persistence/visit-services.repository';
 import { VisitsRepository } from '../persistence/visits.repository';
@@ -34,13 +37,15 @@ import {
   toDiagnosisRecord,
   toHistoryService,
   toPlanGroup,
+  toPresenceRecord,
   toTreatmentPlan,
 } from './record-mapping';
 import { toVisitService } from './visit-mapping';
 
-/** A patient's diagnoses, plans and finished services, with the dentists' names resolved, and
- * which of the patient's visits were voided (D6). */
+/** A patient's presence rows, diagnoses, plans and finished services, with the dentists' names
+ * resolved, and which of the patient's visits were voided (D6). */
 interface Records {
+  presence: ToothPresenceRecord[];
   diagnoses: DiagnosisRecord[];
   plans: TreatmentPlan[];
   history: HistoryService[];
@@ -71,15 +76,15 @@ export class ChartService {
     private readonly plans: TreatmentPlansRepository,
     private readonly groups: PlanGroupsRepository,
     private readonly sessions: PlanSessionsRepository,
-    private readonly teeth: ToothStatusRepository,
+    private readonly presences: ToothPresenceRepository,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   /**
    * The whole chart: the dentition (the override, else the stage for the age on the tenant's
-   * today, else permanent without a date of birth), the per-position tooth presence, the
-   * records, the patient's most recent live visit and the derived per-tooth state, which counts
-   * that visit's services as treated today.
+   * today, else permanent without a date of birth), the presence rows (missing, not erupted,
+   * implant; feature 7), the records, the patient's most recent live visit and the derived
+   * per-tooth state, which counts that visit's services as treated today.
    */
   chart(patientId: string): Promise<PatientChart> {
     return this.read(async () => {
@@ -101,11 +106,6 @@ export class ChartService {
         : [];
       return {
         dentition: { ...effectiveDentition(ageYears, patient.dentitionOverride), ageYears },
-        toothStatus: (await this.teeth.listForPatient(patient.id)).map((row) => ({
-          // The table's CHECK admits exactly the succession positions.
-          position: successionPositionSchema.parse(row.position),
-          present: row.present,
-        })),
         ...records,
         planGroups,
         liveVisitId: liveVisit?.id ?? null,
@@ -124,12 +124,12 @@ export class ChartService {
     return this.read(async () => {
       const patient = await this.patients.get(patientId);
       const { timeZone } = await this.tenancy.currentTenant();
-      const { diagnoses, plans, history, voidedVisitIds } = await this.records(
+      const { presence, diagnoses, plans, history, voidedVisitIds } = await this.records(
         patient.id,
         timeZone,
         toothCode,
       );
-      return { toothCode, diagnoses, plans, services: history, voidedVisitIds };
+      return { toothCode, presence, diagnoses, plans, services: history, voidedVisitIds };
     });
   }
 
@@ -165,11 +165,36 @@ export class ChartService {
     });
   }
 
-  /** The Record overview's treatment counts (W8). */
+  /**
+   * The Record overview's treatment counts (W8), with the missing teeth and implants among the
+   * teeth of the chart the patient is on (feature 7, D8): an adult's long-gone primary molar is
+   * not a missing tooth.
+   */
   summary(patientId: string): Promise<ClinicalSummary> {
     return this.read(async () => {
       const patient = await this.patients.get(patientId);
-      return this.visits.clinicalSummary(patient.id);
+      const { timeZone } = await this.tenancy.currentTenant();
+      const today = localDate(this.clock.now(), timeZone);
+      const ageYears =
+        patient.dateOfBirth === null ? null : Math.max(0, ageOn(patient.dateOfBirth, today));
+      const { stage } = effectiveDentition(ageYears, patient.dentitionOverride);
+      const onChart: ReadonlySet<string> = new Set(
+        stage === 'primary' ? PRIMARY_CODES : PERMANENT_CODES,
+      );
+      const states = [
+        ...currentPresence(
+          (await this.presences.listForPatient(patient.id)).map(({ row }) => ({
+            toothCode: toothCodeSchema.parse(row.toothCode),
+            presence: row.presence,
+          })),
+        ),
+      ].filter(([code]) => onChart.has(code));
+      const count = (presence: string) => states.filter(([, state]) => state === presence).length;
+      return {
+        ...(await this.visits.clinicalSummary(patient.id)),
+        missingTeeth: count('missing'),
+        implants: count('implant'),
+      };
     });
   }
 
@@ -190,7 +215,9 @@ export class ChartService {
     const diagnoses = await this.diagnoses.listForPatient(patientId, toothCode);
     const plans = await this.plans.listForPatient(patientId, toothCode);
     const history = await this.services.finishedForPatient(patientId, toothCode);
+    const presence = await this.presences.listForPatient(patientId, toothCode);
     const names = await this.dentistNames([
+      ...presence.map(({ row }) => row.dentistId),
       ...diagnoses.map(({ record }) => record.dentistId),
       ...plans.map((plan) => plan.dentistId),
       ...history.map((line) => line.dentistId),
@@ -202,6 +229,7 @@ export class ChartService {
         .filter((session) => session.planId === planId)
         .map(({ visitId, date, note }) => ({ visitId, date, note }));
     return {
+      presence: presence.map((line) => toPresenceRecord(line, nameOf(line.row.dentistId))),
       diagnoses: diagnoses.map(({ record, visitDate }) =>
         toDiagnosisRecord(
           record,

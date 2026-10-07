@@ -1,4 +1,4 @@
-import type { ChargeUnit } from '@dcm/contracts';
+import type { ChargeUnit, ToothEffect } from '@dcm/contracts';
 
 export interface DefaultService {
   code: string;
@@ -9,6 +9,8 @@ export interface DefaultService {
   price: string;
   frequent: boolean;
   active: boolean;
+  /** What performing it does to the tooth's presence on the chart (feature 7, H2). */
+  toothEffect: ToothEffect;
 }
 
 export interface DefaultDiagnosis {
@@ -25,7 +27,7 @@ const service = (
   category: string,
   chargeUnit: ChargeUnit,
   price: string,
-  flags: { frequent?: boolean; active?: boolean } = {},
+  flags: { frequent?: boolean; active?: boolean; toothEffect?: ToothEffect } = {},
 ): DefaultService => ({
   code,
   name,
@@ -34,6 +36,7 @@ const service = (
   price,
   frequent: flags.frequent ?? false,
   active: flags.active ?? true,
+  toothEffect: flags.toothEffect ?? 'none',
 });
 
 const diagnosis = (
@@ -52,10 +55,14 @@ const diagnosis = (
 /**
  * The template every tenant starts with (C3): the POC's `CATALOG`, with its prices, and the
  * "Frequently used" services of the workspace spec. Seeded rows are ordinary rows afterwards.
- * Service names are the client's own spelling and must not be corrected.
+ * Service names are the client's own spelling and must not be corrected. Extraction takes the
+ * tooth off the chart and implant placement puts an implant on it (feature 7, H2).
  */
 export const DEFAULT_SERVICES: readonly DefaultService[] = [
-  service('EXT', 'Extraction', 'Surgical', 'per_tooth', '30', { frequent: true }),
+  service('EXT', 'Extraction', 'Surgical', 'per_tooth', '30', {
+    frequent: true,
+    toothEffect: 'removes',
+  }),
   service('CLT', 'Crown lengthening', 'Surgical', 'per_tooth', '15'),
   service('PARO', 'Periodontal treatment', 'Periodontal', 'per_tooth', '30'),
   service('PARX', 'Periodontal treatment / jaw', 'Periodontal', 'per_jaw', '50'),
@@ -67,6 +74,9 @@ export const DEFAULT_SERVICES: readonly DefaultService[] = [
   service('ZIR', 'Zircon crown', 'Prosthetic', 'per_tooth', '350', { frequent: true }),
   service('SCL', 'Scaling & polishing', 'Periodontal', 'per_mouth', '60'),
   service('XRY', 'Periapical X-ray', 'Diagnostic', 'per_tooth', '20', { active: false }),
+  // Not in the POC, so after its rows and without a price: the clinic sets its own before
+  // using it (feature 7, D7).
+  service('IMP', 'Implant placement', 'Surgical', 'per_tooth', '0', { toothEffect: 'implant' }),
 ];
 
 /** The POC's `DX_CATALOG` and the workspace spec's "Frequently used" diagnoses. */

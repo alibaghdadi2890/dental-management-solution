@@ -1,3 +1,4 @@
+import type { LedgerEntryKind } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { EventBus } from '../../../platform/events/event-bus';
@@ -8,6 +9,9 @@ import {
   LedgerEntriesRepository,
   type NewLedgerEntry,
 } from '../persistence/ledger-entries.repository';
+
+/** The entries that are an action of their own: nothing else in the log tells of them. */
+const ACCOUNT_KINDS: readonly LedgerEntryKind[] = ['opening_balance', 'adjustment'];
 
 /**
  * The one write path of a ledger entry: inserts it (with a visit charge's lines), audits
@@ -36,6 +40,8 @@ export class LedgerWriter {
         resourceId: recorded.id,
         after: lines.length === 0 ? recorded : { ...recorded, lines },
         reason: recorded.reason ?? undefined,
+        // The Activity screen shows the payment or the visit change itself, not its entry.
+        hidden: !ACCOUNT_KINDS.includes(recorded.kind),
       });
       const event: LedgerEntryRecorded = this.events.create(LEDGER_ENTRY_RECORDED, {
         entryId: recorded.id,

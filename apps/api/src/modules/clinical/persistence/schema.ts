@@ -5,11 +5,13 @@ import {
   JAWS,
   PLAN_STATUSES,
   SURFACES,
-  TOOTH_PRESENCE_VALUES,
+  TOOTH_EFFECTS,
+  TOOTH_PRESENCE_STATES,
   VISIT_STATUSES,
 } from '@dcm/contracts';
 import { sql, type AnyColumn } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   char,
   check,
@@ -40,6 +42,8 @@ import { LIVE_VISIT_STATUSES } from '../domain/visit-lifecycle';
 export const chargeUnit = pgEnum('charge_unit', CHARGE_UNITS);
 /** The target of a `per_jaw` service or plan. */
 export const jaw = pgEnum('jaw', JAWS);
+/** What performing a per-tooth service does to the tooth's presence (feature 7, H2). */
+export const toothEffect = pgEnum('tooth_effect', TOOTH_EFFECTS);
 
 /**
  * The service catalog ("procedures", ADR-0002). Prices are money in the tenant currency at the
@@ -58,6 +62,7 @@ export const procedures = pgTable(
     priceCurrency: char({ length: 3 }).notNull(),
     frequent: boolean().notNull().default(false),
     active: boolean().notNull().default(true),
+    toothEffect: toothEffect().notNull().default('none'),
     deletedAt: deletedAtColumn(),
     ...timestamps(),
   },
@@ -69,6 +74,11 @@ export const procedures = pgTable(
       .on(table.tenantId, sql`lower(${table.code})`)
       .where(sql`${table.deletedAt} is null`),
     check('procedures_price_non_negative', sql`${table.priceAmount} >= 0`),
+    // Compared as text: the enum is created in the same migration as this check.
+    check(
+      'procedures_tooth_effect_per_tooth',
+      sql`${table.toothEffect}::text = 'none' or ${table.chargeUnit} = 'per_tooth'`,
+    ),
     tenantIsolationPolicy(),
   ],
 );
@@ -109,7 +119,7 @@ export const visitStatus = pgEnum('visit_status', VISIT_STATUSES);
 export const discountMode = pgEnum('discount_mode', DISCOUNT_MODES);
 export const diagnosisStatus = pgEnum('diagnosis_status', DIAGNOSIS_STATUSES);
 export const planStatus = pgEnum('plan_status', PLAN_STATUSES);
-export const toothPresence = pgEnum('tooth_presence', TOOTH_PRESENCE_VALUES);
+export const toothPresenceState = pgEnum('tooth_presence_state', TOOTH_PRESENCE_STATES);
 /** A correction with a reason (4b), or the discount set at checkout (checkout handoff, C4). */
 export const visitAmendmentKind = pgEnum('visit_amendment_kind', [
   'amendment',
@@ -613,32 +623,50 @@ export const visitServices = pgTable(
 );
 
 /**
- * Which tooth is present at a succession position (W5): the primary tooth or its permanent
- * successor. A pure state row, one per patient and position, changed only inside a live visit
- * (W15). No row means the dentition stage decides (`presentTooth`).
+ * What is at a tooth position (feature 7, H1; ADR-0034): one row each time a person or a service
+ * set it, never overwritten. A tooth's presence is its latest live row by `seq`; a tooth without
+ * one is `present`. `occurred_on` is the visit's local date, or the date entered on the patient
+ * record — null there means "before first visit" (H3a). `service_id` is the visit service whose
+ * catalog effect caused the row (H2); it has no foreign key (`visit_services` has no
+ * tenant-scoped unique to point at), and is only ever set together with its visit. Soft-deleted
+ * by an Undo and when its service is removed, amended away or voided: the row before it applies
+ * again.
  */
-export const toothStatus = pgTable(
-  'tooth_status',
+export const toothPresences = pgTable(
+  'tooth_presences',
   {
     id: idColumn(),
     tenantId: tenantIdColumn(),
+    /** Orders a tooth's rows: the last one recorded is its presence (D3). */
+    seq: bigint({ mode: 'number' }).generatedAlwaysAsIdentity(),
     patientId: uuid().notNull(),
-    /** The permanent FDI code of the column, positions 1–5 (`SUCCESSION_POSITIONS`). */
-    position: text().notNull(),
-    present: toothPresence().notNull(),
-    changedInVisitId: uuid().notNull(),
-    changedBy: uuid().notNull(),
+    toothCode: text().notNull(),
+    presence: toothPresenceState().notNull(),
+    occurredOn: date(),
+    reason: text(),
+    dentistId: uuid().notNull(),
+    recordedInVisitId: uuid(),
+    serviceId: uuid(),
+    recordedBy: uuid().notNull(),
+    deletedAt: deletedAtColumn(),
     ...timestamps(),
   },
   (table) => [
-    index('tooth_status_tenant_idx').on(table.tenantId),
-    uniqueIndex('tooth_status_position_unique').on(table.tenantId, table.patientId, table.position),
+    index('tooth_presences_tenant_idx').on(table.tenantId),
+    index('tooth_presences_patient_tooth_idx').on(table.tenantId, table.patientId, table.toothCode),
+    index('tooth_presences_service_idx')
+      .on(table.tenantId, table.serviceId)
+      .where(sql`${table.serviceId} is not null`),
     foreignKey({
-      name: 'tooth_status_changed_visit_fk',
-      columns: [table.tenantId, table.changedInVisitId],
+      name: 'tooth_presences_recorded_visit_fk',
+      columns: [table.tenantId, table.recordedInVisitId],
       foreignColumns: [visits.tenantId, visits.id],
     }),
-    check('tooth_status_position_format', sql`${table.position} ~ '^[1-4][1-5]$'`),
+    toothCodeCheck('tooth_presences_tooth_code_format', table.toothCode),
+    check(
+      'tooth_presences_service_in_visit',
+      sql`${table.serviceId} is null or ${table.recordedInVisitId} is not null`,
+    ),
     tenantIsolationPolicy(),
   ],
 );

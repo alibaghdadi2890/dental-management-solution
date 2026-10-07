@@ -26,6 +26,19 @@ describe('default catalog template', () => {
       ['ZIR', 'Zircon crown', 'Prosthetic', 'per_tooth', '350'],
       ['SCL', 'Scaling & polishing', 'Periodontal', 'per_mouth', '60'],
       ['XRY', 'Periapical X-ray', 'Diagnostic', 'per_tooth', '20'],
+      ['IMP', 'Implant placement', 'Surgical', 'per_tooth', '0'],
+    ]);
+  });
+
+  it('says which services change the tooth: extraction removes it, implant placement implants (H2)', () => {
+    expect(
+      DEFAULT_SERVICES.filter((row) => row.toothEffect !== 'none').map((row) => [
+        row.code,
+        row.toothEffect,
+      ]),
+    ).toEqual([
+      ['EXT', 'removes'],
+      ['IMP', 'implant'],
     ]);
   });
 

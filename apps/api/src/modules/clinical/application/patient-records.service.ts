@@ -1,8 +1,10 @@
 import type {
   PatientChartResult,
+  PatientPresenceResult,
   PlanGroupInput,
   PlanPatientTreatmentInput,
   RecordPatientDiagnosisInput,
+  SetPresenceOnPatientInput,
   UpdatePlanInput,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -11,8 +13,11 @@ import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { EventBus } from '../../../platform/events/event-bus';
 import type { Clock } from '../../../platform/kernel/clock';
+import { localDate } from '../../../platform/kernel/local-date';
+import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { AuditService } from '../../audit';
 import { PatientArchivedError, PatientsService } from '../../patients';
+import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
 import { assertOpen } from '../domain/plan-lifecycle';
 import { isRemovableOutsideVisit } from '../domain/record-rules';
@@ -20,14 +25,17 @@ import {
   DentistInvalidError,
   PlanNotOpenError,
   RecordDentistRequiredError,
+  RecordNotFoundError,
   RecordNotRemovableError,
 } from '../domain/visit-errors';
 import { TREATMENT_CANCELLED, type TreatmentCancelled } from '../events/record-events';
 import { PatientDiagnosesRepository } from '../persistence/patient-diagnoses.repository';
 import { PlanGroupsRepository } from '../persistence/plan-groups.repository';
+import { ToothPresenceRepository } from '../persistence/tooth-presence.repository';
 import { TreatmentPlansRepository } from '../persistence/treatment-plans.repository';
 import { ChartService } from './chart.service';
 import { planStatusOf } from './plan-unperformer';
+import { PresenceWriter } from './presence-writer';
 import { RecordWriter } from './record-writer';
 
 /** What one change on the patient record sees: the patient (locked), the actor and the clock. */
@@ -45,9 +53,10 @@ const GROUP = 'plan_group';
  * Charting on the patient record, outside a visit (docs/modules/clinical.md, ADR-0031): a dentist
  * records what they found and what they intend to do without starting a visit. Diagnoses are
  * recorded and, when recorded here, removed; plans are added, edited, cancelled and, when added
- * here, removed; named plans group them. Resolving a diagnosis, performing a plan, services and
- * tooth presence stay inside a visit (`VisitRecordsService`): they describe what happened in the
- * chair.
+ * here, removed; named plans group them; and what is at a tooth position is set (feature 7): the
+ * gaps and implants a new patient arrives with, a tooth lost between visits. Resolving a
+ * diagnosis, performing a plan and services stay inside a visit (`VisitRecordsService`): they
+ * describe what happened in the chair.
  *
  * Every method re-checks `chart:write`, runs in one `TenantDb` transaction and locks the patient
  * `FOR SHARE` (`lockForDependentWrite`, so a merge waits): unknown → 404, merged → 409
@@ -69,8 +78,64 @@ export class PatientRecordsService {
     private readonly diagnoses: PatientDiagnosesRepository,
     private readonly plans: TreatmentPlansRepository,
     private readonly groups: PlanGroupsRepository,
+    private readonly tenancy: TenancyService,
+    private readonly presences: ToothPresenceRepository,
+    private readonly presence: PresenceWriter,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
+
+  // --- Tooth presence ---
+
+  /**
+   * What is at one or several tooth positions (feature 7, H1, H3a): one row per tooth whose
+   * presence changes, all with the same When — a date not after the tenant's today, or "before
+   * first visit" (no date: it is not known, and is not invented) — the same optional reason and
+   * the same dentist. Answers with the chart and the rows written, which is what Undo removes.
+   */
+  async setPresence(
+    patientId: string,
+    input: SetPresenceOnPatientInput,
+  ): Promise<PatientPresenceResult> {
+    const presenceIds: string[] = [];
+    const result = await this.onPatient(patientId, async (change) => {
+      const occurredOn = input.when.kind === 'date' ? input.when.date : null;
+      if (occurredOn !== null) {
+        const { timeZone } = await this.tenancy.currentTenant();
+        if (occurredOn > localDate(change.now, timeZone)) {
+          const message = 'Date cannot be in the future';
+          throw new ValidationFailedError(message, [
+            { path: 'when.date', code: 'future_date', message },
+          ]);
+        }
+      }
+      const dentistId = await this.dentistFor(change.userId, input.dentistId);
+      const context = { patientId, visitId: null, occurredOn, dentistId, userId: change.userId };
+      for (const tooth of input.teeth) {
+        const row = await this.presence.set(context, { ...tooth, reason: input.reason });
+        if (row) presenceIds.push(row.id);
+      }
+    });
+    return { ...result, presenceIds };
+  }
+
+  /**
+   * The Undo of `setPresence`: rows set on the patient record (409 `record.not_removable` for
+   * one set in a visit, or caused by a service). Every id must be one of the patient's live rows
+   * (404 `record.not_found`). Each tooth goes back to what it was before.
+   */
+  removePresence(patientId: string, ids: readonly string[]): Promise<PatientChartResult> {
+    return this.onPatient(patientId, async ({ now }) => {
+      const wanted = [...new Set(ids)];
+      const rows = await this.presences.findLive(patientId, wanted);
+      if (rows.length !== wanted.length) throw new RecordNotFoundError('Presence record not found');
+      if (rows.some((row) => row.recordedInVisitId !== null)) {
+        throw new RecordNotRemovableError(
+          'Only a presence set on the patient record can be undone here',
+        );
+      }
+      await this.presence.remove(rows, now);
+    });
+  }
 
   // --- Diagnoses ---
 
@@ -269,7 +334,9 @@ export class PatientRecordsService {
       if (patient.archivedAt !== null) {
         throw new PatientArchivedError('Archived patients cannot be charted; restore them first');
       }
-      await work({ patientId: patient.id, userId, now: this.clock.now() });
+      await this.audit.about({ patientId: patient.id }, () =>
+        work({ patientId: patient.id, userId, now: this.clock.now() }),
+      );
       return { chart: await this.chart.chart(patient.id) };
     });
   }

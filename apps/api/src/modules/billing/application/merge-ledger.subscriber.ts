@@ -1,64 +1,47 @@
-import { InjectQueue } from '@nestjs/bullmq';
-import { Injectable, Logger } from '@nestjs/common';
-import type { Queue } from 'bullmq';
-import { MissingTenantContextError, RequestContext } from '../../../platform/cls/request-context';
-import { OnDomainEvent } from '../../../platform/events/event-bus';
-import { TenantJobs } from '../../../platform/queue/tenant-jobs';
+import { Injectable } from '@nestjs/common';
+import { OnDomainEventInTransaction } from '../../../platform/events/event-bus';
+import { AuditService } from '../../audit';
 import { PATIENTS_MERGED, type PatientsMerged } from '../../patients';
-import { BILLING_QUEUE, MERGE_LEDGER_JOB, type MergeLedgerPayload } from './merge-ledger.worker';
+import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
+import { PaymentsRepository } from '../persistence/payments.repository';
+import { Settlement } from './settlement';
 
 /**
- * Ledger entries follow a patient merge (design Q9, ADR-0017). `PatientsMerged` is dispatched
- * after the merge commits; this enqueues the re-point as a tenant job (`merge_<droppedId>`: one
- * job per merged-away patient, so a repeated event enqueues nothing new) in the event's own
- * context — tenant, actor, platform-admin flag, request id. The work itself runs in
- * `MergeLedgerWorker`, retried and dead-lettered.
+ * The ledger re-point of a patient merge (feature 7, H8; ADR-0036): an in-transaction handler of
+ * `PatientsMerged`, like `clinical`'s, so the dropped patient's entries and payments are on the
+ * kept one when the merge commits, and a failure here fails the merge. The merge transaction
+ * already holds both patients `FOR UPDATE`: ledger writes in flight (which hold `FOR SHARE`)
+ * have committed, and none can start. The account locks are taken after the patient locks, the
+ * order every ledger writer uses.
  *
- * The enqueue is not awaited: while Redis is unreachable, ioredis queues commands offline and
- * `queue.add` would not settle, and the after-commit hooks — the merge request and the audit
- * subscriber — would wait for it. A failed enqueue is logged (ids only), never rethrown;
- * ADR-0017 records this after-commit window and its recovery.
+ * P15: one account now — the settle lets the credit of one side meet the open charges of the
+ * other. Audited as `ledger_entry.repoint` on the kept patient when anything moved. A merge chain
+ * (A into B, then B into C) needs nothing more: each merge re-points in its own transaction.
+ *
+ * Not permission-gated: the merge already required `patient:write`.
  */
 @Injectable()
 export class MergeLedgerSubscriber {
-  private readonly logger = new Logger(MergeLedgerSubscriber.name);
-
   constructor(
-    private readonly context: RequestContext,
-    private readonly jobs: TenantJobs,
-    @InjectQueue(BILLING_QUEUE) private readonly queue: Queue,
+    private readonly audit: AuditService,
+    private readonly entries: LedgerEntriesRepository,
+    private readonly payments: PaymentsRepository,
+    private readonly settlement: Settlement,
   ) {}
 
-  @OnDomainEvent(PATIENTS_MERGED)
-  onPatientsMerged(event: PatientsMerged): Promise<void> {
-    void this.enqueue(event).catch((error: unknown) => {
-      this.logger.error(
-        {
-          err: error,
-          tenantId: event.tenantId,
-          keptId: event.payload.keptId,
-          droppedId: event.payload.droppedId,
-        },
-        'enqueueing the ledger re-point after a merge failed',
-      );
-    });
-    return Promise.resolve();
-  }
-
-  private async enqueue(event: PatientsMerged): Promise<void> {
+  @OnDomainEventInTransaction(PATIENTS_MERGED)
+  async onPatientsMerged(event: PatientsMerged): Promise<void> {
     const { keptId, droppedId } = event.payload;
-    if (event.tenantId === null) throw new MissingTenantContextError();
-    const payload: MergeLedgerPayload = { keptId, droppedId };
-    await this.context.run(
-      {
-        requestId: event.requestId ?? event.id,
-        actorKind: event.actor.kind,
-        tenantId: event.tenantId,
-        ...(event.actor.userId === null ? {} : { userId: event.actor.userId }),
-        platformAdmin: event.actor.platformAdmin,
-      },
-      () =>
-        this.jobs.enqueue(this.queue, MERGE_LEDGER_JOB, payload, { jobId: `merge_${droppedId}` }),
-    );
+    await this.settlement.lock([droppedId, keptId]);
+    const count = await this.entries.repointPatient(droppedId, keptId);
+    const payments = await this.payments.repointPatient(droppedId, keptId);
+    if (count === 0 && payments === 0) return;
+    await this.audit.record({
+      action: 'ledger_entry.repoint',
+      resourceType: 'patient',
+      resourceId: keptId,
+      after: { droppedId, keptId, count, payments },
+    });
+    await this.settlement.settle(keptId);
   }
 }

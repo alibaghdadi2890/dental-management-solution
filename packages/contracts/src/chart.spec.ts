@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cellMark, deriveChart } from './chart.js';
+import { cellMark, currentPresence, deriveChart, type DeriveChartInput } from './chart.js';
 import type { DiagnosisRecord, HistoryService, TreatmentPlan } from './clinical-records.js';
 import type { ToothCode } from './tooth.js';
 import type { VisitService } from './visits.js';
@@ -11,6 +11,10 @@ const ID_4 = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d73';
 const VISIT_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
 const DENTIST_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70';
 const MONEY = { amount: '80.00', currency: 'USD' };
+
+/** `deriveChart` without presence rows, which most cases here have nothing to do with. */
+const derive = (input: Omit<DeriveChartInput, 'presence'> & Partial<DeriveChartInput>) =>
+  deriveChart({ presence: [], ...input });
 
 function diagnosis(
   overrides: Partial<DiagnosisRecord> & { toothCode: ToothCode },
@@ -111,12 +115,12 @@ function liveService(
 
 describe('deriveChart', () => {
   it('returns an empty map given no records', () => {
-    const chart = deriveChart({ diagnoses: [], plans: [], history: [], liveServices: [] });
+    const chart = derive({ diagnoses: [], plans: [], history: [], liveServices: [] });
     expect(chart.size).toBe(0);
   });
 
   it('marks a tooth with an open plan as planned', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: '16' })],
       history: [],
@@ -129,7 +133,7 @@ describe('deriveChart', () => {
   });
 
   it('a whole-tooth history service tints wholeTooth as treated, and state as treated', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [history({ toothCode: '16', surfaces: [] })],
@@ -142,7 +146,7 @@ describe('deriveChart', () => {
   });
 
   it('treated (history) outranks planned', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: '16' })],
       history: [history({ toothCode: '16', surfaces: [] })],
@@ -152,7 +156,7 @@ describe('deriveChart', () => {
   });
 
   it('treated_today (live) outranks treated (history)', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [history({ toothCode: '16', surfaces: [] })],
@@ -165,7 +169,7 @@ describe('deriveChart', () => {
   it('a started plan shows as in progress, above earlier treatment and below today’s', () => {
     const started = plan({ toothCode: '16', status: 'in_progress' });
     const tooth = (extra: Partial<Parameters<typeof deriveChart>[0]> = {}) =>
-      deriveChart({ diagnoses: [], plans: [started], history: [], liveServices: [], ...extra }).get(
+      derive({ diagnoses: [], plans: [started], history: [], liveServices: [], ...extra }).get(
         '16',
       );
     expect(tooth()?.state).toBe('in_progress');
@@ -181,7 +185,7 @@ describe('deriveChart', () => {
   });
 
   it('planned outranks none (no other records)', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: '24' })],
       history: [],
@@ -191,7 +195,7 @@ describe('deriveChart', () => {
   });
 
   it('a tooth with nothing recorded is absent from the map', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: '24' })],
       history: [],
@@ -201,7 +205,7 @@ describe('deriveChart', () => {
   });
 
   it('a surface-scoped service marks only that surface, leaving wholeTooth null', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [history({ toothCode: '16', surfaces: ['M', 'O'] })],
@@ -213,7 +217,7 @@ describe('deriveChart', () => {
   });
 
   it('a live service overrides a historic one on the same surface', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [history({ toothCode: '16', surfaces: ['M'] })],
@@ -223,7 +227,7 @@ describe('deriveChart', () => {
   });
 
   it('a live service on a different surface leaves the historic surface mark untouched', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [history({ toothCode: '16', surfaces: ['M'] })],
@@ -233,7 +237,7 @@ describe('deriveChart', () => {
   });
 
   it('a performed plan does not count as planned', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [
         plan({ toothCode: '16', status: 'performed', performedAt: '2026-09-30T10:00:00.000Z' }),
@@ -245,7 +249,7 @@ describe('deriveChart', () => {
   });
 
   it('a cancelled plan does not count as planned', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [
         plan({ toothCode: '16', status: 'cancelled', cancelledAt: '2026-09-30T10:00:00.000Z' }),
@@ -257,7 +261,7 @@ describe('deriveChart', () => {
   });
 
   it('a resolved diagnosis does not set hasActiveDiagnosis', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [
         diagnosis({ toothCode: '16', status: 'resolved', resolvedAt: '2026-09-30T10:00:00.000Z' }),
       ],
@@ -269,7 +273,7 @@ describe('deriveChart', () => {
   });
 
   it('an active diagnosis sets hasActiveDiagnosis and titleParts.diagnoses, without affecting state', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [diagnosis({ toothCode: '16' })],
       plans: [],
       history: [],
@@ -282,7 +286,7 @@ describe('deriveChart', () => {
   });
 
   it('jaw-level history and live services (toothCode null) touch no tooth', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [history({ toothCode: null })],
@@ -292,7 +296,7 @@ describe('deriveChart', () => {
   });
 
   it('a jaw-level plan (toothCode null) touches no tooth', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: null })],
       history: [],
@@ -302,7 +306,7 @@ describe('deriveChart', () => {
   });
 
   it('counts historyCount from completed services only, not live ones', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [
@@ -317,7 +321,7 @@ describe('deriveChart', () => {
   });
 
   it('a surface-scoped plan leaves surfaces empty and sets state planned', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: '16', surfaces: ['O'] })],
       history: [],
@@ -330,7 +334,7 @@ describe('deriveChart', () => {
   });
 
   it('treated_today (live service) outranks planned (open plan)', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: '16' })],
       history: [],
@@ -343,7 +347,7 @@ describe('deriveChart', () => {
     'a whole-tooth history service plus a live surface service: state treated_today, ' +
       'wholeTooth treated, the live surface treated_today',
     () => {
-      const chart = deriveChart({
+      const chart = derive({
         diagnoses: [],
         plans: [],
         history: [history({ toothCode: '16', surfaces: [] })],
@@ -361,7 +365,7 @@ describe('deriveChart', () => {
     'a whole-tooth open plan on a tooth with treated surfaces: state stays treated, the plan ' +
       'still counts as open',
     () => {
-      const chart = deriveChart({
+      const chart = derive({
         diagnoses: [],
         plans: [plan({ toothCode: '16', surfaces: [] })],
         history: [history({ toothCode: '16', surfaces: ['O'] })],
@@ -376,7 +380,7 @@ describe('deriveChart', () => {
   );
 
   it('multiple open plans and active diagnoses on one tooth are each kept, in order', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [
         diagnosis({ toothCode: '16', id: ID, diagnosisId: ID, name: 'Dental caries' }),
         diagnosis({ toothCode: '16', id: ID_2, diagnosisId: ID_2, name: 'Cracked tooth' }),
@@ -401,7 +405,7 @@ describe('cellMark', () => {
   });
 
   it('is none for a recorded tooth with no mark on that surface and no whole-tooth mark', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [diagnosis({ toothCode: '16' })],
       plans: [],
       history: [],
@@ -411,7 +415,7 @@ describe('cellMark', () => {
   });
 
   it('falls back to the whole-tooth mark when the surface has none of its own', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [history({ toothCode: '16', surfaces: [] })],
@@ -421,7 +425,7 @@ describe('cellMark', () => {
   });
 
   it('prefers a surface mark over the whole-tooth mark', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [],
       history: [history({ toothCode: '16', surfaces: [] })],
@@ -434,7 +438,7 @@ describe('cellMark', () => {
   });
 
   it('washes a cell in progress when the tooth state is, and the cell has no service mark', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: '16', status: 'in_progress' })],
       history: [history({ toothCode: '16', surfaces: ['O'] })],
@@ -445,7 +449,7 @@ describe('cellMark', () => {
   });
 
   it('washes a cell planned when the tooth state is planned and the cell has no service mark', () => {
-    const chart = deriveChart({
+    const chart = derive({
       diagnoses: [],
       plans: [plan({ toothCode: '16', surfaces: ['O'] })],
       history: [],
@@ -453,5 +457,54 @@ describe('cellMark', () => {
     });
     expect(cellMark(chart.get('16'), 'O')).toBe('planned');
     expect(cellMark(chart.get('16'), 'M')).toBe('planned');
+  });
+});
+
+describe('tooth presence in the chart (feature 7, H1)', () => {
+  const none = { diagnoses: [], plans: [], history: [], liveServices: [] };
+
+  it('takes the row recorded last for a tooth, whatever came before', () => {
+    const current = currentPresence([
+      { toothCode: '46', presence: 'missing' },
+      { toothCode: '18', presence: 'not_erupted' },
+      { toothCode: '46', presence: 'implant' },
+    ]);
+    expect([...current]).toEqual([
+      ['46', 'implant'],
+      ['18', 'not_erupted'],
+    ]);
+  });
+
+  it('gives a tooth that is not present an entry, even with nothing else on it', () => {
+    const chart = derive({ ...none, presence: [{ toothCode: '36', presence: 'missing' }] });
+    expect(chart.get('36')).toMatchObject({ presence: 'missing', state: 'none', historyCount: 0 });
+    expect(chart.size).toBe(1);
+  });
+
+  it('leaves a tooth marked present again out, like any tooth with nothing recorded', () => {
+    const chart = derive({
+      ...none,
+      presence: [
+        { toothCode: '36', presence: 'missing' },
+        { toothCode: '36', presence: 'present' },
+      ],
+    });
+    expect(chart.has('36')).toBe(false);
+  });
+
+  it('keeps treatment and diagnoses on an implant: every state stays chartable (H3)', () => {
+    const chart = derive({
+      ...none,
+      diagnoses: [diagnosis({ toothCode: '46' })],
+      history: [history({ toothCode: '46' })],
+      presence: [{ toothCode: '46', presence: 'implant' }],
+    });
+    expect(chart.get('46')).toMatchObject({
+      presence: 'implant',
+      state: 'treated',
+      hasActiveDiagnosis: true,
+      historyCount: 1,
+    });
+    expect(chart.get('46')?.presence).toBe('implant');
   });
 });
