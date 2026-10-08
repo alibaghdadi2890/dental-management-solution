@@ -23,7 +23,9 @@
     "tenants": "العيادات",
     "payments": "المدفوعات",
     "today": "اليوم",
-    "activity": "النشاط"
+    "activity": "النشاط",
+    "collapse": "طي القائمة",
+    "expand": "توسيع القائمة"
   },
   "breadcrumb": "مسار التنقل",
   "platformCrumb": "المنصة",

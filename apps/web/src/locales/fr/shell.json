@@ -23,7 +23,9 @@
     "tenants": "Cabinets",
     "payments": "Paiements",
     "today": "Aujourd’hui",
-    "activity": "Activité"
+    "activity": "Activité",
+    "collapse": "Réduire le menu",
+    "expand": "Développer le menu"
   },
   "breadcrumb": "Fil d’Ariane",
   "platformCrumb": "Plateforme",

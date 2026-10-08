@@ -1,5 +1,6 @@
 import type { BranchRef } from '@dcm/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToast } from '@/components/ui/toast-context';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
@@ -9,15 +10,19 @@ const branchLine =
   'truncate font-mono text-[11.5px] leading-snug tracking-[0.04em] text-ink-muted uppercase';
 
 /**
- * The clinic block's branch line. With more than one branch it is a switcher (D7); switching
- * refetches everything, since lists may be branch-scoped.
+ * The branch menu behind `trigger` (a button-like element): one item per branch, the current one
+ * marked. Switching refetches everything, since lists may be branch-scoped.
  */
-export function BranchSwitcher({
+export function BranchMenu({
   branch,
   branches,
+  align = 'start',
+  children,
 }: {
-  branch: BranchRef | null;
+  branch: BranchRef;
   branches: BranchRef[];
+  align?: 'start' | 'end';
+  children: ReactNode;
 }) {
   const { t } = useTranslation('shell');
   const queryClient = useQueryClient();
@@ -33,31 +38,10 @@ export function BranchSwitcher({
     },
   });
 
-  if (!branch) return null;
-  if (branches.length < 2) {
-    return <div className={branchLine}>{t('clinic.branch', { branch: branch.name })}</div>;
-  }
   return (
     <Menu>
-      <MenuTrigger
-        aria-label={t('clinic.switchBranch')}
-        className="flex max-w-full cursor-pointer items-center gap-1 rounded-sm text-start hover:text-ink"
-      >
-        <span className={branchLine}>{t('clinic.branch', { branch: branch.name })}</span>
-        <svg
-          aria-hidden
-          width="10"
-          height="10"
-          viewBox="0 0 10 10"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="flex-none text-ink-muted"
-        >
-          <path d="m2.5 4 2.5 2.5L7.5 4" />
-        </svg>
-      </MenuTrigger>
-      <MenuContent align="start">
+      <MenuTrigger asChild>{children}</MenuTrigger>
+      <MenuContent align={align}>
         {branches.map((item) => (
           <MenuItem
             key={item.id}
@@ -77,5 +61,43 @@ export function BranchSwitcher({
         ))}
       </MenuContent>
     </Menu>
+  );
+}
+
+/** The clinic block's branch line. With more than one branch it is a switcher (D7). */
+export function BranchSwitcher({
+  branch,
+  branches,
+}: {
+  branch: BranchRef | null;
+  branches: BranchRef[];
+}) {
+  const { t } = useTranslation('shell');
+  if (!branch) return null;
+  if (branches.length < 2) {
+    return <div className={branchLine}>{t('clinic.branch', { branch: branch.name })}</div>;
+  }
+  return (
+    <BranchMenu branch={branch} branches={branches}>
+      <button
+        type="button"
+        aria-label={t('clinic.switchBranch')}
+        className="flex max-w-full cursor-pointer items-center gap-1 rounded-sm text-start hover:text-ink"
+      >
+        <span className={branchLine}>{t('clinic.branch', { branch: branch.name })}</span>
+        <svg
+          aria-hidden
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          className="flex-none text-ink-muted"
+        >
+          <path d="m2.5 4 2.5 2.5L7.5 4" />
+        </svg>
+      </button>
+    </BranchMenu>
   );
 }

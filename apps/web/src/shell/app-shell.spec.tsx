@@ -147,4 +147,32 @@ describe('AppShell sidebar', () => {
     expect(sidebar.getByRole('button', { name: 'تسجيل الخروج' })).toBeTruthy();
     expect(document.documentElement.dir).toBe('rtl');
   });
+
+  it('collapses to icons, keeps every entry reachable by name, and remembers the choice', async () => {
+    localStorage.removeItem('dcm.sidebarCollapsed');
+    mockApi();
+    renderShell({ url: '/visits', session: sessionWith(ALL_PERMISSIONS) });
+    await screen.findByText('Visits screen');
+    const aside = screen.getByRole('complementary');
+    const sidebar = within(aside);
+    expect(aside.dataset.collapsed).toBeUndefined();
+
+    fireEvent.click(sidebar.getByRole('button', { name: 'Collapse menu' }));
+    expect(aside.dataset.collapsed).toBe('true');
+    expect(localStorage.getItem('dcm.sidebarCollapsed')).toBe('1');
+    expect(sidebar.getByRole('link', { name: 'Patients' })).toBeTruthy();
+    expect(sidebar.getByRole('link', { name: 'Payments' })).toBeTruthy();
+    expect(sidebar.getByRole('separator', { name: 'Admin' })).toBeTruthy();
+    expect(sidebar.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+    cleanup();
+
+    mockApi();
+    renderShell({ url: '/visits', session: sessionWith(ALL_PERMISSIONS) });
+    await screen.findByText('Visits screen');
+    const again = screen.getByRole('complementary');
+    expect(again.dataset.collapsed).toBe('true');
+    fireEvent.click(within(again).getByRole('button', { name: 'Expand menu' }));
+    expect(again.dataset.collapsed).toBeUndefined();
+    expect(localStorage.getItem('dcm.sidebarCollapsed')).toBe('0');
+  });
 });
