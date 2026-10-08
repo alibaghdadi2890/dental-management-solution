@@ -42,3 +42,6 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0035](0035-the-tenant-currency-locks-at-the-first-ledger-entry.md) | The tenant currency locks at the first ledger entry          | Accepted (amends 0015)               |
 | [0036](0036-the-ledger-follows-a-merge-in-its-transaction.md)       | The ledger follows a patient merge in its transaction        | Accepted (amends 0017)               |
 | [0037](0037-the-audit-log-knows-what-a-row-is-about.md)             | The audit log records what a row is about                    | Accepted (amends CLAUDE.md §10, §12) |
+| [0038](0038-files-belong-to-the-patient.md)                         | Files belong to the patient, with optional visit and tooth   | Accepted (amends CLAUDE.md §4)       |
+| [0039](0039-file-originals-are-immutable.md)                        | Originals are immutable; previews are made in the browser    | Accepted (amends CLAUDE.md §9)       |
+| [0040](0040-files-are-archived-never-deleted.md)                    | Files are archived, never deleted                            | Accepted                             |

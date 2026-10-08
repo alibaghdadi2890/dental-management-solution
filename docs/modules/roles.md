@@ -25,6 +25,8 @@ there is no UI or API to create them yet. Permissions come from the catalog in `
 | `payment:read`                          | ✓     | ✓       | ✓         | ✓         |
 | `payment:write`                         | ✓     | ✓       | –         | ✓         |
 | `payment:refund`, `audit:read`          | ✓     | ✓       | –         | –         |
+| `file:read`, `file:write`               | ✓     | ✓       | ✓         | ✓         |
+| `file:archive`                          | ✓     | ✓       | –         | –         |
 
 `visit:amend` and `visit:void` are enforced by `POST /visits/:id/amend` and `/void` and
 re-checked in `VisitsService` (feature 4b); the SPA shows front desk "Request a change" instead.
@@ -33,6 +35,10 @@ re-checked in `VisitsService` (feature 4b); the SPA shows front desk "Request a 
 `chart:write` is charting on the patient record, outside a visit (ADR-0031): diagnoses, plans and
 named plans; in-visit charting stays on `visit:write`. Migration `0028_records_without_visit`
 grants it likewise.
+
+`file:read`, `file:write` and `file:archive` are patient files (feature 8): everyone reads and
+uploads, and archiving is the owner's and the dentist's — plus, by rule and not by permission, the
+uploader's for 24 hours (`canArchiveFile`, ADR-0040). Migration `0038_files` grants them likewise.
 
 `platform:admin` is never granted by a role (platform admins are decided by rule, ADR-0008). The
 matrix is the pure constant `domain/system-roles.ts`; a unit test pins it per role. Renaming a

@@ -114,7 +114,7 @@ modules/<name>/
 | `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
 | `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, timer, services performed, notes, discount, status; amend and void, ADR-0025; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, `treatment_plans`; recorded in a visit or on the patient record, ADR-0031; what is at each tooth position — missing, not erupted, implant — `tooth_presences`, ADR-0034; named plans, `plan_groups`; work over several visits, `treatment_plan_sessions`, charged when done, ADR-0032) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
 | `billing`       | patient ledger (`ledger_entries`: opening balances, adjustments, visit charges and their adjustments and reversals, payments, refunds, voids; `ledger_entry_lines`), payments (`payments`, `payment_counters`, `payment_allocations`: account-level payments with stored derived allocations, households, credit; ADR-0027 to ADR-0029), balances, receivables, the visit summary, the patient and visit views that need them, the printables' data; later stored invoices, price lists | patients, tenancy (currency, time zone), users (dentist names in the export); clinical from 4a (reacts to `VisitCompleted`, `VisitAmended` and `VisitVoided` in the transaction, ADR-0024 to ADR-0026); reacts to `PatientsMerged` in the merge transaction (ADR-0036) and vetoes a currency change once there is money (`TenantCurrencyChanged`, ADR-0035) |
-| `files`         | S3 object metadata, upload/download signed URLs, attachment links   | tenancy               |
+| `files`         | `files`: a patient's images and documents (feature 8) — always the patient's, optionally linked to a visit and a tooth; category and type, "taken on", note, stored orientation, soft archive; pending uploads; signed upload and download URLs. The bytes are in object storage: the original (never modified) and, for images, a display copy and a thumbnail the browser made (ADR-0038 to ADR-0040) | patients, clinical (a visit's patient, number and status), users (uploader names), tenancy (time zone); reacts to `PatientsMerged` in the merge transaction |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
 | `imports`       | import jobs: uploaded file, column mapping, staged rows + validation, preview, commit progress; writes only through `patients` and `clinical` services | patients, clinical, tenancy |
 | `provisioning`  | platform back office: provisions a tenant end to end (tenant, first branch, owner, system roles), cross-tenant tenants list, suspension; owns no tables | tenancy, auth, users, roles |
@@ -178,6 +178,8 @@ default. The resolved permission set is carried in CLS, and `RequestContext.hasP
 `requirePermission()` is the one evaluation every module uses — so modules below `authorization`
 can re-check without depending on it (ADR-0010). Resource-level rules (e.g. a dentist sees only their
 own appointments if the tenant enables that setting) live here, not scattered in repositories.
+A rule that needs only the caller and the row, and that the SPA must apply too, is a pure function
+in `packages/contracts` used by both (who may archive a file, `canArchiveFile`, ADR-0040).
 
 Rules:
 - Every controller route declares its access: `@RequirePermission(p)`, `@Authenticated()` (any
@@ -247,7 +249,9 @@ Rules:
 - Jobs are idempotent (use a deterministic `jobId`), carry `tenantId`, and are retried with
   backoff. Failed jobs go to a dead-letter queue that is monitored.
 - Never call external services (SMS, email, S3, LLM) synchronously inside a request that mutates
-  state, except signed-URL generation.
+  state, except signed-URL generation and, for `files` only and outside its transaction, the
+  `HEAD` of an uploaded object before Save and the delete of a discarded upload's objects
+  (ADR-0039). File bytes never pass through the API.
 
 ## 10. Audit
 

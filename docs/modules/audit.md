@@ -56,6 +56,7 @@ An action is `<resource>.<verb>`; its first segment decides its area (`areaOfAct
 | `catalog`  | `catalog.`                                                                                                                                          |
 | `users`    | `user.`, `role.`                                                                                                                                    |
 | `settings` | `tenant.`, `branch.`, `room.`                                                                                                                       |
+| `files`    | `file.` (feature 8: `file.upload`, `file.update`, `file.archive`, `file.restore`, `file.repoint`)                                                   |
 
 A row has **no area**, and so is never on the Activity screen, when it is a stored domain event
 (`resource_type = 'event'`; an event name has no `resource.verb` shape) or when its writer marks
