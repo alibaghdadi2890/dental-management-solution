@@ -56,7 +56,8 @@
     "catalog": "Catalog",
     "users": "Users",
     "settings": "Settings",
-    "contacts": "Contacts"
+    "contacts": "Contacts",
+    "files": "Files"
   },
   "ranges": {
     "today": "Today",
@@ -140,6 +141,15 @@
       "less": "Reduced the balance of {{subject}} by {{amount}}",
       "more": "Added {{amount}} to the balance of {{subject}}",
       "repoint": "Moved a merged record’s balance to {{subject}}"
+    },
+    "file": {
+      "upload": "Uploaded {{what}} for {{subject}}",
+      "update": "Changed the details of {{what}} for {{subject}}",
+      "note": "Changed the note on {{what}} for {{subject}}",
+      "orientation": "Saved the orientation of {{what}} for {{subject}}",
+      "archive": "Archived {{what}} for {{subject}}",
+      "restore": "Restored {{what}} for {{subject}}",
+      "repoint": "Moved a merged record’s files to {{subject}}"
     },
     "payment": {
       "create": "Recorded payment {{subject}} · {{amount}} {{method}}",

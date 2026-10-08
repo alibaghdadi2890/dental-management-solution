@@ -10,6 +10,8 @@ import { usePermission } from '@/features/auth/use-permission';
 import { StartVisitPopover } from '@/features/clinical/start-visit-popover';
 import { useStartingVisit } from '@/features/clinical/use-starting-visit';
 import { liveVisitsQuery } from '@/features/clinical/visits-api';
+import { patientFilesQuery } from '@/features/files/files-api';
+import { activeFiles } from '@/features/files/gallery/gallery-filter';
 import { formatAgeLine, formatPhone, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { roleHolder } from '../contact-rows';
@@ -202,6 +204,12 @@ export function RecordHeader({
   const canWrite = usePermission('patient:write');
   const canVisit = usePermission('visit:write');
   const recordTabs = useRecordTabs();
+  // The Files tab says how many files there are, archived ones aside (feature 8).
+  const files = useQuery({
+    ...patientFilesQuery(patient.id),
+    enabled: recordTabs.includes('files'),
+  });
+  const fileCount = activeFiles(files.data ?? []).length;
   const { editPatient } = usePatientNavigation();
   const archived = patient.archivedAt !== null;
   const merged = patient.mergedIntoId;
@@ -318,7 +326,13 @@ export function RecordHeader({
       <Tabs
         idBase={tabsId}
         label={t('record.tabs.label')}
-        tabs={recordTabs.map((key) => ({ key, label: t(`record.tabs.${key}`) }))}
+        tabs={recordTabs.map((key) => ({
+          key,
+          label:
+            key === 'files' && fileCount > 0
+              ? t('record.tabs.filesCount', { count: fileCount })
+              : t(`record.tabs.${key}`),
+        }))}
         active={tab}
         onChange={onTab}
         className="mt-[18px]"

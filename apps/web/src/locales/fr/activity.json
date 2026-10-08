@@ -56,7 +56,8 @@
     "catalog": "Catalogue",
     "users": "Utilisateurs",
     "settings": "Paramètres",
-    "contacts": "Contacts"
+    "contacts": "Contacts",
+    "files": "Fichiers"
   },
   "ranges": {
     "today": "Aujourd’hui",
@@ -140,6 +141,15 @@
       "less": "A réduit le solde de {{subject}} de {{amount}}",
       "more": "A ajouté {{amount}} au solde de {{subject}}",
       "repoint": "A déplacé le solde d’un dossier fusionné vers {{subject}}"
+    },
+    "file": {
+      "upload": "A ajouté {{what}} pour {{subject}}",
+      "update": "A modifié les détails de {{what}} pour {{subject}}",
+      "note": "A modifié la note de {{what}} pour {{subject}}",
+      "orientation": "A enregistré l’orientation de {{what}} pour {{subject}}",
+      "archive": "A archivé {{what}} pour {{subject}}",
+      "restore": "A restauré {{what}} pour {{subject}}",
+      "repoint": "A déplacé les fichiers d’un dossier fusionné vers {{subject}}"
     },
     "payment": {
       "create": "A enregistré le paiement {{subject}} · {{amount}} {{method}}",

@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useSession } from '@/features/auth/session';
 import { AdjustBalanceProvider } from '@/features/billing/adjust/adjust-balance-provider';
 import { PaymentDialogProvider } from '@/features/billing/payments/payment-dialog-provider';
+import { FilesProvider } from '@/features/files/files-provider';
 import { applyClinicLanguage } from '@/lib/i18n';
 import { CommandPalette } from '@/features/patients/command-palette';
 import { ActingTenantBanner } from './acting-tenant-banner';
@@ -13,7 +14,8 @@ import { Sidebar } from './sidebar';
 import { useCommandPalette } from './use-command-palette';
 
 /** POC app shell: 212px sidebar, 56px header, and a main area each screen fills and scrolls.
- * It owns the ⌘K patient palette (mounted once, opened by the header or the shortcut), and
+ * It owns the ⌘K patient palette (mounted once, opened by the header or the shortcut) and the
+ * files upload panel and viewer (`FilesProvider`), and
  * applies the clinic's language until the user picks one (`applyClinicLanguage`). */
 export function AppShell() {
   const { data: session } = useSession();
@@ -28,23 +30,25 @@ export function AppShell() {
   return (
     <PaymentDialogProvider>
       <AdjustBalanceProvider>
-        <div className="flex h-full overflow-hidden bg-background">
-          <Sidebar session={session} />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <AppHeader
-              session={session}
-              onFindPatient={() => {
-                palette.setOpen(true);
-              }}
-            />
-            {acting && <ActingTenantBanner tenantId={acting.id} tenantName={acting.name} />}
-            <main className="relative min-h-0 flex-1 overflow-hidden">
-              <Outlet />
-            </main>
+        <FilesProvider>
+          <div className="flex h-full overflow-hidden bg-background">
+            <Sidebar session={session} />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <AppHeader
+                session={session}
+                onFindPatient={() => {
+                  palette.setOpen(true);
+                }}
+              />
+              {acting && <ActingTenantBanner tenantId={acting.id} tenantName={acting.name} />}
+              <main className="relative min-h-0 flex-1 overflow-hidden">
+                <Outlet />
+              </main>
+            </div>
+            {session && <IdleTimeoutDialog idleSeconds={session.idleTimeoutSeconds} />}
+            {canFind && <CommandPalette open={palette.open} onOpenChange={palette.setOpen} />}
           </div>
-          {session && <IdleTimeoutDialog idleSeconds={session.idleTimeoutSeconds} />}
-          {canFind && <CommandPalette open={palette.open} onOpenChange={palette.setOpen} />}
-        </div>
+        </FilesProvider>
       </AdjustBalanceProvider>
     </PaymentDialogProvider>
   );

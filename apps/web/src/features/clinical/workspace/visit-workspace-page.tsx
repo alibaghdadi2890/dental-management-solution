@@ -15,6 +15,8 @@ import { CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
+import { FileDropSurface } from '@/features/files/file-drop-surface';
+import { VisitFilesStrip } from '@/features/files/file-rows';
 import { patientQuery } from '@/features/patients/patients-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { ApiError } from '@/lib/api';
@@ -145,7 +147,8 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
 
 /**
  * The three bands in a full-height column: the header; the body, a wrapping row of the left
- * region (`1 1 600px`: the chart card, today's services, the treatment plan and the notes) and the
+ * region (`1 1 600px`: the chart card, today's services, the treatment plan, the files strip
+ * (feature 8) and the notes) and the
  * selected-tooth aside (`1 1 340px`), so the aside reflows under the chart below ~1000px; and the
  * financial bar. Read-only without `visit:write`
  * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
@@ -155,7 +158,9 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
  * panel's "Full tooth history →" opens the tooth history dialog, and the financial bar's
  * **Review & complete** the visit summary. A visit of a patient with unfinished services opens
  * with the question which of them it continues (`UnfinishedDialog`). The price groups of services no longer on the visit
- * (removed by someone else) are dropped as the visit refreshes.
+ * (removed by someone else) are dropped as the visit refreshes. A file dropped anywhere on the
+ * workspace, or an image pasted, opens the upload panel with the visit — and the selected
+ * tooth — pre-filled (`FileDropSurface`).
  */
 function Workspace({
   visit,
@@ -330,6 +335,11 @@ function Workspace({
                 onAdd={addService}
               />
               {chart.data && <PlanBoard chart={chart.data} canWrite={canWrite} />}
+              <VisitFilesStrip
+                patient={patient.data}
+                visit={visit}
+                selectedTooth={selection.tooth}
+              />
               <NotesCard visit={visit} canWrite={canWrite} />
             </div>
             <aside
@@ -341,6 +351,7 @@ function Workspace({
             >
               {chart.data ? (
                 <ToothPanel
+                  patientId={visit.patientId}
                   visit={visit}
                   chart={chart.data}
                   teeth={teeth}
@@ -355,6 +366,12 @@ function Workspace({
             </aside>
           </div>
           <FinancialBar visit={visit} canWrite={canWrite} onReview={review} />
+          <FileDropSurface
+            patientId={visit.patientId}
+            patientName={patient.data?.fullName}
+            visit={visit}
+            toothCode={selection.tooth}
+          />
           <VisitSummaryDialog
             visit={visit}
             chart={chart.data}

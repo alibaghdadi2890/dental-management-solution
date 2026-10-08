@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { ToastContext, type ToastOptions, type ToastTone } from './toast-context';
+import { TOAST_REGION, ToastContext, type ToastOptions, type ToastTone } from './toast-context';
 
 interface Toast extends ToastOptions {
   id: number;
@@ -18,7 +18,9 @@ const DOT: Record<ToastTone, string> = {
 
 let nextId = 1;
 
-/** POC toasts: bottom-end of the screen, at most 3, 5 s auto-dismiss, optional action. */
+/** POC toasts: bottom-end of the screen, at most 3, 5 s auto-dismiss, optional action. Above the
+ * dialogs' layer: an action taken in the full-screen file viewer shows its toast (and its Undo)
+ * over it. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation('common');
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -42,8 +44,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={show}>
       {children}
       <div
+        {...{ [TOAST_REGION]: '' }}
         aria-live="polite"
-        className="pointer-events-none fixed end-5 bottom-5 z-40 flex flex-col items-end gap-2"
+        className="pointer-events-none fixed end-5 bottom-5 z-[60] flex flex-col items-end gap-2"
       >
         {toasts.map((toast) => (
           <div

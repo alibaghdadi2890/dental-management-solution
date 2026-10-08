@@ -372,6 +372,8 @@
       "overview": "Overview",
       "history": "Visits & history",
       "chart": "Dental chart",
+      "files": "Files",
+      "filesCount": "Files {{count}}",
       "balance": "Balance & payments",
       "information": "Patient information"
     },

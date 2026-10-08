@@ -165,6 +165,34 @@
     }
   }
 
+  /* The file viewer reaching an end of its list and wrapping round: a soft bump, no error. */
+  --animate-bump: bump 0.22s ease;
+  @keyframes bump {
+    0%,
+    100% {
+      transform: scale(1);
+    }
+    50% {
+      transform: scale(0.965);
+    }
+  }
+
+  /* A file that just arrived in the visit's strip: a ring that fades by itself. */
+  --animate-arrive: arrive 2.4s ease-out;
+  @keyframes arrive {
+    0%,
+    45% {
+      box-shadow:
+        0 0 0 2px var(--color-surface),
+        0 0 0 4px var(--primary);
+    }
+    100% {
+      box-shadow:
+        0 0 0 2px transparent,
+        0 0 0 4px transparent;
+    }
+  }
+
   --animate-shimmer: shimmer 1.2s linear infinite;
   @keyframes shimmer {
     0% {

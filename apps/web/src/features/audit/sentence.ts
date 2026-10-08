@@ -18,6 +18,8 @@ export type Subject =
   | { kind: 'visit'; id: string; label: string }
   | { kind: 'receipt'; paymentId: string; label: string }
   | { kind: 'catalog'; label: string }
+  /** A patient's file: its link opens the viewer on the record's Files tab (feature 8). */
+  | { kind: 'file'; patientId: string; fileId: string; label: string }
   | { kind: 'text'; label: string };
 
 export interface Sentence {
@@ -39,8 +41,9 @@ export interface Lookups {
   money: (amount: string, currency: string) => string;
   /** A tooth code in the clinic's notation. */
   tooth: (code: string) => string;
-  /** The label of a payment method or an adjustment reason; the raw text when it has none. */
-  label: (group: 'method' | 'reason', value: string) => string;
+  /** The label of a payment method, an adjustment reason, or a file's category or type; the
+   * raw text when it has none. */
+  label: (group: 'method' | 'reason' | 'fileCategory' | 'fileType', value: string) => string;
 }
 
 type Snapshot = Record<string, unknown>;
@@ -126,6 +129,7 @@ const PLAIN = new Set([
   'tooth_presence.remove',
   'clinical.repoint',
   'ledger_entry.repoint',
+  'file.repoint',
   'user.create',
   'user.update',
   'user.deactivate',
@@ -194,6 +198,44 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
     const values = { amount: lookups.money(amount.replace('-', ''), currency) };
     if (after.kind === 'opening_balance') return done('ledger_entry.opening', patient, values);
     return done(less ? 'ledger_entry.less' : 'ledger_entry.more', patient, values);
+  }
+
+  // --- Files (feature 8, F15) ---
+  if (prefix === 'file' && action !== 'file.repoint') {
+    const category = field(entry, 'category');
+    const type = field(entry, 'subCategory');
+    const tooth = field(entry, 'toothCode');
+    // "X-ray · Panoramic · #36": what the file is, in the clinic's words.
+    const what = [
+      category ? lookups.label('fileCategory', category) : null,
+      type ? lookups.label('fileType', type) : null,
+      tooth ? lookups.tooth(tooth) : null,
+    ]
+      .filter((part) => part !== null)
+      .join(' · ');
+    const filename = field(entry, 'originalFilename');
+    const file: Subject | null =
+      entry.patientId !== null && entry.resourceType === 'file' && filename
+        ? { kind: 'file', patientId: entry.patientId, fileId: entry.resourceId, label: filename }
+        : null;
+    const changed = Object.keys(after).filter(
+      (key) => JSON.stringify(after[key]) !== JSON.stringify(before[key]),
+    );
+    const key =
+      action !== 'file.update'
+        ? action
+        : changed.length === 1 && changed[0] === 'note'
+          ? 'file.note'
+          : changed.length === 1 && changed[0] === 'orientation'
+            ? 'file.orientation'
+            : 'file.update';
+    const known = ['file.upload', 'file.update', 'file.archive', 'file.restore'];
+    return done(
+      known.includes(action) ? key : 'fallback',
+      patient,
+      { what, action: readableAction(action) },
+      file,
+    );
   }
 
   // --- Catalog ---

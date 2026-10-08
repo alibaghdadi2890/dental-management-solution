@@ -8,6 +8,7 @@ import { RightPanel } from '@/components/ui/right-panel';
 import { usePermission } from '@/features/auth/use-permission';
 import { balanceQuery } from '@/features/billing/billing-api';
 import { owedBalances } from '@/features/billing/owed-balances';
+import { QuickViewFiles } from '@/features/files/file-rows';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { formatAgeLine, formatCalendarDate, formatMoney, formatPhone, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -25,7 +26,8 @@ const NONE = '—';
 
 /**
  * Quick view (`Patients.dc.html` "view" panel, design §Right panel): who the patient is, their
- * alerts, the open balance (`payment:read`), their contacts (design addendum "Quick view") and
+ * alerts, the open balance (`payment:read`), their contacts (design addendum "Quick view"), a
+ * "Files n" line with the first thumbnails (feature 8) and
  * the activity timeline (`audit:read` only, Q10).
  * The footer opens the full record, and offers Edit details (`patient:write`, not archived).
  */
@@ -237,6 +239,8 @@ function QuickView({
       </dl>
 
       <QuickViewContacts patient={patient} country={tenant.country} today={today} />
+
+      <QuickViewFiles patient={patient} />
 
       {canAudit && (
         <ActivityTimeline

@@ -13,6 +13,8 @@ import { BalanceTab } from '@/features/billing/balance-tab';
 import { PostVisitSummaryDialog } from '@/features/clinical/dialogs/post-visit-summary-dialog';
 import { ChartTab } from '@/features/clinical/record/chart-tab';
 import { HistoryTab } from '@/features/clinical/record/history-tab';
+import { FileDropSurface } from '@/features/files/file-drop-surface';
+import { FilesGallery } from '@/features/files/gallery/files-gallery';
 import { ApiError } from '@/lib/api';
 import { useContactDrafts } from '../contact-drafts';
 import { patientQuery } from '../patients-api';
@@ -39,6 +41,8 @@ interface RecordProps {
   /** Visits & history's view and the visit it expands (4b). */
   view?: HistoryView | undefined;
   visitId?: string | undefined;
+  /** A file to open in the viewer on arrival (`?file=`, feature 8). */
+  fileId?: string | undefined;
 }
 
 interface RecordNavigation {
@@ -59,7 +63,7 @@ interface RecordNavigation {
  * `payment:read`, and focus goes to the patient's name when it closes; without it, a "Visit
  * recorded" toast says so. Either way the state is then cleared, so a refresh doesn't repeat it.
  */
-export function PatientRecordScreen({ patientId, tab, panel, view, visitId }: RecordProps) {
+export function PatientRecordScreen({ patientId, tab, panel, view, visitId, fileId }: RecordProps) {
   const { t } = useTranslation('clinical');
   const navigate = useNavigate();
   const toast = useToast();
@@ -99,6 +103,7 @@ export function PatientRecordScreen({ patientId, tab, panel, view, visitId }: Re
         panel={panel}
         view={view}
         visitId={visitId}
+        fileId={fileId}
         headingRef={headingRef}
         onTab={(next) => {
           go({ tab: next });
@@ -142,6 +147,7 @@ function PatientRecord({
   panel,
   view,
   visitId,
+  fileId,
   onTab,
   onHistory,
   onPanel,
@@ -230,6 +236,9 @@ function PatientRecord({
               onAllVisits={() => {
                 onTab('history');
               }}
+              onAllFiles={() => {
+                onTab('files');
+              }}
             />
           ) : tab === 'history' ? (
             <HistoryTab
@@ -241,6 +250,16 @@ function PatientRecord({
             />
           ) : tab === 'chart' ? (
             <ChartTab patient={patient.data} />
+          ) : tab === 'files' ? (
+            <FilesGallery
+              patient={patient.data}
+              tenant={tenant}
+              openFileId={fileId}
+              onFileOpened={() => {
+                // The same tab without `?file=`: a refresh does not reopen the viewer.
+                onTab('files');
+              }}
+            />
           ) : tab === 'balance' ? (
             <BalanceTab patientId={patientId} currency={tenant.currency} locale={locale} />
           ) : (
@@ -256,6 +275,9 @@ function PatientRecord({
           )}
         </TabPanel>
       </div>
+      {patient.data.mergedIntoId === null && (
+        <FileDropSurface patientId={patientId} patientName={patient.data.fullName} />
+      )}
       {addingContact && (
         <AddContactPanel
           patient={patient.data}

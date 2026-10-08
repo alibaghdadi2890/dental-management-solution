@@ -156,8 +156,12 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
         return known.success ? toothLabel(known.data, notation) : code;
       },
       label: (group, value) => {
-        const key =
-          group === 'method' ? `billing:methods.${value}` : `billing:adjust.reasons.${value}`;
+        const key = {
+          method: `billing:methods.${value}`,
+          reason: `billing:adjust.reasons.${value}`,
+          fileCategory: `files:category.${value}`,
+          fileType: `files:subCategory.${value}`,
+        }[group];
         return i18n.exists(key) ? translate(key) : value;
       },
     };
@@ -384,6 +388,18 @@ function SubjectLink({ subject, muted = false }: { subject: Subject; muted?: boo
       >
         {subject.label}
       </button>
+    );
+  }
+  if (subject.kind === 'file') {
+    return (
+      <Link
+        to="/patients/$patientId"
+        params={{ patientId: subject.patientId }}
+        search={{ tab: 'files', file: subject.fileId }}
+        className={className}
+      >
+        {subject.label}
+      </Link>
     );
   }
   if (subject.kind === 'catalog') {

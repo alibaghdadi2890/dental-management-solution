@@ -1,0 +1,296 @@
+{
+  "title": "Files",
+  "subtitle": "X-rays, photos and documents",
+  "upload": "Upload",
+  "loading": "Loading files",
+  "failed": "Couldn’t load the files.",
+  "separator": " · ",
+  "size": {
+    "b": "{{value}} B",
+    "kb": "{{value}} KB",
+    "mb": "{{value}} MB"
+  },
+  "count_one": "{{count}} file",
+  "count_other": "{{count}} files",
+  "images_one": "{{count}} image",
+  "images_other": "{{count}} images",
+  "tooth": "Tooth {{tooth}}",
+  "visitNumber": "Visit {{number}}",
+  "visitVoided": "visit voided",
+  "archivedBadge": "Archived",
+  "linkedToVisit": "Linked to a visit",
+  "category": {
+    "xray": "X-ray",
+    "photo": "Photo",
+    "other": "Other"
+  },
+  "subCategory": {
+    "intraoral": "Intraoral",
+    "panoramic": "Panoramic",
+    "cephalometric": "Cephalometric",
+    "extraoral": "Extraoral",
+    "before_after": "Before/After",
+    "other": "Other"
+  },
+  "glyph": {
+    "pdf": "PDF",
+    "doc": "DOC",
+    "xls": "XLS",
+    "txt": "TXT",
+    "img": "IMG"
+  },
+  "fields": {
+    "category": "Category",
+    "type": "Type",
+    "tooth": "Tooth",
+    "visit": "Visit",
+    "note": "Note",
+    "takenOn": "Taken on"
+  },
+  "toothField": {
+    "placeholder": "No.",
+    "pick": "Choose a tooth on the chart",
+    "chartTitle": "Choose a tooth",
+    "invalid": "No such tooth",
+    "remove": "Remove tooth {{tooth}}",
+    "none": "No tooth"
+  },
+  "visitField": {
+    "none": "Not linked to a visit",
+    "link": "link",
+    "choose": "Choose a visit",
+    "option": "{{number}} · {{date}}",
+    "today": "today",
+    "live": "in progress",
+    "remove": "Remove the link to {{number}}"
+  },
+  "drop": {
+    "overlay": "Drop to add to {{patient}}",
+    "hint": "X-rays, photos and documents, up to 25 MB each"
+  },
+  "panel": {
+    "title": "Add files",
+    "dropMore": "Drop more files here or",
+    "browse": "browse",
+    "dropFirst": "Drop files here, paste an image, or",
+    "takePhoto": "Take photo",
+    "chooseFiles": "Choose files",
+    "applyToAll": "Apply to all",
+    "sameAsLast": "Same as last upload — change if needed",
+    "chooseCategory": "Choose a category",
+    "notePlaceholder": "Optional — e.g. pre-op, after whitening",
+    "files": "Files to add",
+    "edit": "Edit",
+    "editFile": "Edit {{name}}",
+    "done": "Done",
+    "edited": "Edited",
+    "remove": "Remove",
+    "removeFile": "Remove {{name}}",
+    "retry": "Retry",
+    "uploading": "Uploading {{percent}}%",
+    "uploadFailed": "Upload failed",
+    "noCategory": "No category yet",
+    "refused": {
+      "unsupported": "File type not supported",
+      "dicom": "DICOM is not supported yet. Export the image as JPEG or PNG.",
+      "too_large": "Larger than 25 MB",
+      "too_many": "A batch takes up to 20 files"
+    },
+    "saveNone": "Save",
+    "save_one": "Save {{count}} file",
+    "save_other": "Save {{count}} files",
+    "saved_one": "{{count}} file added",
+    "saved_other": "{{count}} files added",
+    "view": "View",
+    "discardTitle_one": "Discard {{count}} file?",
+    "discardTitle_other": "Discard {{count}} files?",
+    "discardBody": "They were uploaded but not saved. Discarding removes them.",
+    "discardOk": "Discard",
+    "keep": "Keep adding"
+  },
+  "gallery": {
+    "select": "Select",
+    "selectDone": "Done",
+    "selectFile": "Select {{name}}",
+    "capped": "Showing the 1,000 most recent files.",
+    "filters": {
+      "label": "Filter files",
+      "category": "Category",
+      "all": "All",
+      "documents": "Documents",
+      "type": "Type",
+      "any": "Any",
+      "tooth": "Tooth",
+      "visit": "Visit",
+      "showArchived": "Show archived",
+      "search": "Search files",
+      "searchPlaceholder": "Note or filename",
+      "clear": "Clear filters"
+    },
+    "groups": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "week": "This week"
+    },
+    "empty": {
+      "title": "No files yet",
+      "body": "Drop X-rays, photos or documents here, click Upload, or paste an image.",
+      "readOnly": "Nothing has been added for this patient."
+    },
+    "noMatch": {
+      "title": "No files match",
+      "body": "Try other filters, or clear them."
+    },
+    "menu": {
+      "label": "Actions for {{name}}",
+      "open": "Open",
+      "download": "Download",
+      "edit": "Edit details",
+      "archive": "Archive",
+      "restore": "Restore"
+    },
+    "bulk": {
+      "label": "Selected files",
+      "selected_one": "{{count}} selected",
+      "selected_other": "{{count}} selected",
+      "setCategory": "Set category",
+      "setTooth": "Set tooth",
+      "archive": "Archive",
+      "download": "Download",
+      "compare": "Compare",
+      "updated_one": "{{count}} file updated",
+      "updated_other": "{{count}} files updated"
+    }
+  },
+  "archive": {
+    "title_one": "Archive this file?",
+    "title_other": "Archive {{count}} files?",
+    "body": "Archived files leave the gallery. You can restore them under Show archived.",
+    "ok": "Archive",
+    "reason": "Reason",
+    "done_one": "Archived",
+    "done_other": "{{count}} files archived",
+    "undo": "Undo",
+    "restored_one": "Restored",
+    "restored_other": "{{count}} files restored"
+  },
+  "recent": {
+    "title": "Recent files",
+    "viewAll": "View all",
+    "upload": "Upload files"
+  },
+  "toothImages": {
+    "title": "Images",
+    "add": "Add an image of tooth {{tooth}}"
+  },
+  "strip": {
+    "title": "Files",
+    "add": "Add files to this visit",
+    "thisVisit": "This visit",
+    "recent": "Recent",
+    "allFiles": "All files",
+    "empty": "Nothing added in this visit yet. Drop a file anywhere, or paste an image."
+  },
+  "allFiles": {
+    "title": "Files · {{patient}}"
+  },
+  "postVisit": {
+    "added": "Files added in this visit: {{count}}",
+    "add": "Add files to this visit"
+  },
+  "quickView": {
+    "label": "Files",
+    "open": "Open the files of {{patient}}"
+  },
+  "viewer": {
+    "label": "File viewer",
+    "position": "{{index}} / {{total}}",
+    "taken": "Taken {{date}}",
+    "previous": "Previous file",
+    "next": "Next file",
+    "rotate": "Rotate",
+    "saveOrientation": "Save orientation",
+    "orientationSaved": "Orientation saved",
+    "fullscreen": "Full screen",
+    "exitFullscreen": "Exit full screen",
+    "details": "Details",
+    "download": "Download",
+    "archive": "Archive",
+    "restore": "Restore",
+    "close": "Close",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoom": "{{percent}}%",
+    "zoomLabel": "Zoom {{percent}}%",
+    "fit": "Fit",
+    "actual": "1:1",
+    "actualLabel": "Actual size",
+    "invert": "Invert",
+    "adjust": "Brightness and contrast",
+    "brightness": "Brightness",
+    "contrast": "Contrast",
+    "reset": "Reset",
+    "filmstrip": "All files in this list",
+    "shortcuts": "Keyboard shortcuts",
+    "noPreview": "This file can’t be shown here.",
+    "open": "Open",
+    "document": "Document: {{name}}",
+    "compare": "Compare",
+    "syncZoom": "Sync zoom",
+    "left": "First image",
+    "right": "Second image",
+    "keys": {
+      "navigate": "Previous / next file",
+      "zoom": "Zoom in / out",
+      "fit": "Fit to screen / actual size",
+      "rotate": "Rotate",
+      "fullscreen": "Full screen",
+      "details": "Details",
+      "filmstrip": "Filmstrip",
+      "help": "This list",
+      "close": "Close"
+    }
+  },
+  "details": {
+    "title": "Details",
+    "close": "Close details",
+    "none": "None",
+    "uploadedBy": "Uploaded by",
+    "uploadedAt": "Uploaded",
+    "someone": "Someone no longer on staff",
+    "filename": "Original filename",
+    "size": "Size",
+    "mime": "File type",
+    "orientation": "Orientation",
+    "degrees": "{{degrees}}° clockwise",
+    "archivedBy": "Archived by",
+    "archivedAt": "Archived",
+    "archiveReason": "Reason",
+    "technical": "Technical details",
+    "storage": "Storage location",
+    "history": "History",
+    "historyLoading": "Loading history",
+    "saved": "Saved",
+    "saving": "Saving…",
+    "saveFailed": "Couldn’t save. Try again.",
+    "futureDate": "Can’t be after today",
+    "events": {
+      "upload": "Uploaded",
+      "note": "Note changed",
+      "orientation": "Orientation saved",
+      "update": "Details changed",
+      "archive": "Archived",
+      "restore": "Restored"
+    }
+  },
+  "errors": {
+    "file": {
+      "not_found": "This file is no longer available.",
+      "type_unsupported": "File type not supported.",
+      "too_large": "This file is larger than 25 MB.",
+      "upload_incomplete": "A file has not finished uploading. Wait a moment and save again.",
+      "visit_mismatch": "That visit is not one of this patient’s visits.",
+      "archive_forbidden": "Only a dentist or the owner can archive or restore this file."
+    }
+  }
+}

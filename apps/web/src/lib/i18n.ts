@@ -27,6 +27,7 @@ export const NAMESPACES = [
   'settings',
   'today',
   'activity',
+  'files',
 ] as const;
 
 type Messages = Record<string, unknown>;

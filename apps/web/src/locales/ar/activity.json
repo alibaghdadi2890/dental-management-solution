@@ -56,7 +56,8 @@
     "catalog": "الكتالوج",
     "users": "المستخدمون",
     "settings": "الإعدادات",
-    "contacts": "جهات الاتصال"
+    "contacts": "جهات الاتصال",
+    "files": "الملفات"
   },
   "ranges": {
     "today": "اليوم",
@@ -140,6 +141,15 @@
       "less": "خفّض رصيد {{subject}} بمقدار {{amount}}",
       "more": "أضاف {{amount}} إلى رصيد {{subject}}",
       "repoint": "نقل رصيد سجل مدموج إلى {{subject}}"
+    },
+    "file": {
+      "upload": "تم رفع {{what}} لـ {{subject}}",
+      "update": "تم تعديل تفاصيل {{what}} لـ {{subject}}",
+      "note": "تم تعديل ملاحظة {{what}} لـ {{subject}}",
+      "orientation": "تم حفظ اتجاه {{what}} لـ {{subject}}",
+      "archive": "تمت أرشفة {{what}} لـ {{subject}}",
+      "restore": "تمت استعادة {{what}} لـ {{subject}}",
+      "repoint": "تم نقل ملفات سجل مدمج إلى {{subject}}"
     },
     "payment": {
       "create": "سجّل الدفعة {{subject}} · {{amount}} {{method}}",

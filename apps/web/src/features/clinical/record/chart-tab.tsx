@@ -298,6 +298,7 @@ function ChartEditor({
           </div>
           <aside aria-label={t('workspace.toothPanel')} className="mb-4 min-w-0 flex-[1_1_340px]">
             <ToothPanel
+              patientId={patient.id}
               visit={null}
               chart={chart}
               teeth={teeth}

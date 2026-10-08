@@ -2,6 +2,7 @@ import 'i18next';
 import type admin from '../locales/en/admin.json';
 import type auth from '../locales/en/auth.json';
 import type billing from '../locales/en/billing.json';
+import type files from '../locales/en/files.json';
 import type catalog from '../locales/en/catalog.json';
 import type clinical from '../locales/en/clinical.json';
 import type common from '../locales/en/common.json';
@@ -33,6 +34,7 @@ declare module 'i18next' {
       settings: typeof settings;
       today: typeof today;
       activity: typeof activity;
+      files: typeof files;
     };
   }
 }

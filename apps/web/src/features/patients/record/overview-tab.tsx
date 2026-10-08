@@ -18,6 +18,7 @@ import { DentalChart } from '@/features/clinical/chart/dental-chart';
 import { useLevelLabel, useToothLabel } from '@/features/clinical/chart/use-chart-settings';
 import { ToothHistoryDialog } from '@/features/clinical/dialogs/tooth-history-dialog';
 import { chartQuery, clinicalSummaryQuery, lastVisitQuery } from '@/features/clinical/visits-api';
+import { RecentFilesCard } from '@/features/files/file-rows';
 import { formatCalendarDate, formatMoney, formatPhone } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CONTACT_ROLES, type ContactRole, roleHolder } from '../contact-rows';
@@ -413,7 +414,8 @@ function PatientInfoCard({
  * The record's Overview (workspace spec §Tab: Overview): with `visit:read`, the Last visit and
  * Dental status cards on the left, and on the right the Balance (`payment:read` only), the
  * Treatment summary and the patient's details. Without it, the details take the left column. A
- * tooth clicked in the chart opens its history.
+ * tooth clicked in the chart opens its history. Under the left column, the Recent files card
+ * (feature 8) once the patient has files.
  */
 export function OverviewTab({
   patient,
@@ -421,6 +423,7 @@ export function OverviewTab({
   locale,
   onComplete,
   onAllVisits,
+  onAllFiles,
 }: {
   patient: Patient;
   tenant: Tenant;
@@ -429,6 +432,8 @@ export function OverviewTab({
   onComplete: () => void;
   /** The Last visit card's "All visits →": the Visits & history tab. */
   onAllVisits: () => void;
+  /** The Recent files card's "View all →": the Files tab. */
+  onAllFiles: () => void;
 }) {
   const canPay = usePermission('payment:read');
   const canWrite = usePermission('patient:write');
@@ -453,6 +458,7 @@ export function OverviewTab({
         ) : (
           info
         )}
+        <RecentFilesCard patient={patient} onViewAll={onAllFiles} />
       </div>
       {(canPay || canVisits) && (
         <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">

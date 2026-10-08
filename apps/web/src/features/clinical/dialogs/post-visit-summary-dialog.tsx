@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/features/auth/session';
 import { RecordPaymentForm } from '@/features/billing/payments/record-payment-dialog';
+import { VisitFilesLine } from '@/features/files/file-rows';
 import { formatCalendarDate } from '@/lib/format';
 import { useVisitCheckout } from './use-visit-checkout';
 import { CheckoutActions, CheckoutBody, CheckoutStatusPill } from './visit-checkout';
@@ -27,7 +28,9 @@ declare module '@tanstack/react-router' {
  * `payment:write`, **Record payment**: the dialog's next step, the payment form in place of the
  * figures (this visit is paid first). Recording the payment ends the checkout and closes the
  * dialog, like Done (the toast says what was taken); Cancel comes back to the figures. Done never asks who collects: the completer may leave it to the front desk, and
- * without `payment:write` a note says so. **Print invoice** is always there.
+ * without `payment:write` a note says so. **Print invoice** is always there. Under the figures,
+ * "Files added in this visit: n" with their thumbnails and a **+** (feature 8): X-rays are
+ * often added right after the clinical work.
  *
  * Its body and actions are the visit's checkout (`visit-checkout.tsx`). With `visit:discount`, on
  * the visit's day and while the visit owes, the Discount row has **Edit**
@@ -141,6 +144,7 @@ function PostVisitContent({
         <>
           <div className="min-h-0 overflow-auto px-[22px] py-[18px]">
             <CheckoutBody checkout={checkout} />
+            {visit && <VisitFilesLine visit={visit} />}
           </div>
           <div className="flex flex-none items-center gap-2.5 border-t border-inner-divider bg-sunken px-[22px] py-3.5">
             {checkout.settled ? (

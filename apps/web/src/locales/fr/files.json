@@ -1,0 +1,296 @@
+{
+  "title": "Fichiers",
+  "subtitle": "Radios, photos et documents",
+  "upload": "Ajouter",
+  "loading": "Chargement des fichiers",
+  "failed": "Impossible de charger les fichiers.",
+  "separator": " · ",
+  "size": {
+    "b": "{{value}} o",
+    "kb": "{{value}} Ko",
+    "mb": "{{value}} Mo"
+  },
+  "count_one": "{{count}} fichier",
+  "count_other": "{{count}} fichiers",
+  "images_one": "{{count}} image",
+  "images_other": "{{count}} images",
+  "tooth": "Dent {{tooth}}",
+  "visitNumber": "Visite {{number}}",
+  "visitVoided": "visite annulée",
+  "archivedBadge": "Archivé",
+  "linkedToVisit": "Lié à une visite",
+  "category": {
+    "xray": "Radio",
+    "photo": "Photo",
+    "other": "Autre"
+  },
+  "subCategory": {
+    "intraoral": "Intra-orale",
+    "panoramic": "Panoramique",
+    "cephalometric": "Céphalométrique",
+    "extraoral": "Extra-orale",
+    "before_after": "Avant/Après",
+    "other": "Autre"
+  },
+  "glyph": {
+    "pdf": "PDF",
+    "doc": "DOC",
+    "xls": "XLS",
+    "txt": "TXT",
+    "img": "IMG"
+  },
+  "fields": {
+    "category": "Catégorie",
+    "type": "Type",
+    "tooth": "Dent",
+    "visit": "Visite",
+    "note": "Note",
+    "takenOn": "Prise le"
+  },
+  "toothField": {
+    "placeholder": "N°",
+    "pick": "Choisir une dent sur le schéma",
+    "chartTitle": "Choisir une dent",
+    "invalid": "Dent inconnue",
+    "remove": "Retirer la dent {{tooth}}",
+    "none": "Aucune dent"
+  },
+  "visitField": {
+    "none": "Non lié à une visite",
+    "link": "lier",
+    "choose": "Choisir une visite",
+    "option": "{{number}} · {{date}}",
+    "today": "aujourd’hui",
+    "live": "en cours",
+    "remove": "Retirer le lien avec {{number}}"
+  },
+  "drop": {
+    "overlay": "Déposez pour ajouter à {{patient}}",
+    "hint": "Radios, photos et documents, 25 Mo maximum chacun"
+  },
+  "panel": {
+    "title": "Ajouter des fichiers",
+    "dropMore": "Déposez d’autres fichiers ici ou",
+    "browse": "parcourez",
+    "dropFirst": "Déposez des fichiers ici, collez une image, ou",
+    "takePhoto": "Prendre une photo",
+    "chooseFiles": "Choisir des fichiers",
+    "applyToAll": "Appliquer à tous",
+    "sameAsLast": "Comme le dernier ajout — modifiez si besoin",
+    "chooseCategory": "Choisissez une catégorie",
+    "notePlaceholder": "Facultatif — p. ex. préopératoire, après blanchiment",
+    "files": "Fichiers à ajouter",
+    "edit": "Modifier",
+    "editFile": "Modifier {{name}}",
+    "done": "Terminé",
+    "edited": "Modifié",
+    "remove": "Retirer",
+    "removeFile": "Retirer {{name}}",
+    "retry": "Réessayer",
+    "uploading": "Envoi {{percent}} %",
+    "uploadFailed": "Échec de l’envoi",
+    "noCategory": "Pas encore de catégorie",
+    "refused": {
+      "unsupported": "Type de fichier non pris en charge",
+      "dicom": "Le DICOM n’est pas encore pris en charge. Exportez l’image en JPEG ou PNG.",
+      "too_large": "Plus de 25 Mo",
+      "too_many": "Un lot contient 20 fichiers au plus"
+    },
+    "saveNone": "Enregistrer",
+    "save_one": "Enregistrer {{count}} fichier",
+    "save_other": "Enregistrer {{count}} fichiers",
+    "saved_one": "{{count}} fichier ajouté",
+    "saved_other": "{{count}} fichiers ajoutés",
+    "view": "Voir",
+    "discardTitle_one": "Abandonner {{count}} fichier ?",
+    "discardTitle_other": "Abandonner {{count}} fichiers ?",
+    "discardBody": "Ils ont été envoyés mais pas enregistrés. Les abandonner les supprime.",
+    "discardOk": "Abandonner",
+    "keep": "Continuer"
+  },
+  "gallery": {
+    "select": "Sélectionner",
+    "selectDone": "Terminé",
+    "selectFile": "Sélectionner {{name}}",
+    "capped": "Les 1 000 fichiers les plus récents sont affichés.",
+    "filters": {
+      "label": "Filtrer les fichiers",
+      "category": "Catégorie",
+      "all": "Tous",
+      "documents": "Documents",
+      "type": "Type",
+      "any": "Tous",
+      "tooth": "Dent",
+      "visit": "Visite",
+      "showArchived": "Afficher les archivés",
+      "search": "Rechercher dans les fichiers",
+      "searchPlaceholder": "Note ou nom de fichier",
+      "clear": "Effacer les filtres"
+    },
+    "groups": {
+      "today": "Aujourd’hui",
+      "yesterday": "Hier",
+      "week": "Cette semaine"
+    },
+    "empty": {
+      "title": "Aucun fichier",
+      "body": "Déposez ici des radios, des photos ou des documents, cliquez sur Ajouter, ou collez une image.",
+      "readOnly": "Rien n’a été ajouté pour ce patient."
+    },
+    "noMatch": {
+      "title": "Aucun fichier ne correspond",
+      "body": "Essayez d’autres filtres, ou effacez-les."
+    },
+    "menu": {
+      "label": "Actions pour {{name}}",
+      "open": "Ouvrir",
+      "download": "Télécharger",
+      "edit": "Modifier les détails",
+      "archive": "Archiver",
+      "restore": "Restaurer"
+    },
+    "bulk": {
+      "label": "Fichiers sélectionnés",
+      "selected_one": "{{count}} sélectionné",
+      "selected_other": "{{count}} sélectionnés",
+      "setCategory": "Définir la catégorie",
+      "setTooth": "Définir la dent",
+      "archive": "Archiver",
+      "download": "Télécharger",
+      "compare": "Comparer",
+      "updated_one": "{{count}} fichier modifié",
+      "updated_other": "{{count}} fichiers modifiés"
+    }
+  },
+  "archive": {
+    "title_one": "Archiver ce fichier ?",
+    "title_other": "Archiver {{count}} fichiers ?",
+    "body": "Les fichiers archivés quittent la galerie. Vous pouvez les restaurer avec Afficher les archivés.",
+    "ok": "Archiver",
+    "reason": "Motif",
+    "done_one": "Archivé",
+    "done_other": "{{count}} fichiers archivés",
+    "undo": "Annuler",
+    "restored_one": "Restauré",
+    "restored_other": "{{count}} fichiers restaurés"
+  },
+  "recent": {
+    "title": "Fichiers récents",
+    "viewAll": "Tout voir",
+    "upload": "Ajouter des fichiers"
+  },
+  "toothImages": {
+    "title": "Images",
+    "add": "Ajouter une image de la dent {{tooth}}"
+  },
+  "strip": {
+    "title": "Fichiers",
+    "add": "Ajouter des fichiers à cette visite",
+    "thisVisit": "Cette visite",
+    "recent": "Récents",
+    "allFiles": "Tous les fichiers",
+    "empty": "Rien n’a encore été ajouté à cette visite. Déposez un fichier n’importe où, ou collez une image."
+  },
+  "allFiles": {
+    "title": "Fichiers · {{patient}}"
+  },
+  "postVisit": {
+    "added": "Fichiers ajoutés pendant cette visite : {{count}}",
+    "add": "Ajouter des fichiers à cette visite"
+  },
+  "quickView": {
+    "label": "Fichiers",
+    "open": "Ouvrir les fichiers de {{patient}}"
+  },
+  "viewer": {
+    "label": "Visionneuse",
+    "position": "{{index}} / {{total}}",
+    "taken": "Prise le {{date}}",
+    "previous": "Fichier précédent",
+    "next": "Fichier suivant",
+    "rotate": "Pivoter",
+    "saveOrientation": "Enregistrer l’orientation",
+    "orientationSaved": "Orientation enregistrée",
+    "fullscreen": "Plein écran",
+    "exitFullscreen": "Quitter le plein écran",
+    "details": "Détails",
+    "download": "Télécharger",
+    "archive": "Archiver",
+    "restore": "Restaurer",
+    "close": "Fermer",
+    "zoomIn": "Zoom avant",
+    "zoomOut": "Zoom arrière",
+    "zoom": "{{percent}} %",
+    "zoomLabel": "Zoom {{percent}} %",
+    "fit": "Ajuster",
+    "actual": "1:1",
+    "actualLabel": "Taille réelle",
+    "invert": "Inverser",
+    "adjust": "Luminosité et contraste",
+    "brightness": "Luminosité",
+    "contrast": "Contraste",
+    "reset": "Réinitialiser",
+    "filmstrip": "Tous les fichiers de cette liste",
+    "shortcuts": "Raccourcis clavier",
+    "noPreview": "Ce fichier ne peut pas être affiché ici.",
+    "open": "Ouvrir",
+    "document": "Document : {{name}}",
+    "compare": "Comparer",
+    "syncZoom": "Synchroniser le zoom",
+    "left": "Première image",
+    "right": "Deuxième image",
+    "keys": {
+      "navigate": "Fichier précédent / suivant",
+      "zoom": "Zoom avant / arrière",
+      "fit": "Ajuster à l’écran / taille réelle",
+      "rotate": "Pivoter",
+      "fullscreen": "Plein écran",
+      "details": "Détails",
+      "filmstrip": "Bande de vignettes",
+      "help": "Cette liste",
+      "close": "Fermer"
+    }
+  },
+  "details": {
+    "title": "Détails",
+    "close": "Fermer les détails",
+    "none": "Aucun",
+    "uploadedBy": "Ajouté par",
+    "uploadedAt": "Ajouté le",
+    "someone": "Une personne qui ne fait plus partie de l’équipe",
+    "filename": "Nom d’origine",
+    "size": "Taille",
+    "mime": "Type de fichier",
+    "orientation": "Orientation",
+    "degrees": "{{degrees}}° dans le sens horaire",
+    "archivedBy": "Archivé par",
+    "archivedAt": "Archivé le",
+    "archiveReason": "Motif",
+    "technical": "Détails techniques",
+    "storage": "Emplacement de stockage",
+    "history": "Historique",
+    "historyLoading": "Chargement de l’historique",
+    "saved": "Enregistré",
+    "saving": "Enregistrement…",
+    "saveFailed": "Enregistrement impossible. Réessayez.",
+    "futureDate": "Ne peut pas être après aujourd’hui",
+    "events": {
+      "upload": "Ajouté",
+      "note": "Note modifiée",
+      "orientation": "Orientation enregistrée",
+      "update": "Détails modifiés",
+      "archive": "Archivé",
+      "restore": "Restauré"
+    }
+  },
+  "errors": {
+    "file": {
+      "not_found": "Ce fichier n’est plus disponible.",
+      "type_unsupported": "Type de fichier non pris en charge.",
+      "too_large": "Ce fichier dépasse 25 Mo.",
+      "upload_incomplete": "Un fichier n’a pas fini d’être envoyé. Patientez un instant puis enregistrez à nouveau.",
+      "visit_mismatch": "Cette visite n’est pas une visite de ce patient.",
+      "archive_forbidden": "Seul un dentiste ou le propriétaire peut archiver ou restaurer ce fichier."
+    }
+  }
+}

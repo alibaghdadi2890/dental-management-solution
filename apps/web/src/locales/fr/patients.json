@@ -372,6 +372,8 @@
       "overview": "Vue d’ensemble",
       "history": "Visites et historique",
       "chart": "Schéma dentaire",
+      "files": "Fichiers",
+      "filesCount": "Fichiers {{count}}",
       "balance": "Solde et paiements",
       "information": "Informations patient"
     },
