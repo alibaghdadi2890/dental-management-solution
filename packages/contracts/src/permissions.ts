@@ -26,6 +26,9 @@ export const PERMISSIONS = [
   'payment:write',
   'payment:refund',
   'import:run',
+  'file:read',
+  'file:write',
+  'file:archive',
   'audit:read',
 ] as const;
 

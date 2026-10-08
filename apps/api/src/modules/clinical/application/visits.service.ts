@@ -78,7 +78,11 @@ import {
   VisitServicesRepository,
 } from '../persistence/visit-services.repository';
 import type { VisitCriteria, VisitTextMatch } from '../persistence/visit-search.sql';
-import { type StoredVisit, VisitsRepository } from '../persistence/visits.repository';
+import {
+  type StoredVisit,
+  type VisitRef,
+  VisitsRepository,
+} from '../persistence/visits.repository';
 import { PlanUnperformer } from './plan-unperformer';
 import { PresenceWriter } from './presence-writer';
 import { computedMoney, moneyOf, toVisit, toVisitService } from './visit-mapping';
@@ -859,6 +863,15 @@ export class VisitsService {
   ): Promise<{ visitId: string; displayNumber: number; localDate: string }[]> {
     this.context.requirePermission('visit:read');
     return this.tenantDb.run(() => this.visits.numbersFor([...new Set(visitIds)]));
+  }
+
+  /**
+   * For `files` (feature 8): the patient, number, day, start and status of each visit among
+   * `visitIds`, in no particular order; unknown and discarded ids are absent.
+   */
+  async refsFor(visitIds: readonly string[]): Promise<VisitRef[]> {
+    this.context.requirePermission('visit:read');
+    return this.tenantDb.run(() => this.visits.refsFor([...new Set(visitIds)]));
   }
 
   /**

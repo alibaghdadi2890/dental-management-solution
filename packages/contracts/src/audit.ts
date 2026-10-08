@@ -23,6 +23,7 @@ export const ACTIVITY_AREAS = [
   'users',
   'settings',
   'contacts',
+  'files',
 ] as const;
 export const activityAreaSchema = z.enum(ACTIVITY_AREAS);
 export type ActivityArea = z.infer<typeof activityAreaSchema>;
@@ -42,6 +43,7 @@ const AREA_OF_PREFIX: Readonly<Record<string, ActivityArea>> = {
   payment: 'payments',
   ledger_entry: 'payments',
   catalog: 'catalog',
+  file: 'files',
   user: 'users',
   role: 'users',
   tenant: 'settings',

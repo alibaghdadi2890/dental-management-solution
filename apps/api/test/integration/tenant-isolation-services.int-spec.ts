@@ -6,6 +6,7 @@ import type {
   OpeningBalanceResult,
   Patient,
   PatientChartResult,
+  PatientFiles,
   PatientPage,
   Role,
   Room,
@@ -13,6 +14,7 @@ import type {
   Session,
   StaffUser,
   Tenant,
+  UploadTarget,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -21,6 +23,7 @@ import { ChartService, VisitsService } from '../../src/modules/clinical';
 import { ContactsService, PatientsService } from '../../src/modules/patients';
 import { UsersService } from '../../src/modules/users';
 import { newId } from '../../src/platform/kernel/id';
+import { FakeObjectStorage } from '../support/fake-storage';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
@@ -40,7 +43,7 @@ interface Clinic {
 /**
  * CLAUDE.md §14: tenant A's users cannot read or affect tenant B's rows through any public
  * service — branches, rooms, users, roles, audit, catalogs, patients, balances, visits and their
- * records, charts — and cannot pick B with `X-Tenant-Id`.
+ * records, charts, files — and cannot pick B with `X-Tenant-Id`.
  */
 describe('tenant isolation through the public services', () => {
   let database: TestDatabase;
@@ -836,6 +839,89 @@ describe('tenant isolation through the public services', () => {
       expect(
         own.items.some((item) => bIds.has(item.patientId ?? '') || bIds.has(item.visitId ?? '')),
       ).toBe(false);
+    });
+
+    it("files: B's files, uploads and objects are not reachable from A, and left unchanged", async () => {
+      const storage = testApp.app.get(FakeObjectStorage);
+      const uploadIn = async (owner: TestAgent, clinic: Clinic): Promise<UploadTarget> => {
+        const response = await owner.post('/api/v1/files/uploads').send({
+          patientId: clinic.patient.id,
+          filename: 'pano.jpg',
+          mimeType: 'image/jpeg',
+          sizeBytes: 1024,
+          preview: false,
+        });
+        expect(response.status, JSON.stringify(response.body)).toBe(201);
+        const target = response.body as UploadTarget;
+        storage.put(`tenants/${clinic.tenant.id}/files/${target.id}/original`, 1024);
+        return target;
+      };
+      const bFile = await uploadIn(ownerB, b);
+      const bSaved = await ownerB
+        .post('/api/v1/files')
+        .send({ patientId: b.patient.id, files: [{ id: bFile.id, category: 'xray' }] });
+      expect(bSaved.status, JSON.stringify(bSaved.body)).toBe(201);
+      const bPending = await uploadIn(ownerB, b);
+      const bFiles = async () =>
+        ((await ownerB.get(`/api/v1/files?patientId=${b.patient.id}`)).body as PatientFiles).items;
+      const before = await bFiles();
+      expect(before.map((file) => file.id)).toEqual([bFile.id]);
+      // The signed URLs are B's own keys.
+      expect(before[0]?.storageKey).toBe(`tenants/${b.tenant.id}/files/${bFile.id}/original`);
+
+      const listed = await ownerA.get(`/api/v1/files?patientId=${b.patient.id}`);
+      expect(listed.status).toBe(200);
+      expect((listed.body as PatientFiles).items).toEqual([]);
+
+      const intent = await ownerA.post('/api/v1/files/uploads').send({
+        patientId: b.patient.id,
+        filename: 'x.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 10,
+        preview: false,
+      });
+      expect(intent.status).toBe(404);
+
+      const notFound = [
+        ownerA.get(`/api/v1/files/${bFile.id}/download`),
+        ownerA.patch('/api/v1/files').send({ ids: [bFile.id], patch: { note: 'mine now' } }),
+        ownerA.post('/api/v1/files/archive').send({ ids: [bFile.id] }),
+        ownerA.post('/api/v1/files/restore').send({ ids: [bFile.id] }),
+        // B's pending upload, saved onto A's patient.
+        ownerA
+          .post('/api/v1/files')
+          .send({ patientId: a.patient.id, files: [{ id: bPending.id, category: 'photo' }] }),
+      ];
+      for (const response of await Promise.all(notFound)) {
+        expect(response.status, JSON.stringify(response.body)).toBe(404);
+      }
+      const discard = await ownerA.delete(`/api/v1/files/uploads?ids=${bPending.id}`);
+      expect(discard.status).toBe(204);
+      expect(storage.has(`tenants/${b.tenant.id}/files/${bPending.id}/original`)).toBe(true);
+
+      // A cannot link its own file to B's visit either.
+      const aFile = await uploadIn(ownerA, a);
+      const bVisit = (
+        await database.ownerPool.query<{ id: string }>(
+          'select id from visits where tenant_id = $1 limit 1',
+          [b.tenant.id],
+        )
+      ).rows[0]?.id;
+      expect(bVisit).toEqual(expect.any(String));
+      const linked = await ownerA.post('/api/v1/files').send({
+        patientId: a.patient.id,
+        files: [{ id: aFile.id, category: 'xray', visitId: bVisit }],
+      });
+      expect(linked.status).toBe(422);
+
+      // Signed URLs change with the second they were signed in; everything else must not.
+      const unsigned = (files: PatientFiles['items']) =>
+        files.map((file) => ({ ...file, thumbnailUrl: null, viewUrl: null }));
+      expect(unsigned(await bFiles())).toEqual(unsigned(before));
+      const bSave = await ownerB
+        .post('/api/v1/files')
+        .send({ patientId: b.patient.id, files: [{ id: bPending.id, category: 'photo' }] });
+      expect(bSave.status).toBe(201);
     });
 
     it("contacts: B's patients and contacts are not found on any contact route", async () => {

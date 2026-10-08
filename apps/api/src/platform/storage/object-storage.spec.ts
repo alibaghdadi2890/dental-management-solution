@@ -4,6 +4,7 @@ import type { AppClsStore } from '../cls/app-cls-store';
 import { MissingTenantContextError, RequestContext } from '../cls/request-context';
 import type { AppConfig } from '../config/config.schema';
 import {
+  contentDisposition,
   createS3Client,
   ForeignObjectKeyError,
   InvalidObjectKeyError,
@@ -67,5 +68,39 @@ describe('ObjectStorage', () => {
         storage.presignDownload({ key: 'tenants/tenant-b/imports/batch-1.csv' }),
       ),
     ).rejects.toBeInstanceOf(ForeignObjectKeyError);
+  });
+
+  it('presigns a download with the name and type the browser should use', async () => {
+    const url = await inTenant('tenant-a', () =>
+      storage.presignDownload({
+        key: 'tenants/tenant-a/files/f1/original',
+        contentType: 'application/pdf',
+        disposition: { type: 'attachment', filename: 'referral.pdf' },
+        expiresInSeconds: 60,
+      }),
+    );
+    expect(url).toContain('X-Amz-Expires=60');
+    expect(url).toContain('response-content-type=application%2Fpdf');
+    expect(url).toContain('response-content-disposition=attachment');
+  });
+
+  it("refuses to look at or delete another tenant's object", async () => {
+    await expect(
+      inTenant('tenant-a', () => storage.head('tenants/tenant-b/files/f1/original')),
+    ).rejects.toBeInstanceOf(ForeignObjectKeyError);
+    await expect(
+      inTenant('tenant-a', () => storage.remove(['tenants/tenant-b/files/f1/original'])),
+    ).rejects.toBeInstanceOf(ForeignObjectKeyError);
+  });
+});
+
+describe('contentDisposition', () => {
+  it('keeps a plain name and encodes one that is not ASCII', () => {
+    expect(contentDisposition({ type: 'inline', filename: 'pano.jpg' })).toBe(
+      `inline; filename="pano.jpg"; filename*=UTF-8''pano.jpg`,
+    );
+    expect(contentDisposition({ type: 'attachment', filename: 'صورة "1".png' })).toBe(
+      `attachment; filename="____ _1_.png"; filename*=UTF-8''%D8%B5%D9%88%D8%B1%D8%A9%20%221%22.png`,
+    );
   });
 });

@@ -10,6 +10,7 @@ export {
   type VisitSearchInternal,
   VisitsService,
 } from './application/visits.service';
+export type { VisitRef } from './persistence/visits.repository';
 export {
   CatalogItemInactiveError,
   CatalogItemInUseError,

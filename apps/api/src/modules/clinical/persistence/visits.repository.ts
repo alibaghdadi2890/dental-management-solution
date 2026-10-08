@@ -48,6 +48,12 @@ export type NewVisit = Pick<
   | 'currency'
 >;
 
+/** A visit as another module refers to it: whose it is, its number, its day and its status. */
+export type VisitRef = Pick<
+  StoredVisit,
+  'patientId' | 'displayNumber' | 'localDate' | 'startedAt' | 'status'
+> & { visitId: string };
+
 /** The fields the lifecycle, notes and discount change. */
 export type VisitPatch = Partial<
   Pick<
@@ -119,6 +125,24 @@ export class VisitsRepository {
         })
         .from(visits)
         .where(inArray(visits.id, [...ids])),
+    );
+  }
+
+  /** What another module names a visit by; discarded visits are left out (W4). */
+  refsFor(ids: readonly string[]): Promise<VisitRef[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.db.run((tx) =>
+      tx
+        .select({
+          visitId: visits.id,
+          patientId: visits.patientId,
+          displayNumber: visits.displayNumber,
+          localDate: visits.localDate,
+          startedAt: visits.startedAt,
+          status: visits.status,
+        })
+        .from(visits)
+        .where(and(inArray(visits.id, [...ids]), ne(visits.status, 'discarded'))),
     );
   }
 

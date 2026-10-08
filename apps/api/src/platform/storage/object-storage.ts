@@ -1,4 +1,10 @@
-import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Inject, Injectable } from '@nestjs/common';
 import { RequestContext } from '../cls/request-context';
@@ -34,13 +40,39 @@ export function createS3Client(config: AppConfig): S3Client {
   });
 }
 
+/** How a download is offered: shown in the browser, or saved under `filename`. */
+export interface ObjectDisposition {
+  type: 'inline' | 'attachment';
+  filename: string;
+}
+
+/**
+ * `Content-Disposition` with an ASCII fallback and the RFC 5987 form, so a name in Arabic or with
+ * quotes survives the header.
+ */
+export function contentDisposition({ type, filename }: ObjectDisposition): string {
+  const fallback = filename.replace(/[^\x20-\x7e]|["\\]/g, '_');
+  const encoded = encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `${type}; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
+
+function isNotFound(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false;
+  const { name, $metadata } = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return name === 'NotFound' || name === 'NoSuchKey' || $metadata?.httpStatusCode === 404;
+}
+
 const SAFE_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
 const DEFAULT_EXPIRY_SECONDS = 300;
 
 /**
- * S3-compatible object storage. Keys are always namespaced by tenant, and presigning refuses keys
+ * S3-compatible object storage. Keys are always namespaced by tenant, and every call refuses keys
  * outside the current tenant. Signed-URL generation is the one external call allowed inside a
- * mutating request (CLAUDE.md §9).
+ * mutating request (CLAUDE.md §9); `head` and `remove` are for the `files` module, outside its
+ * transactions (ADR-0039).
  */
 @Injectable()
 export class ObjectStorage {
@@ -75,16 +107,53 @@ export class ObjectStorage {
     );
   }
 
-  async presignDownload(input: { key: string; expiresInSeconds?: number }): Promise<string> {
+  /** `contentType` and `disposition` override what the object is served with. */
+  async presignDownload(input: {
+    key: string;
+    expiresInSeconds?: number;
+    contentType?: string;
+    disposition?: ObjectDisposition;
+  }): Promise<string> {
     this.assertOwnKey(input.key);
     return getSignedUrl(
       this.s3,
-      new GetObjectCommand({ Bucket: this.config.S3_BUCKET, Key: input.key }),
+      new GetObjectCommand({
+        Bucket: this.config.S3_BUCKET,
+        Key: input.key,
+        ...(input.contentType === undefined ? {} : { ResponseContentType: input.contentType }),
+        ...(input.disposition === undefined
+          ? {}
+          : { ResponseContentDisposition: contentDisposition(input.disposition) }),
+      }),
       { expiresIn: input.expiresInSeconds ?? DEFAULT_EXPIRY_SECONDS },
     );
   }
 
-  private assertOwnKey(key: string): void {
+  /** The stored object's size, or null when nothing was uploaded under `key`. */
+  async head(key: string): Promise<{ sizeBytes: number } | null> {
+    this.assertOwnKey(key);
+    try {
+      const object = await this.s3.send(
+        new HeadObjectCommand({ Bucket: this.config.S3_BUCKET, Key: key }),
+      );
+      return { sizeBytes: object.ContentLength ?? 0 };
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+  }
+
+  /** Deletes objects of the current tenant; a key with no object is not an error. */
+  async remove(keys: readonly string[]): Promise<void> {
+    for (const key of keys) this.assertOwnKey(key);
+    await Promise.all(
+      keys.map((key) =>
+        this.s3.send(new DeleteObjectCommand({ Bucket: this.config.S3_BUCKET, Key: key })),
+      ),
+    );
+  }
+
+  protected assertOwnKey(key: string): void {
     if (!key.startsWith(`tenants/${this.context.requireTenantId()}/`)) {
       throw new ForeignObjectKeyError('Object key does not belong to the current tenant');
     }

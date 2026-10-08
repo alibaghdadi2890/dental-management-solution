@@ -34,6 +34,9 @@ export const SYSTEM_ROLES: readonly SystemRole[] = [
       'payment:write',
       'payment:refund',
       'audit:read',
+      'file:read',
+      'file:write',
+      'file:archive',
     ],
   },
   {
@@ -48,6 +51,8 @@ export const SYSTEM_ROLES: readonly SystemRole[] = [
       'visit:write',
       'catalog:read',
       'payment:read',
+      'file:read',
+      'file:write',
     ],
   },
   {
@@ -63,6 +68,8 @@ export const SYSTEM_ROLES: readonly SystemRole[] = [
       'catalog:read',
       'payment:read',
       'payment:write',
+      'file:read',
+      'file:write',
     ],
   },
 ];

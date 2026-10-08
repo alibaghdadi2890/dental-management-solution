@@ -11,6 +11,7 @@ import { CLOCK } from '../../src/platform/clock/clock.module';
 import { APP_CONFIG } from '../../src/platform/config/config.module';
 import { FixedClock } from '../../src/platform/kernel/clock';
 import { newId } from '../../src/platform/kernel/id';
+import { FakeStorageModule } from './fake-storage';
 import type { TestDatabase } from './postgres';
 import { testConfig } from './test-config';
 
@@ -23,7 +24,7 @@ export interface TestApp {
 /**
  * The real HTTP app (guards, pipes, filters, better-auth) on the run's Postgres and Redis, with
  * queues wired up (their own BullMQ key prefix, so parallel `createTestApp` calls never share
- * jobs), without storage, and with a clock tests can move.
+ * jobs), with object storage faked (`FakeObjectStorage`), and with a clock tests can move.
  */
 export async function createTestApp(database: TestDatabase): Promise<TestApp> {
   const config = testConfig({
@@ -35,7 +36,12 @@ export async function createTestApp(database: TestDatabase): Promise<TestApp> {
   const clock = new FixedClock(new Date());
 
   const moduleRef = await Test.createTestingModule({
-    imports: [...CORE_PLATFORM_MODULES, ...QUEUE_PLATFORM_MODULES, ...DOMAIN_MODULES],
+    imports: [
+      ...CORE_PLATFORM_MODULES,
+      ...QUEUE_PLATFORM_MODULES,
+      FakeStorageModule,
+      ...DOMAIN_MODULES,
+    ],
   })
     .overrideProvider(APP_CONFIG)
     .useValue(config)

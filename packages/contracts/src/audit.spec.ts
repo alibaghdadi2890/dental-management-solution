@@ -70,7 +70,8 @@ describe('areaOfAction', () => {
     expect(areaOfAction('catalog.service.update')).toBe('catalog');
     expect(areaOfAction('user.roles_assign')).toBe('users');
     expect(areaOfAction('room.update')).toBe('settings');
-    expect(ACTIVITY_AREAS).toHaveLength(7);
+    expect(areaOfAction('file.upload')).toBe('files');
+    expect(ACTIVITY_AREAS).toHaveLength(8);
   });
 
   it('gives no area to a stored domain event or an action of no area', () => {

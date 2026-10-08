@@ -26,6 +26,8 @@ const FRONTDESK = [
   'visit:discount',
   'catalog:read',
   'payment:read',
+  'file:read',
+  'file:write',
   'payment:write',
 ];
 

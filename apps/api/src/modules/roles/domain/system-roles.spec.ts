@@ -23,6 +23,9 @@ const D5 = {
     'payment:write',
     'payment:refund',
     'audit:read',
+    'file:read',
+    'file:write',
+    'file:archive',
   ],
   assistant: [
     'tenant:read',
@@ -33,6 +36,8 @@ const D5 = {
     'visit:write',
     'catalog:read',
     'payment:read',
+    'file:read',
+    'file:write',
   ],
   frontdesk: [
     'tenant:read',
@@ -44,6 +49,8 @@ const D5 = {
     'catalog:read',
     'payment:read',
     'payment:write',
+    'file:read',
+    'file:write',
   ],
 } as const;
 
