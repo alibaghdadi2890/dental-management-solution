@@ -17,7 +17,9 @@ Features ship in phases:
 
 Design for growth from day one: new features arrive as new modules, never as bloat inside existing
 ones. Frontend flows for phase 1 follow the Claude Design POC; do not invent screens that diverge
-from it without asking.
+from it without asking. One screen part intentionally supersedes the POC: the dental chart
+(feature 9, ADR-0042, ADR-0043), where colour identifies a diagnosis or service and the POC's
+status fills and red dot are gone.
 
 ## 2. Stack (fixed — do not substitute)
 
@@ -112,9 +114,9 @@ modules/<name>/
 | `audit`         | append-only audit log (who/what/when/tenant/before/after, and the patient, visit and area a row is about — ADR-0037), query API, the Activity feed | — (consumes events from all) |
 | `patients`      | `patients` (records: demographics, phone (optional for minors), insurance text, medical alerts/allergies, primary dentist by staff profile id, notes, the chart's dentition override; archive = soft delete; merge), `patient_counters` (the per-tenant display-number sequence), `contacts` and `patient_contacts` (guardians, billing and emergency contacts, who may themselves be patients; ADR-0019) | tenancy (country, time zone), users (practitioners, ADR-0016, ADR-0020) |
 | `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
-| `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, timer, services performed, notes, discount, status; amend and void, ADR-0025; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, `treatment_plans`; recorded in a visit or on the patient record, ADR-0031; what is at each tooth position — missing, not erupted, implant — `tooth_presences`, ADR-0034; named plans, `plan_groups`; work over several visits, `treatment_plan_sessions`, charged when done, ADR-0032) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
+| `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`, each row with its chart mark: a palette colour, for services an icon, a priority; ADR-0042), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, timer, services performed, notes, discount, status; amend and void, ADR-0025; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, `treatment_plans`; recorded in a visit or on the patient record, ADR-0031; what is at each tooth position — missing, not erupted, implant — `tooth_presences`, ADR-0034; named plans, `plan_groups`; work over several visits, `treatment_plan_sessions`, charged when done, ADR-0032) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
 | `billing`       | patient ledger (`ledger_entries`: opening balances, adjustments, visit charges and their adjustments and reversals, payments, refunds, voids; `ledger_entry_lines`), payments (`payments`, `payment_counters`, `payment_allocations`: account-level payments with stored derived allocations, households, credit; ADR-0027 to ADR-0029), balances, receivables, the visit summary, the patient and visit views that need them, the printables' data; later stored invoices, price lists | patients, tenancy (currency, time zone), users (dentist names in the export); clinical from 4a (reacts to `VisitCompleted`, `VisitAmended` and `VisitVoided` in the transaction, ADR-0024 to ADR-0026); reacts to `PatientsMerged` in the merge transaction (ADR-0036) and vetoes a currency change once there is money (`TenantCurrencyChanged`, ADR-0035) |
-| `files`         | `files`: a patient's images and documents (feature 8) — always the patient's, optionally linked to a visit and a tooth; category and type, "taken on", note, stored orientation, soft archive; pending uploads; signed upload and download URLs. The bytes are in object storage: the original (never modified) and, for images, a display copy and a thumbnail the browser made (ADR-0038 to ADR-0040) | patients, clinical (a visit's patient, number and status), users (uploader names), tenancy (time zone); reacts to `PatientsMerged` in the merge transaction |
+| `files`         | `files`: a patient's images and documents (feature 8) — always the patient's, optionally linked to a visit and a tooth; category and type, "taken on", note, stored orientation, soft archive; pending uploads; signed upload and download URLs. The bytes are in object storage: the original (never modified) and, for images, a display copy and a thumbnail the browser made (ADR-0038 to ADR-0041) | patients, clinical (a visit's patient, number and status), users (uploader names), tenancy (time zone); reacts to `PatientsMerged` in the merge transaction |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
 | `imports`       | import jobs: uploaded file, column mapping, staged rows + validation, preview, commit progress; writes only through `patients` and `clinical` services | patients, clinical, tenancy |
 | `provisioning`  | platform back office: provisions a tenant end to end (tenant, first branch, owner, system roles), cross-tenant tenants list, suspension; owns no tables | tenancy, auth, users, roles |
@@ -249,9 +251,9 @@ Rules:
 - Jobs are idempotent (use a deterministic `jobId`), carry `tenantId`, and are retried with
   backoff. Failed jobs go to a dead-letter queue that is monitored.
 - Never call external services (SMS, email, S3, LLM) synchronously inside a request that mutates
-  state, except signed-URL generation and, for `files` only and outside its transaction, the
-  `HEAD` of an uploaded object before Save and the delete of a discarded upload's objects
-  (ADR-0039). File bytes never pass through the API.
+  state, except signed-URL generation and, for `files` only and outside its transaction, what
+  Save and discard do to an upload's objects: `HEAD`, a read of the first kilobyte, a copy inside
+  the store, and deletes (ADR-0039, ADR-0041). Files are never uploaded or served through the API.
 
 ## 10. Audit
 
@@ -310,6 +312,10 @@ Even in phase 1, write application services so they can be exposed as tools late
   remains the enforcement point.
 - All dates handled with the tenant timezone from session; display via one shared formatter.
 - Calendar views use a scheduler component with resource support; do not build the grid by hand.
+- A tooth is drawn from a `ToothRender` (`features/clinical/chart/tooth-render.ts`): `toToothRender`
+  decides what is painted, in which colour and tone, and words the tooltip; `ToothGlyph` only
+  renders it and derives nothing. A new way to draw a tooth is a second renderer of that object.
+  Chart colours are the palette keys of `@dcm/contracts` (`MARK_COLORS`), never hex values.
 - RTL and Arabic/French/English i18n readiness from day 1: no hard-coded strings, logical CSS
   properties (`margin-inline-start`), i18n keys per feature.
 

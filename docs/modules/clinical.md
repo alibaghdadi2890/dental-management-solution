@@ -43,6 +43,13 @@ module was renamed from `treatments` (ADR-0001) and owns the catalogs (ADR-0002)
   deleted code can be reused. The batch rule (`domain/catalog-batch.ts`) checks the state after
   the batch, so rows may swap codes.
 - Service prices are money in the tenant currency at the time they were set (ADR-0015).
+- **Chart marks** (feature 9, ADR-0042): every diagnosis and every service charged per tooth has
+  a `color`, one of the sixteen palette keys of `@dcm/contracts` (`MARK_COLORS`); a per-tooth
+  service may have an `icon` (`MARK_ICONS`, twelve); every row has a `markPriority` (0–9, default
+  5: which marks show first on a crowded tooth). A service on a jaw or the whole mouth is not drawn on a tooth: what is sent for it is ignored, a new one has no mark, and one moved off the tooth keeps the mark its earlier tooth records are drawn with. A mark field left out of a batch row keeps its stored value; a row that
+  needs a colour and has none gets the one its catalog uses least (`leastUsedMarkColor`). The
+  default template assigns each seeded row its own colour, and icons where one fits. Marks are on
+  the catalog item, never on a record, so changing one recolours every chart.
 - Categories are free text; the Catalog screen's filter pills are the distinct values.
 - A row that a record refers to cannot be deleted, only deactivated (409 `catalog.in_use`,
   V11): a service or a plan that isn't removed (services) or a diagnosis record that isn't
@@ -290,7 +297,11 @@ from one `practitionersByProfileIds` call per read.
   service's code and name), every diagnosis and plan (each plan with its sessions), the named plans,
   the history (most recent visit first, with the
   visit date and dentist), the patient's most recent live visit, and `teeth`: the entries of
-  `deriveChart`, which counts that live visit's services as treated today.
+  `deriveChart`, which counts that live visit's services as treated today. Since feature 9 each
+  tooth lists its active `diagnoses` and its finished and live `services`, each with the colour,
+  icon and priority of its catalog item, the ones to show first leading (priority, then the live
+  visit, then the most recent). `marks` is the mark of every catalog item the records point at,
+  inactive and deleted rows included (one query per catalog), so the SPA derives the same teeth.
 - **Tooth history**: one code's presence rows, diagnoses and plans in the order recorded, then
   its completed services, most recent first. Only that code; the modal links the predecessor or successor.
 - **Last visit**: the most recently completed visit (`completed_at`): its local date, dentist,
@@ -298,6 +309,31 @@ from one `practitionersByProfileIds` call per read.
 - **Summary** (W8): completed visits, active diagnoses, open plans (planned or in progress),
   distinct teeth and the number of services over completed visits' services, in one query; and
   `missingTeeth` and `implants` from the presence rows, among the teeth of the patient's chart.
+
+### The chart on screen (feature 9)
+
+How a tooth looks is decided in the SPA, from the derived teeth (`features/clinical/chart/`):
+
+- **Palette**: `styles.css` defines each of the sixteen keys in four variants
+  (`--color-mark-<key>`, `-tint`, `-strong`, `-on`). `palette.spec.ts` checks every key against
+  the others, the card surface and the chart's rings.
+- **`ToothRender`** (`tooth-render.ts`): `toToothRender(tooth, options)` turns a `ToothState`
+  into what a glyph draws: the fill of each surface or of the simple body, up to three **band**
+  chips at the root end and `+N`, the diagnosis dots of the Both view, the rings, whether the
+  tooth is faded by the legend's highlight, and the tooltip. It is pure and holds every rule:
+  - colour says which item, tone says when (today: saturated, strong edge; before: mid-tone);
+  - a surface is painted by the first item that names it; an item on the whole tooth names all
+    five and also has a band chip; a surface item that won no surface gets a chip too;
+  - an open plan washes what carries no mark and rings the tooth (in progress: a heavier ring);
+  - a missing or not-erupted position draws no fill, band or dots.
+- **`ToothGlyph`** (chart, history and panel variants) renders a `ToothRender` and derives
+  nothing. The anatomical chart, later, is a second renderer of the same object.
+- **Chart view** (ADR-0043): Diagnoses, Services or Both, kept in this browser
+  (`use-chart-view.ts`), switched from the chart card and followed by every chart on screen.
+- **Legend** (`chart-legend.tsx`, `legend-items.ts`): the diagnoses and services actually on the
+  chart on screen, with their tooth counts, then Status and Tooth. A line highlights its teeth.
+- **Marks in the workspace** (`use-chart-marks.ts`): the chart read's `marks` under the cached
+  catalogs, so a service added in the live visit is coloured before the chart is read again.
 
 ### Merge re-point
 

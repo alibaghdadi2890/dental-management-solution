@@ -43,5 +43,8 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0036](0036-the-ledger-follows-a-merge-in-its-transaction.md)       | The ledger follows a patient merge in its transaction        | Accepted (amends 0017)               |
 | [0037](0037-the-audit-log-knows-what-a-row-is-about.md)             | The audit log records what a row is about                    | Accepted (amends CLAUDE.md §10, §12) |
 | [0038](0038-files-belong-to-the-patient.md)                         | Files belong to the patient, with optional visit and tooth   | Accepted (amends CLAUDE.md §4)       |
-| [0039](0039-file-originals-are-immutable.md)                        | Originals are immutable; previews are made in the browser    | Accepted (amends CLAUDE.md §9)       |
+| [0039](0039-file-originals-are-immutable.md)                        | Originals are immutable; previews are made in the browser    | Accepted (amended by 0041)           |
 | [0040](0040-files-are-archived-never-deleted.md)                    | Files are archived, never deleted                            | Accepted                             |
+| [0041](0041-save-seals-a-files-objects.md)                          | Save seals a file's objects and checks the sealed copies     | Accepted (amends 0039, CLAUDE.md §9) |
+| [0042](0042-chart-marks-live-on-catalog-items.md)                   | Chart marks live on catalog items and recolour retroactively | Accepted                             |
+| [0043](0043-chart-view-is-a-browser-preference.md)                  | The chart view is a browser preference; the mode is tenant's | Accepted                             |
