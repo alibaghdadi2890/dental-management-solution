@@ -172,7 +172,9 @@ test('an extraction marks the tooth missing, Undo restores it, and implant place
     ).toBeVisible();
     // The legend explains the three presence marks.
     for (const label of ['Missing', 'Not erupted', 'Implant']) {
-      await expect(chart.locator('[data-legend-item]').filter({ hasText: label })).toBeVisible();
+      await expect(
+        chart.getByRole('group', { name: 'Tooth' }).getByText(label, { exact: true }),
+      ).toBeVisible();
     }
   });
 });

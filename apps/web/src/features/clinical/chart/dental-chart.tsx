@@ -1,7 +1,7 @@
 import {
   archColumns,
   type DentitionStage,
-  isPrimary,
+  markColorVars,
   type PermanentToothCode,
   presentTooth,
   type ToothCode,
@@ -12,8 +12,10 @@ import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { chartGlyphBox } from './glyph-style';
 import { ToothGlyph } from './tooth-glyph';
-import { toothTitle } from './tooth-title';
-import { useChartSettings, useToothName } from './use-chart-settings';
+import type { ChartHighlight, ToothRender } from './tooth-render';
+import { useChartSettings } from './use-chart-settings';
+import { useChartView } from './use-chart-view';
+import { useToothRender } from './use-tooth-render';
 
 export interface DentalChartProps {
   /** `deriveChart`'s sparse map: a tooth absent from it has no recorded treatment. */
@@ -34,6 +36,8 @@ export interface DentalChartProps {
   onAreaClick?: (area: 'upper' | 'lower' | 'mouth') => void;
   /** How many of today's services each area has, shown as a count on its bar or pill. */
   areaCounts?: Partial<Record<'upper' | 'lower' | 'mouth', number>>;
+  /** The legend's highlighted item (M11): every tooth that does not carry it fades. */
+  highlight?: ChartHighlight | null;
 }
 
 type Arch = 'upper' | 'lower';
@@ -48,6 +52,11 @@ type Arch = 'upper' | 'lower';
  * has a selectable bar outside its numbers and the midline a Whole mouth pill; a selected jaw (or
  * both, for the whole mouth) is outlined. Presentational: the caller
  * owns the data, the selection and what a click does.
+ *
+ * What each tooth shows follows this browser's chart view (feature 9): diagnoses, services, or
+ * services with the diagnoses as coloured dots between the number and the glyph. Every tooth is
+ * drawn from its `ToothRender`, which also words its title. The compact chart (under 12 px) is a
+ * summary: no diagnosis dots, and the band as dots.
  */
 export function DentalChart({
   teeth,
@@ -58,12 +67,14 @@ export function DentalChart({
   area = null,
   onAreaClick,
   areaCounts,
+  highlight = null,
 }: DentalChartProps) {
   const { t, i18n } = useTranslation('clinical');
   // The chart is LTR, but its text (titles, markers) reads in the locale's direction.
   const textDir = i18n.dir();
   const { mode, notation, orientation } = useChartSettings();
-  const toothName = useToothName();
+  const [view] = useChartView();
+  const renderTooth = useToothRender();
   const { upper, lower } = archColumns(orientation, dentition);
   const full = size >= 12;
   // The expanded chart: its numbers and dots grow with its glyphs.
@@ -73,8 +84,45 @@ export function DentalChart({
   // plane, and every column is exactly the full glyph's width (never wider, whatever its number
   // row holds): number rows, the midline and the upper/lower columns all stay straight.
   const { width: columnWidth, height: glyphHeight } = chartGlyphBox(mode, size);
+  // Both view: a row between the number and the glyph holds the diagnosis dots. It is there for
+  // every tooth, dots or not, so the rows stay straight.
+  const dotRow = view === 'both' && full;
+  const dotSize = large ? 6 : 5;
 
-  const renderTooth = (column: PermanentToothCode, arch: Arch) => {
+  const diagnosisDots = (render: ToothRender) => (
+    <span
+      data-dots
+      className="flex items-center justify-center gap-[2px]"
+      style={{ height: dotSize }}
+    >
+      {render.dots.map((dot, index) => (
+        <span
+          key={index}
+          data-diagnosis-dot={dot.color ?? 'none'}
+          className={cn(
+            'flex-none rounded-full',
+            dot.ringed && 'outline outline-[1.5px] outline-offset-1 outline-ink',
+          )}
+          style={{
+            width: dotSize,
+            height: dotSize,
+            backgroundColor:
+              dot.color === null ? 'var(--color-border-strong)' : markColorVars(dot.color).fill,
+          }}
+        />
+      ))}
+      {render.dotOverflow > 0 && (
+        <span
+          data-dot-overflow
+          className="font-mono text-[8px] leading-none font-semibold text-ink-secondary"
+        >
+          +{render.dotOverflow}
+        </span>
+      )}
+    </span>
+  );
+
+  const toothColumn = (column: PermanentToothCode, arch: Arch) => {
     const { code, notErupted } = presentTooth(column, dentition);
     const tooth = teeth.get(code);
     // What the dentist recorded (feature 7); without a record, a position the dentition has not
@@ -83,37 +131,28 @@ export function DentalChart({
     const presence = recorded === 'present' && notErupted ? 'not_erupted' : recorded;
     const isSelected = selected === code;
     const label = toothLabel(code, notation);
-    const title = toothTitle(t, {
-      label,
-      name: toothName(code),
-      primary: isPrimary(code),
+    const render = renderTooth(code, tooth, {
       presence,
-      tooth,
+      selected: isSelected,
+      compact: !full,
+      highlight,
     });
+    // The hover title has a line per item; the accessible name is the same words on one line.
+    const { title } = render;
+    const name = title.replaceAll('\n', ' · ');
 
-    // The number stays LTR so the diagnosis dot always follows it. The dot hangs off the number's
-    // end, out of the flow, so the number itself stays centred over its glyph.
     const number = (
       <span
         data-number
         dir="ltr"
         className={cn(
-          'relative font-mono leading-none tabular-nums',
+          'font-mono leading-none tabular-nums',
           large ? 'text-[14px]' : full ? 'text-[12.5px]' : 'text-[11.5px]',
           isSelected ? 'font-semibold text-primary' : 'font-medium text-ink-muted',
           presence !== 'present' && presence !== 'implant' && 'italic',
         )}
       >
         {label.replace(/^#/, '')}
-        {tooth?.hasActiveDiagnosis && (
-          <span
-            data-diagnosis-dot
-            className={cn(
-              'absolute start-full top-1/2 -translate-y-1/2 rounded-full bg-danger',
-              large ? 'ms-[3px] size-[5px]' : full ? 'ms-[3px] size-1' : 'ms-[2px] size-[3px]',
-            )}
-          />
-        )}
       </span>
     );
     const glyph = (
@@ -125,12 +164,10 @@ export function DentalChart({
         <ToothGlyph
           variant="chart"
           code={code}
-          tooth={tooth}
+          render={render}
           mode={mode}
           orientation={orientation}
           size={size}
-          selected={isSelected}
-          presence={presence}
         />
       </span>
     );
@@ -139,9 +176,11 @@ export function DentalChart({
       'flex flex-none flex-col items-center',
       large ? 'gap-[7px]' : full ? 'gap-[5px]' : 'gap-[3px]',
     );
+    const dots = dotRow && diagnosisDots(render);
     const content = (
       <>
         {arch === 'upper' ? number : glyph}
+        {dots}
         {arch === 'upper' ? glyph : number}
       </>
     );
@@ -154,7 +193,7 @@ export function DentalChart({
           dir={textDir}
           data-column={column}
           title={title}
-          aria-label={title}
+          aria-label={name}
           className={columnClass}
           style={{ width: columnWidth }}
         >
@@ -169,7 +208,7 @@ export function DentalChart({
         dir={textDir}
         data-column={column}
         title={title}
-        aria-label={title}
+        aria-label={name}
         aria-pressed={selected === undefined ? undefined : isSelected}
         onClick={() => {
           onToothClick(code);
@@ -188,7 +227,7 @@ export function DentalChart({
       aria-label={t(arch === 'upper' ? 'chart.upperArch' : 'chart.lowerArch')}
       className={cn('flex', full ? 'gap-[5px]' : 'gap-[3px]')}
     >
-      {columns.map((column) => renderTooth(column, arch))}
+      {columns.map((column) => toothColumn(column, arch))}
     </div>
   );
 
@@ -263,7 +302,7 @@ export function DentalChart({
     );
 
   return (
-    <div data-dental-chart dir="ltr" className="overflow-x-auto">
+    <div data-dental-chart data-view={view} dir="ltr" className="overflow-x-auto">
       <div className="mx-auto flex w-max items-center gap-3 p-1.5">
         {full && marker(patientRightOnRight ? 'left' : 'right')}
         <div

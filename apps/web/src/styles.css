@@ -204,6 +204,79 @@
   }
 }
 
+@theme static {
+  /* Chart marks (feature 9, ADR-0042): sixteen palette keys (`MARK_COLORS` in contracts). Each
+     has the fill of work done today, the mid-tone tint of earlier work, a strong variant for
+     edges, rings and text, and the colour of an icon drawn on the fill. `palette.spec.ts`
+     checks them against each other, the surface and the chart rings. They are read through
+     `var()` in inline styles, never through a utility class, so this block is `static`: the
+     variables are always emitted. */
+  --color-mark-rose: #f43f5e;
+  --color-mark-rose-tint: #fda4af;
+  --color-mark-rose-strong: #9f1239;
+  --color-mark-rose-on: #ffffff;
+  --color-mark-red: #c81e1e;
+  --color-mark-red-tint: #e88080;
+  --color-mark-red-strong: #7f1d1d;
+  --color-mark-red-on: #ffffff;
+  --color-mark-orange: #ea580c;
+  --color-mark-orange-tint: #fdba74;
+  --color-mark-orange-strong: #9a3412;
+  --color-mark-orange-on: #ffffff;
+  --color-mark-amber: #f59e0b;
+  --color-mark-amber-tint: #fcd34d;
+  --color-mark-amber-strong: #92400e;
+  --color-mark-amber-on: #92400e;
+  --color-mark-yellow: #facc15;
+  --color-mark-yellow-tint: #fde68a;
+  --color-mark-yellow-strong: #854d0e;
+  --color-mark-yellow-on: #854d0e;
+  --color-mark-lime: #84cc16;
+  --color-mark-lime-tint: #bef264;
+  --color-mark-lime-strong: #3f6212;
+  --color-mark-lime-on: #3f6212;
+  --color-mark-green: #16a34a;
+  --color-mark-green-tint: #86efac;
+  --color-mark-green-strong: #166534;
+  --color-mark-green-on: #ffffff;
+  --color-mark-teal: #0d9488;
+  --color-mark-teal-tint: #5eead4;
+  --color-mark-teal-strong: #115e59;
+  --color-mark-teal-on: #ffffff;
+  --color-mark-cyan: #06b6d4;
+  --color-mark-cyan-tint: #67e8f9;
+  --color-mark-cyan-strong: #164e63;
+  --color-mark-cyan-on: #164e63;
+  --color-mark-sky: #0284c7;
+  --color-mark-sky-tint: #8cc8f5;
+  --color-mark-sky-strong: #075985;
+  --color-mark-sky-on: #ffffff;
+  --color-mark-blue: #2f55d4;
+  --color-mark-blue-tint: #9aa9ee;
+  --color-mark-blue-strong: #1e3a8a;
+  --color-mark-blue-on: #ffffff;
+  --color-mark-violet: #7c3aed;
+  --color-mark-violet-tint: #c4b5fd;
+  --color-mark-violet-strong: #5b21b6;
+  --color-mark-violet-on: #ffffff;
+  --color-mark-purple: #9d2fb8;
+  --color-mark-purple-tint: #dba6ea;
+  --color-mark-purple-strong: #6b1d80;
+  --color-mark-purple-on: #ffffff;
+  --color-mark-magenta: #d61f8a;
+  --color-mark-magenta-tint: #f5a3d0;
+  --color-mark-magenta-strong: #8c0f57;
+  --color-mark-magenta-on: #ffffff;
+  --color-mark-pink: #f472b6;
+  --color-mark-pink-tint: #fbcfe8;
+  --color-mark-pink-strong: #831843;
+  --color-mark-pink-on: #831843;
+  --color-mark-brown: #92613a;
+  --color-mark-brown-tint: #c4a084;
+  --color-mark-brown-strong: #5c3a1e;
+  --color-mark-brown-on: #ffffff;
+}
+
 @layer base {
   html,
   body,

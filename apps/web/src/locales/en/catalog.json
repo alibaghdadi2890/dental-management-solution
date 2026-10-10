@@ -26,7 +26,8 @@
     "charged": "Charged",
     "price": "Price",
     "active": "Active",
-    "toothEffect": "Effect on tooth"
+    "toothEffect": "Effect on tooth",
+    "mark": "Mark"
   },
   "chargeUnit": {
     "per_tooth": "Per tooth",
@@ -85,5 +86,49 @@
     "removes": "Removes the tooth",
     "implant": "Places an implant"
   },
-  "toothEffectHint": "What performing this service does to the tooth on the chart: an extraction marks it missing, an implant placement marks it as an implant."
+  "toothEffectHint": "What performing this service does to the tooth on the chart: an extraction marks it missing, an implant placement marks it as an implant.",
+  "mark": {
+    "none": "Not shown on a tooth",
+    "color": "Chart colour of {{name}}: {{color}}",
+    "colorTitle": "Chart colour",
+    "icon": "Chart icon of {{name}}: {{icon}}",
+    "iconTitle": "Chart icon",
+    "noIcon": "None",
+    "priority": "Chart priority",
+    "priorityHelp": "Higher shows first when a tooth has more marks than fit",
+    "priorityUp": "Raise the chart priority",
+    "priorityDown": "Lower the chart priority"
+  },
+  "markColor": {
+    "rose": "Rose",
+    "red": "Red",
+    "orange": "Orange",
+    "amber": "Amber",
+    "yellow": "Yellow",
+    "lime": "Lime",
+    "green": "Green",
+    "teal": "Teal",
+    "cyan": "Cyan",
+    "sky": "Sky",
+    "blue": "Blue",
+    "violet": "Violet",
+    "purple": "Purple",
+    "magenta": "Magenta",
+    "pink": "Pink",
+    "brown": "Brown"
+  },
+  "markIcon": {
+    "filling": "Filling",
+    "crown": "Crown",
+    "root_canal": "Root canal",
+    "extraction": "Extraction",
+    "implant": "Implant",
+    "bridge": "Bridge",
+    "veneer": "Veneer",
+    "sealant": "Sealant",
+    "post_core": "Post and core",
+    "denture": "Denture",
+    "cleaning": "Cleaning",
+    "whitening": "Whitening"
+  }
 }

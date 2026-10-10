@@ -10,6 +10,7 @@ import { ShortcutHint } from './tooth-panel/quick-add';
 import { useToothSelection } from './tooth-selection';
 import { unfinishedWork } from './unfinished';
 import { UnfinishedRow } from './unfinished-row';
+import { ServiceMark } from '../chart/service-mark';
 
 const SUB_HEAD =
   'm-0 border-b border-warning-border bg-warning-bg px-4 py-2 text-[11.5px] leading-none font-semibold tracking-[.05em] text-warning uppercase [&:lang(ar)]:tracking-normal';
@@ -140,8 +141,9 @@ function ServiceRow({ service, canWrite }: { service: VisitService; canWrite: bo
       >
         {toothCode === null ? levelLabel(service.jaw) : toothLabel(toothCode)}
       </button>
-      <span className="min-w-0 flex-1 text-[13px] leading-[1.35] font-semibold">
-        {service.name}
+      <span className="flex min-w-0 flex-1 items-center gap-[7px] text-[13px] leading-[1.35] font-semibold">
+        <ServiceMark procedureId={service.procedureId} tone="today" />
+        <span className="min-w-0">{service.name}</span>
       </span>
       <span dir="ltr" className="font-mono text-[13px] leading-none font-semibold tabular-nums">
         {formatMoney(service.final, locale)}

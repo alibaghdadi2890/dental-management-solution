@@ -8,6 +8,7 @@ import {
 } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { ToothGlyph } from './tooth-glyph';
+import { useToothRender } from './use-tooth-render';
 
 /**
  * Live previews for the Settings → Dental / tooth chart cards (spec §Settings; POC
@@ -15,8 +16,8 @@ import { ToothGlyph } from './tooth-glyph';
  * clinic's real chart — so a card shows what picking it means before it is picked.
  */
 
-/** Four columns the Chart detail cards preview, one lightly "treated" so surface vs. whole-tooth
- * detail is visible at a glance. */
+/** Four columns the Chart detail cards preview, one of them with a filling on two surfaces and a
+ * crown, so surface vs. whole-tooth detail is visible at a glance. */
 const DETAIL_PREVIEW_CODES: readonly ToothCode[] = ['16', '15', '14', '13'];
 const DETAIL_FILLED_INDEX = 1;
 
@@ -24,17 +25,47 @@ const DETAIL_FILLED_INDEX = 1;
  * tooth plus a primary one, so both the numbering shift and the letter case show. */
 const NOTATION_PREVIEW_CODES: readonly ToothCode[] = ['11', '16', '55'];
 
+const PREVIEW_SERVICE = {
+  code: '',
+  name: '',
+  priority: 5,
+  status: 'treated',
+  date: null,
+  dentistName: '',
+  planId: null,
+} as const;
+
 function previewTooth(code: ToothCode): ToothState {
   return {
     code,
     presence: 'present',
     state: 'treated',
     surfaces: { O: 'treated', B: 'treated' },
-    wholeTooth: null,
+    wholeTooth: 'treated',
     hasActiveDiagnosis: false,
+    diagnoses: [],
+    services: [
+      {
+        ...PREVIEW_SERVICE,
+        recordId: 'filling',
+        procedureId: 'filling',
+        color: 'blue',
+        icon: 'filling',
+        surfaces: ['O', 'B'],
+      },
+      {
+        ...PREVIEW_SERVICE,
+        recordId: 'crown',
+        procedureId: 'crown',
+        color: 'amber',
+        icon: 'crown',
+        surfaces: [],
+      },
+    ],
     openPlanIds: [],
-    historyCount: 1,
-    titleParts: { diagnoses: [], plans: [], historyCount: 1 },
+    planInProgress: false,
+    historyCount: 2,
+    titleParts: { diagnoses: [], plans: [], historyCount: 2 },
   };
 }
 
@@ -46,6 +77,7 @@ export function ChartDetailPreview({
   mode: ChartMode;
   orientation: ChartOrientation;
 }) {
+  const renderTooth = useToothRender();
   return (
     <span aria-hidden dir="ltr" className="flex flex-none items-end gap-1">
       {DETAIL_PREVIEW_CODES.map((code, index) => (
@@ -53,7 +85,11 @@ export function ChartDetailPreview({
           key={code}
           variant="chart"
           code={code}
-          tooth={index === DETAIL_FILLED_INDEX ? previewTooth(code) : undefined}
+          render={renderTooth(
+            code,
+            index === DETAIL_FILLED_INDEX ? previewTooth(code) : undefined,
+            { mode, view: 'services' },
+          )}
           mode={mode}
           orientation={orientation}
           size={9}

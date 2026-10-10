@@ -49,7 +49,7 @@ import {
 import { CATALOG_GRID, STAR_PATH } from './catalog-layout';
 import { CatalogRow } from './catalog-row';
 
-const MIN_WIDTH = 940;
+const MIN_WIDTH = 1010;
 
 /** Header, tabs and table frame shared by the loading/error states and the editor. */
 function CatalogFrame({
@@ -123,6 +123,7 @@ function TableFrame({ tab, children }: { tab: CatalogTab; children: ReactNode })
         ]
       : []),
     { label: t('columns.category') },
+    { label: t('columns.mark') },
     ...(tab === 'services'
       ? [{ label: t('columns.charged') }, { label: t('columns.price'), end: true }]
       : []),

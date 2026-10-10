@@ -38,23 +38,20 @@
   "glyph": {
     "surfaces": "Tooth surfaces",
     "surfaceName": "{{name}} ({{short}})",
-    "surfaceTreated": "{{name}} · treated",
-    "surfaceWholeTooth": "{{name}} · whole tooth treated"
+    "surfaceMarked": "{{name}} · {{item}}"
   },
   "title": {
     "listSeparator": ", ",
     "primary": "primary tooth",
     "planned": "planned: {{names}}",
-    "recordedServices_one": "{{count}} recorded service",
-    "recordedServices_other": "{{count}} recorded services",
-    "treatedToday": "treated in this visit",
     "noRecordedTreatment": "no recorded treatment",
     "inProgress": "not finished: {{names}}",
     "presence": {
       "missing": "missing",
       "not_erupted": "not erupted",
       "implant": "implant"
-    }
+    },
+    "today": "today"
   },
   "chart": {
     "upperArch": "Upper arch",
@@ -65,19 +62,22 @@
     "leftTitle": "Patient's left"
   },
   "legend": {
-    "treatment": "Treatment",
-    "markers": "Markers",
-    "treatedSurface": "Treated surface",
-    "wholeTooth": "Whole tooth",
-    "treated": "Treated",
-    "treatedToday": "Treated today",
-    "diagnosis": "Diagnosis",
-    "planned": "Planned",
+    "diagnosesOnChart": "Diagnoses on this chart",
+    "servicesOnChart": "Services on this chart",
+    "status": "Status",
+    "today": "Done today",
+    "past": "Done earlier",
     "inProgress": "Not finished",
+    "planned": "Planned",
     "presence": "Tooth",
     "missing": "Missing",
     "notErupted": "Not erupted",
-    "implant": "Implant"
+    "implant": "Implant",
+    "teeth_one": "· {{count}} tooth",
+    "teeth_other": "· {{count}} teeth",
+    "more": "+{{count}} more",
+    "highlight": "Highlight the teeth with {{name}}",
+    "clearHighlight": "Stop highlighting {{name}}"
   },
   "workspace": {
     "loading": "Loading visit…",
@@ -286,7 +286,8 @@
       "fullHistory": "Full tooth history →",
       "emptyTitle": "No treatment recorded"
     },
-    "levels": "Level"
+    "levels": "Level",
+    "marks": "Also on this tooth"
   },
   "drawer": {
     "service": {
@@ -575,5 +576,11 @@
       },
       "service": "{{name}} ({{code}}), visit {{number}}"
     }
+  },
+  "chartView": {
+    "label": "Show on the chart",
+    "diagnoses": "Diagnoses",
+    "services": "Services",
+    "both": "Both"
   }
 }

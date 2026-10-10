@@ -10,6 +10,7 @@ import { UnfinishedRow } from '../unfinished-row';
 import { Badge, EmptyBlock, LinkButton, PanelSection } from './panel-section';
 import { priceOf, useServicePrice } from './service-price';
 import { SurfaceTag } from './surface-tag';
+import { ServiceMark } from '../../chart/service-mark';
 
 const MICRO =
   'mb-[5px] block text-[11.5px] leading-none font-medium tracking-[.06em] text-ink-tertiary uppercase [&:lang(ar)]:tracking-normal';
@@ -94,6 +95,10 @@ export function CompletedSection({
               {history.map((line) => (
                 <tr key={line.id} className="border-b border-row-divider">
                   <td className="py-2 pe-1.5 text-[12.5px] leading-[1.35]">
+                    <ServiceMark
+                      procedureId={line.procedureId}
+                      className="me-[7px] inline-grid align-[-3px]"
+                    />
                     {line.name}
                     <SurfaceTag
                       surfaces={line.surfaces}
@@ -172,6 +177,7 @@ function ServiceCard({ service, canWrite }: { service: VisitService; canWrite: b
       className="mb-2 rounded-lg border border-primary-tint-border bg-selected px-3 py-[11px]"
     >
       <div className="mb-[9px] flex items-center gap-2">
+        <ServiceMark procedureId={service.procedureId} tone="today" />
         <span className="min-w-0 text-[13px] leading-[1.3] font-semibold">{service.name}</span>
         <SurfaceTag surfaces={service.surfaces} className="text-primary" />
         <span className="flex-1" />

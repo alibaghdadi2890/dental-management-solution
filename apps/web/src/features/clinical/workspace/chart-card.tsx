@@ -4,8 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ChartLegend } from '../chart/chart-legend';
+import { ChartViewSwitch } from '../chart/chart-view-switch';
 import { DentalChart } from '../chart/dental-chart';
 import { FittedChart } from '../chart/fitted-chart';
+import { CHART_CARD, useChartHighlight } from '../chart/use-chart-highlight';
 import { DentitionSelect } from './dentition-select';
 import { type ChartArea, useToothSelection } from './tooth-selection';
 import type { ChartExpansion } from './use-chart-expansion';
@@ -34,8 +36,8 @@ function ExpandIcon({ expanded }: { expanded: boolean }) {
 }
 
 /** The chart card's frame (spec §Visit Workspace → Body 1): white, 10px radius, 18/18/16px
- * padding, the 600/14px "Dental chart" title with its subtitle (the chart toggle) beside it, and
- * the aside (the legend). The
+ * padding, the 600/14px "Dental chart" title with its subtitle (the chart toggle) and the
+ * Diagnoses / Services / Both switch (feature 9) beside it, and the aside (the legend). The
  * aside is sized by its content: beside the title while it fits there on one line, else on its
  * own full-width row; either way it fills the rest of its row, so an end-aligned legend always
  * ends at the card's inline end.
@@ -79,6 +81,7 @@ export function ChartCardFrame({
     <section
       aria-labelledby={titleId}
       data-expanded={expanded || undefined}
+      {...{ [CHART_CARD]: '' }}
       className="@container/chart relative mb-4 rounded-xl border border-border bg-surface px-[18px] pt-[18px] pb-4"
     >
       {expansion && (
@@ -108,6 +111,7 @@ export function ChartCardFrame({
             {t('chartCard.title')}
           </h2>
           {subtitle}
+          <ChartViewSwitch />
           {action}
         </div>
         {aside && !expanded && <div className="min-w-0 flex-auto">{aside}</div>}
@@ -137,6 +141,10 @@ export function ChartCardFrame({
  * scrolling arch, and focus follows it when it was already in the chart (the arrows walk the
  * teeth with focus). With `expansion` the card can be expanded: the chart is then drawn at the
  * largest cell that fits the card, and the legend becomes a key beside or under it.
+ *
+ * The legend lists what is on this chart; pressing one of its lines highlights that item's
+ * teeth (feature 9, M11). Selecting a tooth, entering marking mode, or switching the chart or
+ * its view lets go of the highlight.
  */
 export function ChartCard({
   teeth,
@@ -173,6 +181,21 @@ export function ChartCard({
 }) {
   const selection = useToothSelection();
   const chartRef = useRef<HTMLDivElement>(null);
+  const { highlight, toggle: toggleHighlight, clear: clearHighlight } = useChartHighlight(stage);
+  const marking = onMark !== undefined;
+  useEffect(() => {
+    if (selection.tooth !== null || marking) clearHighlight();
+  }, [selection.tooth, marking, clearHighlight]);
+  const legend = (layout: 'inline' | 'key') => (
+    <ChartLegend
+      teeth={teeth}
+      dentition={stage}
+      showToday={showToday}
+      layout={layout}
+      highlight={highlight}
+      onHighlight={marking ? undefined : toggleHighlight}
+    />
+  );
 
   useEffect(() => {
     const container = chartRef.current;
@@ -199,8 +222,8 @@ export function ChartCard({
         />
       }
       action={action}
-      aside={<ChartLegend showToday={showToday} />}
-      expandedAside={<ChartLegend showToday={showToday} layout="key" />}
+      aside={legend('inline')}
+      expandedAside={legend('key')}
       expansion={expansion}
     >
       <div ref={chartRef}>
@@ -217,6 +240,7 @@ export function ChartCard({
                 onToothClick={selection.select}
                 area={selection.area}
                 onAreaClick={selection.selectArea}
+                highlight={highlight}
                 {...(areaCounts && { areaCounts })}
               />
             )

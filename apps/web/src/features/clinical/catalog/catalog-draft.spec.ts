@@ -33,6 +33,9 @@ const service = (n: number, code: string, name: string, category: string | null)
   frequent: false,
   active: true,
   toothEffect: 'none',
+  color: 'blue',
+  icon: 'filling',
+  markPriority: 5,
 });
 
 const diagnosis = (n: number, code: string, name: string, category: string): DiagnosisItem => ({
@@ -42,6 +45,8 @@ const diagnosis = (n: number, code: string, name: string, category: string): Dia
   category,
   frequent: false,
   active: true,
+  color: 'rose',
+  markPriority: 5,
 });
 
 const SERVICES = [
@@ -87,6 +92,66 @@ describe('catalog draft', () => {
     draft = editRow(draft, 'services', id(1), { chargeUnit: 'per_tooth' });
     expect(row(draft, 'services', id(1)).toothEffect).toBe('none');
     expect(changeCount(draft)).toBe(0);
+  });
+
+  it('tracks the chart mark: colour, icon and priority, each making the row dirty (feature 9)', () => {
+    let draft = editRow(fresh(), 'services', id(2), { color: 'green' });
+    expect(changeCount(draft)).toBe(1);
+    draft = editRow(draft, 'services', id(2), { color: 'blue', icon: 'crown' });
+    expect(changeCount(draft)).toBe(1);
+    draft = editRow(draft, 'services', id(2), { icon: 'filling', markPriority: 8 });
+    expect(batchOf('services', changedRows(draft, 'services')).items[0]).toMatchObject({
+      color: 'blue',
+      icon: 'filling',
+      markPriority: 8,
+    });
+    draft = editRow(draft, 'services', id(2), { markPriority: 5 });
+    expect(changeCount(draft)).toBe(0);
+
+    const dx = editRow(fresh(), 'diagnoses', id(11), { color: 'purple' });
+    expect(batchOf('diagnoses', changedRows(dx, 'diagnoses'))).toEqual({
+      items: [
+        {
+          id: id(11),
+          code: 'DX-CAR',
+          name: 'Dental caries',
+          category: 'Caries',
+          frequent: false,
+          active: true,
+          color: 'purple',
+          markPriority: 5,
+        },
+      ],
+    });
+  });
+
+  it('keeps the mark of a service moved off the tooth, for the records it already has', () => {
+    let draft = editRow(fresh(), 'services', id(2), { chargeUnit: 'per_mouth' });
+    expect(row(draft, 'services', id(2))).toMatchObject({ color: 'blue', icon: 'filling' });
+    draft = editRow(draft, 'services', id(2), { chargeUnit: 'per_tooth' });
+    expect(changeCount(draft)).toBe(0);
+
+    // A row saved without a mark gets the least used colour when it moves onto a tooth.
+    const jaw = draftFrom(
+      [{ ...service(1, 'ALN', 'Aligners', null), chargeUnit: 'per_jaw', color: null, icon: null }],
+      [],
+    );
+    expect(
+      row(editRow(jaw, 'services', id(1), { chargeUnit: 'per_tooth' }), 'services', id(1)),
+    ).toMatchObject({ color: 'rose', icon: null });
+  });
+
+  it('gives a new row the colour its catalog uses least, counting the draft (M13)', () => {
+    let draft = addRow(fresh(), 'services', 'new-1', '');
+    expect(row(draft, 'services', 'new-1')).toMatchObject({
+      color: 'rose',
+      icon: null,
+      markPriority: 5,
+    });
+    draft = addRow(draft, 'services', 'new-2', '');
+    expect(row(draft, 'services', 'new-2').color).toBe('red');
+    // Each catalog counts its own: the diagnoses already use rose.
+    expect(row(addRow(fresh(), 'diagnoses', 'new-3', ''), 'diagnoses', 'new-3').color).toBe('red');
   });
 
   it('marks an edited row dirty, and clean again when the edit is undone', () => {
@@ -172,6 +237,10 @@ describe('catalog draft', () => {
           frequent: false,
           active: true,
           toothEffect: 'none',
+          // The colour the catalog uses least.
+          color: 'rose',
+          icon: null,
+          markPriority: 5,
         },
         {
           id: id(2),
@@ -183,6 +252,9 @@ describe('catalog draft', () => {
           frequent: false,
           active: true,
           toothEffect: 'none',
+          color: 'blue',
+          icon: 'filling',
+          markPriority: 5,
         },
       ],
     });
@@ -200,6 +272,8 @@ describe('catalog draft', () => {
           category: 'Caries',
           frequent: false,
           active: false,
+          color: 'rose',
+          markPriority: 5,
         },
       ],
     });

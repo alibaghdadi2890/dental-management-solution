@@ -81,6 +81,9 @@ export function serviceItem(
     frequent: false,
     active: true,
     toothEffect: 'none',
+    color: 'blue',
+    icon: null,
+    markPriority: 5,
     ...extra,
   };
 }
@@ -97,6 +100,8 @@ export function diagnosisItem(
     category: 'Caries',
     frequent: false,
     active: true,
+    color: 'rose',
+    markPriority: 5,
     ...extra,
   };
 }
@@ -209,6 +214,7 @@ export function historyLine(
     visitId: OLDER_VISIT_ID,
     visitDate: '2025-03-12',
     dentistName: 'Dr. Ana Reyes',
+    procedureId: id(99),
     code: 'HS',
     name,
     toothCode,
@@ -263,6 +269,7 @@ export function chart(extra: Partial<PatientChart> = {}): PatientChart {
     liveVisitId: VISIT_ID,
     voidedVisitIds: [],
     teeth: [],
+    marks: {},
     ...extra,
   };
 }

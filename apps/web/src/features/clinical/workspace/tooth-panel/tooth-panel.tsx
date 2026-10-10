@@ -10,7 +10,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ToothImageCount, ToothImages } from '@/features/files/file-rows';
 import { formatMoney } from '@/lib/format';
+import { MarkChip } from '../../chart/mark-chip';
 import { PanelGlyph } from '../../chart/panel-glyph';
+import { useToothRender } from '../../chart/use-tooth-render';
 import { PresenceMenu } from '../../presence/presence-menu';
 import { latestPresence, presenceBanner } from '../../presence/presence-text';
 import {
@@ -138,6 +140,7 @@ function SelectedTooth({
   // What the chart knows is at this position, and the row that says so (feature 7, H1).
   const presence = teeth.get(code)?.presence ?? 'present';
   const presenceRow = latestPresence(chart, code);
+  const render = useToothRender()(code, teeth.get(code));
   const openTotal = plansTotal(openPlans);
   // Services are charted in a visit only.
   const canChartVisit = canWrite && visit !== null;
@@ -155,8 +158,7 @@ function SelectedTooth({
       <div className="flex items-start gap-3.5 border-b border-inner-divider bg-sunken px-4 py-[15px]">
         <PanelGlyph
           code={code}
-          tooth={teeth.get(code)}
-          presence={presence}
+          render={render}
           mode={mode}
           orientation={orientation}
           pendingSurfaces={selection.surfaces}
@@ -193,6 +195,35 @@ function SelectedTooth({
             >
               {presenceBanner(t, presenceRow, locale)}
             </p>
+          )}
+          {render.band.length > 0 && (
+            // What the chart shows in the tooth's band, in words (feature 9).
+            <ul
+              aria-label={t('panel.marks')}
+              data-panel-marks
+              className="m-0 mb-[7px] flex list-none flex-wrap gap-x-2.5 gap-y-1 p-0"
+            >
+              {render.band.map((item, index) => (
+                <li
+                  key={index}
+                  className="inline-flex items-center gap-[5px] text-[12.5px] leading-none text-ink-secondary"
+                >
+                  <MarkChip
+                    kind={item.kind}
+                    color={item.color}
+                    icon={item.icon}
+                    tone={item.tone}
+                    size={13}
+                  />
+                  {item.label}
+                </li>
+              ))}
+              {render.bandOverflow > 0 && (
+                <li className="font-mono text-[12px] leading-none text-ink-muted">
+                  +{render.bandOverflow}
+                </li>
+              )}
+            </ul>
           )}
           {hint && (
             <p role="status" className="m-0 text-[12.5px] leading-[1.4] text-ink-muted">

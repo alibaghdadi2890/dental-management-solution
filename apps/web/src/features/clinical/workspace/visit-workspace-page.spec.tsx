@@ -33,7 +33,9 @@ describe('VisitWorkspacePage', () => {
     expect(within(card).getByRole('button', { name: 'Upper jaw' })).toBeTruthy();
     expect(within(card).getByRole('button', { name: 'Whole mouth' })).toBeTruthy();
     expect(within(card).getByRole('group', { name: 'Upper arch' })).toBeTruthy();
-    expect(within(card).getByText('Treatment')).toBeTruthy();
+    // The view switch and the legend's standing groups.
+    expect(within(card).getByRole('radiogroup', { name: 'Show on the chart' })).toBeTruthy();
+    expect(within(card).getByRole('group', { name: 'Status' })).toBeTruthy();
     expect(screen.getByRole('complementary', { name: 'Selected tooth' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Treatment plan' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Clinical notes' })).toBeTruthy();

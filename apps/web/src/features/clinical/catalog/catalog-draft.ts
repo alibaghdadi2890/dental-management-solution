@@ -1,11 +1,15 @@
-import type {
-  ChargeUnit,
-  DiagnosisBatch,
-  DiagnosisItem,
-  ProblemDetails,
-  ServiceBatch,
-  ServiceItem,
-  ToothEffect,
+import {
+  type ChargeUnit,
+  type DiagnosisBatch,
+  type DiagnosisItem,
+  leastUsedMarkColor,
+  MARK_PRIORITY_DEFAULT,
+  type MarkColor,
+  type MarkIcon,
+  type ProblemDetails,
+  type ServiceBatch,
+  type ServiceItem,
+  type ToothEffect,
 } from '@dcm/contracts';
 import { sanitizeAmountInput } from '@/lib/amount';
 
@@ -33,12 +37,28 @@ export interface DraftRow {
   active: boolean;
   /** What performing the service does to the tooth (H2); `none` unless it is charged per tooth. */
   toothEffect: ToothEffect;
+  /** The chart mark (feature 9): a colour for a diagnosis and for a service charged per tooth.
+   * Any other service is never on a tooth; it has none, or the one it had while it was. */
+  color: MarkColor | null;
+  /** Services charged per tooth only. */
+  icon: MarkIcon | null;
+  markPriority: number;
 }
 
 export type RowPatch = Partial<
   Pick<
     DraftRow,
-    'code' | 'name' | 'category' | 'chargeUnit' | 'price' | 'frequent' | 'active' | 'toothEffect'
+    | 'code'
+    | 'name'
+    | 'category'
+    | 'chargeUnit'
+    | 'price'
+    | 'frequent'
+    | 'active'
+    | 'toothEffect'
+    | 'color'
+    | 'icon'
+    | 'markPriority'
   >
 >;
 
@@ -69,7 +89,15 @@ function rowFrom(item: Item): DraftRow {
     frequent: item.frequent,
     active: item.active,
     toothEffect: service?.toothEffect ?? 'none',
+    color: item.color,
+    icon: service?.icon ?? null,
+    markPriority: item.markPriority,
   };
+}
+
+/** The colour a row of `tab` gets when it has none: the one the draft uses least (M13). */
+function freeColor(draft: CatalogDraft, tab: CatalogTab): MarkColor {
+  return leastUsedMarkColor(draft.rows[tab].map((row) => row.color));
 }
 
 export function draftFrom(
@@ -100,8 +128,13 @@ export function editRow(
     rows.map((row) => {
       if (row.key !== key) return row;
       const next = { ...row, ...patch };
+      // A service that becomes one on a tooth needs a colour.
+      if (next.chargeUnit === 'per_tooth') {
+        return next.color === null ? { ...next, color: freeColor(draft, tab) } : next;
+      }
       // Only a per-tooth service changes a tooth: a row that stops being one loses its effect.
-      return next.chargeUnit === 'per_tooth' ? next : { ...next, toothEffect: 'none' };
+      // Its mark stays (the row no longer shows it): tooth records made with it are still drawn.
+      return { ...next, toothEffect: 'none' };
     }),
   );
 }
@@ -124,6 +157,10 @@ export function addRow(
     frequent: false,
     active: true,
     toothEffect: 'none',
+    // Never colourless, however quickly it is added.
+    color: freeColor(draft, tab),
+    icon: null,
+    markPriority: MARK_PRIORITY_DEFAULT,
   };
   return updateTab(draft, tab, (rows) => [row, ...rows]);
 }
@@ -151,10 +188,13 @@ export function isRowChanged(draft: CatalogDraft, tab: CatalogTab, row: DraftRow
     saved.name !== row.name ||
     saved.category !== row.category ||
     saved.frequent !== row.frequent ||
-    saved.active !== row.active;
+    saved.active !== row.active ||
+    saved.color !== row.color ||
+    saved.markPriority !== row.markPriority;
   if (tab === 'diagnoses') return common;
   return (
     common ||
+    saved.icon !== row.icon ||
     saved.chargeUnit !== row.chargeUnit ||
     saved.toothEffect !== row.toothEffect ||
     !sameAmount(saved.price, row.price)
@@ -228,7 +268,13 @@ export function batchOf(tab: CatalogTab, rows: readonly DraftRow[]): ServiceBatc
   });
   if (tab === 'diagnoses') {
     return {
-      items: rows.map((row) => ({ ...common(row), frequent: row.frequent, active: row.active })),
+      items: rows.map((row) => ({
+        ...common(row),
+        frequent: row.frequent,
+        active: row.active,
+        color: row.color,
+        markPriority: row.markPriority,
+      })),
     };
   }
   return {
@@ -239,6 +285,9 @@ export function batchOf(tab: CatalogTab, rows: readonly DraftRow[]): ServiceBatc
       frequent: row.frequent,
       active: row.active,
       toothEffect: row.toothEffect,
+      color: row.color,
+      icon: row.icon,
+      markPriority: row.markPriority,
     })),
   };
 }

@@ -26,7 +26,8 @@
     "charged": "Facturé",
     "price": "Prix",
     "active": "Actif",
-    "toothEffect": "Effet sur la dent"
+    "toothEffect": "Effet sur la dent",
+    "mark": "Repère"
   },
   "chargeUnit": {
     "per_tooth": "Par dent",
@@ -85,5 +86,49 @@
     "removes": "Retire la dent",
     "implant": "Pose un implant"
   },
-  "toothEffectHint": "Ce que la réalisation de cet acte fait à la dent sur le schéma : une extraction la note absente, une pose d’implant la note comme implant."
+  "toothEffectHint": "Ce que la réalisation de cet acte fait à la dent sur le schéma : une extraction la note absente, une pose d’implant la note comme implant.",
+  "mark": {
+    "none": "Non affiché sur une dent",
+    "color": "Couleur de {{name}} sur le schéma : {{color}}",
+    "colorTitle": "Couleur sur le schéma",
+    "icon": "Icône de {{name}} sur le schéma : {{icon}}",
+    "iconTitle": "Icône sur le schéma",
+    "noIcon": "Aucune",
+    "priority": "Priorité sur le schéma",
+    "priorityHelp": "La plus élevée s’affiche d’abord quand une dent a plus de repères que de place",
+    "priorityUp": "Augmenter la priorité sur le schéma",
+    "priorityDown": "Diminuer la priorité sur le schéma"
+  },
+  "markColor": {
+    "rose": "Rose vif",
+    "red": "Rouge",
+    "orange": "Orange",
+    "amber": "Ambre",
+    "yellow": "Jaune",
+    "lime": "Citron vert",
+    "green": "Vert",
+    "teal": "Sarcelle",
+    "cyan": "Cyan",
+    "sky": "Bleu ciel",
+    "blue": "Bleu",
+    "violet": "Violet",
+    "purple": "Pourpre",
+    "magenta": "Magenta",
+    "pink": "Rose",
+    "brown": "Brun"
+  },
+  "markIcon": {
+    "filling": "Obturation",
+    "crown": "Couronne",
+    "root_canal": "Traitement de canal",
+    "extraction": "Extraction",
+    "implant": "Implant",
+    "bridge": "Bridge",
+    "veneer": "Facette",
+    "sealant": "Scellement",
+    "post_core": "Inlay-core",
+    "denture": "Prothèse",
+    "cleaning": "Nettoyage",
+    "whitening": "Blanchiment"
+  }
 }

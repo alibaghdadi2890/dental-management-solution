@@ -33,6 +33,9 @@ const extraction: ServiceItem = {
   frequent: true,
   active: true,
   toothEffect: 'none',
+  color: 'red',
+  icon: 'extraction',
+  markPriority: 5,
 };
 
 const json = (body: unknown) =>

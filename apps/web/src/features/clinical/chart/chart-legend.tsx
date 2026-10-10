@@ -1,104 +1,195 @@
-import type { ReactNode } from 'react';
+import {
+  archColumns,
+  type DentitionStage,
+  presentTooth,
+  type ToothCode,
+  type ToothState,
+} from '@dcm/contracts';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { PLANNED_SHADOW } from './glyph-style';
+import { IN_PROGRESS_SHADOW, PLANNED_SHADOW } from './glyph-style';
+import { LEGEND_GROUP_LIMIT, type LegendEntry, legendGroups } from './legend-items';
+import { MarkChip } from './mark-chip';
 import { AbsentBox } from './presence-glyph';
 import { IMPLANT_OUTLINE } from './presence-style';
+import type { ChartHighlight } from './tooth-render';
 import { useChartSettings } from './use-chart-settings';
+import { useChartView } from './use-chart-view';
 
-interface LegendItem {
+interface StaticItem {
   label: string;
   swatch: ReactNode;
 }
 
 const square = 'size-[11px] flex-none rounded-[2px] border';
 
-/** The planned swatch's ring, with a margin as wide as the ring so it never draws over the label
- * or the next item. */
-const PLANNED_RING = cn(PLANNED_SHADOW, 'm-[1.5px]');
-
-/** A 3×3 mini glyph (5 cells) for the surface legend: `filled` picks which cells are tinted. */
-function MiniGlyph({ filled }: { filled: 'centre' | 'all' }) {
-  return (
-    <span
-      aria-hidden
-      className="grid flex-none grid-cols-[repeat(3,3px)] grid-rows-[repeat(3,3px)] gap-px"
-    >
-      {[false, true, false, true, true, true, false, true, false].map((isSurface, index) => {
-        const tinted = filled === 'all' ? isSurface : index === 4;
-        return (
-          <span
-            key={index}
-            className={cn(
-              isSurface && 'rounded-[1px]',
-              isSurface && (tinted ? 'bg-primary-tint-strong' : 'bg-border-control'),
-            )}
-          />
-        );
-      })}
-    </span>
-  );
-}
+/** A ring swatch, with a margin as wide as the ring so it never draws over the label or the
+ * next item. */
+const ringed = (shadow: string) => cn(shadow, 'm-[2px]');
 
 /**
- * The chart legend (spec §Interactions → Legend), in labelled groups: what the tooth's fill
- * says (its treatment), the markers layered on top, each in precedence order, then what is at
- * the position when it is not a plain natural tooth: missing, not erupted, implant (feature 7). Simple mode
- * collapses "Treated surface" and "Whole tooth" into "Treated"; outside a visit "Treated today" is
- * left out. It is the same for the primary and the permanent chart, so switching between them
- * moves nothing. Every item is one fixed height, so both groups are too. Wraps and aligns to the
- * inline end.
+ * The chart legend (feature 9, M11). It is about this patient: first the **diagnoses** and the
+ * **services** that are on the chart on screen, in the current view, each with its chip, its name
+ * and how many teeth carry it; then what never changes — **Status** (how today's work, earlier
+ * work, work not finished and planned work are told apart, whatever the colour) and **Tooth**
+ * (missing, not erupted, implant). A dynamic group with nothing in it is left out; one with more
+ * than eight lines shows eight and "+N more", which opens in place.
+ *
+ * A dynamic line is a button: pressing it highlights its teeth on the chart (`onHighlight`),
+ * pressing it again clears that. Without `onHighlight` the lines are plain text.
  *
  * `layout="key"` is the expanded chart's legend, where there is room to read it like a map key:
- * each group is a titled list, one item to a line, its swatch in a column of its own. The groups
- * stand side by side under the chart, and stack into a rail beside it once the chart card's
- * `@container/chart` is wide enough for both.
+ * each group is a titled list, one item to a line. The groups stand side by side under the chart,
+ * and stack into a rail beside it once the chart card's `@container/chart` is wide enough.
  */
 export function ChartLegend({
+  teeth,
+  dentition,
   showToday = true,
   layout = 'inline',
+  highlight = null,
+  onHighlight,
 }: {
-  /** "Treated today" means nothing outside a visit (the record's chart tab, 4b D17). */
+  /** The chart's derived teeth, and which of the patient's two charts is on screen. */
+  teeth: ReadonlyMap<ToothCode, ToothState>;
+  dentition: DentitionStage;
+  /** "Today" means nothing outside a visit (the record's chart tab, 4b D17). */
   showToday?: boolean;
   layout?: 'inline' | 'key';
+  highlight?: ChartHighlight | null;
+  onHighlight?: ((item: ChartHighlight) => void) | undefined;
 }) {
   const { t } = useTranslation('clinical');
-  const { mode } = useChartSettings();
+  const { orientation } = useChartSettings();
+  const [view] = useChartView();
+  const [expanded, setExpanded] = useState<ReadonlySet<LegendEntry['kind']>>(new Set());
 
-  const treatedToday: LegendItem = {
-    label: t('legend.treatedToday'),
-    swatch: <span className={cn(square, 'border-primary bg-primary')} />,
+  const groups = useMemo(() => {
+    const { upper, lower } = archColumns(orientation, dentition);
+    const codes = [...upper, ...lower].map((column) => presentTooth(column, dentition).code);
+    return legendGroups(teeth, view, codes);
+  }, [teeth, view, orientation, dentition]);
+
+  const isKey = layout === 'key';
+  const itemClass = isKey
+    ? 'flex h-[18px] items-center gap-2 text-[13px] leading-none whitespace-nowrap text-ink-secondary'
+    : 'inline-flex h-[15px] items-center gap-[5px] text-[12.5px] leading-none whitespace-nowrap text-ink-secondary';
+  const swatchBox = (swatch: ReactNode) =>
+    isKey ? <span className="grid w-[18px] flex-none place-items-center">{swatch}</span> : swatch;
+
+  const entryLine = (entry: LegendEntry) => {
+    const pressed = highlight?.kind === entry.kind && highlight.id === entry.id;
+    const content = (
+      <>
+        {swatchBox(<MarkChip kind={entry.kind} color={entry.color} icon={entry.icon} size={13} />)}
+        <span>{entry.name}</span>{' '}
+        <span className="text-ink-muted">{t('legend.teeth', { count: entry.teeth })}</span>
+      </>
+    );
+    if (!onHighlight) {
+      return (
+        <span data-legend-item={`${entry.kind}:${entry.id}`} className={itemClass}>
+          {content}
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        data-legend-item={`${entry.kind}:${entry.id}`}
+        aria-pressed={pressed}
+        title={t(pressed ? 'legend.clearHighlight' : 'legend.highlight', { name: entry.name })}
+        onClick={() => {
+          onHighlight({ kind: entry.kind, id: entry.id });
+        }}
+        className={cn(
+          itemClass,
+          'cursor-pointer rounded-[5px] border-0 bg-transparent p-0 outline-offset-2 hover:text-ink',
+          pressed && 'font-semibold text-ink underline decoration-primary underline-offset-[3px]',
+        )}
+      >
+        {content}
+      </button>
+    );
   };
-  const treatment: LegendItem[] =
-    mode === 'surface'
-      ? [
-          { label: t('legend.treatedSurface'), swatch: <MiniGlyph filled="centre" /> },
-          { label: t('legend.wholeTooth'), swatch: <MiniGlyph filled="all" /> },
-          treatedToday,
-        ]
-      : [
-          {
-            label: t('legend.treated'),
-            swatch: (
-              <span className={cn(square, 'border-primary-tint-strong bg-primary-tint-border')} />
-            ),
-          },
-          treatedToday,
-        ];
 
-  const fills = showToday ? treatment : treatment.filter((item) => item !== treatedToday);
-  const markers: LegendItem[] = [
+  const dynamic = (kind: LegendEntry['kind'], entries: readonly LegendEntry[]) => {
+    const open = expanded.has(kind);
+    const shown = open ? entries : entries.slice(0, LEGEND_GROUP_LIMIT);
+    const more = entries.length - shown.length;
+    return [
+      ...shown.map((entry) => ({ key: entry.id, node: entryLine(entry) })),
+      ...(more > 0
+        ? [
+            {
+              key: 'more',
+              node: (
+                <button
+                  type="button"
+                  data-legend-more
+                  aria-expanded={false}
+                  onClick={() => {
+                    setExpanded((current) => new Set([...current, kind]));
+                  }}
+                  className={cn(
+                    itemClass,
+                    'cursor-pointer border-0 bg-transparent p-0 font-medium text-primary',
+                  )}
+                >
+                  {t('legend.more', { count: more })}
+                </button>
+              ),
+            },
+          ]
+        : []),
+    ];
+  };
+
+  const fixed = (items: readonly StaticItem[]) =>
+    items.map((item) => ({
+      key: item.label,
+      node: (
+        <span data-legend-item className={itemClass}>
+          {swatchBox(item.swatch)}
+          {item.label}
+        </span>
+      ),
+    }));
+
+  // Status is the second cue (M2), shown on a neutral swatch: it holds for every colour.
+  const status: StaticItem[] = [
+    ...(showToday && view !== 'diagnoses'
+      ? [
+          {
+            label: t('legend.today'),
+            swatch: <span className={cn(square, 'border-[1.5px] border-ink bg-ink-muted')} />,
+          },
+        ]
+      : []),
+    ...(view !== 'diagnoses'
+      ? [
+          {
+            label: t('legend.past'),
+            swatch: <span className={cn(square, 'border-border-control bg-border-strong')} />,
+          },
+        ]
+      : []),
     {
-      label: t('legend.diagnosis'),
-      swatch: <span className="mx-[1.5px] size-2 flex-none rounded-full bg-danger" />,
+      label: t('legend.inProgress'),
+      swatch: (
+        <span
+          className={cn(square, 'border-border-control bg-surface', ringed(IN_PROGRESS_SHADOW))}
+        />
+      ),
     },
     {
       label: t('legend.planned'),
-      swatch: <span className={cn(square, 'border-planned-border bg-planned-bg', PLANNED_RING)} />,
-    },
-    {
-      label: t('legend.inProgress'),
-      swatch: <span className={cn(square, 'border-warning bg-warning-border')} />,
+      swatch: (
+        <span
+          className={cn(square, 'border-planned-border bg-planned-bg', ringed(PLANNED_SHADOW))}
+        />
+      ),
     },
   ];
 
@@ -106,10 +197,10 @@ export function ChartLegend({
   // second outline, none of which needs colour to be told apart.
   const absent = (presence: 'missing' | 'not_erupted') => (
     <span aria-hidden className="flex-none">
-      <AbsentBox presence={presence} width={11} height={11} radius={2} mark="none" />
+      <AbsentBox presence={presence} width={11} height={11} radius={2} />
     </span>
   );
-  const presence: LegendItem[] = [
+  const presence: StaticItem[] = [
     { label: t('legend.missing'), swatch: absent('missing') },
     { label: t('legend.notErupted'), swatch: absent('not_erupted') },
     {
@@ -126,60 +217,59 @@ export function ChartLegend({
     },
   ];
 
-  const group = (title: string, items: LegendItem[]) => (
-    <div className="inline-flex flex-wrap items-center gap-[9px] rounded-[7px] border border-inner-divider bg-faint px-[9px] py-1">
-      <span className="text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase">
-        {title}
-      </span>
-      {items.map((item) => (
-        <span
-          key={item.label}
-          data-legend-item
-          className="inline-flex h-[15px] items-center gap-[5px] text-[12.5px] leading-none whitespace-nowrap text-ink-secondary"
-        >
-          {item.swatch}
-          {item.label}
-        </span>
-      ))}
-    </div>
-  );
+  const sections = [
+    { title: t('legend.diagnosesOnChart'), items: dynamic('diagnosis', groups.diagnoses) },
+    { title: t('legend.servicesOnChart'), items: dynamic('service', groups.services) },
+    { title: t('legend.status'), items: fixed(status) },
+    { title: t('legend.presence'), items: fixed(presence) },
+  ].filter((section) => section.items.length > 0);
 
-  const keyGroup = (title: string, items: LegendItem[]) => (
-    <div role="group" aria-label={title} className="min-w-[148px]">
-      <p className="m-0 mb-2 text-[12.5px] leading-none font-semibold text-ink">{title}</p>
-      <ul className="m-0 flex list-none flex-col gap-[7px] p-0">
-        {items.map((item) => (
-          <li
-            key={item.label}
-            data-legend-item
-            className="flex h-[18px] items-center gap-2 text-[13px] leading-none whitespace-nowrap text-ink-secondary"
-          >
-            <span className="grid w-[18px] flex-none place-items-center">{item.swatch}</span>
-            {item.label}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-
-  if (layout === 'key') {
+  if (isKey) {
     return (
       <div
         data-legend-key
         className="flex flex-wrap gap-x-10 gap-y-5 @min-[1080px]/chart:flex-col @min-[1080px]/chart:flex-nowrap"
       >
-        {keyGroup(t('legend.treatment'), fills)}
-        {keyGroup(t('legend.markers'), markers)}
-        {keyGroup(t('legend.presence'), presence)}
+        {sections.map((section) => (
+          <div
+            key={section.title}
+            role="group"
+            aria-label={section.title}
+            className="min-w-[148px]"
+          >
+            <p className="m-0 mb-2 text-[12.5px] leading-none font-semibold text-ink">
+              {section.title}
+            </p>
+            <ul className="m-0 flex list-none flex-col gap-[7px] p-0">
+              {section.items.map((item) => (
+                <li key={item.key}>{item.node}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     );
   }
 
   return (
     <div className="flex flex-wrap justify-end gap-3">
-      {group(t('legend.treatment'), fills)}
-      {group(t('legend.markers'), markers)}
-      {group(t('legend.presence'), presence)}
+      {sections.map((section) => (
+        <div
+          key={section.title}
+          role="group"
+          aria-label={section.title}
+          className="inline-flex flex-wrap items-center gap-x-[11px] gap-y-[7px] rounded-[7px] border border-inner-divider bg-faint px-[9px] py-[5px]"
+        >
+          <span className="text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase">
+            {section.title}
+          </span>
+          {section.items.map((item) => (
+            <span key={item.key} className="inline-flex">
+              {item.node}
+            </span>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

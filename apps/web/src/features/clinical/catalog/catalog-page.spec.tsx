@@ -28,6 +28,9 @@ const service = (n: number, code: string, name: string, category: string, active
     frequent: false,
     active,
     toothEffect: 'none',
+    color: 'blue',
+    icon: null,
+    markPriority: 5,
   }) satisfies ServiceItem;
 
 const SERVICES = [
@@ -43,6 +46,8 @@ const DIAGNOSES: DiagnosisItem[] = [
     category: 'Caries',
     frequent: true,
     active: true,
+    color: 'rose',
+    markPriority: 5,
   },
 ];
 
@@ -71,13 +76,13 @@ function sessionWith(permissions: Permission[]): Session {
   };
 }
 
-function renderCatalog(permissions: Permission[]) {
+function renderCatalog(permissions: Permission[], tab: 'services' | 'diagnoses' = 'services') {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(sessionQueryOptions().queryKey, sessionWith(permissions));
   client.setQueryData(catalogKeys.tab('services', null), SERVICES);
   client.setQueryData(catalogKeys.tab('diagnoses', null), DIAGNOSES);
   const rootRoute = createRootRoute({
-    component: () => <CatalogPage tab="services" onTabChange={() => undefined} />,
+    component: () => <CatalogPage tab={tab} onTabChange={() => undefined} />,
   });
   const router = createRouter({
     routeTree: rootRoute,
@@ -186,9 +191,70 @@ describe('CatalogPage', () => {
           frequent: true,
           active: true,
           toothEffect: 'none',
+          color: 'blue',
+          icon: null,
+          markPriority: 5,
         },
       ],
     });
     expect(screen.queryByRole('region', { name: /unsaved/ })).toBeNull();
+  });
+
+  it('picks a chart colour, an icon and a priority, each marking the row unsaved (feature 9)', async () => {
+    renderCatalog(['catalog:read', 'catalog:write']);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Chart colour of Composite: Blue' }));
+    const colours = screen.getByRole('dialog', { name: 'Chart colour' });
+    expect(colours.querySelectorAll('[data-color]')).toHaveLength(16);
+    expect(within(colours).getByRole('button', { name: 'Blue' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    expect(
+      within(colours).getByText('Higher shows first when a tooth has more marks than fit'),
+    ).toBeTruthy();
+    fireEvent.click(within(colours).getByRole('button', { name: 'Raise the chart priority' }));
+    expect(within(colours).getByRole('status', { name: 'Chart priority' }).textContent).toBe('6');
+    // Choosing a colour closes the popover.
+    fireEvent.click(within(colours).getByRole('button', { name: 'Green' }));
+    expect(screen.queryByRole('dialog', { name: 'Chart colour' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Chart colour of Composite: Green' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: '1 unsaved change' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Chart icon of Composite: None' }));
+    const icons = screen.getByRole('dialog', { name: 'Chart icon' });
+    // Twelve icons, and None.
+    expect(icons.querySelectorAll('[data-icon]')).toHaveLength(13);
+    fireEvent.click(within(icons).getByRole('button', { name: 'Filling' }));
+    expect(screen.getByRole('button', { name: 'Chart icon of Composite: Filling' })).toBeTruthy();
+    expect(screen.getByRole('region', { name: '1 unsaved change' })).toBeTruthy();
+  });
+
+  it('offers no mark for a service that is not on a tooth, and no icon for a diagnosis', async () => {
+    renderCatalog(['catalog:read', 'catalog:write']);
+
+    await screen.findByRole('button', { name: 'Chart colour of Extraction: Blue' });
+    const charged = screen.getAllByRole('combobox', { name: 'Charged' })[0];
+    if (!charged) throw new Error('no Charged select');
+    fireEvent.change(charged, { target: { value: 'per_jaw' } });
+    expect(screen.queryByRole('button', { name: /^Chart colour of Extraction/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Chart icon of Extraction/ })).toBeNull();
+    expect(screen.getAllByText('Not shown on a tooth').length).toBeGreaterThan(0);
+    // Back on a tooth, its mark is as it was.
+    fireEvent.change(charged, { target: { value: 'per_tooth' } });
+    expect(screen.getByRole('button', { name: 'Chart colour of Extraction: Blue' })).toBeTruthy();
+
+    cleanup();
+    renderCatalog(['catalog:read', 'catalog:write'], 'diagnoses');
+    expect(
+      await screen.findByRole('button', { name: 'Chart colour of Dental caries: Rose' }),
+    ).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Chart icon of/ })).toBeNull();
+  });
+
+  it('shows the marks without pickers to someone who cannot edit the catalog', async () => {
+    renderCatalog(['catalog:read']);
+    await screen.findByDisplayValue('Composite');
+    expect(screen.queryByRole('button', { name: /^Chart colour of/ })).toBeNull();
+    expect(document.querySelectorAll('[data-mark]').length).toBeGreaterThan(0);
   });
 });

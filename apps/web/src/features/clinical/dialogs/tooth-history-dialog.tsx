@@ -23,6 +23,7 @@ import { usePermission } from '@/features/auth/use-permission';
 import { formatCalendarDate, formatDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ToothGlyph } from '../chart/tooth-glyph';
+import { useToothRender } from '../chart/use-tooth-render';
 import {
   useChartSettings,
   useSurfaceLabel,
@@ -127,6 +128,7 @@ function HistoryContent({
   const name = useToothName();
   const chart = useQuery(chartQuery(patientId));
   const history = useQuery(toothHistoryQuery(patientId, code));
+  const renderTooth = useToothRender();
   const succession = chart.data ? successionOf(code, chart.data) : null;
 
   return (
@@ -135,7 +137,10 @@ function HistoryContent({
         <ToothGlyph
           variant="history"
           code={code}
-          tooth={chart.data?.teeth.find((tooth) => tooth.code === code)}
+          render={renderTooth(
+            code,
+            chart.data?.teeth.find((tooth) => tooth.code === code),
+          )}
           mode={mode}
           orientation={orientation}
         />

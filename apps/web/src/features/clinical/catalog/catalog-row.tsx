@@ -3,9 +3,11 @@ import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { MarkChip } from '../chart/mark-chip';
 import { type CatalogTab, type DraftRow, type RowPatch, sanitizePrice } from './catalog-draft';
 import { CATALOG_GRID } from './catalog-layout';
 import { FrequentToggle } from './frequent-toggle';
+import { ColorPicker, IconPicker } from './mark-pickers';
 
 /** 32px table inputs: bordered when editable, borderless when read-only. */
 const cell = (readOnly: boolean) =>
@@ -128,6 +130,47 @@ export function CatalogRow({
         }}
         className={cn(cell(readOnly), 'text-[12.5px] leading-none')}
       />
+      {row.color === null || row.chargeUnit !== 'per_tooth' ? (
+        // A service on a jaw or the whole mouth is never drawn on a tooth: no mark to choose.
+        <span title={t('mark.none')} className="ps-2 text-ink-muted">
+          <span aria-hidden>—</span>
+          <span className="sr-only">{t('mark.none')}</span>
+        </span>
+      ) : readOnly ? (
+        <span data-mark className="flex items-center gap-1.5 ps-1.5">
+          <MarkChip
+            kind={tab === 'services' ? 'service' : 'diagnosis'}
+            color={row.color}
+            icon={row.icon}
+            size={18}
+          />
+          <span className="sr-only">{t(`markColor.${row.color}`)}</span>
+        </span>
+      ) : (
+        <span data-mark className="flex items-center gap-1">
+          <ColorPicker
+            name={name}
+            color={row.color}
+            priority={row.markPriority}
+            onColor={(color) => {
+              onChange({ color });
+            }}
+            onPriority={(markPriority) => {
+              onChange({ markPriority });
+            }}
+          />
+          {tab === 'services' && (
+            <IconPicker
+              name={name}
+              color={row.color}
+              icon={row.icon}
+              onIcon={(icon) => {
+                onChange({ icon });
+              }}
+            />
+          )}
+        </span>
+      )}
       {tab === 'services' && (
         <>
           <select

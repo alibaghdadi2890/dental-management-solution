@@ -38,27 +38,20 @@
   "glyph": {
     "surfaces": "أسطح السن",
     "surfaceName": "{{name}} ({{short}})",
-    "surfaceTreated": "{{name}} · معالَج",
-    "surfaceWholeTooth": "{{name}} · عولجت السن كاملة"
+    "surfaceMarked": "{{name}} · {{item}}"
   },
   "title": {
     "listSeparator": "، ",
     "primary": "سن لبنية",
     "planned": "مخطط: {{names}}",
-    "recordedServices_zero": "لا خدمات مسجلة",
-    "recordedServices_one": "خدمة واحدة مسجلة",
-    "recordedServices_two": "خدمتان مسجلتان",
-    "recordedServices_few": "{{count}} خدمات مسجلة",
-    "recordedServices_many": "{{count}} خدمة مسجلة",
-    "recordedServices_other": "{{count}} خدمة مسجلة",
-    "treatedToday": "عولجت في هذه الزيارة",
     "noRecordedTreatment": "لا علاج مسجل",
     "inProgress": "غير منتهية: {{names}}",
     "presence": {
       "missing": "مفقودة",
       "not_erupted": "لم تبزغ",
       "implant": "زرعة"
-    }
+    },
+    "today": "اليوم"
   },
   "chart": {
     "upperArch": "الفك العلوي",
@@ -69,19 +62,26 @@
     "leftTitle": "يسار المريض"
   },
   "legend": {
-    "treatment": "العلاج",
-    "markers": "العلامات",
-    "treatedSurface": "سطح معالَج",
-    "wholeTooth": "السن كاملة",
-    "treated": "معالَجة",
-    "treatedToday": "عولجت اليوم",
-    "diagnosis": "تشخيص",
-    "planned": "مخطط",
+    "diagnosesOnChart": "التشخيصات على هذا المخطط",
+    "servicesOnChart": "الخدمات على هذا المخطط",
+    "status": "الحالة",
+    "today": "أُنجز اليوم",
+    "past": "أُنجز سابقًا",
     "inProgress": "غير منتهية",
+    "planned": "مخطط",
     "presence": "السنّ",
     "missing": "مفقودة",
     "notErupted": "لم تبزغ",
-    "implant": "زرعة"
+    "implant": "زرعة",
+    "teeth_zero": "· لا أسنان",
+    "teeth_one": "· سنّ واحدة",
+    "teeth_two": "· سنّان",
+    "teeth_few": "· {{count}} أسنان",
+    "teeth_many": "· {{count}} سنًّا",
+    "teeth_other": "· {{count}} سنّ",
+    "more": "+{{count}} أخرى",
+    "highlight": "إبراز الأسنان التي عليها {{name}}",
+    "clearHighlight": "إيقاف إبراز {{name}}"
   },
   "workspace": {
     "loading": "جارٍ تحميل الزيارة…",
@@ -318,7 +318,8 @@
       "fullHistory": "التاريخ الكامل للسن ←",
       "emptyTitle": "لا يوجد علاج مسجل"
     },
-    "levels": "المستوى"
+    "levels": "المستوى",
+    "marks": "على هذه السنّ أيضًا"
   },
   "drawer": {
     "service": {
@@ -635,5 +636,11 @@
       },
       "service": "{{name}} ({{code}})، الزيارة {{number}}"
     }
+  },
+  "chartView": {
+    "label": "ما يظهر على المخطط",
+    "diagnoses": "التشخيصات",
+    "services": "الخدمات",
+    "both": "كلاهما"
   }
 }

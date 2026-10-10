@@ -1,73 +1,60 @@
 import {
-  cellMark,
   type ChartMode,
   type ChartOrientation,
   type SurfaceKey,
   surfaceCells,
   type ToothCode,
-  type ToothPresenceState,
-  type ToothState,
-  type ToothVisualState,
 } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { CELL_MAP, cellClass, gridStyle } from './glyph-style';
+import { CELL_MAP, fillName, fillStyle, gridStyle } from './glyph-style';
 import { ImplantPost } from './presence-glyph';
 import { IMPLANT_OUTLINE, isAbsent, rootSide } from './presence-style';
+import type { Fill, ToothRender } from './tooth-render';
 import { useSurfaceLabel } from './use-chart-settings';
 
 export interface PanelGlyphProps {
   code: ToothCode;
-  /** Absent when nothing is recorded on the tooth. */
-  tooth: ToothState | undefined;
+  /** What to draw (`toToothRender`). The panel draws its presence itself, so the surfaces stay
+   * workable whatever is at the position (H3): a crown is charted on an implant, a pontic on a
+   * gap. */
+  render: ToothRender;
   mode: ChartMode;
   orientation: ChartOrientation;
   /** The surfaces scoped for the next service. */
   pendingSurfaces?: readonly SurfaceKey[];
   /** Toggles a surface in the pending scope. Without it the surfaces are read-only (W18). */
   onSurfaceClick?: (surface: SurfaceKey) => void;
-  /** What is at the position (feature 7). The surfaces stay workable whatever it is (H3): a
-   * crown is charted on an implant, a pontic on a gap. */
-  presence?: ToothPresenceState;
 }
 
 const CELL = 24;
 /** The simple-mode panel glyph is a fixed 52×64 cell (spec §Selected Tooth Panel). */
 const SIMPLE = { width: 52, height: 64, radius: 8 } as const;
 
-/** The panel shows what was done to each surface, not the plan wash: planned and in-progress
- * read as untreated. */
-function panelMark(tooth: ToothState | undefined, surface: SurfaceKey): ToothVisualState {
-  const mark = cellMark(tooth, surface);
-  return mark === 'planned' || mark === 'in_progress' ? 'none' : mark;
+/** The panel shows what is on each surface, not the plan wash: a planned surface reads as a
+ * plain one. */
+function marked(fill: Fill | null | undefined): Fill | undefined {
+  return fill && fill.color !== 'planned' && fill.color !== 'none' ? fill : undefined;
 }
 
-const SURFACE_CLASS: Record<'pending' | ToothVisualState, string> = {
-  pending: 'border-primary-hover bg-primary text-primary-foreground',
-  treated_today: 'border-primary-tint-strong bg-primary text-primary-foreground',
-  treated: 'border-primary-tint-strong bg-primary-tint-border text-ink-secondary',
-  in_progress: 'border-border-control bg-surface text-ink-secondary',
-  planned: 'border-border-control bg-surface text-ink-secondary',
-  none: 'border-border-control bg-surface text-ink-secondary',
-};
-
 /**
- * The selected-tooth panel's enlarged glyph (spec §Selected Tooth Panel): in surface mode a 3×3
- * grid of 24 px surfaces, each showing its letter and toggling the pending scope; in simple mode
- * one 52×64 whole-tooth cell that is never clickable. A surface's name says whether it was
- * treated on its own or as part of a whole-tooth service.
+ * The selected-tooth panel's enlarged glyph (spec §Selected Tooth Panel), drawn from the same
+ * `ToothRender` as the chart's (feature 9): in surface mode a 3×3 grid of 24 px surfaces, each
+ * showing its letter in the colour of the mark on it and toggling the pending scope; in simple
+ * mode one 52×64 whole-tooth cell that is never clickable. A surface's name says which diagnosis
+ * or service is on it. The band's marks are listed as text by the panel, under the glyph.
  */
 export function PanelGlyph({
   code,
-  tooth,
+  render,
   mode,
   orientation,
   pendingSurfaces = [],
   onSurfaceClick,
-  presence = 'present',
 }: PanelGlyphProps) {
   const { t } = useTranslation('clinical');
   const surfaceLabel = useSurfaceLabel();
+  const { presence } = render;
   const absent = isAbsent(presence);
   // Missing: dashed and faded; not erupted: dotted; implant: a second outline and its post.
   const presenceClass = cn(
@@ -98,8 +85,9 @@ export function PanelGlyph({
   );
 
   if (mode === 'simple') {
-    // The panel's tooth is the selected one, so its outline is the accent (as in the POC).
-    const mark = tooth?.state ?? 'none';
+    // The panel's tooth is the selected one, so a plain body's outline is the accent (as in the
+    // POC). An absent position has no body fill in the render.
+    const fill = marked(render.body);
     return (
       <span
         aria-hidden
@@ -109,9 +97,10 @@ export function PanelGlyph({
         style={{ gridTemplateColumns: `${SIMPLE.width}px`, gridTemplateRows: `${SIMPLE.height}px` }}
       >
         <span
-          data-mark={mark}
-          className={cn(cellClass(absent ? 'none' : mark, true), cellBorder)}
-          style={{ borderRadius: SIMPLE.radius }}
+          data-body
+          data-fill={fillName(absent ? undefined : fill)}
+          className={cn('border', cellBorder)}
+          style={{ borderRadius: SIMPLE.radius, ...fillStyle(absent ? undefined : fill, true) }}
         />
         {overlay}
       </span>
@@ -131,22 +120,21 @@ export function PanelGlyph({
       {CELL_MAP.map((index, position) => {
         if (index === null) return <span key={position} />;
         const surface = surfaces[index];
-        const mark = panelMark(tooth, surface);
+        const fill = marked(render.cells[surface]);
         const pending = pendingSurfaces.includes(surface);
         const name = t('glyph.surfaceName', {
           name: surfaceLabel.name(surface),
           short: surfaceLabel.short(surface),
         });
-        const wholeToothOnly = mark !== 'none' && tooth?.surfaces[surface] === undefined;
-        const label =
-          mark === 'none'
-            ? name
-            : t(wholeToothOnly ? 'glyph.surfaceWholeTooth' : 'glyph.surfaceTreated', { name });
+        const label = fill?.label ? t('glyph.surfaceMarked', { name, item: fill.label }) : name;
         const className = cn(
           'grid place-items-center rounded-[2px] border p-0 text-[12.5px] leading-none font-semibold',
-          SURFACE_CLASS[pending ? 'pending' : mark],
+          pending
+            ? 'border-primary-hover bg-primary text-primary-foreground'
+            : !fill && 'text-ink-secondary',
           cellBorder,
         );
+        const style = pending ? undefined : fillStyle(fill, false);
 
         if (!onSurfaceClick) {
           return (
@@ -154,10 +142,11 @@ export function PanelGlyph({
               key={position}
               role="img"
               data-surface={surface}
-              data-mark={mark}
+              data-fill={fillName(fill)}
               title={label}
               aria-label={label}
               className={className}
+              style={style}
             >
               {surfaceLabel.short(surface)}
             </span>
@@ -168,7 +157,7 @@ export function PanelGlyph({
             key={position}
             type="button"
             data-surface={surface}
-            data-mark={mark}
+            data-fill={fillName(fill)}
             title={label}
             aria-label={label}
             aria-pressed={pending}
@@ -176,6 +165,7 @@ export function PanelGlyph({
               onSurfaceClick(surface);
             }}
             className={cn(className, 'cursor-pointer')}
+            style={style}
           >
             {surfaceLabel.short(surface)}
           </button>

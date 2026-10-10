@@ -16,7 +16,6 @@ export function AbsentBox({
   radius,
   planned = false,
   selected = false,
-  mark,
 }: {
   presence: AbsentPresence;
   width: number;
@@ -24,8 +23,6 @@ export function AbsentBox({
   radius: number;
   planned?: boolean;
   selected?: boolean;
-  /** The tooth's overall state, exposed like every glyph cell's (`data-mark`). */
-  mark: string;
 }) {
   const missing = presence === 'missing';
   const cross = Math.max(6, Math.round(Math.min(width, height) * 0.34));
@@ -35,7 +32,7 @@ export function AbsentBox({
       style={{ width, height }}
     >
       <span
-        data-mark={mark}
+        data-fill={planned ? 'planned/wash' : 'none'}
         className={cn(
           'absolute inset-0 border-[1.5px]',
           missing ? 'border-dashed' : 'border-dotted',

@@ -166,7 +166,7 @@ test('the owner charts a visit, completes it and sees its figures with the openi
     await expect(
       page.getByRole('status').filter({ hasText: 'Zircon crown performed' }),
     ).toBeVisible();
-    await expect(tooth(chart, '#16')).toHaveAccessibleName(/treated in this visit/);
+    await expect(tooth(chart, '#16')).toHaveAccessibleName(/Zircon crown · today/);
   });
 
   await test.step('#26: surfaces O and D scope a composite', async () => {
@@ -178,8 +178,10 @@ test('the owner charts a visit, completes it and sees its figures with the openi
     // A frequently used service is one click away at the top of the panel.
     await panel.getByRole('button', { name: 'Add Composite', exact: true }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Composite added' })).toBeVisible();
-    await expect(surfaces.getByRole('button', { name: /^Occlusal \(O\) · treated/ })).toBeVisible();
-    await expect(surfaces.getByRole('button', { name: /^Distal \(D\) · treated/ })).toBeVisible();
+    await expect(
+      surfaces.getByRole('button', { name: /^Occlusal \(O\) · Composite/ }),
+    ).toBeVisible();
+    await expect(surfaces.getByRole('button', { name: /^Distal \(D\) · Composite/ })).toBeVisible();
   });
 
   await test.step('a note autosaves and a 10 % discount comes off the total', async () => {
@@ -191,7 +193,7 @@ test('the owner charts a visit, completes it and sees its figures with the openi
 
     await page.getByRole('radio', { name: 'Percent' }).click();
     await page.getByRole('textbox', { name: 'Visit discount value' }).fill('10');
-    await expect(page.getByRole('group', { name: 'Services' })).toContainText('$400');
+    await expect(page.getByRole('group', { name: 'Services', exact: true })).toContainText('$400');
     await expect(page.getByRole('group', { name: 'Discount amount' })).toContainText('$40');
     await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$360');
   });

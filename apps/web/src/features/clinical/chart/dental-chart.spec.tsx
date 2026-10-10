@@ -4,7 +4,6 @@ import type {
   Session,
   ToothCode,
   ToothNotation,
-  ToothState,
 } from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -13,9 +12,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import i18n from '@/lib/i18n';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { ChartLegend } from './chart-legend';
+import { teethOf, toothDiagnosis, toothService, toothState as tooth } from './chart.test-utils';
 import { DentalChart } from './dental-chart';
 import { chartWidth } from './fit-cell-size';
 import { FittedChart } from './fitted-chart';
+import { chartGlyphBox } from './glyph-style';
+import { LEGEND_GROUP_LIMIT } from './legend-items';
+import { setChartView } from './use-chart-view';
 
 const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
 
@@ -60,23 +63,6 @@ function renderWith(ui: ReactNode, settings: Settings = {}) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
-function tooth(overrides: Partial<ToothState> & Pick<ToothState, 'code'>): ToothState {
-  return {
-    presence: 'present',
-    state: 'none',
-    surfaces: {},
-    wholeTooth: null,
-    hasActiveDiagnosis: false,
-    openPlanIds: [],
-    historyCount: 0,
-    titleParts: { diagnoses: [], plans: [], historyCount: 0 },
-    ...overrides,
-  };
-}
-
-const teethOf = (...states: ToothState[]) =>
-  new Map<ToothCode, ToothState>(states.map((state) => [state.code, state]));
-
 function chart(
   props: Partial<Parameters<typeof DentalChart>[0]> = {},
 ): Parameters<typeof DentalChart>[0] {
@@ -102,9 +88,19 @@ const columnsOf = (arch: string) =>
   );
 const legendItems = () =>
   [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].map((item) => item.textContent);
+const dotsOf = (code: string) =>
+  [...column(code).querySelectorAll<HTMLElement>('[data-diagnosis-dot]')].map(
+    (dot) => dot.dataset.diagnosisDot,
+  );
+
+/** The chart view is this browser's: each test starts from the default. */
+const resetView = () => {
+  cleanup();
+  setChartView('both');
+};
 
 describe('DentalChart', () => {
-  afterEach(cleanup);
+  afterEach(resetView);
 
   it('labels teeth in FDI or Universal notation', () => {
     renderWith(<DentalChart {...chart()} />, { notation: 'fdi' });
@@ -177,60 +173,154 @@ describe('DentalChart', () => {
     expect(numberOf('26')?.className).not.toContain('font-semibold');
   });
 
-  it('marks an active diagnosis with a dot beside the number', () => {
+  it('Both view: shows the diagnoses as coloured dots between the number and the glyph', () => {
     const teeth = teethOf(
       tooth({
-        code: '36',
-        hasActiveDiagnosis: true,
-        titleParts: { diagnoses: ['Dental caries'], plans: [], historyCount: 0 },
+        code: '16',
+        diagnoses: [toothDiagnosis(), toothDiagnosis({ code: 'DX-FRAC', color: 'amber' })],
       }),
+      tooth({ code: '36', diagnoses: [toothDiagnosis({ surfaces: ['M'] })] }),
     );
     renderWith(<DentalChart {...chart({ teeth })} />);
 
-    expect(numberOf('36')?.querySelector('[data-diagnosis-dot]')).not.toBeNull();
-    expect(numberOf('37')?.querySelector('[data-diagnosis-dot]')).toBeNull();
+    expect(document.querySelector('[data-dental-chart]')?.getAttribute('data-view')).toBe('both');
+    expect(dotsOf('16')).toEqual(['rose', 'amber']);
+    expect(dotsOf('37')).toEqual([]);
+    // Upper: number, dots, glyph. Lower: glyph, dots, number.
+    const order = (code: string) =>
+      [...column(code).children].map((child) =>
+        child.hasAttribute('data-number')
+          ? 'number'
+          : child.hasAttribute('data-dots')
+            ? 'dots'
+            : 'glyph',
+      );
+    expect(order('16')).toEqual(['number', 'dots', 'glyph']);
+    expect(order('36')).toEqual(['glyph', 'dots', 'number']);
+    // The dots paint no cell.
+    expect(column('36').querySelector('[data-surface="M"]')?.getAttribute('data-fill')).toBe(
+      'none',
+    );
     expect(column('36').getAttribute('aria-label')).toBe(
-      '#36 · Lower left first molar · Dental caries',
+      '#36 · Lower left first molar · Dental caries · M · 1 Feb 2026 · Dr Rami',
+    );
+    expect(column('36').getAttribute('title')).toBe(
+      '#36 · Lower left first molar\nDental caries · M · 1 Feb 2026 · Dr Rami',
     );
   });
 
-  it('keeps a diagnosed number centred over its tooth: the dot sits outside the flow', () => {
-    const teeth = teethOf(tooth({ code: '36', hasActiveDiagnosis: true }));
+  it('keeps the rows straight: every tooth has the dot row, with dots or without', () => {
+    const teeth = teethOf(tooth({ code: '36', diagnoses: [toothDiagnosis()] }));
     renderWith(<DentalChart {...chart({ teeth })} />);
-
-    const dot = numberOf('36')?.querySelector<HTMLElement>('[data-diagnosis-dot]');
-    expect(numberOf('36')?.className).toContain('relative');
-    expect(dot?.className).toContain('absolute');
-    expect(dot?.className).toContain('start-full');
+    expect(document.querySelectorAll('[data-dots]')).toHaveLength(32);
     expect(column('36').style.width).toBe(column('37').style.width);
   });
 
-  it.each([
-    ['surface', 12, '40px'],
-    ['surface', 8, '28px'],
-    ['simple', 12, '28px'],
-    ['simple', 8, '20px'],
-  ] as const)(
-    'gives every %s column at %ipx cells the glyph box’s fixed width (%s)',
-    (mode, size, width) => {
-      const teeth = teethOf(tooth({ code: '11', hasActiveDiagnosis: true }));
-      renderWith(<DentalChart {...chart({ teeth, size })} />, { mode });
+  it('shows three dots and counts the rest', () => {
+    const diagnoses = ['A', 'B', 'C', 'D'].map((code) => toothDiagnosis({ code }));
+    renderWith(<DentalChart {...chart({ teeth: teethOf(tooth({ code: '16', diagnoses })) })} />);
+    expect(dotsOf('16')).toHaveLength(3);
+    expect(column('16').querySelector('[data-dot-overflow]')?.textContent).toBe('+1');
+  });
 
-      const widths = new Set(
-        [...document.querySelectorAll<HTMLElement>('[data-column]')].map(
-          (element) => element.style.width,
-        ),
-      );
-      expect([...widths]).toEqual([width]);
-      const glyph = column('16').querySelector<HTMLElement>('[data-glyph]');
-      const padding = Number.parseFloat(glyph?.style.padding ?? '');
-      const inner =
-        mode === 'simple'
-          ? Number.parseFloat(glyph?.style.gridTemplateColumns ?? '')
-          : size * 3 + Number.parseFloat(glyph?.style.gap ?? '') * 2;
-      expect(`${String(inner + padding * 2)}px`).toBe(width);
-    },
-  );
+  it('Diagnoses view: paints the diagnosed surface and shows no dots or services', () => {
+    setChartView('diagnoses');
+    const teeth = teethOf(
+      tooth({
+        code: '36',
+        diagnoses: [toothDiagnosis({ surfaces: ['M'] })],
+        services: [toothService({ surfaces: ['O'] })],
+      }),
+    );
+    renderWith(<DentalChart {...chart({ teeth })} />);
+    const fill = (surface: string) =>
+      column('36').querySelector(`[data-surface="${surface}"]`)?.getAttribute('data-fill');
+    expect(fill('M')).toBe('rose/today');
+    expect(fill('O')).toBe('none');
+    expect(document.querySelectorAll('[data-dots]')).toHaveLength(0);
+    expect(column('36').getAttribute('aria-label')).not.toContain('Composite');
+  });
+
+  it('Services view: shows the services and nothing of the diagnoses', () => {
+    setChartView('services');
+    const teeth = teethOf(
+      tooth({
+        code: '36',
+        diagnoses: [toothDiagnosis({ surfaces: ['M'] })],
+        services: [toothService({ surfaces: ['O'] })],
+      }),
+    );
+    renderWith(<DentalChart {...chart({ teeth })} />);
+    expect(column('36').querySelector('[data-surface="O"]')?.getAttribute('data-fill')).toBe(
+      'blue/past',
+    );
+    expect(document.querySelectorAll('[data-diagnosis-dot]')).toHaveLength(0);
+    expect(column('36').getAttribute('aria-label')).not.toContain('Dental caries');
+  });
+
+  it('the compact chart is a summary: band dots, no diagnosis dots, no chips', () => {
+    const teeth = teethOf(
+      tooth({
+        code: '16',
+        diagnoses: [toothDiagnosis()],
+        services: ['A', 'B', 'C', 'D'].map((code) => toothService({ code })),
+      }),
+    );
+    renderWith(<DentalChart {...chart({ teeth, size: 8 })} />);
+    expect(document.querySelectorAll('[data-dots]')).toHaveLength(0);
+    expect(column('16').querySelectorAll('[data-chip]')).toHaveLength(0);
+    expect(column('16').querySelectorAll('[data-band-dot]')).toHaveLength(3);
+    expect(column('16').querySelector('[data-band-overflow]')).toBeNull();
+  });
+
+  it('fades every tooth that does not carry the highlighted item', () => {
+    const teeth = teethOf(
+      tooth({ code: '36', services: [toothService({ surfaces: ['O'] })] }),
+      tooth({ code: '16', services: [toothService({ code: 'ZIR', color: 'amber' })] }),
+    );
+    renderWith(<DentalChart {...chart({ teeth, highlight: { kind: 'service', id: 'CMP' } })} />);
+    const faded = (code: string) =>
+      column(code).querySelector<HTMLElement>('[data-glyph]')?.dataset.faded;
+    expect(faded('36')).toBeUndefined();
+    expect(faded('16')).toBe('true');
+    expect(faded('11')).toBe('true');
+    expect(column('36').querySelector('[data-surface="O"]')?.getAttribute('data-ringed')).toBe(
+      'true',
+    );
+  });
+
+  it.each([
+    ['surface', 12],
+    ['surface', 8],
+    ['simple', 12],
+    ['simple', 8],
+  ] as const)('gives every %s column at %ipx cells the glyph box’s fixed size', (mode, size) => {
+    const teeth = teethOf(
+      tooth({ code: '11', diagnoses: [toothDiagnosis()], services: [toothService()] }),
+    );
+    renderWith(<DentalChart {...chart({ teeth, size })} />, { mode });
+
+    const box = chartGlyphBox(mode, size);
+    const widths = new Set(
+      [...document.querySelectorAll<HTMLElement>('[data-column]')].map(
+        (element) => element.style.width,
+      ),
+    );
+    expect([...widths]).toEqual([`${String(box.width)}px`]);
+    // Each glyph sits in a row of the glyph box's height, aligned to the occlusal plane.
+    const rows = new Set(
+      [...document.querySelectorAll<HTMLElement>('[data-glyph]')].map(
+        (glyph) => glyph.parentElement?.style.height,
+      ),
+    );
+    expect([...rows]).toEqual([`${String(box.height)}px`]);
+    expect(column('16').querySelector('[data-glyph]')?.parentElement?.className).toContain(
+      'items-end',
+    );
+    expect(column('46').querySelector('[data-glyph]')?.parentElement?.className).toContain(
+      'items-start',
+    );
+  });
 
   it('exposes each tooth as a labelled toggle and reports clicks', () => {
     const onToothClick = vi.fn();
@@ -271,7 +361,7 @@ describe('DentalChart', () => {
 
   it('renders one cell per tooth in simple mode', () => {
     renderWith(<DentalChart {...chart()} />, { mode: 'simple' });
-    expect(column('16').querySelectorAll('[data-mark]')).toHaveLength(1);
+    expect(column('16').querySelectorAll('[data-body]')).toHaveLength(1);
     expect(column('16').querySelector('[data-surface]')).toBeNull();
   });
 
@@ -358,82 +448,151 @@ describe('FittedChart', () => {
 });
 
 describe('ChartLegend', () => {
-  afterEach(cleanup);
+  afterEach(resetView);
 
-  it('as a key, lists the same items under their three groups, one to a line', () => {
-    renderWith(<ChartLegend layout="key" />);
-    expect(document.querySelector('[data-legend-key]')).toBeTruthy();
-    expect(screen.getAllByRole('group').map((group) => group.getAttribute('aria-label'))).toEqual([
-      'Treatment',
-      'Markers',
+  const filling = (code: string, surfaces: ('O' | 'D')[] = ['O']) =>
+    tooth({ code: code as ToothCode, services: [toothService({ surfaces })] });
+  const TEETH = teethOf(
+    filling('36'),
+    tooth({
+      code: '46',
+      services: [toothService({ surfaces: ['O'] })],
+      diagnoses: [toothDiagnosis()],
+    }),
+    tooth({
+      code: '16',
+      services: [
+        toothService({ code: 'ZIR', name: 'Zircon crown', color: 'amber', icon: 'crown' }),
+      ],
+    }),
+    // A primary tooth: not on the permanent chart.
+    tooth({ code: '55', services: [toothService({ code: 'PRIM', name: 'Pulpotomy' })] }),
+  );
+  const legend = (props: Partial<Parameters<typeof ChartLegend>[0]> = {}) => (
+    <ChartLegend teeth={TEETH} dentition="permanent" {...props} />
+  );
+  const groups = () =>
+    screen.getAllByRole('group').map((group) => group.getAttribute('aria-label'));
+
+  it('lists what is on this chart, the most widespread first, then status and tooth', () => {
+    renderWith(legend());
+    expect(groups()).toEqual([
+      'Diagnoses on this chart',
+      'Services on this chart',
+      'Status',
       'Tooth',
     ]);
     expect(legendItems()).toEqual([
-      'Treated surface',
-      'Whole tooth',
-      'Treated today',
-      'Diagnosis',
-      'Planned',
+      'Dental caries · 1 tooth',
+      'Composite filling · 2 teeth',
+      'Zircon crown · 1 tooth',
+      'Done today',
+      'Done earlier',
       'Not finished',
+      'Planned',
       'Missing',
       'Not erupted',
       'Implant',
     ]);
-    expect(screen.getAllByRole('listitem')).toHaveLength(9);
+    // A service line is its icon on its colour; a diagnosis line a round swatch.
+    const crown = document.querySelector('[data-legend-item="service:ZIR"]');
+    expect(crown?.querySelector('[data-mark-icon="crown"]')).not.toBeNull();
+    expect(
+      document.querySelector('[data-legend-item="diagnosis:DX-CAR"] .rounded-full'),
+    ).not.toBeNull();
   });
 
-  it('lists the surface legend in precedence order', () => {
-    renderWith(<ChartLegend />);
-    expect(legendItems()).toEqual([
-      'Treated surface',
-      'Whole tooth',
-      'Treated today',
-      'Diagnosis',
-      'Planned',
-      'Not finished',
-      'Missing',
-      'Not erupted',
-      'Implant',
-    ]);
-  });
-
-  it('collapses the fill items in simple mode, and leaves Treated today out outside a visit', () => {
-    renderWith(<ChartLegend />, { mode: 'simple' });
-    expect(legendItems()).toEqual([
-      'Treated',
-      'Treated today',
-      'Diagnosis',
-      'Planned',
-      'Not finished',
-      'Missing',
-      'Not erupted',
-      'Implant',
-    ]);
+  it('follows the view and the chart on screen, and leaves an empty group out', () => {
+    setChartView('services');
+    renderWith(legend());
+    expect(groups()).toEqual(['Services on this chart', 'Status', 'Tooth']);
     cleanup();
-    renderWith(<ChartLegend showToday={false} />, { mode: 'simple' });
-    expect(legendItems()).toEqual([
-      'Treated',
-      'Diagnosis',
-      'Planned',
-      'Not finished',
-      'Missing',
-      'Not erupted',
-      'Implant',
-    ]);
+
+    setChartView('diagnoses');
+    renderWith(legend());
+    expect(groups()).toEqual(['Diagnoses on this chart', 'Status', 'Tooth']);
+    // Without services on the teeth, no "today" or "earlier" to explain.
+    expect(legendItems()).not.toContain('Done today');
+    expect(legendItems()).not.toContain('Done earlier');
+    cleanup();
+
+    setChartView('both');
+    renderWith(legend({ dentition: 'primary' }));
+    expect(legendItems().slice(0, 1)).toEqual(['Pulpotomy · 1 tooth']);
+    cleanup();
+
+    renderWith(<ChartLegend teeth={new Map()} dentition="permanent" />);
+    expect(groups()).toEqual(['Status', 'Tooth']);
   });
 
-  it('draws a compact ring on the planned swatch, clear of its label', () => {
-    renderWith(<ChartLegend />);
+  it('leaves Done today out outside a visit', () => {
+    renderWith(legend({ showToday: false }));
+    expect(legendItems()).not.toContain('Done today');
+    expect(legendItems()).toContain('Done earlier');
+  });
+
+  it('shows eight lines of a long group, then "+N more" that opens in place', () => {
+    const codes = ['11', '12', '13', '14', '15', '16', '17', '18', '21', '22'] as const;
+    const teeth = teethOf(
+      ...codes.map((code, index) =>
+        tooth({
+          code,
+          services: [toothService({ code: `S${String(index)}`, name: `Service ${String(index)}` })],
+        }),
+      ),
+    );
+    renderWith(<ChartLegend teeth={teeth} dentition="permanent" />);
+    const lines = () => document.querySelectorAll('[data-legend-item^="service:"]');
+    expect(lines()).toHaveLength(LEGEND_GROUP_LIMIT);
+    fireEvent.click(screen.getByRole('button', { name: '+2 more' }));
+    expect(lines()).toHaveLength(10);
+    expect(screen.queryByRole('button', { name: /more$/ })).toBeNull();
+  });
+
+  it('makes each line a toggle that reports the item, pressed while highlighted', () => {
+    const onHighlight = vi.fn();
+    renderWith(legend({ onHighlight, highlight: { kind: 'service', id: 'ZIR' } }));
+    const fillings = screen.getByRole('button', { name: 'Composite filling · 2 teeth' });
+    expect(fillings.getAttribute('aria-pressed')).toBe('false');
+    expect(
+      screen.getByRole('button', { name: 'Zircon crown · 1 tooth' }).getAttribute('aria-pressed'),
+    ).toBe('true');
+    fireEvent.click(fillings);
+    expect(onHighlight).toHaveBeenCalledWith({ kind: 'service', id: 'CMP' });
+    // The static lines are not buttons.
+    expect(screen.queryByRole('button', { name: 'Planned' })).toBeNull();
+  });
+
+  it('without a highlight handler, lists the lines as plain text', () => {
+    renderWith(legend());
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('as a key, lists the same lines under their titles, one to a line', () => {
+    renderWith(legend({ layout: 'key' }));
+    expect(document.querySelector('[data-legend-key]')).toBeTruthy();
+    expect(groups()).toEqual([
+      'Diagnoses on this chart',
+      'Services on this chart',
+      'Status',
+      'Tooth',
+    ]);
+    expect(screen.getAllByRole('listitem')).toHaveLength(10);
+  });
+
+  it('draws the planned and not-finished swatches as rings, clear of their labels', () => {
+    renderWith(legend());
     const swatchOf = (label: string) =>
       [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].find(
         (item) => item.textContent === label,
       )?.firstElementChild?.className ?? '';
     expect(swatchOf('Planned')).toContain('shadow-[0_0_0_1.5px_var(--color-planned-border)]');
-    expect(swatchOf('Planned')).toContain('m-[1.5px]');
+    expect(swatchOf('Not finished')).toContain('shadow-[0_0_0_2px_var(--color-warning-dot)]');
+    expect(swatchOf('Planned')).toContain('m-[2px]');
   });
 
-  it('gives every legend item the same height, so both groups line up', () => {
-    renderWith(<ChartLegend />);
+  it('gives every legend line the same height, so the groups line up', () => {
+    renderWith(legend());
     const heights = new Set(
       [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].map((item) =>
         item.className.split(' ').find((name) => name.startsWith('h-')),

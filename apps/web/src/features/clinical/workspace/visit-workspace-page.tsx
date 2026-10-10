@@ -19,8 +19,10 @@ import { FileDropSurface } from '@/features/files/file-drop-surface';
 import { VisitFilesStrip } from '@/features/files/file-rows';
 import { patientQuery } from '@/features/patients/patients-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
+import { practitionersQuery } from '@/features/users/users-api';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useChartMarks } from '../chart/use-chart-marks';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
 import { UnfinishedDialog } from '../dialogs/unfinished-dialog';
@@ -405,11 +407,16 @@ function Workspace({
 
 /** What the chart card and the tooth panel draw: the patient's records plus this visit's services
  * as they stand in the visit cache (`deriveChart`, the same derivation the API runs), so a service
- * added here marks its tooth at once. Empty until the chart loads. */
+ * added here marks its tooth at once, in its catalog colour (`useChartMarks`). Empty until the
+ * chart loads. */
 function useVisitTeeth(
   chart: PatientChart | undefined,
   visit: Visit,
 ): ReadonlyMap<ToothCode, ToothState> {
+  const marks = useChartMarks(chart);
+  const practitioners = useQuery(practitionersQuery()).data;
+  const dentistName =
+    practitioners?.find((dentist) => dentist.id === visit.dentistId)?.displayName ?? '';
   return useMemo(
     () =>
       chart
@@ -419,8 +426,10 @@ function useVisitTeeth(
             history: chart.history,
             liveServices: visit.services,
             presence: chart.presence,
+            marks,
+            liveVisit: { date: visit.localDate, dentistName },
           })
         : new Map<ToothCode, ToothState>(),
-    [chart, visit.services],
+    [chart, visit.services, visit.localDate, marks, dentistName],
   );
 }

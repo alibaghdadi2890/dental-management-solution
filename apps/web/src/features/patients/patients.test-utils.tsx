@@ -188,6 +188,7 @@ export const EMPTY_CHART: PatientChart = {
   liveVisitId: null,
   voidedVisitIds: [],
   teeth: [],
+  marks: {},
 };
 
 export const NO_COUNTS: ClinicalSummary = {

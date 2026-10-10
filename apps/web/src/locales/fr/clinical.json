@@ -38,23 +38,20 @@
   "glyph": {
     "surfaces": "Faces de la dent",
     "surfaceName": "{{name}} ({{short}})",
-    "surfaceTreated": "{{name}} · traitée",
-    "surfaceWholeTooth": "{{name}} · dent entière traitée"
+    "surfaceMarked": "{{name}} · {{item}}"
   },
   "title": {
     "listSeparator": ", ",
     "primary": "dent temporaire",
     "planned": "prévu : {{names}}",
-    "recordedServices_one": "{{count}} soin enregistré",
-    "recordedServices_other": "{{count}} soins enregistrés",
-    "treatedToday": "traitée pendant cette visite",
     "noRecordedTreatment": "aucun soin enregistré",
     "inProgress": "non terminé : {{names}}",
     "presence": {
       "missing": "absente",
       "not_erupted": "non sortie",
       "implant": "implant"
-    }
+    },
+    "today": "aujourd’hui"
   },
   "chart": {
     "upperArch": "Arcade supérieure",
@@ -65,19 +62,22 @@
     "leftTitle": "Gauche du patient"
   },
   "legend": {
-    "treatment": "Soins",
-    "markers": "Repères",
-    "treatedSurface": "Face traitée",
-    "wholeTooth": "Dent entière",
-    "treated": "Traitée",
-    "treatedToday": "Traitée aujourd’hui",
-    "diagnosis": "Diagnostic",
-    "planned": "Prévu",
+    "diagnosesOnChart": "Diagnostics sur ce schéma",
+    "servicesOnChart": "Actes sur ce schéma",
+    "status": "Statut",
+    "today": "Fait aujourd’hui",
+    "past": "Fait auparavant",
     "inProgress": "Non terminé",
+    "planned": "Prévu",
     "presence": "Dent",
     "missing": "Absente",
     "notErupted": "Non sortie",
-    "implant": "Implant"
+    "implant": "Implant",
+    "teeth_one": "· {{count}} dent",
+    "teeth_other": "· {{count}} dents",
+    "more": "+{{count}} de plus",
+    "highlight": "Mettre en évidence les dents avec {{name}}",
+    "clearHighlight": "Ne plus mettre en évidence {{name}}"
   },
   "workspace": {
     "loading": "Chargement de la visite…",
@@ -286,7 +286,8 @@
       "fullHistory": "Historique complet de la dent →",
       "emptyTitle": "Aucun traitement enregistré"
     },
-    "levels": "Niveau"
+    "levels": "Niveau",
+    "marks": "Aussi sur cette dent"
   },
   "drawer": {
     "service": {
@@ -575,5 +576,11 @@
       },
       "service": "{{name}} ({{code}}), visite {{number}}"
     }
+  },
+  "chartView": {
+    "label": "Afficher sur le schéma",
+    "diagnoses": "Diagnostics",
+    "services": "Actes",
+    "both": "Les deux"
   }
 }

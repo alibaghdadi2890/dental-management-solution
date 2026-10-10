@@ -13,6 +13,7 @@ import { practitionersQuery } from '@/features/users/users-api';
 import { ChartLegend } from '../chart/chart-legend';
 import { DentalChart } from '../chart/dental-chart';
 import { FittedChart } from '../chart/fitted-chart';
+import { useChartHighlight } from '../chart/use-chart-highlight';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
 import { PresenceDialog } from '../presence/presence-dialog';
 import { chartQuery } from '../visits-api';
@@ -54,6 +55,9 @@ export function ChartTab({ patient }: { patient: Patient }) {
   const [historyTooth, setHistoryTooth] = useState<ToothCode | null>(null);
   const [stage, setStage] = useChartStage(chart.data?.dentition.stage, null);
   const expansion = useChartExpansion();
+  const { highlight, toggle: toggleHighlight } = useChartHighlight(
+    stage ?? chart.data?.dentition.stage ?? '',
+  );
 
   if (!chart.data) {
     return chart.isError ? (
@@ -65,33 +69,41 @@ export function ChartTab({ patient }: { patient: Patient }) {
     );
   }
   if (canChart) return <ChartEditor patient={patient} chart={chart.data} canWrite={canWrite} />;
+  const shownStage = stage ?? chart.data.dentition.stage;
+  const legend = (layout: 'inline' | 'key') => (
+    <ChartLegend
+      teeth={teeth}
+      dentition={shownStage}
+      showToday={false}
+      layout={layout}
+      highlight={highlight}
+      onHighlight={toggleHighlight}
+    />
+  );
   return (
     <>
       <ChartCardFrame
         subtitle={
           <DentitionSelect
             patient={patient}
-            stage={stage ?? chart.data.dentition.stage}
+            stage={shownStage}
             canWrite={canWrite}
             onChange={setStage}
           />
         }
-        aside={<ChartLegend showToday={false} />}
-        expandedAside={<ChartLegend showToday={false} layout="key" />}
+        aside={legend('inline')}
+        expandedAside={legend('key')}
         expansion={expansion}
       >
-        <FittedChart
-          expanded={expansion.expanded}
-          dentition={stage ?? chart.data.dentition.stage}
-          withAreas={false}
-        >
+        <FittedChart expanded={expansion.expanded} dentition={shownStage} withAreas={false}>
           {(size) => (
             <DentalChart
               teeth={teeth}
-              dentition={stage ?? chart.data.dentition.stage}
+              dentition={shownStage}
               size={size}
               selected={historyTooth}
               onToothClick={setHistoryTooth}
+              highlight={highlight}
             />
           )}
         </FittedChart>

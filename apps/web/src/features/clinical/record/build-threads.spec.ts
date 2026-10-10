@@ -51,6 +51,7 @@ const service = (id: string, extra: Partial<HistoryService> = {}): HistoryServic
   visitId: V2,
   visitDate: '2026-09-01',
   dentistName: 'Dr. Reyes',
+  procedureId: 'procedure-scaling',
   code: 'SCL',
   name: 'Scaling',
   toothCode: null,
