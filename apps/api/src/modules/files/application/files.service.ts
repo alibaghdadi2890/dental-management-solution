@@ -33,6 +33,7 @@ import { type VisitRef, VisitsService } from '../../clinical';
 import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
+import { CONTENT_HEAD_BYTES, contentMatches } from '../domain/content-check';
 import { changesOf } from '../domain/file-changes';
 import {
   FileArchiveForbiddenError,
@@ -56,6 +57,9 @@ import {
 import { FilesRepository, type StoredFile } from '../persistence/files.repository';
 
 const FILE = 'file';
+/** Where the browser uploads to, and where Save copies a file's objects (ADR-0041). */
+const UPLOADS = 'uploads';
+const FILES = 'files';
 const ORIGINAL = 'original';
 const DISPLAY = 'display.jpg';
 const THUMBNAIL = 'thumb.jpg';
@@ -74,6 +78,12 @@ function assertSaved(file: StoredFile): asserts file is SavedFile {
   if (file.category === null || file.takenAt === null || file.savedAt === null) {
     throw new Error(`file ${file.id} is not saved`);
   }
+}
+
+/** A file's objects as Save sealed them: where the original is and what it weighs. */
+interface Sealed {
+  storageKey: string;
+  sizeBytes: number;
 }
 
 /** The key of a preview object, beside the original. */
@@ -99,10 +109,13 @@ function described(file: StoredFile) {
  *
  * The bytes never pass through the API: `requestUpload` records a pending row and answers with
  * signed upload URLs, the browser uploads the original and the previews it made, and `save` turns
- * the pending rows of a batch into files with their category, links and "taken on". Reads answer
- * with short-lived signed URLs. Every mutation re-checks its permission, runs in one `TenantDb`
- * transaction and is audited; the only object-storage calls made around a mutation — the size
- * check before Save, the delete after a discard — run outside the transaction (ADR-0039).
+ * the pending rows of a batch into files with their category, links and "taken on". Save copies
+ * the uploaded objects to keys no upload URL was signed for and checks the copies — their size and
+ * their first bytes — so what a file holds cannot change after it is saved (ADR-0041). Reads
+ * answer with short-lived signed URLs. Every mutation re-checks its permission, runs in one
+ * `TenantDb` transaction and is audited; the object-storage calls made around a mutation — Save's
+ * copy and checks, the deletes after a Save or a discard — run outside the transaction (ADR-0039,
+ * ADR-0041).
  */
 @Injectable()
 export class FilesService {
@@ -140,7 +153,7 @@ export class FilesService {
       );
     }
     const id = newId();
-    const storageKey = this.storage.tenantKey('files', id, ORIGINAL);
+    const storageKey = this.storage.tenantKey(UPLOADS, id, ORIGINAL);
     const hasPreview = input.preview && upload.kind === 'image';
     await this.tenantDb.run(async () => {
       const patient = await this.patients.lockForDependentWrite(input.patientId);
@@ -179,16 +192,10 @@ export class FilesService {
       await this.files.deletePending(pending.map((file) => file.id));
       return pending;
     });
-    const keys = discarded.flatMap((file) => this.keysOf(file));
-    if (keys.length === 0) return;
-    try {
-      await this.storage.remove(keys);
-    } catch (error) {
-      this.logger.warn(
-        { err: error, fileIds: discarded.map((file) => file.id) },
-        'orphaned upload',
-      );
-    }
+    await this.removeQuietly(
+      discarded.flatMap((file) => this.keysOf(file)),
+      'orphaned upload',
+    );
   }
 
   /**
@@ -196,8 +203,14 @@ export class FilesService {
    * files, each with its category, optional type, tooth, visit and note, and its "taken on"
    * (`deriveTakenAt`). All or nothing. An id that is not one of the caller's pending uploads for
    * the patient → 404 `file.not_found`; bytes not there yet → 409 `file.upload_incomplete`; a
-   * stored object over the limit → 422 `file.too_large`; a visit that is not the patient's → 422
+   * stored object over the limit → 422 `file.too_large`; bytes that are not the type the file was
+   * accepted as → 422 `file.type_unsupported`; a visit that is not the patient's → 422
    * `file.visit_mismatch`. Audited `file.upload` per file; `FileUploaded`.
+   *
+   * The objects are sealed first (`seal`), outside the transaction, under keys of this attempt
+   * alone. A Save that fails removes the copies it made and leaves the uploads, so it can be
+   * tried again; one that succeeds removes the uploads. Two Saves of the same upload (a double
+   * click, a retry) therefore never share a key: the one that loses removes only its own copies.
    */
   async save(input: SaveFilesInput): Promise<PatientFiles> {
     this.context.requirePermission('file:write');
@@ -208,20 +221,92 @@ export class FilesService {
       throw new ValidationFailedError(message, [{ path: 'files', code: 'duplicate', message }]);
     }
 
-    // The bytes first, outside the transaction (ADR-0039).
+    // The bytes first, outside the transaction (ADR-0039, ADR-0041).
     const uploaded = await this.files.pendingOf(uploadedBy, ids);
     if (uploaded.length !== ids.length) throw new FileNotFoundError('Upload not found');
-    const sizes = new Map<string, number>();
-    await Promise.all(
-      uploaded.map(async (file) => {
-        const object = await this.storage.head(file.storageKey);
-        if (!object) throw new FileUploadIncompleteError('This file has not finished uploading');
-        if (object.sizeBytes > MAX_FILE_BYTES) throw new FileTooLargeError('File is too large');
-        sizes.set(file.id, object.sizeBytes);
-      }),
+    const copies: string[] = [];
+    let saved: StoredFile[];
+    try {
+      const sealed = await this.sealAll(uploaded, newId(), copies);
+      saved = await this.saveSealed(input, uploadedBy, sealed);
+    } catch (error) {
+      // Nothing was committed, and no row points at this attempt's copies.
+      await this.removeQuietly(copies, 'orphaned copy');
+      throw error;
+    }
+    // Committed: from here on nothing may touch the copies, whatever fails.
+    await this.removeQuietly(
+      uploaded.flatMap((file) => this.keysOf(file)),
+      'orphaned upload',
     );
+    return { items: await this.present(saved) };
+  }
 
-    const saved = await this.tenantDb.run(async () => {
+  /** Seals every upload of a batch under `attempt`; `copies` collects each key written, for the
+   * caller to remove when the Save fails. Waits for all of them, so none is still copying when
+   * that happens. */
+  private async sealAll(
+    uploaded: readonly StoredFile[],
+    attempt: string,
+    copies: string[],
+  ): Promise<Map<string, Sealed>> {
+    const results = await Promise.allSettled(
+      uploaded.map((file) => this.seal(file, attempt, copies)),
+    );
+    const sealed = new Map<string, Sealed>();
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') throw result.reason;
+      const file = uploaded[index];
+      if (file) sealed.set(file.id, result.value);
+    });
+    return sealed;
+  }
+
+  /**
+   * Copies one upload's objects — the original and, for an image with previews, its display copy
+   * and thumbnail — from the keys the browser could write to keys of this Save attempt
+   * (`files/<fileId>/<attempt>/…`), then checks each copy: there, not empty, within the size
+   * limit, and holding what its type says (`contentMatches`). The checks read the copy, never the
+   * upload, and no other request writes these keys, so what was checked is what the file keeps.
+   */
+  private async seal(file: StoredFile, attempt: string, copies: string[]): Promise<Sealed> {
+    const incomplete = () => new FileUploadIncompleteError('This file has not finished uploading');
+    const empty = () => new FileTypeUnsupportedError('This file is empty');
+    // Refused before anything is copied when the upload is plainly missing, empty or too large.
+    const upload = await this.storage.head(file.storageKey);
+    if (!upload) throw incomplete();
+    if (upload.sizeBytes === 0) throw empty();
+    if (upload.sizeBytes > MAX_FILE_BYTES) throw new FileTooLargeError('File is too large');
+
+    const storageKey = this.storage.tenantKey(FILES, file.id, attempt, ORIGINAL);
+    const names = file.hasPreview ? [ORIGINAL, DISPLAY, THUMBNAIL] : [ORIGINAL];
+    let sizeBytes = 0;
+    for (const name of names) {
+      const key = siblingKey(storageKey, name);
+      copies.push(key);
+      if (!(await this.storage.copy(siblingKey(file.storageKey, name), key))) throw incomplete();
+      const object = await this.storage.head(key);
+      if (!object) throw incomplete();
+      if (object.sizeBytes === 0) throw empty();
+      if (object.sizeBytes > MAX_FILE_BYTES) throw new FileTooLargeError('File is too large');
+      const start = await this.storage.readStart(key, CONTENT_HEAD_BYTES);
+      const mimeType = name === ORIGINAL ? file.mimeType : PREVIEW_TYPE;
+      if (!start || !contentMatches(mimeType, start)) {
+        throw new FileTypeUnsupportedError('This file is not the type its name says');
+      }
+      if (name === ORIGINAL) sizeBytes = object.sizeBytes;
+    }
+    return { storageKey, sizeBytes };
+  }
+
+  /** The transaction of a Save: the pending rows become files that point at their sealed objects. */
+  private saveSealed(
+    input: SaveFilesInput,
+    uploadedBy: string,
+    sealed: ReadonlyMap<string, Sealed>,
+  ): Promise<StoredFile[]> {
+    const ids = input.files.map((file) => file.id);
+    return this.tenantDb.run(async () => {
       const patient = await this.patients.lockForDependentWrite(input.patientId);
       const pending = new Map(
         (await this.files.pendingOf(uploadedBy, ids))
@@ -251,7 +336,7 @@ export class FilesService {
               now,
               timeZone,
             }),
-            sizeBytes: sizes.get(item.id) ?? pending.get(item.id)?.sizeBytes ?? 0,
+            ...sealed.get(item.id),
             savedAt: now,
           });
           await this.audit.record({
@@ -267,7 +352,6 @@ export class FilesService {
         return rows;
       });
     });
-    return { items: await this.present(saved) };
   }
 
   // --- Read ---
@@ -478,6 +562,17 @@ export class FilesService {
       }
     }
     return refs;
+  }
+
+  /** Deletes objects nothing points to any more, best effort: a failure leaves bytes without a
+   * row, never a row without bytes. */
+  private async removeQuietly(keys: readonly string[], what: string): Promise<void> {
+    if (keys.length === 0) return;
+    try {
+      await this.storage.remove(keys);
+    } catch (error) {
+      this.logger.warn({ err: error, keys }, what);
+    }
   }
 
   private keysOf(file: StoredFile): string[] {

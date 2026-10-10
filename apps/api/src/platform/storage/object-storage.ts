@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -71,8 +72,8 @@ const DEFAULT_EXPIRY_SECONDS = 300;
 /**
  * S3-compatible object storage. Keys are always namespaced by tenant, and every call refuses keys
  * outside the current tenant. Signed-URL generation is the one external call allowed inside a
- * mutating request (CLAUDE.md §9); `head` and `remove` are for the `files` module, outside its
- * transactions (ADR-0039).
+ * mutating request (CLAUDE.md §9); `head`, `readStart`, `copy` and `remove` are for the `files`
+ * module, outside its transactions (ADR-0039, ADR-0041).
  */
 @Injectable()
 export class ObjectStorage {
@@ -139,6 +140,45 @@ export class ObjectStorage {
       return { sizeBytes: object.ContentLength ?? 0 };
     } catch (error) {
       if (isNotFound(error)) return null;
+      throw error;
+    }
+  }
+
+  /** The first `bytes` bytes of the stored object (fewer when it is shorter), or null when
+   * nothing is stored under `key`. */
+  async readStart(key: string, bytes: number): Promise<Uint8Array | null> {
+    this.assertOwnKey(key);
+    try {
+      const object = await this.s3.send(
+        new GetObjectCommand({
+          Bucket: this.config.S3_BUCKET,
+          Key: key,
+          Range: `bytes=0-${String(bytes - 1)}`,
+        }),
+      );
+      return (await object.Body?.transformToByteArray()) ?? new Uint8Array();
+    } catch (error) {
+      if (isNotFound(error)) return null;
+      throw error;
+    }
+  }
+
+  /** Copies an object of the current tenant to another of its keys, inside the store; false
+   * when nothing is stored under `fromKey`. */
+  async copy(fromKey: string, toKey: string): Promise<boolean> {
+    this.assertOwnKey(fromKey);
+    this.assertOwnKey(toKey);
+    try {
+      await this.s3.send(
+        new CopyObjectCommand({
+          Bucket: this.config.S3_BUCKET,
+          Key: toKey,
+          CopySource: `${this.config.S3_BUCKET}/${fromKey}`,
+        }),
+      );
+      return true;
+    } catch (error) {
+      if (isNotFound(error)) return false;
       throw error;
     }
   }

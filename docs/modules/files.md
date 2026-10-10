@@ -51,11 +51,13 @@ pending ──Save──▶ saved ──archive──▶ archived
 
 A pending upload whose browser was closed stays behind, row and objects. A sweeper is a follow-up.
 
-## Storage and URL policy (ADR-0039)
+## Storage and URL policy (ADR-0039, ADR-0041)
 
-Keys: `tenants/<tenant>/files/<fileId>/original`, and for an image the browser could decode,
-`…/display.jpg` (long edge ≤ 2560 px) and `…/thumb.jpg` (≤ 480 px). No patient id in the key: a
-merge moves no objects.
+Keys: `tenants/<tenant>/files/<fileId>/<attempt>/original` (`<attempt>`: the Save that sealed
+it; files saved before ADR-0041 have no such folder), and for an image the browser could decode,
+`…/display.jpg` (long edge ≤ 2560 px) and `…/thumb.jpg` (≤ 480 px) beside it. No patient id in the key: a
+merge moves no objects. A pending upload's objects are under `tenants/<tenant>/uploads/<fileId>/`
+instead: the only keys an upload URL is ever signed for.
 
 - **Upload**: the browser `PUT`s to presigned URLs (15 min). The API never carries the bytes.
 - **Previews are made in the browser**, on a canvas: that turns the picture upright from its EXIF
@@ -69,9 +71,14 @@ merge moves no objects.
   `Content-Disposition: attachment; filename=<original filename>`: the original bytes.
 - Never a public link. A URL is only signed for a row the caller's tenant can read (RLS), under a
   key of that tenant (`ObjectStorage` refuses any other).
-- **Object checks**: on Save the API `HEAD`s each original (missing → 409, over 25 MB → 422);
-  after a discard it deletes the objects, best effort. Both run outside the transaction; they are
-  the only object-storage calls made around a mutation.
+- **Save seals the objects**: it copies each upload's objects from `uploads/` to `files/` inside
+  the store, then checks the copies: there (else 409), at most 25 MB (else 422 `file.too_large`),
+  and starting with the bytes of the type the file was accepted as (else 422
+  `file.type_unsupported`; `domain/content-check.ts`). A saved file is therefore out of reach of
+  its upload URL, which stays valid for its 15 minutes. A failed Save removes its copies; a
+  successful one removes the uploads; a discard removes the uploads. All of it runs outside the
+  transaction, deletes best effort; these are the only object-storage calls made around a
+  mutation.
 
 The bucket needs CORS for the SPA's origin (`PUT`, `GET`). SeaweedFS in Docker Compose allows it
 by default.
@@ -101,16 +108,16 @@ by default.
 
 `FilesModule`, `FilesService`, the events.
 
-| Method                 | Permission              | Notes                                                                                                                                                                           |
-| ---------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `requestUpload(input)` | `file:write`            | A pending row and the upload URLs. 422 `file.type_unsupported`.                                                                                                                 |
-| `discardUploads(ids)`  | `file:write`            | Deletes the caller's pending rows among `ids` and their objects. Others' and saved ids are ignored.                                                                             |
-| `save(input)`          | `file:write`            | The caller's pending uploads for the patient become files, all or nothing. 404 `file.not_found`, 409 `file.upload_incomplete`, 422 `file.too_large`, 422 `file.visit_mismatch`. |
-| `list(patientId)`      | `file:read`             | Every saved file, archived included, most recently taken first, at most 1000, with signed URLs.                                                                                 |
-| `download(id)`         | `file:read`             | `{ url }` for the original.                                                                                                                                                     |
-| `update(input)`        | `file:write`            | One patch for one or several files; unchanged files are not written. 422 `validation_failed` (`patch.takenAt`) for a future date.                                               |
-| `archive(input)`       | `file:write` + the rule | 403 `file.archive_forbidden` for the whole request when one file may not be archived by the caller. Already archived → unchanged.                                               |
-| `restore(input)`       | `file:write` + the rule | Likewise.                                                                                                                                                                       |
+| Method                 | Permission              | Notes                                                                                                                                                                                                        |
+| ---------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `requestUpload(input)` | `file:write`            | A pending row and the upload URLs. 422 `file.type_unsupported`.                                                                                                                                              |
+| `discardUploads(ids)`  | `file:write`            | Deletes the caller's pending rows among `ids` and their objects. Others' and saved ids are ignored.                                                                                                          |
+| `save(input)`          | `file:write`            | The caller's pending uploads for the patient become files, all or nothing. 404 `file.not_found`, 409 `file.upload_incomplete`, 422 `file.too_large`, 422 `file.type_unsupported`, 422 `file.visit_mismatch`. |
+| `list(patientId)`      | `file:read`             | Every saved file, archived included, most recently taken first, at most 1000, with signed URLs.                                                                                                              |
+| `download(id)`         | `file:read`             | `{ url }` for the original.                                                                                                                                                                                  |
+| `update(input)`        | `file:write`            | One patch for one or several files; unchanged files are not written. 422 `validation_failed` (`patch.takenAt`) for a future date.                                                                            |
+| `archive(input)`       | `file:write` + the rule | 403 `file.archive_forbidden` for the whole request when one file may not be archived by the caller. Already archived → unchanged.                                                                            |
+| `restore(input)`       | `file:write` + the rule | Likewise.                                                                                                                                                                                                    |
 
 Every method takes one Zod-validated object or ids and returns plain data, so each can become an
 agent tool.

@@ -84,6 +84,20 @@ describe('ObjectStorage', () => {
     expect(url).toContain('response-content-disposition=attachment');
   });
 
+  it("refuses to read or copy another tenant's object, or to copy into its keys", async () => {
+    const foreign = 'tenants/tenant-b/files/f1/original';
+    const own = 'tenants/tenant-a/files/f1/original';
+    await expect(inTenant('tenant-a', () => storage.readStart(foreign, 16))).rejects.toBeInstanceOf(
+      ForeignObjectKeyError,
+    );
+    await expect(inTenant('tenant-a', () => storage.copy(foreign, own))).rejects.toBeInstanceOf(
+      ForeignObjectKeyError,
+    );
+    await expect(inTenant('tenant-a', () => storage.copy(own, foreign))).rejects.toBeInstanceOf(
+      ForeignObjectKeyError,
+    );
+  });
+
   it("refuses to look at or delete another tenant's object", async () => {
     await expect(
       inTenant('tenant-a', () => storage.head('tenants/tenant-b/files/f1/original')),

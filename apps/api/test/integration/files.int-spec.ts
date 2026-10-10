@@ -17,7 +17,7 @@ import {
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { newId } from '../../src/platform/kernel/id';
-import { FakeObjectStorage } from '../support/fake-storage';
+import { FakeObjectStorage, sampleStart } from '../support/fake-storage';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
@@ -37,7 +37,8 @@ const problem = (body: unknown) => body as ProblemDetails;
 /**
  * Feature 8: a patient's images and documents — the upload handshake and Save, the one read, the
  * edits, who may archive (F13), the visit link, the download, and the merge re-point. Object
- * storage is faked: a test "uploads" by putting a size under the key.
+ * storage is faked: a test "uploads" by putting a size and the file's first bytes under the
+ * upload key.
  */
 describe('files: upload, read, edit, archive and merge', () => {
   let database: TestDatabase;
@@ -103,7 +104,14 @@ describe('files: upload, read, edit, archive and merge', () => {
     return problem(response.body);
   };
 
-  const keyOf = (id: string, name = 'original') => `tenants/${tenant.id}/files/${id}/${name}`;
+  /** Where a saved file's objects are — under a folder of the Save that sealed them — and where
+   * the browser uploads them before Save. */
+  const sealedPrefix = (id: string) => `tenants/${tenant.id}/files/${id}/`;
+  const sealedKey = (id: string) => new RegExp(`^${sealedPrefix(id)}[0-9a-f-]{36}/original$`);
+  const sibling = (storageKey: string, name: string) =>
+    `${storageKey.slice(0, storageKey.lastIndexOf('/'))}/${name}`;
+  const uploadKeyOf = (id: string, name = 'original') =>
+    `tenants/${tenant.id}/uploads/${id}/${name}`;
 
   /** Asks where to upload, then "uploads" the bytes. */
   const upload = async (
@@ -122,7 +130,11 @@ describe('files: upload, read, edit, archive and merge', () => {
       }),
       201,
     );
-    storage.put(keyOf(target.id), sizeBytes);
+    storage.put(uploadKeyOf(target.id), sizeBytes, sampleStart(file.filename));
+    if (file.preview) {
+      storage.put(uploadKeyOf(target.id, 'display.jpg'), 900);
+      storage.put(uploadKeyOf(target.id, 'thumb.jpg'), 90);
+    }
     return target;
   };
 
@@ -196,9 +208,9 @@ describe('files: upload, read, edit, archive and merge', () => {
       201,
     );
     expect(target.mimeType).toBe('image/jpeg');
-    expect(target.uploadUrl).toContain(`/${keyOf(target.id)}?`);
-    expect(target.displayUploadUrl).toContain(`/${keyOf(target.id, 'display.jpg')}?`);
-    expect(target.thumbnailUploadUrl).toContain(`/${keyOf(target.id, 'thumb.jpg')}?`);
+    expect(target.uploadUrl).toContain(`/${uploadKeyOf(target.id)}?`);
+    expect(target.displayUploadUrl).toContain(`/${uploadKeyOf(target.id, 'display.jpg')}?`);
+    expect(target.thumbnailUploadUrl).toContain(`/${uploadKeyOf(target.id, 'thumb.jpg')}?`);
 
     // A pending upload is no file yet, and Save waits for the bytes.
     expect(await listOf(assistant.agent, patient)).toEqual([]);
@@ -212,7 +224,12 @@ describe('files: upload, read, edit, archive and merge', () => {
     };
     await expectProblem(save(assistant.agent, patient, [item]), 409, 'file.upload_incomplete');
 
-    storage.put(keyOf(target.id), 5000);
+    storage.put(uploadKeyOf(target.id), 5000);
+    // The original is there but its previews are not.
+    await expectProblem(save(assistant.agent, patient, [item]), 409, 'file.upload_incomplete');
+    expect(storage.keysUnder(sealedPrefix(target.id))).toEqual([]);
+    storage.put(uploadKeyOf(target.id, 'display.jpg'), 900);
+    storage.put(uploadKeyOf(target.id, 'thumb.jpg'), 90);
     const saved = await ok<PatientFiles>(save(assistant.agent, patient, [item]), 201);
     expect(saved.items).toHaveLength(1);
     expect(saved.items[0]).toMatchObject({
@@ -243,7 +260,14 @@ describe('files: upload, read, edit, archive and merge', () => {
 
     const [listed] = await listOf(owner, patient);
     expect(listed?.id).toBe(target.id);
-    expect(listed?.storageKey).toBe(keyOf(target.id));
+    // Save moved the objects to keys no upload URL was signed for.
+    const storageKey = listed?.storageKey ?? '';
+    expect(storageKey).toMatch(sealedKey(target.id));
+    for (const name of ['original', 'display.jpg', 'thumb.jpg']) {
+      expect(storage.has(sibling(storageKey, name))).toBe(true);
+      expect(storage.has(uploadKeyOf(target.id, name))).toBe(false);
+    }
+    expect(storage.keysUnder(sealedPrefix(target.id))).toHaveLength(3);
 
     // Saved once: the same upload cannot be saved again.
     await expectProblem(save(assistant.agent, patient, [item]), 404, 'file.not_found');
@@ -287,15 +311,36 @@ describe('files: upload, read, edit, archive and merge', () => {
 
     // A stored object over the limit, whatever the browser claimed.
     const target = await upload(owner, patient, { filename: 'referral.pdf' });
-    storage.put(keyOf(target.id), MAX_FILE_BYTES + 1);
+    storage.put(uploadKeyOf(target.id), MAX_FILE_BYTES + 1, sampleStart('referral.pdf'));
     await expectProblem(
       save(owner, patient, [{ id: target.id, category: 'other' }]),
       422,
       'file.too_large',
     );
 
+    // Bytes that are not what the name says: a page passed off as a PDF.
+    const page = Uint8Array.from('<html><script>', (character) => character.charCodeAt(0));
+    storage.put(uploadKeyOf(target.id), 1000, page);
+    const disguised = await expectProblem(
+      save(owner, patient, [{ id: target.id, category: 'other' }]),
+      422,
+      'file.type_unsupported',
+    );
+    expect(disguised.detail).toBe('This file is not the type its name says');
+    // A refused Save keeps none of its copies.
+    expect(storage.keysUnder(sealedPrefix(target.id))).toEqual([]);
+
+    // Nothing at all is no file.
+    storage.put(uploadKeyOf(target.id), 0, new Uint8Array());
+    const empty = await expectProblem(
+      save(owner, patient, [{ id: target.id, category: 'other' }]),
+      422,
+      'file.type_unsupported',
+    );
+    expect(empty.detail).toBe('This file is empty');
+
     // A type of another category, and someone else's upload.
-    storage.put(keyOf(target.id), 1000);
+    storage.put(uploadKeyOf(target.id), 1000, sampleStart('referral.pdf'));
     expect(
       (await save(owner, patient, [{ id: target.id, category: 'other', subCategory: 'panoramic' }]))
         .status,
@@ -441,16 +486,14 @@ describe('files: upload, read, edit, archive and merge', () => {
     const patient = await createPatient('Discard');
     const mine = await upload(assistant.agent, patient, { filename: 'a.jpg', preview: true });
     const theirs = await upload(dentist.agent, patient, { filename: 'b.jpg' });
-    storage.put(keyOf(mine.id, 'display.jpg'), 10);
-    storage.put(keyOf(mine.id, 'thumb.jpg'), 10);
 
     const response = await assistant.agent.delete(
       `/api/v1/files/uploads?ids=${mine.id},${theirs.id}`,
     );
     expect(response.status).toBe(204);
-    expect(storage.has(keyOf(mine.id))).toBe(false);
-    expect(storage.has(keyOf(mine.id, 'thumb.jpg'))).toBe(false);
-    expect(storage.has(keyOf(theirs.id))).toBe(true);
+    expect(storage.has(uploadKeyOf(mine.id))).toBe(false);
+    expect(storage.has(uploadKeyOf(mine.id, 'thumb.jpg'))).toBe(false);
+    expect(storage.has(uploadKeyOf(theirs.id))).toBe(true);
     await expectProblem(
       save(assistant.agent, patient, [{ id: mine.id, category: 'photo' }]),
       404,
@@ -462,13 +505,59 @@ describe('files: upload, read, edit, archive and merge', () => {
     );
   });
 
+  it('keeps a saved original out of reach of its upload URL', async () => {
+    const patient = await createPatient('Sealed');
+    const target = await upload(dentist.agent, patient, { filename: 'pano.jpg', sizeBytes: 3000 });
+    const saved = await ok<PatientFiles>(
+      save(dentist.agent, patient, [{ id: target.id, category: 'xray' }]),
+      201,
+    );
+    // The upload URL is still valid for minutes: the browser writes other, larger bytes with it.
+    storage.put(uploadKeyOf(target.id), MAX_FILE_BYTES * 4, sampleStart('page.txt'));
+
+    const [listed] = await listOf(owner, patient);
+    expect(listed).toMatchObject({ id: saved.items[0]?.id, sizeBytes: 3000 });
+    const storageKey = listed?.storageKey ?? '';
+    expect(storageKey).toMatch(sealedKey(target.id));
+    expect(storage.startOf(storageKey)).toEqual(sampleStart('pano.jpg'));
+    const download = await ok<FileDownload>(owner.get(`/api/v1/files/${target.id}/download`));
+    expect(download.url).toContain(`/${storageKey}?`);
+  });
+
+  it("leaves a saved file's objects alone when a second Save of the same upload loses", async () => {
+    const patient = await createPatient('Twice');
+    const target = await upload(dentist.agent, patient, { filename: 'pano.jpg' });
+    const item = [{ id: target.id, category: 'xray' }];
+
+    // The first Save has copied its original when a second Save of the same upload (a double
+    // click) runs from start to finish and commits.
+    let overtaking: Promise<{ status: number; body: unknown }> | undefined;
+    storage.afterNextCopy = async () => {
+      overtaking = save(dentist.agent, patient, item);
+      await overtaking;
+    };
+    const first = await save(dentist.agent, patient, item);
+    const second = await overtaking;
+
+    expect(second?.status, JSON.stringify(second?.body)).toBe(201);
+    // The first finds its upload already saved; it removes its own copies and nothing else.
+    expect(first.status, JSON.stringify(first.body)).toBe(404);
+    expect(problem(first.body).code).toBe('file.not_found');
+
+    const [listed] = await listOf(owner, patient);
+    const storageKey = listed?.storageKey ?? '';
+    expect(storageKey).toMatch(sealedKey(target.id));
+    expect(storage.keysUnder(sealedPrefix(target.id))).toEqual([storageKey]);
+  });
+
   it('answers a short-lived download of the original under its own name', async () => {
     const patient = await createPatient('Download');
     const file = await savedFile(dentist.agent, patient);
     const download = await ok<FileDownload>(
       assistant.agent.get(`/api/v1/files/${file.id}/download`),
     );
-    expect(download.url).toContain(`/${keyOf(file.id)}?`);
+    const [listed] = await listOf(owner, patient);
+    expect(download.url).toContain(`/${listed?.storageKey ?? 'no key'}?`);
     expect(download.url).toContain('X-Amz-Expires=60');
     expect(download.url).toContain('response-content-disposition=attachment');
     expect(decodeURIComponent(download.url)).toContain('filename="pano.jpg"');

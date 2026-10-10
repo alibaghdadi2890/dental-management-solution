@@ -853,7 +853,7 @@ describe('tenant isolation through the public services', () => {
         });
         expect(response.status, JSON.stringify(response.body)).toBe(201);
         const target = response.body as UploadTarget;
-        storage.put(`tenants/${clinic.tenant.id}/files/${target.id}/original`, 1024);
+        storage.put(`tenants/${clinic.tenant.id}/uploads/${target.id}/original`, 1024);
         return target;
       };
       const bFile = await uploadIn(ownerB, b);
@@ -867,7 +867,9 @@ describe('tenant isolation through the public services', () => {
       const before = await bFiles();
       expect(before.map((file) => file.id)).toEqual([bFile.id]);
       // The signed URLs are B's own keys.
-      expect(before[0]?.storageKey).toBe(`tenants/${b.tenant.id}/files/${bFile.id}/original`);
+      expect(before[0]?.storageKey).toMatch(
+        new RegExp(`^tenants/${b.tenant.id}/files/${bFile.id}/[0-9a-f-]{36}/original$`),
+      );
 
       const listed = await ownerA.get(`/api/v1/files?patientId=${b.patient.id}`);
       expect(listed.status).toBe(200);
@@ -897,7 +899,7 @@ describe('tenant isolation through the public services', () => {
       }
       const discard = await ownerA.delete(`/api/v1/files/uploads?ids=${bPending.id}`);
       expect(discard.status).toBe(204);
-      expect(storage.has(`tenants/${b.tenant.id}/files/${bPending.id}/original`)).toBe(true);
+      expect(storage.has(`tenants/${b.tenant.id}/uploads/${bPending.id}/original`)).toBe(true);
 
       // A cannot link its own file to B's visit either.
       const aFile = await uploadIn(ownerA, a);

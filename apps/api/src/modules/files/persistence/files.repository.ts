@@ -30,6 +30,7 @@ export type FilePatchRow = Partial<
     | 'subCategory'
     | 'takenAt'
     | 'note'
+    | 'storageKey'
     | 'sizeBytes'
     | 'orientation'
     | 'savedAt'

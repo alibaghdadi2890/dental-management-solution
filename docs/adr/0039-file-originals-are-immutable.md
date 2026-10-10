@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-07
 - Amends: CLAUDE.md §9 (the object-storage calls `files` makes around a mutation)
+- Amended by: ADR-0041 (uploads go to their own keys; Save copies and checks them)
 
 ## Context
 

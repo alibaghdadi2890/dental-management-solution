@@ -116,3 +116,10 @@ by keyboard from inside a modal; everything in the prompt's own Out of scope lis
 - The visit strip keeps **All files** beside the scrolling thumbnails, not at their end.
 - The viewer's "taken on" field is a `datetime-local` read and written in the clinic's time zone
   (`lib/zoned-time.ts`).
+
+## Hardening (2026-10-08, ADR-0041)
+
+D4 and D6 changed: uploads go to `tenants/<tenant>/uploads/<fileId>/…`, and Save copies them to
+the `files/` keys, then checks the copies' size and first bytes. That closes the follow-up
+"making an upload URL unusable once its file is saved" and adds the content check; a size-signed
+upload URL stays a follow-up.
