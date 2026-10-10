@@ -1,5 +1,6 @@
 import {
   ageOn,
+  type CatalogMark,
   type ClinicalSummary,
   currentPresence,
   deriveChart,
@@ -26,9 +27,11 @@ import { localDate } from '../../../platform/kernel/local-date';
 import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
+import { DiagnosesRepository } from '../persistence/diagnoses.repository';
 import { PatientDiagnosesRepository } from '../persistence/patient-diagnoses.repository';
 import { PlanGroupsRepository } from '../persistence/plan-groups.repository';
 import { PlanSessionsRepository } from '../persistence/plan-sessions.repository';
+import { ProceduresRepository } from '../persistence/procedures.repository';
 import { ToothPresenceRepository } from '../persistence/tooth-presence.repository';
 import { TreatmentPlansRepository } from '../persistence/treatment-plans.repository';
 import { VisitServicesRepository } from '../persistence/visit-services.repository';
@@ -77,6 +80,8 @@ export class ChartService {
     private readonly groups: PlanGroupsRepository,
     private readonly sessions: PlanSessionsRepository,
     private readonly presences: ToothPresenceRepository,
+    private readonly procedureCatalog: ProceduresRepository,
+    private readonly diagnosisCatalog: DiagnosesRepository,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -84,7 +89,10 @@ export class ChartService {
    * The whole chart: the dentition (the override, else the stage for the age on the tenant's
    * today, else permanent without a date of birth), the presence rows (missing, not erupted,
    * implant; feature 7), the records, the patient's most recent live visit and the derived
-   * per-tooth state, which counts that visit's services as treated today.
+   * per-tooth state, which counts that visit's services as treated today. `marks` holds the
+   * chart mark of every catalog item those records and services point at, inactive and deleted
+   * ones included, so an old service still has its colour and the SPA derives the same chart
+   * (feature 9).
    */
   chart(patientId: string): Promise<PatientChart> {
     return this.read(async () => {
@@ -104,13 +112,37 @@ export class ChartService {
             toVisitService(service, liveVisit.currency),
           )
         : [];
+      const marks = new Map<string, CatalogMark>([
+        ...(await this.diagnosisCatalog.marksByIds(
+          records.diagnoses.map((record) => record.diagnosisId),
+        )),
+        ...(await this.procedureCatalog.marksByIds([
+          ...records.plans.map((plan) => plan.procedureId),
+          ...records.history.map((service) => service.procedureId),
+          ...liveServices.map((service) => service.procedureId),
+        ])),
+      ]);
+      const liveDentist = liveVisit && (await this.dentistNames([liveVisit.dentistId]));
       return {
         dentition: { ...effectiveDentition(ageYears, patient.dentitionOverride), ageYears },
         ...records,
         planGroups,
         liveVisitId: liveVisit?.id ?? null,
         voidedVisitIds,
-        teeth: [...deriveChart({ ...records, liveServices }).values()],
+        teeth: [
+          ...deriveChart({
+            ...records,
+            liveServices,
+            marks,
+            liveVisit: liveVisit
+              ? {
+                  date: liveVisit.localDate,
+                  dentistName: liveDentist?.get(liveVisit.dentistId) ?? '',
+                }
+              : null,
+          }).values(),
+        ],
+        marks: Object.fromEntries(marks),
       };
     });
   }

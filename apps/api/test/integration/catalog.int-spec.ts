@@ -1,11 +1,12 @@
-import type {
-  AuditPage,
-  Branch,
-  CatalogSeedResult,
-  DiagnosisItem,
-  ProblemDetails,
-  ServiceItem,
-  Tenant,
+import {
+  type AuditPage,
+  type Branch,
+  type CatalogSeedResult,
+  type DiagnosisItem,
+  leastUsedMarkColor,
+  type ProblemDetails,
+  type ServiceItem,
+  type Tenant,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -280,6 +281,114 @@ describe('clinical: service and diagnosis catalogs', () => {
       });
       expect(duplicate.status).toBe(422);
       expect((duplicate.body as ProblemDetails).errors?.[0]?.path).toBe('items.0.code');
+    });
+  });
+
+  describe('chart marks (feature 9)', () => {
+    it('seeds a colour on every diagnosis and per-tooth service, and icons where one fits', async () => {
+      const seeded = await services();
+      expect(seeded.find((item) => item.code === 'IMP')).toMatchObject({
+        color: 'green',
+        icon: 'implant',
+        markPriority: 5,
+      });
+      expect(seeded.find((item) => item.code === 'SCL')).toMatchObject({ color: null, icon: null });
+      expect((await diagnoses()).find((item) => item.code === 'DX-CAR')).toMatchObject({
+        color: 'rose',
+        markPriority: 5,
+      });
+    });
+
+    it('gives new rows the least used colours, and none to a service off the tooth', async () => {
+      const before = await services();
+      const first = leastUsedMarkColor(before.map((item) => item.color));
+      const second = leastUsedMarkColor([...before.map((item) => item.color), first]);
+      const response = await api.put('/catalog/services', {
+        items: [
+          { code: 'MK1', name: 'Mark one', chargeUnit: 'per_tooth', price: '1' },
+          { code: 'MK2', name: 'Mark two', chargeUnit: 'per_tooth', price: '1' },
+          {
+            code: 'MKJ',
+            name: 'Mark jaw',
+            chargeUnit: 'per_jaw',
+            price: '1',
+            color: 'pink',
+            icon: 'denture',
+            markPriority: 9,
+          },
+        ],
+      });
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      const saved = response.body as ServiceItem[];
+      const byCode = (code: string) => saved.find((item) => item.code === code);
+      expect(byCode('MK1')).toMatchObject({ color: first, icon: null, markPriority: 5 });
+      expect(byCode('MK2')).toMatchObject({ color: second, icon: null });
+      expect(first).not.toBe(second);
+      expect(byCode('MKJ')).toMatchObject({ color: null, icon: null, markPriority: 9 });
+
+      const dx = await api.put('/catalog/diagnoses', {
+        items: [{ code: 'DX-MK', name: 'Marked diagnosis' }],
+      });
+      expect(dx.status, JSON.stringify(dx.body)).toBe(200);
+      const all = dx.body as DiagnosisItem[];
+      const created = all.find((item) => item.code === 'DX-MK');
+      expect(created?.color).toBe(
+        leastUsedMarkColor(all.filter((item) => item !== created).map((item) => item.color)),
+      );
+    });
+
+    it('keeps a mark that is not sent, changes one that is, and audits it', async () => {
+      const cmp = await service('MK1');
+      await api.put('/catalog/services', {
+        items: [{ ...input(cmp), color: 'blue', icon: 'filling' }],
+      });
+      const kept = await api.put('/catalog/services', {
+        items: [{ ...input(cmp), name: 'Mark one, renamed' }],
+      });
+      expect((kept.body as ServiceItem[]).find((item) => item.id === cmp.id)).toMatchObject({
+        name: 'Mark one, renamed',
+        color: 'blue',
+        icon: 'filling',
+        markPriority: 5,
+      });
+
+      const changed = await api.put('/catalog/services', {
+        items: [{ ...input(cmp), color: 'magenta', icon: null, markPriority: 8 }],
+      });
+      expect(changed.status, JSON.stringify(changed.body)).toBe(200);
+      expect((changed.body as ServiceItem[]).find((item) => item.id === cmp.id)).toMatchObject({
+        color: 'magenta',
+        icon: null,
+        markPriority: 8,
+      });
+      const [entry] = await auditOf(`resourceId=${cmp.id}`);
+      expect(entry).toMatchObject({
+        action: 'catalog.service.update',
+        before: { color: 'blue', icon: 'filling', markPriority: 5 },
+        after: { color: 'magenta', icon: null, markPriority: 8 },
+      });
+
+      // Off the tooth it keeps its mark, for the tooth records it already has; what is sent
+      // for it is ignored. Back on a tooth it is as it was.
+      const offTooth = await api.put('/catalog/services', {
+        items: [{ ...input(cmp), chargeUnit: 'per_mouth', color: 'lime', icon: 'crown' }],
+      });
+      expect(offTooth.status, JSON.stringify(offTooth.body)).toBe(200);
+      expect((offTooth.body as ServiceItem[]).find((item) => item.id === cmp.id)).toMatchObject({
+        chargeUnit: 'per_mouth',
+        color: 'magenta',
+        icon: null,
+      });
+      const onTooth = await api.put('/catalog/services', { items: [input(cmp)] });
+      expect((onTooth.body as ServiceItem[]).find((item) => item.id === cmp.id)).toMatchObject({
+        chargeUnit: 'per_tooth',
+        color: 'magenta',
+      });
+
+      const refused = await api.put('/catalog/services', {
+        items: [{ ...input(cmp), color: '#ff00ff' }],
+      });
+      expect(refused.status).toBe(400);
     });
   });
 

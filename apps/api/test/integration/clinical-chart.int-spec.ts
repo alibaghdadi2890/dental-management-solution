@@ -303,6 +303,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         liveVisitId: null,
         voidedVisitIds: [],
         teeth: [],
+        marks: {},
       });
 
       const override = await dentist.agent
@@ -425,6 +426,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
           visitId: earlier,
           visitDate: EARLIER,
           dentistName: dentist.user.displayName,
+          procedureId: service.clean.id,
           code: 'ZCLEAN',
           name: 'Test cleaning',
           toothCode: null,
@@ -438,6 +440,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
           visitId: earlier,
           visitDate: EARLIER,
           dentistName: dentist.user.displayName,
+          procedureId: service.fill.id,
           code: 'ZFILL',
           name: 'Test filling',
           toothCode: '16',
@@ -460,9 +463,93 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         openPlanIds: [plan.record.id],
       });
       expect(tooth('46')).toMatchObject({ state: 'treated_today', wholeTooth: 'treated_today' });
+      // The live visit dates and signs its own services (feature 9).
+      expect(tooth('46')?.services[0]).toMatchObject({
+        status: 'treated_today',
+        date: visit.localDate,
+        dentistName: dentist.user.displayName,
+      });
       expect(tooth('36')).toMatchObject({ state: 'none', hasActiveDiagnosis: true });
       expect(tooth('17')).toBeUndefined();
       expect(tooth('27')).toBeUndefined();
+    });
+
+    it('carries the mark of every catalog item its records point at, inactive ones too', async () => {
+      const marked = await owner.put('/api/v1/catalog/services').send({
+        items: [
+          {
+            code: 'ZAMAL',
+            name: 'Test amalgam',
+            chargeUnit: 'per_tooth',
+            price: '40',
+            color: 'amber',
+            icon: 'filling',
+            markPriority: 8,
+          },
+        ],
+      });
+      expect(marked.status, JSON.stringify(marked.body)).toBe(200);
+      const amalgam = (marked.body as ServiceItem[]).find((item) => item.code === 'ZAMAL');
+      if (!amalgam) throw new Error('no service ZAMAL');
+
+      const patient = await createPatient('Chart Marks');
+      const earlier = await completedVisit(patient, { localDate: EARLIER, total: '90' });
+      const old = await completedService(earlier, {
+        item: amalgam,
+        toothCode: '26',
+        surfaces: ['O'],
+      });
+      await completedService(earlier, { item: service.fill, toothCode: '26', surfaces: ['M'] });
+      await olderDiagnosis(patient, earlier, '26');
+      const deactivated = await owner.post(`/api/v1/catalog/services/${amalgam.id}/deactivate`);
+      expect(deactivated.status, JSON.stringify(deactivated.body)).toBe(200);
+
+      const chart = await chartOf(patient);
+      expect(chart.marks[amalgam.id]).toEqual({
+        color: 'amber',
+        icon: 'filling',
+        priority: 8,
+        name: 'Test amalgam',
+        code: 'ZAMAL',
+        active: false,
+      });
+      expect(chart.marks[service.fill.id]).toMatchObject({
+        color: service.fill.color,
+        active: true,
+      });
+      expect(chart.marks[diagnosis.caries.id]).toMatchObject({
+        color: diagnosis.caries.color,
+        icon: null,
+      });
+      expect(chart.history.find((line) => line.id === old)?.procedureId).toBe(amalgam.id);
+
+      const tooth = chart.teeth.find((candidate) => candidate.code === '26');
+      // The higher priority first, whatever the order they were done in.
+      expect(
+        tooth?.services.map((line) => [line.code, line.color, line.icon, line.status]),
+      ).toEqual([
+        ['ZAMAL', 'amber', 'filling', 'treated'],
+        ['ZFILL', service.fill.color, null, 'treated'],
+      ]);
+      expect(tooth?.services[0]).toMatchObject({ date: EARLIER, surfaces: ['O'] });
+      expect(tooth?.diagnoses).toEqual([
+        expect.objectContaining({
+          diagnosisId: diagnosis.caries.id,
+          color: diagnosis.caries.color,
+          recordedDate: EARLIER,
+        }),
+      ]);
+
+      // Recolouring the catalog item recolours what was recorded before.
+      const recoloured = await owner.put('/api/v1/catalog/diagnoses').send({
+        items: [{ id: diagnosis.caries.id, code: 'ZCAR', name: 'Test caries', color: 'purple' }],
+      });
+      expect(recoloured.status, JSON.stringify(recoloured.body)).toBe(200);
+      const after = await chartOf(patient);
+      expect(after.teeth.find((candidate) => candidate.code === '26')?.diagnoses[0]).toMatchObject({
+        color: 'purple',
+        name: 'Test caries',
+      });
     });
 
     it('lists the history across completed visits, the most recent visit first', async () => {

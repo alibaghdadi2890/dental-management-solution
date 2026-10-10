@@ -3,6 +3,10 @@ import {
   DIAGNOSIS_STATUSES,
   DISCOUNT_MODES,
   JAWS,
+  MARK_COLORS,
+  MARK_ICONS,
+  type MarkColor,
+  type MarkIcon,
   PLAN_STATUSES,
   SURFACES,
   TOOTH_EFFECTS,
@@ -23,6 +27,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  smallint,
   text,
   timestamp,
   unique,
@@ -45,6 +50,9 @@ export const jaw = pgEnum('jaw', JAWS);
 /** What performing a per-tooth service does to the tooth's presence (feature 7, H2). */
 export const toothEffect = pgEnum('tooth_effect', TOOTH_EFFECTS);
 
+/** `'a', 'b'`: a contracts key list inside a CHECK. The keys are plain words from the code. */
+const keyList = (keys: readonly string[]) => sql.raw(keys.map((key) => `'${key}'`).join(', '));
+
 /**
  * The service catalog ("procedures", ADR-0002). Prices are money in the tenant currency at the
  * time they were set (ADR-0015). Codes are unique among live rows, so a deleted code can return.
@@ -63,6 +71,10 @@ export const procedures = pgTable(
     frequent: boolean().notNull().default(false),
     active: boolean().notNull().default(true),
     toothEffect: toothEffect().notNull().default('none'),
+    // The chart mark (feature 9, ADR-0042): a palette key and an icon, for a per-tooth service.
+    color: text().$type<MarkColor>(),
+    icon: text().$type<MarkIcon>(),
+    markPriority: smallint().notNull().default(5),
     deletedAt: deletedAtColumn(),
     ...timestamps(),
   },
@@ -79,6 +91,15 @@ export const procedures = pgTable(
       'procedures_tooth_effect_per_tooth',
       sql`${table.toothEffect}::text = 'none' or ${table.chargeUnit} = 'per_tooth'`,
     ),
+    check('procedures_color_known', sql`${table.color} in (${keyList(MARK_COLORS)})`),
+    check('procedures_icon_known', sql`${table.icon} in (${keyList(MARK_ICONS)})`),
+    // A service on a tooth always has a colour. One moved to a jaw or the mouth keeps the mark it
+    // had, for the tooth records that still point at it.
+    check(
+      'procedures_mark_per_tooth',
+      sql`${table.chargeUnit} <> 'per_tooth' or ${table.color} is not null`,
+    ),
+    check('procedures_mark_priority_range', sql`${table.markPriority} between 0 and 9`),
     tenantIsolationPolicy(),
   ],
 );
@@ -94,6 +115,9 @@ export const diagnoses = pgTable(
     category: text(),
     frequent: boolean().notNull().default(false),
     active: boolean().notNull().default(true),
+    // The chart mark (feature 9): a diagnosis is always on a tooth, so it always has a colour.
+    color: text().$type<MarkColor>().notNull(),
+    markPriority: smallint().notNull().default(5),
     deletedAt: deletedAtColumn(),
     ...timestamps(),
   },
@@ -104,6 +128,8 @@ export const diagnoses = pgTable(
     uniqueIndex('diagnoses_code_unique')
       .on(table.tenantId, sql`lower(${table.code})`)
       .where(sql`${table.deletedAt} is null`),
+    check('diagnoses_color_known', sql`${table.color} in (${keyList(MARK_COLORS)})`),
+    check('diagnoses_mark_priority_range', sql`${table.markPriority} between 0 and 9`),
     tenantIsolationPolicy(),
   ],
 );

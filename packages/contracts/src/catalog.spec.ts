@@ -100,8 +100,34 @@ describe('serviceItemSchema', () => {
       frequent: true,
       active: true,
       toothEffect: 'none',
+      color: null,
+      icon: null,
+      markPriority: 5,
     };
     expect(serviceItemSchema.parse(item)).toEqual(item);
+  });
+});
+
+describe('chart marks on a catalog row (feature 9)', () => {
+  it('are optional on a row being saved', () => {
+    const parsed = serviceItemInputSchema.parse(service);
+    expect(parsed).not.toHaveProperty('color');
+    expect(parsed).not.toHaveProperty('markPriority');
+    expect(diagnosisItemInputSchema.parse({ code: 'dx-car', name: 'Caries' })).not.toHaveProperty(
+      'color',
+    );
+  });
+
+  it('take a palette key, an icon and a priority from 0 to 9', () => {
+    expect(
+      serviceItemInputSchema.parse({ ...service, color: 'blue', icon: 'filling', markPriority: 8 }),
+    ).toMatchObject({ color: 'blue', icon: 'filling', markPriority: 8 });
+    expect(serviceItemInputSchema.safeParse({ ...service, color: '#ff0000' }).success).toBe(false);
+    expect(serviceItemInputSchema.safeParse({ ...service, icon: 'tooth' }).success).toBe(false);
+    expect(serviceItemInputSchema.safeParse({ ...service, markPriority: 10 }).success).toBe(false);
+    expect(
+      diagnosisItemInputSchema.safeParse({ code: 'DX-CAR', name: 'Caries', icon: 'crown' }).data,
+    ).not.toHaveProperty('icon');
   });
 });
 

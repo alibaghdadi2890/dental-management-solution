@@ -1,12 +1,15 @@
-import type {
-  CatalogKind,
-  CatalogSeedResult,
-  DiagnosisBatch,
-  DiagnosisItem,
-  DiagnosisItemInput,
-  ServiceBatch,
-  ServiceItem,
-  ServiceItemInput,
+import {
+  type CatalogKind,
+  type CatalogSeedResult,
+  type DiagnosisBatch,
+  type DiagnosisItem,
+  type DiagnosisItemInput,
+  leastUsedMarkColor,
+  MARK_PRIORITY_DEFAULT,
+  type MarkColor,
+  type ServiceBatch,
+  type ServiceItem,
+  type ServiceItemInput,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../platform/cls/request-context';
@@ -33,6 +36,19 @@ interface Catalog<TItem extends CatalogItem> {
 }
 
 const sameRow = (a: CatalogItem, b: CatalogItem) => JSON.stringify(a) === JSON.stringify(b);
+
+/**
+ * Hands out the chart colour of rows that have none (feature 9): the key the catalog uses least,
+ * counting the ones already handed out in this batch.
+ */
+function colorPicker(): (stored: readonly { color: MarkColor | null }[]) => MarkColor {
+  const given: MarkColor[] = [];
+  return (stored) => {
+    const color = leastUsedMarkColor([...stored.map((item) => item.color), ...given]);
+    given.push(color);
+    return color;
+  };
+}
 
 /**
  * The per-tenant service and diagnosis catalogs (docs/modules/clinical.md). Writes need
@@ -73,43 +89,64 @@ export class CatalogService {
   /**
    * The save bar's batch: new rows (no id) and whole changed rows, in one transaction. A price
    * takes the tenant's current currency when it is created or changed. Returns the catalog.
+   *
+   * Chart marks (feature 9): a mark field that is not sent keeps its stored value; a per-tooth
+   * service left without a colour gets the least used one. For a service on a jaw or the mouth
+   * what is sent is ignored: a new one has no mark, and one moved off the tooth keeps the mark it
+   * had, which its earlier tooth records are still drawn with.
    */
   async saveServices(batch: ServiceBatch): Promise<ServiceItem[]> {
     this.context.requirePermission('catalog:write');
     return this.tenantDb.run(async () => {
       const { currency } = await this.tenancy.currentTenant();
+      const pickColor = colorPicker();
       return this.saveBatch(
         this.services,
         batch.items,
-        (row: ServiceItemInput, id, before): ServiceItem => ({
-          id,
-          code: row.code,
-          name: row.name,
-          category: row.category,
-          chargeUnit: row.chargeUnit,
-          price:
-            before && Number(before.price.amount) === Number(row.price)
-              ? before.price
-              : { amount: row.price, currency },
-          frequent: row.frequent,
-          active: row.active,
-          toothEffect: row.toothEffect,
-        }),
+        (row: ServiceItemInput, id, before, stored): ServiceItem => {
+          const perTooth = row.chargeUnit === 'per_tooth';
+          return {
+            id,
+            code: row.code,
+            name: row.name,
+            category: row.category,
+            chargeUnit: row.chargeUnit,
+            price:
+              before && Number(before.price.amount) === Number(row.price)
+                ? before.price
+                : { amount: row.price, currency },
+            frequent: row.frequent,
+            active: row.active,
+            toothEffect: row.toothEffect,
+            color: perTooth
+              ? (row.color ?? before?.color ?? pickColor(stored))
+              : (before?.color ?? null),
+            icon: perTooth && row.icon !== undefined ? row.icon : (before?.icon ?? null),
+            markPriority: row.markPriority ?? before?.markPriority ?? MARK_PRIORITY_DEFAULT,
+          };
+        },
       );
     });
   }
 
   async saveDiagnoses(batch: DiagnosisBatch): Promise<DiagnosisItem[]> {
     this.context.requirePermission('catalog:write');
+    const pickColor = colorPicker();
     return this.tenantDb.run(() =>
-      this.saveBatch(this.diagnoses, batch.items, (row: DiagnosisItemInput, id): DiagnosisItem => ({
-        id,
-        code: row.code,
-        name: row.name,
-        category: row.category,
-        frequent: row.frequent,
-        active: row.active,
-      })),
+      this.saveBatch(
+        this.diagnoses,
+        batch.items,
+        (row: DiagnosisItemInput, id, before, stored): DiagnosisItem => ({
+          id,
+          code: row.code,
+          name: row.name,
+          category: row.category,
+          frequent: row.frequent,
+          active: row.active,
+          color: row.color ?? before?.color ?? pickColor(stored),
+          markPriority: row.markPriority ?? before?.markPriority ?? MARK_PRIORITY_DEFAULT,
+        }),
+      ),
     );
   }
 
@@ -149,10 +186,15 @@ export class CatalogService {
           ...row,
           id: newId(),
           price: { amount: price, currency },
+          markPriority: MARK_PRIORITY_DEFAULT,
         })),
       );
       const createdDiagnoses = await this.diagnoses.store.insertIfAbsent(
-        DEFAULT_DIAGNOSES.map((row) => ({ ...row, id: newId() })),
+        DEFAULT_DIAGNOSES.map((row) => ({
+          ...row,
+          id: newId(),
+          markPriority: MARK_PRIORITY_DEFAULT,
+        })),
       );
       await this.recorded(
         this.services,
@@ -194,19 +236,19 @@ export class CatalogService {
   private async saveBatch<TItem extends CatalogItem, TInput extends { id?: string | undefined }>(
     catalog: Catalog<TItem>,
     rows: readonly TInput[],
-    build: (row: TInput, id: string, before: TItem | undefined) => TItem,
+    build: (row: TInput, id: string, before: TItem | undefined, stored: readonly TItem[]) => TItem,
   ): Promise<TItem[]> {
     const stored = await catalog.store.list();
     const byId = new Map(stored.map((item) => [item.id, item]));
     const changes = rows.map((row) => {
       if (row.id === undefined) {
-        return build(row, newId(), undefined);
+        return build(row, newId(), undefined, stored);
       }
       const before = byId.get(row.id);
       if (!before) {
         throw new CatalogItemNotFoundError('Catalog row not found');
       }
-      return build(row, row.id, before);
+      return build(row, row.id, before, stored);
     });
 
     assertUniqueCodes(stored, changes);

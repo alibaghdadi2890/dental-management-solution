@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cellMark, currentPresence, deriveChart, type DeriveChartInput } from './chart.js';
 import type { DiagnosisRecord, HistoryService, TreatmentPlan } from './clinical-records.js';
+import type { CatalogMark } from './marks.js';
 import type { ToothCode } from './tooth.js';
 import type { VisitService } from './visits.js';
 
@@ -13,8 +14,9 @@ const DENTIST_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70';
 const MONEY = { amount: '80.00', currency: 'USD' };
 
 /** `deriveChart` without presence rows, which most cases here have nothing to do with. */
-const derive = (input: Omit<DeriveChartInput, 'presence'> & Partial<DeriveChartInput>) =>
-  deriveChart({ presence: [], ...input });
+const derive = (
+  input: Omit<DeriveChartInput, 'presence' | 'marks' | 'liveVisit'> & Partial<DeriveChartInput>,
+) => deriveChart({ presence: [], marks: new Map(), liveVisit: null, ...input });
 
 function diagnosis(
   overrides: Partial<DiagnosisRecord> & { toothCode: ToothCode },
@@ -81,6 +83,7 @@ function history(
     visitId: VISIT_ID,
     visitDate: '2026-09-01',
     dentistName: 'Dr. Smith',
+    procedureId: ID,
     code: 'D2140',
     name: 'Amalgam Filling',
     jaw: null,
@@ -396,6 +399,162 @@ describe('deriveChart', () => {
     expect(tooth?.openPlanIds).toEqual([ID_3, ID_4]);
     expect(tooth?.titleParts.plans).toEqual(['Composite Filling', 'Zircon Crown']);
     expect(tooth?.titleParts.diagnoses).toEqual(['Dental caries', 'Cracked tooth']);
+  });
+});
+
+describe('deriveChart: marks (feature 9)', () => {
+  const mark = (overrides: Partial<CatalogMark> = {}): CatalogMark => ({
+    color: 'blue',
+    icon: null,
+    priority: 5,
+    name: 'Catalog name',
+    code: 'CAT',
+    active: true,
+    ...overrides,
+  });
+
+  it('lists the active diagnoses of a tooth with the colour of their catalog item', () => {
+    const chart = derive({
+      diagnoses: [
+        diagnosis({ toothCode: '46', id: ID, diagnosisId: ID_2, surfaces: ['M'] }),
+        diagnosis({ toothCode: '46', id: ID_3, diagnosisId: ID_2, status: 'resolved' }),
+      ],
+      plans: [],
+      history: [],
+      liveServices: [],
+      marks: new Map([[ID_2, mark({ color: 'rose', priority: 7 })]]),
+    });
+    expect(chart.get('46')?.diagnoses).toEqual([
+      {
+        recordId: ID,
+        diagnosisId: ID_2,
+        // The record's own snapshot, not the catalog's current name.
+        code: 'K02.9',
+        name: 'Dental caries',
+        color: 'rose',
+        priority: 7,
+        surfaces: ['M'],
+        recordedDate: '2026-09-30',
+        dentistName: 'Dr. Smith',
+      },
+    ]);
+    expect(chart.get('46')?.hasActiveDiagnosis).toBe(true);
+  });
+
+  it('lists finished and live services, the live visit dating its own', () => {
+    const chart = derive({
+      diagnoses: [],
+      plans: [],
+      history: [history({ toothCode: '36', id: ID, procedureId: ID_2, surfaces: ['O', 'D'] })],
+      liveServices: [liveService({ toothCode: '36', id: ID_3, procedureId: ID_2, planId: ID_4 })],
+      marks: new Map([[ID_2, mark({ icon: 'filling' })]]),
+      liveVisit: { date: '2026-10-08', dentistName: 'Dr. Rami' },
+    });
+    expect(chart.get('36')?.services).toEqual([
+      {
+        recordId: ID_3,
+        procedureId: ID_2,
+        code: 'D2140',
+        name: 'Amalgam Filling',
+        color: 'blue',
+        icon: 'filling',
+        priority: 5,
+        surfaces: [],
+        status: 'treated_today',
+        date: '2026-10-08',
+        dentistName: 'Dr. Rami',
+        planId: ID_4,
+      },
+      {
+        recordId: ID,
+        procedureId: ID_2,
+        code: 'D2140',
+        name: 'Amalgam Filling',
+        color: 'blue',
+        icon: 'filling',
+        priority: 5,
+        surfaces: ['O', 'D'],
+        status: 'treated',
+        date: '2026-09-01',
+        dentistName: 'Dr. Smith',
+        planId: null,
+      },
+    ]);
+  });
+
+  it('orders by priority, then the most recent, then the record made last', () => {
+    const chart = derive({
+      diagnoses: [],
+      plans: [],
+      history: [
+        history({ toothCode: '16', id: ID, procedureId: ID, visitDate: '2026-01-10' }),
+        history({ toothCode: '16', id: ID_2, procedureId: ID_2, visitDate: '2024-03-01' }),
+        history({ toothCode: '16', id: ID_3, procedureId: ID, visitDate: '2026-05-02' }),
+        history({ toothCode: '16', id: ID_4, procedureId: ID, visitDate: '2026-05-02' }),
+      ],
+      liveServices: [],
+      marks: new Map([
+        [ID, mark()],
+        [ID_2, mark({ priority: 8 })],
+      ]),
+    });
+    expect(chart.get('16')?.services.map((service) => service.recordId)).toEqual([
+      ID_2,
+      ID_4,
+      ID_3,
+      ID,
+    ]);
+  });
+
+  it('keeps the mark of an inactive catalog item', () => {
+    const chart = derive({
+      diagnoses: [],
+      plans: [],
+      history: [history({ toothCode: '26', procedureId: ID_2 })],
+      liveServices: [],
+      marks: new Map([[ID_2, mark({ color: 'amber', icon: 'crown', active: false })]]),
+    });
+    expect(chart.get('26')?.services[0]).toMatchObject({ color: 'amber', icon: 'crown' });
+  });
+
+  it('derives a record whose catalog item is unknown, without a colour', () => {
+    const chart = derive({
+      diagnoses: [diagnosis({ toothCode: '11' })],
+      plans: [],
+      history: [history({ toothCode: '11' })],
+      liveServices: [liveService({ toothCode: '11', id: ID_2 })],
+    });
+    const tooth = chart.get('11');
+    expect(tooth?.diagnoses[0]).toMatchObject({ color: null, priority: 5 });
+    expect(tooth?.services[0]).toMatchObject({ color: null, icon: null, priority: 5, date: null });
+    expect(tooth?.services).toHaveLength(2);
+  });
+
+  it('says a plan is in progress even on a tooth treated today', () => {
+    const chart = derive({
+      diagnoses: [],
+      plans: [plan({ toothCode: '21', status: 'in_progress' })],
+      history: [],
+      liveServices: [liveService({ toothCode: '21' })],
+    });
+    expect(chart.get('21')).toMatchObject({ state: 'treated_today', planInProgress: true });
+    const planned = derive({
+      diagnoses: [],
+      plans: [plan({ toothCode: '21' })],
+      history: [],
+      liveServices: [],
+    });
+    expect(planned.get('21')?.planInProgress).toBe(false);
+  });
+
+  it('leaves jaw and mouth services out of every tooth', () => {
+    const chart = derive({
+      diagnoses: [],
+      plans: [],
+      history: [history({ toothCode: null, jaw: 'upper' })],
+      liveServices: [],
+    });
+    expect(chart.size).toBe(0);
   });
 });
 

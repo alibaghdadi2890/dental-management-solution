@@ -76,6 +76,36 @@ describe('default catalog template', () => {
     ]);
   });
 
+  it('gives every diagnosis and per-tooth service its own chart colour, the others none', () => {
+    const perTooth = DEFAULT_SERVICES.filter((row) => row.chargeUnit === 'per_tooth');
+    expect(perTooth.every((row) => row.color !== null)).toBe(true);
+    expect(new Set(perTooth.map((row) => row.color)).size).toBe(perTooth.length);
+    expect(new Set(DEFAULT_DIAGNOSES.map((row) => row.color)).size).toBe(DEFAULT_DIAGNOSES.length);
+    expect(
+      DEFAULT_SERVICES.filter((row) => row.chargeUnit !== 'per_tooth').map((row) => [
+        row.code,
+        row.color,
+        row.icon,
+      ]),
+    ).toEqual([
+      ['PARX', null, null],
+      ['SCL', null, null],
+    ]);
+    expect(
+      DEFAULT_SERVICES.filter((row) => row.icon !== null).map((row) => [row.code, row.icon]),
+    ).toEqual([
+      ['EXT', 'extraction'],
+      ['PARO', 'cleaning'],
+      ['CMP', 'filling'],
+      ['CGIC', 'filling'],
+      ['CBIO', 'filling'],
+      ['ONL', 'filling'],
+      ['MCC', 'crown'],
+      ['ZIR', 'crown'],
+      ['IMP', 'implant'],
+    ]);
+  });
+
   it('has unique codes in each catalog', () => {
     expect(new Set(codes(DEFAULT_SERVICES)).size).toBe(DEFAULT_SERVICES.length);
     expect(new Set(codes(DEFAULT_DIAGNOSES)).size).toBe(DEFAULT_DIAGNOSES.length);

@@ -1,6 +1,6 @@
-import type { DiagnosisItem } from '@dcm/contracts';
+import type { CatalogMark, DiagnosisItem } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import {
   type CatalogRowLock,
@@ -20,6 +20,8 @@ function toDiagnosis(row: DiagnosisRow): DiagnosisItem {
     category: row.category,
     frequent: row.frequent,
     active: row.active,
+    color: row.color,
+    markPriority: row.markPriority,
   };
 }
 
@@ -30,6 +32,8 @@ function toRow(item: DiagnosisItem) {
     category: item.category,
     frequent: item.frequent,
     active: item.active,
+    color: item.color,
+    markPriority: item.markPriority,
   };
 }
 
@@ -49,6 +53,34 @@ export class DiagnosesRepository implements CatalogStore<DiagnosisItem> {
           .where(live)
           .orderBy(asc(diagnoses.createdAt), asc(diagnoses.id))
       ).map(toDiagnosis),
+    );
+  }
+
+  /**
+   * The chart marks of the diagnoses `ids` name (feature 9), by id; rows removed from the catalog
+   * since are included, as for services. A diagnosis has no icon.
+   */
+  async marksByIds(ids: readonly string[]): Promise<Map<string, CatalogMark>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({
+          id: diagnoses.id,
+          color: diagnoses.color,
+          priority: diagnoses.markPriority,
+          name: diagnoses.name,
+          code: diagnoses.code,
+          active: diagnoses.active,
+          deletedAt: diagnoses.deletedAt,
+        })
+        .from(diagnoses)
+        .where(inArray(diagnoses.id, [...new Set(ids)])),
+    );
+    return new Map(
+      rows.map(({ id, deletedAt, active, ...mark }) => [
+        id,
+        { ...mark, icon: null, active: active && deletedAt === null },
+      ]),
     );
   }
 

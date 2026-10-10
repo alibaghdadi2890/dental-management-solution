@@ -14,6 +14,7 @@ import {
 
 const ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
 const ID_2 = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
+const ID_3 = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70';
 
 describe('recordDiagnosisSchema', () => {
   it('accepts a diagnosis on a tooth with surfaces', () => {
@@ -121,7 +122,10 @@ describe('toothStateSchema', () => {
     surfaces: {},
     wholeTooth: null,
     hasActiveDiagnosis: false,
+    diagnoses: [],
+    services: [],
     openPlanIds: [],
+    planInProgress: false,
     historyCount: 0,
     titleParts: { diagnoses: [], plans: [], historyCount: 0 },
   };
@@ -235,6 +239,7 @@ const CHART = {
       visitId: ID_2,
       visitDate: '2026-09-29',
       dentistName: 'Dr. Amal Karim',
+      procedureId: ID_3,
       code: 'CMP',
       name: 'Composite filling',
       toothCode: '16',
@@ -254,11 +259,51 @@ const CHART = {
       surfaces: { O: 'treated_today' },
       wholeTooth: null,
       hasActiveDiagnosis: true,
+      diagnoses: [
+        {
+          recordId: ID,
+          diagnosisId: ID_2,
+          code: 'DX-CAR',
+          name: 'Dental caries',
+          color: 'rose',
+          priority: 5,
+          surfaces: [],
+          recordedDate: '2026-09-29',
+          dentistName: 'Dr. Amal Karim',
+        },
+      ],
+      services: [
+        {
+          recordId: ID,
+          procedureId: ID_3,
+          code: 'CMP',
+          name: 'Composite filling',
+          color: 'blue',
+          icon: 'filling',
+          priority: 5,
+          surfaces: ['O'],
+          status: 'treated_today',
+          date: null,
+          dentistName: '',
+          planId: null,
+        },
+      ],
       openPlanIds: [ID],
+      planInProgress: false,
       historyCount: 1,
       titleParts: { diagnoses: ['Dental caries'], plans: ['Extraction'], historyCount: 1 },
     },
   ],
+  marks: {
+    [ID_3]: {
+      color: 'blue',
+      icon: 'filling',
+      priority: 5,
+      name: 'Composite filling',
+      code: 'CMP',
+      active: false,
+    },
+  },
 };
 
 describe('patientChartSchema', () => {

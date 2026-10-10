@@ -9,6 +9,7 @@ export * from './common.js';
 export * from './contacts.js';
 export * from './digits.js';
 export * from './files.js';
+export * from './marks.js';
 export * from './patient-age.js';
 export * from './patients.js';
 export * from './payments.js';

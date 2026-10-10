@@ -2,10 +2,13 @@ import {
   type DiagnosisRecord,
   type HistoryService,
   isOpenPlan,
+  type ToothDiagnosis,
+  type ToothService,
   type ToothState,
   type ToothVisualState,
   type TreatmentPlan,
 } from './clinical-records.js';
+import { type CatalogMark, MARK_PRIORITY_DEFAULT } from './marks.js';
 import type { SurfaceKey, ToothCode, ToothPresenceChange, ToothPresenceState } from './tooth.js';
 import type { VisitService } from './visits.js';
 
@@ -40,6 +43,8 @@ interface ToothBuilder {
    * reflected via `openPlanIds` (and so `state`), never here. */
   wholeTooth: ServiceMark | null;
   hasActiveDiagnosis: boolean;
+  diagnoses: ToothDiagnosis[];
+  services: ToothService[];
   openPlanIds: string[];
   /** An open plan on the tooth has been started. */
   inProgress: boolean;
@@ -53,6 +58,8 @@ function newBuilder(): ToothBuilder {
     surfaces: {},
     wholeTooth: null,
     hasActiveDiagnosis: false,
+    diagnoses: [],
+    services: [],
     openPlanIds: [],
     inProgress: false,
     diagnosisNames: [],
@@ -102,6 +109,28 @@ function overallState(builder: ToothBuilder): ToothVisualState {
   return strongest ?? 'none';
 }
 
+/**
+ * The order a tooth's marks are shown in when more than fit (M3, M4): the higher priority first,
+ * then work of the live visit, then the most recent date, then the record made last (ids are
+ * time-ordered).
+ */
+function byShowFirst(
+  a: { priority: number; live: boolean; date: string; recordId: string },
+  b: { priority: number; live: boolean; date: string; recordId: string },
+): number {
+  if (a.priority !== b.priority) return b.priority - a.priority;
+  if (a.live !== b.live) return a.live ? -1 : 1;
+  if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+  if (a.recordId === b.recordId) return 0;
+  return a.recordId < b.recordId ? 1 : -1;
+}
+
+/** The visit whose services are "today's": its local date and its dentist, for the tooltip. */
+export interface LiveVisitFacts {
+  date: string;
+  dentistName: string;
+}
+
 /** The raw records `deriveChart` folds into per-tooth state. */
 export interface DeriveChartInput {
   readonly diagnoses: readonly DiagnosisRecord[];
@@ -110,6 +139,11 @@ export interface DeriveChartInput {
   readonly liveServices: readonly VisitService[];
   /** The patient's presence rows, in the order recorded (`PatientChart.presence`). */
   readonly presence: readonly ToothPresenceChange[];
+  /** The mark of each catalog item, by diagnosis or procedure id (feature 9). A record whose
+   * item is not here still derives, without a colour. */
+  readonly marks: ReadonlyMap<string, CatalogMark>;
+  /** The visit `liveServices` belong to, when there is one. */
+  readonly liveVisit: LiveVisitFacts | null;
 }
 
 /**
@@ -148,6 +182,18 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
     const builder = builderFor(builders, record.toothCode);
     builder.hasActiveDiagnosis = true;
     builder.diagnosisNames.push(record.name);
+    const mark = input.marks.get(record.diagnosisId);
+    builder.diagnoses.push({
+      recordId: record.id,
+      diagnosisId: record.diagnosisId,
+      code: record.code,
+      name: record.name,
+      color: mark?.color ?? null,
+      priority: mark?.priority ?? MARK_PRIORITY_DEFAULT,
+      surfaces: record.surfaces,
+      recordedDate: record.recordedDate,
+      dentistName: record.dentistName,
+    });
   }
 
   for (const record of input.plans) {
@@ -164,12 +210,42 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
     const builder = builderFor(builders, record.toothCode);
     builder.historyCount += 1;
     applyService(builder, record.surfaces, 'treated');
+    const mark = input.marks.get(record.procedureId);
+    builder.services.push({
+      recordId: record.id,
+      procedureId: record.procedureId,
+      code: record.code,
+      name: record.name,
+      color: mark?.color ?? null,
+      icon: mark?.icon ?? null,
+      priority: mark?.priority ?? MARK_PRIORITY_DEFAULT,
+      surfaces: record.surfaces,
+      status: 'treated',
+      date: record.visitDate,
+      dentistName: record.dentistName,
+      planId: record.planId,
+    });
   }
 
   for (const record of input.liveServices) {
     if (record.toothCode === null) continue;
     const builder = builderFor(builders, record.toothCode);
     applyService(builder, record.surfaces, 'treated_today');
+    const mark = input.marks.get(record.procedureId);
+    builder.services.push({
+      recordId: record.id,
+      procedureId: record.procedureId,
+      code: record.code,
+      name: record.name,
+      color: mark?.color ?? null,
+      icon: mark?.icon ?? null,
+      priority: mark?.priority ?? MARK_PRIORITY_DEFAULT,
+      surfaces: record.surfaces,
+      status: 'treated_today',
+      date: input.liveVisit?.date ?? null,
+      dentistName: input.liveVisit?.dentistName ?? '',
+      planId: record.planId,
+    });
   }
 
   // A tooth that is not present has an entry even with nothing else recorded on it.
@@ -187,7 +263,28 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
       surfaces: builder.surfaces,
       wholeTooth: builder.wholeTooth,
       hasActiveDiagnosis: builder.hasActiveDiagnosis,
+      diagnoses: builder.diagnoses
+        .map((item) => ({
+          item,
+          priority: item.priority,
+          live: false,
+          date: item.recordedDate,
+          recordId: item.recordId,
+        }))
+        .sort(byShowFirst)
+        .map(({ item }) => item),
+      services: builder.services
+        .map((item) => ({
+          item,
+          priority: item.priority,
+          live: item.status === 'treated_today',
+          date: item.date ?? '',
+          recordId: item.recordId,
+        }))
+        .sort(byShowFirst)
+        .map(({ item }) => item),
       openPlanIds: builder.openPlanIds,
+      planInProgress: builder.inProgress,
       historyCount: builder.historyCount,
       titleParts: {
         diagnoses: builder.diagnosisNames,

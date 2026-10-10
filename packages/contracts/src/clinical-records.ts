@@ -9,6 +9,7 @@ import {
   notFutureDateSchema,
   optionalText,
 } from './common.js';
+import { catalogMarkSchema, markColorSchema, markIconSchema, markPrioritySchema } from './marks.js';
 import { dentitionStageSchema } from './patient-age.js';
 import {
   surfaceKeySchema,
@@ -296,6 +297,8 @@ export const historyServiceSchema = z.object({
   visitId: idSchema,
   visitDate: isoDateSchema,
   dentistName: z.string(),
+  /** The catalog item, which the chart reads its mark from (feature 9). */
+  procedureId: idSchema,
   code: z.string(),
   name: z.string(),
   toothCode: toothCodeSchema.nullable(),
@@ -315,6 +318,44 @@ export type ToothVisualState = (typeof TOOTH_VISUAL_STATES)[number];
 const toothVisualStateSchema = z.enum(TOOTH_VISUAL_STATES);
 
 /**
+ * An active diagnosis on a tooth, as the chart draws it (feature 9): the record's own code and
+ * name, and the colour and priority of its catalog item as they are now.
+ */
+export const toothDiagnosisSchema = z.object({
+  recordId: idSchema,
+  diagnosisId: idSchema,
+  code: z.string(),
+  name: z.string(),
+  /** Null only when the catalog item could not be found. */
+  color: markColorSchema.nullable(),
+  priority: markPrioritySchema,
+  /** Empty = the whole tooth. */
+  surfaces: surfacesSchema,
+  recordedDate: isoDateSchema,
+  dentistName: z.string(),
+});
+export type ToothDiagnosis = z.infer<typeof toothDiagnosisSchema>;
+
+/** A service done on a tooth, finished or in the live visit, as the chart draws it (feature 9). */
+export const toothServiceSchema = z.object({
+  recordId: idSchema,
+  procedureId: idSchema,
+  code: z.string(),
+  name: z.string(),
+  color: markColorSchema.nullable(),
+  icon: markIconSchema.nullable(),
+  priority: markPrioritySchema,
+  /** Empty = the whole tooth. */
+  surfaces: surfacesSchema,
+  status: serviceMarkSchema,
+  /** The visit's local date; null for a live service whose visit was not given. */
+  date: isoDateSchema.nullable(),
+  dentistName: z.string(),
+  planId: idSchema.nullable(),
+});
+export type ToothService = z.infer<typeof toothServiceSchema>;
+
+/**
  * One tooth's derived chart state (`chart.ts`'s `deriveChart`; spec §Chart state / §Derived
  * values). `state` is the glyph's overall precedence (`'none'` when nothing applies); `surfaces`
  * and `wholeTooth` carry only the marks a per-surface or whole-tooth *service* (completed or
@@ -323,6 +364,11 @@ const toothVisualStateSchema = z.enum(TOOTH_VISUAL_STATES);
  * planned state (`chart.ts`'s `cellMark`), the same way the POC's `toothCells` falls back to a
  * planned wash for cells with no service mark. A diagnosis alone never marks a surface or the
  * whole tooth; it only sets `hasActiveDiagnosis`. `titleParts` feeds the tooltip.
+ *
+ * `diagnoses` and `services` are what the glyph draws since feature 9: the active diagnoses and
+ * the finished and live services, each with its catalog mark, the ones to show first leading
+ * (priority, then most recent). `planInProgress` says an open plan was started, which `state`
+ * hides once the tooth is treated today.
  */
 export const toothStateSchema = z.object({
   code: toothCodeSchema,
@@ -332,7 +378,10 @@ export const toothStateSchema = z.object({
   surfaces: z.partialRecord(surfaceKeySchema, serviceMarkSchema),
   wholeTooth: serviceMarkSchema.nullable(),
   hasActiveDiagnosis: z.boolean(),
+  diagnoses: z.array(toothDiagnosisSchema),
+  services: z.array(toothServiceSchema),
   openPlanIds: z.array(idSchema),
+  planInProgress: z.boolean(),
   historyCount: z.number().int().nonnegative(),
   titleParts: z.object({
     diagnoses: z.array(z.string()),
@@ -362,6 +411,9 @@ export const patientChartSchema = z.object({
   voidedVisitIds: z.array(idSchema),
   /** Derived per-tooth state (`chart.ts`'s `deriveChart`), one entry per code that has any. */
   teeth: z.array(toothStateSchema),
+  /** The mark of every catalog item the records point at, by diagnosis or procedure id; inactive
+   * and deleted items included, so the SPA derives the same chart (feature 9). */
+  marks: z.record(idSchema, catalogMarkSchema),
 });
 export type PatientChart = z.infer<typeof patientChartSchema>;
 

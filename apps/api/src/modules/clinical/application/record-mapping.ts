@@ -99,6 +99,7 @@ export function toHistoryService(
     visitId: service.visitId,
     visitDate,
     dentistName,
+    procedureId: service.procedureId,
     code: service.code,
     name: service.name,
     toothCode: service.toothCode === null ? null : toothCodeSchema.parse(service.toothCode),

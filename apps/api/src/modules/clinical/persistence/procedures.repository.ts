@@ -1,6 +1,6 @@
-import type { ServiceItem, ToothEffect } from '@dcm/contracts';
+import type { CatalogMark, ServiceItem, ToothEffect } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { and, asc, count, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import {
   type CatalogRowLock,
@@ -23,6 +23,9 @@ function toService(row: ProcedureRow): ServiceItem {
     frequent: row.frequent,
     active: row.active,
     toothEffect: row.toothEffect,
+    color: row.color,
+    icon: row.icon,
+    markPriority: row.markPriority,
   };
 }
 
@@ -37,6 +40,9 @@ function toRow(item: ServiceItem) {
     frequent: item.frequent,
     active: item.active,
     toothEffect: item.toothEffect,
+    color: item.color,
+    icon: item.icon,
+    markPriority: item.markPriority,
   };
 }
 
@@ -69,6 +75,35 @@ export class ProceduresRepository implements CatalogStore<ServiceItem> {
       tx.select({ effect: procedures.toothEffect }).from(procedures).where(eq(procedures.id, id)),
     );
     return row?.effect ?? 'none';
+  }
+
+  /**
+   * The chart marks of the services `ids` name (feature 9), by id. Rows removed from the catalog
+   * since are included: a record keeps pointing at its row and must still be drawn.
+   */
+  async marksByIds(ids: readonly string[]): Promise<Map<string, CatalogMark>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({
+          id: procedures.id,
+          color: procedures.color,
+          icon: procedures.icon,
+          priority: procedures.markPriority,
+          name: procedures.name,
+          code: procedures.code,
+          active: procedures.active,
+          deletedAt: procedures.deletedAt,
+        })
+        .from(procedures)
+        .where(inArray(procedures.id, [...new Set(ids)])),
+    );
+    return new Map(
+      rows.map(({ id, deletedAt, active, ...mark }) => [
+        id,
+        { ...mark, active: active && deletedAt === null },
+      ]),
+    );
   }
 
   byId(id: string, lock?: CatalogRowLock): Promise<ServiceItem | undefined> {
