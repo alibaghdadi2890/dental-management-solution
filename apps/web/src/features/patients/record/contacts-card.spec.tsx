@@ -373,7 +373,7 @@ describe('Add contact panel', () => {
     mockApi({ patients: [RANA], contacts: { [RANA.id]: [] } });
     renderRecord({ url: `/patients/${RANA.id}?tab=overview&panel=add-contact` });
     await screen.findByRole('heading', { level: 1, name: 'Rana Haddad' });
-    await screen.findAllByText('Not recorded');
+    await screen.findByRole('region', { name: 'Needs attention' });
     expect(screen.queryByRole('complementary')).toBeNull();
   });
 

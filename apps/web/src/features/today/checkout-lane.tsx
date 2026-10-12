@@ -35,9 +35,10 @@ export function CheckoutCard({
   locale: string;
   onCheckout: () => void;
 }) {
-  const { t } = useTranslation('today');
+  const { t } = useTranslation(['today', 'clinical']);
   const facts = [
     formatVisitNumber(visit.displayNumber),
+    t(`clinical:flow.types.${visit.type}`),
     visit.dentist.name,
     visit.room?.name,
     visit.completedAt

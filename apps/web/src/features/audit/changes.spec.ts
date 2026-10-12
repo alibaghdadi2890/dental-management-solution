@@ -4,6 +4,7 @@ import en from '@/locales/en/activity.json';
 import { CHANGE_FIELDS, type ChangeWords, changesOf } from './changes';
 
 const words: ChangeWords = {
+  none: 'None',
   empty: '—',
   yes: 'Yes',
   no: 'No',
@@ -60,7 +61,13 @@ describe('changesOf (H7)', () => {
           currency: 'EUR',
           discount: { mode: 'amount', value: '10.00' },
           active: false,
-          medicalAlerts: ['Latex', 'Penicillin allergy'],
+          medicalHistory: {
+            noKnownAllergies: false,
+            allergies: [{ id: 'a', name: 'Latex' }],
+            noConditions: true,
+            conditions: [],
+            medication: null,
+          },
           status: 'completed',
           notes: 'Came in pain',
         },
@@ -74,7 +81,7 @@ describe('changesOf (H7)', () => {
       total: { before: 'USD 100.00', after: 'EUR 90.00' },
       discount: { before: '0%', after: 'EUR 10.00' },
       active: { before: 'Yes', after: 'No' },
-      medicalAlerts: { before: '—', after: 'Latex, Penicillin allergy' },
+      medicalHistory: { before: '—', after: 'Latex · None · —' },
       status: { before: 'in progress', after: 'completed' },
       notes: { before: '—', after: 'Came in pain' },
     });

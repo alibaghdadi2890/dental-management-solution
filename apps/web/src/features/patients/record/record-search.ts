@@ -8,6 +8,7 @@ export const RECORD_TABS = [
   'overview',
   'history',
   'chart',
+  'plan',
   'files',
   'balance',
   'information',
@@ -21,6 +22,7 @@ export const DEFAULT_RECORD_TAB: RecordTab = 'overview';
 const TAB_PERMISSION: Partial<Record<RecordTab, Permission>> = {
   history: 'visit:read',
   chart: 'visit:read',
+  plan: 'visit:read',
   files: 'file:read',
   balance: 'payment:read',
 };

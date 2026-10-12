@@ -1,5 +1,6 @@
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
+import { chooseTreatment, openAllView } from './start-visit';
 
 /** The clinic every test of this file works in: provisioned once per worker, so the flows share
  * nothing with other files (their clinics, the dev tenant) and each registers its own patients. */
@@ -101,20 +102,18 @@ async function registerPatient(
 }
 
 /** Record header → Start visit → the popover (the owner is the branch's dentist, pre-selected)
- * with the given room → the workspace. `asked`: the visit opens under the unfinished services
- * question, which hides the rest of the page from the accessibility tree until it is answered. */
-async function startVisit(page: Page, room: 'Room 1' | 'Room 2' | 'Room 3', asked = false) {
+ * with the given room, as a Treatment visit → the workspace, on its All view: these flows chart
+ * in the whole workspace (the step screens have their own suite, `visit-flows.spec.ts`). */
+async function startVisit(page: Page, room: 'Room 1' | 'Room 2' | 'Room 3') {
   await page.getByRole('main').getByRole('button', { name: 'Start visit' }).click();
   const popover = page.getByRole('dialog', { name: 'Start visit' });
   await expect(popover.getByRole('combobox', { name: 'Dentist' })).toHaveValue(/.+/);
   await popover.getByRole('combobox', { name: 'Room' }).selectOption({ label: room });
+  await chooseTreatment(popover);
   await popover.getByRole('button', { name: 'Start visit' }).click();
   await expect(page).toHaveURL(/\/visits\/[0-9a-f-]{36}$/);
-  if (asked) {
-    await expect(page.getByRole('dialog', { name: 'Unfinished services' })).toBeVisible();
-    return;
-  }
   await expect(page.getByRole('timer', { name: 'Visit time' })).toHaveText(/^\d{2}:\d{2}$/);
+  await openAllView(page);
 }
 
 /** The workspace's full chart (not the plan board's tooth links). */
@@ -394,7 +393,7 @@ test('a completed visit is amended with a reason, then voided, from the Visits s
     await confirm.getByRole('button', { name: 'Void visit' }).click();
     await expect(page.getByRole('status').filter({ hasText: /voided$/ })).toBeVisible();
     await expect(row).toContainText('Voided');
-    await expect(row.getByRole('cell').nth(5)).toHaveClass(/line-through/);
+    await expect(row.getByRole('cell').nth(6)).toHaveClass(/line-through/);
 
     await row.click();
     await details.getByRole('link', { name: 'Open in record' }).click();
@@ -433,7 +432,6 @@ test('a service not finished in one visit is continued in the next and billed by
 
   const board = page.getByRole('region', { name: 'Treatment plan' });
   const today = page.getByRole('region', { name: "Today's services" });
-  const question = page.getByRole('dialog', { name: 'Unfinished services' });
   const complete = async () => {
     await page.getByRole('button', { name: 'Review & complete' }).click();
     const summary = page.getByRole('dialog', { name: 'Complete visit' });
@@ -476,11 +474,13 @@ test('a service not finished in one visit is continued in the next and billed by
     await expect(recorded).toBeHidden();
   });
 
-  await test.step('second visit: asked as it opens, continued, and nothing is charged', async () => {
-    await startVisit(page, 'Room 3', true);
-    await expect(question).toContainText('Zircon crown');
-    await question.getByRole('button', { name: 'Continue' }).click();
-    await expect(question).toBeHidden();
+  await test.step('second visit: nothing asks; continued from the card, and nothing is charged', async () => {
+    await startVisit(page, 'Room 3');
+    // No prompt (ADR-0048): the work waits at the top of Today's services.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(today.getByText('To continue · 1')).toBeVisible();
+    await today.getByRole('button', { name: 'Actions: Zircon crown' }).click();
+    await page.getByRole('menuitem', { name: 'Continue' }).click();
     await expect(today).toContainText('2 visits');
 
     const summary = await complete();
@@ -491,10 +491,8 @@ test('a service not finished in one visit is continued in the next and billed by
     await expect(recorded).toBeHidden();
   });
 
-  await test.step('third visit: "Not today", then continued from the card and completed', async () => {
-    await startVisit(page, 'Room 3', true);
-    await question.getByRole('button', { name: 'Not today' }).click();
-    await expect(question).toBeHidden();
+  await test.step('third visit: continued from the card and completed', async () => {
+    await startVisit(page, 'Room 3');
     await expect(today.getByText('To continue · 1')).toBeVisible();
     await today.getByRole('button', { name: 'Actions: Zircon crown' }).click();
     await page.getByRole('menuitem', { name: 'Continue' }).click();

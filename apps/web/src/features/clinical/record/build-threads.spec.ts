@@ -34,7 +34,6 @@ const plan = (id: string, extra: Partial<TreatmentPlan> = {}) =>
     diagnosisRecordId: null,
     recordedInVisitId: V1,
     recordedAt: '2026-08-12T09:10:00.000Z',
-    groupId: null,
     startedInVisitId: null,
     startedAt: null,
     sessions: [],
@@ -103,6 +102,9 @@ describe('buildThreads', () => {
           plan('p1', {
             diagnosisRecordId: 'd1',
             status: 'performed',
+            priority: 'high',
+            acceptedAt: null,
+            estimatedSessions: null,
             performedInVisitId: V2,
             performedAt: '2026-09-01T09:30:00.000Z',
           }),

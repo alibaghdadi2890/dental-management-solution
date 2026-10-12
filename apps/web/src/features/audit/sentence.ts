@@ -41,9 +41,12 @@ export interface Lookups {
   money: (amount: string, currency: string) => string;
   /** A tooth code in the clinic's notation. */
   tooth: (code: string) => string;
-  /** The label of a payment method, an adjustment reason, or a file's category or type; the
-   * raw text when it has none. */
-  label: (group: 'method' | 'reason' | 'fileCategory' | 'fileType', value: string) => string;
+  /** The label of a payment method, an adjustment reason, a file's category or type, a visit's
+   * type or a plan's priority; the raw text when it has none. */
+  label: (
+    group: 'method' | 'reason' | 'fileCategory' | 'fileType' | 'visitType' | 'priority',
+    value: string,
+  ) => string;
 }
 
 type Snapshot = Record<string, unknown>;
@@ -112,10 +115,14 @@ const PLAIN = new Set([
   'visit.discount',
   'visit.checkout',
   'visit.void',
-  'visit.unfinished_answered',
+  'visit.history_confirm',
+  'visit.history_unconfirm',
   'visit_service.update',
   'diagnosis_record.resolve',
   'diagnosis_record.reopen',
+  'diagnosis_record.seen_on',
+  'treatment_plan.accept',
+  'treatment_plan.unaccept',
   'treatment_plan.update',
   'treatment_plan.start',
   'treatment_plan.cancel',
@@ -251,6 +258,19 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
     return done(priceOnly ? 'catalog.service.price' : action, subject);
   }
 
+  // --- The medical-history lists (feature 10): the Catalog's own tab ---
+  if (prefix === 'medical_option') {
+    const known = ['create', 'update', 'delete', 'deactivate'].map(
+      (verb) => `medical_option.${verb}`,
+    );
+    const name = field(entry, 'name');
+    return done(
+      known.includes(action) ? action : 'fallback',
+      name ? { kind: 'catalog', label: name } : null,
+      { action: readableAction(action) },
+    );
+  }
+
   // --- Contacts ---
   if (action === 'contact.link' || action === 'contact.roles' || action === 'contact.unlink') {
     return done(action, patient, { name: field(entry, 'fullName') ?? '' });
@@ -279,7 +299,40 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
 
   // --- Visits and the clinical record ---
   if (action === 'visit.update') {
-    return done('notes' in after ? 'visit.notes' : 'visit.discount_live', visit, {}, patient);
+    const key =
+      'notes' in after
+        ? 'visit.notes'
+        : 'reason' in after
+          ? 'visit.reason'
+          : 'painScore' in after
+            ? 'visit.complaint'
+            : 'visit.discount_live';
+    return done(key, visit, {}, patient);
+  }
+  // Why the patient came, said with the start (feature 10).
+  if (action === 'visit.start') {
+    const type = text(after.type);
+    const reason = text(after.reason);
+    const values = { type: type ? lookups.label('visitType', type) : '', reason: reason ?? '' };
+    return done(
+      type === null ? 'visit.start' : reason ? 'visit.start_reason' : 'visit.start_type',
+      visit,
+      values,
+      patient,
+    );
+  }
+  // A service the visit's type added by itself (ADR-0047).
+  if (action === 'visit_service.create' && after.autoAdded === true) {
+    return done('visit_service.create_auto', visit, { name: recordName(entry, lookups) }, patient);
+  }
+  if (action === 'treatment_plan.prioritise') {
+    const priority = text(after.priority);
+    return done(
+      action,
+      patient,
+      { priority: priority ? lookups.label('priority', priority) : '' },
+      visit,
+    );
   }
   if (prefix === 'visit' || prefix === 'visit_service') {
     const values: Record<string, string> = NAMED.has(action)
@@ -291,9 +344,6 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
       values,
       patient,
     );
-  }
-  if (prefix === 'plan_group') {
-    return done(action, patient, { name: field(entry, 'title') ?? '' });
   }
   if (NAMED.has(action)) return done(action, patient, { name: recordName(entry, lookups) }, visit);
   if (PLAIN.has(action)) {

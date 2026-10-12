@@ -4,6 +4,8 @@ import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/components/ui/button';
 import { usePermission } from '@/features/auth/use-permission';
+import { useToothLabel } from '@/features/clinical/chart/use-chart-settings';
+import { fileCitationsQuery } from '@/features/clinical/visits-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { todayIn } from '@/lib/format';
@@ -47,6 +49,47 @@ function eventOf(
   );
   if (changed.length === 1 && changed[0] === 'note') return 'note';
   return changed.length === 1 && changed[0] === 'orientation' ? 'orientation' : 'update';
+}
+
+/**
+ * The diagnoses that were **seen on** this image (feature 10, ADR-0049): tooth and name, a
+ * resolved one struck through. `clinical` knows them; nothing without `visit:read`, or while
+ * none cites the image.
+ */
+function Citations({ file }: { file: PatientFile }) {
+  const { t } = useTranslation('files');
+  const toothLabel = useToothLabel();
+  const canRead = usePermission('visit:read');
+  const citations = useQuery({ ...fileCitationsQuery(file.patientId), enabled: canRead });
+  const diagnoses = citations.data?.find((entry) => entry.fileId === file.id)?.diagnoses ?? [];
+  if (diagnoses.length === 0) return null;
+  return (
+    <section aria-label={t('details.citations')}>
+      <h3 className={MICRO}>{t('details.citations')}</h3>
+      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+        {diagnoses.map((diagnosis) => (
+          <li
+            key={diagnosis.recordId}
+            className="flex items-baseline gap-2 text-[12.5px] leading-[1.4]"
+          >
+            <span dir="ltr" className="flex-none font-mono font-semibold text-primary">
+              {toothLabel(diagnosis.toothCode)}
+            </span>
+            <span
+              className={cn(
+                'min-w-0',
+                diagnosis.status === 'resolved'
+                  ? 'text-ink-muted line-through'
+                  : 'font-medium text-danger',
+              )}
+            >
+              {diagnosis.name}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }
 
 function History({ fileId }: { fileId: string }) {
@@ -340,6 +383,8 @@ export function DetailsPanel({
             </>
           )}
         </dl>
+
+        <Citations file={file} />
 
         {file.storageKey !== null && (
           <details className="text-[12.5px]">

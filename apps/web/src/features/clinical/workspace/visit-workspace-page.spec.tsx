@@ -35,6 +35,8 @@ describe('VisitWorkspacePage', () => {
     expect(within(card).getByRole('group', { name: 'Upper arch' })).toBeTruthy();
     // The view switch and the legend's standing groups.
     expect(within(card).getByRole('radiogroup', { name: 'Show on the chart' })).toBeTruthy();
+    expect(within(card).queryByRole('group', { name: 'Status' })).toBeNull();
+    fireEvent.click(within(card).getByRole('button', { name: 'Key' }));
     expect(within(card).getByRole('group', { name: 'Status' })).toBeTruthy();
     expect(screen.getByRole('complementary', { name: 'Selected tooth' })).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Treatment plan' })).toBeTruthy();

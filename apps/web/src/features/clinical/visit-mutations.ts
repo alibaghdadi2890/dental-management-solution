@@ -1,14 +1,18 @@
 import { visitListKeys } from './visits-list/visits-list-api';
 import type {
   AddServiceInput,
-  AnswerUnfinishedInput,
+  DiagnosisEvidence,
+  PlanPriority,
   PlanTreatmentInput,
   RecordDiagnosisInput,
-  StartVisitInput,
+  StartVisitRequest,
   UpdateServiceInput,
   Visit,
+  VisitComplaintInput,
   VisitDiscountInput,
   VisitNotesInput,
+  VisitStep,
+  VisitViewMode,
   ToothPresenceChange,
 } from '@dcm/contracts';
 import { hashKey, mutationOptions, type QueryClient, useQueryClient } from '@tanstack/react-query';
@@ -17,10 +21,11 @@ import { invalidatePatientData } from '@/features/patients/patients-api';
 import { actingTenantId, useActingTenantId } from '@/features/platform/acting-tenant';
 import {
   addService,
-  answerUnfinished,
+  addWorkItem,
   cancelPlan,
   clinicalKeys,
   completeVisit,
+  confirmHistory,
   discardVisit,
   markServiceUnfinished,
   pauseVisit,
@@ -33,12 +38,20 @@ import {
   removePresence,
   removeService,
   removeSession,
+  removeWorkItem,
   reopenDiagnosis,
   resolveDiagnosis,
   resumeVisit,
+  setDiagnosisSeenOn,
+  setPlanPriority,
   setPresence,
+  setVisitComplaint,
   setVisitDiscount,
+  setVisitReason,
+  setVisitStep,
+  setVisitView,
   startVisit,
+  unconfirmHistory,
   updateService,
   updateVisitNotes,
   visitKeys,
@@ -118,18 +131,18 @@ function invalidate(queryClient: QueryClient, keys: Keys): Promise<void> {
   );
 }
 
-/** What the chart card, tooth history and the Overview's treatment summary derive from. */
+/** What the chart card, the tooth histories and the image viewer derive from. */
 const chartingKeys = (tenantId: Tenant, patientId: string) => [
   clinicalKeys.chart(tenantId, patientId),
   clinicalKeys.toothHistories(tenantId, patientId),
-  clinicalKeys.summary(tenantId, patientId),
+  clinicalKeys.fileCitations(tenantId, patientId),
 ];
 
 /** `POST /visits`: a new or resumed visit; either way the patient now has a live visit (the
  * live-visit lists and the chart's `liveVisitId`). */
 export function startVisitMutation(queryClient: QueryClient, tenantId: Tenant = actingTenantId()) {
   return mutationOptions({
-    mutationFn: (input: StartVisitInput) => startVisit(input, tenantId ?? undefined),
+    mutationFn: (input: StartVisitRequest) => startVisit(input, tenantId ?? undefined),
     onSuccess: async ({ visit }) => {
       await writeVisit(queryClient, tenantId, visit);
       await invalidate(queryClient, [
@@ -216,6 +229,41 @@ export function visitMutations(
       mutationFn: (input: VisitNotesInput) => updateVisitNotes(visitId, input, tenant),
       onSuccess: visitOnly,
     }),
+    /** The flow (feature 10). The step is on the Today board's pill, which reads the visits list. */
+    setStep: mutationOptions({
+      ...base,
+      mutationFn: (step: VisitStep) => setVisitStep(visitId, { step }, tenant),
+      onSuccess: then(() => [visitKeys.allLive(tenantId), visitListKeys.lists(tenantId)]),
+    }),
+    setView: mutationOptions({
+      ...base,
+      mutationFn: (viewMode: VisitViewMode) => setVisitView(visitId, { viewMode }, tenant),
+      onSuccess: visitOnly,
+    }),
+    setReason: mutationOptions({
+      ...base,
+      mutationFn: (reason: string) => setVisitReason(visitId, { reason }, tenant),
+      onSuccess: visitOnly,
+    }),
+    setComplaint: mutationOptions({
+      ...base,
+      mutationFn: (input: VisitComplaintInput) => setVisitComplaint(visitId, input, tenant),
+      onSuccess: visitOnly,
+    }),
+    /** "Confirmed with the patient": the record header's "not confirmed" line reads it too. */
+    confirmHistory: mutationOptions({
+      ...base,
+      mutationFn: (confirmed: boolean) =>
+        confirmed ? confirmHistory(visitId, tenant) : unconfirmHistory(visitId, tenant),
+      onSuccess: then((visit) => [clinicalKeys.historyConfirmation(tenantId, visit.patientId)]),
+    }),
+    /** Today's work: a planned treatment ticked onto today's list, or off it. */
+    setWorkItem: mutationOptions({
+      ...base,
+      mutationFn: ({ planId, listed }: { planId: string; listed: boolean }) =>
+        listed ? addWorkItem(visitId, planId, tenant) : removeWorkItem(visitId, planId, tenant),
+      onSuccess: visitOnly,
+    }),
     setDiscount: mutationOptions({
       ...base,
       mutationFn: (input: VisitDiscountInput) => setVisitDiscount(visitId, input, tenant),
@@ -262,9 +310,21 @@ export function visitMutations(
       mutationFn: (recordId: string) => removeDiagnosis(visitId, recordId, tenant),
       onSuccess: charting,
     }),
+    setSeenOn: mutationOptions({
+      ...base,
+      mutationFn: ({ recordId, seenOn }: { recordId: string; seenOn: DiagnosisEvidence | null }) =>
+        setDiagnosisSeenOn(visitId, recordId, { seenOn }, tenant),
+      onSuccess: charting,
+    }),
     planTreatment: mutationOptions({
       ...base,
       mutationFn: (input: PlanTreatmentInput) => planTreatment(visitId, input, tenant),
+      onSuccess: charting,
+    }),
+    setPlanPriority: mutationOptions({
+      ...base,
+      mutationFn: ({ planId, priority }: { planId: string; priority: PlanPriority }) =>
+        setPlanPriority(visitId, planId, { priority }, tenant),
       onSuccess: charting,
     }),
     performPlan: mutationOptions({
@@ -272,27 +332,11 @@ export function visitMutations(
       mutationFn: (planId: string) => performPlan(visitId, planId, tenant),
       onSuccess: charting,
     }),
-    /** Unfinished services (ADR-0032): marking one, the visit's answer about earlier ones,
-     * continuing one and undoing that. */
+    /** Unfinished services (ADR-0032): marking one, continuing one and undoing that. */
     markUnfinished: mutationOptions({
       ...base,
       mutationFn: (serviceId: string) => markServiceUnfinished(visitId, serviceId, tenant),
       onSuccess: charting,
-    }),
-    /** A refused answer may name a service cancelled meanwhile: the chart is refetched too. */
-    answerUnfinished: mutationOptions({
-      ...base,
-      mutationFn: (input: AnswerUnfinishedInput) => answerUnfinished(visitId, input, tenant),
-      onSuccess: charting,
-      onError: () => {
-        const patientId = queryClient.getQueryData<Visit>(mutationKey)?.patientId;
-        return Promise.all([
-          refetchVisit(queryClient, mutationKey),
-          patientId === undefined
-            ? undefined
-            : invalidate(queryClient, chartingKeys(tenantId, patientId)),
-        ]);
-      },
     }),
     recordSession: mutationOptions({
       ...base,

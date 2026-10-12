@@ -114,7 +114,8 @@ export function ChartCardFrame({
           <ChartViewSwitch />
           {action}
         </div>
-        {aside && !expanded && <div className="min-w-0 flex-auto">{aside}</div>}
+        {/* A row of its own under the title and the switches. */}
+        {aside && !expanded && <div className="min-w-0 basis-full">{aside}</div>}
       </div>
       {expanded ? (
         <div className="grid items-center gap-x-7 gap-y-5 pt-1 pb-2 @min-[1080px]/chart:grid-cols-[minmax(0,1fr)_auto]">

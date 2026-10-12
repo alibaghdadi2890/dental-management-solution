@@ -63,6 +63,16 @@ describe('visits search', () => {
     });
   });
 
+  it('filters by visit type, counts it as a filter and clears it (feature 10)', () => {
+    const search = parseVisitsSearch({ type: 'hygiene' });
+    expect(search.type).toBe('hygiene');
+    expect(parseVisitsSearch({ type: 'checkup' }).type).toBeUndefined();
+    expect(filtersOf(search).type).toBe('hygiene');
+    expect(filterParams(filtersOf(search))).toMatchObject({ type: 'hygiene' });
+    expect(activeFilterCount(search)).toBe(1);
+    expect(clearFilters(search).type).toBeUndefined();
+  });
+
   it('clears back to 90 days, keeping the tab, size and open visit', () => {
     const search = parseVisitsSearch({
       tab: 'in_progress',

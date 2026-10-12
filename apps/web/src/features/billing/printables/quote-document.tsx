@@ -1,4 +1,10 @@
-import { formatQuoteNumber, fromCents, isOpenPlan, toCents } from '@dcm/contracts';
+import {
+  formatQuoteNumber,
+  fromCents,
+  type PlanPriority,
+  planPhases,
+  toCents,
+} from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '@/features/auth/session';
@@ -19,18 +25,28 @@ function addDays(date: string, days: number): string {
 
 /**
  * A treatment-plan quote (B9, Q3): the patient's open plans at the prices they were planned at,
- * valid 60 days, with two signature lines. Printed on demand, not stored: its number is
- * `EST-<patient number>-<date>`.
+ * grouped by priority — the phases of the plan (feature 10, ADR-0045) — each with its total, then
+ * the estimate; valid 60 days, with two signature lines. With `priority` it is that phase alone.
+ * Printed on demand, not stored: its number is `EST-<patient number>-<date>`.
  */
-export function QuoteDocument({ patientId }: { patientId: string }) {
-  const { t, i18n } = useTranslation('printables');
+export function QuoteDocument({
+  patientId,
+  priority,
+}: {
+  patientId: string;
+  priority?: PlanPriority | undefined;
+}) {
+  const { t, i18n } = useTranslation(['printables', 'clinical']);
   const locale = i18n.resolvedLanguage ?? 'en';
   const { data: session } = useSession();
   const toothLabel = useToothLabel();
   const patient = useQuery(patientQuery(patientId));
   const chart = useQuery(chartQuery(patientId));
   const today = session?.tenant ? todayIn(session.tenant.timeZone) : '';
-  const plans = (chart.data?.plans ?? []).filter(isOpenPlan);
+  const phases = planPhases(chart.data?.plans ?? []).filter(
+    (phase) => phase.open.length > 0 && (priority === undefined || phase.priority === priority),
+  );
+  const plans = phases.flatMap((phase) => phase.open);
   const currency = plans[0]?.price.currency ?? session?.tenant?.currency ?? 'USD';
   const total = plans.reduce((sum, plan) => sum + toCents(plan.price.amount), 0n);
   const dentists = [...new Set(plans.map((plan) => plan.dentistName))];
@@ -56,22 +72,31 @@ export function QuoteDocument({ patientId }: { patientId: string }) {
               { label: t('insurance'), lines: [patient.data.insurance ?? '—'] },
             ]}
           />
-          {plans.length === 0 ? (
-            <p className="text-ink-muted">{t('quote.empty')}</p>
-          ) : (
-            <ItemsTable
-              headers={[t('code'), t('quote.treatment'), t('tooth'), t('amount')]}
-              numeric={[3]}
-              rows={plans.map((plan) => [
-                <span key="code" className="font-mono">
-                  {plan.code}
-                </span>,
-                plan.name,
-                plan.toothCode ? toothLabel(plan.toothCode) : '—',
-                formatMoney(plan.price, locale),
-              ])}
-            />
-          )}
+          {plans.length === 0 && <p className="text-ink-muted">{t('quote.empty')}</p>}
+          {phases.map((phase) => (
+            <section key={phase.priority} data-phase={phase.priority} className="mb-4">
+              <h2 className="m-0 mb-1.5 flex items-baseline justify-between text-[12px] font-semibold tracking-[.05em] uppercase">
+                {t(`clinical:flow.priority.${phase.priority}`)}
+                {phase.total && (
+                  <span className="font-mono tracking-normal tabular-nums">
+                    {formatMoney(phase.total, locale)}
+                  </span>
+                )}
+              </h2>
+              <ItemsTable
+                headers={[t('code'), t('quote.treatment'), t('tooth'), t('amount')]}
+                numeric={[3]}
+                rows={phase.open.map((plan) => [
+                  <span key="code" className="font-mono">
+                    {plan.code}
+                  </span>,
+                  plan.name,
+                  plan.toothCode ? toothLabel(plan.toothCode) : '—',
+                  formatMoney(plan.price, locale),
+                ])}
+              />
+            </section>
+          ))}
           <Totals
             lines={[
               {

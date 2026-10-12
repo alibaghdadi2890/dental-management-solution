@@ -86,6 +86,7 @@ export function VisitDetailPanel({
   onClose: () => void;
 }) {
   const { t, i18n } = useTranslation(['visits', 'common', 'billing']);
+  const { t: tClinical } = useTranslation('clinical');
   const navigate = useNavigate();
   const openPayment = useRecordPayment();
   const confirm = useConfirm();
@@ -268,6 +269,7 @@ export function VisitDetailPanel({
           </div>
           <span className="text-[12.5px] text-ink-secondary">
             {[
+              tClinical(`flow.types.${visit.type}`),
               formatDate(visit.startedAt, { timeZone, locale }),
               visit.dentist.name,
               visit.room?.name,
@@ -275,6 +277,11 @@ export function VisitDetailPanel({
               .filter(Boolean)
               .join(' · ')}
           </span>
+          {visit.reason && (
+            <span data-visit-reason className="text-[12.5px] leading-[1.4] text-ink-secondary">
+              {t('panel.reason', { reason: visit.reason })}
+            </span>
+          )}
         </div>
       }
       dirty={dirty}

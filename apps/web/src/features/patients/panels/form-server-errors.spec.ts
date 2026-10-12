@@ -24,9 +24,6 @@ describe('fieldErrorsOf', () => {
     expect(
       fieldErrorsOf(apiError(422, 'validation_failed', ['patient.email', 'patient.address'])),
     ).toEqual({ email: 'invalidEmail', address: 'invalid' });
-    expect(fieldErrorsOf(apiError(422, 'validation_failed', ['patient.medicalAlerts.3']))).toEqual({
-      alerts: 'invalid',
-    });
   });
 
   it("puts the phone rule's missing phone as Required, not as an invalid number", () => {
@@ -153,7 +150,6 @@ describe('failureOf', () => {
   it('names the known patient failures', () => {
     expect(failureOf(apiError(409, 'patient.archived'))).toBe('archived');
     expect(failureOf(apiError(409, 'patient.merged'))).toBe('merged');
-    expect(failureOf(apiError(422, 'patient.merge_alerts_overflow'))).toBe('alertsOverflow');
     expect(failureOf(apiError(422, 'patient.unknown_dentist'))).toBe('unknownDentist');
     expect(failureOf(apiError(404, 'patient.not_found'))).toBe('notFound');
   });

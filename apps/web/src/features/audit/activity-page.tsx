@@ -161,6 +161,8 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
           reason: `billing:adjust.reasons.${value}`,
           fileCategory: `files:category.${value}`,
           fileType: `files:subCategory.${value}`,
+          visitType: `clinical:flow.types.${value}`,
+          priority: `clinical:flow.priority.${value}`,
         }[group];
         return i18n.exists(key) ? translate(key) : value;
       },
@@ -532,6 +534,7 @@ function Changes({
     empty: '—',
     yes: t('yes'),
     no: t('no'),
+    none: t('none'),
     money: (amount, code) => formatMoney({ amount, currency: code }, locale),
   };
   const changes = changesOf(entry, currency, words);

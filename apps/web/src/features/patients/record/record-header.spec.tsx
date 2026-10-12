@@ -8,6 +8,7 @@ import { todayIn } from '@/lib/format';
 import {
   ALL_PERMISSIONS,
   DENTIST_ID,
+  history,
   id,
   json,
   mockApi,
@@ -22,7 +23,7 @@ import {
 
 const RANA = patient(1, 'Rana Haddad', {
   dateOfBirth: '1990-05-01',
-  medicalAlerts: ['Penicillin allergy', 'Latex'],
+  medicalHistory: history(['Penicillin', 'Latex'], ['Asthma']),
 });
 const KEPT = patient(2, 'Rana Haddad');
 const recordOf = (p: Patient) => `/patients/${p.id}`;
@@ -56,12 +57,12 @@ describe('RecordHeader', () => {
       within(alerts)
         .getAllByRole('listitem')
         .map((chip) => chip.textContent),
-    ).toEqual(['Penicillin allergy', 'Latex']);
+    ).toEqual(['Penicillin', 'Latex', 'Asthma']);
   });
 
   describe('guardian chip (design addendum "Record")', () => {
     it('follows the alert chips for a minor: the primary guardian, with their phone', async () => {
-      const minor = { ...KARIM, medicalAlerts: ['Latex'] };
+      const minor = { ...KARIM, medicalHistory: history(['Latex']) };
       mockApi({
         patients: [minor],
         contacts: {
@@ -136,11 +137,10 @@ describe('RecordHeader', () => {
       });
       renderRecord({ url: recordOf(adult) });
       const banner = await header();
-      await waitFor(() => {
-        expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/contacts'))).toBe(true);
-      });
       await new Promise((resolve) => setTimeout(resolve, 20));
       expect(guardianChip(banner)).toBeNull();
+      // An adult's contacts are not even read for the header.
+      expect(fetchMock.mock.calls.some(([url]) => url.endsWith('/contacts'))).toBe(false);
     });
   });
 

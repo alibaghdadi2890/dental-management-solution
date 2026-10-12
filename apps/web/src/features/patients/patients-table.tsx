@@ -313,12 +313,17 @@ export function PatientRow({
   const age = years === null ? NONE : String(years);
   const ageSex =
     patient.sex === 'unknown' ? age : t('ageSex', { age, sex: t(`sex.${patient.sex}`) });
-  const [firstAlert] = patient.medicalAlerts;
-  const alertWord = firstAlert?.split(/[\s—(]/)[0] ?? '';
+  // Allergies first: the badge shows the one a dentist must not miss.
+  const alerts = [...patient.allergyNames, ...patient.conditionNames];
+  const [firstAlert] = alerts;
   const alertBadge =
-    patient.medicalAlerts.length > 1
-      ? t('alertBadge', { alert: alertWord, more: patient.medicalAlerts.length - 1 })
-      : alertWord;
+    firstAlert !== undefined && alerts.length > 1
+      ? t('alertBadge', { alert: firstAlert, more: alerts.length - 1 })
+      : firstAlert;
+  const alertTone =
+    patient.allergyNames.length > 0
+      ? 'border-danger-border bg-danger-bg text-danger'
+      : 'border-warning-border bg-warning-bg text-warning';
   const dentist = patient.primaryDentistId
     ? (context.dentistNames.get(patient.primaryDentistId) ?? NONE)
     : NONE;
@@ -367,10 +372,7 @@ export function PatientRow({
                 {patient.fullName}
               </span>
               {firstAlert !== undefined && (
-                <span
-                  title={patient.medicalAlerts.join(', ')}
-                  className={cn(badge, 'border-danger-border bg-danger-bg text-danger')}
-                >
+                <span title={alerts.join(', ')} className={cn(badge, alertTone)}>
                   {alertBadge}
                 </span>
               )}

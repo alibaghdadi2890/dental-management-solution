@@ -1,12 +1,13 @@
-import type { VisitListItem } from '@dcm/contracts';
+import { stepLabelKey, type VisitListItem } from '@dcm/contracts';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { useElapsedText } from '@/features/clinical/use-visit-timer';
 import { cn } from '@/lib/utils';
 
 /**
- * One live visit of the branch (Today board, T4): the patient, the dentist and room, and the
- * running or paused time. With `visit:write` the name links to the workspace.
+ * One live visit of the branch (Today board, T4; feature 10, V15): the patient, the visit's type,
+ * the dentist and room, the step it is on as a pill ("On Perform"), and the running or paused
+ * time. With `visit:write` the name links to the workspace, which opens on that step.
  */
 export function ChairRow({
   visit,
@@ -18,8 +19,12 @@ export function ChairRow({
   receivedAt: number;
   canOpen: boolean;
 }) {
-  const { t } = useTranslation('today');
+  const { t } = useTranslation(['today', 'clinical']);
   const elapsed = useElapsedText(visit, receivedAt);
+  // The key is built at run time; every `stepLabelKey` value has its `flow.steps` entry.
+  const stepLabel = (t as (key: string) => string)(
+    `clinical:flow.steps.${stepLabelKey(visit.type, visit.currentStep)}`,
+  );
   const running = visit.status === 'in_progress';
 
   return (
@@ -46,9 +51,17 @@ export function ChairRow({
           </span>
         )}
         <span className="text-[12.5px] leading-snug text-ink-muted">
-          {[visit.dentist.name, visit.room?.name].filter(Boolean).join(' · ')}
+          {[t(`clinical:flow.types.${visit.type}`), visit.dentist.name, visit.room?.name]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
       </div>
+      <span
+        data-step={visit.currentStep}
+        className="flex-none rounded-[5px] border border-primary-tint-border bg-primary-tint px-2 py-[3px] text-[11.5px] leading-none font-medium text-primary"
+      >
+        {t('chair.onStep', { step: stepLabel })}
+      </span>
       {!running && (
         <span className="flex-none text-[11.5px] leading-none text-ink-muted">
           {t('chair.paused')}

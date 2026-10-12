@@ -6,6 +6,7 @@ import {
   outstandingPageSchema,
   patientAccountSchema,
   type PaymentRequest,
+  type PlanPriority,
   paymentWriteResultSchema,
   receiptSchema,
   receivablesSchema,
@@ -189,7 +190,9 @@ export const printPath = {
   invoice: (visitId: string) => `/print/invoice/${visitId}`,
   statement: (patientId: string) => `/print/statement/${patientId}`,
   familyStatement: (contactId: string) => `/print/family-statement/${contactId}`,
-  quote: (patientId: string) => `/print/quote/${patientId}`,
+  /** The whole plan, or one of its phases (feature 10, ADR-0045). */
+  quote: (patientId: string, priority?: PlanPriority) =>
+    `/print/quote/${patientId}${priority ? `?priority=${priority}` : ''}`,
 };
 
 export function openPrintable(path: string): void {

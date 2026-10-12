@@ -18,6 +18,7 @@ import {
 } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { history } from './patients.test-utils';
 import '@/lib/i18n';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import { ToastProvider } from '@/components/ui/toast';
@@ -55,7 +56,8 @@ const item = (n: number, fullName: string, extra: Partial<PatientListItem> = {})
     phone: '+9613123456',
     dateOfBirth: '1990-05-01',
     sex: 'female',
-    medicalAlerts: [],
+    allergyNames: [],
+    conditionNames: [],
     primaryDentistId: null,
     email: null,
     archivedAt: null,
@@ -65,8 +67,13 @@ const item = (n: number, fullName: string, extra: Partial<PatientListItem> = {})
     ...extra,
   }) satisfies PatientListItem;
 
-const full = (patient: PatientListItem, archivedAt: string | null): Patient => ({
+const full = (
+  { allergyNames, conditionNames, ...patient }: PatientListItem,
+  archivedAt: string | null,
+): Patient => ({
   ...patient,
+  medicalHistory: history(allergyNames, conditionNames),
+  firstVisitType: null,
   address: null,
   insurance: null,
   notes: null,
@@ -78,7 +85,7 @@ const full = (patient: PatientListItem, archivedAt: string | null): Patient => (
 });
 
 const RANA = item(1, 'Rana Haddad', {
-  medicalAlerts: ['Penicillin allergy'],
+  allergyNames: ['Penicillin'],
   primaryDentistId: profileId(DENTIST_ID),
 });
 const SAMI = item(2, 'Sami Khoury', { sex: 'male', dateOfBirth: null });

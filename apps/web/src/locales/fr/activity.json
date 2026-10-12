@@ -95,19 +95,26 @@
       "discount": "A changé la remise de la visite {{subject}} à l’encaissement",
       "checkout": "A clôturé l’encaissement de la visite {{subject}}",
       "void": "A annulé la visite {{subject}}",
-      "unfinished_answered": "A indiqué quels soins non terminés la visite {{subject}} poursuit"
+      "start_type": "A commencé la visite {{subject}} · {{type}}",
+      "start_reason": "A commencé la visite {{subject}} · {{type}} · « {{reason}} »",
+      "reason": "A modifié le motif de la visite {{subject}}",
+      "complaint": "A enregistré la plainte de la visite {{subject}}",
+      "history_confirm": "A confirmé les antécédents avec le patient lors de la visite {{subject}}",
+      "history_unconfirm": "A retiré la confirmation des antécédents lors de la visite {{subject}}"
     },
     "visit_service": {
       "create": "A ajouté {{name}} à la visite {{subject}}",
       "update": "A changé le prix d’un acte dans la visite {{subject}}",
       "delete": "A retiré {{name}} de la visite {{subject}}",
-      "unfinished": "A marqué {{name}} comme non terminé dans la visite {{subject}}"
+      "unfinished": "A marqué {{name}} comme non terminé dans la visite {{subject}}",
+      "create_auto": "{{name}} a été ajouté automatiquement à la visite {{subject}}"
     },
     "diagnosis_record": {
       "create": "A noté {{name}} pour {{subject}}",
       "delete": "A retiré le diagnostic {{name}} pour {{subject}}",
       "resolve": "A résolu un diagnostic pour {{subject}}",
-      "reopen": "A rouvert un diagnostic pour {{subject}}"
+      "reopen": "A rouvert un diagnostic pour {{subject}}",
+      "seen_on": "A modifié ce sur quoi un diagnostic a été vu pour {{subject}}"
     },
     "treatment_plan": {
       "create": "A planifié {{name}} pour {{subject}}",
@@ -119,12 +126,10 @@
       "session": "A noté un travail sur un soin non terminé pour {{subject}}",
       "session_delete": "A retiré le travail d’une visite sur un soin non terminé pour {{subject}}",
       "reprice": "A changé le prix d’un soin planifié pour {{subject}}",
-      "delete": "A retiré le soin planifié {{name}} pour {{subject}}"
-    },
-    "plan_group": {
-      "create": "A créé le plan « {{name}} » pour {{subject}}",
-      "update": "A modifié le plan « {{name}} » pour {{subject}}",
-      "delete": "A supprimé le plan « {{name}} » pour {{subject}}"
+      "delete": "A retiré le soin planifié {{name}} pour {{subject}}",
+      "prioritise": "A défini la priorité d’un traitement planifié sur {{priority}} pour {{subject}}",
+      "accept": "A marqué un traitement planifié comme accepté pour {{subject}}",
+      "unaccept": "A retiré l’acceptation d’un traitement planifié pour {{subject}}"
     },
     "tooth_status": {
       "set": "A changé une dent sur le schéma de {{subject}}"
@@ -196,6 +201,12 @@
     "room": {
       "create": "A ajouté la salle {{subject}}",
       "update": "A modifié la salle {{subject}}"
+    },
+    "medical_option": {
+      "create": "A ajouté {{subject}} aux listes d’antécédents",
+      "update": "A modifié {{subject}} dans les listes d’antécédents",
+      "delete": "A supprimé {{subject}} des listes d’antécédents",
+      "deactivate": "A cessé de proposer {{subject}} dans les listes d’antécédents"
     }
   },
   "fields": {
@@ -211,7 +222,6 @@
     "sex": "Sexe",
     "address": "Adresse",
     "insurance": "Assurance",
-    "medicalAlerts": "Alertes médicales",
     "notes": "Notes",
     "note": "Note",
     "status": "Statut",
@@ -250,10 +260,13 @@
     "chartMode": "Détail du schéma",
     "toothNotation": "Notation dentaire",
     "chartOrientation": "Orientation du schéma",
-    "dentitionOverride": "Schéma"
+    "dentitionOverride": "Schéma",
+    "medicalHistory": "Antécédents médicaux",
+    "firstVisitType": "Première visite"
   },
   "noAccess": {
     "title": "Vous ne pouvez pas ouvrir le journal d’activité",
     "body": "Demandez au propriétaire du cabinet ou à un dentiste."
-  }
+  },
+  "none": "Aucune"
 }

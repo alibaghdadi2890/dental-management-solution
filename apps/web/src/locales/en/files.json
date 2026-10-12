@@ -174,11 +174,6 @@
     "restored_one": "Restored",
     "restored_other": "{{count}} files restored"
   },
-  "recent": {
-    "title": "Recent files",
-    "viewAll": "View all",
-    "upload": "Upload files"
-  },
   "toothImages": {
     "title": "Images",
     "add": "Add an image of tooth {{tooth}}"
@@ -281,7 +276,8 @@
       "update": "Details changed",
       "archive": "Archived",
       "restore": "Restored"
-    }
+    },
+    "citations": "Diagnoses seen on this image"
   },
   "errors": {
     "file": {
@@ -292,5 +288,17 @@
       "visit_mismatch": "That visit is not one of this patient’s visits.",
       "archive_forbidden": "Only a dentist or the owner can archive or restore this file."
     }
+  },
+  "evidence": {
+    "title": "Evidence",
+    "upload": "Upload",
+    "takePhoto": "Take photo",
+    "empty": "No images yet."
+  },
+  "latest": {
+    "title": "Latest images",
+    "all": "All {{count}}",
+    "loading": "Loading the files…",
+    "failed": "Couldn’t load the files"
   }
 }

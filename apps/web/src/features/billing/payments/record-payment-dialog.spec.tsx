@@ -24,6 +24,7 @@ const ACCOUNT: PatientAccount = {
       kind: 'visit_charge',
       visitId: id(20),
       visitNumber: 12,
+      visitType: 'treatment',
       date: '2026-09-01',
       charged: '300.00',
       paid: '0.00',

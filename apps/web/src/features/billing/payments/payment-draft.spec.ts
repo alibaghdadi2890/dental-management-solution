@@ -10,6 +10,7 @@ const charge = (n: number, outstanding: string) => ({
   kind: 'visit_charge' as const,
   visitId: id(n + 50),
   visitNumber: n,
+  visitType: 'treatment' as const,
   date: '2026-09-01',
   charged: outstanding,
   paid: '0.00',

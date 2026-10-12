@@ -33,15 +33,19 @@ export function formatDate(value: DateInput, { timeZone, locale }: DateFormatOpt
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone }).format(date);
 }
 
-/** Date plus 24-hour time, e.g. "4 Sep 2026, 09:05". */
-export function formatDateTime(value: DateInput, options: DateFormatOptions): string {
-  const time = new Intl.DateTimeFormat(options.locale === 'en' ? 'en-GB' : options.locale, {
+/** The 24-hour time of day, e.g. "09:05". */
+export function formatTime(value: DateInput, { timeZone, locale }: DateFormatOptions): string {
+  return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : locale, {
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
-    timeZone: options.timeZone,
+    timeZone,
   }).format(toDate(value));
-  return `${formatDate(value, options)}, ${time}`;
+}
+
+/** Date plus 24-hour time, e.g. "4 Sep 2026, 09:05". */
+export function formatDateTime(value: DateInput, options: DateFormatOptions): string {
+  return `${formatDate(value, options)}, ${formatTime(value, options)}`;
 }
 
 /** "$1,234" when whole, "$1,234.50" otherwise, "−$30" for negatives (U+2212, per the POC). */

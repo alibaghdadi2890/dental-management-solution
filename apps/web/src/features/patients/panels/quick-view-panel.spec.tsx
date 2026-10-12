@@ -5,6 +5,7 @@ import { todayIn } from '@/lib/format';
 import {
   DENTIST_ID,
   FRONT_DESK_ID,
+  history,
   id,
   json,
   mockApi,
@@ -19,7 +20,7 @@ const RANA = patient(1, 'Rana Haddad', {
   dateOfBirth: '1990-05-01',
   email: 'rana@example.com',
   insurance: 'Allianz — Gold',
-  medicalAlerts: ['Penicillin allergy', 'Latex'],
+  medicalHistory: history(['Penicillin', 'Latex'], ['Asthma']),
   primaryDentistId: profileId(DENTIST_ID),
 });
 
@@ -80,7 +81,7 @@ describe('QuickViewPanel', () => {
       within(alerts)
         .getAllByRole('listitem')
         .map((li) => li.textContent),
-    ).toEqual(['Penicillin allergy', 'Latex']);
+    ).toEqual(['Penicillin', 'Latex', 'Asthma']);
     await waitFor(() => {
       expect(within(aside).getByText('Dr. Ana Reyes')).toBeTruthy();
     });

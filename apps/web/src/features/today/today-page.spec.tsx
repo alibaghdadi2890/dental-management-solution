@@ -15,6 +15,8 @@ const RANA = listVisit(11, 'Rana Haddad', { id: VISIT_ID });
 const KARIM = listVisit(12, 'Karim Saleh');
 const OMAR = listVisit(13, 'Omar Saleh', {
   status: 'in_progress',
+  type: 'examination',
+  currentStep: 'findings',
   completedAt: null,
   durationMinutes: null,
   startedAt: '2026-09-04T09:47:55.000Z',
@@ -77,14 +79,17 @@ describe('TodayPage', () => {
     const cards = await waiting.findAllByRole('listitem');
     await waitFor(() => {
       expect(cards.map((card) => card.textContent)).toEqual([
-        'Rana HaddadV-000011 · Dr. Ana Reyes · Room 1 · finished 12:11Composite filling$140Check out',
-        'Karim SalehV-000012 · Dr. Ana Reyes · Room 1 · finished 12:12Composite filling$140Check out',
+        'Rana HaddadV-000011 · Treatment · Dr. Ana Reyes · Room 1 · finished 12:11Composite filling$140Check out',
+        'Karim SalehV-000012 · Treatment · Dr. Ana Reyes · Room 1 · finished 12:12Composite filling$140Check out',
       ]);
     });
 
     const chair = within(await lane(/^In the chair · 1$/));
     const [seated] = await chair.findAllByRole('listitem');
-    expect(seated?.textContent).toBe('Omar SalehDr. Ana Reyes · Room 112:05');
+    // Its type, and the step it is on as a pill (feature 10, V15).
+    expect(seated?.textContent).toBe(
+      'Omar SalehExamination · Dr. Ana Reyes · Room 1On Findings12:05',
+    );
     // The front desk reads the lane; it has no workspace to open.
     expect(chair.queryByRole('link')).toBeNull();
     expect(
@@ -99,7 +104,7 @@ describe('TodayPage', () => {
     const waiting = within(await lane(/^Ready for checkout · 1$/));
     const cards = await waiting.findAllByRole('listitem');
     expect(cards.map((card) => card.textContent)).toEqual([
-      'Karim SalehV-000012 · Dr. Ana Reyes · Room 1 · finished 12:12Composite filling$140Check out',
+      'Karim SalehV-000012 · Treatment · Dr. Ana Reyes · Room 1 · finished 12:12Composite filling$140Check out',
     ]);
     expect(screen.queryByText('Rana Haddad')).toBeNull();
   });

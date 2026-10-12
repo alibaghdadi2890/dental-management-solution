@@ -77,7 +77,7 @@ describe('InformationTab', () => {
     expect(field(/Phone/).value).toBe('03 123 456');
     expect(field(/Date of birth/).value).toBe('01/05/1990');
     expect(field('Email').value).toBe('rana@example.com');
-    for (const name of ['Address', 'Insurance', /Medical alerts/, 'Notes']) {
+    for (const name of ['Address', 'Insurance', 'Medication', 'Notes']) {
       expect(within(form).getByRole('textbox', { name })).toBeTruthy();
     }
     expect(within(form).getByRole('combobox', { name: 'Sex' })).toBeTruthy();

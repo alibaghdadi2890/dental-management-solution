@@ -1,5 +1,6 @@
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
+import { chooseTreatment, openAllView } from './start-visit';
 
 /**
  * Feature 9 (chart marks): colours and icons chosen in the Catalog show on the dental chart,
@@ -90,8 +91,10 @@ async function startVisit(page: Page) {
   const popover = page.getByRole('dialog', { name: 'Start visit' });
   await expect(popover.getByRole('combobox', { name: 'Dentist' })).toHaveValue(/.+/);
   await popover.getByRole('combobox', { name: 'Room' }).selectOption({ label: 'Room 1' });
+  await chooseTreatment(popover);
   await popover.getByRole('button', { name: 'Start visit' }).click();
   await expect(page.getByRole('timer', { name: 'Visit time' })).toHaveText(/^\d{2}:\d{2}$/);
+  await openAllView(page);
 }
 
 /** Scopes the surfaces in the tooth panel, then adds the frequently used Composite. */

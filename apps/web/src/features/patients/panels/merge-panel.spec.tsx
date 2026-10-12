@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  history,
   id,
   mockApi,
   patient,
@@ -13,12 +14,12 @@ import {
 const OLDER = patient(1, 'Rana Haddad', {
   phone: '+9613123456',
   email: 'rana@example.com',
-  medicalAlerts: ['Penicillin allergy'],
+  medicalHistory: history(['Penicillin']),
 });
 const NEWER = patient(2, 'Rana Haddad', {
   phone: '+9613654321',
   email: null,
-  medicalAlerts: ['Latex', 'penicillin allergy'],
+  medicalHistory: history(['Latex', 'Penicillin'], ['Asthma']),
 });
 const URL = `/?panel=merge:${NEWER.id},${OLDER.id}`;
 
@@ -48,7 +49,7 @@ describe('MergePanel', () => {
     expect(radio('Keep this ID P-000001').checked).toBe(true);
     expect(radio('Phone from P-000001: 03 123 456').checked).toBe(true);
     expect(radio('Email from P-000001: rana@example.com').checked).toBe(true);
-    expect(within(aside).getByText(/7 other fields match\./)).toBeTruthy();
+    expect(within(aside).getByText(/8 other fields match\./)).toBeTruthy();
     expect(
       within(aside).getByText(/P-000002 will be archived\. Its balance moves to P-000001\./),
     ).toBeTruthy();
@@ -63,8 +64,10 @@ describe('MergePanel', () => {
       within(alerts)
         .getAllByRole('listitem')
         .map((li) => li.textContent),
-    ).toEqual(['Penicillin allergy', 'Latex']);
-    expect(within(aside).getByText('Alerts from both records are kept.')).toBeTruthy();
+    ).toEqual(['Penicillin', 'Latex', 'Asthma']);
+    expect(
+      within(aside).getByText('Allergies and conditions from both records are kept.'),
+    ).toBeTruthy();
   });
 
   it('sends the picked values, and needs a reason of at least 3 characters', async () => {
@@ -116,23 +119,6 @@ describe('MergePanel', () => {
       dropId: OLDER.id,
       fieldChoices: { phone: 'keep', email: 'keep' },
     });
-  });
-
-  it('blocks Merge when the alerts together would exceed 20', async () => {
-    const many = (prefix: string) => Array.from({ length: 11 }, (_, i) => `${prefix} ${String(i)}`);
-    mockApi({
-      patients: [
-        { ...OLDER, medicalAlerts: many('Allergy') },
-        { ...NEWER, medicalAlerts: many('Condition') },
-      ],
-    });
-    renderPanels({ url: URL });
-    const aside = await mergePanel();
-    expect(within(aside).getByRole('alert').textContent).toContain('more than 20 medical alerts');
-    expect(within(aside).getByRole('button', { name: 'Merge records' })).toHaveProperty(
-      'disabled',
-      true,
-    );
   });
 
   it('keeps the dialog open with an inline error when a record was archived meanwhile', async () => {

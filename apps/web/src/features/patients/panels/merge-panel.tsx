@@ -10,11 +10,12 @@ import { useStaffNames } from '@/features/users/use-staff-names';
 import { formatCalendarDate, formatPhone, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { PatientPanel } from '../list-query';
+import { AlertChips } from '../medical-history/alert-chips';
 import {
-  alertsOverflow,
   differingFields,
   type MergeDraft,
   mergeDraft,
+  mergeValue,
   mergePhoneMissing,
   preview,
   swapKeep,
@@ -125,10 +126,9 @@ function MergeEditor({
   const dropped = keepsA ? b : a;
   const fields = differingFields(a, b);
   const result = preview(draft);
-  const overflow = alertsOverflow(draft);
   // The server refuses to leave an adult without a phone (422 at `phone`): say so before Merge.
   const phoneMissing = mergePhoneMissing(draft, todayIn(tenant.timeZone));
-  const hasAlerts = a.medicalAlerts.length > 0 || b.medicalAlerts.length > 0;
+  const hasAlerts = result.allergies.length > 0 || result.conditions.length > 0;
 
   const valueOf = (patient: Patient, field: MergeField): string => {
     switch (field) {
@@ -143,7 +143,7 @@ function MergeEditor({
           ? (dentistNames.get(patient.primaryDentistId) ?? t('quickView.unknownDentist'))
           : NONE;
       default:
-        return patient[field] ?? NONE;
+        return mergeValue(patient, field) ?? NONE;
     }
   };
 
@@ -197,7 +197,7 @@ function MergeEditor({
       footer={
         <>
           <Button onClick={onClose}>{t('common:cancel')}</Button>
-          <Button variant="dangerSolid" disabled={overflow || phoneMissing} onClick={submit}>
+          <Button variant="dangerSolid" disabled={phoneMissing} onClick={submit}>
             {t('merge.submit')}
           </Button>
         </>
@@ -287,19 +287,11 @@ function MergeEditor({
               {t('merge.fields.alerts')}
             </span>
             <div className="border-s border-row-divider p-2.5">
-              <ul
-                aria-label={t('merge.fields.alerts')}
-                className="m-0 flex list-none flex-wrap gap-1.5 p-0"
-              >
-                {result.medicalAlerts.map((alert) => (
-                  <li
-                    key={alert}
-                    className="rounded-md border border-danger-border bg-danger-bg px-2 py-1 text-[11.5px] leading-none font-medium text-danger"
-                  >
-                    {alert}
-                  </li>
-                ))}
-              </ul>
+              <AlertChips
+                allergies={result.allergies}
+                conditions={result.conditions}
+                label={t('merge.fields.alerts')}
+              />
               <p className="mt-2 text-xs leading-snug text-ink-muted">{t('merge.alertsKept')}</p>
             </div>
           </div>
@@ -307,15 +299,6 @@ function MergeEditor({
       </div>
 
       <MergeContactsList kept={kept} dropped={dropped} country={tenant.country} />
-
-      {overflow && (
-        <p
-          role="alert"
-          className="rounded-lg border border-danger-border bg-danger-bg px-3 py-2.5 text-[12.5px] leading-[1.45] font-medium text-danger"
-        >
-          {t('merge.overflow')}
-        </p>
-      )}
 
       {phoneMissing && (
         <p

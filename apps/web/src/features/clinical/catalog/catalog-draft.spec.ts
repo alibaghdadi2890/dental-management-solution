@@ -19,6 +19,7 @@ import {
   plainAmount,
   sanitizePrice,
   serverRowErrors,
+  sessionsFrom,
 } from './catalog-draft';
 
 const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
@@ -36,6 +37,8 @@ const service = (n: number, code: string, name: string, category: string | null)
   color: 'blue',
   icon: 'filling',
   markPriority: 5,
+  addedOnVisitType: null,
+  typicalSessions: null,
 });
 
 const diagnosis = (n: number, code: string, name: string, category: string): DiagnosisItem => ({
@@ -141,12 +144,34 @@ describe('catalog draft', () => {
     ).toMatchObject({ color: 'rose', icon: null });
   });
 
+  it('lets only a whole-mouth service be added to a visit by itself (feature 10)', () => {
+    let draft = editRow(fresh(), 'services', id(3), { chargeUnit: 'per_mouth' });
+    draft = editRow(draft, 'services', id(3), { addedOnVisitType: 'hygiene', typicalSessions: 2 });
+    expect(batchOf('services', changedRows(draft, 'services')).items[0]).toMatchObject({
+      chargeUnit: 'per_mouth',
+      addedOnVisitType: 'hygiene',
+      typicalSessions: 2,
+    });
+    // Off the mouth, it is no longer added; how many sessions it takes stays.
+    draft = editRow(draft, 'services', id(3), { chargeUnit: 'per_jaw' });
+    expect(row(draft, 'services', id(3))).toMatchObject({
+      addedOnVisitType: null,
+      typicalSessions: 2,
+    });
+  });
+
+  it('reads the Sessions field: blank, 0 and 1 are one sitting, at most 20', () => {
+    expect(['', '0', '1', '2', '3x', '99'].map(sessionsFrom)).toEqual([null, null, null, 2, 3, 20]);
+  });
+
   it('gives a new row the colour its catalog uses least, counting the draft (M13)', () => {
     let draft = addRow(fresh(), 'services', 'new-1', '');
     expect(row(draft, 'services', 'new-1')).toMatchObject({
       color: 'rose',
       icon: null,
       markPriority: 5,
+      addedOnVisitType: null,
+      typicalSessions: null,
     });
     draft = addRow(draft, 'services', 'new-2', '');
     expect(row(draft, 'services', 'new-2').color).toBe('red');
@@ -241,6 +266,8 @@ describe('catalog draft', () => {
           color: 'rose',
           icon: null,
           markPriority: 5,
+          addedOnVisitType: null,
+          typicalSessions: null,
         },
         {
           id: id(2),
@@ -255,6 +282,8 @@ describe('catalog draft', () => {
           color: 'blue',
           icon: 'filling',
           markPriority: 5,
+          addedOnVisitType: null,
+          typicalSessions: null,
         },
       ],
     });

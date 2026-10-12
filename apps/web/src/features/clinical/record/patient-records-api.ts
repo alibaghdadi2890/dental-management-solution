@@ -1,9 +1,9 @@
 import {
+  type DiagnosisEvidence,
   patientChartResultSchema,
   type PatientChartResult,
   patientPresenceResultSchema,
   type SetPresenceOnPatientInput,
-  type PlanGroupInput,
   type PlanPatientTreatmentInput,
   type RecordPatientDiagnosisInput,
   type UpdatePlanInput,
@@ -16,11 +16,11 @@ import { clinicalKeys } from '../visits-api';
 
 /**
  * Charting on the patient record, outside a visit (ADR-0031): `clinical`'s
- * `/clinical/patients/:id/{diagnoses,plans,plan-groups,presence}` routes. Each answers `{ chart }`, the
+ * `/clinical/patients/:id/{diagnoses,plans,presence}` routes. Each answers `{ chart }`, the
  * chart as it now is.
  */
 function call(
-  method: 'POST' | 'PATCH' | 'DELETE',
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
   patientId: string,
   path: string,
   { json, tenantId }: { json?: unknown; tenantId?: string | undefined } = {},
@@ -35,7 +35,7 @@ function call(
 /**
  * The patient record's charting mutations. Each `onSuccess` writes the returned chart into its
  * cache, so the tab redraws without a refetch, and invalidates what derives from the same
- * records (the tooth histories, the Overview's treatment summary).
+ * records (the tooth histories, the image viewer's citations).
  */
 export function patientRecordMutations(
   queryClient: QueryClient,
@@ -50,7 +50,7 @@ export function patientRecordMutations(
     await Promise.all(
       [
         clinicalKeys.toothHistories(tenantId, patientId),
-        clinicalKeys.summary(tenantId, patientId),
+        clinicalKeys.fileCitations(tenantId, patientId),
       ].map((key) => queryClient.invalidateQueries({ queryKey: key })),
     );
   };
@@ -68,10 +68,26 @@ export function patientRecordMutations(
       mutationFn: (recordId: string) =>
         call('DELETE', patientId, `diagnoses/${recordId}`, { tenantId: tenant }),
     }),
+    setSeenOn: mutationOptions({
+      ...base,
+      mutationFn: ({ recordId, seenOn }: { recordId: string; seenOn: DiagnosisEvidence | null }) =>
+        call('PATCH', patientId, `diagnoses/${recordId}/seen-on`, {
+          json: { seenOn },
+          tenantId: tenant,
+        }),
+    }),
     planTreatment: mutationOptions({
       ...base,
       mutationFn: (input: PlanPatientTreatmentInput) =>
         call('POST', patientId, 'plans', { json: input, tenantId: tenant }),
+    }),
+    /** The patient accepted the treatment, or that is taken back (ADR-0045). */
+    setAcceptance: mutationOptions({
+      ...base,
+      mutationFn: ({ planId, accepted }: { planId: string; accepted: boolean }) =>
+        call(accepted ? 'PUT' : 'DELETE', patientId, `plans/${planId}/acceptance`, {
+          tenantId: tenant,
+        }),
     }),
     updatePlan: mutationOptions({
       ...base,
@@ -87,21 +103,6 @@ export function patientRecordMutations(
       ...base,
       mutationFn: (planId: string) =>
         call('DELETE', patientId, `plans/${planId}`, { tenantId: tenant }),
-    }),
-    createGroup: mutationOptions({
-      ...base,
-      mutationFn: (input: PlanGroupInput) =>
-        call('POST', patientId, 'plan-groups', { json: input, tenantId: tenant }),
-    }),
-    updateGroup: mutationOptions({
-      ...base,
-      mutationFn: ({ groupId, input }: { groupId: string; input: PlanGroupInput }) =>
-        call('PATCH', patientId, `plan-groups/${groupId}`, { json: input, tenantId: tenant }),
-    }),
-    deleteGroup: mutationOptions({
-      ...base,
-      mutationFn: (groupId: string) =>
-        call('DELETE', patientId, `plan-groups/${groupId}`, { tenantId: tenant }),
     }),
     /** Tooth presence on the record (feature 7): answers the rows written, for the Undo. */
     setPresence: mutationOptions({

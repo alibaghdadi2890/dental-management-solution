@@ -23,10 +23,8 @@ import {
 const READER: Permission[] = [...ALL_PERMISSIONS, 'visit:read', 'catalog:read'];
 const DENTIST: Permission[] = [...READER, 'visit:write', 'chart:write'];
 
-const GROUP = { id: id(70), patientId: RANA.id, title: 'Phase 1', note: 'Upper right first' };
-
 /** A caries on #16 from an earlier visit and one recorded on the record; a filling planned in a
- * visit, and a crown planned on the record inside the named plan. */
+ * visit, and a crown planned on the record. */
 const CHART: PatientChart = {
   ...EMPTY_CHART,
   diagnoses: [
@@ -35,9 +33,8 @@ const CHART: PatientChart = {
   ],
   plans: [
     treatmentPlan(20, 'Composite filling', '16', { recordedInVisitId: OLDER_VISIT_ID }),
-    treatmentPlan(22, 'Zircon crown', '26', { recordedInVisitId: null, groupId: GROUP.id }),
+    treatmentPlan(22, 'Zircon crown', '26', { recordedInVisitId: null }),
   ],
-  planGroups: [GROUP],
 };
 
 const SERVICES = [serviceItem(40, 'Root canal')];
@@ -120,40 +117,10 @@ describe('ChartTab', () => {
         toothCode: '26',
         surfaces: [],
         note: null,
+        priority: 'high',
         dentistId: profileId(DENTIST_ID),
       });
     });
     expect(await screen.findByText('Root canal planned')).toBeTruthy();
-  });
-
-  it('shows named plans with their estimate, moves a plan and creates a plan', async () => {
-    const { fetchMock } = renderChartTab(DENTIST);
-    const board = await screen.findByRole('region', { name: 'Treatment plan' });
-    const named = board.querySelector<HTMLElement>(`[data-plan-group="${GROUP.id}"]`);
-    if (!named) throw new Error('no named plan section');
-    expect(within(named).getByRole('heading', { name: 'Phase 1' })).toBeTruthy();
-    expect(within(named).getByText('Upper right first')).toBeTruthy();
-    expect(within(named).getByText('Zircon crown')).toBeTruthy();
-    expect(within(board).getByRole('heading', { name: 'Other planned treatment' })).toBeTruthy();
-
-    fireEvent.change(within(board).getByLabelText('Named plan for Composite filling'), {
-      target: { value: GROUP.id },
-    });
-    await waitFor(() => {
-      expect(sent(fetchMock, 'PATCH', records(`plans/${id(20)}`))).toEqual({ groupId: GROUP.id });
-    });
-
-    fireEvent.click(within(board).getByRole('button', { name: 'New plan' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New named plan' });
-    const create = within(dialog).getByRole('button', { name: 'Create plan' });
-    expect((create as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.change(within(dialog).getByLabelText('Title'), { target: { value: ' Phase 2 ' } });
-    fireEvent.click(create);
-    await waitFor(() => {
-      expect(sent(fetchMock, 'POST', records('plan-groups'))).toEqual({
-        title: 'Phase 2',
-        note: null,
-      });
-    });
   });
 });

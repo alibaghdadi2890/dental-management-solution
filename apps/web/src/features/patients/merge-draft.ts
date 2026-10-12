@@ -1,7 +1,6 @@
 import {
-  dedupeAlerts,
   isMinor,
-  MEDICAL_ALERTS_MAX,
+  type MedicalItem,
   MERGE_FIELDS,
   patientMergeSchema,
   type MergeField,
@@ -28,10 +27,19 @@ function displayNumberValue(displayNumber: string): number {
   return Number(displayNumber.slice(2));
 }
 
+/** The merge fields that are a property of the record itself (the medication line is part of
+ * its medical history). */
+type RecordMergeField = Exclude<MergeField, 'medication'>;
+
+/** A record's value for a merge field. */
+export function mergeValue(patient: Patient, field: MergeField) {
+  return field === 'medication' ? patient.medicalHistory.medication : patient[field];
+}
+
 /** The pickable fields (`MERGE_FIELDS`) where the two records actually disagree — the only rows
  * the compare grid needs a radio for. */
 export function differingFields(a: Patient, b: Patient): MergeField[] {
-  return MERGE_FIELDS.filter((field) => a[field] !== b[field]);
+  return MERGE_FIELDS.filter((field) => mergeValue(a, field) !== mergeValue(b, field));
 }
 
 /**
@@ -78,19 +86,27 @@ export interface MergePreview {
   email: string | null;
   address: string | null;
   insurance: string | null;
+  medication: string | null;
   primaryDentistId: string | null;
   notes: string | null;
-  /** The union of both records' alerts, kept's own first (matches the server's `resolveMerge`) —
-   * not capped here; see `alertsOverflow` for the 422 `patient.merge_alerts_overflow` guard. */
-  medicalAlerts: string[];
+  /** The union of both records' allergies and of their conditions, by name, the kept record's
+   * first: never a choice (ADR-0046), as the server's `resolveMerge` does it. */
+  allergies: string[];
+  conditions: string[];
+}
+
+/** Both records' items once each, the kept record's first. */
+function unionNames(kept: readonly MedicalItem[], dropped: readonly MedicalItem[]): string[] {
+  const names = new Map([...kept, ...dropped].map((item) => [item.id, item.name]));
+  return [...names.values()];
 }
 
 /** The record the merge would produce, for the compare grid's "resulting value" column. */
 export function preview(draft: MergeDraft): MergePreview {
   const kept = keptOf(draft);
   const dropped = droppedOf(draft);
-  const pick = <K extends MergeField>(field: K): Patient[K] =>
-    draft.choices[field] === 'drop' ? dropped[field] : kept[field];
+  const source = (field: MergeField) => (draft.choices[field] === 'drop' ? dropped : kept);
+  const pick = <K extends RecordMergeField>(field: K): Patient[K] => source(field)[field];
 
   return {
     fullName: pick('fullName'),
@@ -100,16 +116,12 @@ export function preview(draft: MergeDraft): MergePreview {
     email: pick('email'),
     address: pick('address'),
     insurance: pick('insurance'),
+    medication: source('medication').medicalHistory.medication,
     primaryDentistId: pick('primaryDentistId'),
     notes: pick('notes'),
-    medicalAlerts: dedupeAlerts([...kept.medicalAlerts, ...dropped.medicalAlerts]),
+    allergies: unionNames(kept.medicalHistory.allergies, dropped.medicalHistory.allergies),
+    conditions: unionNames(kept.medicalHistory.conditions, dropped.medicalHistory.conditions),
   };
-}
-
-/** True when the merged alert union would exceed `MEDICAL_ALERTS_MAX` (design Q8: the merge must
- * be refused, not silently truncated — the panel should block Confirm and explain why). */
-export function alertsOverflow(draft: MergeDraft): boolean {
-  return preview(draft).medicalAlerts.length > MEDICAL_ALERTS_MAX;
 }
 
 /**

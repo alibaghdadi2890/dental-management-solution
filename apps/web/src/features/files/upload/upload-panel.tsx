@@ -66,6 +66,11 @@ function initialBatch(request: UploadRequest): { batch: Batch; remembered: boole
       header: {
         ...EMPTY_META,
         ...(remembered ? last : {}),
+        ...(request.preset && {
+          category: request.preset.category,
+          subCategory: request.preset.subCategory ?? null,
+          note: request.preset.note ?? '',
+        }),
         toothCode: request.toothCode ?? null,
         visitId: request.visit?.id ?? null,
       },
@@ -125,7 +130,9 @@ export function UploadPanel({
     if (started.current) return;
     started.current = true;
     add(request.files ?? []);
-  }, [add, request.files]);
+    // Still inside the click that opened the panel, so the browser lets the picker open.
+    if (request.source === 'camera') cameraRef.current?.click();
+  }, [add, request.files, request.source]);
 
   // While the panel is open every drop and every pasted image joins the batch (F2, F6).
   const onDrop = useEffectEvent((event: DragEvent) => {

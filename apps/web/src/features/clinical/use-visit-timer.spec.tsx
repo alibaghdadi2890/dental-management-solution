@@ -147,6 +147,8 @@ describe('useElapsedText', () => {
       patientId: VISIT_ID,
       patientName: 'Nadia',
       dentistName: 'Dr. Reyes',
+      type: 'treatment',
+      currentStep: 'today',
       status: 'in_progress',
       startedAt: STARTED,
       pausedAt: null,

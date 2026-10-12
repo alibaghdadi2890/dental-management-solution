@@ -26,6 +26,7 @@ import { useToothSelection } from '../tooth-selection';
 import { AreaPanel } from './area-panel';
 import { CompletedSection } from './completed-section';
 import { DiagnosisSection } from './diagnosis-section';
+import { FindingsBody } from './findings-body';
 import { Badge } from './panel-section';
 import { PlanSection } from './plan-section';
 import { QuickAdd } from './quick-add';
@@ -49,6 +50,10 @@ export interface ToothPanelProps {
   onOpenDrawer: (mode: DrawerMode) => void;
   /** Opens the tooth-history dialog ("Full tooth history →"); the link is left out without it. */
   onOpenHistory?: ((code: ToothCode) => void) | undefined;
+  /** `findings` is the Examine step's panel (feature 10, V5): under the same header, what is
+   * being found on the tooth instead of the three stages. A jaw or the whole mouth has no
+   * findings, so its panel is the same in both. */
+  mode?: 'full' | 'findings' | undefined;
 }
 
 /**
@@ -122,6 +127,7 @@ function SelectedTooth({
   timeZone,
   onOpenDrawer,
   onOpenHistory,
+  mode: panelMode = 'full',
   code,
   sections,
 }: ToothPanelProps & {
@@ -232,58 +238,71 @@ function SelectedTooth({
           )}
         </div>
       </div>
-      {canChartVisit && (
-        <QuickAdd
-          onOpen={() => {
-            onOpenDrawer('service');
-          }}
-        />
-      )}
-      {openTotal && (
-        <div className="border-b border-planned-strip-border bg-planned-strip px-4 py-[9px] text-[11.5px] leading-[1.4] font-medium text-warning">
-          {t('panel.plannedStrip', {
-            names: openPlans.map((plan) => plan.name).join(t('title.listSeparator')),
-            total: formatMoney(openTotal, locale),
-          })}
-        </div>
-      )}
-      <div className="px-4 py-[15px]">
-        <DiagnosisSection
+      {panelMode === 'findings' && visit !== null ? (
+        <FindingsBody
+          patientId={patientId}
+          visit={visit}
+          code={code}
           diagnoses={records.diagnoses}
           canWrite={canWrite}
-          open={sections.isOpen('diagnosis')}
-          onToggle={sections.toggle('diagnosis')}
-          onAdd={() => {
-            onOpenDrawer('diagnosis');
-          }}
+          onOpenDrawer={onOpenDrawer}
         />
-        <PlanSection
-          plans={records.plans}
-          diagnoses={chart.diagnoses}
-          timeZone={timeZone}
-          canWrite={canWrite}
-          open={sections.isOpen('plan')}
-          onToggle={sections.toggle('plan')}
-          onAdd={() => {
-            onOpenDrawer('plan');
-          }}
-        />
-        <CompletedSection
-          code={code}
-          services={records.services}
-          unfinished={records.plans.filter((plan) => plan.status === 'in_progress')}
-          history={records.history}
-          canWrite={canChartVisit}
-          canWriteUnfinished={canWrite}
-          open={sections.isOpen('completed')}
-          onToggle={sections.toggle('completed')}
-          onAdd={() => {
-            onOpenDrawer('service');
-          }}
-          onOpenHistory={onOpenHistory}
-        />
-        <ToothImages patientId={patientId} code={code} visit={visit} />
-      </div>
+      ) : (
+        <>
+          {canChartVisit && (
+            <QuickAdd
+              onOpen={() => {
+                onOpenDrawer('service');
+              }}
+            />
+          )}
+          {openTotal && (
+            <div className="border-b border-planned-strip-border bg-planned-strip px-4 py-[9px] text-[11.5px] leading-[1.4] font-medium text-warning">
+              {t('panel.plannedStrip', {
+                names: openPlans.map((plan) => plan.name).join(t('title.listSeparator')),
+                total: formatMoney(openTotal, locale),
+              })}
+            </div>
+          )}
+          <div className="px-4 py-[15px]">
+            <DiagnosisSection
+              diagnoses={records.diagnoses}
+              canWrite={canWrite}
+              open={sections.isOpen('diagnosis')}
+              onToggle={sections.toggle('diagnosis')}
+              onAdd={() => {
+                onOpenDrawer('diagnosis');
+              }}
+            />
+            <PlanSection
+              plans={records.plans}
+              diagnoses={chart.diagnoses}
+              timeZone={timeZone}
+              canWrite={canWrite}
+              open={sections.isOpen('plan')}
+              onToggle={sections.toggle('plan')}
+              onAdd={() => {
+                onOpenDrawer('plan');
+              }}
+            />
+            <CompletedSection
+              code={code}
+              services={records.services}
+              unfinished={records.plans.filter((plan) => plan.status === 'in_progress')}
+              history={records.history}
+              canWrite={canChartVisit}
+              canWriteUnfinished={canWrite}
+              open={sections.isOpen('completed')}
+              onToggle={sections.toggle('completed')}
+              onAdd={() => {
+                onOpenDrawer('service');
+              }}
+              onOpenHistory={onOpenHistory}
+            />
+            <ToothImages patientId={patientId} code={code} visit={visit} />
+          </div>
+        </>
+      )}
     </>
   );
 }

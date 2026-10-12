@@ -12,7 +12,7 @@ import { ItemsTable, Parties, PrintSheet, Totals } from './print-sheet';
  * receipt carries a VOID mark.
  */
 export function ReceiptDocument({ paymentId }: { paymentId: string }) {
-  const { t, i18n } = useTranslation(['printables', 'billing']);
+  const { t, i18n } = useTranslation(['printables', 'billing', 'clinical']);
   const locale = i18n.resolvedLanguage ?? 'en';
   const receipt = useQuery(receiptQuery(paymentId));
   const chargeLabel = useChargeLabel();
@@ -58,7 +58,15 @@ export function ReceiptDocument({ paymentId }: { paymentId: string }) {
               row.allocations.length > 0
                 ? row.allocations.map((line) => [
                     row.patient.fullName,
-                    chargeLabel(line),
+                    <span key="charge">
+                      {chargeLabel(line)}
+                      {line.visitType !== null && (
+                        // The visit's type, under its number (feature 10).
+                        <span className="block text-[11px] text-ink-secondary">
+                          {t(`clinical:flow.types.${line.visitType}`)}
+                        </span>
+                      )}
+                    </span>,
                     money(line.amount),
                   ])
                 : [[row.patient.fullName, '—', money(row.amount)]],

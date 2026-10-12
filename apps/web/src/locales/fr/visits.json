@@ -33,7 +33,8 @@
       "90d": "90 derniers jours",
       "12m": "12 derniers mois",
       "all": "Toutes les dates"
-    }
+    },
+    "type": "Type"
   },
   "columns": {
     "table": "Visites",
@@ -44,7 +45,8 @@
     "services": "Actes",
     "total": "Total",
     "balance": "Solde",
-    "status": "Statut"
+    "status": "Statut",
+    "type": "Type"
   },
   "status": {
     "in_progress": "En cours",
@@ -89,7 +91,8 @@
     "requestChange": "Demander une modification",
     "requestToast": "Demandez à {{dentist}} de modifier ou d'annuler cette visite",
     "invoice": "Facture",
-    "planQuote": "Devis du plan"
+    "planQuote": "Devis du plan",
+    "reason": "Motif : {{reason}}"
   },
   "trail": {
     "title": "Journal d'audit",

@@ -1,4 +1,4 @@
-import type { ToothCode } from '@dcm/contracts';
+import type { FileCategory, FileSubCategory, ToothCode } from '@dcm/contracts';
 import { createContext, useContext } from 'react';
 import type { VisitOption } from './visit-options';
 
@@ -11,6 +11,12 @@ export interface UploadRequest {
   toothCode?: ToothCode | null | undefined;
   /** Dropped or pasted files; without them the panel opens on its drop zone. */
   files?: readonly File[] | undefined;
+  /** Said by where the panel was opened (a row's Before / After photo): it wins over the last
+   * upload's category. */
+  preset?:
+    { category: FileCategory; subCategory?: FileSubCategory | null; note?: string } | undefined;
+  /** **Take photo**: the panel opens the device's camera at once. */
+  source?: 'camera' | undefined;
 }
 
 /** What opens the viewer: the list it navigates is the list it was opened from (§4). */

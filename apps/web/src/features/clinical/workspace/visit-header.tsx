@@ -1,5 +1,11 @@
-import type { Patient, PatientChart, Session, Visit } from '@dcm/contracts';
-import { useMutation } from '@tanstack/react-query';
+import {
+  formatVisitNumber,
+  type Patient,
+  type PatientChart,
+  type Session,
+  type Visit,
+} from '@dcm/contracts';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Button, IconButton } from '@/components/ui/button';
@@ -7,9 +13,11 @@ import { useConfirm } from '@/components/ui/confirm-context';
 import { Pill } from '@/components/ui/list';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
 import { useToast } from '@/components/ui/toast-context';
+import { AlertChips } from '@/features/patients/medical-history/alert-chips';
+import { branchRoomsQuery } from '@/features/tenancy/tenancy-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { ApiError } from '@/lib/api';
-import { formatAgeLine, formatCalendarDate, todayIn } from '@/lib/format';
+import { formatAgeLine, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
 import { useAnyGroupDirty } from '../save-groups-context';
@@ -21,14 +29,15 @@ type Tenant = NonNullable<Session['tenant']>;
 
 /**
  * Whether the visit has put nothing on the record yet, as far as the client can tell (the
- * discard rule, spec §Discard): no services and no notes on the visit, and no diagnosis or plan
- * recorded, resolved, started, continued, performed or cancelled in it per the chart. A tooth presence change isn't
- * visible here, so the server's 409 `visit.not_empty` stays the last word.
+ * discard rule, spec §Discard): no services — the one its type added by itself aside (ADR-0047)
+ * — and no notes on the visit, and no diagnosis or plan recorded, resolved, started, continued,
+ * performed or cancelled in it per the chart. A tooth presence change and an edited automatic
+ * service aren't visible here, so the server's 409 `visit.not_empty` stays the last word.
  */
 function looksEmpty(visit: Visit, chart: PatientChart): boolean {
   const inThisVisit = (visitId: string | null) => visitId === visit.id;
   return (
-    visit.services.length === 0 &&
+    visit.services.every((service) => service.autoAdded) &&
     visit.notes.trim() === '' &&
     !chart.diagnoses.some(
       (record) => inThisVisit(record.recordedInVisitId) || inThisVisit(record.resolvedInVisitId),
@@ -44,11 +53,12 @@ function looksEmpty(visit: Visit, chart: PatientChart): boolean {
 }
 
 /**
- * The workspace header band (spec §Visit Workspace → Visit header): the patient chip back to the
- * record, the red alert chips, then the status and date block, the timer chip (running or
- * paused), Pause / Resume and — while the visit is still empty, unsaved edits included — a menu
- * with **Discard visit**. Without `visit:write` (front desk, W18) it shows a View only badge
- * instead of the controls.
+ * The workspace header band (spec §Visit Workspace → Visit header; feature 10, V2): the patient
+ * chip back to the record, the alert chips, then the status over the visit's own line — its
+ * number, type, dentist and room — and its reason, the timer chip (running or paused), Pause /
+ * Resume and — while the visit is still empty, unsaved edits included — a menu with **Discard
+ * visit**. Without `visit:write` (front desk, W18) it shows a View only badge instead of the
+ * controls.
  */
 export function VisitHeader({
   visit,
@@ -76,8 +86,19 @@ export function VisitHeader({
   const running = visit.status === 'in_progress';
   const busy = pause.isPending || resume.isPending || discard.isPending;
 
-  const dentist = dentistNames.get(visit.dentistId);
-  const date = formatCalendarDate(visit.localDate, locale);
+  const rooms = useQuery({
+    ...branchRoomsQuery(visit.branchId),
+    enabled: visit.roomId !== null,
+  });
+  // "V-000071 · Examination · Dr. Ana Reyes · Room 2".
+  const visitLine = [
+    formatVisitNumber(visit.displayNumber),
+    t(`flow.types.${visit.type}`),
+    dentistNames.get(visit.dentistId),
+    rooms.data?.find((room) => room.id === visit.roomId)?.name,
+  ]
+    .filter((part) => part !== undefined)
+    .join(' · ');
   // Unsaved notes or prices are something recorded too: no Discard until they settle.
   const unsaved = useAnyGroupDirty();
   const ageLine =
@@ -155,17 +176,13 @@ export function VisitHeader({
         )}
       </Link>
 
-      {patient && patient.medicalAlerts.length > 0 && (
-        <ul aria-label={t('workspace.alerts')} className="m-0 flex list-none flex-wrap gap-2 p-0">
-          {patient.medicalAlerts.map((alert) => (
-            <li
-              key={alert}
-              className="rounded-md border border-danger-border bg-danger-bg px-2.5 py-1.5 text-[14px] leading-none font-semibold text-danger"
-            >
-              {alert}
-            </li>
-          ))}
-        </ul>
+      {patient && (
+        <AlertChips
+          allergies={patient.medicalHistory.allergies.map((item) => item.name)}
+          conditions={patient.medicalHistory.conditions.map((item) => item.name)}
+          label={t('workspace.alerts')}
+          size="lg"
+        />
       )}
 
       <div className="ms-auto flex flex-wrap items-center gap-3.5">
@@ -173,9 +190,18 @@ export function VisitHeader({
           <div className="mb-1 text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase [&:lang(ar)]:tracking-normal">
             {t(running ? 'workspace.status.inProgress' : 'workspace.status.paused')}
           </div>
-          <div className="text-[12.5px] leading-none text-ink-tertiary">
-            {dentist ? t('workspace.dateDentist', { date, dentist }) : date}
+          <div data-visit-line className="text-[12.5px] leading-none text-ink-tertiary">
+            {visitLine}
           </div>
+          {visit.reason && (
+            <div
+              data-visit-reason
+              title={visit.reason}
+              className="mt-[5px] max-w-[320px] truncate text-[12.5px] leading-none text-ink-secondary"
+            >
+              {visit.reason}
+            </div>
+          )}
         </div>
         <div
           role="timer"

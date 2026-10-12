@@ -8,8 +8,8 @@ import { formatMoney } from '@/lib/format';
 import { useLevelLabel, useToothLabel } from '../chart/use-chart-settings';
 import {
   type ChartingActions,
+  DEFAULT_PLAN_PRIORITY,
   type DrawerMode,
-  type PlanGroupActions,
   scopeOf,
 } from '../workspace/charting-actions';
 import type { ToothSelection } from '../workspace/tooth-selection';
@@ -37,7 +37,7 @@ export function usePatientChartingActions({
   dentistId: string | undefined;
   selection: ToothSelection;
   openDrawer: (mode: DrawerMode) => void;
-}): ChartingActions & { groups: PlanGroupActions } {
+}): ChartingActions {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const toast = useToast();
@@ -79,12 +79,22 @@ export function usePatientChartingActions({
       saveServicePrice: () => Promise.resolve(),
       resolveDiagnosis: visitOnly,
       reopenDiagnosis: visitOnly,
-      planTreatment: (item, target) => {
+      setSeenOn: (recordId, seenOn) => {
+        fire(mutations.setSeenOn, { recordId, seenOn });
+      },
+      setPlanPriority: (planId, priority) => {
+        fire(mutations.updatePlan, { planId, patch: { priority } });
+      },
+      planTreatment: (item, target, options = {}) => {
         const scope = scopeOf(item.chargeUnit, target);
         run(mutations.planTreatment, {
           procedureId: item.id,
           ...scope,
           note: null,
+          priority: options.priority ?? DEFAULT_PLAN_PRIORITY,
+          ...(options.diagnosisRecordId !== undefined && {
+            diagnosisRecordId: options.diagnosisRecordId,
+          }),
           ...forDentist,
         })
           .then(() => {
@@ -105,6 +115,7 @@ export function usePatientChartingActions({
           toothCode: code,
           surfaces: [...target.surfaces],
           note: null,
+          seenOn: null,
           ...forDentist,
         })
           .then(() => {
@@ -160,17 +171,7 @@ export function usePatientChartingActions({
           throw error;
         }
       },
-      groups: {
-        create: (input) => run(mutations.createGroup, input).then(visitOnly),
-        update: (groupId, input) => run(mutations.updateGroup, { groupId, input }).then(visitOnly),
-        remove: (groupId) => {
-          fire(mutations.deleteGroup, groupId);
-        },
-        movePlan: (planId, groupId) => {
-          fire(mutations.updatePlan, { planId, patch: { groupId } });
-        },
-      },
-    } satisfies ChartingActions & { groups: PlanGroupActions };
+    } satisfies ChartingActions;
   }, [
     queryClient,
     mutations,

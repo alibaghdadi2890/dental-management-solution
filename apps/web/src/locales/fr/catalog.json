@@ -4,7 +4,8 @@
   "tabs": {
     "label": "Catalogue",
     "services": "Actes",
-    "diagnoses": "Diagnostics"
+    "diagnoses": "Diagnostics",
+    "history": "Antécédents médicaux"
   },
   "add": {
     "services": "Ajouter un acte",
@@ -27,7 +28,9 @@
     "price": "Prix",
     "active": "Actif",
     "toothEffect": "Effet sur la dent",
-    "mark": "Repère"
+    "mark": "Repère",
+    "addedOn": "Ajouté à",
+    "sessions": "Séances"
   },
   "chargeUnit": {
     "per_tooth": "Par dent",
@@ -130,5 +133,46 @@
     "denture": "Prothèse",
     "cleaning": "Nettoyage",
     "whitening": "Blanchiment"
-  }
+  },
+  "history": {
+    "intro": "Les allergies et affections proposées lors de la saisie des antécédents. Un élément inactif reste sur les patients qui l’ont et n’est plus proposé.",
+    "allergy": {
+      "title": "Allergies",
+      "add": "Ajouter une allergie",
+      "none": "Aucune connue"
+    },
+    "condition": {
+      "title": "Affections",
+      "add": "Ajouter une affection",
+      "none": "Aucune"
+    },
+    "noneNote": "« {{none}} » est toujours proposé",
+    "name": "Nom",
+    "active": "{{name}} est proposé",
+    "remove": "Supprimer",
+    "deleteNamed": "Supprimer {{name}}",
+    "empty": "Cette liste est vide.",
+    "seed": "Ajouter les listes par défaut",
+    "missing_one": "{{count}} élément sans nom",
+    "missing_other": "{{count}} éléments sans nom",
+    "duplicate": "Un nom figure deux fois dans sa liste",
+    "saved_one": "{{count}} élément enregistré",
+    "saved_other": "{{count}} éléments enregistrés",
+    "saveFirst": "Enregistrez ou annulez vos modifications avant de changer d’onglet",
+    "delete": {
+      "title": "Supprimer « {{name}} » ?",
+      "body": "Il ne sera plus proposé. Cette action est définitive.",
+      "ok": "Supprimer"
+    },
+    "inUse": {
+      "title": "« {{name}} » figure dans les antécédents d’un patient",
+      "body": "Il ne peut pas être supprimé. Rendez-le inactif pour ne plus le proposer ; les patients concernés le gardent.",
+      "ok": "Rendre inactif"
+    }
+  },
+  "addedOn": {
+    "never": "Non ajouté"
+  },
+  "addedOnHint": "Une visite de ce type commence avec ce service dans les services du jour, à ce prix. Uniquement pour un service facturé pour toute la bouche.",
+  "sessionsHint": "Le nombre de séances habituel pour ce service. Laissez vide pour un acte réalisé en une séance."
 }

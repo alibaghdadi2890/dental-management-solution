@@ -1,5 +1,6 @@
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
+import { chooseTreatment, openAllView } from './start-visit';
 
 /**
  * Feature 7 (MVP hardening): tooth presence in a visit and at intake, a balance adjustment and
@@ -116,8 +117,10 @@ test('an extraction marks the tooth missing, Undo restores it, and implant place
   const popover = page.getByRole('dialog', { name: 'Start visit' });
   await expect(popover.getByRole('combobox', { name: 'Dentist' })).toHaveValue(/.+/);
   await popover.getByRole('combobox', { name: 'Room' }).selectOption({ label: 'Room 1' });
+  await chooseTreatment(popover);
   await popover.getByRole('button', { name: 'Start visit' }).click();
   await expect(page.getByRole('timer', { name: 'Visit time' })).toHaveText(/^\d{2}:\d{2}$/);
+  await openAllView(page);
 
   const chart = chartCard(page);
   const panel = page.getByRole('complementary', { name: 'Selected tooth' });
@@ -170,7 +173,8 @@ test('an extraction marks the tooth missing, Undo restores it, and implant place
     await expect(
       page.getByRole('status').filter({ hasText: 'Dental caries recorded' }),
     ).toBeVisible();
-    // The legend explains the three presence marks.
+    // The legend's key explains the three presence marks.
+    await chart.getByRole('button', { name: 'Key' }).click();
     for (const label of ['Missing', 'Not erupted', 'Implant']) {
       await expect(
         chart.getByRole('group', { name: 'Tooth' }).getByText(label, { exact: true }),
@@ -215,9 +219,6 @@ test('Edit presence marks a new patient’s gaps and implant in one batch, befor
   await expect(panel).toContainText('Implant · before first visit');
 
   await page.getByRole('tab', { name: 'Overview' }).click();
-  await expect(page.getByRole('region', { name: 'Treatment summary' })).toContainText(
-    'Missing teeth: 4 · Implants: 1',
-  );
   const compact = page.getByRole('region', { name: 'Dental status' });
   await expect(compact.locator('[data-column="18"] [data-presence="missing"]')).toBeVisible();
   await expect(compact.locator('[data-column="36"] [data-presence="implant"]')).toBeVisible();

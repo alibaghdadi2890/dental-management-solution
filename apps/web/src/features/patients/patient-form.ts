@@ -3,11 +3,12 @@ import {
   type ContactLinkTarget,
   type ContactRelationship,
   decimalAmountSchema,
-  dedupeAlerts,
   emailSchema,
+  EMPTY_MEDICAL_HISTORY,
+  type EntryVisitType,
   isMinor,
   isoDateSchema,
-  MEDICAL_ALERTS_MAX,
+  type MedicalHistoryInput,
   nameSchema,
   normalizePhone,
   openingBalanceInputSchema,
@@ -20,15 +21,17 @@ import {
   type PatientCreateInput,
   type PatientPatch,
   type PatientSex,
+  toMedicalHistoryInput,
 } from '@dcm/contracts';
 import { parseAmount } from '@/lib/amount';
 import { formatPhone } from '@/lib/format';
+import { sameHistory } from './medical-history/history-model';
 
 /**
  * The pure create/edit patient form model (design "Create / Edit" panel and the Patient
  * information tab, which share this exact model). Every field is a plain string so a controlled
- * `<input>` can bind to it directly — except the create-only contacts, which are picked, not typed
- * (`pendingContacts`, `linkContactId`); conversion to/from the wire types (`Patient`,
+ * `<input>` can bind to it directly — except what is picked, not typed: the medical history's
+ * chips and the create-only contacts (`pendingContacts`, `linkContactId`); conversion to/from the wire types (`Patient`,
  * `PatientCreate`, `PatientPatch`) happens only at the edges (`fromPatient`, `toCreatePayload`,
  * `toPatchPayload`).
  */
@@ -42,8 +45,10 @@ export interface PatientFormValues {
   email: string;
   address: string;
   insurance: string;
-  /** Comma-separated, as typed; see `parseAlerts`. */
-  alertsText: string;
+  /** Allergies, conditions and medication (feature 10): the chips' own model, sent whole. */
+  medicalHistory: MedicalHistoryInput;
+  /** Create-only: what the patient comes for (the First visit tiles), or `''` for not said. */
+  firstVisitType: EntryVisitType | '';
   /**
    * A practitioner's staff profile id (`Practitioner.id`, ADR-0020), or `''` for none (a native
    * `<select>`'s empty option).
@@ -95,7 +100,8 @@ const EMPTY: PatientFormValues = {
   email: '',
   address: '',
   insurance: '',
-  alertsText: '',
+  medicalHistory: toMedicalHistoryInput(EMPTY_MEDICAL_HISTORY),
+  firstVisitType: '',
   primaryDentistId: '',
   notes: '',
   openingBalanceAmount: '',
@@ -123,7 +129,7 @@ export function fromPatient(patient: Patient, country: string): PatientFormValue
     email: patient.email ?? '',
     address: patient.address ?? '',
     insurance: patient.insurance ?? '',
-    alertsText: patient.medicalAlerts.join(', '),
+    medicalHistory: toMedicalHistoryInput(patient.medicalHistory),
     primaryDentistId: patient.primaryDentistId ?? '',
     notes: patient.notes ?? '',
   };
@@ -137,7 +143,6 @@ export type FormField =
   | 'address'
   | 'insurance'
   | 'notes'
-  | 'alerts'
   | 'openingBalanceAmount'
   | 'openingBalanceAsOf'
   | 'openingBalanceNote'
@@ -162,7 +167,6 @@ export type FormErrorKey =
   | 'futureDate'
   | 'beforeMinDate'
   | 'tooLong'
-  | 'tooMany'
   | 'invalidAmount'
   | 'negativeAmount';
 
@@ -181,8 +185,8 @@ type PhoneCountry = Parameters<typeof normalizePhone>[1];
 const OPENING_BALANCE_NOTE_MAX = 200;
 
 /** Only the `FormField`s that are also plain string properties of `PatientFormValues` with a
- * simple, always-applicable max-length rule — `alerts` and the `openingBalance…` fields (checked
- * only while a balance will be recorded) have their own dedicated checks in `validate`. Keyed to
+ * simple, always-applicable max-length rule — the `openingBalance…` fields (checked only while
+ * a balance will be recorded) have their own dedicated checks in `validate`. Keyed to
  * this narrower type (not `FormField`) so `values[field]` below can't be asked for a field that
  * doesn't exist. */
 type TextLimitField = 'address' | 'insurance' | 'notes';
@@ -365,17 +369,6 @@ export function pendingExclusions(values: PatientFormValues): {
   return { contactIds, patientIds };
 }
 
-/** `'.5'` → `'.5'`, `'5.'` → `'5.'` (unchanged) — normalised separately by each caller that needs
- * a `Number()`-clean value; see `normalizeAmountText`. */
-function rawAlertItems(text: string): string[] {
-  return text
-    .split(',')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-}
-
-const ALERT_ITEM_MAX = 60;
-
 /** `.5` → `0.5`, `5.` → `5`: the two shapes `Number()` parses fine but `decimalAmountSchema`'s
  * strict regex (and the amount input's own visual alignment) doesn't want. Locale/digit
  * normalisation itself lives in `amountValue`/`lib/amount.ts`; this only tidies the dot. */
@@ -425,13 +418,6 @@ export function validate(
     if (!errors[field] && values[field].trim().length > max) {
       errors[field] = 'tooLong';
     }
-  }
-
-  const rawAlerts = rawAlertItems(values.alertsText);
-  if (rawAlerts.some((alert) => alert.length > ALERT_ITEM_MAX)) {
-    errors.alerts = 'tooLong';
-  } else if (dedupeAlerts(rawAlerts).length > MEDICAL_ALERTS_MAX) {
-    errors.alerts = 'tooMany';
   }
 
   if (values.openingBalanceAmount.trim() !== '') {
@@ -489,15 +475,11 @@ function contactLinkError(link: ContactLinkInput, country: string): FormErrorKey
 export function isDirty(initial: PatientFormValues, current: PatientFormValues): boolean {
   // A create form starts with no pending contacts, so any pending one is a change.
   if (current.pendingContacts.length > 0) return true;
+  if (!sameHistory(initial.medicalHistory, current.medicalHistory)) return true;
   return (Object.keys(initial) as (keyof PatientFormValues)[]).some((key) => {
-    if (key === 'pendingContacts') return false;
+    if (key === 'pendingContacts' || key === 'medicalHistory') return false;
     return initial[key].trim() !== current[key].trim();
   });
-}
-
-/** Comma text → trimmed, de-duplicated, capped alerts (the chip input's model). */
-export function parseAlerts(text: string): string[] {
-  return dedupeAlerts(rawAlertItems(text)).slice(0, MEDICAL_ALERTS_MAX);
 }
 
 /** The opening-balance amount's form value for what was typed (design "Account" group): a plain
@@ -526,7 +508,8 @@ export function toCreatePayload(values: PatientFormValues): PatientCreate {
     email: values.email,
     address: values.address,
     insurance: values.insurance,
-    medicalAlerts: parseAlerts(values.alertsText),
+    medicalHistory: values.medicalHistory,
+    firstVisitType: values.firstVisitType || null,
     primaryDentistId: values.primaryDentistId || null,
     notes: values.notes,
     contacts: values.pendingContacts.map((pending) => pending.link),
@@ -590,13 +573,8 @@ function changedFields(
     patch.primaryDentistId = current.primaryDentistId || null;
   }
 
-  const initialAlerts = parseAlerts(initial.alertsText);
-  const currentAlerts = parseAlerts(current.alertsText);
-  if (
-    initialAlerts.length !== currentAlerts.length ||
-    initialAlerts.some((alert, index) => alert !== currentAlerts[index])
-  ) {
-    patch.medicalAlerts = currentAlerts;
+  if (!sameHistory(initial.medicalHistory, current.medicalHistory)) {
+    patch.medicalHistory = current.medicalHistory;
   }
 
   return patch;

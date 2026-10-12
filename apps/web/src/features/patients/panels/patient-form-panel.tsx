@@ -1,4 +1,4 @@
-import type { Patient, Session } from '@dcm/contracts';
+import { ENTRY_VISIT_TYPES, type Patient, type Session } from '@dcm/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-ch
 import { usePermission } from '@/features/auth/use-permission';
 import { createWithOpeningBalance } from '@/features/billing/billing-api';
 import { formatCalendarDate, todayIn } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import { useIdempotencyKeys } from '@/lib/idempotency';
 import { ContactDraftContext, useContactDrafts } from '../contact-drafts';
 import { type PatientPanel, parsePatientsSearch } from '../list-query';
@@ -61,8 +62,10 @@ const leavesForm = (current: GuardLocation, next: GuardLocation) =>
  * patient a minor, design addendum C3) — on create, with the offer to link a contact whose phone
  * it is (C4) — then the contacts (the Guardian block for a minor, "Contacts & family" for an
  * adult: pending links sent with the create, or, when editing, immediate actions, C5), the
- * optional details demoted below, and — create only, with `payment:write` — the Account group's
- * opening balance (design Q1).
+ * optional details demoted below — the medical history's chips among them (feature 10, V13) —
+ * and, create only: the First visit tiles, whose choice is what the patient's first visit is
+ * suggested as, with **Create and start {type}** beside Create patient for those who can start a
+ * visit; and, with `payment:write`, the Account group's opening balance (design Q1).
  */
 export function PatientFormPanel({
   mode,
@@ -175,6 +178,7 @@ function PatientForm({
     tenant,
     formRef,
     patient ? 'edit' : 'create',
+    patient?.medicalHistory,
   );
   const { initial, values, country, today } = form;
   const [amountText, setAmountText] = useState('');
@@ -224,7 +228,8 @@ function PatientForm({
     },
   });
 
-  const submit = async () => {
+  /** `start`: go straight to the new patient's record with the Start visit popover open. */
+  const submit = async ({ start = false }: { start?: boolean } = {}) => {
     if (saving.current) return;
     if (!form.check()) return;
     saving.current = true;
@@ -235,6 +240,12 @@ function PatientForm({
       void invalidatePatientData(queryClient);
       if (!mounted.current) return;
       saved.current = true;
+      if (start && !editing) {
+        // Straight to the record: leaving the list closes the panel, and closing it first would
+        // navigate too, and win.
+        openPatient(id, { startVisit: true });
+        return;
+      }
       onClose();
       if (editing) {
         toast(t('form.updated'));
@@ -276,6 +287,8 @@ function PatientForm({
   };
 
   const message = form.messageOf;
+  // The second create button: only for a chosen first visit, and only for who can start one.
+  const startType = !editing && canStartVisit ? values.firstVisitType : '';
 
   const field = (name: PatientFieldName, className?: string) => (
     <PatientField form={form} name={name} variant="panel" className={className} />
@@ -309,6 +322,17 @@ function PatientForm({
           >
             {editing ? t('form.save') : pending ? t('form.creating') : t('form.create')}
           </Button>
+          {startType !== '' && (
+            <Button
+              variant="primary"
+              disabled={!ready || pending}
+              onClick={() => {
+                void submit({ start: true });
+              }}
+            >
+              {t('form.createAndStart', { type: t(`form.firstVisit.types.${startType}`) })}
+            </Button>
+          )}
         </>
       }
     >
@@ -404,10 +428,41 @@ function PatientForm({
           {field('email', 'col-span-2')}
           {field('address', 'col-span-2')}
           {field('insurance', 'col-span-2')}
-          {field('alerts', 'col-span-2')}
+          {field('history', 'col-span-2')}
           {field('dentist', 'col-span-2')}
           {field('notes', 'col-span-2')}
         </div>
+
+        {!editing && (
+          <fieldset className="m-0 min-w-0 border-0 p-0">
+            <legend className="mb-1.5 p-0 text-[12.5px] leading-none font-medium text-ink-muted">
+              {t('form.firstVisit.label')}
+            </legend>
+            <div className="grid grid-cols-2 gap-1.5">
+              {ENTRY_VISIT_TYPES.map((type) => {
+                const on = values.firstVisitType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => {
+                      form.setFirstVisitType(on ? '' : type);
+                    }}
+                    className={cn(
+                      'h-[38px] cursor-pointer rounded-[7px] border px-2.5 text-start text-[12.5px] leading-none font-medium focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-primary',
+                      on
+                        ? 'border-primary-tint-border bg-primary-tint text-primary'
+                        : 'border-border-control bg-surface text-ink-secondary hover:border-ink-muted',
+                    )}
+                  >
+                    {t(`form.firstVisit.types.${type}`)}
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
 
         {showAccount && (
           <AccountFields

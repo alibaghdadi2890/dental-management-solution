@@ -5,7 +5,7 @@ import {
   type ToothCode,
   type ToothState,
 } from '@dcm/contracts';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { IN_PROGRESS_SHADOW, PLANNED_SHADOW } from './glyph-style';
@@ -29,15 +29,23 @@ const square = 'size-[11px] flex-none rounded-[2px] border';
 const ringed = (shadow: string) => cn(shadow, 'm-[2px]');
 
 /**
- * The chart legend (feature 9, M11). It is about this patient: first the **diagnoses** and the
- * **services** that are on the chart on screen, in the current view, each with its chip, its name
- * and how many teeth carry it; then what never changes — **Status** (how today's work, earlier
- * work, work not finished and planned work are told apart, whatever the colour) and **Tooth**
- * (missing, not erupted, implant). A dynamic group with nothing in it is left out; one with more
- * than eight lines shows eight and "+N more", which opens in place.
+ * The chart legend (feature 9, M11). It holds two different things and keeps them apart.
  *
- * A dynamic line is a button: pressing it highlights its teeth on the chart (`onHighlight`),
- * pressing it again clears that. Without `onHighlight` the lines are plain text.
+ * **What is on this chart** is about this patient and changes with every record: the
+ * **diagnoses** and the **services** on the chart on screen, in the current view, each with its
+ * chip, its name and how many teeth carry it. A group with nothing in it is left out; one with
+ * more than eight lines shows eight and "+N more", which opens in place. A line is a button:
+ * pressing it highlights its teeth on the chart (`onHighlight`), pressing it again clears that.
+ * Without `onHighlight` the lines are plain text.
+ *
+ * **The key** never changes: **Status** (how today's work, earlier work, work not finished and
+ * planned work are told apart, whatever the colour) and **Tooth** (missing, not erupted,
+ * implant). It is learned once, and every tooth says the same in its tooltip.
+ *
+ * `layout="inline"` is one band under the card's header: what is on the chart as a row of
+ * chips, read from the start edge, and a **Key** button at its end that opens the key under
+ * the row. The key starts closed, so the band is as long as the patient's chart is busy and no
+ * longer.
  *
  * `layout="key"` is the expanded chart's legend, where there is room to read it like a map key:
  * each group is a titled list, one item to a line. The groups stand side by side under the chart,
@@ -64,6 +72,8 @@ export function ChartLegend({
   const { orientation } = useChartSettings();
   const [view] = useChartView();
   const [expanded, setExpanded] = useState<ReadonlySet<LegendEntry['kind']>>(new Set());
+  const [keyOpen, setKeyOpen] = useState(false);
+  const keyId = useId();
 
   const groups = useMemo(() => {
     const { upper, lower } = archColumns(orientation, dentition);
@@ -74,11 +84,59 @@ export function ChartLegend({
   const isKey = layout === 'key';
   const itemClass = isKey
     ? 'flex h-[18px] items-center gap-2 text-[13px] leading-none whitespace-nowrap text-ink-secondary'
-    : 'inline-flex h-[15px] items-center gap-[5px] text-[12.5px] leading-none whitespace-nowrap text-ink-secondary';
+    : 'inline-flex h-6 items-center gap-[5px] text-[12.5px] leading-none whitespace-nowrap text-ink-secondary';
   const swatchBox = (swatch: ReactNode) =>
     isKey ? <span className="grid w-[18px] flex-none place-items-center">{swatch}</span> : swatch;
 
+  /** A line of the inline band: a chip of its own, with the tooth count as a bare number. */
+  const entryChip = (entry: LegendEntry) => {
+    const pressed = highlight?.kind === entry.kind && highlight.id === entry.id;
+    const said = `${entry.name} ${t('legend.teeth', { count: entry.teeth })}`;
+    const chip =
+      'inline-flex h-6 max-w-[220px] flex-none items-center gap-1.5 rounded-full border px-2 text-[12.5px] leading-none whitespace-nowrap';
+    const content = (
+      <>
+        <MarkChip kind={entry.kind} color={entry.color} icon={entry.icon} size={12} />
+        <span className="min-w-0 truncate">{entry.name}</span>
+        <span className="font-mono text-[11.5px] text-ink-muted tabular-nums">{entry.teeth}</span>
+      </>
+    );
+    if (!onHighlight) {
+      return (
+        <span
+          data-legend-item={`${entry.kind}:${entry.id}`}
+          title={said}
+          className={cn(chip, 'border-inner-divider bg-surface text-ink-secondary')}
+        >
+          {content}
+        </span>
+      );
+    }
+    return (
+      <button
+        type="button"
+        data-legend-item={`${entry.kind}:${entry.id}`}
+        aria-pressed={pressed}
+        aria-label={said}
+        title={t(pressed ? 'legend.clearHighlight' : 'legend.highlight', { name: entry.name })}
+        onClick={() => {
+          onHighlight({ kind: entry.kind, id: entry.id });
+        }}
+        className={cn(
+          chip,
+          'cursor-pointer outline-offset-2',
+          pressed
+            ? 'border-primary bg-primary-tint font-semibold text-primary'
+            : 'border-inner-divider bg-surface text-ink-secondary hover:border-border-strong hover:text-ink',
+        )}
+      >
+        {content}
+      </button>
+    );
+  };
+
   const entryLine = (entry: LegendEntry) => {
+    if (!isKey) return entryChip(entry);
     const pressed = highlight?.kind === entry.kind && highlight.id === entry.id;
     const content = (
       <>
@@ -135,6 +193,7 @@ export function ChartLegend({
                   className={cn(
                     itemClass,
                     'cursor-pointer border-0 bg-transparent p-0 font-medium text-primary',
+                    !isKey && 'h-6 px-1',
                   )}
                 >
                   {t('legend.more', { count: more })}
@@ -217,12 +276,23 @@ export function ChartLegend({
     },
   ];
 
-  const sections = [
-    { title: t('legend.diagnosesOnChart'), items: dynamic('diagnosis', groups.diagnoses) },
-    { title: t('legend.servicesOnChart'), items: dynamic('service', groups.services) },
+  const onChart = [
+    {
+      title: t('legend.diagnosesOnChart'),
+      short: t('legend.diagnoses'),
+      items: dynamic('diagnosis', groups.diagnoses),
+    },
+    {
+      title: t('legend.servicesOnChart'),
+      short: t('legend.services'),
+      items: dynamic('service', groups.services),
+    },
+  ].filter((section) => section.items.length > 0);
+  const key = [
     { title: t('legend.status'), items: fixed(status) },
     { title: t('legend.presence'), items: fixed(presence) },
-  ].filter((section) => section.items.length > 0);
+  ];
+  const sections = [...onChart, ...key];
 
   if (isKey) {
     return (
@@ -251,25 +321,84 @@ export function ChartLegend({
     );
   }
 
+  const groupLabel = 'flex-none text-[12px] leading-none font-medium text-ink-muted';
   return (
-    <div className="flex flex-wrap justify-end gap-3">
-      {sections.map((section) => (
-        <div
-          key={section.title}
-          role="group"
-          aria-label={section.title}
-          className="inline-flex flex-wrap items-center gap-x-[11px] gap-y-[7px] rounded-[7px] border border-inner-divider bg-faint px-[9px] py-[5px]"
-        >
-          <span className="text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase">
-            {section.title}
-          </span>
-          {section.items.map((item) => (
-            <span key={item.key} className="inline-flex">
-              {item.node}
+    <div data-legend-band className="rounded-lg border border-inner-divider bg-faint">
+      <div className="flex items-start gap-3 px-2.5 py-1.5">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-4 gap-y-1.5">
+          {onChart.length === 0 && (
+            <span className="flex h-6 items-center text-[12.5px] leading-none text-ink-muted">
+              {t('legend.nothing')}
             </span>
+          )}
+          {onChart.map((section) => (
+            <div
+              key={section.title}
+              role="group"
+              aria-label={section.title}
+              className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1.5"
+            >
+              <span className={groupLabel}>{section.short}</span>
+              {section.items.map((item) => (
+                <span key={item.key} className="inline-flex min-w-0">
+                  {item.node}
+                </span>
+              ))}
+            </div>
           ))}
         </div>
-      ))}
+        <button
+          type="button"
+          aria-expanded={keyOpen}
+          aria-controls={keyOpen ? keyId : undefined}
+          onClick={() => {
+            setKeyOpen((current) => !current);
+          }}
+          className={cn(
+            'flex h-6 flex-none cursor-pointer items-center gap-1 rounded-md border px-2 text-[12px] leading-none font-medium',
+            keyOpen
+              ? 'border-primary-tint-border bg-primary-tint text-primary'
+              : 'border-transparent bg-transparent text-ink-muted hover:border-inner-divider hover:bg-surface hover:text-ink',
+          )}
+        >
+          {t('legend.key')}
+          <svg
+            aria-hidden
+            width="9"
+            height="9"
+            viewBox="0 0 10 10"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            className={cn(keyOpen && 'rotate-180')}
+          >
+            <path d="m2 3.5 3 3 3-3" />
+          </svg>
+        </button>
+      </div>
+      {keyOpen && (
+        <div
+          id={keyId}
+          data-legend-static
+          className="flex flex-wrap gap-x-7 gap-y-2 border-t border-inner-divider px-2.5 py-2"
+        >
+          {key.map((section) => (
+            <div
+              key={section.title}
+              role="group"
+              aria-label={section.title}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1.5"
+            >
+              <span className={groupLabel}>{section.title}</span>
+              {section.items.map((item) => (
+                <span key={item.key} className="inline-flex">
+                  {item.node}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

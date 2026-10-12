@@ -1,5 +1,6 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
+import { chooseTreatment, openAllView } from './start-visit';
 
 /**
  * Feature 8 (patient files): a file dropped on the visit workspace is uploaded to object storage,
@@ -117,8 +118,10 @@ test('a file dropped on a visit is saved, viewed, rotated, archived and restored
   const popover = page.getByRole('dialog', { name: 'Start visit' });
   await expect(popover.getByRole('combobox', { name: 'Dentist' })).toHaveValue(/.+/);
   await popover.getByRole('combobox', { name: 'Room' }).selectOption({ label: 'Room 1' });
+  await chooseTreatment(popover);
   await popover.getByRole('button', { name: 'Start visit' }).click();
   await expect(page.getByRole('timer', { name: 'Visit time' })).toHaveText(/^\d{2}:\d{2}$/);
+  await openAllView(page);
 
   const strip = page.getByRole('region', { name: 'Files' });
   await expect(strip).toContainText('Nothing added in this visit yet');

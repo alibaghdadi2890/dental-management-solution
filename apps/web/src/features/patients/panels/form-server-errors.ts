@@ -24,7 +24,6 @@ const SERVER_FIELDS: Record<string, ErrorField> = {
   address: 'address',
   insurance: 'insurance',
   notes: 'notes',
-  medicalAlerts: 'alerts',
   primaryDentistId: 'primaryDentistId',
   'openingBalance.amount': 'openingBalanceAmount',
   'openingBalance.asOf': 'openingBalanceAsOf',
@@ -44,7 +43,7 @@ function bareOf(path: string): string {
 
 function fieldOfPath(path: string): ErrorField | undefined {
   const bare = bareOf(path);
-  return SERVER_FIELDS[bare] ?? (bare.startsWith('medicalAlerts.') ? 'alerts' : undefined);
+  return SERVER_FIELDS[bare];
 }
 
 const CONTACT_PATH = /^contacts\.(\d+)(?:\.(.+))?$/;
@@ -119,7 +118,6 @@ export function fieldErrorsOf(error: unknown, sent: SentContext = {}): FormError
 export type PatientFailure =
   | 'archived'
   | 'merged'
-  | 'alertsOverflow'
   | 'unknownDentist'
   | 'phoneRequired'
   | 'notFound'
@@ -144,7 +142,6 @@ const FAILURE_VALUES = { max: PATIENT_CREATE_CONTACTS_MAX } as const;
 const FAILURES: Record<string, PatientFailure> = {
   'patient.archived': 'archived',
   'patient.merged': 'merged',
-  'patient.merge_alerts_overflow': 'alertsOverflow',
   'patient.unknown_dentist': 'unknownDentist',
   'contact.not_found': 'contactNotFound',
   'contact.already_linked': 'contactAlreadyLinked',

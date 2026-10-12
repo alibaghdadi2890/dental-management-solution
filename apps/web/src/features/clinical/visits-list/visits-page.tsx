@@ -1,4 +1,4 @@
-import { exportLanguageSchema, type Session, VISIT_RANGES } from '@dcm/contracts';
+import { exportLanguageSchema, type Session, VISIT_RANGES, VISIT_TYPES } from '@dcm/contracts';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -98,6 +98,7 @@ function VisitsList({
   branchId,
 }: VisitsPageProps & { tenant: Tenant; branchId: string | null }) {
   const { t, i18n } = useTranslation(['visits', 'common']);
+  const { t: tClinical } = useTranslation('clinical');
   const toast = useToast();
   const canPay = usePermission('payment:read');
   const locale = i18n.resolvedLanguage ?? 'en';
@@ -361,6 +362,20 @@ function VisitsList({
               ]}
               onChange={(value) => {
                 set({ room: value || undefined });
+              }}
+            />
+            <FilterChip
+              label={t('filters.type')}
+              value={search.type ?? ''}
+              options={[
+                { value: '', label: t('filters.any') },
+                ...VISIT_TYPES.map((type) => ({
+                  value: type,
+                  label: tClinical(`flow.types.${type}`),
+                })),
+              ]}
+              onChange={(value) => {
+                set({ type: VISIT_TYPES.find((type) => type === value) });
               }}
             />
             {activeFilterCount(effective) > 0 && (

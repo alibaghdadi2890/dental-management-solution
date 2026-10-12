@@ -1,8 +1,10 @@
 import type {
   ChargeUnit,
+  DiagnosisEvidence,
   DiagnosisItem,
+  DiagnosisRecord,
   Jaw,
-  PlanGroupInput,
+  PlanPriority,
   ServiceItem,
   SurfaceKey,
   ToothCode,
@@ -52,6 +54,16 @@ export const servicePriceKey = (serviceId: string) => `${SERVICE_PRICE_PREFIX}${
  * (ADR-0031), where only diagnoses and plans are recorded. */
 export type ChartingScope = { kind: 'visit'; visitId: string } | { kind: 'patient' };
 
+/** The phase a plan made without saying joins (ADR-0045): the one the Plan step offers first. */
+export const DEFAULT_PLAN_PRIORITY: PlanPriority = 'high';
+
+/** What a plan is made with beside its treatment and target (feature 10): its phase, and the
+ * diagnosis it treats when the tooth's latest one is not the one meant. */
+export interface PlanOptions {
+  priority?: PlanPriority | undefined;
+  diagnosisRecordId?: string | undefined;
+}
+
 /** Whether a diagnosis or plan was recorded where the charting happens: in this visit, or on the
  * patient record. Such a record is removed; another is resolved or cancelled (W13, ADR-0031). */
 export const madeHere = (scope: ChartingScope, record: { recordedInVisitId: string | null }) =>
@@ -59,22 +71,17 @@ export const madeHere = (scope: ChartingScope, record: { recordedInVisitId: stri
     ? record.recordedInVisitId === scope.visitId
     : record.recordedInVisitId === null;
 
-/** Managing the patient's named plans: the patient record's Chart tab only. */
-export interface PlanGroupActions {
-  create: (input: PlanGroupInput) => Promise<void>;
-  update: (groupId: string, input: PlanGroupInput) => Promise<void>;
-  remove: (groupId: string) => void;
-  /** Moves an open plan into a named plan, or out of any (`null`). */
-  movePlan: (planId: string, groupId: string | null) => void;
-}
-
 export interface ChartingActions {
   /** In the patient scope the visit-only actions (services, perform, resolve) are
    * never offered. */
   scope: ChartingScope;
   addService: (item: ServiceItem, target: ChartTarget) => void;
-  planTreatment: (item: ServiceItem, target: ChartTarget) => void;
+  planTreatment: (item: ServiceItem, target: ChartTarget, options?: PlanOptions) => void;
   recordDiagnosis: (item: DiagnosisItem, target: ChartTarget) => void;
+  /** Seen on (ADR-0049): the image a diagnosis was seen on, "clinical exam", or not said. */
+  setSeenOn: (recordId: string, seenOn: DiagnosisEvidence | null) => void;
+  /** The phase of the treatment plan an open plan belongs to (ADR-0045). */
+  setPlanPriority: (planId: string, priority: PlanPriority) => void;
   /** Perform now, or Complete for an unfinished service: the plan becomes a service of this
    * visit, with an Undo toast. */
   performPlan: (plan: TreatmentPlan) => void;
@@ -135,10 +142,14 @@ export function useChartingActionsState({
   visit,
   selection,
   openDrawer,
+  onPlanDiagnosis,
 }: {
   visit: Visit;
   selection: ToothSelection;
   openDrawer: (mode: DrawerMode) => void;
+  /** The diagnosis toast's **Plan treatment**, where the visit has a Plan step to take it to
+   * (feature 10); answers false to plan from the drawer instead, as the All view does. */
+  onPlanDiagnosis?: ((record: DiagnosisRecord) => boolean) | undefined;
 }): ChartingActions {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
@@ -212,9 +223,17 @@ export function useChartingActionsState({
           })
           .catch(failed);
       },
-      planTreatment: (item, target) => {
+      planTreatment: (item, target, options = {}) => {
         const scope = scopeOf(item.chargeUnit, target);
-        run(mutations.planTreatment, { procedureId: item.id, ...scope, note: null })
+        run(mutations.planTreatment, {
+          procedureId: item.id,
+          ...scope,
+          note: null,
+          priority: options.priority ?? DEFAULT_PLAN_PRIORITY,
+          ...(options.diagnosisRecordId !== undefined && {
+            diagnosisRecordId: options.diagnosisRecordId,
+          }),
+        })
           .then(({ record }) => {
             toast(t('actions.planned', { name: item.name }), {
               body: t('actions.plannedBody', {
@@ -233,18 +252,26 @@ export function useChartingActionsState({
           toothCode: code,
           surfaces: [...target.surfaces],
           note: null,
+          seenOn: null,
         })
-          .then(() => {
+          .then(({ record }) => {
             toast(t('actions.diagnosed', { name: item.name }), {
               body: t('actions.diagnosedBody', { tooth: tooth(code) }),
               actionLabel: t('actions.planTreatment'),
               onAction: () => {
+                if (onPlanDiagnosis?.(record)) return;
                 ensureSelected(code);
                 openDrawer('plan');
               },
             });
           })
           .catch(failed);
+      },
+      setSeenOn: (recordId, seenOn) => {
+        fire(mutations.setSeenOn, { recordId, seenOn });
+      },
+      setPlanPriority: (planId, priority) => {
+        fire(mutations.setPlanPriority, { planId, priority });
       },
       markUnfinished: (service) => {
         // The plan takes the service's price, so an edit still on its way is saved first.
@@ -362,6 +389,7 @@ export function useChartingActionsState({
     removing,
     ensureSelected,
     openDrawer,
+    onPlanDiagnosis,
   ]);
 }
 

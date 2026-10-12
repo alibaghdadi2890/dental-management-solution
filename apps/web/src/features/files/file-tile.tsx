@@ -103,6 +103,8 @@ const TILE_SIZE = {
   sm: 'size-16 rounded-lg',
   /** The visit strip. */
   md: 'size-[72px] rounded-lg',
+  /** The Evidence strip of a visit's steps. */
+  lg: 'size-24 rounded-[7px]',
   /** The gallery: as wide as its grid cell. */
   fill: 'aspect-square w-full rounded-[10px]',
 } as const;
@@ -131,7 +133,7 @@ export function FileTile({
   const text = useFileText();
   const toothLabel = useToothLabel();
   const archived = file.archivedAt !== null;
-  const rich = size === 'fill' || size === 'md';
+  const rich = size === 'fill' || size === 'md' || size === 'lg';
   const note = file.note.split('\n')[0] ?? '';
 
   return (

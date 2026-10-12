@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { UnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-context';
-import { EmptyState, ErrorState, SearchInput, SkeletonRows, ViewTabs } from '@/components/ui/list';
+import { EmptyState, ErrorState, SearchInput, SkeletonRows } from '@/components/ui/list';
 import { SaveBar } from '@/components/ui/save-bar';
 import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
@@ -32,6 +32,7 @@ import {
   CATALOG_TABS,
   type CatalogDraft,
   type CatalogTab,
+  type CatalogView,
   categoriesOf,
   changeCount,
   changedRows,
@@ -46,58 +47,10 @@ import {
   type RowPatch,
   serverRowErrors,
 } from './catalog-draft';
-import { CATALOG_GRID, STAR_PATH } from './catalog-layout';
+import { CatalogFrame } from './catalog-frame';
+import { CATALOG_GRID, CATALOG_MIN_WIDTH, STAR_PATH } from './catalog-layout';
 import { CatalogRow } from './catalog-row';
-
-const MIN_WIDTH = 1010;
-
-/** Header, tabs and table frame shared by the loading/error states and the editor. */
-function CatalogFrame({
-  tab,
-  onTabChange,
-  counts,
-  action,
-  children,
-  footer,
-}: {
-  tab: CatalogTab;
-  onTabChange: (tab: CatalogTab) => void;
-  counts?: Record<CatalogTab, number> | undefined;
-  action?: ReactNode;
-  children: ReactNode;
-  footer?: ReactNode;
-}) {
-  const { t } = useTranslation('catalog');
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-auto">
-        <div className="max-w-[1080px] px-[26px] pt-6 pb-8">
-          <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="mb-1 text-[21px] leading-tight font-semibold tracking-[-0.02em]">
-                {t('title')}
-              </h1>
-              <p className="text-[13px] leading-snug text-ink-tertiary">{t('subtitle')}</p>
-            </div>
-            {action}
-          </div>
-          <ViewTabs
-            label={t('tabs.label')}
-            active={tab}
-            onChange={onTabChange}
-            tabs={CATALOG_TABS.map((key) => ({
-              key,
-              label: t(`tabs.${key}`),
-              count: counts?.[key],
-            }))}
-          />
-          {children}
-        </div>
-      </div>
-      {footer}
-    </div>
-  );
-}
+import { HistoryListsTab } from './history-lists-tab';
 
 function TableFrame({ tab, children }: { tab: CatalogTab; children: ReactNode }) {
   const { t } = useTranslation('catalog');
@@ -125,7 +78,24 @@ function TableFrame({ tab, children }: { tab: CatalogTab; children: ReactNode })
     { label: t('columns.category') },
     { label: t('columns.mark') },
     ...(tab === 'services'
-      ? [{ label: t('columns.charged') }, { label: t('columns.price'), end: true }]
+      ? [
+          { label: t('columns.charged') },
+          { label: t('columns.price'), end: true },
+          {
+            label: (
+              <span title={t('addedOnHint')} className="cursor-help">
+                {t('columns.addedOn')}
+              </span>
+            ),
+          },
+          {
+            label: (
+              <span title={t('sessionsHint')} className="cursor-help">
+                {t('columns.sessions')}
+              </span>
+            ),
+          },
+        ]
       : []),
     { label: t('columns.active') },
     { label: '' },
@@ -133,7 +103,11 @@ function TableFrame({ tab, children }: { tab: CatalogTab; children: ReactNode })
   return (
     <section className="overflow-hidden rounded-xl border border-border bg-surface">
       <div className="overflow-x-auto">
-        <div role="table" aria-label={t(`tabs.${tab}`)} style={{ minWidth: MIN_WIDTH }}>
+        <div
+          role="table"
+          aria-label={t(`tabs.${tab}`)}
+          style={{ minWidth: CATALOG_MIN_WIDTH[tab] }}
+        >
           <div
             role="row"
             className="grid h-10 items-center gap-2.5 border-b border-border bg-faint px-3.5"
@@ -226,7 +200,7 @@ function CatalogEditor({
   services: ServiceItem[];
   diagnoses: DiagnosisItem[];
   tab: CatalogTab;
-  onTabChange: (tab: CatalogTab) => void;
+  onTabChange: (tab: CatalogView) => void;
 }) {
   const { t, i18n } = useTranslation(['catalog', 'common']);
   const toast = useToast();
@@ -443,6 +417,11 @@ function CatalogEditor({
     <CatalogFrame
       tab={tab}
       onTabChange={(next) => {
+        // The medical-history lists are saved apart: leave nothing unsaved behind.
+        if (next === 'history' && changes > 0) {
+          toast(t('history.saveFirst'), { tone: 'danger' });
+          return;
+        }
         onTabChange(next);
         setFilters((current) => ({ ...current, category: null }));
       }}
@@ -510,13 +489,27 @@ function CatalogEditor({
   );
 }
 
-/** The Catalog screen (`Catalog.dc.html`): services and diagnoses, edited inline in batches. */
+/**
+ * The Catalog screen (`Catalog.dc.html`): services and diagnoses, edited inline in batches, and
+ * the medical-history lists on a tab of their own (feature 10, V14).
+ */
 export function CatalogPage({
   tab,
   onTabChange,
 }: {
+  tab: CatalogView;
+  onTabChange: (tab: CatalogView) => void;
+}) {
+  if (tab === 'history') return <HistoryListsTab onTabChange={onTabChange} />;
+  return <CatalogsTab tab={tab} onTabChange={onTabChange} />;
+}
+
+function CatalogsTab({
+  tab,
+  onTabChange,
+}: {
   tab: CatalogTab;
-  onTabChange: (tab: CatalogTab) => void;
+  onTabChange: (tab: CatalogView) => void;
 }) {
   const { t } = useTranslation('catalog');
   const services = useQuery(servicesQuery());

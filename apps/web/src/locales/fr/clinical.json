@@ -77,7 +77,11 @@
     "teeth_other": "· {{count}} dents",
     "more": "+{{count}} de plus",
     "highlight": "Mettre en évidence les dents avec {{name}}",
-    "clearHighlight": "Ne plus mettre en évidence {{name}}"
+    "clearHighlight": "Ne plus mettre en évidence {{name}}",
+    "diagnoses": "Diagnostics",
+    "services": "Services",
+    "key": "Légende",
+    "nothing": "Rien sur le schéma pour l’instant"
   },
   "workspace": {
     "loading": "Chargement de la visite…",
@@ -92,7 +96,6 @@
       "inProgress": "En cours",
       "paused": "En pause"
     },
-    "dateDentist": "{{date}} · {{dentist}}",
     "timer": "Durée de la visite",
     "pause": "Pause",
     "resume": "Reprendre",
@@ -131,19 +134,7 @@
     "selectTooth": "Afficher {{label}} dans le panneau de la dent",
     "estimate": "Estimation du plan",
     "emptyTitle": "Rien de planifié pour l’instant",
-    "quote": "Devis du plan",
-    "newPlan": "Nouveau plan",
-    "other": "Autres traitements planifiés",
-    "rename": "Renommer",
-    "delete": "Supprimer",
-    "renameNamed": "Renommer {{title}}",
-    "deleteNamed": "Supprimer {{title}}",
-    "deleteTitle": "Supprimer « {{title}} » ?",
-    "deleteBody": "Ses traitements planifiés restent sur le patient, sans plan nommé.",
-    "deleteOk": "Supprimer le plan",
-    "moveTo": "Plan nommé pour {{name}}",
-    "noGroup": "Aucun plan nommé",
-    "emptyGroup": "Rien n’est encore planifié dans ce plan."
+    "quote": "Devis du plan"
   },
   "notes": {
     "title": "Notes cliniques",
@@ -202,7 +193,11 @@
       "failed": "Impossible de démarrer la visite : {{reason}}",
       "merged": "Ce dossier a été fusionné avec un autre. Démarrez la visite depuis le dossier conservé.",
       "branchRequired": "Une visite démarre dans un site, et cette session n'en a aucun. Changez de site et réessayez."
-    }
+    },
+    "type": "Type de visite",
+    "suggested": "Suggéré",
+    "reason": "Motif",
+    "reasonPlaceholder": "Facultatif : pourquoi le patient vient"
   },
   "actions": {
     "failed": "Impossible d’enregistrer la modification : {{reason}}",
@@ -453,16 +448,6 @@
     "lower": "Arcade inférieure",
     "mouth": "Bouche entière"
   },
-  "planGroup": {
-    "newTitle": "Nouveau plan nommé",
-    "editTitle": "Renommer le plan",
-    "title": "Titre",
-    "titlePlaceholder": "p. ex. Réhabilitation complète",
-    "note": "Note",
-    "create": "Créer le plan",
-    "save": "Enregistrer",
-    "cancel": "Annuler"
-  },
   "recordChart": {
     "dentist": "Enregistré pour",
     "chooseDentist": "Choisir un dentiste…",
@@ -481,7 +466,9 @@
     "count_one": "{{count}} acte",
     "count_other": "{{count}} actes",
     "charged": "Facturé aujourd’hui",
-    "carried": "Reporté"
+    "carried": "Reporté",
+    "auto": "ajouté automatiquement",
+    "autoHint": "Catalogue › Services › Ajouté à"
   },
   "unfinished": {
     "badge": "Non terminé",
@@ -498,10 +485,6 @@
     "toContinue": "À poursuivre · {{count}}",
     "count_one": "{{count}} non terminé",
     "count_other": "{{count}} non terminés",
-    "dialogTitle": "Actes non terminés",
-    "dialogQuestion": "En poursuivre aujourd’hui ?",
-    "dialogContinue": "Poursuivre",
-    "dialogFailed": "Impossible d’enregistrer la réponse : {{reason}}",
     "recordTitle": "Actes non terminés",
     "noCharge": "Non facturé",
     "session": "Séance {{number}}"
@@ -582,5 +565,224 @@
     "diagnoses": "Diagnostics",
     "services": "Actes",
     "both": "Les deux"
+  },
+  "flow": {
+    "types": {
+      "examination": "Examen",
+      "emergency": "Urgence",
+      "treatment": "Traitement",
+      "hygiene": "Hygiène",
+      "consultation": "Consultation"
+    },
+    "steps": {
+      "intake": "Accueil",
+      "complaint": "Plainte",
+      "examine": "Examen",
+      "findings": "Constats",
+      "plan": "Plan",
+      "proposal": "Proposition",
+      "today": "Travail du jour",
+      "perform": "Réalisation",
+      "treatNow": "Traiter maintenant",
+      "complete": "Terminer"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "Élevée",
+      "elective": "Facultatif"
+    },
+    "session": "Séance {{number}}",
+    "sessionOf": "Séance {{number}} sur {{total}}",
+    "stepper": "Étapes de la visite {{type}}",
+    "stepDone": "fait",
+    "view": {
+      "label": "Affichage",
+      "steps": "Étapes",
+      "all": "Tout"
+    },
+    "footer": "Étapes de la visite",
+    "previous": "Précédent",
+    "stepOf": "Étape {{number}} sur {{total}}",
+    "continueTo": "Continuer vers {{step}}",
+    "completeVisit": "Terminer la visite",
+    "history": {
+      "title": "Antécédents médicaux",
+      "unconfirmed": "Saisi par l’accueil · non confirmé",
+      "confirm": "Confirmé avec le patient",
+      "confirmedBy": "Confirmé par {{name}} · {{time}}",
+      "saveFailed": "Impossible d’enregistrer les antécédents : {{reason}}",
+      "confirmFailed": "Impossible d’enregistrer la confirmation : {{reason}}"
+    },
+    "reason": {
+      "label": "Motif",
+      "placeholder": "Motif de consultation",
+      "none": "Aucun motif indiqué"
+    },
+    "lastVisit": {
+      "title": "Dernière visite",
+      "line": "{{type}} · {{dentist}}",
+      "none": "Aucune visite précédente.",
+      "failed": "Impossible de charger la dernière visite."
+    },
+    "openTreatment": {
+      "title": "Traitements en cours",
+      "none": "Rien en cours."
+    },
+    "complaint": {
+      "label": "Plainte",
+      "placeholder": "Ce que rapporte le patient"
+    },
+    "pain": {
+      "label": "Douleur",
+      "notRated": "Non évaluée",
+      "score": "{{score}} / {{max}}",
+      "clear": "Effacer"
+    },
+    "since": {
+      "label": "Depuis",
+      "today": "Aujourd’hui",
+      "days_1_3": "1 à 3 jours",
+      "about_a_week": "Environ une semaine",
+      "longer": "Plus longtemps"
+    },
+    "seenOn": {
+      "label": "Vu sur",
+      "named": "Vu sur : {{name}}",
+      "notSaid": "Non précisé",
+      "clinicalExam": "Examen clinique",
+      "image": "Une image"
+    },
+    "findings": {
+      "title": "Diagnostics",
+      "tooth": "Dent",
+      "diagnosis": "Diagnostic",
+      "plan": "Plan",
+      "today": "Enregistrés aujourd’hui",
+      "older": "Ouverts auparavant, non planifiés",
+      "noneToday": "Aucun diagnostic enregistré pendant cette visite.",
+      "noneOlder": "Tout ce qui est plus ancien est planifié.",
+      "recorded": "Enregistré le {{date}}",
+      "planTreatment": "Planifier le traitement",
+      "inPlan": "Dans le plan du jour",
+      "frequent": "Diagnostics fréquents",
+      "recordNamed": "Enregistrer {{name}}",
+      "search": "Rechercher un diagnostic",
+      "addService": "Ajouter un service à cette dent",
+      "examine": "Examiner {{tooth}}"
+    },
+    "proposal": {
+      "named": "{{tooth}} · {{name}}",
+      "surfaces": "Faces {{surfaces}}",
+      "priority": "Priorité",
+      "priorityOf": "Priorité du traitement de {{name}}",
+      "none": "Aucun traitement proposé pour l’instant.",
+      "frequent": "Services fréquents",
+      "proposeNamed": "Proposer {{name}}",
+      "search": "Rechercher dans le catalogue",
+      "searchNamed": "Rechercher dans le catalogue pour {{name}}",
+      "noMatch": "Aucun résultat.",
+      "noDiagnoses": "Aucun diagnostic enregistré pendant cette visite.",
+      "printQuote": "Imprimer le devis"
+    },
+    "phase": {
+      "items_one": "{{count}} acte",
+      "items_other": "{{count}} actes",
+      "none": "Rien dans cette phase",
+      "new": "Nouveau",
+      "total": "Total"
+    },
+    "today": {
+      "none": "Rien d’ouvert dans le plan de traitement.",
+      "inProgress": "En cours",
+      "perform": "Réaliser",
+      "performNamed": "Réaliser {{name}}",
+      "continue": "Continuer",
+      "continueNamed": "Continuer {{name}}",
+      "undoNamed": "Annuler : {{name}}",
+      "addUnplanned": "+ Ajouter un acte non planifié",
+      "forToday": "Pour aujourd’hui : {{target}} {{name}}",
+      "hint": "Cochez ce que vous ferez aujourd’hui.",
+      "ofPhase": "{{picked}} sur {{total}} pour aujourd’hui",
+      "picked_one": "{{count}} traitement pour aujourd’hui",
+      "picked_other": "{{count}} traitements pour aujourd’hui"
+    },
+    "work": {
+      "completed": "Terminé",
+      "unfinished": "Non terminé"
+    },
+    "planned": {
+      "title": "Prévu aujourd’hui",
+      "count_one": "{{count}} acte",
+      "count_other": "{{count}} actes",
+      "notFinishedHint": "Non terminé · à poursuivre à la prochaine visite",
+      "notFinishedNamed": "Non terminé : {{name}}",
+      "beforePhoto": "Photo avant",
+      "afterPhoto": "Photo après"
+    },
+    "lastHygiene": {
+      "title": "Dernière visite d’hygiène",
+      "none": "Aucune enregistrée"
+    },
+    "complete": {
+      "thisVisit": "Cette visite",
+      "recorded": "Enregistré",
+      "diagnoses_one": "{{count}} diagnostic",
+      "diagnoses_other": "{{count}} diagnostics",
+      "planned": "Ajouté au plan",
+      "plannedHead": "{{items}}, {{total}}",
+      "done": "Réalisé aujourd’hui",
+      "doneHead": "{{services}} · {{total}}",
+      "continues": "À poursuivre à la prochaine visite",
+      "sessionNoCharge": "Séance {{number}} · Sans frais",
+      "previous": "Visites précédentes",
+      "outstanding": "Total restant dû",
+      "next": "Prochaine visite :",
+      "nextOf": {
+        "continue": "{{name}} · {{target}} (à poursuivre)",
+        "urgent": "{{name}} · {{target}}"
+      },
+      "nextNone": "Rien d’urgent en cours"
+    },
+    "planStatus": {
+      "planned": "Planifié",
+      "accepted": "Accepté",
+      "in_progress": "En cours",
+      "done": "Réalisé"
+    },
+    "optional": "facultatif",
+    "other": {
+      "open": "+ Ajouter un autre traitement",
+      "title": "Autre traitement",
+      "hint": "Sur une autre dent, une arcade ou toute la bouche.",
+      "where": "Où",
+      "choose": "Choisir…",
+      "levels": "Arcade ou bouche",
+      "primaryTooth": "{{label}} (temporaire)",
+      "priority": "Priorité du prochain traitement",
+      "chooseFirst": "Choisissez où va le traitement pour voir les actes correspondants.",
+      "noServices": "Le catalogue n’a aucun acte pour cela.",
+      "search": "Rechercher un autre traitement dans le catalogue"
+    }
+  },
+  "planTab": {
+    "title": "Plan de traitement",
+    "open": "Ouvrir le plan",
+    "failed": "Impossible de charger le plan de traitement",
+    "nothingOpen": "Rien de planifié.",
+    "empty": "Aucun traitement n’a encore été planifié pour ce patient.",
+    "counts": "{{items}} · {{done}} réalisés",
+    "quoteOf": "Devis : {{phase}}",
+    "tableOf": "Traitements : {{phase}}",
+    "treatment": "Traitement",
+    "for": "Pour",
+    "status": "Statut",
+    "patient": "Patient",
+    "price": "Prix",
+    "accepted": "✓ Accepté",
+    "markAccepted": "Marquer accepté",
+    "acceptNamed": "Marquer {{name}} accepté",
+    "proposed": "Proposé",
+    "withdraw": "Retirer l’acceptation",
+    "withdrawNamed": "Retirer l’acceptation de {{name}}"
   }
 }

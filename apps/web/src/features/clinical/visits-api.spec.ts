@@ -47,7 +47,7 @@ describe('query keys', () => {
       clinicalKeys.toothHistory('t1', PATIENT_ID, '16'),
       clinicalKeys.toothHistories('t1', PATIENT_ID),
     );
-    under(clinicalKeys.summary('t1', PATIENT_ID), clinicalKeys.all('t1'));
+    under(clinicalKeys.fileCitations('t1', PATIENT_ID), clinicalKeys.all('t1'));
     under(clinicalKeys.lastVisit('t1', PATIENT_ID), clinicalKeys.all('t1'));
   });
 
@@ -79,9 +79,19 @@ describe('queries', () => {
       `/clinical/patients/${PATIENT_ID}/last-visit`,
     ],
     [
-      'summary',
-      () => api.clinicalSummaryQuery(PATIENT_ID),
-      `/clinical/patients/${PATIENT_ID}/summary`,
+      'last hygiene visit',
+      () => api.lastVisitOfTypeQuery(PATIENT_ID, 'hygiene'),
+      `/clinical/patients/${PATIENT_ID}/last-visit?type=hygiene`,
+    ],
+    [
+      'history confirmation',
+      () => api.historyConfirmationQuery(PATIENT_ID),
+      `/clinical/patients/${PATIENT_ID}/history-confirmation`,
+    ],
+    [
+      'file citations',
+      () => api.fileCitationsQuery(PATIENT_ID),
+      `/clinical/patients/${PATIENT_ID}/file-citations`,
     ],
   ])('%s requests its route', async (_name, build, path) => {
     apiFetchMock.mockResolvedValueOnce({});
@@ -110,10 +120,10 @@ describe('writes', () => {
   it.each([
     [
       'start',
-      () => api.startVisit({ patientId: PATIENT_ID, dentistId: RECORD_ID }),
+      () => api.startVisit({ patientId: PATIENT_ID, dentistId: RECORD_ID, type: 'treatment' }),
       'POST',
       '/visits',
-      { patientId: PATIENT_ID, dentistId: RECORD_ID },
+      { patientId: PATIENT_ID, dentistId: RECORD_ID, type: 'treatment' },
     ],
     ['pause', () => api.pauseVisit(VISIT_ID), 'POST', `/visits/${VISIT_ID}/pause`],
     ['resume', () => api.resumeVisit(VISIT_ID), 'POST', `/visits/${VISIT_ID}/resume`],
@@ -161,10 +171,11 @@ describe('writes', () => {
           toothCode: '16',
           surfaces: [],
           note: null,
+          seenOn: null,
         }),
       'POST',
       `/visits/${VISIT_ID}/diagnoses`,
-      { diagnosisId: RECORD_ID, toothCode: '16', surfaces: [], note: null },
+      { diagnosisId: RECORD_ID, toothCode: '16', surfaces: [], note: null, seenOn: null },
     ],
     [
       'resolve diagnosis',
@@ -186,10 +197,16 @@ describe('writes', () => {
     ],
     [
       'plan treatment',
-      () => api.planTreatment(VISIT_ID, { procedureId: RECORD_ID, surfaces: [], note: null }),
+      () =>
+        api.planTreatment(VISIT_ID, {
+          procedureId: RECORD_ID,
+          surfaces: [],
+          note: null,
+          priority: 'high',
+        }),
       'POST',
       `/visits/${VISIT_ID}/plans`,
-      { procedureId: RECORD_ID, surfaces: [], note: null },
+      { procedureId: RECORD_ID, surfaces: [], note: null, priority: 'high' },
     ],
     [
       'perform plan',
@@ -228,7 +245,10 @@ describe('writes — tenant', () => {
     apiFetchMock.mockResolvedValue({});
     await api.addService(VISIT_ID, { procedureId: RECORD_ID, surfaces: [] }, 'tenant-2');
     await api.pauseVisit(VISIT_ID, 'tenant-2');
-    await api.startVisit({ patientId: PATIENT_ID, dentistId: RECORD_ID }, 'tenant-2');
+    await api.startVisit(
+      { patientId: PATIENT_ID, dentistId: RECORD_ID, type: 'treatment' },
+      'tenant-2',
+    );
     expect(apiFetchMock).toHaveBeenNthCalledWith(
       1,
       `/visits/${VISIT_ID}/services`,
@@ -250,7 +270,7 @@ describe('writes — tenant', () => {
     );
     expect(apiFetchMock).toHaveBeenNthCalledWith(3, '/visits', expect.anything(), {
       method: 'POST',
-      json: { patientId: PATIENT_ID, dentistId: RECORD_ID },
+      json: { patientId: PATIENT_ID, dentistId: RECORD_ID, type: 'treatment' },
       tenantId: 'tenant-2',
     });
   });

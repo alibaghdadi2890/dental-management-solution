@@ -1,21 +1,29 @@
-import type { BranchRef } from '@dcm/contracts';
+import type { BranchRef, VisitType } from '@dcm/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 import { Popover } from 'radix-ui';
 import { type ReactNode, type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { Field, Select } from '@/components/ui/field';
+import { Field, Select, TextInput } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { useSession } from '@/features/auth/session';
 import { useActingTenantId } from '@/features/platform/acting-tenant';
 import { branchRoomsQuery, tenancyKeys } from '@/features/tenancy/tenancy-api';
 import { branchPractitionersQuery, userKeys } from '@/features/users/users-api';
 import { ApiError } from '@/lib/api';
+import { VisitTypeTiles } from './flow/visit-type-tiles';
 import { startVisitKey, useStartingVisit } from './use-starting-visit';
 import { startVisitMutation } from './visit-mutations';
-import { startDefaultsQuery } from './visits-api';
+import { startDefaultsQuery, startOptionsQuery } from './visits-api';
 import { apiErrorMessage } from '@/lib/api-error-message';
+
+/** What the popover opens with when its opener already knows why (the Overview's Needs
+ * attention): the type, and the plans the visit starts with on its list for today. */
+export interface StartPreset {
+  type: VisitType;
+  planIds?: readonly string[] | undefined;
+}
 
 type FieldName = 'dentist' | 'room';
 type Errors = Partial<Record<FieldName | 'form', string>>;
@@ -49,7 +57,9 @@ const isFormError = (code: string): code is keyof typeof FORM_ERRORS =>
 /**
  * The Start visit popover (spec V3/W7), anchored to its trigger (`children`): the dentist — the
  * session branch's dentists, the caller pre-selected when they are one — and the room — the
- * branch's active rooms, required when it has any, hidden when it has none (W7) — then
+ * branch's active rooms, required when it has any, hidden when it has none (W7) — then, since
+ * feature 10 (V1), why the patient is here: the visit type tiles with their steps and the one
+ * the record suggests, and an optional reason — then
  * `POST /visits` and on to the workspace. A patient who already has a live visit gets that one
  * back (`resumed`), which is where they were going anyway: no toast either way. It can't be
  * dismissed while the start is in flight. Without a branch in the session, it only says why a
@@ -58,11 +68,16 @@ const isFormError = (code: string): code is keyof typeof FORM_ERRORS =>
 export function StartVisitPopover({
   patientId,
   defaultOpen = false,
+  preset,
+  onClose,
   children,
 }: {
   patientId: string;
   /** Open on first render (the record's `?startVisit=1`, from the patient-created toast). */
   defaultOpen?: boolean;
+  preset?: StartPreset | undefined;
+  /** The popover closed, whatever closed it. */
+  onClose?: (() => void) | undefined;
   /** The trigger button. */
   children: ReactNode;
 }) {
@@ -76,7 +91,9 @@ export function StartVisitPopover({
     <Popover.Root
       open={open}
       onOpenChange={(next) => {
-        if (next || !starting) setOpen(next);
+        if (!next && starting) return;
+        setOpen(next);
+        if (!next) onClose?.();
       }}
     >
       <Popover.Trigger asChild>{children}</Popover.Trigger>
@@ -84,6 +101,7 @@ export function StartVisitPopover({
         <Popover.Content
           align="end"
           sideOffset={6}
+          collisionPadding={12}
           aria-labelledby={titleId}
           // The form focuses its first empty field once its lists have loaded (`StartVisitForm`);
           // until then, the popover itself.
@@ -93,7 +111,8 @@ export function StartVisitPopover({
             if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
           }}
           // On the dialogs' layer: the tooth history's empty state opens it too.
-          className="z-50 w-[300px] max-w-[calc(100vw-24px)] animate-fadein rounded-[10px] border border-border bg-surface p-4 shadow-[0_10px_28px_rgba(27,26,31,.14)]"
+          // As tall as the room it has: a long plan list scrolls inside it, Start stays in reach.
+          className="z-50 max-h-(--radix-popover-content-available-height) w-[380px] max-w-[calc(100vw-24px)] animate-fadein overflow-auto rounded-[10px] border border-border bg-surface p-4 shadow-[0_10px_28px_rgba(27,26,31,.14)]"
         >
           <h2 id={titleId} className="m-0 mb-3.5 text-[14px] leading-none font-semibold">
             {t('startVisit.title')}
@@ -102,11 +121,14 @@ export function StartVisitPopover({
             <StartVisitForm
               patientId={patientId}
               branch={branch}
+              preset={preset}
               onCancel={() => {
                 setOpen(false);
+                onClose?.();
               }}
               onStarted={() => {
                 setOpen(false);
+                onClose?.();
               }}
             />
           ) : (
@@ -125,11 +147,13 @@ export function StartVisitPopover({
 function StartVisitForm({
   patientId,
   branch,
+  preset,
   onCancel,
   onStarted,
 }: {
   patientId: string;
   branch: BranchRef;
+  preset: StartPreset | undefined;
   onCancel: () => void;
   onStarted: () => void;
 }) {
@@ -140,6 +164,7 @@ function StartVisitForm({
   const practitioners = useQuery(branchPractitionersQuery(branch.id));
   const rooms = useQuery(branchRoomsQuery(branch.id));
   const defaults = useQuery(startDefaultsQuery());
+  const options = useQuery(startOptionsQuery(patientId));
   const start = useMutation({
     ...startVisitMutation(queryClient, tenantId),
     mutationKey: startVisitKey(tenantId, patientId),
@@ -152,6 +177,10 @@ function StartVisitForm({
     room: null,
   });
   const [errors, setErrors] = useState<Errors>({});
+  // `null` = not chosen yet: the suggestion applies.
+  const [pickedType, setPickedType] = useState<VisitType | null>(preset?.type ?? null);
+  const [reason, setReason] = useState('');
+  const type = pickedType ?? options.data?.suggestedType ?? 'examination';
 
   const activeRooms = rooms.data?.filter((room) => room.active) ?? [];
   // A choice or default that is no longer listed (a dentist moved, a room deactivated — the
@@ -163,7 +192,9 @@ function StartVisitForm({
   const needsRoom = activeRooms.length > 0;
 
   // Without its defaults (a failed read), the form just starts empty.
-  const loading = practitioners.isPending || rooms.isPending || defaults.isPending;
+  // Without its suggestion either (a failed read): an examination, and no plan rows.
+  const loading =
+    practitioners.isPending || rooms.isPending || defaults.isPending || options.isPending;
   const loadFailed = practitioners.isError || rooms.isError;
   const noDentist = practitioners.data?.length === 0;
 
@@ -207,7 +238,17 @@ function StartVisitForm({
     }
     // `mutateAsync`, not `mutate` with callbacks: those are skipped once this form unmounts, and
     // going to the workspace must not depend on it staying mounted.
-    start.mutateAsync({ patientId, dentistId, ...(needsRoom ? { roomId } : {}) }).then(
+    const visit = {
+      patientId,
+      dentistId,
+      ...(needsRoom ? { roomId } : {}),
+      type,
+      reason: reason.trim() || null,
+      // A treatment visit asked for from a plan starts with that plan on its list; otherwise
+      // the server takes the work in progress and what is urgent, and Today's work has the rest.
+      ...(type === 'treatment' && preset?.planIds ? { planIds: [...preset.planIds] } : {}),
+    };
+    start.mutateAsync(visit).then(
       ({ visit }) => {
         onStarted();
         void navigate({ to: '/visits/$visitId', params: { visitId: visit.id } });
@@ -308,6 +349,26 @@ function StartVisitForm({
           )}
         </Field>
       )}
+      <VisitTypeTiles
+        value={type}
+        suggested={options.data?.suggestedType}
+        disabled={start.isPending}
+        onChange={setPickedType}
+      />
+      <Field label={t('startVisit.reason')}>
+        {(field) => (
+          <TextInput
+            {...field}
+            name="reason"
+            maxLength={500}
+            placeholder={t('startVisit.reasonPlaceholder')}
+            value={reason}
+            onChange={(event) => {
+              setReason(event.target.value);
+            }}
+          />
+        )}
+      </Field>
       {errors.form && (
         <p role="alert" className="m-0 text-xs leading-tight font-medium text-danger">
           {errors.form}

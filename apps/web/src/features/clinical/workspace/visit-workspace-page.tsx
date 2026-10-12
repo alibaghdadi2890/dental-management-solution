@@ -1,11 +1,17 @@
 import {
   deriveChart,
+  type DiagnosisRecord,
   effectiveDentition,
+  hasStep,
+  isOptionalStep,
+  type Jaw,
   type PatientChart,
   type Session,
   type ToothCode,
   type ToothState,
+  type TreatmentPlan,
   type Visit,
+  type VisitType,
 } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
@@ -15,6 +21,7 @@ import { CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
+import { EvidenceStrip } from '@/features/files/evidence-strip';
 import { FileDropSurface } from '@/features/files/file-drop-surface';
 import { VisitFilesStrip } from '@/features/files/file-rows';
 import { patientQuery } from '@/features/patients/patients-api';
@@ -25,8 +32,19 @@ import { cn } from '@/lib/utils';
 import { useChartMarks } from '../chart/use-chart-marks';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
-import { UnfinishedDialog } from '../dialogs/unfinished-dialog';
 import { VisitSummaryDialog } from '../dialogs/visit-summary-dialog';
+import { FlowFooter } from '../flow/flow-footer';
+import { LastHygieneLine } from '../flow/last-hygiene-line';
+import { PlannedToday } from '../flow/planned-today';
+import { CompleteStep } from '../flow/steps/complete-step';
+import { ComplaintStep } from '../flow/steps/complaint-step';
+import { FindingsStep } from '../flow/steps/findings-step';
+import { IntakeStep } from '../flow/steps/intake-step';
+import { PlanStep } from '../flow/steps/plan-step';
+import { TodayStep } from '../flow/steps/today-step';
+import { useCarriedDiagnoses } from '../flow/use-carried-diagnoses';
+import { useVisitFlow } from '../flow/use-visit-flow';
+import { VisitStepper } from '../flow/visit-stepper';
 import { useDropOrphanedGroups } from '../save-groups-context';
 import { SaveGroupsProvider } from '../save-groups-provider';
 import { useVisit } from '../use-visit';
@@ -44,7 +62,6 @@ import { FinancialBar } from './financial-bar';
 import { NotesCard } from './notes-card';
 import { PlanBoard } from './plan-board';
 import { TodaysServices } from './todays-services';
-import { unfinishedWork } from './unfinished';
 import { ToothPanel } from './tooth-panel/tooth-panel';
 import { ToothSelectionContext, useToothSelectionState } from './tooth-selection';
 import { useChartExpansion } from './use-chart-expansion';
@@ -54,6 +71,13 @@ import { VisitHeader } from './visit-header';
 import { useToothParam } from './workspace-search';
 
 type Tenant = NonNullable<Session['tenant']>;
+
+/** The types whose examination starts from the images: their Evidence strip opens by itself. */
+const EVIDENCE_FIRST: ReadonlySet<VisitType> = new Set([
+  'examination',
+  'emergency',
+  'consultation',
+]);
 
 /** The `/visits/$visitId` route: one workspace per visit, so its autosave groups (V6) never
  * carry over from one visit to the next. `tooth` is `?tooth=`, the tooth to select on arrival. */
@@ -148,18 +172,25 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
 }
 
 /**
- * The three bands in a full-height column: the header; the body, a wrapping row of the left
- * region (`1 1 600px`: the chart card, today's services, the treatment plan, the files strip
- * (feature 8) and the notes) and the
- * selected-tooth aside (`1 1 340px`), so the aside reflows under the chart below ~1000px; and the
- * financial bar. Read-only without `visit:write`
+ * The bands of a full-height column: the header, the stepper (feature 10), the body and a
+ * footer. The visit's flow (`useVisitFlow`, ADR-0044) decides the body:
+ *
+ * - **All** — the whole workspace, as before the flows: a wrapping row of the left region
+ *   (`1 1 600px`: the chart card, today's services, the treatment plan, the files strip and the
+ *   notes) and the selected-tooth aside (`1 1 340px`), so the aside reflows under the chart below
+ *   ~1000px; the footer is the financial bar.
+ * - **Steps** — only what the step is for. Examine and Perform keep the chart and the tooth
+ *   panel (in findings mode for Examine) with their own cards on the left; Intake, Complaint,
+ *   Findings, Plan, Today's work and Complete take the whole body. The footer moves between the
+ *   steps and ends on **Complete visit**.
+ *
+ * Read-only without `visit:write`
  * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
  * the chart, the tooth panel and the drawer; the drawer opens over a scrim. `?tooth=` selects
  * its tooth (the tooth history's "Chart it in this visit"), then leaves the URL. Add service is
  * offered at the top of the tooth panel, on Today's services and with the `S` key. The tooth
  * panel's "Full tooth history →" opens the tooth history dialog, and the financial bar's
- * **Review & complete** the visit summary. A visit of a patient with unfinished services opens
- * with the question which of them it continues (`UnfinishedDialog`). The price groups of services no longer on the visit
+ * **Review & complete** the visit summary. The price groups of services no longer on the visit
  * (removed by someone else) are dropped as the visit refreshes. A file dropped anywhere on the
  * workspace, or an image pasted, opens the upload panel with the visit — and the selected
  * tooth — pre-filled (`FileDropSurface`).
@@ -197,13 +228,72 @@ function Workspace({
   const closeReview = useCallback(() => {
     setReviewing(false);
   }, []);
-  const actions = useChartingActionsState({ visit, selection, openDrawer: setDrawer });
+  const flow = useVisitFlow(visit, chart.data);
+  const { select, selectArea, area: selectedArea } = selection;
+  /** Selects where a record is: its tooth, or its jaw or the whole mouth. */
+  const focusTarget = useCallback(
+    (record: { toothCode: ToothCode | null; jaw?: Jaw | null }) => {
+      if (record.toothCode !== null) {
+        select(record.toothCode);
+        return;
+      }
+      const area = record.jaw ?? 'mouth';
+      // Selecting the selected area again would deselect it.
+      if (selectedArea !== area) selectArea(area);
+    },
+    [select, selectArea, selectedArea],
+  );
+  const { carried, carry } = useCarriedDiagnoses(visit.id);
+  // The diagnosis the Plan step was opened for: its card takes the focus.
+  const [planFocus, setPlanFocus] = useState<string | null>(null);
+  const { goTo, view } = flow;
+  const planDiagnosis = useCallback(
+    (record: DiagnosisRecord) => {
+      if (record.recordedInVisitId !== visit.id) carry(record.id);
+      setPlanFocus(record.id);
+      goTo('plan');
+    },
+    [visit.id, carry, goTo],
+  );
+  // The diagnosis toast's Plan treatment: on to the Plan step where the visit shows one.
+  const hasPlanStep = hasStep(visit.type, 'plan');
+  const onPlanDiagnosis = useCallback(
+    (record: DiagnosisRecord) => {
+      if (view !== 'steps' || !hasPlanStep) return false;
+      planDiagnosis(record);
+      return true;
+    },
+    [view, hasPlanStep, planDiagnosis],
+  );
+  const actions = useChartingActionsState({
+    visit,
+    selection,
+    openDrawer: setDrawer,
+    onPlanDiagnosis,
+  });
+  const startWork = useCallback(
+    (plan: TreatmentPlan) => {
+      goTo('perform');
+      focusTarget(plan);
+    },
+    [goTo, focusTarget],
+  );
+  const examineTooth = useCallback(
+    (record: DiagnosisRecord) => {
+      goTo('examine');
+      focusTarget(record);
+    },
+    [goTo, focusTarget],
+  );
+  const addUnplanned = useCallback(() => {
+    goTo('perform');
+    setDrawer('service');
+  }, [goTo]);
+  /** The step whose layout shows; none in the All view. */
+  const step = flow.view === 'all' ? null : flow.current;
+  // The steps that keep the chart and the tooth panel.
+  const charting = step === null || step === 'examine' || step === 'perform';
   const teeth = useVisitTeeth(chart.data, visit);
-  // What the visit is asked about as it opens, until it has answered (unfinished spec U5).
-  const toAsk =
-    canWrite && visit.unfinishedAnsweredAt === null && chart.data
-      ? unfinishedWork(chart.data.plans, visit.id).toContinue
-      : [];
   // Today's services that aren't on a tooth, per jaw and for the whole mouth.
   const areaCounts = useMemo(() => {
     const counts = { upper: 0, lower: 0, mouth: 0 };
@@ -241,7 +331,8 @@ function Workspace({
     onSelect: selection.select,
     // The summary dialog handles its own keys; while it is open the chart takes none.
     onEscape: drawer !== null ? closeDrawer : reviewing ? closeReview : undefined,
-    onAddService: canWrite ? addService : undefined,
+    // `S` adds a service where the chart is on screen.
+    onAddService: canWrite && charting ? addService : undefined,
   });
 
   const expansion = useChartExpansion();
@@ -300,74 +391,151 @@ function Workspace({
               </Link>
             </div>
           )}
-          <div className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-auto">
-            {/* Expanded, the chart card leaves its column for a row of its own across the page;
-                the services, the plans and the tooth panel follow under it. */}
-            {expansion.expanded && chartCard && (
-              <div className="min-w-0 basis-full px-5 pt-[18px]">{chartCard}</div>
-            )}
+          <VisitStepper flow={flow} />
+          {step === 'intake' && (
+            <IntakeStep
+              visit={visit}
+              patient={patient.data}
+              chart={chart.data}
+              canWrite={canWrite}
+            />
+          )}
+          {step === 'complaint' && <ComplaintStep visit={visit} canWrite={canWrite} />}
+          {step === 'findings' && (
+            <FindingsStep
+              visit={visit}
+              chart={chart.data}
+              canWrite={canWrite}
+              carried={carried}
+              onPlan={planDiagnosis}
+              onTooth={examineTooth}
+            />
+          )}
+          {step === 'plan' && (
+            <PlanStep
+              visit={visit}
+              chart={chart.data}
+              canWrite={canWrite}
+              carried={carried}
+              focusId={planFocus}
+            />
+          )}
+          {step === 'today' && (
+            <TodayStep
+              visit={visit}
+              chart={chart.data}
+              canWrite={canWrite}
+              onStart={startWork}
+              onAddUnplanned={addUnplanned}
+            />
+          )}
+          {step === 'complete' && (
+            <CompleteStep
+              visit={visit}
+              chart={chart.data}
+              canWrite={canWrite}
+              onAddService={addService}
+            />
+          )}
+          {charting && (
             <div
-              className={cn(
-                'min-w-0 flex-[1_1_600px] px-5 pb-5',
-                !(expansion.expanded && chartCard) && 'pt-[18px]',
-              )}
+              data-step={step ?? 'all'}
+              className="flex min-h-0 flex-1 flex-wrap items-stretch overflow-auto"
             >
-              {chartCard ? (
-                !expansion.expanded && chartCard
-              ) : (
-                <ChartCardFrame>
-                  {chart.error || patient.error ? (
-                    <ErrorState
-                      title={t('workspace.chartFailed')}
-                      body={t('workspace.failedBody')}
-                      onRetry={() => {
-                        void chart.refetch();
-                        void patient.refetch();
-                      }}
-                    />
-                  ) : (
-                    <CardSkeleton label={t('workspace.loading')} />
-                  )}
-                </ChartCardFrame>
+              {/* Expanded, the chart card leaves its column for a row of its own across the page;
+                the services, the plans and the tooth panel follow under it. */}
+              {expansion.expanded && chartCard && (
+                <div className="min-w-0 basis-full px-5 pt-[18px]">{chartCard}</div>
               )}
-              <TodaysServices
-                visit={visit}
-                chart={chart.data}
-                canWrite={canWrite}
-                onAdd={addService}
-              />
-              {chart.data && <PlanBoard chart={chart.data} canWrite={canWrite} />}
-              <VisitFilesStrip
-                patient={patient.data}
-                visit={visit}
-                selectedTooth={selection.tooth}
-              />
-              <NotesCard visit={visit} canWrite={canWrite} />
+              <div
+                className={cn(
+                  'min-w-0 flex-[1_1_600px] px-5 pb-5',
+                  !(expansion.expanded && chartCard) && 'pt-[18px]',
+                )}
+              >
+                {step === 'perform' && visit.type === 'hygiene' && (
+                  <LastHygieneLine patientId={visit.patientId} />
+                )}
+                {step !== null && (
+                  <EvidenceStrip
+                    // Each step decides where its strip starts.
+                    key={step}
+                    visit={visit}
+                    selectedTooth={selection.tooth}
+                    defaultOpen={step === 'examine' && EVIDENCE_FIRST.has(visit.type)}
+                  />
+                )}
+                {chartCard ? (
+                  !expansion.expanded && chartCard
+                ) : (
+                  <ChartCardFrame>
+                    {chart.error || patient.error ? (
+                      <ErrorState
+                        title={t('workspace.chartFailed')}
+                        body={t('workspace.failedBody')}
+                        onRetry={() => {
+                          void chart.refetch();
+                          void patient.refetch();
+                        }}
+                      />
+                    ) : (
+                      <CardSkeleton label={t('workspace.loading')} />
+                    )}
+                  </ChartCardFrame>
+                )}
+                {step === 'perform' && (
+                  <PlannedToday visit={visit} chart={chart.data} canWrite={canWrite} />
+                )}
+                {step !== 'examine' && (
+                  <TodaysServices
+                    visit={visit}
+                    chart={chart.data}
+                    canWrite={canWrite}
+                    onAdd={addService}
+                  />
+                )}
+                {/* Where Perform is optional, the plan is at hand for what is done on the spot. */}
+                {(step === null || (step === 'perform' && isOptionalStep(visit.type, step))) &&
+                  chart.data && <PlanBoard chart={chart.data} canWrite={canWrite} />}
+                {step === null && (
+                  <VisitFilesStrip
+                    patient={patient.data}
+                    visit={visit}
+                    selectedTooth={selection.tooth}
+                  />
+                )}
+                {step !== 'examine' && <NotesCard visit={visit} canWrite={canWrite} />}
+              </div>
+              <aside
+                aria-label={t('workspace.toothPanel')}
+                className={cn(
+                  'min-w-0 flex-[1_1_340px] border-s border-border bg-surface p-4',
+                  expansion.expanded && chartCard && 'rounded-ss-xl border-t',
+                )}
+              >
+                {chart.data ? (
+                  <ToothPanel
+                    patientId={visit.patientId}
+                    visit={visit}
+                    chart={chart.data}
+                    teeth={teeth}
+                    canWrite={canWrite}
+                    timeZone={tenant.timeZone}
+                    onOpenDrawer={setDrawer}
+                    onOpenHistory={setHistoryTooth}
+                    mode={step === 'examine' ? 'findings' : 'full'}
+                  />
+                ) : (
+                  !chart.error && <CardSkeleton label={t('workspace.loading')} />
+                )}
+              </aside>
             </div>
-            <aside
-              aria-label={t('workspace.toothPanel')}
-              className={cn(
-                'min-w-0 flex-[1_1_340px] border-s border-border bg-surface p-4',
-                expansion.expanded && chartCard && 'rounded-ss-xl border-t',
-              )}
-            >
-              {chart.data ? (
-                <ToothPanel
-                  patientId={visit.patientId}
-                  visit={visit}
-                  chart={chart.data}
-                  teeth={teeth}
-                  canWrite={canWrite}
-                  timeZone={tenant.timeZone}
-                  onOpenDrawer={setDrawer}
-                  onOpenHistory={setHistoryTooth}
-                />
-              ) : (
-                !chart.error && <CardSkeleton label={t('workspace.loading')} />
-              )}
-            </aside>
-          </div>
-          <FinancialBar visit={visit} canWrite={canWrite} onReview={review} />
+          )}
+          {step === null ? (
+            <FinancialBar visit={visit} canWrite={canWrite} onReview={review} />
+          ) : (
+            <FlowFooter flow={flow} canComplete={canWrite} onComplete={review} />
+          )}
           <FileDropSurface
             patientId={visit.patientId}
             patientName={patient.data?.fullName}
@@ -390,7 +558,6 @@ function Workspace({
               <CatalogDrawer key={drawer} mode={drawer} onClose={closeDrawer} />
             </>
           )}
-          {toAsk.length > 0 && <UnfinishedDialog visitId={visit.id} plans={toAsk} />}
           <ToothHistoryDialog
             patientId={visit.patientId}
             patientName={patient.data?.fullName}

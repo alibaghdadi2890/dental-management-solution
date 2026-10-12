@@ -157,8 +157,6 @@ describe('Today’s services and the chart’s jaw and whole-mouth areas', () =>
         visit({
           services: [visitService(50, 'Composite filling', '14')],
           money: { subtotal: '80.00', discount: '0.00', total: '80.00', capped: false },
-          // Answered already: the popup is another spec's.
-          unfinishedAnsweredAt: '2026-09-04T09:01:00.000Z',
         }),
       chart: () =>
         chart({

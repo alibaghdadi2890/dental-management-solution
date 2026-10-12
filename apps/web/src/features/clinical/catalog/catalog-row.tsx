@@ -1,10 +1,16 @@
-import { CHARGE_UNITS, TOOTH_EFFECTS } from '@dcm/contracts';
+import { CHARGE_UNITS, ENTRY_VISIT_TYPES, TOOTH_EFFECTS } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { MarkChip } from '../chart/mark-chip';
-import { type CatalogTab, type DraftRow, type RowPatch, sanitizePrice } from './catalog-draft';
+import {
+  type CatalogTab,
+  type DraftRow,
+  type RowPatch,
+  sanitizePrice,
+  sessionsFrom,
+} from './catalog-draft';
 import { CATALOG_GRID } from './catalog-layout';
 import { FrequentToggle } from './frequent-toggle';
 import { ColorPicker, IconPicker } from './mark-pickers';
@@ -40,6 +46,7 @@ export function CatalogRow({
   onDelete: () => void;
 }) {
   const { t, i18n } = useTranslation('catalog');
+  const { t: tClinical } = useTranslation('clinical');
   const nameMissing = !readOnly && row.name.trim() === '';
   const codeInvalid = !readOnly && (row.code.trim() === '' || error !== undefined);
   const errorId = `catalog-row-error-${row.key}`;
@@ -213,6 +220,48 @@ export function CatalogRow({
               className="w-full min-w-0 border-none bg-transparent text-end tabular-nums outline-none"
             />
           </label>
+          {row.chargeUnit === 'per_mouth' ? (
+            <select
+              aria-label={t('columns.addedOn')}
+              title={t('addedOnHint')}
+              disabled={readOnly}
+              value={row.addedOnVisitType ?? ''}
+              onChange={(event) => {
+                onChange({
+                  addedOnVisitType:
+                    ENTRY_VISIT_TYPES.find((type) => type === event.target.value) ?? null,
+                });
+              }}
+              className={cn(
+                cell(readOnly),
+                'text-[12.5px] leading-none disabled:opacity-100',
+                readOnly && 'appearance-none',
+                row.addedOnVisitType === null && 'text-ink-muted',
+              )}
+            >
+              <option value="">{t('addedOn.never')}</option>
+              {ENTRY_VISIT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {tClinical(`flow.types.${type}`)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            // A service on a tooth or a jaw needs a place: no visit can start with it.
+            <span role="presentation" />
+          )}
+          <input
+            aria-label={t('columns.sessions')}
+            title={t('sessionsHint')}
+            readOnly={readOnly}
+            inputMode="numeric"
+            placeholder="1"
+            value={row.typicalSessions ?? ''}
+            onChange={(event) => {
+              onChange({ typicalSessions: sessionsFrom(event.target.value) });
+            }}
+            className={cn(cell(readOnly), 'text-center font-mono text-[12.5px] leading-none')}
+          />
         </>
       )}
       <Switch

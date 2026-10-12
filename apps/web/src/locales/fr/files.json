@@ -174,11 +174,6 @@
     "restored_one": "Restauré",
     "restored_other": "{{count}} fichiers restaurés"
   },
-  "recent": {
-    "title": "Fichiers récents",
-    "viewAll": "Tout voir",
-    "upload": "Ajouter des fichiers"
-  },
   "toothImages": {
     "title": "Images",
     "add": "Ajouter une image de la dent {{tooth}}"
@@ -281,7 +276,8 @@
       "update": "Détails modifiés",
       "archive": "Archivé",
       "restore": "Restauré"
-    }
+    },
+    "citations": "Diagnostics vus sur cette image"
   },
   "errors": {
     "file": {
@@ -292,5 +288,17 @@
       "visit_mismatch": "Cette visite n’est pas une visite de ce patient.",
       "archive_forbidden": "Seul un dentiste ou le propriétaire peut archiver ou restaurer ce fichier."
     }
+  },
+  "evidence": {
+    "title": "Imagerie",
+    "upload": "Importer",
+    "takePhoto": "Prendre une photo",
+    "empty": "Aucune image pour l’instant."
+  },
+  "latest": {
+    "title": "Dernières images",
+    "all": "Tout ({{count}})",
+    "loading": "Chargement des fichiers…",
+    "failed": "Impossible de charger les fichiers"
   }
 }

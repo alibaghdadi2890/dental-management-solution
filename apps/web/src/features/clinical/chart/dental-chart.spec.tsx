@@ -472,10 +472,25 @@ describe('ChartLegend', () => {
     <ChartLegend teeth={TEETH} dentition="permanent" {...props} />
   );
   const groups = () =>
-    screen.getAllByRole('group').map((group) => group.getAttribute('aria-label'));
+    screen.queryAllByRole('group').map((group) => group.getAttribute('aria-label'));
+  /** The key (Status, Tooth) is closed until asked for. */
+  const openKey = () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Key' }));
+  };
 
-  it('lists what is on this chart, the most widespread first, then status and tooth', () => {
+  it('lists what is on this chart, the most widespread first; the key opens under it', () => {
     renderWith(legend());
+    // One band: the patient's own lines as chips, name and tooth count.
+    expect(groups()).toEqual(['Diagnoses on this chart', 'Services on this chart']);
+    expect(legendItems()).toEqual(['Dental caries1', 'Composite filling2', 'Zircon crown1']);
+    expect(document.querySelector('[data-legend-item="service:CMP"]')?.getAttribute('title')).toBe(
+      'Composite filling · 2 teeth',
+    );
+    const key = screen.getByRole('button', { name: 'Key' });
+    expect(key.getAttribute('aria-expanded')).toBe('false');
+
+    openKey();
+    expect(key.getAttribute('aria-expanded')).toBe('true');
     expect(groups()).toEqual([
       'Diagnoses on this chart',
       'Services on this chart',
@@ -483,9 +498,9 @@ describe('ChartLegend', () => {
       'Tooth',
     ]);
     expect(legendItems()).toEqual([
-      'Dental caries · 1 tooth',
-      'Composite filling · 2 teeth',
-      'Zircon crown · 1 tooth',
+      'Dental caries1',
+      'Composite filling2',
+      'Zircon crown1',
       'Done today',
       'Done earlier',
       'Not finished',
@@ -505,11 +520,12 @@ describe('ChartLegend', () => {
   it('follows the view and the chart on screen, and leaves an empty group out', () => {
     setChartView('services');
     renderWith(legend());
-    expect(groups()).toEqual(['Services on this chart', 'Status', 'Tooth']);
+    expect(groups()).toEqual(['Services on this chart']);
     cleanup();
 
     setChartView('diagnoses');
     renderWith(legend());
+    openKey();
     expect(groups()).toEqual(['Diagnoses on this chart', 'Status', 'Tooth']);
     // Without services on the teeth, no "today" or "earlier" to explain.
     expect(legendItems()).not.toContain('Done today');
@@ -518,15 +534,19 @@ describe('ChartLegend', () => {
 
     setChartView('both');
     renderWith(legend({ dentition: 'primary' }));
-    expect(legendItems().slice(0, 1)).toEqual(['Pulpotomy · 1 tooth']);
+    expect(legendItems().slice(0, 1)).toEqual(['Pulpotomy1']);
     cleanup();
 
     renderWith(<ChartLegend teeth={new Map()} dentition="permanent" />);
+    expect(groups()).toEqual([]);
+    expect(screen.getByText('Nothing charted yet')).toBeTruthy();
+    openKey();
     expect(groups()).toEqual(['Status', 'Tooth']);
   });
 
   it('leaves Done today out outside a visit', () => {
     renderWith(legend({ showToday: false }));
+    openKey();
     expect(legendItems()).not.toContain('Done today');
     expect(legendItems()).toContain('Done earlier');
   });
@@ -559,13 +579,15 @@ describe('ChartLegend', () => {
     ).toBe('true');
     fireEvent.click(fillings);
     expect(onHighlight).toHaveBeenCalledWith({ kind: 'service', id: 'CMP' });
-    // The static lines are not buttons.
+    // The key's lines are not buttons.
+    openKey();
     expect(screen.queryByRole('button', { name: 'Planned' })).toBeNull();
   });
 
   it('without a highlight handler, lists the lines as plain text', () => {
     renderWith(legend());
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    // Only the Key toggle is a button.
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual(['Key']);
   });
 
   it('as a key, lists the same lines under their titles, one to a line', () => {
@@ -582,6 +604,7 @@ describe('ChartLegend', () => {
 
   it('draws the planned and not-finished swatches as rings, clear of their labels', () => {
     renderWith(legend());
+    openKey();
     const swatchOf = (label: string) =>
       [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].find(
         (item) => item.textContent === label,
@@ -593,11 +616,12 @@ describe('ChartLegend', () => {
 
   it('gives every legend line the same height, so the groups line up', () => {
     renderWith(legend());
+    openKey();
     const heights = new Set(
       [...document.querySelectorAll<HTMLElement>('[data-legend-item]')].map((item) =>
         item.className.split(' ').find((name) => name.startsWith('h-')),
       ),
     );
-    expect([...heights]).toEqual(['h-[15px]']);
+    expect([...heights]).toEqual(['h-6']);
   });
 });

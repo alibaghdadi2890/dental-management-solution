@@ -1,4 +1,10 @@
-import type { DiagnosisItem, Permission, ServiceItem, Session } from '@dcm/contracts';
+import type {
+  DiagnosisItem,
+  MedicalOption,
+  Permission,
+  ServiceItem,
+  Session,
+} from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -6,12 +12,13 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@/lib/i18n';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
 import { ToastProvider } from '@/components/ui/toast';
 import { sessionQueryOptions } from '@/features/auth/session';
+import { medicalOptionKeys } from '@/features/patients/medical-history/medical-options-api';
 import { catalogKeys } from './catalog-api';
 import { CatalogPage } from './catalog-page';
 
@@ -31,6 +38,8 @@ const service = (n: number, code: string, name: string, category: string, active
     color: 'blue',
     icon: null,
     markPriority: 5,
+    addedOnVisitType: null,
+    typicalSessions: null,
   }) satisfies ServiceItem;
 
 const SERVICES = [
@@ -76,11 +85,20 @@ function sessionWith(permissions: Permission[]): Session {
   };
 }
 
-function renderCatalog(permissions: Permission[], tab: 'services' | 'diagnoses' = 'services') {
+const OPTIONS: MedicalOption[] = [
+  { id: id(21), kind: 'allergy', name: 'Latex', active: true },
+  { id: id(22), kind: 'condition', name: 'Asthma', active: true },
+];
+
+function renderCatalog(
+  permissions: Permission[],
+  tab: 'services' | 'diagnoses' | 'history' = 'services',
+) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(sessionQueryOptions().queryKey, sessionWith(permissions));
   client.setQueryData(catalogKeys.tab('services', null), SERVICES);
   client.setQueryData(catalogKeys.tab('diagnoses', null), DIAGNOSES);
+  client.setQueryData(medicalOptionKeys.list(null), OPTIONS);
   const rootRoute = createRootRoute({
     component: () => <CatalogPage tab={tab} onTabChange={() => undefined} />,
   });
@@ -194,6 +212,8 @@ describe('CatalogPage', () => {
           color: 'blue',
           icon: null,
           markPriority: 5,
+          addedOnVisitType: null,
+          typicalSessions: null,
         },
       ],
     });
@@ -249,6 +269,51 @@ describe('CatalogPage', () => {
       await screen.findByRole('button', { name: 'Chart colour of Dental caries: Rose' }),
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: /^Chart icon of/ })).toBeNull();
+  });
+
+  it('edits the medical-history lists on their own tab and saves the changed rows in one batch', async () => {
+    const saved: MedicalOption[] = [
+      ...OPTIONS,
+      { id: id(23), kind: 'allergy', name: 'Sulfa', active: true },
+    ];
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        new Response(JSON.stringify(saved), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    renderCatalog(['catalog:read', 'catalog:write'], 'history');
+
+    const allergies = await screen.findByRole('region', { name: 'Allergies' });
+    expect(within(allergies).getByDisplayValue('Latex')).toBeTruthy();
+    expect(
+      within(screen.getByRole('region', { name: 'Conditions' })).getByDisplayValue('Asthma'),
+    ).toBeTruthy();
+
+    fireEvent.click(within(allergies).getByRole('button', { name: 'Add allergy' }));
+    const added = within(allergies).getAllByRole('textbox', { name: 'Name' }).at(-1);
+    if (!added) throw new Error('no new row');
+    // A name already in the list blocks saving; another one does not.
+    fireEvent.change(added, { target: { value: 'latex' } });
+    const bar = screen.getByRole('region', { name: '1 unsaved change' });
+    expect(within(bar).getByText('A name is in its list twice')).toBeTruthy();
+    fireEvent.change(added, { target: { value: ' Sulfa ' } });
+    fireEvent.click(within(bar).getByRole('button', { name: 'Save changes' }));
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      { method: string; body: string },
+    ];
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body)).toEqual({
+      items: [{ kind: 'allergy', name: 'Sulfa', active: true }],
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('region', { name: /unsaved/ })).toBeNull();
+    });
   });
 
   it('shows the marks without pickers to someone who cannot edit the catalog', async () => {

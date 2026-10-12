@@ -1,4 +1,11 @@
-import type { Permission, Practitioner, Room, Session, StartDefaults } from '@dcm/contracts';
+import type {
+  Permission,
+  Practitioner,
+  Room,
+  Session,
+  StartDefaults,
+  StartOptions,
+} from '@dcm/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   createMemoryHistory,
@@ -44,16 +51,22 @@ const DENTISTS: Practitioner[] = [
   { id: MARCUS, userId: id(83), displayName: 'Dr. Marcus Lee', title: null },
 ];
 
+/** What a start sends beside who and where, for a patient with nothing planned. */
+const EXAMINATION = { type: 'examination', reason: null };
+
 type FetchMock = ReturnType<typeof vi.fn<(url: string, init?: RequestInit) => Promise<Response>>>;
 
 function mockStart({
   defaults = { dentistId: ANA, roomId: id(72) },
+  options = { suggestedType: 'examination' },
   rooms = ROOMS,
   dentists = () => DENTISTS,
   start = () => json({ visit: startedVisit(60), resumed: false }, 201),
 }: {
   /** `null` answers the defaults with a 500. */
   defaults?: StartDefaults | null;
+  /** `null` answers the options with a 500. */
+  options?: StartOptions | null;
   rooms?: Room[];
   /** The branch's dentists at each read. */
   dentists?: () => Practitioner[];
@@ -69,6 +82,9 @@ function mockStart({
     if (path === `/rooms?branchId=${BRANCH.id}`) return Promise.resolve(json(rooms));
     if (path === '/visits/start-defaults') {
       return Promise.resolve(defaults ? json(defaults) : problem(500, 'internal'));
+    }
+    if (path === `/visits/start-options?patientId=${PATIENT_ID}`) {
+      return Promise.resolve(options ? json(options) : problem(500, 'internal'));
     }
     return Promise.resolve(problem(404, 'not_found'));
   });
@@ -166,7 +182,12 @@ describe('StartVisitPopover', () => {
 
     submit(dialog);
     await screen.findByText(`Workspace ${id(60)}`);
-    expect(posted(fetchMock)).toEqual({ patientId: PATIENT_ID, dentistId: ANA, roomId: id(72) });
+    expect(posted(fetchMock)).toEqual({
+      patientId: PATIENT_ID,
+      dentistId: ANA,
+      roomId: id(72),
+      ...EXAMINATION,
+    });
     expect(router.state.location.pathname).toBe(`/visits/${id(60)}`);
   });
 
@@ -191,7 +212,12 @@ describe('StartVisitPopover', () => {
     expect(within(dialog).queryByText('Choose a dentist')).toBeNull();
     submit(dialog);
     await screen.findByText(`Workspace ${id(60)}`);
-    expect(posted(fetchMock)).toEqual({ patientId: PATIENT_ID, dentistId: MARCUS, roomId: id(71) });
+    expect(posted(fetchMock)).toEqual({
+      patientId: PATIENT_ID,
+      dentistId: MARCUS,
+      roomId: id(71),
+      ...EXAMINATION,
+    });
   });
 
   it('hides the room when the branch has no active room, and starts without one', async () => {
@@ -204,7 +230,67 @@ describe('StartVisitPopover', () => {
     expect(within(dialog).queryByRole('combobox', { name: 'Room' })).toBeNull();
     submit(dialog);
     await screen.findByText(`Workspace ${id(60)}`);
-    expect(posted(fetchMock)).toEqual({ patientId: PATIENT_ID, dentistId: ANA });
+    expect(posted(fetchMock)).toEqual({ patientId: PATIENT_ID, dentistId: ANA, ...EXAMINATION });
+  });
+
+  it('suggests the visit type and shows each type with its steps', async () => {
+    const fetchMock = mockStart({ options: { suggestedType: 'hygiene' } });
+    renderPopover();
+    const dialog = await open();
+    const hygiene = await within(dialog).findByRole<HTMLInputElement>('radio', {
+      name: /^Hygiene/,
+    });
+    expect(hygiene.checked).toBe(true);
+    expect(hygiene.closest('label')?.textContent).toContain('Suggested');
+    expect(
+      within(dialog)
+        .getByRole('radio', { name: /^Examination/ })
+        .closest('label')?.textContent,
+    ).toContain('Intake · Examine · Findings · Plan · Perform · Complete');
+
+    fireEvent.click(within(dialog).getByRole('radio', { name: /^Emergency/ }));
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Reason' }), {
+      target: { value: ' Broken filling ' },
+    });
+    submit(dialog);
+    await screen.findByText(`Workspace ${id(60)}`);
+    expect(posted(fetchMock)).toMatchObject({
+      type: 'emergency',
+      reason: 'Broken filling',
+    });
+  });
+
+  it('asks a treatment visit for nothing more: its work is picked on Today’s work', async () => {
+    const fetchMock = mockStart({ options: { suggestedType: 'treatment' } });
+    renderPopover();
+    const dialog = await open();
+    const treatment = await within(dialog).findByRole<HTMLInputElement>('radio', {
+      name: /^Treatment/,
+    });
+    expect(treatment.checked).toBe(true);
+    // No list of plans, and none named: the visit starts with its default list.
+    expect(within(dialog).queryByRole('checkbox')).toBeNull();
+    submit(dialog);
+    await screen.findByText(`Workspace ${id(60)}`);
+    expect(posted(fetchMock)).toEqual({
+      patientId: PATIENT_ID,
+      dentistId: ANA,
+      roomId: id(72),
+      type: 'treatment',
+      reason: null,
+    });
+  });
+
+  it('starts as an examination when the options fail to load', async () => {
+    const fetchMock = mockStart({ options: null });
+    renderPopover();
+    const dialog = await open();
+    await waitFor(() => {
+      expect(select(dialog, 'Dentist').value).toBe(ANA);
+    });
+    submit(dialog);
+    await screen.findByText(`Workspace ${id(60)}`);
+    expect(posted(fetchMock)).toMatchObject(EXAMINATION);
   });
 
   it('goes to a resumed visit without a toast', async () => {
@@ -286,7 +372,12 @@ describe('StartVisitPopover', () => {
     fireEvent.change(select(dialog, 'Room'), { target: { value: id(71) } });
     submit(dialog);
     await screen.findByText(`Workspace ${id(60)}`);
-    expect(posted(fetchMock)).toEqual({ patientId: PATIENT_ID, dentistId: ANA, roomId: id(71) });
+    expect(posted(fetchMock)).toEqual({
+      patientId: PATIENT_ID,
+      dentistId: ANA,
+      roomId: id(71),
+      ...EXAMINATION,
+    });
   });
 
   it.each([

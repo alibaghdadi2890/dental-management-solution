@@ -1,9 +1,11 @@
 import {
   idSchema,
   VISIT_RANGES,
+  VISIT_TYPES,
   type VisitFilters,
   type VisitListQuery,
   type VisitRange,
+  type VisitType,
 } from '@dcm/contracts';
 import { z } from 'zod';
 
@@ -23,6 +25,8 @@ export interface VisitsSearch {
   range: VisitRange;
   dentist?: string | undefined;
   room?: string | undefined;
+  /** Why the patient came (feature 10). */
+  type?: VisitType | undefined;
   q?: string | undefined;
   size: VisitPageSize;
   /** The visit whose detail panel is open. */
@@ -36,6 +40,7 @@ const searchSchema = z.object({
   range: z.enum(VISIT_RANGES).catch(DEFAULT_RANGE),
   dentist: idSchema.optional().catch(undefined),
   room: idSchema.optional().catch(undefined),
+  type: z.enum(VISIT_TYPES).optional().catch(undefined),
   q: z
     .string()
     .trim()
@@ -66,6 +71,7 @@ export function filtersOf(search: VisitsSearch): VisitFilters {
     range: search.range,
     dentistId: search.dentist,
     roomId: search.room,
+    type: search.type,
     q: search.q,
   };
 }
@@ -80,11 +86,12 @@ export function activeFilterCount(search: VisitsSearch): number {
     search.range !== DEFAULT_RANGE,
     search.dentist !== undefined,
     search.room !== undefined,
+    search.type !== undefined,
     search.q !== undefined,
   ].filter(Boolean).length;
 }
 
-/** Back to the defaults (90 days, any dentist and room, no search); the tab and size stay. */
+/** Back to the defaults (90 days, any dentist, room and type, no search); the tab and size stay. */
 export function clearFilters(search: VisitsSearch): VisitsSearch {
   return { tab: search.tab, range: DEFAULT_RANGE, size: search.size, visit: search.visit };
 }
@@ -94,6 +101,7 @@ export function filterParams(filters: VisitFilters): Record<string, string> {
   const params: Record<string, string> = { tab: filters.tab, range: filters.range };
   if (filters.dentistId !== undefined) params['dentistId'] = filters.dentistId;
   if (filters.roomId !== undefined) params['roomId'] = filters.roomId;
+  if (filters.type !== undefined) params['type'] = filters.type;
   if (filters.q !== undefined) params['q'] = filters.q;
   if (filters.patientId !== undefined) params['patientId'] = filters.patientId;
   return params;

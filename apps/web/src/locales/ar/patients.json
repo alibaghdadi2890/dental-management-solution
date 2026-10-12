@@ -247,16 +247,13 @@
       "email": "البريد الإلكتروني",
       "address": "العنوان",
       "insurance": "التأمين",
-      "alerts": "تنبيهات طبية",
       "dentist": "طبيب الأسنان المعالج",
       "notes": "ملاحظات"
     },
-    "alertsHint": "مفصولة بفواصل",
     "placeholders": {
       "fullName": "مثال: رنا حداد",
       "email": "name@email.com",
-      "insurance": "شركة التأمين — الخطة",
-      "alerts": "مثال: حساسية من البنسلين"
+      "insurance": "شركة التأمين — الخطة"
     },
     "sexOptions": {
       "unknown": "—",
@@ -295,7 +292,6 @@
       "futureDate": "لا يمكن أن يكون في المستقبل",
       "beforeMinDate": "تحقّق من السنة",
       "tooLong": "طويل جدًا",
-      "tooMany": "20 تنبيهًا كحدّ أقصى",
       "invalidAmount": "أدخل مبلغًا مثل 250 أو 12.50",
       "negativeAmount": "أدخل صفرًا أو مبلغًا موجبًا",
       "invalid": "تحقّق من هذه القيمة",
@@ -308,7 +304,17 @@
       "contactAlreadyPatient": "جهة الاتصال هذه مريض مسجَّل مسبقًا — ابحث عن سجله بدلًا من ذلك"
     },
     "archivedWhileEditing": "تمت أرشفة هذا المريض أثناء التعديل. تبقى تغييراتك هنا، لكن لا يمكن حفظها قبل استعادة الملف.",
-    "startVisit": "بدء زيارة"
+    "startVisit": "بدء زيارة",
+    "firstVisit": {
+      "label": "الزيارة الأولى",
+      "types": {
+        "examination": "فحص",
+        "emergency": "حالة طارئة",
+        "hygiene": "تنظيف",
+        "consultation": "استشارة"
+      }
+    },
+    "createAndStart": "إنشاء وبدء {{type}}"
   },
   "merge": {
     "eyebrow": "دمج الملفات المكررة",
@@ -327,10 +333,11 @@
       "insurance": "التأمين",
       "primaryDentistId": "الطبيب",
       "notes": "ملاحظات",
-      "alerts": "التنبيهات"
+      "alerts": "التنبيهات",
+      "medication": "الأدوية"
     },
     "valueFor": "{{field}} من {{number}}: {{value}}",
-    "alertsKept": "يُحتفظ بتنبيهات الملفين معًا.",
+    "alertsKept": "تُحفظ الحساسية والحالات الصحية من السجلّين.",
     "matching_zero": "لا توجد حقول أخرى متطابقة.",
     "matching_one": "حقل آخر متطابق.",
     "matching_two": "حقلان آخران متطابقان.",
@@ -338,7 +345,6 @@
     "matching_many": "{{count, number}} حقلًا آخر متطابقًا.",
     "matching_other": "{{count, number}} حقل آخر متطابق.",
     "summary": "سيُؤرشف {{drop}} وينتقل رصيده إلى {{keep}}.",
-    "overflow": "يتجاوز مجموع التنبيهات الطبية في الملفين 20 تنبيهًا. احذف بعضها من أحد الملفين قبل الدمج.",
     "phoneRequired": "يجب أن يكون للمريض البالغ رقم هاتف. احتفظ برقم هاتف، أو بتاريخ ميلاد لمن هو دون 18 سنة.",
     "unavailable": "أحد هذين الملفين مؤرشف أو مدموج مسبقًا، لذا لا يمكن دمجهما.",
     "submit": "دمج الملفات",
@@ -351,7 +357,6 @@
   "failures": {
     "archived": "الملف مؤرشف",
     "merged": "تم دمج الملف في ملف آخر مسبقًا",
-    "alertsOverflow": "يتجاوز مجموع التنبيهات الطبية في الملفين 20 تنبيهًا",
     "unknownDentist": "الطبيب المختار لم يعد متاحًا",
     "phoneRequired": "يجب أن يكون للمريض البالغ رقم هاتف",
     "notFound": "المريض لم يعد موجودًا",
@@ -415,37 +420,8 @@
       "files": "الملفات",
       "filesCount": "الملفات {{count}}",
       "balance": "الرصيد والمدفوعات",
-      "information": "معلومات المريض"
-    },
-    "summary": {
-      "title": "ملخص العلاج",
-      "visits": "الزيارات المسجّلة",
-      "diagnoses": "التشخيصات النشطة",
-      "planned": "الإجراءات المخطّطة",
-      "teeth": "الأسنان المعالَجة",
-      "services": "الخدمات المنفّذة",
-      "billed": "إجمالي ما فُوتر",
-      "loading": "جارٍ تحميل ملخص العلاج…",
-      "failed": "تعذّر تحميل ملخص العلاج",
-      "presence": "الأسنان المفقودة: {{missing}} · الزرعات: {{implants}}"
-    },
-    "info": {
-      "title": "معلومات المريض",
-      "complete": "إكمال",
-      "phone": "الهاتف",
-      "dateOfBirth": "تاريخ الميلاد",
-      "email": "البريد الإلكتروني",
-      "address": "العنوان",
-      "insurance": "التأمين",
-      "notRecorded": "غير مسجّل",
-      "contacts": "جهات الاتصال",
-      "contactRole": "{{role}}: {{name}}",
-      "contactRoles": "{{name}} ({{roles}})",
-      "roleWords": {
-        "guardian": "وليّ أمر",
-        "billing": "الفوترة",
-        "emergency": "الطوارئ"
-      }
+      "information": "معلومات المريض",
+      "plan": "خطة العلاج"
     },
     "form": {
       "title": "معلومات المريض",
@@ -476,6 +452,23 @@
       "hint": "انقر على سن لرؤية تاريخها الكامل",
       "loading": "جارٍ تحميل المخطط…",
       "failed": "تعذّر تحميل المخطط"
+    },
+    "historyUnconfirmed": "سجّله الاستقبال · غير مؤكَّد",
+    "attention": {
+      "title": "يحتاج إلى متابعة",
+      "none": "لا شيء يحتاج إلى متابعة.",
+      "loading": "جارٍ التحميل…",
+      "continue": "متابعة",
+      "continueReason": "{{session}} غير منتهية · بدأت في {{date}}",
+      "treat": "علاج",
+      "treatReason": "خُطّط في {{date}}، لم يُنفَّذ بعد",
+      "balance": "رصيد مستحق",
+      "balanceReason": "{{amount}} غير مدفوعة",
+      "moneySign": "$",
+      "recordPayment": "تسجيل دفعة",
+      "examination": "لا فحص بعد",
+      "examinationReason": "مسجَّل، ولم يُفحص في هذه العيادة",
+      "startExamination": "بدء الفحص"
     }
   },
   "contacts": {
@@ -605,5 +598,22 @@
     "addPanel": {
       "title": "إضافة جهة اتصال"
     }
+  },
+  "history": {
+    "medication": "الأدوية",
+    "medicationPlaceholder": "مثال: وارفارين 5 ملغ يوميًا",
+    "allergy": {
+      "label": "الحساسية",
+      "none": "لا حساسية معروفة",
+      "placeholder": "اكتب اسم الحساسية…"
+    },
+    "condition": {
+      "label": "الحالات الصحية",
+      "none": "لا شيء",
+      "placeholder": "اكتب اسم الحالة…"
+    },
+    "add": "إضافة «{{name}}»",
+    "remove": "إزالة {{name}}",
+    "addFailed": "تعذّرت إضافة {{name}}: {{reason}}"
   }
 }

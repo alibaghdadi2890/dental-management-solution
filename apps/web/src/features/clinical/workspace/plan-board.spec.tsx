@@ -116,7 +116,11 @@ describe('PlanBoard', () => {
     expect(within(card).queryByText('Sealant')).toBeNull();
     expect(within(card).queryByText('Veneer')).toBeNull();
     expect(within(card).getByText('Plan estimate')).toBeTruthy();
-    expect(within(card).getByText('$1,100')).toBeTruthy();
+    // One phase here (every fixture plan is High): its total is the estimate.
+    const phase = within(card).getByRole('group', { name: 'High' });
+    expect(within(phase).getByRole('heading', { name: 'High' })).toBeTruthy();
+    expect(within(card).getAllByText('$1,100')).toHaveLength(2);
+    expect(within(card).queryByRole('group', { name: 'Urgent' })).toBeNull();
   });
 
   it('orders by the Universal numbers when the clinic uses them', async () => {

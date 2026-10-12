@@ -1,7 +1,6 @@
 import type { Patient } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
 import {
-  alertsOverflow,
   differingFields,
   mergeDraft,
   mergePhoneMissing,
@@ -9,6 +8,7 @@ import {
   swapKeep,
   toMergePayload,
 } from './merge-draft';
+import { history } from './patients.test-utils';
 
 const ID_A = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
 const ID_B = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6f';
@@ -26,7 +26,8 @@ function patient(overrides: Partial<Patient>): Patient {
     email: 'jane@example.com',
     address: '1 Main St',
     insurance: null,
-    medicalAlerts: [],
+    medicalHistory: history(),
+    firstVisitType: null,
     primaryDentistId: null,
     notes: null,
     dentitionOverride: null,
@@ -109,14 +110,34 @@ describe('preview', () => {
     expect(preview(withDrop).address).toBe(newer.address);
   });
 
-  it('unions medical alerts, kept record first, regardless of field choices', () => {
+  it('unions allergies and conditions, kept record first, regardless of field choices', () => {
     const a = patient({
       id: ID_A,
       displayNumber: 'P-000001',
-      medicalAlerts: ['Penicillin', 'Latex'],
+      medicalHistory: history(['Penicillin', 'Latex']),
     });
-    const b = patient({ id: ID_B, displayNumber: 'P-000002', medicalAlerts: ['latex', 'Nuts'] });
-    expect(preview(mergeDraft(a, b)).medicalAlerts).toEqual(['Penicillin', 'Latex', 'Nuts']);
+    const b = patient({
+      id: ID_B,
+      displayNumber: 'P-000002',
+      medicalHistory: history(['Latex', 'Nuts'], ['Asthma']),
+    });
+    const result = preview(mergeDraft(a, b));
+    expect(result.allergies).toEqual(['Penicillin', 'Latex', 'Nuts']);
+    expect(result.conditions).toEqual(['Asthma']);
+  });
+
+  it('picks the medication line like any other field', () => {
+    const a = patient({ id: ID_A, displayNumber: 'P-000001' });
+    const b = patient({
+      id: ID_B,
+      displayNumber: 'P-000002',
+      medicalHistory: history([], [], { medication: 'Warfarin' }),
+    });
+    const merge = mergeDraft(a, b);
+    expect(differingFields(a, b)).toContain('medication');
+    expect(preview(merge).medication).toBeNull();
+    const dropped = { ...merge, choices: { ...merge.choices, medication: 'drop' as const } };
+    expect(preview(dropped).medication).toBe('Warfarin');
   });
 });
 
@@ -155,26 +176,6 @@ describe('mergePhoneMissing', () => {
     const agedOut = patient({ phone: null });
     const twin = patient({ id: ID_B, displayNumber: 'P-000002', phone: null, notes: 'x' });
     expect(mergePhoneMissing({ ...mergeDraft(agedOut, twin), choices: {} }, TODAY)).toBe(false);
-  });
-});
-
-describe('alertsOverflow', () => {
-  it('is false when the union fits', () => {
-    expect(alertsOverflow(mergeDraft(older, newer))).toBe(false);
-  });
-
-  it('is true once the union exceeds MEDICAL_ALERTS_MAX', () => {
-    const a = patient({
-      id: ID_A,
-      displayNumber: 'P-000001',
-      medicalAlerts: Array.from({ length: 15 }, (_, i) => `Alert A${i}`),
-    });
-    const b = patient({
-      id: ID_B,
-      displayNumber: 'P-000002',
-      medicalAlerts: Array.from({ length: 10 }, (_, i) => `Alert B${i}`),
-    });
-    expect(alertsOverflow(mergeDraft(a, b))).toBe(true);
   });
 });
 

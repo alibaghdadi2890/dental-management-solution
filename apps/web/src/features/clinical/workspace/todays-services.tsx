@@ -20,7 +20,8 @@ const SUB_HEAD =
  * mouth. First **To continue**, the patient's unfinished services (ADR-0032) this visit has not
  * worked on, so they are seen as the visit opens; then the visit's services in the order added,
  * and the unfinished services it did work on. A row's target selects it on the chart; a service's
- * three-dot menu holds **Not finished** and **Remove**. The header counts and totals what the
+ * three-dot menu holds **Not finished** and **Remove**. A service the visit's type added by itself
+ * (ADR-0047) says "added automatically", and is removed like any other. The header counts and totals what the
  * visit charges and, for who may chart, holds **Add service** (the catalog drawer, on whatever the
  * chart has selected); the footer sets what is charged beside what is carried forward. A visit
  * with nothing yet says how to add; read-only, an empty card is left out.
@@ -119,7 +120,7 @@ export function TodaysServices({
 }
 
 function ServiceRow({ service, canWrite }: { service: VisitService; canWrite: boolean }) {
-  const { i18n } = useTranslation('clinical');
+  const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const { select, selectArea } = useToothSelection();
   const toothLabel = useToothLabel();
@@ -144,6 +145,14 @@ function ServiceRow({ service, canWrite }: { service: VisitService; canWrite: bo
       <span className="flex min-w-0 flex-1 items-center gap-[7px] text-[13px] leading-[1.35] font-semibold">
         <ServiceMark procedureId={service.procedureId} tone="today" />
         <span className="min-w-0">{service.name}</span>
+        {service.autoAdded && (
+          <span
+            title={t('todayServices.autoHint')}
+            className="flex-none text-[12px] leading-none font-normal text-ink-muted"
+          >
+            {t('todayServices.auto')}
+          </span>
+        )}
       </span>
       <span dir="ltr" className="font-mono text-[13px] leading-none font-semibold tabular-nums">
         {formatMoney(service.final, locale)}

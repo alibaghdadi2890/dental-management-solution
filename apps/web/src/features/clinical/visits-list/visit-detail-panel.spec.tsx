@@ -22,6 +22,9 @@ const usd = (amount: string) => ({ amount, currency: 'USD' });
 const VISIT: VisitListItem = {
   id: id(1),
   displayNumber: 42,
+  type: 'treatment',
+  currentStep: 'complete',
+  reason: null,
   status: 'completed',
   localDate: '2026-09-04',
   startedAt: '2026-09-04T09:00:00.000Z',

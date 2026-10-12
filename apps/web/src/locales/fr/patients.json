@@ -215,16 +215,13 @@
       "email": "E-mail",
       "address": "Adresse",
       "insurance": "Assurance",
-      "alerts": "Alertes médicales",
       "dentist": "Dentiste référent",
       "notes": "Notes"
     },
-    "alertsHint": "Séparées par des virgules",
     "placeholders": {
       "fullName": "ex. Rana Haddad",
       "email": "nom@email.com",
-      "insurance": "Assureur — formule",
-      "alerts": "ex. Allergie à la pénicilline"
+      "insurance": "Assureur — formule"
     },
     "sexOptions": {
       "unknown": "—",
@@ -263,7 +260,6 @@
       "futureDate": "Ne peut pas être dans le futur",
       "beforeMinDate": "Vérifiez l’année",
       "tooLong": "Trop long",
-      "tooMany": "20 alertes au maximum",
       "invalidAmount": "Saisissez un montant comme 250 ou 12,50",
       "negativeAmount": "Saisissez zéro ou un montant positif",
       "invalid": "Vérifiez cette valeur",
@@ -276,7 +272,17 @@
       "contactAlreadyPatient": "Ce contact est déjà un patient — recherchez plutôt son dossier"
     },
     "archivedWhileEditing": "Ce patient a été archivé pendant votre modification. Vos changements restent ici, mais ne pourront être enregistrés qu’une fois le dossier restauré.",
-    "startVisit": "Commencer une visite"
+    "startVisit": "Commencer une visite",
+    "firstVisit": {
+      "label": "Première visite",
+      "types": {
+        "examination": "Examen",
+        "emergency": "Urgence",
+        "hygiene": "Hygiène",
+        "consultation": "Consultation"
+      }
+    },
+    "createAndStart": "Créer et démarrer : {{type}}"
   },
   "merge": {
     "eyebrow": "Fusionner les doublons",
@@ -295,14 +301,14 @@
       "insurance": "Assurance",
       "primaryDentistId": "Dentiste",
       "notes": "Notes",
-      "alerts": "Alertes"
+      "alerts": "Alertes",
+      "medication": "Médicaments"
     },
     "valueFor": "{{field}} de {{number}} : {{value}}",
-    "alertsKept": "Les alertes des deux dossiers sont conservées.",
+    "alertsKept": "Les allergies et affections des deux dossiers sont conservées.",
     "matching_one": "{{count, number}} autre champ est identique.",
     "matching_other": "{{count, number}} autres champs sont identiques.",
     "summary": "{{drop}} sera archivé. Son solde passe sur {{keep}}.",
-    "overflow": "Ensemble, ces dossiers comptent plus de 20 alertes médicales. Retirez-en de l’un des dossiers avant de fusionner.",
     "phoneRequired": "Un patient adulte doit avoir un numéro de téléphone. Gardez un téléphone, ou une date de naissance de moins de 18 ans.",
     "unavailable": "L’un de ces dossiers est archivé ou déjà fusionné : ils ne peuvent pas être fusionnés.",
     "submit": "Fusionner les dossiers",
@@ -315,7 +321,6 @@
   "failures": {
     "archived": "le dossier est archivé",
     "merged": "le dossier a déjà été fusionné avec un autre",
-    "alertsOverflow": "ensemble, ces dossiers comptent plus de 20 alertes médicales",
     "unknownDentist": "le dentiste choisi n’est plus disponible",
     "phoneRequired": "un patient adulte doit avoir un numéro de téléphone",
     "notFound": "le patient n’existe plus",
@@ -375,37 +380,8 @@
       "files": "Fichiers",
       "filesCount": "Fichiers {{count}}",
       "balance": "Solde et paiements",
-      "information": "Informations patient"
-    },
-    "summary": {
-      "title": "Résumé des soins",
-      "visits": "Visites enregistrées",
-      "diagnoses": "Diagnostics actifs",
-      "planned": "Actes prévus",
-      "teeth": "Dents traitées",
-      "services": "Actes réalisés",
-      "billed": "Total facturé",
-      "loading": "Chargement du résumé des soins…",
-      "failed": "Impossible de charger le résumé des soins",
-      "presence": "Dents absentes : {{missing}} · Implants : {{implants}}"
-    },
-    "info": {
-      "title": "Informations patient",
-      "complete": "Compléter",
-      "phone": "Téléphone",
-      "dateOfBirth": "Date de naissance",
-      "email": "E-mail",
-      "address": "Adresse",
-      "insurance": "Assurance",
-      "notRecorded": "Non renseigné",
-      "contacts": "Contacts",
-      "contactRole": "{{role}} : {{name}}",
-      "contactRoles": "{{name}} ({{roles}})",
-      "roleWords": {
-        "guardian": "responsable",
-        "billing": "facturation",
-        "emergency": "urgence"
-      }
+      "information": "Informations patient",
+      "plan": "Plan de traitement"
     },
     "form": {
       "title": "Informations patient",
@@ -436,6 +412,23 @@
       "hint": "Cliquez sur une dent pour voir tout son historique",
       "loading": "Chargement du schéma…",
       "failed": "Impossible de charger le schéma"
+    },
+    "historyUnconfirmed": "Saisi par l’accueil · non confirmé",
+    "attention": {
+      "title": "À traiter",
+      "none": "Rien à traiter.",
+      "loading": "Chargement…",
+      "continue": "Continuer",
+      "continueReason": "{{session}} non terminée · commencée le {{date}}",
+      "treat": "Traiter",
+      "treatReason": "planifié le {{date}}, pas encore réalisé",
+      "balance": "Solde restant dû",
+      "balanceReason": "{{amount}} impayés",
+      "moneySign": "$",
+      "recordPayment": "Enregistrer un paiement",
+      "examination": "Pas encore d’examen",
+      "examinationReason": "Enregistré, jamais examiné dans cette clinique",
+      "startExamination": "Commencer l’examen"
     }
   },
   "contacts": {
@@ -561,5 +554,22 @@
     "addPanel": {
       "title": "Ajouter un contact"
     }
+  },
+  "history": {
+    "medication": "Médicaments",
+    "medicationPlaceholder": "p. ex. Warfarine 5 mg par jour",
+    "allergy": {
+      "label": "Allergies",
+      "none": "Aucune connue",
+      "placeholder": "Saisissez une allergie…"
+    },
+    "condition": {
+      "label": "Affections",
+      "none": "Aucune",
+      "placeholder": "Saisissez une affection…"
+    },
+    "add": "Ajouter « {{name}} »",
+    "remove": "Retirer {{name}}",
+    "addFailed": "Impossible d’ajouter {{name}} : {{reason}}"
   }
 }

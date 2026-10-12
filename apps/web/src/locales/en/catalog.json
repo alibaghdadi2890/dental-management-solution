@@ -4,7 +4,8 @@
   "tabs": {
     "label": "Catalog",
     "services": "Services",
-    "diagnoses": "Diagnoses"
+    "diagnoses": "Diagnoses",
+    "history": "Medical history"
   },
   "add": {
     "services": "Add service",
@@ -27,7 +28,9 @@
     "price": "Price",
     "active": "Active",
     "toothEffect": "Effect on tooth",
-    "mark": "Mark"
+    "mark": "Mark",
+    "addedOn": "Added on",
+    "sessions": "Sessions"
   },
   "chargeUnit": {
     "per_tooth": "Per tooth",
@@ -130,5 +133,46 @@
     "denture": "Denture",
     "cleaning": "Cleaning",
     "whitening": "Whitening"
-  }
+  },
+  "history": {
+    "intro": "The allergies and conditions offered when a medical history is entered. An inactive item stays on the patients who have it and is no longer offered.",
+    "allergy": {
+      "title": "Allergies",
+      "add": "Add allergy",
+      "none": "None known"
+    },
+    "condition": {
+      "title": "Conditions",
+      "add": "Add condition",
+      "none": "None"
+    },
+    "noneNote": "“{{none}}” is always offered",
+    "name": "Name",
+    "active": "{{name}} is offered",
+    "remove": "Delete",
+    "deleteNamed": "Delete {{name}}",
+    "empty": "Nothing in this list yet.",
+    "seed": "Add the default lists",
+    "missing_one": "{{count}} item has no name",
+    "missing_other": "{{count}} items have no name",
+    "duplicate": "A name is in its list twice",
+    "saved_one": "{{count}} item saved",
+    "saved_other": "{{count}} items saved",
+    "saveFirst": "Save or discard your changes before switching tabs",
+    "delete": {
+      "title": "Delete “{{name}}”?",
+      "body": "It will no longer be offered. This cannot be undone.",
+      "ok": "Delete"
+    },
+    "inUse": {
+      "title": "“{{name}}” is on a patient’s history",
+      "body": "It cannot be deleted. Mark it inactive to stop offering it; the patients who have it keep it.",
+      "ok": "Mark inactive"
+    }
+  },
+  "addedOn": {
+    "never": "Not added"
+  },
+  "addedOnHint": "A visit of this type starts with the service in Today’s services, at this price. Only for a service charged for the whole mouth.",
+  "sessionsHint": "How many sessions the service usually takes. Leave empty for work done in one sitting."
 }

@@ -4,7 +4,7 @@ import { CatalogPage } from '@/features/clinical/catalog/catalog-page';
 
 export const Route = createFileRoute('/_app/catalog')({
   staticData: { navKey: 'catalog' },
-  validateSearch: z.object({ tab: z.enum(['services', 'diagnoses']).optional() }),
+  validateSearch: z.object({ tab: z.enum(['services', 'diagnoses', 'history']).optional() }),
   component: CatalogRoute,
 });
 

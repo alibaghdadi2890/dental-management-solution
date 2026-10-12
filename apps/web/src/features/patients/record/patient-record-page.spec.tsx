@@ -50,10 +50,6 @@ describe('PatientRecordPage', () => {
     await waitFor(() => {
       expect(router.state.location.search).toEqual({ tab: 'overview' });
     });
-    fireEvent.click(await screen.findByRole('button', { name: 'Complete' }));
-    await waitFor(() => {
-      expect(router.state.location.search).toEqual({ tab: 'information' });
-    });
     fireEvent.click(screen.getByRole('button', { name: 'All patients' }));
     await waitFor(() => {
       expect(router.state.location.pathname).toBe('/patients');

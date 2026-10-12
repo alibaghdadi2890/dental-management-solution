@@ -143,6 +143,16 @@ export function toothImages(files: readonly PatientFile[], toothCode: ToothCode)
   return activeFiles(files).filter((file) => file.toothCode === toothCode && file.kind === 'image');
 }
 
+/**
+ * The patient's images, the newest first — what was taken last, then what was added last: the
+ * Evidence strip of a visit's steps, and what a diagnosis can be "seen on" (feature 10).
+ */
+export function evidenceImages(files: readonly PatientFile[]): PatientFile[] {
+  return activeFiles(files)
+    .filter((file) => file.kind === 'image')
+    .sort((a, b) => b.takenAt.localeCompare(a.takenAt) || b.uploadedAt.localeCompare(a.uploadedAt));
+}
+
 /** The visits the patient's files are linked to, newest first: the Visit filter's options. */
 export function linkedVisits(files: readonly PatientFile[]) {
   const visits = new Map<string, NonNullable<PatientFile['visit']>>();

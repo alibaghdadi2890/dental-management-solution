@@ -10,8 +10,8 @@ import { useElapsedText } from '../use-visit-timer';
 /** Visit · Date/time · Patient · Dentist · Services · Total · Balance · Status (spec §Visits
  * page; the room sits under the date). */
 export const VISIT_COLUMNS =
-  '96px 124px minmax(170px,1.2fr) 112px minmax(160px,1.3fr) 88px 92px 108px';
-export const VISIT_TABLE_MIN_WIDTH = 1000;
+  '96px 104px 124px minmax(170px,1.2fr) 112px minmax(160px,1.3fr) 88px 92px 108px';
+export const VISIT_TABLE_MIN_WIDTH = 1110;
 
 const NONE = '—';
 
@@ -22,6 +22,7 @@ export function VisitsTableHead() {
       columns={VISIT_COLUMNS}
       labels={[
         t('columns.visit'),
+        t('columns.type'),
         t('columns.date'),
         t('columns.patient'),
         t('columns.dentist'),
@@ -101,6 +102,7 @@ export function VisitRow({
   onOpen: () => void;
 }) {
   const { t } = useTranslation('visits');
+  const { t: tClinical } = useTranslation('clinical');
   const servicesText = useServicesText();
   const voided = visit.status === 'voided';
   const live = visit.status === 'in_progress' || visit.status === 'paused';
@@ -151,6 +153,9 @@ export function VisitRow({
         >
           <span dir="ltr">{formatVisitNumber(visit.displayNumber)}</span>
         </button>
+      </span>
+      <span role="cell" className="truncate text-[12.5px] text-ink-secondary">
+        {tClinical(`flow.types.${visit.type}`)}
       </span>
       <span role="cell" className="min-w-0 text-[12.5px] leading-[1.35]">
         <span className="block">{formatDate(visit.startedAt, context)}</span>

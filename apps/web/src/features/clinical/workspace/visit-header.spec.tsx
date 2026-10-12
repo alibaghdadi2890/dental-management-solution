@@ -26,7 +26,7 @@ describe('VisitHeader', () => {
     vi.useRealTimers();
   });
 
-  it('shows the patient chip linking to the record, the alerts, the status, date and dentist', async () => {
+  it('shows the patient chip linking to the record, the alerts, the status and the visit line', async () => {
     // The visit's own day, so the age line doesn't drift with the calendar.
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-09-04T09:12:05.000Z') });
     mockWorkspace();
@@ -34,9 +34,17 @@ describe('VisitHeader', () => {
     const banner = await header();
     expect(within(banner).getByText('P-000001 · 8 yrs · 1 Mar 2018')).toBeTruthy();
     const alerts = within(banner).getByRole('list', { name: 'Medical alerts' });
-    expect(within(alerts).getByText('Penicillin allergy')).toBeTruthy();
+    expect(
+      within(alerts)
+        .getAllByRole('listitem')
+        .map((chip) => [chip.textContent, chip.dataset.alert]),
+    ).toEqual([
+      ['Penicillin', 'allergy'],
+      ['Asthma', 'condition'],
+    ]);
     expect(within(banner).getByText('In progress')).toBeTruthy();
-    expect(await within(banner).findByText('4 Sep 2026 · Dr. Ana Reyes')).toBeTruthy();
+    // The visit's own line: number, type, dentist (it has no room).
+    expect(await within(banner).findByText('V-000001 · Treatment · Dr. Ana Reyes')).toBeTruthy();
     expect(timerChip().textContent).toBe('12:05');
 
     fireEvent.click(within(banner).getByRole('link', { name: /Rana Haddad/ }));
@@ -176,6 +184,7 @@ function serviceRow() {
     discount: { amount: '0.00', currency: 'USD' },
     final: { amount: '40.00', currency: 'USD' },
     planId: null,
+    autoAdded: false,
     recordedBy: id(80),
     createdAt: '2026-09-04T09:05:00.000Z',
   };
@@ -194,6 +203,7 @@ function diagnosisRow(visitId: string) {
     category: null,
     status: 'active' as const,
     note: null,
+    seenOn: null,
     dentistId: id(66),
     dentistName: 'Dr. Ana Reyes',
     recordedBy: id(80),
@@ -220,13 +230,15 @@ function planRow(extra: { performedInVisitId: string }) {
     price: { amount: '40.00', currency: 'USD' },
     diagnosisRecordId: null,
     status: 'performed' as const,
+    priority: 'high' as const,
+    acceptedAt: null,
+    estimatedSessions: null,
     note: null,
     dentistId: id(66),
     dentistName: 'Dr. Ana Reyes',
     recordedBy: id(80),
     recordedInVisitId: id(61),
     recordedAt: '2026-08-01T09:05:00.000Z',
-    groupId: null,
     startedInVisitId: null,
     startedAt: null,
     sessions: [],

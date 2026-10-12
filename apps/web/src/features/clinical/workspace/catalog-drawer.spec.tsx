@@ -40,6 +40,8 @@ function actionsMock(): ChartingActions {
     addService: vi.fn(),
     planTreatment: vi.fn(),
     recordDiagnosis: vi.fn(),
+    setSeenOn: vi.fn(),
+    setPlanPriority: vi.fn(),
     performPlan: vi.fn(),
     markUnfinished: vi.fn(),
     continuePlan: vi.fn(),
@@ -261,6 +263,7 @@ describe('CatalogDrawer — in the workspace', () => {
       recordedAt: '2026-09-04T09:05:00.000Z',
       resolvedInVisitId: null,
       resolvedAt: null,
+      seenOn: null,
     };
     const added = visitService(47, 'Scaling', null);
     const fetchMock = mockWorkspace({
@@ -349,6 +352,7 @@ describe('CatalogDrawer — in the workspace', () => {
       recordedAt: '2026-09-04T09:05:00.000Z',
       resolvedInVisitId: null,
       resolvedAt: null,
+      seenOn: null,
     };
     mockWorkspace({
       visit: current,

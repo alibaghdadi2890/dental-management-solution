@@ -81,7 +81,11 @@
     "teeth_other": "· {{count}} سنّ",
     "more": "+{{count}} أخرى",
     "highlight": "إبراز الأسنان التي عليها {{name}}",
-    "clearHighlight": "إيقاف إبراز {{name}}"
+    "clearHighlight": "إيقاف إبراز {{name}}",
+    "diagnoses": "التشخيصات",
+    "services": "الخدمات",
+    "key": "مفتاح الرموز",
+    "nothing": "لا شيء على المخطط بعد"
   },
   "workspace": {
     "loading": "جارٍ تحميل الزيارة…",
@@ -96,7 +100,6 @@
       "inProgress": "جارية",
       "paused": "متوقفة مؤقتًا"
     },
-    "dateDentist": "{{date}} · {{dentist}}",
     "timer": "مدة الزيارة",
     "pause": "إيقاف مؤقت",
     "resume": "استئناف",
@@ -143,19 +146,7 @@
     "selectTooth": "عرض {{label}} في لوحة السن",
     "estimate": "تقدير الخطة",
     "emptyTitle": "لا شيء مخطط بعد",
-    "quote": "عرض سعر الخطة",
-    "newPlan": "خطة جديدة",
-    "other": "علاجات مخططة أخرى",
-    "rename": "إعادة تسمية",
-    "delete": "حذف",
-    "renameNamed": "إعادة تسمية {{title}}",
-    "deleteNamed": "حذف {{title}}",
-    "deleteTitle": "حذف «{{title}}»؟",
-    "deleteBody": "تبقى علاجاتها المخططة لدى المريض من دون خطة مسماة.",
-    "deleteOk": "حذف الخطة",
-    "moveTo": "الخطة المسماة لـ {{name}}",
-    "noGroup": "بدون خطة مسماة",
-    "emptyGroup": "لا شيء مخطط في هذه الخطة بعد."
+    "quote": "عرض سعر الخطة"
   },
   "notes": {
     "title": "الملاحظات السريرية",
@@ -222,7 +213,11 @@
       "failed": "تعذّر بدء الزيارة: {{reason}}",
       "merged": "تم دمج هذا السجل في سجل آخر. ابدأ الزيارة من السجل المحتفَظ به.",
       "branchRequired": "تبدأ الزيارات في فرع، ولا يوجد فرع لهذه الجلسة. بدّل الفرع وحاول مرة أخرى."
-    }
+    },
+    "type": "نوع الزيارة",
+    "suggested": "مقترح",
+    "reason": "السبب",
+    "reasonPlaceholder": "اختياري: سبب قدوم المريض"
   },
   "actions": {
     "failed": "تعذّر حفظ التغيير: {{reason}}",
@@ -489,16 +484,6 @@
     "lower": "الفك السفلي",
     "mouth": "الفم كاملاً"
   },
-  "planGroup": {
-    "newTitle": "خطة مسماة جديدة",
-    "editTitle": "إعادة تسمية الخطة",
-    "title": "العنوان",
-    "titlePlaceholder": "مثال: إعادة تأهيل كاملة",
-    "note": "ملاحظة",
-    "create": "إنشاء الخطة",
-    "save": "حفظ",
-    "cancel": "إلغاء"
-  },
   "recordChart": {
     "dentist": "التسجيل باسم",
     "chooseDentist": "اختر طبيباً…",
@@ -521,7 +506,9 @@
     "count_many": "{{count}} خدمة",
     "count_other": "{{count}} خدمة",
     "charged": "محسوب اليوم",
-    "carried": "مُرحَّل"
+    "carried": "مُرحَّل",
+    "auto": "أُضيفت تلقائيًا",
+    "autoHint": "الكتالوج ‹ الخدمات ‹ يُضاف في"
   },
   "unfinished": {
     "badge": "غير منتهية",
@@ -546,10 +533,6 @@
     "count_few": "{{count}} غير منتهية",
     "count_many": "{{count}} غير منتهية",
     "count_other": "{{count}} غير منتهية",
-    "dialogTitle": "خدمات غير منتهية",
-    "dialogQuestion": "هل ستتابع أيًّا منها اليوم؟",
-    "dialogContinue": "متابعة",
-    "dialogFailed": "تعذّر حفظ الإجابة: {{reason}}",
     "recordTitle": "خدمات غير منتهية",
     "noCharge": "بلا رسوم",
     "session": "الجلسة {{number}}"
@@ -642,5 +625,240 @@
     "diagnoses": "التشخيصات",
     "services": "الخدمات",
     "both": "كلاهما"
+  },
+  "flow": {
+    "types": {
+      "examination": "فحص",
+      "emergency": "حالة طارئة",
+      "treatment": "علاج",
+      "hygiene": "تنظيف",
+      "consultation": "استشارة"
+    },
+    "steps": {
+      "intake": "الاستقبال",
+      "complaint": "الشكوى",
+      "examine": "الفحص",
+      "findings": "النتائج",
+      "plan": "الخطة",
+      "proposal": "المقترح",
+      "today": "عمل اليوم",
+      "perform": "التنفيذ",
+      "treatNow": "العلاج الآن",
+      "complete": "الإنهاء"
+    },
+    "priority": {
+      "urgent": "عاجل",
+      "high": "مرتفع",
+      "elective": "اختياري"
+    },
+    "session": "الجلسة {{number}}",
+    "sessionOf": "الجلسة {{number}} من {{total}}",
+    "stepper": "خطوات زيارة {{type}}",
+    "stepDone": "تمّت",
+    "view": {
+      "label": "العرض",
+      "steps": "الخطوات",
+      "all": "الكل"
+    },
+    "footer": "خطوات الزيارة",
+    "previous": "السابق",
+    "stepOf": "الخطوة {{number}} من {{total}}",
+    "continueTo": "المتابعة إلى {{step}}",
+    "completeVisit": "إنهاء الزيارة",
+    "history": {
+      "title": "التاريخ الطبي",
+      "unconfirmed": "سجّله الاستقبال · غير مؤكَّد",
+      "confirm": "تم التأكيد مع المريض",
+      "confirmedBy": "أكّده {{name}} · {{time}}",
+      "saveFailed": "تعذّر حفظ التاريخ الطبي: {{reason}}",
+      "confirmFailed": "تعذّر حفظ التأكيد: {{reason}}"
+    },
+    "reason": {
+      "label": "سبب الزيارة",
+      "placeholder": "الشكوى الرئيسية",
+      "none": "لم يُذكر سبب"
+    },
+    "lastVisit": {
+      "title": "آخر زيارة",
+      "line": "{{type}} · {{dentist}}",
+      "none": "لا زيارات سابقة.",
+      "failed": "تعذّر تحميل آخر زيارة."
+    },
+    "openTreatment": {
+      "title": "العلاج المفتوح",
+      "none": "لا شيء مفتوح."
+    },
+    "complaint": {
+      "label": "الشكوى",
+      "placeholder": "ما يذكره المريض"
+    },
+    "pain": {
+      "label": "الألم",
+      "notRated": "غير مقيَّم",
+      "score": "{{score}} / {{max}}",
+      "clear": "مسح"
+    },
+    "since": {
+      "label": "منذ",
+      "today": "اليوم",
+      "days_1_3": "١–٣ أيام",
+      "about_a_week": "نحو أسبوع",
+      "longer": "أكثر من ذلك"
+    },
+    "seenOn": {
+      "label": "شوهد في",
+      "named": "شوهد في: {{name}}",
+      "notSaid": "غير محدَّد",
+      "clinicalExam": "الفحص السريري",
+      "image": "صورة"
+    },
+    "findings": {
+      "title": "التشخيصات",
+      "tooth": "السن",
+      "diagnosis": "التشخيص",
+      "plan": "الخطة",
+      "today": "سُجّل اليوم",
+      "older": "مفتوحة من قبل، بلا خطة",
+      "noneToday": "لم يُسجَّل أي تشخيص في هذه الزيارة.",
+      "noneOlder": "كل ما هو أقدم له خطة.",
+      "recorded": "سُجّل في {{date}}",
+      "planTreatment": "خطّط العلاج",
+      "inPlan": "ضمن خطة اليوم",
+      "frequent": "التشخيصات الأكثر استخدامًا",
+      "recordNamed": "تسجيل {{name}}",
+      "search": "البحث في التشخيصات",
+      "addService": "إضافة خدمة لهذا السن",
+      "examine": "فحص {{tooth}}"
+    },
+    "proposal": {
+      "named": "{{tooth}} · {{name}}",
+      "surfaces": "الأسطح {{surfaces}}",
+      "priority": "الأولوية",
+      "priorityOf": "أولوية علاج {{name}}",
+      "none": "لم يُقترح علاج بعد.",
+      "frequent": "الخدمات الأكثر استخدامًا",
+      "proposeNamed": "اقتراح {{name}}",
+      "search": "البحث في كتالوج الخدمات",
+      "searchNamed": "البحث في كتالوج الخدمات لـ {{name}}",
+      "noMatch": "لا نتائج مطابقة.",
+      "noDiagnoses": "لم يُسجَّل أي تشخيص في هذه الزيارة.",
+      "printQuote": "طباعة عرض السعر"
+    },
+    "phase": {
+      "items_one": "عنصر واحد",
+      "items_other": "{{count}} عنصر",
+      "none": "لا شيء في هذه المرحلة",
+      "new": "جديد",
+      "total": "الإجمالي",
+      "items_zero": "لا عناصر",
+      "items_two": "عنصران",
+      "items_few": "{{count}} عناصر",
+      "items_many": "{{count}} عنصرًا"
+    },
+    "today": {
+      "none": "لا شيء مفتوح في خطة العلاج.",
+      "inProgress": "قيد التنفيذ",
+      "perform": "تنفيذ",
+      "performNamed": "تنفيذ {{name}}",
+      "continue": "متابعة",
+      "continueNamed": "متابعة {{name}}",
+      "undoNamed": "تراجع: {{name}}",
+      "addUnplanned": "+ إضافة عمل غير مخطَّط",
+      "forToday": "لليوم: {{target}} {{name}}",
+      "hint": "حدّد ما ستعمل عليه اليوم.",
+      "ofPhase": "{{picked}} من {{total}} لليوم",
+      "picked_one": "علاج واحد لليوم",
+      "picked_other": "{{count}} علاج لليوم",
+      "picked_zero": "لا علاج لليوم",
+      "picked_two": "علاجان لليوم",
+      "picked_few": "{{count}} علاجات لليوم",
+      "picked_many": "{{count}} علاجًا لليوم"
+    },
+    "work": {
+      "completed": "مكتمل",
+      "unfinished": "غير منتهٍ"
+    },
+    "planned": {
+      "title": "مخطَّط لليوم",
+      "count_one": "عنصر واحد",
+      "count_other": "{{count}} عنصر",
+      "notFinishedHint": "غير منتهٍ · يُتابَع في الزيارة القادمة",
+      "notFinishedNamed": "غير منتهٍ: {{name}}",
+      "beforePhoto": "صورة قبل",
+      "afterPhoto": "صورة بعد",
+      "count_zero": "لا عناصر",
+      "count_two": "عنصران",
+      "count_few": "{{count}} عناصر",
+      "count_many": "{{count}} عنصرًا"
+    },
+    "lastHygiene": {
+      "title": "آخر زيارة تنظيف",
+      "none": "لا شيء مسجَّل"
+    },
+    "complete": {
+      "thisVisit": "هذه الزيارة",
+      "recorded": "سُجّل",
+      "diagnoses_one": "تشخيص واحد",
+      "diagnoses_other": "{{count}} تشخيص",
+      "planned": "أُضيف إلى الخطة",
+      "plannedHead": "{{items}}، {{total}}",
+      "done": "أُنجز اليوم",
+      "doneHead": "{{services}} · {{total}}",
+      "continues": "يُتابَع في الزيارة القادمة",
+      "sessionNoCharge": "الجلسة {{number}} · بلا رسوم",
+      "previous": "الزيارات السابقة",
+      "outstanding": "إجمالي المستحق",
+      "next": "الزيارة القادمة:",
+      "nextOf": {
+        "continue": "{{name}} · {{target}} (متابعة)",
+        "urgent": "{{name}} · {{target}}"
+      },
+      "nextNone": "لا شيء عاجل مفتوح",
+      "diagnoses_zero": "لا تشخيصات",
+      "diagnoses_two": "تشخيصان",
+      "diagnoses_few": "{{count}} تشخيصات",
+      "diagnoses_many": "{{count}} تشخيصًا"
+    },
+    "planStatus": {
+      "planned": "مخطَّط",
+      "accepted": "مقبول",
+      "in_progress": "قيد التنفيذ",
+      "done": "منجز"
+    },
+    "optional": "اختياري",
+    "other": {
+      "open": "+ إضافة علاج آخر",
+      "title": "علاج آخر",
+      "hint": "على سن أخرى أو فك أو الفم كاملًا.",
+      "where": "الموضع",
+      "choose": "اختر…",
+      "levels": "الفك أو الفم",
+      "primaryTooth": "{{label}} (لبنية)",
+      "priority": "أولوية العلاج التالي",
+      "chooseFirst": "اختر موضع العلاج لعرض الخدمات المناسبة له.",
+      "noServices": "لا توجد خدمة مناسبة في الكتالوج.",
+      "search": "البحث في كتالوج الخدمات عن علاج آخر"
+    }
+  },
+  "planTab": {
+    "title": "خطة العلاج",
+    "open": "فتح الخطة",
+    "failed": "تعذّر تحميل خطة العلاج",
+    "nothingOpen": "لا شيء مخطَّط.",
+    "empty": "لم يُخطَّط أي علاج لهذا المريض بعد.",
+    "counts": "{{items}} · {{done}} منجز",
+    "quoteOf": "عرض سعر: {{phase}}",
+    "tableOf": "علاجات {{phase}}",
+    "treatment": "العلاج",
+    "for": "لأجل",
+    "status": "الحالة",
+    "patient": "المريض",
+    "price": "السعر",
+    "accepted": "✓ مقبول",
+    "markAccepted": "تحديد كمقبول",
+    "acceptNamed": "تحديد {{name}} كمقبول",
+    "proposed": "مقترَح",
+    "withdraw": "التراجع عن القبول",
+    "withdrawNamed": "التراجع عن قبول {{name}}"
   }
 }

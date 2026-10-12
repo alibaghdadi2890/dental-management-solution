@@ -11,6 +11,9 @@ export function listVisit(
   return {
     id: id(n),
     displayNumber: n,
+    type: 'treatment',
+    currentStep: 'complete',
+    reason: null,
     status: 'completed',
     localDate: '2026-09-04',
     startedAt: '2026-09-04T09:00:00.000Z',

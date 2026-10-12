@@ -2,6 +2,7 @@ import type { DiagnosisRecord } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { formatCalendarDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { SeenOnSelect } from '../../flow/seen-on-select';
 import { madeHere, useChartingActions } from '../charting-actions';
 import { Badge, EmptyBlock, LinkButton, PanelSection } from './panel-section';
 import { SurfaceTag } from './surface-tag';
@@ -11,17 +12,21 @@ import { SurfaceTag } from './surface-tag';
  * active), the name (struck through once resolved) with a Resolved badge, the note, then the
  * date and dentist with **Resolve / Reopen** (in a visit only) and — only for a record added
  * where the charting happens, this visit or the patient record — **Remove** (others are
- * resolved, never deleted: W13, ADR-0031). Read-only without the scope's write permission.
+ * resolved, never deleted: W13, ADR-0031). With `evidence` (the Examine step's findings mode,
+ * feature 10) an active record also carries its **Seen on**. Read-only without the scope's write
+ * permission.
  */
 export function DiagnosisSection({
   diagnoses,
   canWrite,
+  evidence = false,
   open,
   onToggle,
   onAdd,
 }: {
   diagnoses: readonly DiagnosisRecord[];
   canWrite: boolean;
+  evidence?: boolean;
   open: boolean;
   onToggle: () => void;
   onAdd: () => void;
@@ -89,6 +94,14 @@ export function DiagnosisSection({
               {record.note && (
                 <div className="ms-[15px] mt-[5px] text-[12.5px] leading-normal text-ink-secondary">
                   {record.note}
+                </div>
+              )}
+              {evidence && isActive && (
+                <div className="ms-[15px] mt-2 flex items-center gap-2">
+                  <span className="flex-none text-[12px] leading-none font-medium text-ink-muted">
+                    {t('flow.seenOn.label')}
+                  </span>
+                  <SeenOnSelect record={record} canWrite={canWrite} />
                 </div>
               )}
               <div className="ms-[15px] mt-[7px] flex flex-wrap items-center gap-2.5">

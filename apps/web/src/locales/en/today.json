@@ -16,7 +16,8 @@
     "empty": "No visit in progress.",
     "loading": "Loading the visits in progress",
     "failed": "Couldn't load the visits in progress.",
-    "paused": "Paused"
+    "paused": "Paused",
+    "onStep": "On {{step}}"
   },
   "dialog": {
     "title": "Checkout · {{name}}"

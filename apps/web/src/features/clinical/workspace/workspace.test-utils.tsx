@@ -38,6 +38,7 @@ import {
   problem,
   profileId,
   sessionWith,
+  history,
 } from '@/features/patients/patients.test-utils';
 import { PatientRecordScreen } from '@/features/patients/record/patient-record-page';
 import { parseRecordSearch } from '@/features/patients/record/record-search';
@@ -51,7 +52,7 @@ export const VISIT_ID = id(60);
 /** A child by date of birth; the chart fixture decides which chart opens. */
 export const RANA = patient(1, 'Rana Haddad', {
   dateOfBirth: '2018-03-01',
-  medicalAlerts: ['Penicillin allergy'],
+  medicalHistory: history(['Penicillin'], ['Asthma']),
 });
 
 export const DENTIST_WRITE: Permission[] = [
@@ -84,6 +85,8 @@ export function serviceItem(
     color: 'blue',
     icon: null,
     markPriority: 5,
+    addedOnVisitType: null,
+    typicalSessions: null,
     ...extra,
   };
 }
@@ -124,6 +127,7 @@ export function diagnosisRecord(
     category: null,
     status: 'active',
     note: null,
+    seenOn: null,
     dentistId: profileId(DENTIST_ID),
     dentistName: 'Dr. Ana Reyes',
     recordedBy: DENTIST_ID,
@@ -157,13 +161,15 @@ export function treatmentPlan(
     price: usd('400.00'),
     diagnosisRecordId: null,
     status: 'planned',
+    priority: 'high',
+    acceptedAt: null,
+    estimatedSessions: null,
     note: null,
     dentistId: profileId(DENTIST_ID),
     dentistName: 'Dr. Ana Reyes',
     recordedBy: DENTIST_ID,
     recordedInVisitId: VISIT_ID,
     recordedAt: '2026-09-04T09:06:00.000Z',
-    groupId: null,
     startedInVisitId: null,
     startedAt: null,
     sessions: [],
@@ -196,6 +202,7 @@ export function visitService(
     discount: usd('0.00'),
     final: usd('80.00'),
     planId: null,
+    autoAdded: false,
     recordedBy: DENTIST_ID,
     createdAt: '2026-09-04T09:10:00.000Z',
     ...extra,
@@ -235,6 +242,15 @@ export function visit(extra: Partial<Visit> = {}): Visit {
     roomId: null,
     dentistId: profileId(DENTIST_ID),
     startedBy: DENTIST_ID,
+    type: 'treatment',
+    currentStep: 'today',
+    // The whole workspace, as these suites test it; the flow suites open the steps.
+    viewMode: 'all',
+    reason: null,
+    painScore: null,
+    painSince: null,
+    historyConfirmation: null,
+    worklist: [],
     status: 'in_progress',
     localDate: '2026-09-04',
     startedAt: '2026-09-04T09:00:00.000Z',
@@ -242,7 +258,6 @@ export function visit(extra: Partial<Visit> = {}): Visit {
     pausedSeconds: 0,
     completedAt: null,
     completedBy: null,
-    unfinishedAnsweredAt: null,
     durationMinutes: null,
     notes: '',
     discountMode: 'percent',
@@ -264,7 +279,6 @@ export function chart(extra: Partial<PatientChart> = {}): PatientChart {
     presence: [],
     diagnoses: [],
     plans: [],
-    planGroups: [],
     history: [],
     liveVisitId: VISIT_ID,
     voidedVisitIds: [],
@@ -289,6 +303,8 @@ export interface WorkspaceApi {
   visitSummary?: VisitFinancialSummary;
   /** Overrides a mutation's answer; `undefined` falls back to the default. */
   mutation?: (method: string, path: string, body: unknown) => Answer;
+  /** Other reads, by path without its query: the body each answers. */
+  reads?: Record<string, unknown>;
 }
 
 const LIFECYCLE = ['pause', 'resume', 'discard'] as const;
@@ -306,6 +322,7 @@ export function mockWorkspace({
   toothHistories = [],
   visitSummary,
   mutation,
+  reads = {},
 }: WorkspaceApi = {}): FetchMock {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     const current = typeof visitAnswer === 'function' ? visitAnswer() : visitAnswer;
@@ -336,6 +353,7 @@ export function mockWorkspace({
     if (path === `/visits/${VISIT_ID}`) {
       return Promise.resolve(current ? json(current) : problem(404, 'visit.not_found'));
     }
+    if (Object.hasOwn(reads, path)) return Promise.resolve(json(reads[path]));
     if (path === `/patients/${record.id}`) return Promise.resolve(json(record));
     if (path === `/clinical/patients/${record.id}/chart`) return Promise.resolve(json(charted));
     const toothCode = new RegExp(`^/clinical/patients/${record.id}/teeth/(\\d+)/history$`).exec(

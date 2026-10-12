@@ -16,7 +16,8 @@
     "empty": "Aucune visite en cours.",
     "loading": "Chargement des visites en cours",
     "failed": "Impossible de charger les visites en cours.",
-    "paused": "En pause"
+    "paused": "En pause",
+    "onStep": "Étape : {{step}}"
   },
   "dialog": {
     "title": "Encaissement · {{name}}"

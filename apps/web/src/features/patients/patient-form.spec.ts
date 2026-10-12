@@ -8,7 +8,6 @@ import {
   guardianLink,
   isDirty,
   isEditDirty,
-  parseAlerts,
   pendingExclusions,
   phoneOptional,
   removePendingContact,
@@ -23,8 +22,10 @@ import {
   type ContactDisplay,
   type PatientFormValues,
 } from './patient-form';
+import { history } from './patients.test-utils';
 
 const TODAY = '2026-09-27';
+const PENICILLIN = history(['Penicillin']).allergies[0]?.id ?? '';
 const CTX = { country: 'LB', today: TODAY };
 
 const PATIENT: Patient = {
@@ -37,7 +38,8 @@ const PATIENT: Patient = {
   email: 'jane@example.com',
   address: '1 Main St',
   insurance: null,
-  medicalAlerts: ['Penicillin'],
+  medicalHistory: history(['Penicillin']),
+  firstVisitType: null,
   primaryDentistId: null,
   notes: null,
   dentitionOverride: null,
@@ -55,10 +57,12 @@ describe('emptyForm / fromPatient', () => {
     expect(emptyForm().sex).toBe('unknown');
   });
 
-  it('reads an existing patient into form values, alerts joined, phone shown in national format', () => {
+  it('reads an existing patient into form values, the history as ids, phone shown in national format', () => {
     const values = fromPatient(PATIENT, 'LB');
     expect(values.fullName).toBe('Jane Doe');
-    expect(values.alertsText).toBe('Penicillin');
+    expect(values.medicalHistory).toMatchObject({ allergyIds: [PENICILLIN], conditionIds: [] });
+    // The first-visit tiles are the create panel's: an edit never sends them.
+    expect(values.firstVisitType).toBe('');
     expect(values.primaryDentistId).toBe('');
     expect(values.dateOfBirth).toBe('1990-01-01');
     expect(values.phone).toBe('03 123 456');
@@ -175,20 +179,6 @@ describe('validate', () => {
       CTX,
     );
     expect(errors.notes).toBeUndefined();
-  });
-
-  it('flags a single alert over 60 characters', () => {
-    const errors = validate(
-      { ...base, fullName: 'Jane', phone: '03123456', alertsText: 'x'.repeat(61) },
-      CTX,
-    );
-    expect(errors.alerts).toBe('tooLong');
-  });
-
-  it('flags more than MEDICAL_ALERTS_MAX distinct alerts after de-duping', () => {
-    const alertsText = Array.from({ length: 25 }, (_, i) => `Alert ${i}`).join(',');
-    const errors = validate({ ...base, fullName: 'Jane', phone: '03123456', alertsText }, CTX);
-    expect(errors.alerts).toBe('tooMany');
   });
 
   it('requires a properly formatted, zero or positive opening balance amount when one is entered', () => {
@@ -598,14 +588,39 @@ describe('isEditDirty', () => {
   });
 });
 
-describe('parseAlerts', () => {
-  it('trims, drops blanks, and de-dupes case-insensitively', () => {
-    expect(parseAlerts('Penicillin, penicillin , , Latex')).toEqual(['Penicillin', 'Latex']);
+describe('the medical history and the first visit', () => {
+  const initial = fromPatient(PATIENT, 'LB');
+
+  it('sends the history whole on create, with what the patient comes for', () => {
+    const payload = toCreatePayload({
+      ...emptyForm(),
+      fullName: 'Jane',
+      phone: '03123456',
+      medicalHistory: {
+        ...emptyForm().medicalHistory,
+        noConditions: true,
+        medication: ' Aspirin ',
+      },
+      firstVisitType: 'hygiene',
+    });
+    expect(payload.medicalHistory).toMatchObject({ noConditions: true, medication: 'Aspirin' });
+    expect(payload.firstVisitType).toBe('hygiene');
+    expect(toCreatePayload({ ...emptyForm(), fullName: 'Jane', phone: '03123456' })).toMatchObject({
+      firstVisitType: null,
+    });
   });
 
-  it('caps at MEDICAL_ALERTS_MAX', () => {
-    const many = Array.from({ length: 25 }, (_, i) => `Alert ${i}`).join(',');
-    expect(parseAlerts(many)).toHaveLength(20);
+  it('patches the history only when it changes, whatever the order of its items', () => {
+    expect(toPatchPayload(initial, initial, 'LB')).toBeNull();
+    const none = {
+      ...initial,
+      medicalHistory: { ...initial.medicalHistory, allergyIds: [], noKnownAllergies: true },
+    };
+    expect(toPatchPayload(initial, none, 'LB')).toEqual({
+      medicalHistory: { ...none.medicalHistory },
+    });
+    expect(isEditDirty(initial, none, 'LB')).toBe(true);
+    expect(isDirty(initial, none)).toBe(true);
   });
 });
 
@@ -715,12 +730,6 @@ describe('validate/payload-builder parity (property-style)', () => {
   const PHONES = ['', '03123456', '03 123 456', '12', '+33612345678', 'not a phone'];
   const DOBS = ['', '1990-01-01', '2009-09-27', '2027-01-01', '2026-13-45', '1899-01-01'];
   const EMAILS = ['', 'jane@example.com', 'not-an-email'];
-  const ALERTS = [
-    '',
-    'Penicillin, Latex',
-    'x'.repeat(61),
-    Array.from({ length: 25 }, (_, i) => `Alert ${i}`).join(','),
-  ];
   const AMOUNTS = ['', '0', '50', '-5', 'abc', '.5', '5.', '12345678901.00'];
   const AS_OFS = ['', '2026-09-20', '2026-09-28', '2026-13-01'];
   const SEXES: PatientSex[] = ['unknown', 'female', 'male', 'other'];
@@ -735,7 +744,6 @@ describe('validate/payload-builder parity (property-style)', () => {
       email: pick(EMAILS),
       address: '',
       insurance: '',
-      alertsText: pick(ALERTS),
       primaryDentistId: '',
       notes: '',
       openingBalanceAmount: pick(AMOUNTS),

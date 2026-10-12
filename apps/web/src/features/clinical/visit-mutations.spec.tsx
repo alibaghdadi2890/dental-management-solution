@@ -55,7 +55,7 @@ function seededClient() {
   const keys = {
     chart: clinicalKeys.chart(TENANT, PATIENT_ID),
     history: clinicalKeys.toothHistory(TENANT, PATIENT_ID, '16'),
-    summary: clinicalKeys.summary(TENANT, PATIENT_ID),
+    citations: clinicalKeys.fileCitations(TENANT, PATIENT_ID),
     lastVisit: clinicalKeys.lastVisit(TENANT, PATIENT_ID),
     live: visitKeys.live(TENANT, { mine: true }),
     patients: ['patients', TENANT, 'detail', PATIENT_ID],
@@ -82,14 +82,14 @@ describe('visitMutations — cache effects', () => {
     expect(stale(keys.chart)).toBe(false);
   });
 
-  it('a record change also invalidates the chart, tooth histories and summary', async () => {
+  it('a record change also invalidates the chart, tooth histories and file citations', async () => {
     const { client, keys, stale, cached } = seededClient();
     apiFetchMock.mockResolvedValueOnce({ visit: visit({ notes: 'new' }), record: {} });
     await run(client, visitMutations(client, VISIT_ID).resolveDiagnosis, RECORD_ID);
     expect(cached()?.notes).toBe('new');
     expect(stale(keys.chart)).toBe(true);
     expect(stale(keys.history)).toBe(true);
-    expect(stale(keys.summary)).toBe(true);
+    expect(stale(keys.citations)).toBe(true);
     expect(stale(keys.live)).toBe(false);
   });
 
@@ -140,6 +140,7 @@ describe('visitMutations — cache effects', () => {
     await run(client, startVisitMutation(client), {
       patientId: PATIENT_ID,
       dentistId: RECORD_ID,
+      type: 'treatment',
     });
     expect(cached()).toEqual(visit());
     expect(stale(keys.live)).toBe(true);

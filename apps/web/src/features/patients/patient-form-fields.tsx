@@ -6,7 +6,8 @@ import { Field, Select, TextInput } from '@/components/ui/field';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { ageOrNull } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { DATE_OF_BIRTH_FLOOR, parseAlerts } from './patient-form';
+import { HistoryFields } from './medical-history/history-fields';
+import { DATE_OF_BIRTH_FLOOR } from './patient-form';
 import type { PatientForm, TextField } from './use-patient-form';
 
 export type PatientFieldName =
@@ -17,7 +18,7 @@ export type PatientFieldName =
   | 'email'
   | 'address'
   | 'insurance'
-  | 'alerts'
+  | 'history'
   | 'dentist'
   | 'notes';
 
@@ -92,7 +93,7 @@ export function PatientField({
   };
 
   const text = (
-    field: Exclude<TextField, 'alertsText'>,
+    field: TextField,
     options: {
       label: string;
       hint?: string;
@@ -203,43 +204,15 @@ export function PatientField({
           )}
         </Field>
       );
-    case 'alerts': {
-      const alerts = parseAlerts(values.alertsText);
+    case 'history':
       return (
-        <Field
-          label={label(t('form.fields.alerts'))}
-          hint={t('form.alertsHint')}
-          error={message('alerts')}
+        <HistoryFields
+          value={values.medicalHistory}
+          onChange={form.setMedicalHistory}
+          stored={form.storedHistory}
           className={wrapper}
-        >
-          {(props) => (
-            <>
-              <TextInput
-                {...props}
-                placeholder={t('form.placeholders.alerts')}
-                value={values.alertsText}
-                onChange={(event) => {
-                  set('alertsText')(event.target.value);
-                }}
-                className={INPUT[tone]}
-              />
-              {alerts.length > 0 && (
-                <ul className="m-0 mt-1.5 flex list-none flex-wrap gap-1.5 p-0">
-                  {alerts.map((alert) => (
-                    <li
-                      key={alert}
-                      className="rounded-md border border-danger-border bg-danger-bg px-2 py-1 text-[11.5px] leading-none font-medium text-danger"
-                    >
-                      {alert}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-        </Field>
+        />
       );
-    }
     case 'dentist':
       return (
         <Field

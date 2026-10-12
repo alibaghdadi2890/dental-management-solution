@@ -95,19 +95,26 @@
       "discount": "Changed the discount of visit {{subject}} at checkout",
       "checkout": "Closed the checkout of visit {{subject}}",
       "void": "Voided visit {{subject}}",
-      "unfinished_answered": "Answered which unfinished work visit {{subject}} continues"
+      "start_type": "Started visit {{subject}} · {{type}}",
+      "start_reason": "Started visit {{subject}} · {{type}} · “{{reason}}”",
+      "reason": "Changed the reason of visit {{subject}}",
+      "complaint": "Recorded the complaint of visit {{subject}}",
+      "history_confirm": "Confirmed the medical history with the patient in visit {{subject}}",
+      "history_unconfirm": "Took back the medical history confirmation in visit {{subject}}"
     },
     "visit_service": {
       "create": "Added {{name}} to visit {{subject}}",
       "update": "Changed a service price in visit {{subject}}",
       "delete": "Removed {{name}} from visit {{subject}}",
-      "unfinished": "Marked {{name}} not finished in visit {{subject}}"
+      "unfinished": "Marked {{name}} not finished in visit {{subject}}",
+      "create_auto": "{{name}} was added to visit {{subject}} automatically"
     },
     "diagnosis_record": {
       "create": "Recorded {{name}} for {{subject}}",
       "delete": "Removed the diagnosis {{name}} for {{subject}}",
       "resolve": "Resolved a diagnosis for {{subject}}",
-      "reopen": "Reopened a diagnosis for {{subject}}"
+      "reopen": "Reopened a diagnosis for {{subject}}",
+      "seen_on": "Changed what a diagnosis was seen on for {{subject}}"
     },
     "treatment_plan": {
       "create": "Planned {{name}} for {{subject}}",
@@ -119,12 +126,10 @@
       "session": "Recorded work on an unfinished treatment for {{subject}}",
       "session_delete": "Removed a visit’s work on an unfinished treatment for {{subject}}",
       "reprice": "Changed the price of a planned treatment for {{subject}}",
-      "delete": "Removed the planned {{name}} for {{subject}}"
-    },
-    "plan_group": {
-      "create": "Created the plan “{{name}}” for {{subject}}",
-      "update": "Edited the plan “{{name}}” for {{subject}}",
-      "delete": "Deleted the plan “{{name}}” for {{subject}}"
+      "delete": "Removed the planned {{name}} for {{subject}}",
+      "prioritise": "Set a planned treatment to {{priority}} for {{subject}}",
+      "accept": "Marked a planned treatment accepted for {{subject}}",
+      "unaccept": "Took back the acceptance of a planned treatment for {{subject}}"
     },
     "tooth_status": {
       "set": "Changed a tooth on the chart of {{subject}}"
@@ -196,6 +201,12 @@
     "room": {
       "create": "Added room {{subject}}",
       "update": "Edited room {{subject}}"
+    },
+    "medical_option": {
+      "create": "Added {{subject}} to the medical history lists",
+      "update": "Edited {{subject}} in the medical history lists",
+      "delete": "Deleted {{subject}} from the medical history lists",
+      "deactivate": "Stopped offering {{subject}} in the medical history lists"
     }
   },
   "fields": {
@@ -211,7 +222,6 @@
     "sex": "Sex",
     "address": "Address",
     "insurance": "Insurance",
-    "medicalAlerts": "Medical alerts",
     "notes": "Notes",
     "note": "Note",
     "status": "Status",
@@ -250,10 +260,13 @@
     "chartMode": "Chart detail",
     "toothNotation": "Tooth notation",
     "chartOrientation": "Chart orientation",
-    "dentitionOverride": "Chart"
+    "dentitionOverride": "Chart",
+    "medicalHistory": "Medical history",
+    "firstVisitType": "First visit"
   },
   "noAccess": {
     "title": "You can’t open the activity log",
     "body": "Ask the clinic owner or a dentist."
-  }
+  },
+  "none": "None"
 }

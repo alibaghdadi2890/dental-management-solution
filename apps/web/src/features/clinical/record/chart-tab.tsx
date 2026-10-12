@@ -306,7 +306,7 @@ function ChartEditor({
           <div className="min-w-0 flex-[1_1_600px]">
             {!expansion.expanded && chartCard}
             <UnfinishedCard chart={chart} canWrite />
-            <PlanBoard chart={chart} canWrite groups={actions.groups} />
+            <PlanBoard chart={chart} canWrite />
           </div>
           <aside aria-label={t('workspace.toothPanel')} className="mb-4 min-w-0 flex-[1_1_340px]">
             <ToothPanel

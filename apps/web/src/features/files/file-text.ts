@@ -79,6 +79,8 @@ export function useFileText() {
         const { value, unit } = sizeParts(bytes, locale);
         return t(`size.${unit}`, { value });
       },
+      /** "X-ray · Panoramic": what it is, without where. */
+      kind: (file: FileFacts) => summary({ ...file, toothCode: null }),
       takenDate: (file: Pick<PatientFile, 'takenAt'>) =>
         formatDate(file.takenAt, { timeZone, locale }),
       dateTime: (iso: string) => formatDateTime(iso, { timeZone, locale }),

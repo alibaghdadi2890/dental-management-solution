@@ -12,7 +12,9 @@ const lookups: Lookups = {
   patients: new Map([
     [PATIENT, { id: PATIENT, fullName: 'Rami Khoury', displayNumber: 'P-000012' }],
   ]),
-  visits: new Map([[VISIT, { visitId: VISIT, displayNumber: 45, localDate: '2026-10-01' }]]),
+  visits: new Map([
+    [VISIT, { visitId: VISIT, displayNumber: 45, localDate: '2026-10-01', type: 'treatment' }],
+  ]),
   staff: new Map([[STAFF, 'Lina S.']]),
   money: (amount, currency) => `${currency} ${amount}`,
   tooth: (code) => `#${code}`,
@@ -78,6 +80,60 @@ describe('sentenceOf (H7)', () => {
         after: { notes: 'x' },
       }),
     ).toBe('Edited the notes of visit [V-000045]');
+  });
+
+  it('says why the patient came with the start, and words the flow’s own changes (feature 10)', () => {
+    const visit = { resourceType: 'visit', resourceId: VISIT, patientId: PATIENT, visitId: VISIT };
+    expect(
+      read({ ...visit, action: 'visit.start', after: { type: 'emergency', reason: null } }),
+    ).toBe('Started visit [V-000045] · emergency · Rami Khoury');
+    expect(
+      read({
+        ...visit,
+        action: 'visit.start',
+        after: { type: 'emergency', reason: 'Broken filling' },
+      }),
+    ).toBe('Started visit [V-000045] · emergency · “Broken filling” · Rami Khoury');
+    // A start recorded before visits had a type.
+    expect(read({ ...visit, action: 'visit.start', after: {} })).toBe(
+      'Started visit [V-000045] · Rami Khoury',
+    );
+    expect(read({ ...visit, action: 'visit.update', after: { reason: 'Pain' } })).toBe(
+      'Changed the reason of visit [V-000045] · Rami Khoury',
+    );
+    expect(read({ ...visit, action: 'visit.update', after: { painScore: 8 } })).toBe(
+      'Recorded the complaint of visit [V-000045] · Rami Khoury',
+    );
+    expect(read({ ...visit, action: 'visit.history_confirm' })).toBe(
+      'Confirmed the medical history with the patient in visit [V-000045] · Rami Khoury',
+    );
+    expect(
+      read({
+        ...visit,
+        action: 'visit_service.create',
+        after: { name: 'Examination', code: 'EXAM', autoAdded: true },
+      }),
+    ).toBe('Examination (EXAM) was added to visit [V-000045] automatically · Rami Khoury');
+    expect(
+      read({
+        action: 'treatment_plan.prioritise',
+        patientId: PATIENT,
+        after: { priority: 'urgent' },
+      }),
+    ).toBe('Set a planned treatment to urgent for [Rami Khoury]');
+    expect(read({ action: 'treatment_plan.accept', patientId: PATIENT })).toBe(
+      'Marked a planned treatment accepted for [Rami Khoury]',
+    );
+    expect(read({ action: 'diagnosis_record.seen_on', patientId: PATIENT })).toBe(
+      'Changed what a diagnosis was seen on for [Rami Khoury]',
+    );
+    expect(
+      read({
+        action: 'medical_option.create',
+        resourceType: 'medical_option',
+        after: { name: 'Sulfa' },
+      }),
+    ).toBe('Added [Sulfa] to the medical history lists');
   });
 
   it('reads a payment with its receipt, amount and method, linking the receipt', () => {
@@ -196,7 +252,8 @@ describe('every action the API emits has a sentence (H7)', () => {
     'visit.discount',
     'visit.checkout',
     'visit.void',
-    'visit.unfinished_answered',
+    'visit.history_confirm',
+    'visit.history_unconfirm',
     'visit_service.create',
     'visit_service.update',
     'visit_service.delete',
@@ -205,6 +262,14 @@ describe('every action the API emits has a sentence (H7)', () => {
     'diagnosis_record.delete',
     'diagnosis_record.resolve',
     'diagnosis_record.reopen',
+    'diagnosis_record.seen_on',
+    'treatment_plan.prioritise',
+    'treatment_plan.accept',
+    'treatment_plan.unaccept',
+    'medical_option.create',
+    'medical_option.update',
+    'medical_option.delete',
+    'medical_option.deactivate',
     'treatment_plan.create',
     'treatment_plan.update',
     'treatment_plan.start',
@@ -215,9 +280,6 @@ describe('every action the API emits has a sentence (H7)', () => {
     'treatment_plan.session_delete',
     'treatment_plan.reprice',
     'treatment_plan.delete',
-    'plan_group.create',
-    'plan_group.update',
-    'plan_group.delete',
     'tooth_presence.set',
     'tooth_presence.remove',
     'clinical.repoint',

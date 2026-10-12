@@ -1,4 +1,11 @@
-import type { ContactLinkInput, PatientSex, Session } from '@dcm/contracts';
+import type {
+  ContactLinkInput,
+  EntryVisitType,
+  MedicalHistory,
+  MedicalHistoryInput,
+  PatientSex,
+  Session,
+} from '@dcm/contracts';
 import { type RefObject, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { dateInputOrder, todayIn } from '@/lib/format';
@@ -17,10 +24,10 @@ import {
 
 type Tenant = NonNullable<Session['tenant']>;
 
-/** Every form value but `sex` and the create's contacts (picked, not typed) is plain text. */
+/** Every form value that is plain text: all but what is picked, not typed. */
 export type TextField = Exclude<
   keyof PatientFormValues,
-  'sex' | 'pendingContacts' | 'linkContactId'
+  'sex' | 'pendingContacts' | 'linkContactId' | 'medicalHistory' | 'firstVisitType'
 >;
 
 /** Drops the server's errors on the contacts (`contacts.<i>`: indexes shift once the list
@@ -47,6 +54,8 @@ export function usePatientForm(
   tenant: Tenant,
   formRef: RefObject<HTMLFormElement | null>,
   mode: 'create' | 'edit',
+  /** The saved history of the patient being edited: its items stay offered, active or not. */
+  storedHistory?: MedicalHistory,
 ) {
   const { t } = useTranslation('patients');
   const { country } = tenant;
@@ -76,9 +85,8 @@ export function usePatientForm(
 
   const set = (field: TextField) => (value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
-    const errorField: ErrorField = field === 'alertsText' ? 'alerts' : field;
     // Remove the server's error rather than masking the field's own validation with `undefined`.
-    setServerErrors(({ [errorField]: _, ...rest }) => rest);
+    setServerErrors(({ [field]: _, ...rest }) => rest);
   };
 
   const changeContacts = (change: (current: PatientFormValues) => PatientFormValues) => {
@@ -99,6 +107,7 @@ export function usePatientForm(
     initial,
     values,
     errors,
+    storedHistory,
     /** A field's error message, in the person's language. */
     messageOf: (field: ErrorField): string | undefined => {
       const key = errors[field];
@@ -112,6 +121,13 @@ export function usePatientForm(
     set,
     setSex: (sex: PatientSex) => {
       setValues((current) => ({ ...current, sex }));
+    },
+    setMedicalHistory: (medicalHistory: MedicalHistoryInput) => {
+      setValues((current) => ({ ...current, medicalHistory }));
+    },
+    /** Create only: what the patient comes for; the same tile again takes it back. */
+    setFirstVisitType: (type: EntryVisitType | '') => {
+      setValues((current) => ({ ...current, firstVisitType: type }));
     },
     /** The create panel's Guardian block shows while the DOB makes the patient a minor. */
     showGuardianBlock: showGuardianBlock(values, today),

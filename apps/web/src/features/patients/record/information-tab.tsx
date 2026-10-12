@@ -115,7 +115,13 @@ export function InformationTab({
   const canWrite = usePermission('patient:write');
   const titleId = useId();
   const formRef = useRef<HTMLFormElement>(null);
-  const form = usePatientForm(() => fromPatient(patient, tenant.country), tenant, formRef, 'edit');
+  const form = usePatientForm(
+    () => fromPatient(patient, tenant.country),
+    tenant,
+    formRef,
+    'edit',
+    patient.medicalHistory,
+  );
   const { initial, values, country } = form;
   const [phase, setPhase] = useState<Phase>('idle');
   const cardDrafts = useContactDrafts();
@@ -262,7 +268,7 @@ export function InformationTab({
               {field('dentist')}
               {field('address', 'col-span-full')}
               {field('insurance')}
-              {field('alerts', 'col-span-full')}
+              {field('history', 'col-span-full')}
               {field('notes', 'col-span-full')}
             </div>
           </fieldset>

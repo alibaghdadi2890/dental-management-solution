@@ -7,14 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Pill } from '@/components/ui/list';
 import { Tabs } from '@/components/ui/tabs';
 import { usePermission } from '@/features/auth/use-permission';
-import { StartVisitPopover } from '@/features/clinical/start-visit-popover';
+import { type StartPreset, StartVisitPopover } from '@/features/clinical/start-visit-popover';
 import { useStartingVisit } from '@/features/clinical/use-starting-visit';
-import { liveVisitsQuery } from '@/features/clinical/visits-api';
+import { historyConfirmationQuery, liveVisitsQuery } from '@/features/clinical/visits-api';
 import { patientFilesQuery } from '@/features/files/files-api';
 import { activeFiles } from '@/features/files/gallery/gallery-filter';
 import { formatAgeLine, formatPhone, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { roleHolder } from '../contact-rows';
+import { isHistoryAsked } from '@dcm/contracts';
+import { AlertChips } from '../medical-history/alert-chips';
 import { contactsQuery } from '../contacts-api';
 import { minorOn } from '../patient-form';
 import { usePatientNavigation } from '../patient-navigation';
@@ -52,25 +54,6 @@ export function BackToPatients() {
       </svg>
       {t('record.back')}
     </button>
-  );
-}
-
-function AlertIcon() {
-  return (
-    <svg
-      aria-hidden
-      width="11"
-      height="11"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      className="flex-none"
-    >
-      <path d="M8 2.5 14.5 13.5H1.5L8 2.5Z" />
-      <path d="M8 6.6v3" />
-      <path d="M8 11.4h.01" />
-    </svg>
   );
 }
 
@@ -124,9 +107,20 @@ function MergedNotice({ keptId }: { keptId: string }) {
  * one but can still resume theirs. Both need `visit:write`: the front desk sees neither (W18).
  * While a start is in flight, Start stays (with its popover) even once the reloaded list has the
  * new visit: the popover goes to the workspace when the start is done. `?startVisit=1` (the
- * patient-created toast's Start visit) opens the popover once, then leaves the URL.
+ * patient-created toast's Start visit) opens the popover once, then leaves the URL. A `request`
+ * (the Overview's Needs attention) opens it on what was asked for.
  */
-function VisitAction({ patientId, archived }: { patientId: string; archived: boolean }) {
+function VisitAction({
+  patientId,
+  archived,
+  request,
+  onRequestClosed,
+}: {
+  patientId: string;
+  archived: boolean;
+  request: StartRequest | null;
+  onRequestClosed: () => void;
+}) {
   const { t } = useTranslation('patients');
   const navigate = useNavigate();
   const live = useQuery(liveVisitsQuery({ patientId }));
@@ -166,7 +160,14 @@ function VisitAction({ patientId, archived }: { patientId: string; archived: boo
   }
   if (archived) return null;
   return (
-    <StartVisitPopover patientId={patientId} defaultOpen={openOnArrival}>
+    <StartVisitPopover
+      // A request remounts it, so it opens on that request's type and plans.
+      key={request?.id ?? 'own'}
+      patientId={patientId}
+      defaultOpen={openOnArrival || request !== null}
+      preset={request?.preset}
+      onClose={onRequestClosed}
+    >
       <Button variant="primary" className="font-semibold">
         {t('record.startVisit')}
       </Button>
@@ -174,10 +175,39 @@ function VisitAction({ patientId, archived }: { patientId: string; archived: boo
   );
 }
 
+/** One opening of the start popover asked for from outside the header. */
+export interface StartRequest {
+  id: number;
+  preset: StartPreset;
+}
+
+/**
+ * "Registered by front desk · not confirmed" (feature 10, ADR-0046): while the patient has a
+ * medical history that no dentist has ever confirmed in a visit. Needs `visit:read`.
+ */
+function UnconfirmedHistory({ patient }: { patient: Patient }) {
+  const { t } = useTranslation('patients');
+  const canRead = usePermission('visit:read');
+  const confirmation = useQuery({
+    ...historyConfirmationQuery(patient.id),
+    enabled: canRead && isHistoryAsked(patient.medicalHistory),
+  });
+  if (confirmation.data?.confirmation !== null) return null;
+  return (
+    <p
+      data-history-unconfirmed
+      className="m-0 inline-flex items-center gap-1.5 text-[12px] leading-none font-medium text-warning"
+    >
+      <span aria-hidden className="size-1.5 rounded-full bg-warning-dot" />
+      {t('record.historyUnconfirmed')}
+    </p>
+  );
+}
+
 /**
  * The patient record's header (workspace spec §Screen 3 header, design §Patient record): the
  * "All patients" back link, the avatar, name and metadata (number, age line, phone), the medical
- * alert chips and — for a minor — the guardian chip, then Edit patient — or, for an archived
+ * alert chips with the "not confirmed" line and — for a minor — the guardian chip, then Edit patient — or, for an archived
  * record, the Archived badge and Restore (never for a merged one: the server refuses it) — and
  * Start visit / Resume visit, and the tabs. No Add note yet.
  */
@@ -189,6 +219,8 @@ export function RecordHeader({
   tab,
   onTab,
   headingRef,
+  startRequest = null,
+  onStartClosed,
 }: {
   patient: Patient;
   tenant: Tenant;
@@ -197,6 +229,9 @@ export function RecordHeader({
   tabsId: string;
   tab: RecordTab;
   onTab: (tab: RecordTab) => void;
+  /** Opens the start popover on a preset (the Overview's Needs attention). */
+  startRequest?: StartRequest | null;
+  onStartClosed?: (() => void) | undefined;
   /** The patient's name, focusable by code (after the post-visit summary closes). */
   headingRef?: Ref<HTMLHeadingElement> | undefined;
 }) {
@@ -213,6 +248,8 @@ export function RecordHeader({
   const { editPatient } = usePatientNavigation();
   const archived = patient.archivedAt !== null;
   const merged = patient.mergedIntoId;
+  const { allergies, conditions } = patient.medicalHistory;
+  const hasAlerts = allergies.length > 0 || conditions.length > 0;
 
   // Restore (as the list's, with Undo), then — once the reloaded record swaps Restore for Edit
   // patient — focus lands on Edit patient rather than on the page.
@@ -276,24 +313,14 @@ export function RecordHeader({
             )}
           </div>
         </div>
-        {(patient.medicalAlerts.length > 0 || guardian) && (
+        {(hasAlerts || guardian || isHistoryAsked(patient.medicalHistory)) && (
           <div data-record-chips className="flex flex-wrap items-center gap-[7px] pt-1">
-            {patient.medicalAlerts.length > 0 && (
-              <ul
-                aria-label={t('record.alerts')}
-                className="m-0 flex list-none flex-wrap gap-[7px] p-0"
-              >
-                {patient.medicalAlerts.map((alert) => (
-                  <li
-                    key={alert}
-                    className="inline-flex items-center gap-[5px] rounded-md border border-danger-border bg-danger-bg px-[9px] py-[5px] text-[11.5px] leading-none font-medium text-danger"
-                  >
-                    <AlertIcon />
-                    {alert}
-                  </li>
-                ))}
-              </ul>
-            )}
+            <AlertChips
+              allergies={allergies.map((item) => item.name)}
+              conditions={conditions.map((item) => item.name)}
+              label={t('record.alerts')}
+            />
+            <UnconfirmedHistory patient={patient} />
             {guardian && <GuardianChip guardian={guardian} country={tenant.country} />}
           </div>
         )}
@@ -318,7 +345,14 @@ export function RecordHeader({
                   {t('record.edit')}
                 </Button>
               ))}
-            {canVisit && <VisitAction patientId={patient.id} archived={archived} />}
+            {canVisit && (
+              <VisitAction
+                patientId={patient.id}
+                archived={archived}
+                request={startRequest}
+                onRequestClosed={() => onStartClosed?.()}
+              />
+            )}
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import {
   type ChargeUnit,
   type DiagnosisBatch,
   type DiagnosisItem,
+  type EntryVisitType,
   leastUsedMarkColor,
   MARK_PRIORITY_DEFAULT,
   type MarkColor,
@@ -15,6 +16,10 @@ import { sanitizeAmountInput } from '@/lib/amount';
 
 export type CatalogTab = 'services' | 'diagnoses';
 export const CATALOG_TABS: readonly CatalogTab[] = ['services', 'diagnoses'];
+
+/** What the Catalog screen shows: its two catalogs, or the medical-history lists (feature 10). */
+export type CatalogView = CatalogTab | 'history';
+export const CATALOG_VIEWS: readonly CatalogView[] = [...CATALOG_TABS, 'history'];
 
 /**
  * One editable row of either catalog. Diagnoses carry the service-only fields too (unused), so
@@ -43,6 +48,11 @@ export interface DraftRow {
   /** Services charged per tooth only. */
   icon: MarkIcon | null;
   markPriority: number;
+  /** "Added on" (feature 10, ADR-0047): a visit of this type starts with the service. Only a
+   * service charged for the whole mouth can be. */
+  addedOnVisitType: EntryVisitType | null;
+  /** How many sessions the service usually takes; null = one sitting. */
+  typicalSessions: number | null;
 }
 
 export type RowPatch = Partial<
@@ -59,6 +69,8 @@ export type RowPatch = Partial<
     | 'color'
     | 'icon'
     | 'markPriority'
+    | 'addedOnVisitType'
+    | 'typicalSessions'
   >
 >;
 
@@ -92,7 +104,17 @@ function rowFrom(item: Item): DraftRow {
     color: item.color,
     icon: service?.icon ?? null,
     markPriority: item.markPriority,
+    addedOnVisitType: service?.addedOnVisitType ?? null,
+    typicalSessions: service?.typicalSessions ?? null,
   };
+}
+
+const MAX_SESSIONS = 20;
+
+/** The Sessions field as typed → the stored count: blank, 0 and 1 mean one sitting (null). */
+export function sessionsFrom(value: string): number | null {
+  const count = Number(value.replace(/\D/g, ''));
+  return count < 2 ? null : Math.min(count, MAX_SESSIONS);
 }
 
 /** The colour a row of `tab` gets when it has none: the one the draft uses least (M13). */
@@ -127,7 +149,10 @@ export function editRow(
   return updateTab(draft, tab, (rows) =>
     rows.map((row) => {
       if (row.key !== key) return row;
-      const next = { ...row, ...patch };
+      const merged = { ...row, ...patch };
+      // Only a service for the whole mouth can be added to a visit by itself.
+      const next =
+        merged.chargeUnit === 'per_mouth' ? merged : { ...merged, addedOnVisitType: null };
       // A service that becomes one on a tooth needs a colour.
       if (next.chargeUnit === 'per_tooth') {
         return next.color === null ? { ...next, color: freeColor(draft, tab) } : next;
@@ -161,6 +186,8 @@ export function addRow(
     color: freeColor(draft, tab),
     icon: null,
     markPriority: MARK_PRIORITY_DEFAULT,
+    addedOnVisitType: null,
+    typicalSessions: null,
   };
   return updateTab(draft, tab, (rows) => [row, ...rows]);
 }
@@ -197,6 +224,8 @@ export function isRowChanged(draft: CatalogDraft, tab: CatalogTab, row: DraftRow
     saved.icon !== row.icon ||
     saved.chargeUnit !== row.chargeUnit ||
     saved.toothEffect !== row.toothEffect ||
+    saved.addedOnVisitType !== row.addedOnVisitType ||
+    saved.typicalSessions !== row.typicalSessions ||
     !sameAmount(saved.price, row.price)
   );
 }
@@ -288,6 +317,8 @@ export function batchOf(tab: CatalogTab, rows: readonly DraftRow[]): ServiceBatc
       color: row.color,
       icon: row.icon,
       markPriority: row.markPriority,
+      addedOnVisitType: row.addedOnVisitType,
+      typicalSessions: row.typicalSessions,
     })),
   };
 }

@@ -1,7 +1,7 @@
 import type { Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
-import { type RefObject, useCallback, useEffect, useId, useRef } from 'react';
+import { type RefObject, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
@@ -13,6 +13,9 @@ import { BalanceTab } from '@/features/billing/balance-tab';
 import { PostVisitSummaryDialog } from '@/features/clinical/dialogs/post-visit-summary-dialog';
 import { ChartTab } from '@/features/clinical/record/chart-tab';
 import { HistoryTab } from '@/features/clinical/record/history-tab';
+import { TreatmentPlanTab } from '@/features/clinical/record/treatment-plan-tab';
+import type { StartPreset } from '@/features/clinical/start-visit-popover';
+import { liveVisitsQuery } from '@/features/clinical/visits-api';
 import { FileDropSurface } from '@/features/files/file-drop-surface';
 import { FilesGallery } from '@/features/files/gallery/files-gallery';
 import { ApiError } from '@/lib/api';
@@ -21,7 +24,7 @@ import { patientQuery } from '../patients-api';
 import { useContactActions } from '../use-contact-actions';
 import { InformationTab } from './information-tab';
 import { OverviewTab } from './overview-tab';
-import { BackToPatients, RecordHeader } from './record-header';
+import { BackToPatients, RecordHeader, type StartRequest } from './record-header';
 import { AddContactPanel } from './add-contact-panel';
 import {
   type HistoryView,
@@ -161,6 +164,22 @@ function PatientRecord({
   const tab = useRecordTabs().includes(requestedTab) ? requestedTab : 'overview';
   const patient = useQuery(patientQuery(patientId));
   const canWrite = usePermission('patient:write');
+  // A Needs attention action that starts a visit: the patient's live visit when there is one,
+  // else the header's start popover, opened on what the action is for.
+  const navigate = useNavigate();
+  const canStart = usePermission('visit:write');
+  const live = useQuery({ ...liveVisitsQuery({ patientId }), enabled: canStart });
+  const [startRequest, setStartRequest] = useState<StartRequest | null>(null);
+  const requestId = useRef(0);
+  const startVisit = (preset: StartPreset) => {
+    const [liveVisit] = live.data ?? [];
+    if (liveVisit) {
+      void navigate({ to: '/visits/$visitId', params: { visitId: liveVisit.id } });
+      return;
+    }
+    requestId.current += 1;
+    setStartRequest({ id: requestId.current, preset });
+  };
   // One set of contact actions for the Contacts & family card and the Add contact panel, so one
   // runs at a time; the panel's unsaved work, for the Patient information tab's guard.
   const contactActions = useContactActions(patientId);
@@ -223,6 +242,10 @@ function PatientRecord({
           tab={tab}
           onTab={onTab}
           headingRef={headingRef}
+          startRequest={startRequest}
+          onStartClosed={() => {
+            setStartRequest(null);
+          }}
         />
         <TabPanel idBase={tabsId} tabKey={tab} className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
           {tab === 'overview' ? (
@@ -230,14 +253,19 @@ function PatientRecord({
               patient={patient.data}
               tenant={tenant}
               locale={locale}
-              onComplete={() => {
-                onTab('information');
-              }}
+              onStart={
+                canStart && patient.data.archivedAt === null && patient.data.mergedIntoId === null
+                  ? startVisit
+                  : undefined
+              }
               onAllVisits={() => {
                 onTab('history');
               }}
               onAllFiles={() => {
                 onTab('files');
+              }}
+              onOpenPlan={() => {
+                onTab('plan');
               }}
             />
           ) : tab === 'history' ? (
@@ -250,6 +278,8 @@ function PatientRecord({
             />
           ) : tab === 'chart' ? (
             <ChartTab patient={patient.data} />
+          ) : tab === 'plan' ? (
+            <TreatmentPlanTab patient={patient.data} />
           ) : tab === 'files' ? (
             <FilesGallery
               patient={patient.data}
@@ -318,26 +348,15 @@ function RecordSkeleton({ tab }: { tab: RecordTab }) {
       </div>
       <div className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
         {tab === 'overview' ? (
-          <div className="flex flex-wrap items-start gap-4">
-            <div className="flex min-w-0 flex-[1_1_520px] flex-col gap-4">
-              {canVisits ? (
-                <>
-                  {skeleton(t('record.lastVisit.title'))}
-                  {skeleton(t('record.dental.title'))}
-                </>
-              ) : (
-                skeleton(t('record.info.title'))
-              )}
+          <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr))]">
+            <div className="flex min-w-0 flex-col gap-4">
+              {skeleton(t('record.attention.title'))}
+              {canVisits && skeleton(t('record.lastVisit.title'))}
             </div>
             {(canPay || canVisits) && (
-              <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-4">
+              <div className="flex min-w-0 flex-col gap-4">
                 {canPay && skeleton(t('billing:balance.title'))}
-                {canVisits && (
-                  <>
-                    {skeleton(t('record.summary.title'))}
-                    {skeleton(t('record.info.title'))}
-                  </>
-                )}
+                {canVisits && skeleton(t('record.dental.title'))}
               </div>
             )}
           </div>

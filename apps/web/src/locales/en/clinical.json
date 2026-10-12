@@ -77,7 +77,11 @@
     "teeth_other": "· {{count}} teeth",
     "more": "+{{count}} more",
     "highlight": "Highlight the teeth with {{name}}",
-    "clearHighlight": "Stop highlighting {{name}}"
+    "clearHighlight": "Stop highlighting {{name}}",
+    "diagnoses": "Diagnoses",
+    "services": "Services",
+    "key": "Key",
+    "nothing": "Nothing charted yet"
   },
   "workspace": {
     "loading": "Loading visit…",
@@ -92,7 +96,6 @@
       "inProgress": "In progress",
       "paused": "Paused"
     },
-    "dateDentist": "{{date}} · {{dentist}}",
     "timer": "Visit time",
     "pause": "Pause",
     "resume": "Resume",
@@ -131,19 +134,7 @@
     "selectTooth": "Show {{label}} in the tooth panel",
     "estimate": "Plan estimate",
     "emptyTitle": "Nothing planned yet",
-    "quote": "Plan quote",
-    "newPlan": "New plan",
-    "other": "Other planned treatment",
-    "rename": "Rename",
-    "delete": "Delete",
-    "renameNamed": "Rename {{title}}",
-    "deleteNamed": "Delete {{title}}",
-    "deleteTitle": "Delete “{{title}}”?",
-    "deleteBody": "Its planned treatments stay on the patient, without a named plan.",
-    "deleteOk": "Delete plan",
-    "moveTo": "Named plan for {{name}}",
-    "noGroup": "No named plan",
-    "emptyGroup": "Nothing planned in this plan yet."
+    "quote": "Plan quote"
   },
   "notes": {
     "title": "Clinical notes",
@@ -202,7 +193,11 @@
       "failed": "Couldn't start the visit: {{reason}}",
       "merged": "This record was merged into another one. Start the visit from the kept record.",
       "branchRequired": "Visits start in a branch, and this session has none. Switch branch and try again."
-    }
+    },
+    "type": "Visit type",
+    "suggested": "Suggested",
+    "reason": "Reason",
+    "reasonPlaceholder": "Optional: why the patient is here"
   },
   "actions": {
     "failed": "Couldn't save the change: {{reason}}",
@@ -453,16 +448,6 @@
     "lower": "Lower jaw",
     "mouth": "Whole mouth"
   },
-  "planGroup": {
-    "newTitle": "New named plan",
-    "editTitle": "Rename plan",
-    "title": "Title",
-    "titlePlaceholder": "e.g. Full rehabilitation",
-    "note": "Note",
-    "create": "Create plan",
-    "save": "Save",
-    "cancel": "Cancel"
-  },
   "recordChart": {
     "dentist": "Recording for",
     "chooseDentist": "Choose a dentist…",
@@ -481,7 +466,9 @@
     "count_one": "{{count}} service",
     "count_other": "{{count}} services",
     "charged": "Charged today",
-    "carried": "Carried forward"
+    "carried": "Carried forward",
+    "auto": "added automatically",
+    "autoHint": "Catalog › Services › Added on"
   },
   "unfinished": {
     "badge": "Not finished",
@@ -498,10 +485,6 @@
     "toContinue": "To continue · {{count}}",
     "count_one": "{{count}} not finished",
     "count_other": "{{count}} not finished",
-    "dialogTitle": "Unfinished services",
-    "dialogQuestion": "Continue any of these today?",
-    "dialogContinue": "Continue",
-    "dialogFailed": "Couldn't save the answer: {{reason}}",
     "recordTitle": "Unfinished services",
     "noCharge": "No charge",
     "session": "Session {{number}}"
@@ -582,5 +565,224 @@
     "diagnoses": "Diagnoses",
     "services": "Services",
     "both": "Both"
+  },
+  "flow": {
+    "types": {
+      "examination": "Examination",
+      "emergency": "Emergency",
+      "treatment": "Treatment",
+      "hygiene": "Hygiene",
+      "consultation": "Consultation"
+    },
+    "steps": {
+      "intake": "Intake",
+      "complaint": "Complaint",
+      "examine": "Examine",
+      "findings": "Findings",
+      "plan": "Plan",
+      "proposal": "Proposal",
+      "today": "Today’s work",
+      "perform": "Perform",
+      "treatNow": "Treat now",
+      "complete": "Complete"
+    },
+    "priority": {
+      "urgent": "Urgent",
+      "high": "High",
+      "elective": "Elective"
+    },
+    "session": "Session {{number}}",
+    "sessionOf": "Session {{number}} of {{total}}",
+    "stepper": "{{type}} visit steps",
+    "stepDone": "done",
+    "view": {
+      "label": "View",
+      "steps": "Steps",
+      "all": "All"
+    },
+    "footer": "Visit steps",
+    "previous": "Previous",
+    "stepOf": "Step {{number}} of {{total}}",
+    "continueTo": "Continue to {{step}}",
+    "completeVisit": "Complete visit",
+    "history": {
+      "title": "Medical history",
+      "unconfirmed": "Registered by front desk · not confirmed",
+      "confirm": "Confirmed with the patient",
+      "confirmedBy": "Confirmed by {{name}} · {{time}}",
+      "saveFailed": "Couldn’t save the medical history: {{reason}}",
+      "confirmFailed": "Couldn’t save the confirmation: {{reason}}"
+    },
+    "reason": {
+      "label": "Reason",
+      "placeholder": "Chief complaint",
+      "none": "No reason given"
+    },
+    "lastVisit": {
+      "title": "Last visit",
+      "line": "{{type}} · {{dentist}}",
+      "none": "No previous visits.",
+      "failed": "Couldn’t load the last visit."
+    },
+    "openTreatment": {
+      "title": "Open treatment",
+      "none": "Nothing open."
+    },
+    "complaint": {
+      "label": "Complaint",
+      "placeholder": "What the patient reports"
+    },
+    "pain": {
+      "label": "Pain",
+      "notRated": "Not rated",
+      "score": "{{score}} / {{max}}",
+      "clear": "Clear"
+    },
+    "since": {
+      "label": "Since",
+      "today": "Today",
+      "days_1_3": "1–3 days",
+      "about_a_week": "About a week",
+      "longer": "Longer"
+    },
+    "seenOn": {
+      "label": "Seen on",
+      "named": "Seen on: {{name}}",
+      "notSaid": "Not said",
+      "clinicalExam": "Clinical exam",
+      "image": "An image"
+    },
+    "findings": {
+      "title": "Diagnoses",
+      "tooth": "Tooth",
+      "diagnosis": "Diagnosis",
+      "plan": "Plan",
+      "today": "Recorded today",
+      "older": "Open from before, not planned",
+      "noneToday": "No diagnoses recorded in this visit.",
+      "noneOlder": "Everything older is planned.",
+      "recorded": "Recorded {{date}}",
+      "planTreatment": "Plan treatment",
+      "inPlan": "In today’s plan",
+      "frequent": "Frequently used diagnoses",
+      "recordNamed": "Record {{name}}",
+      "search": "Search diagnoses",
+      "addService": "Add a service to this tooth",
+      "examine": "Examine {{tooth}}"
+    },
+    "proposal": {
+      "named": "{{tooth}} · {{name}}",
+      "surfaces": "Surfaces {{surfaces}}",
+      "priority": "Priority",
+      "priorityOf": "Priority of the treatment for {{name}}",
+      "none": "No treatment proposed yet.",
+      "frequent": "Frequently used services",
+      "proposeNamed": "Propose {{name}}",
+      "search": "Search the services catalog",
+      "searchNamed": "Search the services catalog for {{name}}",
+      "noMatch": "Nothing matches.",
+      "noDiagnoses": "No diagnoses recorded in this visit.",
+      "printQuote": "Print quote"
+    },
+    "phase": {
+      "items_one": "{{count}} item",
+      "items_other": "{{count}} items",
+      "none": "Nothing in this phase",
+      "new": "New",
+      "total": "Total"
+    },
+    "today": {
+      "none": "Nothing is open on the treatment plan.",
+      "inProgress": "In progress",
+      "perform": "Perform",
+      "performNamed": "Perform {{name}}",
+      "continue": "Continue",
+      "continueNamed": "Continue {{name}}",
+      "undoNamed": "Undo: {{name}}",
+      "addUnplanned": "+ Add unplanned work",
+      "forToday": "For today: {{target}} {{name}}",
+      "hint": "Tick what you will work on today.",
+      "ofPhase": "{{picked}} of {{total}} for today",
+      "picked_one": "{{count}} treatment for today",
+      "picked_other": "{{count}} treatments for today"
+    },
+    "work": {
+      "completed": "Completed",
+      "unfinished": "Not finished"
+    },
+    "planned": {
+      "title": "Planned for today",
+      "count_one": "{{count}} item",
+      "count_other": "{{count}} items",
+      "notFinishedHint": "Not finished · continue next visit",
+      "notFinishedNamed": "Not finished: {{name}}",
+      "beforePhoto": "Before photo",
+      "afterPhoto": "After photo"
+    },
+    "lastHygiene": {
+      "title": "Last hygiene visit",
+      "none": "None recorded"
+    },
+    "complete": {
+      "thisVisit": "This visit",
+      "recorded": "Recorded",
+      "diagnoses_one": "{{count}} diagnosis",
+      "diagnoses_other": "{{count}} diagnoses",
+      "planned": "Added to the plan",
+      "plannedHead": "{{items}}, {{total}}",
+      "done": "Done today",
+      "doneHead": "{{services}} · {{total}}",
+      "continues": "Continues next visit",
+      "sessionNoCharge": "Session {{number}} · No charge",
+      "previous": "Previous visits",
+      "outstanding": "Total outstanding",
+      "next": "Next visit:",
+      "nextOf": {
+        "continue": "{{name}} · {{target}} (continue)",
+        "urgent": "{{name}} · {{target}}"
+      },
+      "nextNone": "Nothing urgent open"
+    },
+    "planStatus": {
+      "planned": "Planned",
+      "accepted": "Accepted",
+      "in_progress": "In progress",
+      "done": "Done"
+    },
+    "optional": "optional",
+    "other": {
+      "open": "+ Add other treatment",
+      "title": "Other treatment",
+      "hint": "On another tooth, a jaw or the whole mouth.",
+      "where": "Where",
+      "choose": "Choose…",
+      "levels": "Jaw or mouth",
+      "primaryTooth": "{{label}} (primary)",
+      "priority": "Priority of the next treatment",
+      "chooseFirst": "Choose where the treatment goes to see the services for it.",
+      "noServices": "The catalog has no service for this.",
+      "search": "Search the services catalog for other treatment"
+    }
+  },
+  "planTab": {
+    "title": "Treatment plan",
+    "open": "Open plan",
+    "failed": "Couldn’t load the treatment plan",
+    "nothingOpen": "Nothing planned.",
+    "empty": "No treatment has been planned for this patient yet.",
+    "counts": "{{items}} · {{done}} done",
+    "quoteOf": "Quote: {{phase}}",
+    "tableOf": "{{phase}} treatments",
+    "treatment": "Treatment",
+    "for": "For",
+    "status": "Status",
+    "patient": "Patient",
+    "price": "Price",
+    "accepted": "✓ Accepted",
+    "markAccepted": "Mark accepted",
+    "acceptNamed": "Mark {{name}} accepted",
+    "proposed": "Proposed",
+    "withdraw": "Take the acceptance back",
+    "withdrawNamed": "Take back the acceptance of {{name}}"
   }
 }

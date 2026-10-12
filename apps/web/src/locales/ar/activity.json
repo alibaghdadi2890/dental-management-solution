@@ -95,19 +95,26 @@
       "discount": "غيّر خصم الزيارة {{subject}} عند الدفع",
       "checkout": "أغلق تحصيل الزيارة {{subject}}",
       "void": "ألغى الزيارة {{subject}}",
-      "unfinished_answered": "حدّد الأعمال غير المنتهية التي تتابعها الزيارة {{subject}}"
+      "start_type": "بدأ الزيارة {{subject}} · {{type}}",
+      "start_reason": "بدأ الزيارة {{subject}} · {{type}} · «{{reason}}»",
+      "reason": "غيّر سبب الزيارة {{subject}}",
+      "complaint": "سجّل شكوى الزيارة {{subject}}",
+      "history_confirm": "أكّد التاريخ الطبي مع المريض في الزيارة {{subject}}",
+      "history_unconfirm": "تراجع عن تأكيد التاريخ الطبي في الزيارة {{subject}}"
     },
     "visit_service": {
       "create": "أضاف {{name}} إلى الزيارة {{subject}}",
       "update": "غيّر سعر خدمة في الزيارة {{subject}}",
       "delete": "أزال {{name}} من الزيارة {{subject}}",
-      "unfinished": "علّم {{name}} كغير منتهٍ في الزيارة {{subject}}"
+      "unfinished": "علّم {{name}} كغير منتهٍ في الزيارة {{subject}}",
+      "create_auto": "أُضيفت {{name}} إلى الزيارة {{subject}} تلقائيًا"
     },
     "diagnosis_record": {
       "create": "سجّل {{name}} لـ {{subject}}",
       "delete": "أزال التشخيص {{name}} لـ {{subject}}",
       "resolve": "أغلق تشخيصًا لـ {{subject}}",
-      "reopen": "أعاد فتح تشخيص لـ {{subject}}"
+      "reopen": "أعاد فتح تشخيص لـ {{subject}}",
+      "seen_on": "غيّر ما شوهد عليه تشخيص لـ {{subject}}"
     },
     "treatment_plan": {
       "create": "خطّط {{name}} لـ {{subject}}",
@@ -119,12 +126,10 @@
       "session": "سجّل عملًا على علاج غير منتهٍ لـ {{subject}}",
       "session_delete": "أزال عمل زيارة على علاج غير منتهٍ لـ {{subject}}",
       "reprice": "غيّر سعر علاج مخطط لـ {{subject}}",
-      "delete": "أزال العلاج المخطط {{name}} لـ {{subject}}"
-    },
-    "plan_group": {
-      "create": "أنشأ الخطة «{{name}}» لـ {{subject}}",
-      "update": "عدّل الخطة «{{name}}» لـ {{subject}}",
-      "delete": "حذف الخطة «{{name}}» لـ {{subject}}"
+      "delete": "أزال العلاج المخطط {{name}} لـ {{subject}}",
+      "prioritise": "جعل أولوية علاج مخطَّط {{priority}} لـ {{subject}}",
+      "accept": "حدّد علاجًا مخطَّطًا كمقبول لـ {{subject}}",
+      "unaccept": "تراجع عن قبول علاج مخطَّط لـ {{subject}}"
     },
     "tooth_status": {
       "set": "غيّر سنًّا في مخطط {{subject}}"
@@ -196,6 +201,12 @@
     "room": {
       "create": "أضاف الغرفة {{subject}}",
       "update": "عدّل الغرفة {{subject}}"
+    },
+    "medical_option": {
+      "create": "أضاف {{subject}} إلى قوائم التاريخ الطبي",
+      "update": "عدّل {{subject}} في قوائم التاريخ الطبي",
+      "delete": "حذف {{subject}} من قوائم التاريخ الطبي",
+      "deactivate": "أوقف عرض {{subject}} في قوائم التاريخ الطبي"
     }
   },
   "fields": {
@@ -211,7 +222,6 @@
     "sex": "الجنس",
     "address": "العنوان",
     "insurance": "التأمين",
-    "medicalAlerts": "تنبيهات طبية",
     "notes": "ملاحظات",
     "note": "ملاحظة",
     "status": "الحالة",
@@ -250,10 +260,13 @@
     "chartMode": "تفاصيل المخطط",
     "toothNotation": "ترقيم الأسنان",
     "chartOrientation": "اتجاه المخطط",
-    "dentitionOverride": "المخطط"
+    "dentitionOverride": "المخطط",
+    "medicalHistory": "التاريخ الطبي",
+    "firstVisitType": "الزيارة الأولى"
   },
   "noAccess": {
     "title": "لا يمكنك فتح سجل النشاط",
     "body": "اطلب من مالك العيادة أو من طبيب أسنان."
-  }
+  },
+  "none": "لا شيء"
 }

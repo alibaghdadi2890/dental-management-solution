@@ -215,16 +215,13 @@
       "email": "Email",
       "address": "Address",
       "insurance": "Insurance",
-      "alerts": "Medical alerts",
       "dentist": "Primary dentist",
       "notes": "Notes"
     },
-    "alertsHint": "Comma-separated",
     "placeholders": {
       "fullName": "e.g. Rana Haddad",
       "email": "name@email.com",
-      "insurance": "Carrier — plan",
-      "alerts": "e.g. Penicillin allergy"
+      "insurance": "Carrier — plan"
     },
     "sexOptions": {
       "unknown": "—",
@@ -263,7 +260,6 @@
       "futureDate": "Can't be in the future",
       "beforeMinDate": "Check the year",
       "tooLong": "Too long",
-      "tooMany": "At most 20 alerts",
       "invalidAmount": "Enter an amount like 250 or 12.50",
       "negativeAmount": "Enter zero or a positive amount",
       "invalid": "Check this value",
@@ -276,7 +272,17 @@
       "contactAlreadyPatient": "This contact is already a patient — search for their record instead"
     },
     "archivedWhileEditing": "This patient was archived while you were editing. Your changes are kept here, but they can’t be saved until the record is restored.",
-    "startVisit": "Start visit"
+    "startVisit": "Start visit",
+    "firstVisit": {
+      "label": "First visit",
+      "types": {
+        "examination": "Examination",
+        "emergency": "Emergency",
+        "hygiene": "Hygiene",
+        "consultation": "Consultation"
+      }
+    },
+    "createAndStart": "Create and start {{type}}"
   },
   "merge": {
     "eyebrow": "Merge duplicates",
@@ -295,14 +301,14 @@
       "insurance": "Insurance",
       "primaryDentistId": "Dentist",
       "notes": "Notes",
-      "alerts": "Alerts"
+      "alerts": "Alerts",
+      "medication": "Medication"
     },
     "valueFor": "{{field}} from {{number}}: {{value}}",
-    "alertsKept": "Alerts from both records are kept.",
+    "alertsKept": "Allergies and conditions from both records are kept.",
     "matching_one": "{{count, number}} other field matches.",
     "matching_other": "{{count, number}} other fields match.",
     "summary": "{{drop}} will be archived. Its balance moves to {{keep}}.",
-    "overflow": "Together these records have more than 20 medical alerts. Remove some from one record before merging.",
     "phoneRequired": "An adult patient needs a phone number. Keep a phone, or a date of birth under 18.",
     "unavailable": "One of these records is archived or already merged, so they can't be merged.",
     "submit": "Merge records",
@@ -315,7 +321,6 @@
   "failures": {
     "archived": "the record is archived",
     "merged": "the record has already been merged into another",
-    "alertsOverflow": "together these records have more than 20 medical alerts",
     "unknownDentist": "the chosen dentist is no longer available",
     "phoneRequired": "an adult patient needs a phone number",
     "notFound": "the patient no longer exists",
@@ -375,37 +380,8 @@
       "files": "Files",
       "filesCount": "Files {{count}}",
       "balance": "Balance & payments",
-      "information": "Patient information"
-    },
-    "summary": {
-      "title": "Treatment summary",
-      "visits": "Visits recorded",
-      "diagnoses": "Active diagnoses",
-      "planned": "Planned procedures",
-      "teeth": "Teeth with treatment",
-      "services": "Services performed",
-      "billed": "Lifetime billed",
-      "loading": "Loading the treatment summary…",
-      "failed": "Couldn’t load the treatment summary",
-      "presence": "Missing teeth: {{missing}} · Implants: {{implants}}"
-    },
-    "info": {
-      "title": "Patient information",
-      "complete": "Complete",
-      "phone": "Phone",
-      "dateOfBirth": "Date of birth",
-      "email": "Email",
-      "address": "Address",
-      "insurance": "Insurance",
-      "notRecorded": "Not recorded",
-      "contacts": "Contacts",
-      "contactRole": "{{role}}: {{name}}",
-      "contactRoles": "{{name}} ({{roles}})",
-      "roleWords": {
-        "guardian": "guardian",
-        "billing": "billing",
-        "emergency": "emergency"
-      }
+      "information": "Patient information",
+      "plan": "Treatment plan"
     },
     "form": {
       "title": "Patient information",
@@ -436,6 +412,23 @@
       "hint": "Click a tooth for its full history",
       "loading": "Loading the chart…",
       "failed": "Couldn’t load the chart"
+    },
+    "historyUnconfirmed": "Registered by front desk · not confirmed",
+    "attention": {
+      "title": "Needs attention",
+      "none": "Nothing needs attention.",
+      "loading": "Loading…",
+      "continue": "Continue",
+      "continueReason": "{{session}} not finished · started {{date}}",
+      "treat": "Treat",
+      "treatReason": "planned {{date}}, not done yet",
+      "balance": "Outstanding balance",
+      "balanceReason": "{{amount}} unpaid",
+      "moneySign": "$",
+      "recordPayment": "Record payment",
+      "examination": "No examination yet",
+      "examinationReason": "Registered, never examined in this clinic",
+      "startExamination": "Start examination"
     }
   },
   "contacts": {
@@ -561,5 +554,22 @@
     "addPanel": {
       "title": "Add contact"
     }
+  },
+  "history": {
+    "medication": "Medication",
+    "medicationPlaceholder": "e.g. Warfarin 5 mg daily",
+    "allergy": {
+      "label": "Allergies",
+      "none": "None known",
+      "placeholder": "Type an allergy…"
+    },
+    "condition": {
+      "label": "Conditions",
+      "none": "None",
+      "placeholder": "Type a condition…"
+    },
+    "add": "Add “{{name}}”",
+    "remove": "Remove {{name}}",
+    "addFailed": "Couldn’t add {{name}}: {{reason}}"
   }
 }

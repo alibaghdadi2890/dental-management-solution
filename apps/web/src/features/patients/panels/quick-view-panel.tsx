@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { ActivityTimeline } from '../activity-timeline';
 import type { PatientPanel } from '../list-query';
 import { usePatientNavigation } from '../patient-navigation';
+import { AlertChips } from '../medical-history/alert-chips';
 import { patientQuery } from '../patients-api';
 import { PatientAvatar } from '../patients-table';
 import { PanelFallback } from './panel-fallback';
@@ -196,24 +197,11 @@ function QuickView({
         </div>
       )}
 
-      {patient.medicalAlerts.length > 0 && (
-        <ul
-          aria-label={t('quickView.alerts')}
-          className="m-0 flex list-none flex-wrap gap-1.5 rounded-lg border border-danger-border bg-danger-bg p-2.5"
-        >
-          {patient.medicalAlerts.map((alert) => (
-            <li
-              key={alert}
-              className="flex items-center gap-1.5 rounded-md border border-danger-border bg-surface px-2 py-1 text-[11.5px] leading-none font-medium text-danger"
-            >
-              <svg aria-hidden width="11" height="11" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 1.5 15 14H1L8 1.5Zm-.75 4.5v4h1.5V6h-1.5Zm0 5.25v1.5h1.5v-1.5h-1.5Z" />
-              </svg>
-              {alert}
-            </li>
-          ))}
-        </ul>
-      )}
+      <AlertChips
+        allergies={patient.medicalHistory.allergies.map((item) => item.name)}
+        conditions={patient.medicalHistory.conditions.map((item) => item.name)}
+        label={t('quickView.alerts')}
+      />
 
       <dl className="m-0 mb-1.5 grid grid-cols-[118px_minmax(0,1fr)] gap-x-3 gap-y-2.5">
         <Detail label={t('quickView.fields.dateOfBirth')}>

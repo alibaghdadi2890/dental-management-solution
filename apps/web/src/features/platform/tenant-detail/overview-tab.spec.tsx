@@ -36,6 +36,8 @@ const extraction: ServiceItem = {
   color: 'red',
   icon: 'extraction',
   markPriority: 5,
+  addedOnVisitType: null,
+  typicalSessions: null,
 };
 
 const json = (body: unknown) =>

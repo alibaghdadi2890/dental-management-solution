@@ -1,11 +1,12 @@
 import { formatVisitNumber, type Patient, type ToothCode } from '@dcm/contracts';
+import { useFileText } from './file-text';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Dialog } from 'radix-ui';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardSkeleton } from '@/components/ui/card';
 import { keepOpenForToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
@@ -24,6 +25,9 @@ function usePatientFiles(patientId: string) {
   const files = useQuery({ ...patientFilesQuery(patientId), enabled: canRead });
   return files.data;
 }
+
+/** How many files the Overview's Latest images card shows. */
+const LATEST_COUNT = 4;
 
 const ADD_SIZE = {
   xs: 'size-12 rounded-md',
@@ -67,79 +71,75 @@ function AddTile({
 }
 
 /**
- * The Overview's **Recent files** card (feature 8 §2): the six most recently taken, a link to
- * the Files tab and an Upload button. Left out while the patient has no files — the empty Files
- * tab does the inviting.
+ * The Overview's **Latest images** card (feature 10, V11): the four newest files, each with what
+ * it is and when it was taken — a click opens the viewer on them — and "All n →" to the Files
+ * tab. Without files it says so.
  */
-export function RecentFilesCard({
-  patient,
+export function LatestImagesCard({
+  patientId,
   onViewAll,
 }: {
-  patient: Patient;
+  patientId: string;
   onViewAll: () => void;
 }) {
   const { t } = useTranslation('files');
-  const { openUpload, openViewer } = useFiles();
-  const canWrite = usePermission('file:write') && patient.mergedIntoId === null;
-  const files = activeFiles(usePatientFiles(patient.id) ?? []);
-  if (files.length === 0) return null;
-  const recent = files.slice(0, 6);
+  const text = useFileText();
+  const { openViewer } = useFiles();
+  const canRead = usePermission('file:read');
+  const all = useQuery({ ...patientFilesQuery(patientId), enabled: canRead });
+  const files = activeFiles(all.data ?? []);
+  const latest = files.slice(0, LATEST_COUNT);
   return (
     <Card
-      title={t('recent.title')}
+      title={t('latest.title')}
       action={
-        <span className="flex items-center gap-2">
+        files.length > 0 && (
           <button
             type="button"
             onClick={onViewAll}
             className="flex cursor-pointer items-center gap-1 text-[12.5px] leading-none font-medium text-primary hover:underline"
           >
-            {t('recent.viewAll')}
+            {t('latest.all', { count: files.length })}
             <span aria-hidden className="rtl:-scale-x-100">
               {'→'}
             </span>
           </button>
-          {canWrite && (
-            <IconButton
-              aria-label={t('recent.upload')}
-              title={t('recent.upload')}
-              onClick={() => {
-                openUpload({ patientId: patient.id });
-              }}
-            >
-              <svg
-                aria-hidden
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <path d="M8 10.5v-8m0 0-3 3m3-3 3 3M3 13.5h10" />
-              </svg>
-            </IconButton>
-          )}
-        </span>
+        )
       }
     >
-      <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
-        {recent.map((file) => (
-          <li key={file.id}>
-            <FileTile
-              file={file}
-              size="sm"
-              onOpen={() => {
-                openViewer({
-                  patientId: patient.id,
-                  ids: recent.map((entry) => entry.id),
-                  startId: file.id,
-                });
-              }}
-            />
-          </li>
-        ))}
-      </ul>
+      {all.isError ? (
+        <p role="alert" className="m-0 text-[12.5px] leading-snug text-ink-muted">
+          {t('latest.failed')}
+        </p>
+      ) : all.data === undefined ? (
+        <CardSkeleton label={t('latest.loading')} />
+      ) : latest.length === 0 ? (
+        <p className="m-0 text-[12.5px] leading-[1.4] text-ink-muted">{t('evidence.empty')}</p>
+      ) : (
+        <ul className="m-0 grid list-none grid-cols-4 gap-2.5 p-0">
+          {latest.map((file) => (
+            <li key={file.id} className="flex min-w-0 flex-col gap-1.5">
+              <FileTile
+                file={file}
+                size="fill"
+                onOpen={() => {
+                  openViewer({
+                    patientId,
+                    ids: latest.map((entry) => entry.id),
+                    startId: file.id,
+                  });
+                }}
+              />
+              <span className="truncate text-[12px] leading-none font-medium">
+                {text.kind(file)}
+              </span>
+              <span className="font-mono text-[11.5px] leading-none text-ink-muted">
+                {text.takenDate(file)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }

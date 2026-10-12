@@ -21,7 +21,7 @@ import { ItemsTable, Parties, PrintSheet, Totals } from './print-sheet';
  * Addressed to the patient and the primary billing contact. A voided visit is marked VOID.
  */
 export function InvoiceDocument({ visitId }: { visitId: string }) {
-  const { t, i18n } = useTranslation(['printables', 'billing']);
+  const { t, i18n } = useTranslation(['printables', 'billing', 'clinical']);
   const locale = i18n.resolvedLanguage ?? 'en';
   const toothLabel = useToothLabel();
   const { dentistNames } = useStaffNames();
@@ -55,6 +55,7 @@ export function InvoiceDocument({ visitId }: { visitId: string }) {
                 label: t('invoice.visit'),
                 lines: [
                   formatVisitNumber(visit.data.displayNumber),
+                  t(`clinical:flow.types.${visit.data.type}`),
                   formatCalendarDate(visit.data.localDate, locale),
                   dentistNames.get(visit.data.dentistId),
                 ],

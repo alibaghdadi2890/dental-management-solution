@@ -20,7 +20,8 @@ export const CHANGE_FIELDS = [
   'sex',
   'address',
   'insurance',
-  'medicalAlerts',
+  'medicalHistory',
+  'firstVisitType',
   'notes',
   'note',
   'status',
@@ -84,6 +85,8 @@ export interface ChangeWords {
   empty: string;
   yes: string;
   no: string;
+  /** "None" as an explicit answer of a medical history list. */
+  none: string;
   money: (amount: string, currency: string) => string;
 }
 
@@ -109,6 +112,22 @@ function show(field: string, value: unknown, currency: string, words: ChangeWord
     return items.length === 0 ? words.empty : items.map(plain).join(', ');
   }
   const object = snapshot(value);
+  // A medical history (feature 10): allergies; conditions; medication.
+  if (Array.isArray(object.allergies) && Array.isArray(object.conditions)) {
+    const list = (items: unknown[], none: unknown) => {
+      const names = items.flatMap((item) => {
+        const { name } = snapshot(item);
+        return typeof name === 'string' ? [name] : [];
+      });
+      return names.length > 0 ? names.join(', ') : none === true ? words.none : words.empty;
+    };
+    const medication = typeof object.medication === 'string' ? object.medication : words.empty;
+    return [
+      list(object.allergies, object.noKnownAllergies),
+      list(object.conditions, object.noConditions),
+      medication,
+    ].join(' · ');
+  }
   // `{ amount, currency }` (a catalog price) and `{ mode, value }` (a visit discount).
   if (typeof object.amount === 'string' && typeof object.currency === 'string') {
     return words.money(object.amount, object.currency);

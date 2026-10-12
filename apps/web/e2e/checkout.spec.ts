@@ -1,5 +1,6 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
+import { chooseTreatment, openAllView } from './start-visit';
 
 interface Account {
   email: string;
@@ -104,8 +105,10 @@ test('the dentist completes a visit; the front desk discounts it and takes the p
     await page.getByRole('main').getByRole('button', { name: 'Start visit' }).click();
     const popover = page.getByRole('dialog', { name: 'Start visit' });
     await expect(popover.getByRole('combobox', { name: 'Dentist' })).toHaveValue(/.+/);
+    await chooseTreatment(popover);
     await popover.getByRole('button', { name: 'Start visit' }).click();
     await expect(page).toHaveURL(/\/visits\/[0-9a-f-]{36}$/);
+    await openAllView(page);
 
     await page
       .getByRole('region', { name: 'Dental chart' })

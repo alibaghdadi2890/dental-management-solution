@@ -1,9 +1,10 @@
 import type {
   AuditEntry,
   BalanceMoney,
-  ClinicalSummary,
   ContactLookupItem,
   LastVisit,
+  MedicalHistory,
+  MedicalOption,
   Patient,
   PatientChart,
   PatientContact,
@@ -48,6 +49,42 @@ export const FRONT_DESK_ID = id(82);
 /** The signed-in user of `sessionWith`. */
 export const SESSION_USER_ID = id(90);
 
+/** A medical history from names; an item's id is stable for its name. */
+export function history(
+  allergies: string[] = [],
+  conditions: string[] = [],
+  extra: Partial<MedicalHistory> = {},
+): MedicalHistory {
+  const item = (name: string) => {
+    let hash = 0;
+    for (let index = 0; index < name.length; index += 1) hash += name.charCodeAt(index);
+    hash %= 4096;
+    return { id: `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c6${hash.toString(16).padStart(3, '0')}`, name };
+  };
+  return {
+    noKnownAllergies: false,
+    allergies: allergies.map(item),
+    noConditions: false,
+    conditions: conditions.map(item),
+    medication: null,
+    ...extra,
+  };
+}
+
+/** The clinic's lists as `GET /medical-history/options` answers them: the chips a form offers. */
+export const MEDICAL_OPTIONS: MedicalOption[] = [
+  ...history(['Latex', 'Penicillin']).allergies.map((item) => ({
+    ...item,
+    kind: 'allergy' as const,
+    active: true,
+  })),
+  ...history([], ['Asthma', 'Diabetes']).conditions.map((item) => ({
+    ...item,
+    kind: 'condition' as const,
+    active: true,
+  })),
+];
+
 export function patient(n: number, fullName: string, extra: Partial<Patient> = {}): Patient {
   return {
     id: id(n),
@@ -59,7 +96,8 @@ export function patient(n: number, fullName: string, extra: Partial<Patient> = {
     email: null,
     address: null,
     insurance: null,
-    medicalAlerts: [],
+    medicalHistory: history(),
+    firstVisitType: null,
     primaryDentistId: null,
     notes: null,
     dentitionOverride: null,
@@ -79,7 +117,8 @@ export const listItem = (p: Patient): PatientListItem => ({
   phone: p.phone,
   dateOfBirth: p.dateOfBirth,
   sex: p.sex,
-  medicalAlerts: p.medicalAlerts,
+  allergyNames: p.medicalHistory.allergies.map((item) => item.name),
+  conditionNames: p.medicalHistory.conditions.map((item) => item.name),
   primaryDentistId: p.primaryDentistId,
   email: p.email,
   archivedAt: p.archivedAt,
@@ -183,7 +222,6 @@ export const EMPTY_CHART: PatientChart = {
   presence: [],
   diagnoses: [],
   plans: [],
-  planGroups: [],
   history: [],
   liveVisitId: null,
   voidedVisitIds: [],
@@ -191,26 +229,15 @@ export const EMPTY_CHART: PatientChart = {
   marks: {},
 };
 
-export const NO_COUNTS: ClinicalSummary = {
-  visits: 0,
-  activeDiagnoses: 0,
-  plannedProcedures: 0,
-  teethTreated: 0,
-  servicesPerformed: 0,
-  missingTeeth: 0,
-  implants: 0,
-};
-
 export interface MockApi {
   patients?: Patient[];
   balances?: Record<string, BalanceMoney[]>;
   /** The balance's `charged` (Σ visit charges, W8) per patient id; none by default. */
   charged?: Record<string, BalanceMoney[]>;
-  /** `clinical`'s reads per patient id: `EMPTY_CHART`, no last visit, `NO_COUNTS` and an empty
-   * history for every tooth unless given. */
+  /** `clinical`'s reads per patient id: `EMPTY_CHART`, no last visit, no history confirmation,
+   * no file citations and an empty history for every tooth unless given. */
   charts?: Record<string, PatientChart>;
   lastVisits?: Record<string, LastVisit>;
-  summaries?: Record<string, ClinicalSummary>;
   toothHistories?: Record<string, ToothHistory[]>;
   audit?: Record<string, AuditEntry[]>;
   /** `GET /patients/:id/contacts` per patient id (none by default). */
@@ -240,7 +267,6 @@ export function mockApi({
   charged = {},
   charts = {},
   lastVisits = {},
-  summaries = {},
   toothHistories = {},
   audit = {},
   contacts = {},
@@ -304,6 +330,7 @@ export function mockApi({
         json(ids.map((patientId) => ({ patientId, lastVisitDate: null, visitCount: 0 }))),
       );
     }
+    if (bare === '/medical-history/options') return Promise.resolve(json(MEDICAL_OPTIONS));
     if (bare === '/patients/duplicates') return Promise.resolve(json([]));
     if (bare === '/patients/duplicates/check') return Promise.resolve(json(twins));
     if (bare === '/users/practitioners') {
@@ -349,14 +376,15 @@ export function mockApi({
       );
     }
     const clinical =
-      /^\/clinical\/patients\/([^/]+)\/(chart|last-visit|summary|teeth\/(\d+)\/history)$/.exec(
+      /^\/clinical\/patients\/([^/]+)\/(chart|last-visit|history-confirmation|file-citations|teeth\/(\d+)\/history)$/.exec(
         bare,
       );
     if (clinical) {
       const [, patientId = '', read, toothCode] = clinical;
       if (read === 'chart') return Promise.resolve(json(charts[patientId] ?? EMPTY_CHART));
       if (read === 'last-visit') return Promise.resolve(json(lastVisits[patientId] ?? null));
-      if (read === 'summary') return Promise.resolve(json(summaries[patientId] ?? NO_COUNTS));
+      if (read === 'history-confirmation') return Promise.resolve(json({ confirmation: null }));
+      if (read === 'file-citations') return Promise.resolve(json([]));
       const history = toothHistories[patientId]?.find((tooth) => tooth.toothCode === toothCode);
       return Promise.resolve(
         json(
