@@ -3,16 +3,28 @@ import { AuditModule } from '../audit';
 import { PatientsModule } from '../patients';
 import { TenancyModule } from '../tenancy';
 import { UsersModule } from '../users';
-import { CatalogSeedingSubscriber } from './application/catalog-seeding.subscriber';
-import { CatalogService } from './application/catalog.service';
-import { ChartService } from './application/chart.service';
+import { CatalogSeedingSubscriber } from './application/catalog/catalog-seeding.subscriber';
+import { CatalogService } from './application/catalog/catalog.service';
+import { ChartService } from './application/reads/chart.service';
 import { MergeClinicalSubscriber } from './application/merge-clinical.subscriber';
-import { PatientRecordsService } from './application/patient-records.service';
-import { PlanUnperformer } from './application/plan-unperformer';
-import { PresenceWriter } from './application/presence-writer';
-import { RecordWriter } from './application/record-writer';
-import { VisitRecordsService } from './application/visit-records.service';
-import { VisitsService } from './application/visits.service';
+import { PatientRecordsService } from './application/records/patient-records.service';
+import { PlanUnperformer } from './application/plan/plan-unperformer';
+import { PresenceWriter } from './application/records/presence-writer';
+import { RecordWriter } from './application/records/record-writer';
+import { PlanChartingService } from './application/plan/plan-charting.service';
+import { StartOptionsService } from './application/reads/start-options.service';
+import { VisitListService } from './application/reads/visit-list.service';
+import { DiagnosisChartingService } from './application/records/diagnosis-charting.service';
+import { PresenceChartingService } from './application/records/presence-charting.service';
+import { RecordPresenter } from './application/records/record-presenter';
+import { ServiceChartingService } from './application/records/service-charting.service';
+import { VisitCharting } from './application/records/visit-charting';
+import { VisitCorrectionsService } from './application/visits/visit-corrections.service';
+import { VisitFactsService } from './application/visits/visit-facts.service';
+import { VisitFlowService } from './application/visits/visit-flow.service';
+import { VisitLocks } from './application/visits/visit-locks';
+import { VisitPresenter } from './application/visits/visit-presenter';
+import { VisitsService } from './application/visits/visits.service';
 import { CatalogController } from './http/catalog.controller';
 import { ClinicalPatientsController } from './http/clinical-patients.controller';
 import { PatientRecordsController } from './http/patient-records.controller';
@@ -20,13 +32,13 @@ import { VisitRecordsController } from './http/visit-records.controller';
 import { VisitsController } from './http/visits.controller';
 import { DiagnosesRepository } from './persistence/diagnoses.repository';
 import { PatientDiagnosesRepository } from './persistence/patient-diagnoses.repository';
-import { PlanGroupsRepository } from './persistence/plan-groups.repository';
 import { PlanSessionsRepository } from './persistence/plan-sessions.repository';
 import { ProceduresRepository } from './persistence/procedures.repository';
 import { ToothPresenceRepository } from './persistence/tooth-presence.repository';
 import { TreatmentPlansRepository } from './persistence/treatment-plans.repository';
 import { VisitAmendmentsRepository } from './persistence/visit-amendments.repository';
 import { VisitCountersRepository } from './persistence/visit-counters.repository';
+import { VisitPlanItemsRepository } from './persistence/visit-plan-items.repository';
 import { VisitServicesRepository } from './persistence/visit-services.repository';
 import { VisitsRepository } from './persistence/visits.repository';
 
@@ -55,13 +67,25 @@ import { VisitsRepository } from './persistence/visits.repository';
     VisitsService,
     VisitsRepository,
     VisitServicesRepository,
-    VisitRecordsService,
+    VisitCorrectionsService,
+    VisitListService,
+    VisitFactsService,
+    VisitFlowService,
+    StartOptionsService,
+    VisitPlanItemsRepository,
+    VisitLocks,
+    VisitPresenter,
+    VisitCharting,
+    RecordPresenter,
+    ServiceChartingService,
+    DiagnosisChartingService,
+    PresenceChartingService,
+    PlanChartingService,
     PlanUnperformer,
     VisitCountersRepository,
     VisitAmendmentsRepository,
     PatientDiagnosesRepository,
     TreatmentPlansRepository,
-    PlanGroupsRepository,
     PlanSessionsRepository,
     ToothPresenceRepository,
     PresenceWriter,
@@ -73,7 +97,8 @@ import { VisitsRepository } from './persistence/visits.repository';
   exports: [
     CatalogService,
     VisitsService,
-    VisitRecordsService,
+    VisitListService,
+    VisitFactsService,
     PatientRecordsService,
     ChartService,
   ],

@@ -7,8 +7,9 @@ import {
   type VisitService,
   visitMoney,
 } from '@dcm/contracts';
-import type { StoredVisitService } from '../persistence/visit-services.repository';
-import type { StoredVisit } from '../persistence/visits.repository';
+import type { WorklistRow } from '../../persistence/visit-plan-items.repository';
+import type { StoredVisitService } from '../../persistence/visit-services.repository';
+import type { StoredVisit } from '../../persistence/visits.repository';
 
 /** A service line in the visit currency; `final` = base − line discount. */
 export function toVisitService(service: StoredVisitService, currency: string): VisitService {
@@ -28,6 +29,7 @@ export function toVisitService(service: StoredVisitService, currency: string): V
     discount: { amount: service.discountAmount, currency },
     final: { amount: lineFinal(line), currency },
     planId: service.planId,
+    autoAdded: service.autoAdded,
     recordedBy: service.recordedBy,
     createdAt: service.createdAt.toISOString(),
   };
@@ -51,11 +53,23 @@ export function moneyOf(visit: StoredVisit, services: StoredVisitService[]): Vis
     : computed;
 }
 
+/** What a `Visit` shows beyond its own row. */
+export interface VisitParts {
+  services: StoredVisitService[];
+  worklist: readonly WorklistRow[];
+  /** The display name of who confirmed the medical history; unused when nobody has. */
+  confirmedByName: string;
+  now: Date;
+}
+
 /**
- * The `Visit` the API answers with: the row, its services and the money (`moneyOf`).
+ * The `Visit` the API answers with: the row, its services, worklist and the money (`moneyOf`).
  * `serverNow` lets the client run the timer from an offset.
  */
-export function toVisit(visit: StoredVisit, services: StoredVisitService[], now: Date): Visit {
+export function toVisit(
+  visit: StoredVisit,
+  { services, worklist, confirmedByName, now }: VisitParts,
+): Visit {
   return {
     id: visit.id,
     displayNumber: visit.displayNumber,
@@ -64,6 +78,21 @@ export function toVisit(visit: StoredVisit, services: StoredVisitService[], now:
     roomId: visit.roomId,
     dentistId: visit.dentistId,
     startedBy: visit.startedBy,
+    type: visit.type,
+    currentStep: visit.currentStep,
+    viewMode: visit.viewMode,
+    reason: visit.reason,
+    painScore: visit.painScore,
+    painSince: visit.painSince,
+    historyConfirmation:
+      visit.historyConfirmedAt !== null && visit.historyConfirmedBy !== null
+        ? {
+            at: visit.historyConfirmedAt.toISOString(),
+            by: visit.historyConfirmedBy,
+            byName: confirmedByName,
+          }
+        : null,
+    worklist: worklist.map(({ planId }) => ({ planId })),
     status: visit.status,
     localDate: visit.localDate,
     startedAt: visit.startedAt.toISOString(),
@@ -71,7 +100,6 @@ export function toVisit(visit: StoredVisit, services: StoredVisitService[], now:
     pausedSeconds: visit.pausedSeconds,
     completedAt: visit.completedAt?.toISOString() ?? null,
     completedBy: visit.completedBy,
-    unfinishedAnsweredAt: visit.unfinishedAnsweredAt?.toISOString() ?? null,
     durationMinutes: visit.durationMinutes,
     notes: visit.notes,
     discountMode: visit.discountMode,

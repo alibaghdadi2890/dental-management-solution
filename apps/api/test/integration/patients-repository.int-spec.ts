@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { planLinkChange } from '../../src/modules/patients/domain/contacts';
 import { PatientNotFoundError } from '../../src/modules/patients/domain/patient-errors';
 import { ContactsRepository } from '../../src/modules/patients/persistence/contacts.repository';
+import { MedicalOptionsRepository } from '../../src/modules/patients/persistence/medical-options.repository';
 import { PatientContactsRepository } from '../../src/modules/patients/persistence/patient-contacts.repository';
 import { PatientCountersRepository } from '../../src/modules/patients/persistence/patient-counters.repository';
 import {
@@ -35,7 +36,14 @@ function newPatient(overrides: Partial<NewPatient> = {}): NewPatient {
     address: null,
     insurance: null,
     notes: null,
-    medicalAlerts: [],
+    medicalHistory: {
+      noKnownAllergies: false,
+      allergyIds: [],
+      noConditions: false,
+      conditionIds: [],
+      medication: null,
+    },
+    firstVisitType: null,
     primaryDentistId: null,
     externalId: null,
     idempotency: null,
@@ -344,8 +352,23 @@ describe('patients: repositories', () => {
       withDentistA = (await create(tenant, { primaryDentistId: dentistA })).id;
       await create(tenant, { primaryDentistId: dentistB });
       noDentist = (await create(tenant, { primaryDentistId: null })).id;
-      withAlerts = (await create(tenant, { medicalAlerts: ['Penicillin'] })).id;
-      withoutAlerts = (await create(tenant, { medicalAlerts: [] })).id;
+      const penicillin = await inTenant(tenant, () =>
+        testApp.app
+          .get(MedicalOptionsRepository)
+          .insert({ kind: 'allergy', name: 'Penicillin', active: true }),
+      );
+      withAlerts = (
+        await create(tenant, {
+          medicalHistory: {
+            noKnownAllergies: false,
+            allergyIds: [penicillin.id],
+            noConditions: false,
+            conditionIds: [],
+            medication: null,
+          },
+        })
+      ).id;
+      withoutAlerts = (await create(tenant)).id;
       youngPatient = (await create(tenant, { dateOfBirth: '2020-01-01' })).id;
       oldPatient = (await create(tenant, { dateOfBirth: '1950-01-01' })).id;
     });

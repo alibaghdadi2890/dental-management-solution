@@ -109,7 +109,7 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
   };
 
   const start = (agent: TestAgent, body: Record<string, unknown>) =>
-    agent.post('/api/v1/visits').send(body);
+    agent.post('/api/v1/visits').send({ type: 'treatment', ...body });
 
   /** Starts a new visit and expects 201. */
   const started = async (agent: TestAgent, body: Record<string, unknown>): Promise<Visit> => {
@@ -799,7 +799,12 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
       const response = await admin
         .post('/api/v1/visits')
         .set('X-Tenant-Id', main.tenant.id)
-        .send({ patientId: patient.id, dentistId: main.ownerProfileId, roomId: room(3) });
+        .send({
+          type: 'treatment',
+          patientId: patient.id,
+          dentistId: main.ownerProfileId,
+          roomId: room(3),
+        });
       expect(response.status, JSON.stringify(response.body)).toBe(201);
       const visit = (response.body as StartVisitResult).visit;
       const adminId = ((await admin.get('/api/v1/session')).body as Session).user.id;

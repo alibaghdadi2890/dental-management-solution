@@ -1,4 +1,4 @@
-import type { ChargeUnit, MarkColor, MarkIcon, ToothEffect } from '@dcm/contracts';
+import type { ChargeUnit, EntryVisitType, MarkColor, MarkIcon, ToothEffect } from '@dcm/contracts';
 
 export interface DefaultService {
   code: string;
@@ -14,6 +14,10 @@ export interface DefaultService {
   /** The chart mark (feature 9): every per-tooth service has a colour, the others none. */
   color: MarkColor | null;
   icon: MarkIcon | null;
+  /** The visit type that starts with this service (feature 10, ADR-0047); per-mouth only. */
+  addedOnVisitType: EntryVisitType | null;
+  /** How many sessions the work usually takes, when more than one. */
+  typicalSessions: number | null;
 }
 
 export interface DefaultDiagnosis {
@@ -37,6 +41,8 @@ const service = (
     toothEffect?: ToothEffect;
     color?: MarkColor;
     icon?: MarkIcon;
+    addedOn?: EntryVisitType;
+    sessions?: number;
   } = {},
 ): DefaultService => ({
   code,
@@ -49,6 +55,8 @@ const service = (
   toothEffect: flags.toothEffect ?? 'none',
   color: flags.color ?? null,
   icon: flags.icon ?? null,
+  addedOnVisitType: flags.addedOn ?? null,
+  typicalSessions: flags.sessions ?? null,
 });
 
 const diagnosis = (
@@ -72,7 +80,9 @@ const diagnosis = (
  * Service names are the client's own spelling and must not be corrected. Extraction takes the
  * tooth off the chart and implant placement puts an implant on it (feature 7, H2). Every service
  * on a tooth and every diagnosis has its chart colour, each a different one, and services an icon
- * where one fits (feature 9).
+ * where one fits (feature 9). The round-3 design's visit fees and root canal treatment follow the
+ * POC's rows (feature 10): an examination, an emergency and a hygiene visit each start with their
+ * service, and a root canal usually takes three sessions.
  */
 export const DEFAULT_SERVICES: readonly DefaultService[] = [
   service('EXT', 'Extraction', 'Surgical', 'per_tooth', '30', {
@@ -114,7 +124,7 @@ export const DEFAULT_SERVICES: readonly DefaultService[] = [
     color: 'purple',
     icon: 'crown',
   }),
-  service('SCL', 'Scaling & polishing', 'Periodontal', 'per_mouth', '60'),
+  service('SCL', 'Scaling & polishing', 'Periodontal', 'per_mouth', '60', { addedOn: 'hygiene' }),
   service('XRY', 'Periapical X-ray', 'Diagnostic', 'per_tooth', '20', {
     active: false,
     color: 'lime',
@@ -125,6 +135,16 @@ export const DEFAULT_SERVICES: readonly DefaultService[] = [
     toothEffect: 'implant',
     color: 'green',
     icon: 'implant',
+  }),
+  service('EXAM', 'Examination', 'Diagnostic', 'per_mouth', '25', { addedOn: 'examination' }),
+  service('EMX', 'Emergency examination', 'Diagnostic', 'per_mouth', '30', {
+    addedOn: 'emergency',
+  }),
+  service('CONS', 'Consultation', 'Diagnostic', 'per_mouth', '20'),
+  service('RCT', 'Root canal treatment', 'Restorative', 'per_tooth', '180', {
+    color: 'pink',
+    icon: 'root_canal',
+    sessions: 3,
   }),
 ];
 

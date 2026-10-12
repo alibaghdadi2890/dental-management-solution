@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  answerUnfinishedSchema,
   diagnosisResultSchema,
   patientChartSchema,
+  planPhases,
   planResultSchema,
   planTreatmentSchema,
   recordDiagnosisSchema,
@@ -48,8 +48,19 @@ describe('recordDiagnosisSchema', () => {
 
 describe('planTreatmentSchema', () => {
   it('allows a plan with no tooth (per-jaw services)', () => {
-    const result = planTreatmentSchema.safeParse({ procedureId: ID, surfaces: [] });
+    const result = planTreatmentSchema.safeParse({
+      procedureId: ID,
+      surfaces: [],
+      priority: 'high',
+    });
     expect(result.success).toBe(true);
+  });
+
+  it('needs a priority: a plan always belongs to a phase', () => {
+    expect(planTreatmentSchema.safeParse({ procedureId: ID, surfaces: [] }).success).toBe(false);
+    expect(
+      planTreatmentSchema.safeParse({ procedureId: ID, surfaces: [], priority: 'soon' }).success,
+    ).toBe(false);
   });
 
   it('rejects an unknown tooth code', () => {
@@ -59,14 +70,50 @@ describe('planTreatmentSchema', () => {
   });
 });
 
-describe('answerUnfinishedSchema', () => {
-  const PLAN = '0198c0de-0000-7000-8000-000000000001';
+describe('planPhases (ADR-0045)', () => {
+  const plan = (
+    status: 'planned' | 'in_progress' | 'performed' | 'cancelled',
+    priority: 'urgent' | 'high' | 'elective',
+    amount: string,
+  ) => ({ status, priority, price: { amount, currency: 'USD' } });
 
-  it('takes the plans a visit continues, none for "not today", each once', () => {
-    expect(answerUnfinishedSchema.safeParse({ continue: [PLAN] }).success).toBe(true);
-    expect(answerUnfinishedSchema.safeParse({ continue: [] }).success).toBe(true);
-    expect(answerUnfinishedSchema.safeParse({ continue: [PLAN, PLAN] }).success).toBe(false);
-    expect(answerUnfinishedSchema.safeParse({}).success).toBe(false);
+  it('gives the three phases in order, each with its open work, its done work and its total', () => {
+    const crown = plan('planned', 'urgent', '350.00');
+    const rootCanal = plan('in_progress', 'urgent', '180.00');
+    const filling = plan('performed', 'urgent', '50.00');
+    const whitening = plan('planned', 'elective', '120.00');
+    const phases = planPhases([crown, rootCanal, filling, whitening]);
+    expect(phases.map((phase) => phase.priority)).toEqual(['urgent', 'high', 'elective']);
+    // Work in progress leads; done work stays in its phase and is not in the total.
+    expect(phases[0]).toEqual({
+      priority: 'urgent',
+      open: [rootCanal, crown],
+      done: [filling],
+      total: { amount: '530.00', currency: 'USD' },
+    });
+    expect(phases[1]).toEqual({ priority: 'high', open: [], done: [], total: null });
+    expect(phases[2]?.total).toEqual({ amount: '120.00', currency: 'USD' });
+  });
+
+  it('leaves cancelled plans out', () => {
+    const [urgent] = planPhases([plan('cancelled', 'urgent', '30.00')]);
+    expect(urgent).toMatchObject({ open: [], done: [], total: null });
+  });
+});
+
+describe('diagnosis evidence (ADR-0049)', () => {
+  it('is the clinical exam, or an image by its file id; left out, nobody said', () => {
+    const base = { diagnosisId: ID, toothCode: '16' };
+    expect(recordDiagnosisSchema.parse(base).seenOn).toBeNull();
+    expect(
+      recordDiagnosisSchema.parse({ ...base, seenOn: { kind: 'clinical_exam' } }).seenOn,
+    ).toEqual({ kind: 'clinical_exam' });
+    expect(
+      recordDiagnosisSchema.parse({ ...base, seenOn: { kind: 'image', fileId: ID } }).seenOn,
+    ).toEqual({ kind: 'image', fileId: ID });
+    expect(recordDiagnosisSchema.safeParse({ ...base, seenOn: { kind: 'image' } }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -191,6 +238,7 @@ const CHART = {
       category: 'Caries',
       status: 'active',
       note: null,
+      seenOn: null,
       dentistId: ID,
       dentistName: 'Dr. Amal Karim',
       recordedBy: ID,
@@ -216,13 +264,15 @@ const CHART = {
       price: { amount: '30.00', currency: 'USD' },
       diagnosisRecordId: ID,
       status: 'planned',
+      priority: 'high',
+      acceptedAt: null,
+      estimatedSessions: null,
       note: null,
       dentistId: ID,
       dentistName: 'Dr. Amal Karim',
       recordedBy: ID,
       recordedInVisitId: ID_2,
       recordedAt: '2026-09-29T10:05:00Z',
-      groupId: null,
       startedInVisitId: null,
       startedAt: null,
       sessions: [],
@@ -232,7 +282,6 @@ const CHART = {
       cancelledAt: null,
     },
   ],
-  planGroups: [],
   history: [
     {
       id: ID,
@@ -323,6 +372,14 @@ describe('charting route results', () => {
     roomId: null,
     dentistId: ID,
     startedBy: ID,
+    type: 'treatment',
+    currentStep: 'today',
+    viewMode: 'steps',
+    reason: null,
+    painScore: null,
+    painSince: null,
+    historyConfirmation: null,
+    worklist: [],
     status: 'in_progress',
     localDate: '2026-09-29',
     startedAt: '2026-09-29T10:00:00Z',
@@ -330,7 +387,6 @@ describe('charting route results', () => {
     pausedSeconds: 0,
     completedAt: null,
     completedBy: null,
-    unfinishedAnsweredAt: null,
     durationMinutes: null,
     notes: '',
     discountMode: 'amount',

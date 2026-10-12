@@ -20,7 +20,7 @@ import {
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
-import { CatalogService } from '../application/catalog.service';
+import { CatalogService } from '../application/catalog/catalog.service';
 
 class ServiceItemDto extends createZodDto(serviceItemSchema) {}
 class ServiceBatchDto extends createZodDto(serviceBatchSchema) {}

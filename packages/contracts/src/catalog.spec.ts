@@ -51,7 +51,31 @@ describe('serviceItemInputSchema', () => {
       frequent: false,
       active: true,
       toothEffect: 'none',
+      addedOnVisitType: null,
+      typicalSessions: null,
     });
+  });
+
+  it('adds only a per-mouth service to a visit by itself, and never to a treatment visit', () => {
+    const perMouth = { ...service, chargeUnit: 'per_mouth' };
+    expect(
+      serviceItemInputSchema.parse({ ...perMouth, addedOnVisitType: 'hygiene' }).addedOnVisitType,
+    ).toBe('hygiene');
+    const perTooth = serviceItemInputSchema.safeParse({ ...service, addedOnVisitType: 'hygiene' });
+    expect(perTooth.success).toBe(false);
+    expect(perTooth.error?.issues[0]?.path).toEqual(['addedOnVisitType']);
+    expect(
+      serviceItemInputSchema.safeParse({ ...perMouth, addedOnVisitType: 'treatment' }).success,
+    ).toBe(false);
+  });
+
+  it('takes the usual number of sessions only when it is more than one', () => {
+    expect(serviceItemInputSchema.parse({ ...service, typicalSessions: 3 }).typicalSessions).toBe(
+      3,
+    );
+    expect(serviceItemInputSchema.safeParse({ ...service, typicalSessions: 1 }).success).toBe(
+      false,
+    );
   });
 
   it('lets only a per-tooth service change a tooth (H2)', () => {
@@ -103,6 +127,8 @@ describe('serviceItemSchema', () => {
       color: null,
       icon: null,
       markPriority: 5,
+      addedOnVisitType: null,
+      typicalSessions: null,
     };
     expect(serviceItemSchema.parse(item)).toEqual(item);
   });

@@ -12,7 +12,7 @@ import {
   type VisitAmended,
   type VisitChargeFacts,
   type VisitCompleted,
-  VisitsService,
+  VisitFactsService,
   type VisitVoided,
 } from '../../clinical';
 import { PatientsService } from '../../patients';
@@ -52,7 +52,7 @@ export class VisitChargeSubscriber {
     private readonly context: RequestContext,
     private readonly patients: PatientsService,
     private readonly tenancy: TenancyService,
-    private readonly visits: VisitsService,
+    private readonly visits: VisitFactsService,
     private readonly billing: BillingService,
     private readonly entries: LedgerEntriesRepository,
     private readonly writer: LedgerWriter,

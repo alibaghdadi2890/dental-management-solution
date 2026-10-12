@@ -28,6 +28,7 @@ import {
   type TransactionFilters,
   type TransactionPage,
   type TransactionQuery,
+  type VisitNumber,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
@@ -35,7 +36,7 @@ import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
-import { VisitsService } from '../../clinical';
+import { VisitListService } from '../../clinical';
 import { ContactsService, PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
@@ -92,7 +93,7 @@ export class PaymentViewsService {
     private readonly patients: PatientsService,
     private readonly contacts: ContactsService,
     private readonly users: UsersService,
-    private readonly visits: VisitsService,
+    private readonly visits: VisitListService,
     private readonly paymentsService: PaymentsService,
     private readonly payments: PaymentsRepository,
     private readonly allocations: AllocationsRepository,
@@ -358,12 +359,12 @@ export class PaymentViewsService {
       const pairs = await this.allocations.pairsOf([patientId]);
       const owed = outstandingByTarget(targets, pairs);
       const credit = sum(unallocatedBySource(sources, pairs).values());
-      const numbers = await this.labels.visitNumbers(targets.map((target) => target.visitId));
+      const visits = await this.labels.visitsOf(targets.map((target) => target.visitId));
 
       const openCharges: OpenCharge[] = targets
         .filter((target) => (owed.get(target.entryId) ?? 0n) > 0n)
         .sort(byAge)
-        .map((target) => this.openCharge(target, owed, numbers));
+        .map((target) => this.openCharge(target, owed, visits));
       const last = targets
         .filter((target) => target.visitId !== null && target.net > 0n)
         .sort(byAge)
@@ -387,7 +388,7 @@ export class PaymentViewsService {
           last && last.visitId
             ? {
                 visitId: last.visitId,
-                visitNumber: numbers.get(last.visitId) ?? 0,
+                visitNumber: visits.get(last.visitId)?.displayNumber ?? 0,
                 date: last.date,
                 total: fromCents(last.net),
                 paid: fromCents(last.allocated),
@@ -823,14 +824,16 @@ export class PaymentViewsService {
   private openCharge(
     target: AccountTarget,
     owed: Map<string, bigint>,
-    numbers: Map<string, number>,
+    visits: Map<string, VisitNumber>,
   ): OpenCharge {
+    const visit = target.visitId ? visits.get(target.visitId) : undefined;
     return {
       entryId: target.entryId,
       patientId: target.patientId,
       kind: target.kind,
       visitId: target.visitId,
-      visitNumber: target.visitId ? (numbers.get(target.visitId) ?? null) : null,
+      visitNumber: visit?.displayNumber ?? null,
+      visitType: visit?.type ?? null,
       date: target.date,
       charged: fromCents(target.net),
       paid: fromCents(target.allocated),

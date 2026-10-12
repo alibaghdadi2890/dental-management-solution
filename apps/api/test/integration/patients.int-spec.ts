@@ -29,6 +29,7 @@ import { newId } from '../../src/platform/kernel/id';
 import { ValidationFailedError } from '../../src/platform/kernel/validation-failed.error';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
+import { historyInput, medicalOptions } from '../support/medical-options';
 import { createTestApp, type TestApp } from '../support/test-app';
 import { asPlatformAdminIn } from '../support/tenants';
 
@@ -145,7 +146,14 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         fullName: 'Lina Aoun',
         phone: '+9613123456',
         sex: 'unknown',
-        medicalAlerts: [],
+        medicalHistory: {
+          noKnownAllergies: false,
+          allergies: [],
+          noConditions: false,
+          conditions: [],
+          medication: null,
+        },
+        firstVisitType: null,
         archivedAt: null,
         mergedIntoId: null,
       });
@@ -556,7 +564,9 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       jose = await createPatient(clinic.owner, {
         fullName: 'José Álvarez',
         phone: '03 123 456',
-        medicalAlerts: ['Penicillin'],
+        medicalHistory: historyInput({
+          allergyIds: [(await medicalOptions(clinic.owner)).id('allergy', 'Penicillin')],
+        }),
         primaryDentistId: zed.profileId,
       });
       amira = await createPatient(clinic.owner, {
@@ -1078,18 +1088,25 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect(kept.body).toMatchObject({ id: minor.id, phone: null });
     });
 
-    it('takes the chosen fields, unions the alerts and archives the dropped record', async () => {
+    it('takes the chosen fields, unions the allergies and conditions and archives the dropped record', async () => {
+      const options = await medicalOptions(main.owner);
+      const penicillin = options.id('allergy', 'Penicillin');
+      const latex = options.id('allergy', 'Latex');
       const kept = await createPatient(main.owner, {
         fullName: 'Mergetest Karim',
         phone: '71 000 030',
         address: 'Keep St',
-        medicalAlerts: ['Penicillin'],
+        medicalHistory: historyInput({ allergyIds: [penicillin], noConditions: true }),
       });
       const dropped = await createPatient(main.owner, {
         fullName: 'Mergetest Karim',
         phone: '76 000 031',
         email: 'karim@example.com',
-        medicalAlerts: ['Latex', 'penicillin'],
+        medicalHistory: historyInput({
+          allergyIds: [latex, penicillin],
+          conditionIds: [options.id('condition', 'Asthma')],
+          medication: 'Salbutamol',
+        }),
       });
 
       const response = await merge(main.owner, {
@@ -1104,7 +1121,18 @@ describe('patients: records, search, duplicates, archive and merge', () => {
         phone: '+96176000031',
         address: 'Keep St',
         email: null,
-        medicalAlerts: ['Penicillin', 'Latex'],
+        // Both records' items; "none" for conditions gives way to the dropped record's asthma,
+        // and the medication line stays the kept record's (it was not chosen).
+        medicalHistory: {
+          noKnownAllergies: false,
+          allergies: [
+            { id: latex, name: 'Latex' },
+            { id: penicillin, name: 'Penicillin' },
+          ],
+          noConditions: false,
+          conditions: [{ name: 'Asthma' }],
+          medication: null,
+        },
       });
       // The kept record is found by the phone it took over (search digits re-derived).
       expect(ids(await search(main.owner, 'q=76000031'))).toEqual([kept.id]);
@@ -1184,28 +1212,6 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       });
       const short = await merge(main.owner, { keepId: a.id, dropId: other.id, reason: 'ab' });
       expect(short.status).toBe(400);
-
-      const alerts = (prefix: string) =>
-        Array.from({ length: 12 }, (_, index) => `${prefix} ${index}`);
-      const full = await createPatient(main.owner, {
-        fullName: 'Many Alerts A',
-        phone: '71000035',
-        medicalAlerts: alerts('Allergy'),
-      });
-      const fuller = await createPatient(main.owner, {
-        fullName: 'Many Alerts B',
-        phone: '71000036',
-        medicalAlerts: alerts('Condition'),
-      });
-      const overflow = await merge(main.owner, {
-        keepId: full.id,
-        dropId: fuller.id,
-        reason: 'Same person',
-      });
-      expect(overflow.status).toBe(422);
-      expect(overflow.body).toMatchObject({ code: 'patient.merge_alerts_overflow' });
-      expect((await getPatient(main.owner, fuller.id)).archivedAt).toBeNull();
-      expect((await getPatient(main.owner, full.id)).medicalAlerts).toHaveLength(12);
     });
 
     it('lets exactly one of two conflicting concurrent merges win, without deadlock', async () => {

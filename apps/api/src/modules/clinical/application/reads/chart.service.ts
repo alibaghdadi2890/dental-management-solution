@@ -1,17 +1,15 @@
 import {
   ageOn,
   type CatalogMark,
-  type ClinicalSummary,
-  currentPresence,
   deriveChart,
   type DiagnosisRecord,
   effectiveDentition,
+  type FileCitation,
   type HistoryService,
   type LastVisit,
+  type LastVisitQuery,
   type PatientChart,
-  PERMANENT_CODES,
-  type PlanGroup,
-  PRIMARY_CODES,
+  type PatientHistoryConfirmation,
   toothCodeSchema,
   type ToothCode,
   type ToothHistory,
@@ -19,31 +17,29 @@ import {
   type TreatmentPlan,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
-import { CLOCK } from '../../../platform/clock/clock.module';
-import { RequestContext } from '../../../platform/cls/request-context';
-import { TenantDb } from '../../../platform/db/tenant-db';
-import type { Clock } from '../../../platform/kernel/clock';
-import { localDate } from '../../../platform/kernel/local-date';
-import { PatientsService } from '../../patients';
-import { TenancyService } from '../../tenancy';
-import { UsersService } from '../../users';
-import { DiagnosesRepository } from '../persistence/diagnoses.repository';
-import { PatientDiagnosesRepository } from '../persistence/patient-diagnoses.repository';
-import { PlanGroupsRepository } from '../persistence/plan-groups.repository';
-import { PlanSessionsRepository } from '../persistence/plan-sessions.repository';
-import { ProceduresRepository } from '../persistence/procedures.repository';
-import { ToothPresenceRepository } from '../persistence/tooth-presence.repository';
-import { TreatmentPlansRepository } from '../persistence/treatment-plans.repository';
-import { VisitServicesRepository } from '../persistence/visit-services.repository';
-import { VisitsRepository } from '../persistence/visits.repository';
+import { CLOCK } from '../../../../platform/clock/clock.module';
+import { RequestContext } from '../../../../platform/cls/request-context';
+import { TenantDb } from '../../../../platform/db/tenant-db';
+import type { Clock } from '../../../../platform/kernel/clock';
+import { localDate } from '../../../../platform/kernel/local-date';
+import { PatientsService } from '../../../patients';
+import { TenancyService } from '../../../tenancy';
+import { UsersService } from '../../../users';
+import { DiagnosesRepository } from '../../persistence/diagnoses.repository';
+import { PatientDiagnosesRepository } from '../../persistence/patient-diagnoses.repository';
+import { PlanSessionsRepository } from '../../persistence/plan-sessions.repository';
+import { ProceduresRepository } from '../../persistence/procedures.repository';
+import { ToothPresenceRepository } from '../../persistence/tooth-presence.repository';
+import { TreatmentPlansRepository } from '../../persistence/treatment-plans.repository';
+import { VisitServicesRepository } from '../../persistence/visit-services.repository';
+import { VisitsRepository } from '../../persistence/visits.repository';
 import {
   toDiagnosisRecord,
   toHistoryService,
-  toPlanGroup,
   toPresenceRecord,
   toTreatmentPlan,
-} from './record-mapping';
-import { toVisitService } from './visit-mapping';
+} from '../records/record-mapping';
+import { toVisitService } from '../visits/visit-mapping';
 
 /** A patient's presence rows, diagnoses, plans and finished services, with the dentists' names
  * resolved, and which of the patient's visits were voided (D6). */
@@ -56,8 +52,8 @@ interface Records {
 }
 
 /**
- * A patient's clinical record as the chart, the tooth history, the Last visit card and the
- * treatment summary read it (docs/modules/clinical.md, spec §ChartService). Everything needs
+ * A patient's clinical record as the chart, the tooth history, the Last visit card, the record
+ * header and the image viewer read it (docs/modules/clinical.md, spec §ChartService). Everything needs
  * `visit:read` and runs in one `TenantDb` transaction; the patient comes from `PatientsService`,
  * so an unknown one (another tenant's included) is 404 `patient.not_found`. Records that were
  * removed never appear; history is the services of completed, amended and voided visits — a voided
@@ -77,7 +73,6 @@ export class ChartService {
     private readonly services: VisitServicesRepository,
     private readonly diagnoses: PatientDiagnosesRepository,
     private readonly plans: TreatmentPlansRepository,
-    private readonly groups: PlanGroupsRepository,
     private readonly sessions: PlanSessionsRepository,
     private readonly presences: ToothPresenceRepository,
     private readonly procedureCatalog: ProceduresRepository,
@@ -103,9 +98,6 @@ export class ChartService {
       const ageYears =
         patient.dateOfBirth === null ? null : Math.max(0, ageOn(patient.dateOfBirth, today));
       const { voidedVisitIds, ...records } = await this.records(patient.id, timeZone);
-      const planGroups: PlanGroup[] = (await this.groups.listForPatient(patient.id)).map(
-        toPlanGroup,
-      );
       const liveVisit = (await this.visits.liveRefs({ patientId: patient.id })).at(-1);
       const liveServices = liveVisit
         ? (await this.services.listForVisit(liveVisit.id)).map((service) =>
@@ -126,7 +118,6 @@ export class ChartService {
       return {
         dentition: { ...effectiveDentition(ageYears, patient.dentitionOverride), ageYears },
         ...records,
-        planGroups,
         liveVisitId: liveVisit?.id ?? null,
         voidedVisitIds,
         teeth: [
@@ -169,10 +160,11 @@ export class ChartService {
    * The most recently completed visit, amended or not (the Last visit card, D18), or null: its local date, dentist,
    * duration, frozen total and the services that weren't removed, as chips.
    */
-  lastVisit(patientId: string): Promise<LastVisit> {
+  lastVisit(patientId: string, query: LastVisitQuery = {}): Promise<LastVisit> {
     return this.read(async () => {
       const patient = await this.patients.get(patientId);
-      const visit = await this.visits.latestCompleted(patient.id);
+      // Of one type when asked: the Hygiene step's "Last hygiene visit" (feature 10, V9).
+      const visit = await this.visits.latestCompleted(patient.id, query.type);
       if (!visit) return null;
       const { durationMinutes, total } = visit;
       // `visits_completed_fields`: a completed visit has its duration and money.
@@ -183,6 +175,9 @@ export class ChartService {
       const names = await this.dentistNames([visit.dentistId]);
       return {
         id: visit.id,
+        displayNumber: visit.displayNumber,
+        type: visit.type,
+        reason: visit.reason,
         date: visit.localDate,
         dentistName: names.get(visit.dentistId) ?? '',
         durationMinutes,
@@ -198,35 +193,49 @@ export class ChartService {
   }
 
   /**
-   * The Record overview's treatment counts (W8), with the missing teeth and implants among the
-   * teeth of the chart the patient is on (feature 7, D8): an adult's long-gone primary molar is
-   * not a missing tooth.
+   * The last time a dentist confirmed the patient's medical history with them, in a visit
+   * (ADR-0046); null when none ever did: the record then reads "not confirmed".
    */
-  summary(patientId: string): Promise<ClinicalSummary> {
+  historyConfirmation(patientId: string): Promise<PatientHistoryConfirmation> {
     return this.read(async () => {
       const patient = await this.patients.get(patientId);
-      const { timeZone } = await this.tenancy.currentTenant();
-      const today = localDate(this.clock.now(), timeZone);
-      const ageYears =
-        patient.dateOfBirth === null ? null : Math.max(0, ageOn(patient.dateOfBirth, today));
-      const { stage } = effectiveDentition(ageYears, patient.dentitionOverride);
-      const onChart: ReadonlySet<string> = new Set(
-        stage === 'primary' ? PRIMARY_CODES : PERMANENT_CODES,
-      );
-      const states = [
-        ...currentPresence(
-          (await this.presences.listForPatient(patient.id)).map(({ row }) => ({
-            toothCode: toothCodeSchema.parse(row.toothCode),
-            presence: row.presence,
-          })),
-        ),
-      ].filter(([code]) => onChart.has(code));
-      const count = (presence: string) => states.filter(([, state]) => state === presence).length;
+      const visit = await this.visits.latestHistoryConfirmation(patient.id);
+      if (!visit?.historyConfirmedAt || !visit.historyConfirmedBy) return { confirmation: null };
+      const names = await this.users.namesByUserIds([visit.historyConfirmedBy]);
       return {
-        ...(await this.visits.clinicalSummary(patient.id)),
-        missingTeeth: count('missing'),
-        implants: count('implant'),
+        confirmation: {
+          at: visit.historyConfirmedAt.toISOString(),
+          byName: names.get(visit.historyConfirmedBy) ?? '',
+          visitId: visit.id,
+        },
       };
+    });
+  }
+
+  /**
+   * Per file, the patient's diagnoses that were seen on it (ADR-0049), resolved ones included,
+   * for the image viewer. Files no diagnosis cites are absent.
+   */
+  fileCitations(patientId: string): Promise<FileCitation[]> {
+    return this.read(async () => {
+      const patient = await this.patients.get(patientId);
+      const byFile = new Map<string, FileCitation>();
+      for (const record of await this.diagnoses.citingFiles(patient.id)) {
+        if (record.seenOnFileId === null) continue;
+        const citation = byFile.get(record.seenOnFileId) ?? {
+          fileId: record.seenOnFileId,
+          diagnoses: [],
+        };
+        citation.diagnoses.push({
+          recordId: record.id,
+          // The table's CHECK admits exactly the contract's tooth codes.
+          toothCode: toothCodeSchema.parse(record.toothCode),
+          name: record.name,
+          status: record.status,
+        });
+        byFile.set(record.seenOnFileId, citation);
+      }
+      return [...byFile.values()];
     });
   }
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { RecordNotFoundError } from '../domain/visit-errors';
 import { treatmentPlans } from './schema';
@@ -23,20 +23,24 @@ export type NewTreatmentPlan = Pick<
   | 'priceAmount'
   | 'priceCurrency'
   | 'diagnosisRecordId'
+  | 'priority'
+  | 'estimatedSessions'
   | 'note'
   | 'dentistId'
   | 'recordedBy'
   | 'recordedInVisitId'
   | 'recordedAt'
-  | 'groupId'
 >;
 
-/** Start (and its undo), perform (and its undo), cancel, a move between named plans, a note edit
- * or the soft delete. */
+/** Start (and its undo), perform (and its undo), cancel, the priority, the patient's acceptance,
+ * a note edit or the soft delete. */
 export type TreatmentPlanPatch = Partial<
   Pick<
     StoredTreatmentPlan,
     | 'status'
+    | 'priority'
+    | 'acceptedAt'
+    | 'acceptedBy'
     | 'priceAmount'
     | 'startedInVisitId'
     | 'startedAt'
@@ -44,7 +48,6 @@ export type TreatmentPlanPatch = Partial<
     | 'performedAt'
     | 'cancelledInVisitId'
     | 'cancelledAt'
-    | 'groupId'
     | 'note'
     | 'deletedAt'
   >
@@ -110,6 +113,25 @@ export class TreatmentPlansRepository {
     );
   }
 
+  /** The patient's open plans (planned or in progress), in the order they were recorded. */
+  listOpenForPatient(patientId: string): Promise<StoredTreatmentPlan[]> {
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(treatmentPlans)
+          .where(
+            and(
+              eq(treatmentPlans.patientId, patientId),
+              inArray(treatmentPlans.status, ['planned', 'in_progress']),
+              isNull(treatmentPlans.deletedAt),
+            ),
+          )
+          .orderBy(asc(treatmentPlans.recordedAt), asc(treatmentPlans.id))
+      ).map(toStored),
+    );
+  }
+
   async update(id: string, patch: TreatmentPlanPatch): Promise<StoredTreatmentPlan> {
     const [row] = await this.db.run((tx) =>
       tx.update(treatmentPlans).set(patch).where(eq(treatmentPlans.id, id)).returning(),
@@ -131,21 +153,6 @@ export class TreatmentPlansRepository {
         .returning({ id: treatmentPlans.id }),
     );
     return rows.length;
-  }
-
-  /**
-   * Takes the patient's plans out of a named plan being removed (removed plans included, so none
-   * points at it); returns the ids of the plans that were in it.
-   */
-  async ungroup(patientId: string, groupId: string): Promise<string[]> {
-    const rows = await this.db.run((tx) =>
-      tx
-        .update(treatmentPlans)
-        .set({ groupId: null })
-        .where(and(eq(treatmentPlans.patientId, patientId), eq(treatmentPlans.groupId, groupId)))
-        .returning({ id: treatmentPlans.id }),
-    );
-    return rows.map((row) => row.id);
   }
 
   /**

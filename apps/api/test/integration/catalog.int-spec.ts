@@ -96,7 +96,7 @@ describe('clinical: service and diagnosis catalogs', () => {
   describe('default template', () => {
     it('is seeded on provisioning, in POC order, in the tenant currency, by the system', async () => {
       const seeded = await services();
-      expect(seeded).toHaveLength(13);
+      expect(seeded).toHaveLength(17);
       expect(seeded.map((item) => item.code).slice(0, 4)).toEqual(['EXT', 'CLT', 'PARO', 'PARX']);
       expect(seeded[0]).toMatchObject({
         name: 'Extraction',
@@ -113,7 +113,7 @@ describe('clinical: service and diagnosis catalogs', () => {
       expect(dx[0]).toMatchObject({ code: 'DX-CAR', name: 'Dental caries', frequent: true });
 
       const created = await auditOf('resourceType=procedure');
-      expect(created.filter((entry) => entry.action === 'catalog.service.create')).toHaveLength(13);
+      expect(created.filter((entry) => entry.action === 'catalog.service.create')).toHaveLength(17);
       expect(created[0]).toMatchObject({ actorKind: 'system', actorPlatformAdmin: false });
     });
 
@@ -121,7 +121,7 @@ describe('clinical: service and diagnosis catalogs', () => {
       const response = await api.post('/catalog/seed-default');
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ services: 0, diagnoses: 0 } satisfies CatalogSeedResult);
-      expect(await services()).toHaveLength(13);
+      expect(await services()).toHaveLength(17);
     });
 
     it('seeds a tenant whose catalogs are empty', async () => {
@@ -139,8 +139,8 @@ describe('clinical: service and diagnosis catalogs', () => {
       }
 
       const seeded = await inOther.post('/catalog/seed-default');
-      expect(seeded.body).toEqual({ services: 13, diagnoses: 14 });
-      expect((await inOther.get('/catalog/services')).body).toHaveLength(13);
+      expect(seeded.body).toEqual({ services: 17, diagnoses: 14 });
+      expect((await inOther.get('/catalog/services')).body).toHaveLength(17);
     });
   });
 
@@ -161,7 +161,7 @@ describe('clinical: service and diagnosis catalogs', () => {
       });
       expect(response.status).toBe(200);
       const saved = response.body as ServiceItem[];
-      expect(saved).toHaveLength(14);
+      expect(saved).toHaveLength(18);
       expect(saved.at(-1)).toMatchObject({
         code: 'IMPL',
         name: 'Implant consult',
@@ -422,9 +422,9 @@ describe('clinical: service and diagnosis catalogs', () => {
       const patientId = newId();
       await database.ownerPool.query(
         `insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
-                             started_by, status, local_date, started_at, currency)
+                             started_by, type, current_step, status, local_date, started_at, currency)
          values ($1, $2, (select coalesce(max(display_number), 0) + 1 from visits where tenant_id = $2),
-                 $3, $4, $5, $6, 'in_progress', '2026-06-10', now(), 'USD')`,
+                 $3, $4, $5, $6, 'treatment', 'today', 'in_progress', '2026-06-10', now(), 'USD')`,
         [visitId, tenant.id, patientId, newId(), newId(), newId()],
       );
       const paro = await service('PARO');
@@ -445,8 +445,8 @@ describe('clinical: service and diagnosis catalogs', () => {
       await database.ownerPool.query(
         `insert into treatment_plans (id, tenant_id, patient_id, tooth_code, procedure_id, code, name,
                                       charge_unit, price_amount, price_currency, dentist_id,
-                                      recorded_by, recorded_in_visit_id, recorded_at)
-         values ($1, $2, $3, '16', $4, $5, $6, 'per_tooth', 250, 'USD', $7, $8, $9, now())`,
+                                      recorded_by, recorded_in_visit_id, recorded_at, priority)
+         values ($1, $2, $3, '16', $4, $5, $6, 'per_tooth', 250, 'USD', $7, $8, $9, now(), 'high')`,
         [newId(), tenant.id, patientId, mcc.id, mcc.code, mcc.name, newId(), recordedBy, visitId],
       );
       await database.ownerPool.query(
@@ -492,9 +492,9 @@ describe('clinical: service and diagnosis catalogs', () => {
       const visitId = newId();
       await database.ownerPool.query(
         `insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
-                             started_by, status, local_date, started_at, currency)
+                             started_by, type, current_step, status, local_date, started_at, currency)
          values ($1, $2, (select coalesce(max(display_number), 0) + 1 from visits where tenant_id = $2),
-                 $3, $4, $5, $6, 'in_progress', '2026-06-10', now(), 'USD')`,
+                 $3, $4, $5, $6, 'treatment', 'today', 'in_progress', '2026-06-10', now(), 'USD')`,
         [visitId, tenant.id, newId(), newId(), newId(), newId()],
       );
 

@@ -102,7 +102,7 @@ describe('billing: payments, refunds, voids and credit (feature 5)', () => {
     const { visit } = await ok<StartVisitResult>(
       dentist.agent
         .post('/api/v1/visits')
-        .send({ patientId: patient.id, dentistId: dentist.user.profileId }),
+        .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId }),
       201,
     );
     const added = await ok<ServiceResult>(

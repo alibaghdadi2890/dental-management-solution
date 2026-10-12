@@ -16,7 +16,7 @@ import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
-import { VisitsService } from '../../clinical';
+import { VisitListService } from '../../clinical';
 import { TenancyService } from '../../tenancy';
 import { csvRow, UTF8_BOM } from '../domain/csv';
 import { AllocationsRepository } from '../persistence/allocations.repository';
@@ -111,9 +111,9 @@ export interface VisitExport {
 
 /**
  * The Visits screen's views that need the ledger (4b, spec §Backend — billing), composed on
- * `VisitsService` like the patient views: the *Unpaid* tab (visits whose entries still sum above
+ * `VisitListService` like the patient views: the *Unpaid* tab (visits whose entries still sum above
  * what is paid, `idsIn`), its summary, and the CSV export of any tab. Every method requires
- * `payment:read`; `VisitsService` re-checks `visit:read`.
+ * `payment:read`; `VisitListService` re-checks `visit:read`.
  */
 @Injectable()
 export class VisitViewsService {
@@ -121,7 +121,7 @@ export class VisitViewsService {
     private readonly context: RequestContext,
     private readonly tenantDb: TenantDb,
     private readonly tenancy: TenancyService,
-    private readonly visits: VisitsService,
+    private readonly visits: VisitListService,
     private readonly entries: LedgerEntriesRepository,
     private readonly allocations: AllocationsRepository,
     @Inject(CLOCK) private readonly clock: Clock,

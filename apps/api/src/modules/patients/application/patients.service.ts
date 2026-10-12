@@ -3,6 +3,7 @@ import {
   type DentitionOverride,
   type DuplicateCheckQuery,
   type DuplicateGroup,
+  type MedicalHistoryInput,
   type Patient,
   type PatientArchive,
   type PatientCounts,
@@ -32,6 +33,7 @@ import { dentistRank } from '../domain/dentist-rank';
 import { formatDisplayNumber } from '../domain/display-number';
 import type { PatientRankKeys } from '../domain/rank-keys';
 import { groupDuplicates } from '../domain/duplicates';
+import { historyIssues, type StoredMedicalHistory } from '../domain/medical-history';
 import { resolveMerge } from '../domain/merge';
 import type { DomainPatient } from '../domain/patient';
 import {
@@ -54,6 +56,7 @@ import {
   type PatientsMerged,
   type PatientUpdated,
 } from '../events/patient-events';
+import { MedicalOptionsRepository } from '../persistence/medical-options.repository';
 import { PatientCountersRepository } from '../persistence/patient-counters.repository';
 import {
   type PatientRank,
@@ -115,6 +118,7 @@ export class PatientsService {
     private readonly users: UsersService,
     private readonly patients: PatientsRepository,
     private readonly counters: PatientCountersRepository,
+    private readonly medicalOptions: MedicalOptionsRepository,
     private readonly contactLinks: ContactLinks,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -157,6 +161,7 @@ export class PatientsService {
       if (input.primaryDentistId !== null) {
         await this.assertActiveDentist(input.primaryDentistId);
       }
+      await this.assertHistory(input.medicalHistory, null);
       const displayNumber = formatDisplayNumber(await this.counters.nextValue());
       const created = toPatient(
         await this.patients.insert({
@@ -169,7 +174,8 @@ export class PatientsService {
           address: input.address,
           insurance: input.insurance,
           notes: input.notes,
-          medicalAlerts: input.medicalAlerts,
+          medicalHistory: input.medicalHistory,
+          firstVisitType: input.firstVisitType,
           primaryDentistId: input.primaryDentistId,
           // The import key is set only by the import (feature 6).
           externalId: null,
@@ -193,7 +199,8 @@ export class PatientsService {
    * Changes only the fields whose stored value differs; a patch that changes nothing writes,
    * audits and emits nothing. A dentist kept from before may be inactive; a newly chosen one must
    * be an active practitioner. The phone rule is re-checked when the patch touches the phone or
-   * the date of birth (`normalizeFields`).
+   * the date of birth (`normalizeFields`). A medical history is stored whole: its items must be
+   * options of the clinic's lists, and an inactive one only if the patient already has it.
    */
   async update(id: string, patch: PatientPatch): Promise<Patient> {
     this.context.requirePermission('patient:write');
@@ -209,6 +216,8 @@ export class PatientsService {
       if (dentist !== undefined && dentist !== null && dentist !== before.primaryDentistId) {
         await this.assertActiveDentist(dentist);
       }
+      if (patch.medicalHistory !== undefined)
+        await this.assertHistory(patch.medicalHistory, before);
 
       const { set, fields } = changesOf(before, patch, normalized);
       if (fields.length === 0) return toPatient(before);
@@ -440,7 +449,8 @@ export class PatientsService {
 
   /**
    * One transaction with both rows locked in id order (no deadlock between overlapping merges).
-   * The kept record takes the chosen fields and the union of alerts; the dropped one is archived
+   * The kept record takes the chosen fields and the union of both records' allergies and
+   * conditions (ADR-0046); the dropped one is archived
    * with `mergedIntoId`. Its contacts move to the kept record and the contacts that are either
    * record are re-pointed or folded (addendum C8; `ContactLinks.mergeContacts`). Returns the kept
    * record.
@@ -471,7 +481,7 @@ export class PatientsService {
       const tenant = await this.tenancy.currentTenant();
       const patch = resolveMerge(kept, dropped, input.fieldChoices);
       assertMergePhoneRule(kept, patch, this.today(tenant));
-      const set = mergeSet(patch, tenant.country);
+      const set = mergeSet(kept, patch, tenant.country);
       const keptAfter =
         Object.keys(set).length === 0 ? kept : await this.patients.update(kept.id, set);
       if (!keptAfter) throw new PatientNotFoundError(NOT_FOUND);
@@ -522,6 +532,22 @@ export class PatientsService {
     const practitioners = await this.users.listPractitioners();
     if (!practitioners.some((practitioner) => practitioner.id === profileId)) {
       throw new UnknownDentistError('The primary dentist is not an active dentist of this clinic');
+    }
+  }
+
+  /** Every item of `history` is an option of its list (422 `validation_failed` otherwise). */
+  private async assertHistory(
+    history: MedicalHistoryInput,
+    before: StoredMedicalHistory | null,
+  ): Promise<void> {
+    // Held until the history is written: an option cannot be deleted under it.
+    const known = await this.medicalOptions.shareByIds([
+      ...history.allergyIds,
+      ...history.conditionIds,
+    ]);
+    const issues = historyIssues(history, known, before);
+    if (issues.length > 0) {
+      throw new ValidationFailedError('The medical history names an unknown item', issues);
     }
   }
 

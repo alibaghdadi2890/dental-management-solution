@@ -17,7 +17,7 @@ import { nameKey } from '../domain/name-key';
 import type { MatchedContactSummary } from '../domain/patient';
 import type { PatientRankKeys } from '../domain/rank-keys';
 import { joinLinkedPatient, resolvedFullName, resolvedPhoneSearch } from './contact-resolution.sql';
-import { contacts, patientContacts, patients } from './schema';
+import { contacts, patientContacts, patientMedicalItems, patients } from './schema';
 
 /** `active`/`notSeen` map to `deleted_at is null`; `notSeen` is narrowed by the caller's
  * `idsNotIn` (the patients `clinical` saw lately, feature 4b). */
@@ -201,10 +201,12 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
   if (filters.dobAfter) conditions.push(gt(patients.dateOfBirth, filters.dobAfter));
   if (filters.dobOnOrBefore) conditions.push(lte(patients.dateOfBirth, filters.dobOnOrBefore));
 
+  // An alert is an allergy or a condition the patient has (feature 10).
+  const hasAlert = sql`exists (select 1 from ${patientMedicalItems} where ${patientMedicalItems.patientId} = ${patients.id})`;
   if (filters.alerts === 'yes') {
-    conditions.push(sql`cardinality(${patients.medicalAlerts}) > 0`);
+    conditions.push(hasAlert);
   } else if (filters.alerts === 'no') {
-    conditions.push(sql`cardinality(${patients.medicalAlerts}) = 0`);
+    conditions.push(sql`not ${hasAlert}`);
   }
 
   if (idsIn) conditions.push(idAmong(patients.id, idsIn));

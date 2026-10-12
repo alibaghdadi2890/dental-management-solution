@@ -75,6 +75,13 @@ export class RecordDentistRequiredError extends DomainError {
   readonly kind = 'invalid';
 }
 
+/** A visit sets the priority only of a plan made in it; an older one is prioritised on the
+ * patient's treatment plan (ADR-0045). */
+export class PlanNotOfVisitError extends DomainError {
+  readonly code = 'plan.not_of_visit';
+  readonly kind = 'conflict';
+}
+
 /** Starting, performing, cancelling or removing a plan in a status that doesn't allow it. */
 export class PlanNotOpenError extends DomainError {
   readonly code = 'plan.not_open';
@@ -90,6 +97,48 @@ export class PlanNotInProgressError extends DomainError {
 /** Cancel is for plans from an earlier visit; a plan made in this visit is removed (W13). */
 export class PlanNotCancellableError extends DomainError {
   readonly code = 'plan.not_cancellable';
+  readonly kind = 'conflict';
+}
+
+/** Only a treatment visit takes planned work on at start (feature 10, ADR-0048). */
+export class VisitPlansNotAllowedError extends DomainError {
+  readonly code = 'visit.plans_not_allowed';
+  readonly kind = 'invalid';
+}
+
+/** A plan picked at start is not one of the patient's open plans. */
+export class VisitPlanInvalidError extends DomainError {
+  readonly code = 'visit.plan_invalid';
+  readonly kind = 'invalid';
+}
+
+/** The step is not one a visit of this type ever shows (ADR-0044). */
+export class VisitStepInvalidError extends DomainError {
+  readonly code = 'visit.step_invalid';
+  readonly kind = 'invalid';
+}
+
+/** A pain score and a "since" belong to an emergency visit. */
+export class ComplaintNotAllowedError extends DomainError {
+  readonly code = 'visit.complaint_not_allowed';
+  readonly kind = 'invalid';
+}
+
+/** The image a diagnosis was seen on is not one of this patient's files (ADR-0049). */
+export class EvidenceInvalidError extends DomainError {
+  readonly code = 'record.evidence_invalid';
+  readonly kind = 'invalid';
+}
+
+/** The diagnosis a plan is for is not the patient's active diagnosis on that tooth. */
+export class DiagnosisLinkInvalidError extends DomainError {
+  readonly code = 'record.diagnosis_link_invalid';
+  readonly kind = 'invalid';
+}
+
+/** Acceptance is withdrawn only while the plan is still planned: work begun was agreed to. */
+export class PlanAcceptanceLockedError extends DomainError {
+  readonly code = 'plan.acceptance_locked';
   readonly kind = 'conflict';
 }
 

@@ -1,8 +1,9 @@
-import { MEDICAL_ALERTS_MAX } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
-import { MergeAlertsOverflowError } from './patient-errors';
 import type { DomainPatient } from './patient';
 import { resolveMerge } from './merge';
+
+const PENICILLIN = { id: 'penicillin', name: 'Penicillin' };
+const LATEX = { id: 'latex', name: 'Latex' };
 
 function patient(overrides: Partial<DomainPatient> = {}): DomainPatient {
   return {
@@ -18,7 +19,12 @@ function patient(overrides: Partial<DomainPatient> = {}): DomainPatient {
     address: 'Kept Addr',
     insurance: 'Kept Ins',
     notes: 'Kept notes',
-    medicalAlerts: ['Penicillin'],
+    noKnownAllergies: false,
+    allergies: [PENICILLIN],
+    noConditions: false,
+    conditions: [],
+    medication: null,
+    firstVisitType: null,
     primaryDentistId: 'dentist-1',
     dentitionOverride: null,
     externalId: null,
@@ -43,21 +49,36 @@ const dropped = patient({
   address: 'Dropped Addr',
   insurance: 'Dropped Ins',
   notes: 'Dropped notes',
-  medicalAlerts: ['penicillin', 'Latex'],
+  allergies: [PENICILLIN, LATEX],
+  medication: 'Warfarin',
   primaryDentistId: 'dentist-2',
 });
 
 describe('resolveMerge', () => {
-  it('keeps every field by default, still unioning the alerts', () => {
+  const UNION = {
+    noKnownAllergies: false,
+    allergyIds: ['penicillin', 'latex'],
+    noConditions: false,
+    conditionIds: [],
+  };
+
+  it('keeps every field by default, still unioning the allergies and conditions', () => {
     const kept = patient();
     const patch = resolveMerge(kept, dropped, {});
-    expect(patch).toEqual({ medicalAlerts: ['Penicillin', 'Latex'] });
+    expect(patch).toEqual({ medicalItems: UNION });
+  });
+
+  it('picks the medication line like any other field', () => {
+    expect(resolveMerge(patient(), dropped, { medication: 'drop' })).toMatchObject({
+      medication: 'Warfarin',
+    });
+    expect(resolveMerge(patient(), dropped, {}).medication).toBeUndefined();
   });
 
   it('takes a field from the dropped record when chosen', () => {
     const kept = patient();
     const patch = resolveMerge(kept, dropped, { fullName: 'drop' });
-    expect(patch).toEqual({ fullName: 'Dropped Name', medicalAlerts: ['Penicillin', 'Latex'] });
+    expect(patch).toEqual({ fullName: 'Dropped Name', medicalItems: UNION });
   });
 
   it('resolves every scalar field independently', () => {
@@ -100,35 +121,9 @@ describe('resolveMerge', () => {
     expect(resolveMerge(kept, same, { phone: 'drop', primaryDentistId: 'drop' })).toEqual({});
   });
 
-  it('unions medical alerts case-insensitively, kept first then dropped, never as a choice', () => {
-    const kept = patient({ medicalAlerts: ['Penicillin', 'Latex'] });
-    const droppedAlerts = patient({
-      id: 'dropped-id',
-      medicalAlerts: ['LATEX', 'Nut allergy', 'penicillin'],
-    });
-    const patch = resolveMerge(kept, droppedAlerts, {});
-    expect(patch.medicalAlerts).toEqual(['Penicillin', 'Latex', 'Nut allergy']);
-  });
-
-  it('throws MergeAlertsOverflowError instead of truncating when the union exceeds the cap', () => {
-    const keptAlerts = Array.from({ length: MEDICAL_ALERTS_MAX }, (_, i) => `Kept-${i}`);
-    const droppedAlerts = patient({ id: 'dropped-id', medicalAlerts: ['One more allergy'] });
-    const kept = patient({ medicalAlerts: keptAlerts });
-    expect(() => resolveMerge(kept, droppedAlerts, {})).toThrow(MergeAlertsOverflowError);
-  });
-
-  it('does not throw when the union is exactly at the cap', () => {
-    const keptAlerts = Array.from({ length: MEDICAL_ALERTS_MAX - 1 }, (_, i) => `Kept-${i}`);
-    const droppedAlerts = patient({ id: 'dropped-id', medicalAlerts: ['One more allergy'] });
-    const kept = patient({ medicalAlerts: keptAlerts });
-    const patch = resolveMerge(kept, droppedAlerts, {});
-    expect(patch.medicalAlerts).toHaveLength(MEDICAL_ALERTS_MAX);
-  });
-
-  it('omits medicalAlerts from the patch when the union equals the kept alerts', () => {
-    const kept = patient({ medicalAlerts: ['Penicillin'] });
-    const droppedSameAlerts = patient({ id: 'dropped-id', medicalAlerts: ['penicillin'] });
-    const patch = resolveMerge(kept, droppedSameAlerts, {});
-    expect(patch.medicalAlerts).toBeUndefined();
+  it('omits the medical items from the patch when the kept record already has them all', () => {
+    const kept = patient({ allergies: [PENICILLIN, LATEX] });
+    const patch = resolveMerge(kept, patient({ id: 'dropped-id', allergies: [LATEX] }), {});
+    expect(patch.medicalItems).toBeUndefined();
   });
 });

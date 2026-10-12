@@ -1,4 +1,4 @@
-import { COUNTED_VISIT_STATUSES, type ClinicalSummary } from '@dcm/contracts';
+import { COUNTED_VISIT_STATUSES, type VisitType } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import {
   and,
@@ -43,6 +43,9 @@ export type NewVisit = Pick<
   | 'roomId'
   | 'dentistId'
   | 'startedBy'
+  | 'type'
+  | 'currentStep'
+  | 'reason'
   | 'localDate'
   | 'startedAt'
   | 'currency'
@@ -54,11 +57,18 @@ export type VisitRef = Pick<
   'patientId' | 'displayNumber' | 'localDate' | 'startedAt' | 'status'
 > & { visitId: string };
 
-/** The fields the lifecycle, notes and discount change. */
+/** The fields the lifecycle, the flow, notes and discount change. */
 export type VisitPatch = Partial<
   Pick<
     StoredVisit,
     | 'status'
+    | 'currentStep'
+    | 'viewMode'
+    | 'reason'
+    | 'painScore'
+    | 'painSince'
+    | 'historyConfirmedAt'
+    | 'historyConfirmedBy'
     | 'pausedAt'
     | 'pausedSeconds'
     | 'notes'
@@ -71,7 +81,6 @@ export type VisitPatch = Partial<
     | 'voidReason'
     | 'completedAt'
     | 'completedBy'
-    | 'unfinishedAnsweredAt'
     | 'checkedOutAt'
     | 'checkedOutBy'
     | 'durationMinutes'
@@ -94,12 +103,6 @@ function toStored({ tenantId: _tenantId, ...visit }: VisitRow): StoredVisit {
 
 const live = inArray(visits.status, [...LIVE_VISIT_STATUSES]);
 const counted = inArray(visits.status, [...COUNTED_VISIT_STATUSES]);
-const COUNTED_STATUS_LIST = sql.raw(
-  `(${COUNTED_VISIT_STATUSES.map((status) => `'${status}'`).join(', ')})`,
-);
-
-/** The counts of the treatment summary that one query over visits and records answers. */
-export type ClinicalCounts = Omit<ClinicalSummary, 'missingTeeth' | 'implants'>;
 
 /**
  * The tenant's `visits` (RLS through `TenantDb`; `tenant_id` is never passed — CLAUDE.md §5). The
@@ -111,10 +114,10 @@ export type ClinicalCounts = Omit<ClinicalSummary, 'missingTeeth' | 'implants'>;
 export class VisitsRepository {
   constructor(private readonly db: TenantDb) {}
 
-  /** Display numbers and local dates of `ids` (any status), in no particular order. */
+  /** Display numbers, local dates and types of `ids` (any status), in no particular order. */
   numbersFor(
     ids: readonly string[],
-  ): Promise<{ visitId: string; displayNumber: number; localDate: string }[]> {
+  ): Promise<{ visitId: string; displayNumber: number; localDate: string; type: VisitType }[]> {
     if (ids.length === 0) return Promise.resolve([]);
     return this.db.run((tx) =>
       tx
@@ -122,6 +125,7 @@ export class VisitsRepository {
           visitId: visits.id,
           displayNumber: visits.displayNumber,
           localDate: visits.localDate,
+          type: visits.type,
         })
         .from(visits)
         .where(inArray(visits.id, [...ids])),
@@ -327,46 +331,59 @@ export class VisitsRepository {
     );
   }
 
-  /** The patient's most recently completed visit (amended since or not, D18), or undefined. */
-  async latestCompleted(patientId: string): Promise<StoredVisit | undefined> {
+  /**
+   * The patient's most recently completed visit (amended since or not, D18), of `type` when
+   * given ("Last hygiene visit"), or undefined.
+   */
+  async latestCompleted(patientId: string, type?: VisitType): Promise<StoredVisit | undefined> {
     const [row] = await this.db.run((tx) =>
       tx
         .select()
         .from(visits)
-        .where(and(eq(visits.patientId, patientId), counted))
+        .where(
+          and(
+            eq(visits.patientId, patientId),
+            counted,
+            type === undefined ? undefined : eq(visits.type, type),
+          ),
+        )
         .orderBy(desc(visits.completedAt), desc(visits.id))
         .limit(1),
     );
     return row && toStored(row);
   }
 
-  /**
-   * The Record overview's treatment counts (W8) in one query of scalar subqueries: counted
-   * visits (completed or amended, never voided — D18); active diagnoses and `planned` plans that aren't removed; and, over the services of
-   * counted visits that aren't removed, the distinct teeth and the number of services. The
-   * missing teeth and implants come from the presence rows (`ChartService.summary`).
-   */
-  async clinicalSummary(patientId: string): Promise<ClinicalCounts> {
-    const completedServices = sql`from ${visitServices} join ${visits} on ${visits.id} = ${visitServices.visitId} where ${visits.patientId} = ${patientId} and ${visits.status} in ${COUNTED_STATUS_LIST} and ${isNull(visitServices.deletedAt)}`;
-    const counts = {
-      visits: sql`select count(*) from ${visits} where ${visits.patientId} = ${patientId} and ${visits.status} in ${COUNTED_STATUS_LIST}`,
-      activeDiagnoses: sql`select count(*) from ${patientDiagnoses} where ${patientDiagnoses.patientId} = ${patientId} and ${patientDiagnoses.status} = 'active' and ${isNull(patientDiagnoses.deletedAt)}`,
-      plannedProcedures: sql`select count(*) from ${treatmentPlans} where ${treatmentPlans.patientId} = ${patientId} and ${treatmentPlans.status}::text in ('planned', 'in_progress') and ${isNull(treatmentPlans.deletedAt)}`,
-      // count(distinct …) skips null tooth codes: jaw-level services treat no tooth.
-      teethTreated: sql`select count(distinct ${visitServices.toothCode}) ${completedServices}`,
-      servicesPerformed: sql`select count(*) ${completedServices}`,
-    } satisfies Record<keyof ClinicalCounts, SQL>;
-    const columns = sql.join(
-      Object.entries(counts).map(
-        ([name, subquery]) => sql`(${subquery})::int as ${sql.identifier(name)}`,
-      ),
-      sql`, `,
+  /** How many visits the patient has had (counted ones, D18): none makes the next their first. */
+  async countedCount(patientId: string): Promise<number> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select({ total: sql<number>`count(*)::int` })
+        .from(visits)
+        .where(and(eq(visits.patientId, patientId), counted)),
     );
-    const {
-      rows: [row],
-    } = await this.db.run((tx) => tx.execute<ClinicalCounts>(sql`select ${columns}`));
-    if (!row) throw new Error('clinical summary returned no row');
-    return row;
+    return row?.total ?? 0;
+  }
+
+  /**
+   * The visit in which a dentist last confirmed the patient's medical history (ADR-0046), any
+   * status but discarded; undefined when none ever did.
+   */
+  async latestHistoryConfirmation(patientId: string): Promise<StoredVisit | undefined> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select()
+        .from(visits)
+        .where(
+          and(
+            eq(visits.patientId, patientId),
+            isNotNull(visits.historyConfirmedAt),
+            ne(visits.status, 'discarded'),
+          ),
+        )
+        .orderBy(desc(visits.historyConfirmedAt), desc(visits.id))
+        .limit(1),
+    );
+    return row && toStored(row);
   }
 
   /**
@@ -493,8 +510,10 @@ export class VisitsRepository {
       tx
         .select({
           notes: visits.notes,
+          // A service the visit type added by itself is not content until someone edits it
+          // (ADR-0047): its row is then no longer as it was written.
           services: fact(
-            sql`select 1 from ${visitServices} where ${visitServices.visitId} = ${visits.id} and ${isNull(visitServices.deletedAt)}`,
+            sql`select 1 from ${visitServices} where ${visitServices.visitId} = ${visits.id} and ${isNull(visitServices.deletedAt)} and not (${visitServices.autoAdded} and ${visitServices.updatedAt} = ${visitServices.createdAt})`,
           ),
           diagnosesRecorded: fact(
             sql`select 1 from ${patientDiagnoses} where ${patientDiagnoses.patientId} = ${visits.patientId} and ${patientDiagnoses.recordedInVisitId} = ${visits.id} and ${isNull(patientDiagnoses.deletedAt)}`,

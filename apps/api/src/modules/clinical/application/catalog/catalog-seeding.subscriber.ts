@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { RequestContext } from '../../../platform/cls/request-context';
-import { OnDomainEvent } from '../../../platform/events/event-bus';
-import { TENANT_PROVISIONED, type TenantProvisioned } from '../../provisioning';
+import { RequestContext } from '../../../../platform/cls/request-context';
+import { OnDomainEvent } from '../../../../platform/events/event-bus';
+import { TENANT_PROVISIONED, type TenantProvisioned } from '../../../provisioning';
 import { CatalogService } from './catalog.service';
 
 /**

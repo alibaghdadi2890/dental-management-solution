@@ -5,16 +5,22 @@ import {
   liveVisitQuerySchema,
   liveVisitRefSchema,
   startDefaultsSchema,
+  startOptionsQuerySchema,
+  startOptionsSchema,
   startVisitResultSchema,
   startVisitSchema,
+  visitComplaintInputSchema,
   visitDiscountSchema,
   visitFiltersSchema,
   visitListQuerySchema,
   visitListSummarySchema,
   visitNotesSchema,
   visitPageSchema,
+  visitReasonInputSchema,
   visitResultSchema,
   visitSchema,
+  visitStepInputSchema,
+  visitViewInputSchema,
   voidVisitSchema,
   visitNumberSchema,
   visitNumbersQuerySchema,
@@ -22,12 +28,14 @@ import {
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
   Param,
   Patch,
   Post,
+  Put,
   Query,
   Res,
 } from '@nestjs/common';
@@ -36,7 +44,12 @@ import type { Response } from 'express';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
-import { VisitsService } from '../application/visits.service';
+import { StartOptionsService } from '../application/reads/start-options.service';
+import { VisitListService } from '../application/reads/visit-list.service';
+import { VisitCorrectionsService } from '../application/visits/visit-corrections.service';
+import { VisitFactsService } from '../application/visits/visit-facts.service';
+import { VisitFlowService } from '../application/visits/visit-flow.service';
+import { VisitsService } from '../application/visits/visits.service';
 
 class StartVisitDto extends createZodDto(startVisitSchema) {}
 class StartVisitResultDto extends createZodDto(startVisitResultSchema) {}
@@ -57,6 +70,13 @@ class VisitListSummaryDto extends createZodDto(visitListSummarySchema) {}
 class VisitNumbersQueryDto extends createZodDto(visitNumbersQuerySchema) {}
 class VisitNumberDto extends createZodDto(visitNumberSchema) {}
 class VoidVisitDto extends createZodDto(voidVisitSchema) {}
+class StartOptionsQueryDto extends createZodDto(startOptionsQuerySchema) {}
+class StartOptionsDto extends createZodDto(startOptionsSchema) {}
+class VisitStepDto extends createZodDto(visitStepInputSchema) {}
+class VisitViewDto extends createZodDto(visitViewInputSchema) {}
+class VisitReasonDto extends createZodDto(visitReasonInputSchema) {}
+class VisitComplaintDto extends createZodDto(visitComplaintInputSchema) {}
+class WorklistParamsDto extends createZodDto(z.object({ id: idSchema, planId: idSchema })) {}
 
 /**
  * The live visit's lifecycle (docs/modules/clinical.md, spec §HTTP). Every change answers with
@@ -65,7 +85,14 @@ class VoidVisitDto extends createZodDto(voidVisitSchema) {}
  */
 @Controller('visits')
 export class VisitsController {
-  constructor(private readonly visits: VisitsService) {}
+  constructor(
+    private readonly visits: VisitsService,
+    private readonly corrections: VisitCorrectionsService,
+    private readonly list: VisitListService,
+    private readonly facts: VisitFactsService,
+    private readonly flow: VisitFlowService,
+    private readonly startOptionsFor: StartOptionsService,
+  ) {}
 
   /** 201 for a new visit; 200 with `resumed: true` when the patient already had a live one. */
   @Post()
@@ -88,6 +115,14 @@ export class VisitsController {
     return this.visits.startDefaults();
   }
 
+  /** What the Start visit popover offers for a patient: the suggested type and the open plans. */
+  @Get('start-options')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: StartOptionsDto })
+  startOptions(@Query() query: StartOptionsQueryDto) {
+    return this.startOptionsFor.forPatient(query.patientId);
+  }
+
   @Get('live')
   @RequirePermission('visit:read')
   @ZodResponse({ type: [LiveVisitRefDto] })
@@ -100,14 +135,14 @@ export class VisitsController {
   @RequirePermission('visit:read')
   @ZodResponse({ type: VisitPageDto })
   search(@Query() query: VisitListQueryDto) {
-    return this.visits.search(query);
+    return this.list.search(query);
   }
 
   @Get('summary')
   @RequirePermission('visit:read')
   @ZodResponse({ type: VisitListSummaryDto })
   summary(@Query() query: VisitFiltersDto) {
-    return this.visits.summary(query);
+    return this.list.summary(query);
   }
 
   /** Before `:id`, like the other static paths. */
@@ -115,7 +150,7 @@ export class VisitsController {
   @RequirePermission('visit:read')
   @ZodResponse({ type: [VisitNumberDto] })
   numbers(@Query() query: VisitNumbersQueryDto) {
-    return this.visits.numbersFor(query.ids);
+    return this.facts.numbersFor(query.ids);
   }
 
   @Get(':id')
@@ -164,7 +199,7 @@ export class VisitsController {
   @HttpCode(HttpStatus.OK)
   @ZodResponse({ type: VisitResultDto })
   amend(@Param() params: VisitParamsDto, @Body() body: AmendVisitDto) {
-    return this.visits.amend(params.id, body);
+    return this.corrections.amend(params.id, body);
   }
 
   /** `{ visit }` with the discount set at checkout; `billing` has posted the difference. */
@@ -173,7 +208,7 @@ export class VisitsController {
   @HttpCode(HttpStatus.OK)
   @ZodResponse({ type: VisitResultDto })
   checkoutDiscount(@Param() params: VisitParamsDto, @Body() body: CheckoutDiscountDto) {
-    return this.visits.setCheckoutDiscount(params.id, body);
+    return this.corrections.setCheckoutDiscount(params.id, body);
   }
 
   /** `{ visit }` out of the checkout queue: its checkout was closed without a payment (ADR-0033). */
@@ -182,7 +217,7 @@ export class VisitsController {
   @HttpCode(HttpStatus.OK)
   @ZodResponse({ type: VisitResultDto })
   checkOut(@Param() params: VisitParamsDto) {
-    return this.visits.checkOut(params.id);
+    return this.corrections.checkOut(params.id);
   }
 
   /** `{ visit }` voided; `billing` has reversed its charge in the same transaction (4b). */
@@ -191,7 +226,67 @@ export class VisitsController {
   @HttpCode(HttpStatus.OK)
   @ZodResponse({ type: VisitResultDto })
   void(@Param() params: VisitParamsDto, @Body() body: VoidVisitDto) {
-    return this.visits.void(params.id, body);
+    return this.corrections.void(params.id, body);
+  }
+
+  // --- The flow (feature 10): where the visit is, and what it was told at the start of it ---
+
+  @Patch(':id/step')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: VisitResultDto })
+  setStep(@Param() params: VisitParamsDto, @Body() body: VisitStepDto) {
+    return this.flow.setStep(params.id, body);
+  }
+
+  @Patch(':id/view')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: VisitResultDto })
+  setView(@Param() params: VisitParamsDto, @Body() body: VisitViewDto) {
+    return this.flow.setView(params.id, body);
+  }
+
+  @Patch(':id/reason')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: VisitResultDto })
+  setReason(@Param() params: VisitParamsDto, @Body() body: VisitReasonDto) {
+    return this.flow.setReason(params.id, body);
+  }
+
+  @Patch(':id/complaint')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: VisitResultDto })
+  setComplaint(@Param() params: VisitParamsDto, @Body() body: VisitComplaintDto) {
+    return this.flow.setComplaint(params.id, body);
+  }
+
+  /** "Confirmed with the patient": a dentist's (or the owner's) to give, and to take back. */
+  @Put(':id/history-confirmation')
+  @RequirePermission('chart:write')
+  @ZodResponse({ type: VisitResultDto })
+  confirmHistory(@Param() params: VisitParamsDto) {
+    return this.flow.confirmHistory(params.id);
+  }
+
+  @Delete(':id/history-confirmation')
+  @RequirePermission('chart:write')
+  @ZodResponse({ type: VisitResultDto })
+  unconfirmHistory(@Param() params: VisitParamsDto) {
+    return this.flow.unconfirmHistory(params.id);
+  }
+
+  /** Today's work: a planned treatment ticked onto the visit's list, or off it. */
+  @Put(':id/worklist/:planId')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: VisitResultDto })
+  addWorkItem(@Param() params: WorklistParamsDto) {
+    return this.flow.setWorkItem(params.id, params.planId, true);
+  }
+
+  @Delete(':id/worklist/:planId')
+  @RequirePermission('visit:write')
+  @ZodResponse({ type: VisitResultDto })
+  removeWorkItem(@Param() params: WorklistParamsDto) {
+    return this.flow.setWorkItem(params.id, params.planId, false);
   }
 
   @Patch(':id/notes')

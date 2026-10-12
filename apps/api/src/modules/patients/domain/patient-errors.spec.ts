@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MergeAlertsOverflowError,
+  MedicalOptionInUseError,
+  MedicalOptionNotFoundError,
   MergeSameError,
   PatientArchivedError,
   PatientMergedError,
@@ -22,7 +23,8 @@ describe('patient domain errors', () => {
     [new PatientMergedError('merged'), 'patient.merged', 'conflict'],
     [new MergeSameError('same'), 'patient.merge_same', 'invalid'],
     [new UnknownDentistError('unknown'), 'patient.unknown_dentist', 'invalid'],
-    [new MergeAlertsOverflowError('overflow'), 'patient.merge_alerts_overflow', 'invalid'],
+    [new MedicalOptionInUseError('in use'), 'medical_option.in_use', 'conflict'],
+    [new MedicalOptionNotFoundError('missing'), 'medical_option.not_found', 'not_found'],
   ])('%s carries code %s and kind %s', (error, code, kind) => {
     expect(error.code).toBe(code);
     expect(error.kind).toBe(kind);

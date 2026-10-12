@@ -1,5 +1,17 @@
-import type { Patient, PatientListItem } from '@dcm/contracts';
+import type { MedicalHistory, Patient, PatientListItem } from '@dcm/contracts';
+import type { StoredMedicalHistory } from '../domain/medical-history';
 import type { DomainPatient, DomainPatientListRow } from '../domain/patient';
+
+/** The history as the API answers it: the items with their current names. */
+function toMedicalHistory(history: StoredMedicalHistory): MedicalHistory {
+  return {
+    noKnownAllergies: history.noKnownAllergies,
+    allergies: history.allergies,
+    noConditions: history.noConditions,
+    conditions: history.conditions,
+    medication: history.medication,
+  };
+}
 
 /** The contract record: ISO timestamps, `archivedAt` from `deleted_at`, no internal columns. */
 export function toPatient(patient: DomainPatient): Patient {
@@ -13,7 +25,8 @@ export function toPatient(patient: DomainPatient): Patient {
     email: patient.email,
     address: patient.address,
     insurance: patient.insurance,
-    medicalAlerts: patient.medicalAlerts,
+    medicalHistory: toMedicalHistory(patient),
+    firstVisitType: patient.firstVisitType,
     primaryDentistId: patient.primaryDentistId,
     notes: patient.notes,
     dentitionOverride: patient.dentitionOverride,
@@ -34,7 +47,8 @@ export function toListItem(patient: DomainPatientListRow): PatientListItem {
     phone: patient.phone,
     dateOfBirth: patient.dateOfBirth,
     sex: patient.sex,
-    medicalAlerts: patient.medicalAlerts,
+    allergyNames: patient.allergies.map((item) => item.name),
+    conditionNames: patient.conditions.map((item) => item.name),
     primaryDentistId: patient.primaryDentistId,
     email: patient.email,
     archivedAt: patient.deletedAt?.toISOString() ?? null,

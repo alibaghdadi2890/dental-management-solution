@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { decimalAmountSchema, idSchema, moneySchema, nameSchema, optionalText } from './common.js';
 import { markColorSchema, markIconSchema, markPrioritySchema } from './marks.js';
+import { entryVisitTypeSchema } from './visit-flow.js';
 
 /**
  * The per-tenant service and diagnosis catalogs (`clinical`, ADR-0002): what a clinic charges for
@@ -50,6 +51,9 @@ export const TOOTH_EFFECTS = ['none', 'removes', 'implant'] as const;
 export const toothEffectSchema = z.enum(TOOTH_EFFECTS);
 export type ToothEffect = z.infer<typeof toothEffectSchema>;
 
+/** How many sessions a service usually takes, when more than one ("session 2 of 3"). */
+export const typicalSessionsSchema = z.number().int().min(2).max(20);
+
 export const serviceItemSchema = z.object({
   id: idSchema,
   code: z.string(),
@@ -66,6 +70,11 @@ export const serviceItemSchema = z.object({
   color: markColorSchema.nullable(),
   icon: markIconSchema.nullable(),
   markPriority: markPrioritySchema,
+  /** "Added on": a visit of this type starts with this service in Today's services, at its
+   * catalog price (feature 10, ADR-0047). Only a service charged per mouth can be. */
+  addedOnVisitType: entryVisitTypeSchema.nullable(),
+  /** Null for work done in one sitting. */
+  typicalSessions: typicalSessionsSchema.nullable(),
 });
 export type ServiceItem = z.infer<typeof serviceItemSchema>;
 
@@ -106,8 +115,17 @@ export const serviceItemInputSchema = z
     toothEffect: toothEffectSchema.default('none'),
     ...markInput,
     icon: markIconSchema.nullable().optional(),
+    addedOnVisitType: entryVisitTypeSchema.nullish().transform((type) => type ?? null),
+    typicalSessions: typicalSessionsSchema.nullish().transform((count) => count ?? null),
   })
   .superRefine((row, context) => {
+    if (row.addedOnVisitType !== null && row.chargeUnit !== 'per_mouth') {
+      context.addIssue({
+        code: 'custom',
+        path: ['addedOnVisitType'],
+        message: 'Only a service charged per mouth can be added to a visit by itself',
+      });
+    }
     if (row.toothEffect !== 'none' && row.chargeUnit !== 'per_tooth') {
       context.addIssue({
         code: 'custom',

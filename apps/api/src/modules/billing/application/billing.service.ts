@@ -21,7 +21,7 @@ import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
 import { requestHash } from '../../../platform/kernel/request-hash';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
-import { VisitNotLiveError, VisitsService } from '../../clinical';
+import { VisitNotLiveError, VisitFactsService } from '../../clinical';
 import { PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { patientBalance, sumBalances } from '../domain/balances';
@@ -60,7 +60,7 @@ export class BillingService {
     private readonly patients: PatientsService,
     private readonly entries: LedgerEntriesRepository,
     @Inject(CLOCK) private readonly clock: Clock,
-    private readonly visits: VisitsService,
+    private readonly visits: VisitFactsService,
     private readonly settlement: Settlement,
     private readonly allocations: AllocationsRepository,
   ) {}
@@ -264,7 +264,7 @@ export class BillingService {
    * entries were posted in the completion's, amendment's or void's transaction, so they are
    * already there. _This visit_ = Σ its visit entries (the charge, its adjustments, a reversal; 0
    * when none: a zero total, W20), _paid_ = Σ allocated to it (feature 5), with the payments
-   * that cover it; _Previous_ = the balance less this visit's outstanding; the total = the balance. Needs `payment:read`, and `visit:read` for `VisitsService.visitMoney`:
+   * that cover it; _Previous_ = the balance less this visit's outstanding; the total = the balance. Needs `payment:read`, and `visit:read` for `VisitFactsService.visitMoney`:
    * unknown or discarded → 404 `visit.not_found`; a live visit → 409 `visit.not_live` (it has no
    * charge yet). Balances in other currencies are left out — known gap, `docs/modules/billing.md`.
    */

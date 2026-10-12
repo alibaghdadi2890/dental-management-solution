@@ -1,4 +1,9 @@
-import type { DentitionStage, PatientSex } from '@dcm/contracts';
+import type {
+  DentitionStage,
+  EntryVisitType,
+  MedicalHistoryInput,
+  PatientSex,
+} from '@dcm/contracts';
 import { phoneDigits } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, eq, getTableColumns, isNotNull, isNull, ne, sql } from 'drizzle-orm';
@@ -20,6 +25,10 @@ import {
   type PatientSearchFilters,
   type PatientSearchOptions,
 } from './patient-search.sql';
+import {
+  type PatientMedicalItems,
+  PatientMedicalItemsRepository,
+} from './patient-medical-items.repository';
 import { contacts, patientContacts, patients } from './schema';
 
 export type {
@@ -40,7 +49,9 @@ type PatientRow = typeof patients.$inferSelect;
  */
 const DB_NOW = sql`now()`;
 
-function toDomain(row: PatientRow): DomainPatient {
+const NO_ITEMS: PatientMedicalItems = { allergies: [], conditions: [] };
+
+function toDomain(row: PatientRow, items: PatientMedicalItems = NO_ITEMS): DomainPatient {
   return {
     id: row.id,
     displayNumber: row.displayNumber,
@@ -54,7 +65,12 @@ function toDomain(row: PatientRow): DomainPatient {
     address: row.address,
     insurance: row.insurance,
     notes: row.notes,
-    medicalAlerts: row.medicalAlerts,
+    noKnownAllergies: row.noKnownAllergies,
+    allergies: items.allergies,
+    noConditions: row.noConditions,
+    conditions: items.conditions,
+    medication: row.medication,
+    firstVisitType: row.firstVisitType,
     primaryDentistId: row.primaryDentistId,
     dentitionOverride: row.dentitionOverride,
     externalId: row.externalId,
@@ -122,11 +138,17 @@ function toGuardian(row: GuardianColumns): GuardianSummary | null {
   };
 }
 
-function toListRow(
-  row: PatientRow & GuardianColumns,
-  matchedContact: DomainPatientListRow['matchedContact'] = null,
-): DomainPatientListRow {
-  return { ...toDomain(row), primaryGuardian: toGuardian(row), matchedContact };
+/** A list query's row: the patient, its guardian columns and, in a search, the matched contact. */
+type ListRow = PatientRow &
+  GuardianColumns & { matchedContact?: DomainPatientListRow['matchedContact'] };
+
+/** The two history columns and the items every write of a history sets together. */
+function historyColumns(history: MedicalHistoryInput) {
+  return {
+    noKnownAllergies: history.noKnownAllergies,
+    noConditions: history.noConditions,
+    medication: history.medication,
+  };
 }
 
 /**
@@ -162,7 +184,8 @@ export interface NewPatient {
   address: string | null;
   insurance: string | null;
   notes: string | null;
-  medicalAlerts: string[];
+  medicalHistory: MedicalHistoryInput;
+  firstVisitType: EntryVisitType | null;
   primaryDentistId: string | null;
   externalId: string | null;
   /** The create request's `Idempotency-Key` and body fingerprint, when it sent a key (H5). */
@@ -183,7 +206,9 @@ export interface PatientPatch {
   address?: string | null;
   insurance?: string | null;
   notes?: string | null;
-  medicalAlerts?: string[];
+  /** The whole history: the flags, the medication line and the items of both lists. */
+  medicalHistory?: MedicalHistoryInput;
+  firstVisitType?: EntryVisitType | null;
   primaryDentistId?: string | null;
   dentitionOverride?: DentitionStage | null;
 }
@@ -196,11 +221,42 @@ export interface PatientSearchResult {
 /**
  * Patients of the current tenant (RLS). Repositories never accept or filter by `tenantId`
  * (CLAUDE.md §5); `insert`/`update` derive `name_key`/`phone_search` from `fullName`/`phone` so
- * callers can never let them drift.
+ * callers can never let them drift. Every patient is read with its allergies and conditions
+ * (`PatientMedicalItemsRepository`, one query per read however many rows).
  */
 @Injectable()
 export class PatientsRepository {
-  constructor(private readonly db: TenantDb) {}
+  constructor(
+    private readonly db: TenantDb,
+    private readonly medicalItems: PatientMedicalItemsRepository,
+  ) {}
+
+  private async many(rows: readonly PatientRow[]): Promise<DomainPatient[]> {
+    const items = await this.medicalItems.forPatients(rows.map((row) => row.id));
+    return rows.map((row) => toDomain(row, items.get(row.id)));
+  }
+
+  private async one(row: PatientRow): Promise<DomainPatient> {
+    const [patient] = await this.many([row]);
+    if (!patient) throw new Error('a patient row mapped to nothing');
+    return patient;
+  }
+
+  private async listRows(rows: readonly ListRow[]): Promise<DomainPatientListRow[]> {
+    const patients = await this.many(rows);
+    return rows.flatMap((row, index) => {
+      const patient = patients[index];
+      return patient
+        ? [
+            {
+              ...patient,
+              primaryGuardian: toGuardian(row),
+              matchedContact: row.matchedContact ?? null,
+            },
+          ]
+        : [];
+    });
+  }
 
   insert(input: NewPatient): Promise<DomainPatient> {
     return this.db.run(async (tx) => {
@@ -218,7 +274,8 @@ export class PatientsRepository {
           address: input.address,
           insurance: input.insurance,
           notes: input.notes,
-          medicalAlerts: input.medicalAlerts,
+          ...historyColumns(input.medicalHistory),
+          firstVisitType: input.firstVisitType,
           primaryDentistId: input.primaryDentistId,
           externalId: input.externalId,
           idempotencyKey: input.idempotency?.key ?? null,
@@ -226,7 +283,9 @@ export class PatientsRepository {
         })
         .returning();
       if (!row) throw new Error('patient insert returned no row');
-      return toDomain(row);
+      const { allergyIds, conditionIds } = input.medicalHistory;
+      await this.medicalItems.replace(row.id, [...allergyIds, ...conditionIds]);
+      return this.one(row);
     });
   }
 
@@ -247,7 +306,7 @@ export class PatientsRepository {
     const [row] = await this.db.run((tx) =>
       tx.select().from(patients).where(eq(patients.idempotencyKey, key)).limit(1),
     );
-    return row ? { patient: toDomain(row), hash: row.idempotencyHash } : undefined;
+    return row ? { patient: await this.one(row), hash: row.idempotencyHash } : undefined;
   }
 
   update(id: string, patch: PatientPatch): Promise<DomainPatient | undefined> {
@@ -263,7 +322,10 @@ export class PatientsRepository {
     if (patch.address !== undefined) set.address = patch.address;
     if (patch.insurance !== undefined) set.insurance = patch.insurance;
     if (patch.notes !== undefined) set.notes = patch.notes;
-    if (patch.medicalAlerts !== undefined) set.medicalAlerts = patch.medicalAlerts;
+    if (patch.medicalHistory !== undefined) {
+      Object.assign(set, historyColumns(patch.medicalHistory));
+    }
+    if (patch.firstVisitType !== undefined) set.firstVisitType = patch.firstVisitType;
     if (patch.primaryDentistId !== undefined) set.primaryDentistId = patch.primaryDentistId;
     if (patch.dentitionOverride !== undefined) set.dentitionOverride = patch.dentitionOverride;
 
@@ -273,13 +335,18 @@ export class PatientsRepository {
         .set({ ...set, updatedAt: DB_NOW })
         .where(eq(patients.id, id))
         .returning();
-      return row ? toDomain(row) : undefined;
+      if (!row) return undefined;
+      if (patch.medicalHistory !== undefined) {
+        const { allergyIds, conditionIds } = patch.medicalHistory;
+        await this.medicalItems.replace(id, [...allergyIds, ...conditionIds]);
+      }
+      return this.one(row);
     });
   }
 
   async findById(id: string): Promise<DomainPatient | undefined> {
     const [row] = await this.db.run((tx) => tx.select().from(patients).where(eq(patients.id, id)));
-    return row ? toDomain(row) : undefined;
+    return row ? this.one(row) : undefined;
   }
 
   async findByIds(ids: readonly string[]): Promise<DomainPatient[]> {
@@ -287,7 +354,7 @@ export class PatientsRepository {
     const rows = await this.db.run((tx) =>
       tx.select().from(patients).where(idAmong(patients.id, ids)),
     );
-    return rows.map(toDomain);
+    return this.many(rows);
   }
 
   /**
@@ -310,7 +377,7 @@ export class PatientsRepository {
         .orderBy(patients.id)
         .for('update'),
     );
-    return rows.map(toDomain);
+    return this.many(rows);
   }
 
   /**
@@ -325,7 +392,7 @@ export class PatientsRepository {
     const [row] = await this.db.run((tx) =>
       tx.select().from(patients).where(eq(patients.id, id)).for('update'),
     );
-    return row ? toDomain(row) : undefined;
+    return row ? this.one(row) : undefined;
   }
 
   /**
@@ -340,7 +407,7 @@ export class PatientsRepository {
     const [row] = await this.db.run((tx) =>
       tx.select().from(patients).where(eq(patients.id, id)).for('share'),
     );
-    return row ? toDomain(row) : undefined;
+    return row ? this.one(row) : undefined;
   }
 
   /**
@@ -370,7 +437,7 @@ export class PatientsRepository {
         .where(idAmong(patients.id, ids))
         .orderBy(patients.id)
         .for('update');
-      const byId = new Map(rows.map((row) => [row.id, toDomain(row)]));
+      const byId = new Map((await this.many(rows)).map((patient) => [patient.id, patient]));
       const patientA = byId.get(a);
       const patientB = byId.get(b);
       if (!patientA || !patientB) throw new PatientNotFoundError('Patient not found');
@@ -398,7 +465,7 @@ export class PatientsRepository {
     const rows = await this.db.run((tx) =>
       tx.update(patients).set({ deletedAt: at, updatedAt: DB_NOW }).where(condition).returning(),
     );
-    return rows.map(toDomain);
+    return this.many(rows);
   }
 
   /** Archives the dropped record of a merge with `mergedIntoId` pointing at the kept one. */
@@ -410,7 +477,7 @@ export class PatientsRepository {
         .where(eq(patients.id, dropId))
         .returning(),
     );
-    return row ? toDomain(row) : undefined;
+    return row ? this.one(row) : undefined;
   }
 
   async search(
@@ -461,7 +528,7 @@ export class PatientsRepository {
     }
 
     const total = Number(rows.at(0)?.total ?? 0);
-    return { rows: rows.map((row) => toListRow(row, row.matchedContact)), total };
+    return { rows: await this.listRows(rows), total };
   }
 
   /**
@@ -520,7 +587,7 @@ export class PatientsRepository {
           ),
         )
         .where(and(isNull(patients.deletedAt), isNotNull(patients.dateOfBirth)));
-      return rows.map((row) => toListRow(row));
+      return this.listRows(rows);
     });
   }
 
@@ -560,7 +627,7 @@ export class PatientsRepository {
         .orderBy(byNameKey(patients.nameKey), patients.id)
         .limit(limit),
     );
-    return rows.map(toDomain);
+    return this.many(rows);
   }
 
   /**
@@ -578,7 +645,7 @@ export class PatientsRepository {
         .where(idAmong(patients.id, ids))
         .orderBy(patients.nameKey, patients.id);
     });
-    return rows.map((row) => toListRow(row));
+    return this.listRows(rows);
   }
 
   /** Active rows sharing a name (matched via `nameKey`) and date of birth — the duplicate check. */
@@ -601,6 +668,6 @@ export class PatientsRepository {
         .leftJoin(guardian, eq(guardian.patientId, patients.id))
         .where(and(...conditions));
     });
-    return rows.map((row) => toListRow(row));
+    return this.listRows(rows);
   }
 }

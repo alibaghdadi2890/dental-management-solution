@@ -29,7 +29,7 @@ import { newId } from '../../../platform/kernel/id';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { ObjectStorage } from '../../../platform/storage/object-storage';
 import { AuditService } from '../../audit';
-import { type VisitRef, VisitsService } from '../../clinical';
+import { type VisitRef, VisitFactsService } from '../../clinical';
 import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
@@ -127,7 +127,7 @@ export class FilesService {
     private readonly events: EventBus,
     private readonly audit: AuditService,
     private readonly patients: PatientsService,
-    private readonly visits: VisitsService,
+    private readonly visits: VisitFactsService,
     private readonly users: UsersService,
     private readonly tenancy: TenancyService,
     private readonly storage: ObjectStorage,

@@ -12,19 +12,19 @@ import {
   type ServiceItemInput,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { RequestContext } from '../../../platform/cls/request-context';
-import { TenantDb } from '../../../platform/db/tenant-db';
-import { EventBus } from '../../../platform/events/event-bus';
-import { newId } from '../../../platform/kernel/id';
-import { AuditService } from '../../audit';
-import { TenancyService } from '../../tenancy';
-import { assertUniqueCodes } from '../domain/catalog-batch';
-import { CatalogItemInUseError, CatalogItemNotFoundError } from '../domain/catalog-errors';
-import { DEFAULT_DIAGNOSES, DEFAULT_SERVICES } from '../domain/default-catalog';
-import { CATALOG_CHANGED, type CatalogChanged } from '../events/catalog-changed';
-import type { CatalogRowLock, CatalogStore } from '../persistence/catalog-store';
-import { DiagnosesRepository } from '../persistence/diagnoses.repository';
-import { ProceduresRepository } from '../persistence/procedures.repository';
+import { RequestContext } from '../../../../platform/cls/request-context';
+import { TenantDb } from '../../../../platform/db/tenant-db';
+import { EventBus } from '../../../../platform/events/event-bus';
+import { newId } from '../../../../platform/kernel/id';
+import { AuditService } from '../../../audit';
+import { TenancyService } from '../../../tenancy';
+import { assertUniqueCodes } from '../../domain/catalog-batch';
+import { CatalogItemInUseError, CatalogItemNotFoundError } from '../../domain/catalog-errors';
+import { DEFAULT_DIAGNOSES, DEFAULT_SERVICES } from '../../domain/default-catalog';
+import { CATALOG_CHANGED, type CatalogChanged } from '../../events/catalog-changed';
+import type { CatalogRowLock, CatalogStore } from '../../persistence/catalog-store';
+import { DiagnosesRepository } from '../../persistence/diagnoses.repository';
+import { ProceduresRepository } from '../../persistence/procedures.repository';
 
 type CatalogItem = ServiceItem | DiagnosisItem;
 
@@ -123,6 +123,8 @@ export class CatalogService {
               : (before?.color ?? null),
             icon: perTooth && row.icon !== undefined ? row.icon : (before?.icon ?? null),
             markPriority: row.markPriority ?? before?.markPriority ?? MARK_PRIORITY_DEFAULT,
+            addedOnVisitType: row.addedOnVisitType,
+            typicalSessions: row.typicalSessions,
           };
         },
       );

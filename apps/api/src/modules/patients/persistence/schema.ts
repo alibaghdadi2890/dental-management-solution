@@ -1,4 +1,4 @@
-import { DENTITION_STAGES } from '@dcm/contracts';
+import { DENTITION_STAGES, ENTRY_VISIT_TYPES, MEDICAL_OPTION_KINDS } from '@dcm/contracts';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -28,6 +28,12 @@ export const patientSex = pgEnum('patient_sex', ['female', 'male', 'other', 'unk
 
 /** The chart a patient was switched to by hand, `primary` or `permanent`; null follows the age. */
 export const dentition = pgEnum('dentition', DENTITION_STAGES);
+
+/** Which of a clinic's two medical-history lists an option is in (feature 10, ADR-0046). */
+export const medicalOptionKind = pgEnum('medical_option_kind', MEDICAL_OPTION_KINDS);
+
+/** `'a', 'b'`: a contracts key list inside a CHECK. The keys are plain words from the code. */
+const keyList = (keys: readonly string[]) => sql.raw(keys.map((key) => `'${key}'`).join(', '));
 
 /** The contact's relation *to the patient* (design addendum C2); stable, not tenant-extendable. */
 export const contactRelationship = pgEnum('contact_relationship', [
@@ -68,10 +74,16 @@ export const patients = pgTable(
     address: text(),
     insurance: text(),
     notes: text(),
-    medicalAlerts: text()
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
+    /**
+     * Medical history (feature 10, ADR-0046). The allergies and conditions themselves are
+     * `patient_medical_items`; "none" is an answer of its own, so a list with no items and no
+     * flag was never asked. The service keeps a flag and items of its list apart.
+     */
+    noKnownAllergies: boolean().notNull().default(false),
+    noConditions: boolean().notNull().default(false),
+    medication: text(),
+    /** What a new patient came for: the suggested type of their first visit. */
+    firstVisitType: text().$type<(typeof ENTRY_VISIT_TYPES)[number]>(),
     /** `staff_profiles.id` (ADR-0020); no cross-module foreign key (CLAUDE.md §4 rule 1). */
     primaryDentistId: uuid(),
     /** Null means "auto": the chart derives the stage from age (spec W14, `effectiveDentition`). */
@@ -116,6 +128,69 @@ export const patients = pgTable(
       sql`${table.mergedIntoId} is null or ${table.deletedAt} is not null`,
     ),
     check('patients_not_merged_into_self', sql`${table.mergedIntoId} <> ${table.id}`),
+    check(
+      'patients_first_visit_type_known',
+      sql`${table.firstVisitType} in (${keyList(ENTRY_VISIT_TYPES)})`,
+    ),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/**
+ * A clinic's allergy and condition lists (feature 10, ADR-0046): what the chips of a patient's
+ * medical history offer. Edited in the Catalog. A name is unique within its list among live
+ * rows, without case; an option a patient has is deactivated, never deleted.
+ */
+export const medicalHistoryOptions = pgTable(
+  'medical_history_options',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    kind: medicalOptionKind().notNull(),
+    name: text().notNull(),
+    active: boolean().notNull().default(true),
+    deletedAt: deletedAtColumn(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('medical_history_options_tenant_idx').on(table.tenantId),
+    // Target of the patient_medical_items composite foreign key.
+    unique('medical_history_options_tenant_id_unique').on(table.tenantId, table.id),
+    uniqueIndex('medical_history_options_name_unique')
+      .on(table.tenantId, table.kind, sql`lower(${table.name})`)
+      .where(sql`${table.deletedAt} is null`),
+    check('medical_history_options_name_length', sql`char_length(${table.name}) between 1 and 60`),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/**
+ * One allergy or condition of a patient: a junction row, hard-deleted when the history is edited
+ * (CLAUDE.md §7); the edit itself is in the audit log.
+ */
+export const patientMedicalItems = pgTable(
+  'patient_medical_items',
+  {
+    tenantId: tenantIdColumn(),
+    patientId: uuid().notNull(),
+    optionId: uuid().notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    primaryKey({ name: 'patient_medical_items_pk', columns: [table.patientId, table.optionId] }),
+    index('patient_medical_items_tenant_idx').on(table.tenantId),
+    // "Is this option in use?" (the delete rule) and the merge re-point.
+    index('patient_medical_items_option_idx').on(table.optionId),
+    foreignKey({
+      name: 'patient_medical_items_patient_fk',
+      columns: [table.tenantId, table.patientId],
+      foreignColumns: [patients.tenantId, patients.id],
+    }),
+    foreignKey({
+      name: 'patient_medical_items_option_fk',
+      columns: [table.tenantId, table.optionId],
+      foreignColumns: [medicalHistoryOptions.tenantId, medicalHistoryOptions.id],
+    }),
     tenantIsolationPolicy(),
   ],
 );

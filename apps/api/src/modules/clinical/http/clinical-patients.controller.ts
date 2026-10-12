@@ -1,8 +1,10 @@
 import {
-  clinicalSummarySchema,
+  fileCitationSchema,
   idSchema,
+  lastVisitQuerySchema,
   lastVisitSchema,
   patientChartSchema,
+  patientHistoryConfirmationSchema,
   toothCodeSchema,
   toothHistorySchema,
   visitStatsQuerySchema,
@@ -14,8 +16,8 @@ import type { Response } from 'express';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
-import { ChartService } from '../application/chart.service';
-import { VisitsService } from '../application/visits.service';
+import { ChartService } from '../application/reads/chart.service';
+import { VisitListService } from '../application/reads/visit-list.service';
 
 class PatientChartDto extends createZodDto(patientChartSchema) {}
 class ToothHistoryDto extends createZodDto(toothHistorySchema) {}
@@ -23,7 +25,9 @@ class ToothHistoryDto extends createZodDto(toothHistorySchema) {}
 class LastVisitDto extends createZodDto(lastVisitSchema.unwrap()) {}
 /** `Output` builds a new class on every read; the route registers and references this one. */
 const LastVisitOutput = LastVisitDto.Output;
-class ClinicalSummaryDto extends createZodDto(clinicalSummarySchema) {}
+class LastVisitQueryDto extends createZodDto(lastVisitQuerySchema) {}
+class HistoryConfirmationDto extends createZodDto(patientHistoryConfirmationSchema) {}
+class FileCitationDto extends createZodDto(fileCitationSchema) {}
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class VisitStatsQueryDto extends createZodDto(visitStatsQuerySchema) {}
 class VisitStatDto extends createZodDto(visitStatSchema) {}
@@ -32,14 +36,14 @@ class ToothParamsDto extends createZodDto(z.object({ id: idSchema, toothCode: to
 
 /**
  * A patient's clinical record (docs/modules/clinical.md, spec §HTTP): the chart, one tooth's
- * history, the Last visit card and the treatment summary, and the patients list's Last visit and
- * Visits columns (4b). Read-only, so front desk sees them too.
+ * history, the Last visit card, the last confirmation of the medical history and the diagnoses
+ * citing each file (feature 10), and the patients list's Last visit and Visits columns (4b). Read-only, so front desk sees them too.
  */
 @Controller('clinical/patients')
 export class ClinicalPatientsController {
   constructor(
     private readonly chart: ChartService,
-    private readonly visits: VisitsService,
+    private readonly visits: VisitListService,
   ) {}
 
   /** Last visit and visit count of the visible page's patients (D18). */
@@ -76,18 +80,31 @@ export class ClinicalPatientsController {
     description: 'The last completed visit, or null when there is none',
     schema: { nullable: true, allOf: [{ $ref: getSchemaPath(LastVisitOutput) }] },
   })
-  async lastVisit(@Param() params: PatientParamsDto, @Res() response: Response): Promise<void> {
-    const lastVisit = lastVisitSchema.safeParse(await this.chart.lastVisit(params.id));
+  async lastVisit(
+    @Param() params: PatientParamsDto,
+    @Query() query: LastVisitQueryDto,
+    @Res() response: Response,
+  ): Promise<void> {
+    const lastVisit = lastVisitSchema.safeParse(await this.chart.lastVisit(params.id, query));
     if (!lastVisit.success) {
       throw new Error('the last visit does not match its contract', { cause: lastVisit.error });
     }
     response.json(lastVisit.data);
   }
 
-  @Get(':id/summary')
+  /** The last time a dentist confirmed the medical history in a visit (ADR-0046), or none. */
+  @Get(':id/history-confirmation')
   @RequirePermission('visit:read')
-  @ZodResponse({ type: ClinicalSummaryDto })
-  summary(@Param() params: PatientParamsDto) {
-    return this.chart.summary(params.id);
+  @ZodResponse({ type: HistoryConfirmationDto })
+  historyConfirmation(@Param() params: PatientParamsDto) {
+    return this.chart.historyConfirmation(params.id);
+  }
+
+  /** Per file, the diagnoses that were seen on it (ADR-0049): the image viewer's list. */
+  @Get(':id/file-citations')
+  @RequirePermission('visit:read')
+  @ZodResponse({ type: [FileCitationDto] })
+  fileCitations(@Param() params: PatientParamsDto) {
+    return this.chart.fileCitations(params.id);
   }
 }

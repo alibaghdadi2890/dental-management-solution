@@ -1,6 +1,11 @@
-import { type AllocationLine, fromCents, type LedgerEntryKind } from '@dcm/contracts';
+import {
+  type AllocationLine,
+  fromCents,
+  type LedgerEntryKind,
+  type VisitNumber,
+} from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { VisitsService } from '../../clinical';
+import { VisitFactsService } from '../../clinical';
 
 interface ChargeLine {
   targetId: string;
@@ -13,28 +18,36 @@ interface ChargeLine {
 
 /**
  * Turns allocation lines into the contract's `AllocationLine`s, with each visit's display number
- * (`VisitsService.numbersFor`, one query). Visit targets are dated by their visit's local date.
+ * and type (`VisitFactsService.numbersFor`, one query). Visit targets are dated by their visit's
+ * local date.
  */
 @Injectable()
 export class ChargeLabels {
-  constructor(private readonly visits: VisitsService) {}
+  constructor(private readonly visits: VisitFactsService) {}
 
-  async visitNumbers(visitIds: readonly (string | null)[]): Promise<Map<string, number>> {
+  /** Each visit's number, date and type, by id. */
+  async visitsOf(visitIds: readonly (string | null)[]): Promise<Map<string, VisitNumber>> {
     const ids = visitIds.filter((id): id is string => id !== null);
     if (ids.length === 0) return new Map();
-    return new Map(
-      (await this.visits.numbersFor(ids)).map((visit) => [visit.visitId, visit.displayNumber]),
-    );
+    return new Map((await this.visits.numbersFor(ids)).map((visit) => [visit.visitId, visit]));
+  }
+
+  async visitNumbers(visitIds: readonly (string | null)[]): Promise<Map<string, number>> {
+    const visits = await this.visitsOf(visitIds);
+    return new Map([...visits].map(([id, visit]) => [id, visit.displayNumber]));
   }
 
   async label(lines: readonly ChargeLine[]): Promise<AllocationLine[]> {
-    const numbers = await this.visitNumbers(lines.map((line) => line.visitId));
+    const visits = await this.visitsOf(lines.map((line) => line.visitId));
+    const visitOf = (line: ChargeLine) =>
+      line.visitId === null ? undefined : visits.get(line.visitId);
     return lines.map((line) => ({
       entryId: line.targetId,
       patientId: line.patientId,
       kind: line.kind,
       visitId: line.visitId,
-      visitNumber: line.visitId === null ? null : (numbers.get(line.visitId) ?? null),
+      visitNumber: visitOf(line)?.displayNumber ?? null,
+      visitType: visitOf(line)?.type ?? null,
       date: line.date,
       amount: fromCents(line.amount),
     }));

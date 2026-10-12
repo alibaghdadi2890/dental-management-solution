@@ -55,7 +55,7 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
     testApp.clock.set(at(day));
     const response = await dentist.agent
       .post('/api/v1/visits')
-      .send({ patientId: patient.id, dentistId: dentist.user.profileId });
+      .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as StartVisitResult).visit;
   };
@@ -96,12 +96,9 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
   const started = async (visit: Visit, toothCode: string) =>
     markUnfinished(visit, (await addService(visit, toothCode)).id);
 
-  const answer = async (visit: Visit, planIds: string[]) =>
-    (
-      await ok<VisitResult>(
-        dentist.agent.post(path(visit, 'unfinished-answer')).send({ continue: planIds }),
-      )
-    ).visit;
+  /** Continue today: this visit's session on work in progress. */
+  const continueToday = (visit: Visit, planId: string) =>
+    ok<PlanResult>(dentist.agent.put(path(visit, `plans/${planId}/session`)).send({}));
 
   const complete = async (visit: Visit): Promise<Visit> => {
     testApp.clock.advance({ minutes: 30 });
@@ -213,9 +210,7 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
     expect(await charges(patient)).toEqual([]);
 
     const second = await startVisit(patient, DAY_2);
-    expect(second.unfinishedAnsweredAt).toBeNull();
-    const answered = await answer(second, [plan.id]);
-    expect(answered.unfinishedAnsweredAt).toBe(at(DAY_2).toISOString());
+    await continueToday(second, plan.id);
     expect((await chartOf(patient)).plans).toMatchObject([
       {
         id: plan.id,
@@ -226,11 +221,8 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
         ],
       },
     ]);
-    // A second answer keeps the first stamp, and continuing twice is still one session.
-    testApp.clock.advance({ minutes: 5 });
-    expect((await answer(second, [plan.id])).unfinishedAnsweredAt).toBe(
-      answered.unfinishedAnsweredAt,
-    );
+    // Continuing twice is still one session.
+    await continueToday(second, plan.id);
     expect((await chartOf(patient)).plans[0]?.sessions).toHaveLength(2);
     // The middle visit worked on it and charges nothing.
     expect((await complete(second)).money.total).toBe('0.00');
@@ -249,27 +241,27 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
       'treatment_plan.session',
       'treatment_plan.start',
     ]);
-    const summary = await ok<{ plannedProcedures: number }>(
-      dentist.agent.get(`/api/v1/clinical/patients/${patient.id}/summary`),
+    // Nothing is left open on the plan.
+    const open = (await chartOf(patient)).plans.filter(
+      ({ status }) => status === 'planned' || status === 'in_progress',
     );
-    expect(summary.plannedProcedures).toBe(0);
+    expect(open).toEqual([]);
   });
 
-  it('a visit that answers "not today" records nothing and can still be discarded', async () => {
+  it('a visit that does not continue the work records nothing and can still be discarded', async () => {
     const patient = await createPatient('Not Today');
     const first = await startVisit(patient, DAY_1);
     const { record: plan } = await started(first, '37');
     await complete(first);
 
     const second = await startVisit(patient, DAY_2);
-    expect((await answer(second, [])).unfinishedAnsweredAt).toBe(at(DAY_2).toISOString());
     expect((await chartOf(patient)).plans).toMatchObject([
       { id: plan.id, status: 'in_progress', sessions: [{ visitId: first.id }] },
     ]);
     // Only work in progress can be continued.
     const third = await startVisit(await createPatient('Someone Else'), DAY_2);
     await expectProblem(
-      dentist.agent.post(path(third, 'unfinished-answer')).send({ continue: [plan.id] }),
+      dentist.agent.put(path(third, `plans/${plan.id}/session`)).send({}),
       404,
       'record.not_found',
     );
@@ -310,11 +302,22 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
       409,
       'plan.not_in_progress',
     );
-    await expectProblem(
+    // A session on a plan that is only planned starts the work here (feature 10), and its undo
+    // takes that back.
+    const restarted = await ok<PlanResult>(
       dentist.agent.put(path(first, `plans/${plan.id}/session`)).send({}),
-      409,
-      'plan.not_in_progress',
     );
+    expect(restarted.record).toMatchObject({
+      status: 'in_progress',
+      startedInVisitId: first.id,
+      sessions: [{ visitId: first.id }],
+    });
+    expect(restarted.record.acceptedAt).not.toBeNull();
+    // The acceptance that start recorded goes with it: the patient never gave one.
+    const takenBack = await ok<PlanResult>(
+      dentist.agent.delete(path(first, `plans/${plan.id}/session`)),
+    );
+    expect(takenBack.record).toMatchObject({ status: 'planned', acceptedAt: null });
 
     // Performed, then marked not finished: the same plan is in progress again.
     const performed = await ok<PlanResult>(

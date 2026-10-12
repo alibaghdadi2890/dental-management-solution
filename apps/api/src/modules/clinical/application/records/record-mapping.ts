@@ -1,21 +1,41 @@
 import {
+  type DiagnosisEvidence,
   type DiagnosisRecord,
   type HistoryService,
   lineFinal,
-  type PlanGroup,
   type PlanSession,
   surfacesSchema,
   toothCodeSchema,
   type ToothPresenceRecord,
   type TreatmentPlan,
 } from '@dcm/contracts';
-import type { StoredDiagnosisRecord } from '../persistence/patient-diagnoses.repository';
-import type { StoredPlanGroup } from '../persistence/plan-groups.repository';
-import type { ToothPresenceLine } from '../persistence/tooth-presence.repository';
-import type { StoredTreatmentPlan } from '../persistence/treatment-plans.repository';
-import type { FinishedService } from '../persistence/visit-services.repository';
+import type { StoredDiagnosisRecord } from '../../persistence/patient-diagnoses.repository';
+import type { ToothPresenceLine } from '../../persistence/tooth-presence.repository';
+import type { StoredTreatmentPlan } from '../../persistence/treatment-plans.repository';
+import type { FinishedService } from '../../persistence/visit-services.repository';
 
 // The tables' CHECKs admit exactly the contract's tooth codes and surface keys.
+
+/** What a diagnosis was seen on, from its two columns (`patient_diagnoses_seen_on_file`). */
+export function seenOnOf({
+  seenOn,
+  seenOnFileId,
+}: Pick<StoredDiagnosisRecord, 'seenOn' | 'seenOnFileId'>): DiagnosisEvidence | null {
+  if (seenOn === 'clinical_exam') return { kind: 'clinical_exam' };
+  return seenOn === 'image' && seenOnFileId !== null
+    ? { kind: 'image', fileId: seenOnFileId }
+    : null;
+}
+
+/** The two columns of what a diagnosis was seen on. */
+export function seenOnColumns(
+  evidence: DiagnosisEvidence | null,
+): Pick<StoredDiagnosisRecord, 'seenOn' | 'seenOnFileId'> {
+  return {
+    seenOn: evidence?.kind ?? null,
+    seenOnFileId: evidence?.kind === 'image' ? evidence.fileId : null,
+  };
+}
 
 /** A diagnosis record as the API answers it: the row plus who and when, for display.
  * `recordedDate` is its visit's local date, or the tenant-local date of `recordedAt` without one. */
@@ -35,6 +55,7 @@ export function toDiagnosisRecord(
     category: record.category,
     status: record.status,
     note: record.note,
+    seenOn: seenOnOf(record),
     dentistId: record.dentistId,
     dentistName,
     recordedBy: record.recordedBy,
@@ -67,13 +88,15 @@ export function toTreatmentPlan(
     price: { amount: plan.priceAmount, currency: plan.priceCurrency },
     diagnosisRecordId: plan.diagnosisRecordId,
     status: plan.status,
+    priority: plan.priority,
+    acceptedAt: plan.acceptedAt?.toISOString() ?? null,
+    estimatedSessions: plan.estimatedSessions,
     note: plan.note,
     dentistId: plan.dentistId,
     dentistName,
     recordedBy: plan.recordedBy,
     recordedInVisitId: plan.recordedInVisitId,
     recordedAt: plan.recordedAt.toISOString(),
-    groupId: plan.groupId,
     startedInVisitId: plan.startedInVisitId,
     startedAt: plan.startedAt?.toISOString() ?? null,
     sessions,
@@ -82,11 +105,6 @@ export function toTreatmentPlan(
     cancelledInVisitId: plan.cancelledInVisitId,
     cancelledAt: plan.cancelledAt?.toISOString() ?? null,
   };
-}
-
-/** A named plan as the API answers it. */
-export function toPlanGroup(group: StoredPlanGroup): PlanGroup {
-  return { id: group.id, patientId: group.patientId, title: group.title, note: group.note };
 }
 
 /** A service of a completed visit as a history line: its final price in the visit currency. */

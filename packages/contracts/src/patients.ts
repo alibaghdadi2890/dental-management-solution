@@ -14,7 +14,14 @@ import {
   commaSeparatedIds,
 } from './common.js';
 import { contactLinkInputSchema, matchedContactSchema, primaryGuardianSchema } from './contacts.js';
+import {
+  EMPTY_MEDICAL_HISTORY,
+  medicalHistoryInputSchema,
+  medicalHistorySchema,
+  toMedicalHistoryInput,
+} from './medical-history.js';
 import { AGE_BANDS, dentitionStageSchema } from './patient-age.js';
+import { entryVisitTypeSchema } from './visit-flow.js';
 
 /**
  * `patients` (feature 3): patient records, the palette, the list and its filters, and merge.
@@ -26,46 +33,6 @@ import { AGE_BANDS, dentitionStageSchema } from './patient-age.js';
 export const PATIENT_SEXES = ['female', 'male', 'other', 'unknown'] as const;
 export const patientSexSchema = z.enum(PATIENT_SEXES);
 export type PatientSex = z.infer<typeof patientSexSchema>;
-
-/** Also the merge patch's overflow threshold (`MergeAlertsOverflowError`, `domain/merge.ts`). */
-export const MEDICAL_ALERTS_MAX = 20;
-
-/**
- * De-dupes case- and normalization-insensitively (NFKC folds compatibility forms — full-width,
- * ligatures — as well as composed/decomposed accents; e.g. "Café" typed as `e` + combining acute
- * (NFD) collapses with "Café" typed as the single precomposed `é` (NFC)), keeping the first
- * occurrence. Values have already been normalized to NFC (canonical composition) by
- * `medicalAlertItemSchema` — the text isn't rewritten more than necessary to make it comparable.
- * Exported so `domain/merge.ts` (patient merge's alert union) reuses this exact semantics instead
- * of a copy.
- */
-export function dedupeAlerts(values: string[]): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const key = value.normalize('NFKC').toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(value);
-  }
-  return result;
-}
-
-/**
- * Normalizes to NFC *before* trimming/length-checking: a decomposed string (each accent typed as
- * a separate combining mark) is longer in UTF-16 code units than its composed form, so checking
- * the length first could reject an alert the user would see as exactly 60 characters.
- */
-const medicalAlertItemSchema = z
-  .string()
-  .transform((value) => value.normalize('NFC').trim())
-  .pipe(z.string().min(1).max(60));
-
-/** Normalized, trimmed, 1–60 chars each, de-duplicated (see `dedupeAlerts`), max 20. */
-export const medicalAlertsSchema = z
-  .array(medicalAlertItemSchema)
-  .transform(dedupeAlerts)
-  .pipe(z.array(z.string()).max(MEDICAL_ALERTS_MAX));
 
 const primaryDentistIdSchema = idSchema.nullish().transform((value) => value ?? null);
 
@@ -97,7 +64,10 @@ const patientFields = {
   email: optionalEmailSchema,
   address: optionalText(240),
   insurance: optionalText(120),
-  medicalAlerts: medicalAlertsSchema,
+  /** The whole history: an edit replaces it (feature 10, ADR-0046). */
+  medicalHistory: medicalHistoryInputSchema,
+  /** What a new patient comes for: the type their first visit is suggested as. */
+  firstVisitType: entryVisitTypeSchema.nullish().transform((value) => value ?? null),
   /** A staff profile id (`staff_profiles.id`, ADR-0020), never an auth user id. */
   primaryDentistId: primaryDentistIdSchema,
   notes: optionalText(2000),
@@ -107,7 +77,7 @@ const patientFields = {
 export const patientInputSchema = z.object({
   ...patientFields,
   sex: patientSexSchema.default('unknown'),
-  medicalAlerts: medicalAlertsSchema.default([]),
+  medicalHistory: medicalHistoryInputSchema.default(toMedicalHistoryInput(EMPTY_MEDICAL_HISTORY)),
 });
 export type PatientInput = z.infer<typeof patientInputSchema>;
 
@@ -178,7 +148,8 @@ export const patientSchema = z.object({
   email: z.string().nullable(),
   address: z.string().nullable(),
   insurance: z.string().nullable(),
-  medicalAlerts: z.array(z.string()),
+  medicalHistory: medicalHistorySchema,
+  firstVisitType: entryVisitTypeSchema.nullable(),
   primaryDentistId: idSchema.nullable(),
   notes: z.string().nullable(),
   dentitionOverride: dentitionStageSchema.nullable(),
@@ -212,13 +183,15 @@ export const patientListItemSchema = patientSchema
     phone: true,
     dateOfBirth: true,
     sex: true,
-    medicalAlerts: true,
     primaryDentistId: true,
     email: true,
     archivedAt: true,
     updatedAt: true,
   })
   .extend({
+    /** The names of the patient's allergies and conditions, for the alert chips. */
+    allergyNames: z.array(z.string()),
+    conditionNames: z.array(z.string()),
     primaryGuardian: primaryGuardianSchema.nullable(),
     matchedContact: matchedContactSchema.nullable(),
   });
@@ -316,6 +289,7 @@ export const MERGE_FIELDS = [
   'email',
   'address',
   'insurance',
+  'medication',
   'primaryDentistId',
   'notes',
 ] as const;
@@ -324,7 +298,7 @@ export type MergeField = z.infer<typeof mergeFieldSchema>;
 
 const mergeChoiceSchema = z.enum(['keep', 'drop']);
 
-/** Medical alerts are always unioned, never picked (design Q8) — not a field choice. */
+/** Allergies and conditions are always unioned, never picked (ADR-0046) — not a field choice. */
 export const patientMergeSchema = z
   .object({
     keepId: idSchema,

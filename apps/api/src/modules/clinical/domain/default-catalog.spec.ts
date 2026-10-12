@@ -27,7 +27,31 @@ describe('default catalog template', () => {
       ['SCL', 'Scaling & polishing', 'Periodontal', 'per_mouth', '60'],
       ['XRY', 'Periapical X-ray', 'Diagnostic', 'per_tooth', '20'],
       ['IMP', 'Implant placement', 'Surgical', 'per_tooth', '0'],
+      ['EXAM', 'Examination', 'Diagnostic', 'per_mouth', '25'],
+      ['EMX', 'Emergency examination', 'Diagnostic', 'per_mouth', '30'],
+      ['CONS', 'Consultation', 'Diagnostic', 'per_mouth', '20'],
+      ['RCT', 'Root canal treatment', 'Restorative', 'per_tooth', '180'],
     ]);
+  });
+
+  it('starts an examination, an emergency and a hygiene visit with their service (ADR-0047)', () => {
+    const added = DEFAULT_SERVICES.filter((row) => row.addedOnVisitType !== null);
+    expect(added.map((row) => [row.code, row.addedOnVisitType])).toEqual([
+      ['SCL', 'hygiene'],
+      ['EXAM', 'examination'],
+      ['EMX', 'emergency'],
+    ]);
+    // Such a service has no tooth or jaw to ask for.
+    expect(added.every((row) => row.chargeUnit === 'per_mouth')).toBe(true);
+  });
+
+  it('knows that a root canal takes three sessions', () => {
+    expect(
+      DEFAULT_SERVICES.filter((row) => row.typicalSessions !== null).map((row) => [
+        row.code,
+        row.typicalSessions,
+      ]),
+    ).toEqual([['RCT', 3]]);
   });
 
   it('says which services change the tooth: extraction removes it, implant placement implants (H2)', () => {
@@ -90,6 +114,9 @@ describe('default catalog template', () => {
     ).toEqual([
       ['PARX', null, null],
       ['SCL', null, null],
+      ['EXAM', null, null],
+      ['EMX', null, null],
+      ['CONS', null, null],
     ]);
     expect(
       DEFAULT_SERVICES.filter((row) => row.icon !== null).map((row) => [row.code, row.icon]),
@@ -103,6 +130,7 @@ describe('default catalog template', () => {
       ['MCC', 'crown'],
       ['ZIR', 'crown'],
       ['IMP', 'implant'],
+      ['RCT', 'root_canal'],
     ]);
   });
 

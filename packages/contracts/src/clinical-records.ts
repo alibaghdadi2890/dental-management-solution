@@ -9,6 +9,7 @@ import {
   notFutureDateSchema,
   optionalText,
 } from './common.js';
+import { fromCents, toCents } from './cents.js';
 import { catalogMarkSchema, markColorSchema, markIconSchema, markPrioritySchema } from './marks.js';
 import { dentitionStageSchema } from './patient-age.js';
 import {
@@ -18,6 +19,7 @@ import {
   toothPresenceChangeSchema,
   toothPresenceStateSchema,
 } from './tooth.js';
+import { visitTypeSchema } from './visit-flow.js';
 import { visitSchema } from './visits.js';
 
 /**
@@ -32,6 +34,17 @@ import { visitSchema } from './visits.js';
 /** A free-text note on a diagnosis or plan record — short, unlike a patient's own notes field
  * (`patients.ts`'s `optionalText(2000)`). */
 const RECORD_NOTE_MAX = 500;
+
+/**
+ * What a diagnosis was seen on (feature 10, ADR-0049): the clinical examination, or one of the
+ * patient's images. Null on a record means nobody said.
+ */
+export const diagnosisEvidenceSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('clinical_exam') }),
+  z.object({ kind: z.literal('image'), fileId: idSchema }),
+]);
+export type DiagnosisEvidence = z.infer<typeof diagnosisEvidenceSchema>;
+export const SEEN_ON_KINDS = ['clinical_exam', 'image'] as const;
 
 export const DIAGNOSIS_STATUSES = ['active', 'resolved'] as const;
 export type DiagnosisStatus = (typeof DIAGNOSIS_STATUSES)[number];
@@ -52,6 +65,7 @@ export const diagnosisRecordSchema = z.object({
   category: z.string().nullable(),
   status: diagnosisStatusSchema,
   note: z.string().nullable(),
+  seenOn: diagnosisEvidenceSchema.nullable(),
   /** A staff profile id (ADR-0020). */
   dentistId: idSchema,
   dentistName: z.string(),
@@ -75,9 +89,60 @@ export const PLAN_STATUSES = ['planned', 'in_progress', 'performed', 'cancelled'
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
 export const planStatusSchema = z.enum(PLAN_STATUSES);
 
+/**
+ * How soon a planned treatment is needed, which is also the phase of the plan it belongs to
+ * (feature 10, ADR-0045): the plan is always shown, totalled and quoted by priority.
+ */
+export const PLAN_PRIORITIES = ['urgent', 'high', 'elective'] as const;
+export const planPrioritySchema = z.enum(PLAN_PRIORITIES);
+export type PlanPriority = z.infer<typeof planPrioritySchema>;
+
 /** A plan that still has work to do: planned, or started and not yet done. */
 export const isOpenPlan = (plan: { status: PlanStatus }): boolean =>
   plan.status === 'planned' || plan.status === 'in_progress';
+
+/** The plans of one priority: the phase of the treatment plan they make up. */
+export interface PlanPhase<TPlan> {
+  priority: PlanPriority;
+  /** Still to do: work in progress first, then planned, each in the order recorded. */
+  open: TPlan[];
+  /** Done: they stay in their phase. */
+  done: TPlan[];
+  /** What is still to do costs, in the plans' currency; null for a phase with nothing open. */
+  total: { amount: string; currency: string } | null;
+}
+
+/**
+ * A patient's plans as the three phases of their treatment plan (ADR-0045), Urgent first:
+ * every list, total and quote of the plan is built from this. Cancelled plans are left out.
+ */
+export function planPhases<
+  TPlan extends {
+    status: PlanStatus;
+    priority: PlanPriority;
+    price: { amount: string; currency: string };
+  },
+>(plans: readonly TPlan[]): PlanPhase<TPlan>[] {
+  return PLAN_PRIORITIES.map((priority) => {
+    const own = plans.filter((plan) => plan.priority === priority);
+    const open = [
+      ...own.filter((plan) => plan.status === 'in_progress'),
+      ...own.filter((plan) => plan.status === 'planned'),
+    ];
+    const [first] = open;
+    return {
+      priority,
+      open,
+      done: own.filter((plan) => plan.status === 'performed'),
+      total: first
+        ? {
+            amount: fromCents(open.reduce((sum, plan) => sum + toCents(plan.price.amount), 0n)),
+            currency: first.price.currency,
+          }
+        : null,
+    };
+  });
+}
 
 /** One visit's work on a plan in progress (`treatment_plan_sessions`): no money, a note at most. */
 export const planSessionSchema = z.object({
@@ -106,6 +171,11 @@ export const treatmentPlanSchema = z.object({
   price: moneySchema,
   diagnosisRecordId: idSchema.nullable(),
   status: planStatusSchema,
+  priority: planPrioritySchema,
+  /** When the patient accepted it; null while it is only proposed. */
+  acceptedAt: isoDateTimeSchema.nullable(),
+  /** How many sessions the work usually takes (from the catalog when planned), if more than one. */
+  estimatedSessions: z.number().int().positive().nullable(),
   note: z.string().nullable(),
   /** A staff profile id (ADR-0020). */
   dentistId: idSchema,
@@ -114,8 +184,6 @@ export const treatmentPlanSchema = z.object({
   recordedBy: idSchema,
   recordedInVisitId: idSchema.nullable(),
   recordedAt: isoDateTimeSchema,
-  /** The named plan it belongs to, if any. */
-  groupId: idSchema.nullable(),
   /** Set once the work was started (ADR-0032); kept after it is done. */
   startedInVisitId: idSchema.nullable(),
   startedAt: isoDateTimeSchema.nullable(),
@@ -127,22 +195,6 @@ export const treatmentPlanSchema = z.object({
   cancelledAt: isoDateTimeSchema.nullable(),
 });
 export type TreatmentPlan = z.infer<typeof treatmentPlanSchema>;
-
-/** A named plan (`plan_groups`): a title over some of the patient's planned procedures. It has no
- * status and no money of its own; its estimate is the sum of its open plans. */
-export const planGroupSchema = z.object({
-  id: idSchema,
-  patientId: idSchema,
-  title: z.string(),
-  note: z.string().nullable(),
-});
-export type PlanGroup = z.infer<typeof planGroupSchema>;
-
-export const planGroupInputSchema = z.object({
-  title: z.string().trim().min(1).max(120),
-  note: optionalText(RECORD_NOTE_MAX),
-});
-export type PlanGroupInput = z.infer<typeof planGroupInputSchema>;
 
 /** A free-text reason on a presence set by hand ("accident", "congenitally missing"). */
 const PRESENCE_REASON_MAX = 200;
@@ -171,13 +223,20 @@ export const toothPresenceRecordSchema = z.object({
 });
 export type ToothPresenceRecord = z.infer<typeof toothPresenceRecordSchema>;
 
+const seenOnInput = diagnosisEvidenceSchema.nullish().transform((seenOn) => seenOn ?? null);
+
 export const recordDiagnosisSchema = z.object({
   diagnosisId: idSchema,
   toothCode: toothCodeSchema,
   surfaces: surfacesSchema.default([]),
   note: optionalText(RECORD_NOTE_MAX),
+  seenOn: seenOnInput,
 });
 export type RecordDiagnosisInput = z.infer<typeof recordDiagnosisSchema>;
+
+/** `PATCH …/diagnoses/:recordId/seen-on`: what the diagnosis was seen on, or null to unsay it. */
+export const seenOnInputSchema = z.object({ seenOn: diagnosisEvidenceSchema.nullable() });
+export type SeenOnInput = z.infer<typeof seenOnInputSchema>;
 
 export const planTreatmentSchema = z.object({
   procedureId: idSchema,
@@ -185,24 +244,20 @@ export const planTreatmentSchema = z.object({
   jaw: jawSchema.optional(),
   surfaces: surfacesSchema.default([]),
   note: optionalText(RECORD_NOTE_MAX),
-  /** One of the patient's named plans. */
-  groupId: idSchema.optional(),
+  priority: planPrioritySchema,
+  /** The diagnosis this treats: one of the patient's active diagnoses on the same tooth. Left
+   * out, the tooth's most recent active diagnosis is linked. */
+  diagnosisRecordId: idSchema.optional(),
 });
 export type PlanTreatmentInput = z.infer<typeof planTreatmentSchema>;
+
+/** `PATCH /visits/:id/plans/:planId/priority`. */
+export const planPriorityInputSchema = z.object({ priority: planPrioritySchema });
+export type PlanPriorityInput = z.infer<typeof planPriorityInputSchema>;
 
 /** Continue today: this visit's session on a plan in progress. */
 export const recordSessionSchema = z.object({ note: optionalText(RECORD_NOTE_MAX) });
 export type RecordSessionInput = z.infer<typeof recordSessionSchema>;
-
-/** A visit's answer to "which unfinished services do you continue today?" (unfinished spec U5):
- * the plans it continues; none is "Not today". */
-export const answerUnfinishedSchema = z.object({
-  continue: z
-    .array(idSchema)
-    .max(50)
-    .refine((ids) => new Set(ids).size === ids.length, { message: 'Each plan once' }),
-});
-export type AnswerUnfinishedInput = z.infer<typeof answerUnfinishedSchema>;
 
 /**
  * Recording on the patient record, outside a visit (`chart:write`, ADR-0031). `dentistId` is a
@@ -218,13 +273,13 @@ export const planPatientTreatmentSchema = planTreatmentSchema.extend({
 });
 export type PlanPatientTreatmentInput = z.infer<typeof planPatientTreatmentSchema>;
 
-/** Moves an open plan between named plans (`groupId: null` ungroups it) or edits its note. */
+/** Changes an open plan's priority, its note, or both. */
 export const updatePlanSchema = z
   .object({
-    groupId: idSchema.nullable().optional(),
+    priority: planPrioritySchema.optional(),
     note: optionalText(RECORD_NOTE_MAX).optional(),
   })
-  .refine((patch) => patch.groupId !== undefined || patch.note !== undefined, {
+  .refine((patch) => patch.priority !== undefined || patch.note !== undefined, {
     message: 'Change at least one field',
   });
 export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
@@ -402,8 +457,6 @@ export const patientChartSchema = z.object({
   presence: z.array(toothPresenceRecordSchema),
   diagnoses: z.array(diagnosisRecordSchema),
   plans: z.array(treatmentPlanSchema),
-  /** The patient's named plans, oldest first. */
-  planGroups: z.array(planGroupSchema),
   /** Completed services, most recent first. */
   history: z.array(historyServiceSchema),
   liveVisitId: idSchema.nullable(),
@@ -441,10 +494,18 @@ export const toothHistorySchema = z.object({
 });
 export type ToothHistory = z.infer<typeof toothHistorySchema>;
 
+/** `GET /clinical/patients/:id/last-visit?type=`: the last counted visit, or the last of one
+ * type ("Last hygiene visit"). */
+export const lastVisitQuerySchema = z.object({ type: visitTypeSchema.optional() });
+export type LastVisitQuery = z.infer<typeof lastVisitQuerySchema>;
+
 /** `GET /clinical/patients/:id/last-visit`: `null` when the patient has no completed visit. */
 export const lastVisitSchema = z
   .object({
     id: idSchema,
+    displayNumber: z.number().int().positive(),
+    type: visitTypeSchema,
+    reason: z.string().nullable(),
     date: isoDateSchema,
     dentistName: z.string(),
     durationMinutes: z.number().int().positive(),
@@ -461,15 +522,39 @@ export const lastVisitSchema = z
   .nullable();
 export type LastVisit = z.infer<typeof lastVisitSchema>;
 
-/** `GET /clinical/patients/:id/summary` (spec W8): the Record overview's treatment counts. */
-export const clinicalSummarySchema = z.object({
-  visits: z.number().int().nonnegative(),
-  activeDiagnoses: z.number().int().nonnegative(),
-  plannedProcedures: z.number().int().nonnegative(),
-  teethTreated: z.number().int().nonnegative(),
-  servicesPerformed: z.number().int().nonnegative(),
-  /** Among the teeth of the chart the patient is on (H1, D8). */
-  missingTeeth: z.number().int().nonnegative(),
-  implants: z.number().int().nonnegative(),
+/** `GET /visits/start-options?patientId=`: the type the popover suggests (`suggestVisitType`). */
+export const startOptionsSchema = z.object({
+  suggestedType: visitTypeSchema,
 });
-export type ClinicalSummary = z.infer<typeof clinicalSummarySchema>;
+export type StartOptions = z.infer<typeof startOptionsSchema>;
+
+export const startOptionsQuerySchema = z.object({ patientId: idSchema });
+export type StartOptionsQuery = z.infer<typeof startOptionsQuerySchema>;
+
+/**
+ * `GET /clinical/patients/:id/history-confirmation`: the last time a dentist confirmed the
+ * patient's medical history in a visit (ADR-0046); null when none ever did.
+ */
+export const patientHistoryConfirmationSchema = z.object({
+  confirmation: z
+    .object({ at: isoDateTimeSchema, byName: z.string(), visitId: idSchema })
+    .nullable(),
+});
+export type PatientHistoryConfirmation = z.infer<typeof patientHistoryConfirmationSchema>;
+
+/**
+ * `GET /clinical/patients/:id/file-citations`: per file, the diagnoses that were seen on it
+ * (ADR-0049), for the image viewer.
+ */
+export const fileCitationSchema = z.object({
+  fileId: idSchema,
+  diagnoses: z.array(
+    z.object({
+      recordId: idSchema,
+      toothCode: toothCodeSchema,
+      name: z.string(),
+      status: diagnosisStatusSchema,
+    }),
+  ),
+});
+export type FileCitation = z.infer<typeof fileCitationSchema>;

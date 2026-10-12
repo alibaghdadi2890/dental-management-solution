@@ -11,7 +11,7 @@ import { CLOCK } from '../../../platform/clock/clock.module';
 import { RequestContext } from '../../../platform/cls/request-context';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
-import { VisitsService } from '../../clinical';
+import { VisitListService } from '../../clinical';
 import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
@@ -139,7 +139,7 @@ export class PatientExportService {
     private readonly users: UsersService,
     private readonly views: PatientViewsService,
     private readonly entries: LedgerEntriesRepository,
-    private readonly visits: VisitsService,
+    private readonly visits: VisitListService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 

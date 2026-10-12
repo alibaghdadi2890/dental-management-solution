@@ -2,7 +2,6 @@ import type {
   AuditEntry,
   AuditPage,
   Branch,
-  ClinicalSummary,
   DiagnosisItem,
   Patient,
   PatientChart,
@@ -86,7 +85,7 @@ describe('clinical: tooth presence (missing, not erupted, implant)', () => {
   const startVisit = async (patient: Patient): Promise<Visit> => {
     const response = await dentist.agent
       .post('/api/v1/visits')
-      .send({ patientId: patient.id, dentistId: dentist.user.profileId });
+      .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as StartVisitResult).visit;
   };
@@ -500,7 +499,7 @@ describe('clinical: tooth presence (missing, not erupted, implant)', () => {
       const plan = await ok<PlanResult>(
         dentist.agent
           .post(visitPath(visit.id, 'plans'))
-          .send({ procedureId: service.extraction.id, toothCode: '38' }),
+          .send({ priority: 'high', procedureId: service.extraction.id, toothCode: '38' }),
         201,
       );
       expect(await presenceOf(patient)).toEqual({});
@@ -545,17 +544,12 @@ describe('clinical: tooth presence (missing, not erupted, implant)', () => {
         '48': 'missing',
         '36': 'implant',
       });
-      const summary = await ok<ClinicalSummary>(dentist.agent.get(recordPath(patient, 'summary')));
-      expect(summary).toMatchObject({ missingTeeth: 4, implants: 1 });
 
       // Undo takes the whole batch back.
       const undone = await ok<{ chart: PatientChart }>(
         dentist.agent.delete(recordPath(patient, `presence?ids=${result.presenceIds.join(',')}`)),
       );
       expect(undone.chart.presence).toEqual([]);
-      expect(
-        await ok<ClinicalSummary>(dentist.agent.get(recordPath(patient, 'summary'))),
-      ).toMatchObject({ missingTeeth: 0, implants: 0 });
     });
 
     it('records a tooth lost in an accident with its date and reason; the next visit shows it', async () => {
@@ -663,9 +657,6 @@ describe('clinical: tooth presence (missing, not erupted, implant)', () => {
         201,
       );
       expect((await chartOf(child)).dentition.stage).toBe('primary');
-      expect(
-        await ok<ClinicalSummary>(dentist.agent.get(recordPath(child, 'summary'))),
-      ).toMatchObject({ missingTeeth: 1, implants: 0 });
     });
   });
 

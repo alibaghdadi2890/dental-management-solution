@@ -38,12 +38,13 @@ export class UnknownDentistError extends DomainError {
   readonly kind = 'invalid';
 }
 
-/**
- * The unioned medical alerts of a merge exceed `MEDICAL_ALERTS_MAX` (`@dcm/contracts`). Alerts are
- * never truncated (a dropped allergy is a clinical risk, design Q8): the caller must remove some
- * alerts from one of the two records before merging.
- */
-export class MergeAlertsOverflowError extends DomainError {
-  readonly code = 'patient.merge_alerts_overflow';
-  readonly kind = 'invalid';
+/** A list option that a patient's history uses can only be deactivated (feature 10, ADR-0046). */
+export class MedicalOptionInUseError extends DomainError {
+  readonly code = 'medical_option.in_use';
+  readonly kind = 'conflict';
+}
+
+export class MedicalOptionNotFoundError extends DomainError {
+  readonly code = 'medical_option.not_found';
+  readonly kind = 'not_found';
 }

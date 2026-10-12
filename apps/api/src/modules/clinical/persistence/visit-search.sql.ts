@@ -1,4 +1,4 @@
-import type { VisitStatus } from '@dcm/contracts';
+import type { VisitStatus, VisitType } from '@dcm/contracts';
 import { and, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { visits, visitServices } from './schema';
 
@@ -15,6 +15,7 @@ export interface VisitCriteria {
   fromDate?: string | undefined;
   dentistId?: string | undefined;
   roomId?: string | undefined;
+  type?: VisitType | undefined;
   match?: VisitTextMatch | undefined;
   /** Restricts to these visits (`billing`'s Unpaid tab); an empty list matches nothing. */
   idsIn?: readonly string[] | undefined;
@@ -64,6 +65,7 @@ export function whereFor(criteria: VisitCriteria): SQL {
   if (criteria.fromDate !== undefined) conditions.push(gte(visits.localDate, criteria.fromDate));
   if (criteria.dentistId !== undefined) conditions.push(eq(visits.dentistId, criteria.dentistId));
   if (criteria.roomId !== undefined) conditions.push(eq(visits.roomId, criteria.roomId));
+  if (criteria.type !== undefined) conditions.push(eq(visits.type, criteria.type));
   if (criteria.match !== undefined) conditions.push(textCondition(criteria.match));
   if (criteria.idsIn !== undefined) {
     conditions.push(sql`${visits.id} = any(${uuidList(criteria.idsIn)})`);

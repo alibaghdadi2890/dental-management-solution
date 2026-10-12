@@ -1,4 +1,4 @@
-import type { ToothPresenceState } from '@dcm/contracts';
+import type { PlanPriority, ToothPresenceState } from '@dcm/contracts';
 import type { DomainEvent } from '../../../platform/events/domain-event';
 
 /**
@@ -19,6 +19,17 @@ export type DiagnosisRecorded = DomainEvent<
     toothCode: string;
     diagnosisId: string;
   }
+>;
+
+/**
+ * A diagnosis names the image it was seen on (feature 10, ADR-0049). Published inside the
+ * writing transaction: `files` checks that the file is this patient's and refuses it otherwise,
+ * which rolls the write back.
+ */
+export const DIAGNOSIS_EVIDENCE_CITED = 'DiagnosisEvidenceCited';
+export type DiagnosisEvidenceCited = DomainEvent<
+  typeof DIAGNOSIS_EVIDENCE_CITED,
+  { recordId: string; patientId: string; fileId: string }
 >;
 
 export const DIAGNOSIS_RESOLVED = 'DiagnosisResolved';
@@ -63,6 +74,20 @@ export type TreatmentPerformed = DomainEvent<
     serviceId: string;
     toothCode: string | null;
   }
+>;
+
+/** The plan moved to another phase of the treatment plan (ADR-0045). */
+export const TREATMENT_PRIORITISED = 'TreatmentPrioritised';
+export type TreatmentPrioritised = DomainEvent<
+  typeof TREATMENT_PRIORITISED,
+  { planId: string; visitId: string | null; patientId: string; priority: PlanPriority }
+>;
+
+/** The patient accepted the proposed treatment, or the acceptance was withdrawn. */
+export const TREATMENT_ACCEPTED = 'TreatmentAccepted';
+export type TreatmentAccepted = DomainEvent<
+  typeof TREATMENT_ACCEPTED,
+  { planId: string; patientId: string; accepted: boolean }
 >;
 
 export const TREATMENT_CANCELLED = 'TreatmentCancelled';

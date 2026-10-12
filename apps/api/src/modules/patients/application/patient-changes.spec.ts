@@ -5,6 +5,17 @@ import { assertMergePhoneRule, changesOf, mergeSet, normalizeFields } from './pa
 import { toListItem, toPatient } from './patient-mapping';
 
 const DENTIST = '01a0e36d-9ddf-74a5-a703-0cf252c75393';
+const PENICILLIN = { id: '01a0e36d-9ddf-74a5-a703-000000000001', name: 'Penicillin' };
+const LATEX = { id: '01a0e36d-9ddf-74a5-a703-000000000002', name: 'Latex' };
+
+/** A whole history as an edit sends it. */
+const history = (allergyIds: string[], medication: string | null = null) => ({
+  noKnownAllergies: false,
+  allergyIds,
+  noConditions: false,
+  conditionIds: [],
+  medication,
+});
 
 function patient(overrides: Partial<DomainPatient> = {}): DomainPatient {
   return {
@@ -20,7 +31,12 @@ function patient(overrides: Partial<DomainPatient> = {}): DomainPatient {
     address: null,
     insurance: null,
     notes: null,
-    medicalAlerts: ['Penicillin'],
+    noKnownAllergies: false,
+    allergies: [PENICILLIN],
+    noConditions: false,
+    conditions: [],
+    medication: null,
+    firstVisitType: null,
     primaryDentistId: DENTIST,
     dentitionOverride: null,
     externalId: null,
@@ -171,11 +187,14 @@ describe('changesOf', () => {
     expect(changesOf(patient(), patch, normalized)).toEqual({ set: {}, fields: [] });
   });
 
-  it('sees no change for the same alerts, and a change when their order differs', () => {
-    expect(changesOf(patient(), { medicalAlerts: ['Penicillin'] }, {}).fields).toEqual([]);
-    expect(changesOf(patient(), { medicalAlerts: ['Latex', 'Penicillin'] }, {}).fields).toEqual([
-      'medicalAlerts',
-    ]);
+  it('sees no change for the same medical history, and one for another item or line', () => {
+    const same = { medicalHistory: history([PENICILLIN.id]) };
+    expect(changesOf(patient(), same, {}).fields).toEqual([]);
+    const more = { medicalHistory: history([LATEX.id, PENICILLIN.id]) };
+    expect(changesOf(patient(), more, {})).toEqual({ set: more, fields: ['medicalHistory'] });
+    expect(
+      changesOf(patient(), { medicalHistory: history([PENICILLIN.id], 'Warfarin') }, {}).fields,
+    ).toEqual(['medicalHistory']);
   });
 
   it('lists only the changed fields, with the normalised values', () => {
@@ -205,19 +224,35 @@ describe('changesOf', () => {
 
 describe('mergeSet', () => {
   it('re-derives the national digits of a picked E.164 phone, whatever the country', () => {
-    expect(mergeSet({ phone: '+33612345678', address: 'Rue X' }, 'LB')).toEqual({
+    expect(mergeSet(patient(), { phone: '+33612345678', address: 'Rue X' }, 'LB')).toEqual({
       phone: { e164: '+33612345678', national: '0612345678' },
       address: 'Rue X',
     });
   });
 
   it('passes a patch without a phone through, and a null phone as a clear', () => {
-    expect(mergeSet({ medicalAlerts: ['Latex'] }, 'LB')).toEqual({ medicalAlerts: ['Latex'] });
-    expect(mergeSet({ phone: null }, 'LB')).toEqual({ phone: null });
+    expect(mergeSet(patient(), { address: 'Rue X' }, 'LB')).toEqual({ address: 'Rue X' });
+    expect(mergeSet(patient(), { phone: null }, 'LB')).toEqual({ phone: null });
+  });
+
+  it('stores the history whole: the unioned items with the picked medication line', () => {
+    const medicalItems = {
+      noKnownAllergies: false,
+      allergyIds: [PENICILLIN.id, LATEX.id],
+      noConditions: true,
+      conditionIds: [],
+    };
+    expect(mergeSet(patient({ medication: 'Aspirin' }), { medicalItems }, 'LB')).toEqual({
+      medicalHistory: { ...medicalItems, medication: 'Aspirin' },
+    });
+    // Only the medication line was picked: the kept record's items stay.
+    expect(mergeSet(patient(), { medication: 'Warfarin' }, 'LB')).toEqual({
+      medicalHistory: history([PENICILLIN.id], 'Warfarin'),
+    });
   });
 
   it('refuses a stored phone that is not valid E.164', () => {
-    expect(() => mergeSet({ phone: 'not a phone' }, 'LB')).toThrow('not a valid E.164');
+    expect(() => mergeSet(patient(), { phone: 'not a phone' }, 'LB')).toThrow('not a valid E.164');
   });
 });
 

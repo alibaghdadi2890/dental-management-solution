@@ -2,9 +2,11 @@
 export { PatientsModule } from './patients.module';
 export { type PatientSearchInternal, PatientsService } from './application/patients.service';
 export { ContactsService } from './application/contacts.service';
+export { MedicalOptionsService } from './application/medical-options.service';
 export type { PatientRankKeys } from './domain/rank-keys';
 export {
-  MergeAlertsOverflowError,
+  MedicalOptionInUseError,
+  MedicalOptionNotFoundError,
   MergeSameError,
   PatientArchivedError,
   PatientMergedError,

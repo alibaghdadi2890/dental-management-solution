@@ -2,7 +2,7 @@ import type { OwingCount, PatientListQuery, PatientPage } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
-import { VisitsService } from '../../clinical';
+import { VisitListService } from '../../clinical';
 import { type PatientRankKeys, type PatientSearchInternal, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { rankByBalance } from '../domain/balances';
@@ -47,7 +47,7 @@ export class PatientViewsService {
     private readonly patients: PatientsService,
     private readonly billing: BillingService,
     private readonly entries: LedgerEntriesRepository,
-    private readonly visits: VisitsService,
+    private readonly visits: VisitListService,
   ) {}
 
   /** `GET /billing/patients`: any valid list query, same page shape as `GET /patients`. */

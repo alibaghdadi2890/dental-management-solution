@@ -1,6 +1,7 @@
 /**
  * What a visit has put on the record, counted by the service from the rows that point at it:
- * non-deleted services; non-deleted diagnoses and plans recorded in it; diagnoses resolved and
+ * non-deleted services, except one the visit type added by itself that nobody has edited
+ * (ADR-0047); non-deleted diagnoses and plans recorded in it; diagnoses resolved and
  * plans performed or cancelled in it; sessions of plans in progress (ADR-0032) that aren't
  * removed; tooth presence set in it, by hand or by a service (feature 7); and its notes.
  */
@@ -19,6 +20,7 @@ export interface DiscardFacts {
 /**
  * A visit can be discarded only while it is empty (spec §Discard, W4), so a discard never erases
  * clinical history. The visit-level discount isn't a fact: on its own it doesn't block a discard.
+ * Neither are the visit's type, reason, step or worklist: they say why it was opened.
  * Whitespace-only notes count as empty.
  */
 export function isDiscardable(facts: DiscardFacts): boolean {

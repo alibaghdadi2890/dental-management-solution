@@ -2,16 +2,25 @@ import {
   CHARGE_UNITS,
   DIAGNOSIS_STATUSES,
   DISCOUNT_MODES,
+  ENTRY_VISIT_TYPES,
+  type EntryVisitType,
   JAWS,
   MARK_COLORS,
   MARK_ICONS,
   type MarkColor,
   type MarkIcon,
+  PAIN_SINCE,
+  PLAN_PRIORITIES,
   PLAN_STATUSES,
+  SEEN_ON_KINDS,
   SURFACES,
   TOOTH_EFFECTS,
   TOOTH_PRESENCE_STATES,
   VISIT_STATUSES,
+  VISIT_STEPS,
+  VISIT_TYPES,
+  VISIT_VIEW_MODES,
+  type VisitStep,
 } from '@dcm/contracts';
 import { sql, type AnyColumn } from 'drizzle-orm';
 import {
@@ -27,6 +36,7 @@ import {
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -75,6 +85,10 @@ export const procedures = pgTable(
     color: text().$type<MarkColor>(),
     icon: text().$type<MarkIcon>(),
     markPriority: smallint().notNull().default(5),
+    /** "Added on" (feature 10, ADR-0047): a visit of this type starts with this service. */
+    addedOnVisitType: text().$type<EntryVisitType>(),
+    /** How many sessions the work usually takes, when more than one ("session 2 of 3"). */
+    typicalSessions: smallint(),
     deletedAt: deletedAtColumn(),
     ...timestamps(),
   },
@@ -100,6 +114,16 @@ export const procedures = pgTable(
       sql`${table.chargeUnit} <> 'per_tooth' or ${table.color} is not null`,
     ),
     check('procedures_mark_priority_range', sql`${table.markPriority} between 0 and 9`),
+    check(
+      'procedures_added_on_known',
+      sql`${table.addedOnVisitType} in (${keyList(ENTRY_VISIT_TYPES)})`,
+    ),
+    // A service added by itself has no tooth or jaw to be asked for.
+    check(
+      'procedures_added_on_per_mouth',
+      sql`${table.addedOnVisitType} is null or ${table.chargeUnit}::text = 'per_mouth'`,
+    ),
+    check('procedures_typical_sessions_range', sql`${table.typicalSessions} between 2 and 20`),
     tenantIsolationPolicy(),
   ],
 );
@@ -146,6 +170,11 @@ export const discountMode = pgEnum('discount_mode', DISCOUNT_MODES);
 export const diagnosisStatus = pgEnum('diagnosis_status', DIAGNOSIS_STATUSES);
 export const planStatus = pgEnum('plan_status', PLAN_STATUSES);
 export const toothPresenceState = pgEnum('tooth_presence_state', TOOTH_PRESENCE_STATES);
+/** Feature 10 (ADR-0044, ADR-0045): why the patient is here, and the phase of a planned treatment. */
+export const visitType = pgEnum('visit_type', VISIT_TYPES);
+export const visitViewMode = pgEnum('visit_view_mode', VISIT_VIEW_MODES);
+export const painSince = pgEnum('pain_since', PAIN_SINCE);
+export const planPriority = pgEnum('plan_priority', PLAN_PRIORITIES);
 /** A correction with a reason (4b), or the discount set at checkout (checkout handoff, C4). */
 export const visitAmendmentKind = pgEnum('visit_amendment_kind', [
   'amendment',
@@ -199,6 +228,20 @@ export const visits = pgTable(
     roomId: uuid(),
     dentistId: uuid().notNull(),
     startedBy: uuid().notNull(),
+    /** Why the patient is here; it decides the steps (feature 10, ADR-0044). Set at start. */
+    type: visitType().notNull(),
+    /** The step the visit is on, as last stored; `resolveStep` gives the one to open. */
+    currentStep: text().$type<VisitStep>().notNull(),
+    /** The Steps | All toggle, remembered with the visit. */
+    viewMode: visitViewMode().notNull().default('steps'),
+    /** The chief complaint. */
+    reason: text(),
+    /** An emergency's pain, 0–10; null = not rated. */
+    painScore: smallint(),
+    painSince: painSince(),
+    /** A dentist's "Confirmed with the patient" on the medical history (ADR-0046). */
+    historyConfirmedAt: instant(),
+    historyConfirmedBy: uuid(),
     status: visitStatus().notNull().default('in_progress'),
     /** The tenant-local date the visit started on. */
     localDate: date().notNull(),
@@ -207,7 +250,6 @@ export const visits = pgTable(
     pausedSeconds: integer().notNull().default(0),
     completedAt: instant(),
     completedBy: uuid(),
-    unfinishedAnsweredAt: instant(),
     /** The checkout was closed without a payment (ADR-0033): the visit left the checkout queue. */
     checkedOutAt: instant(),
     checkedOutBy: uuid(),
@@ -249,6 +291,17 @@ export const visits = pgTable(
     index('visits_live_idx')
       .on(table.tenantId, table.status)
       .where(sql`${table.status} in ${LIVE_STATUS_LIST}`),
+    check('visits_current_step_known', sql`${table.currentStep} in (${keyList(VISIT_STEPS)})`),
+    check('visits_reason_length', sql`char_length(${table.reason}) between 1 and 500`),
+    check('visits_pain_score_range', sql`${table.painScore} between 0 and 10`),
+    check(
+      'visits_pain_emergency_only',
+      sql`(${table.painScore} is null and ${table.painSince} is null) or ${table.type}::text = 'emergency'`,
+    ),
+    check(
+      'visits_history_confirmed_fields',
+      sql`(${table.historyConfirmedAt} is null) = (${table.historyConfirmedBy} is null)`,
+    ),
     check('visits_paused_seconds_non_negative', sql`${table.pausedSeconds} >= 0`),
     check('visits_discount_value_non_negative', sql`${table.discountValue} >= 0`),
     check(
@@ -363,6 +416,13 @@ export const patientDiagnoses = pgTable(
     category: text(),
     status: diagnosisStatus().notNull().default('active'),
     note: text(),
+    /**
+     * What it was seen on (feature 10, ADR-0049): the clinical exam, or one of the patient's
+     * files. The file is `files`' row, so it carries no foreign key (CLAUDE.md §4 rule 1);
+     * `files` checks it in the writing transaction.
+     */
+    seenOn: text().$type<(typeof SEEN_ON_KINDS)[number]>(),
+    seenOnFileId: uuid(),
     dentistId: uuid().notNull(),
     recordedBy: uuid().notNull(),
     /** Null when recorded on the patient record, outside a visit (ADR-0031). */
@@ -397,6 +457,15 @@ export const patientDiagnoses = pgTable(
       columns: [table.tenantId, table.resolvedInVisitId],
       foreignColumns: [visits.tenantId, visits.id],
     }),
+    // The image viewer's "diagnoses that cite this file".
+    index('patient_diagnoses_seen_on_file_idx')
+      .on(table.tenantId, table.patientId, table.seenOnFileId)
+      .where(sql`${table.seenOnFileId} is not null`),
+    check('patient_diagnoses_seen_on_known', sql`${table.seenOn} in (${keyList(SEEN_ON_KINDS)})`),
+    check(
+      'patient_diagnoses_seen_on_file',
+      sql`(${table.seenOnFileId} is not null) = (${table.seenOn} is not distinct from 'image')`,
+    ),
     toothCodeCheck('patient_diagnoses_tooth_code_format', table.toothCode),
     surfacesCheck('patient_diagnoses_surfaces_valid', table.surfaces),
     // Resolve stamps both fields; reopen clears both.
@@ -404,32 +473,6 @@ export const patientDiagnoses = pgTable(
       'patient_diagnoses_resolved_fields',
       sql`case when ${table.status} = 'resolved' then ${table.resolvedInVisitId} is not null and ${table.resolvedAt} is not null else ${table.resolvedInVisitId} is null and ${table.resolvedAt} is null end`,
     ),
-    tenantIsolationPolicy(),
-  ],
-);
-
-/**
- * A named plan: a title over some of a patient's planned procedures (`treatment_plans.group_id`).
- * It carries no status and no money; removing it ungroups its plans.
- */
-export const planGroups = pgTable(
-  'plan_groups',
-  {
-    id: idColumn(),
-    tenantId: tenantIdColumn(),
-    patientId: uuid().notNull(),
-    title: text().notNull(),
-    note: text(),
-    createdBy: uuid().notNull(),
-    deletedAt: deletedAtColumn(),
-    ...timestamps(),
-  },
-  (table) => [
-    index('plan_groups_tenant_idx').on(table.tenantId),
-    // Target of the treatment_plans composite foreign key.
-    unique('plan_groups_tenant_id_unique').on(table.tenantId, table.id),
-    index('plan_groups_patient_idx').on(table.tenantId, table.patientId),
-    check('plan_groups_title_length', sql`char_length(${table.title}) between 1 and 120`),
     tenantIsolationPolicy(),
   ],
 );
@@ -460,14 +503,19 @@ export const treatmentPlans = pgTable(
     /** The tooth's most recent active diagnosis when planned; unlinked if that record is removed. */
     diagnosisRecordId: uuid(),
     status: planStatus().notNull().default('planned'),
+    /** How soon it is needed: also the phase of the plan it belongs to (ADR-0045). */
+    priority: planPriority().notNull(),
+    /** When the patient accepted it, and who recorded that; both null while only proposed. */
+    acceptedAt: instant(),
+    acceptedBy: uuid(),
+    /** The catalog's `typical_sessions` when it was planned. */
+    estimatedSessions: smallint(),
     note: text(),
     dentistId: uuid().notNull(),
     recordedBy: uuid().notNull(),
     /** Null when planned on the patient record, outside a visit (ADR-0031). */
     recordedInVisitId: uuid(),
     recordedAt: instant().notNull(),
-    /** The named plan it belongs to, if any. */
-    groupId: uuid(),
     /** The visit that started the work (ADR-0032); both set once started, kept when done. */
     startedInVisitId: uuid(),
     startedAt: instant(),
@@ -492,11 +540,6 @@ export const treatmentPlans = pgTable(
       name: 'treatment_plans_diagnosis_record_fk',
       columns: [table.tenantId, table.diagnosisRecordId],
       foreignColumns: [patientDiagnoses.tenantId, patientDiagnoses.id],
-    }),
-    foreignKey({
-      name: 'treatment_plans_group_fk',
-      columns: [table.tenantId, table.groupId],
-      foreignColumns: [planGroups.tenantId, planGroups.id],
     }),
     foreignKey({
       name: 'treatment_plans_recorded_visit_fk',
@@ -526,6 +569,11 @@ export const treatmentPlans = pgTable(
     ),
     jawMatchesUnit('treatment_plans_jaw_matches_unit', table.jaw, table.chargeUnit),
     check('treatment_plans_price_non_negative', sql`${table.priceAmount} >= 0`),
+    check(
+      'treatment_plans_accepted_fields',
+      sql`(${table.acceptedAt} is null) = (${table.acceptedBy} is null)`,
+    ),
+    check('treatment_plans_estimated_sessions_positive', sql`${table.estimatedSessions} >= 1`),
     // Start stamps both fields; undoing the first session clears both. Work in progress was
     // started. The status is compared as text (the enum grew in this migration, see 0019).
     check(
@@ -607,6 +655,8 @@ export const visitServices = pgTable(
     baseAmount: money().notNull(),
     discountAmount: money().notNull().default('0'),
     planId: uuid(),
+    /** Added at start because the catalog adds it on visits of this type (ADR-0047). */
+    autoAdded: boolean().notNull().default(false),
     recordedBy: uuid().notNull(),
     deletedAt: deletedAtColumn(),
     ...timestamps(),
@@ -644,6 +694,41 @@ export const visitServices = pgTable(
       'visit_services_discount_within_base',
       sql`${table.discountAmount} >= 0 and ${table.discountAmount} <= ${table.baseAmount}`,
     ),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/**
+ * A planned item on a visit's list for today (feature 10, ADR-0048): taken on at start, or
+ * ticked on Today's work; unticking deletes the row. It says what the visit intends, not what
+ * it did — that is the plan's own status and sessions — so it is a junction row, hard-deleted
+ * with nothing to keep, and a visit with only a worklist is still empty.
+ */
+export const visitPlanItems = pgTable(
+  'visit_plan_items',
+  {
+    tenantId: tenantIdColumn(),
+    visitId: uuid().notNull(),
+    planId: uuid().notNull(),
+    /** The order they were put on the list. */
+    position: smallint().notNull(),
+    addedBy: uuid().notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    primaryKey({ name: 'visit_plan_items_pk', columns: [table.visitId, table.planId] }),
+    index('visit_plan_items_tenant_idx').on(table.tenantId),
+    index('visit_plan_items_plan_idx').on(table.tenantId, table.planId),
+    foreignKey({
+      name: 'visit_plan_items_visit_fk',
+      columns: [table.tenantId, table.visitId],
+      foreignColumns: [visits.tenantId, visits.id],
+    }),
+    foreignKey({
+      name: 'visit_plan_items_plan_fk',
+      columns: [table.tenantId, table.planId],
+      foreignColumns: [treatmentPlans.tenantId, treatmentPlans.id],
+    }),
     tenantIsolationPolicy(),
   ],
 );

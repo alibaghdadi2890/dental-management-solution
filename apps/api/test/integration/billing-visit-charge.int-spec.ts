@@ -109,7 +109,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
   const startVisit = async (patient: Patient, agent: TestAgent = dentist.agent) => {
     const response = await agent
       .post('/api/v1/visits')
-      .send({ patientId: patient.id, dentistId: dentist.user.profileId });
+      .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as StartVisitResult).visit;
   };

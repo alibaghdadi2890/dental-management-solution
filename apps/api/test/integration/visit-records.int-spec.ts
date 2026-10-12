@@ -79,7 +79,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
   const startVisit = async (patient: Patient): Promise<Visit> => {
     const response = await dentist.agent
       .post('/api/v1/visits')
-      .send({ patientId: patient.id, dentistId: dentist.user.profileId });
+      .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as StartVisitResult).visit;
   };
@@ -133,7 +133,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
     visitId: string,
     body: Record<string, unknown>,
   ): Promise<PlanResult> => {
-    const response = await agent.post(path(visitId, 'plans')).send(body);
+    const response = await agent.post(path(visitId, 'plans')).send({ priority: 'high', ...body });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return response.body as PlanResult;
   };
@@ -486,7 +486,9 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         'visit.tooth_not_allowed',
       );
       await expectProblem(
-        dentist.agent.post(path(visit.id, 'plans')).send({ procedureId: service.whiten.id }),
+        dentist.agent
+          .post(path(visit.id, 'plans'))
+          .send({ priority: 'high', procedureId: service.whiten.id }),
         422,
         'visit.jaw_required',
       );
@@ -743,19 +745,21 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
       await expectProblem(
         dentist.agent
           .post(path(visit.id, 'plans'))
-          .send({ procedureId: service.clean.id, toothCode: '46' }),
+          .send({ priority: 'high', procedureId: service.clean.id, toothCode: '46' }),
         422,
         'visit.tooth_not_allowed',
       );
       await expectProblem(
-        dentist.agent.post(path(visit.id, 'plans')).send({ procedureId: service.crown.id }),
+        dentist.agent
+          .post(path(visit.id, 'plans'))
+          .send({ priority: 'high', procedureId: service.crown.id }),
         422,
         'visit.tooth_required',
       );
       await expectProblem(
         dentist.agent
           .post(path(visit.id, 'plans'))
-          .send({ procedureId: service.retired.id, toothCode: '46' }),
+          .send({ priority: 'high', procedureId: service.retired.id, toothCode: '46' }),
         422,
         'catalog.inactive',
       );
@@ -966,7 +970,9 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         frontdesk.agent.post(path(visit.id, `diagnoses/${id}/resolve`)),
         frontdesk.agent.post(path(visit.id, `diagnoses/${id}/reopen`)),
         frontdesk.agent.delete(path(visit.id, `diagnoses/${id}`)),
-        frontdesk.agent.post(path(visit.id, 'plans')).send({ procedureId: service.clean.id }),
+        frontdesk.agent
+          .post(path(visit.id, 'plans'))
+          .send({ priority: 'high', procedureId: service.clean.id }),
         frontdesk.agent.post(path(visit.id, `plans/${id}/perform`)),
         frontdesk.agent.post(path(visit.id, `plans/${id}/cancel`)),
         frontdesk.agent.delete(path(visit.id, `plans/${id}`)),
@@ -1003,7 +1009,9 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         'visit.not_live',
       );
       await expectProblem(
-        dentist.agent.post(path(visit.id, 'plans')).send({ procedureId: service.clean.id }),
+        dentist.agent
+          .post(path(visit.id, 'plans'))
+          .send({ priority: 'high', procedureId: service.clean.id }),
         409,
         'visit.not_live',
       );

@@ -1,4 +1,4 @@
-import type { CatalogMark, ServiceItem, ToothEffect } from '@dcm/contracts';
+import type { CatalogMark, EntryVisitType, ServiceItem, ToothEffect } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -26,6 +26,8 @@ function toService(row: ProcedureRow): ServiceItem {
     color: row.color,
     icon: row.icon,
     markPriority: row.markPriority,
+    addedOnVisitType: row.addedOnVisitType,
+    typicalSessions: row.typicalSessions,
   };
 }
 
@@ -43,6 +45,8 @@ function toRow(item: ServiceItem) {
     color: item.color,
     icon: item.icon,
     markPriority: item.markPriority,
+    addedOnVisitType: item.addedOnVisitType,
+    typicalSessions: item.typicalSessions,
   };
 }
 
@@ -63,6 +67,34 @@ export class ProceduresRepository implements CatalogStore<ServiceItem> {
           .orderBy(asc(procedures.createdAt), asc(procedures.id))
       ).map(toService),
     );
+  }
+
+  /**
+   * The active services a visit of `type` starts with ("Added on", ADR-0047), by code, read
+   * `FOR KEY SHARE` so none is deleted before the visit's services point at it.
+   */
+  addedOn(type: EntryVisitType): Promise<ServiceItem[]> {
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(procedures)
+          .where(and(eq(procedures.addedOnVisitType, type), eq(procedures.active, true), live))
+          .orderBy(asc(procedures.code), asc(procedures.id))
+          .for('key share')
+      ).map(toService),
+    );
+  }
+
+  /** How many sessions the service usually takes, if more than one; null for an unknown id. */
+  async typicalSessionsOf(id: string): Promise<number | null> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select({ sessions: procedures.typicalSessions })
+        .from(procedures)
+        .where(eq(procedures.id, id)),
+    );
+    return row?.sessions ?? null;
   }
 
   /**

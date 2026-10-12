@@ -2,23 +2,23 @@ import {
   idSchema,
   patientChartResultSchema,
   patientPresenceResultSchema,
-  planGroupInputSchema,
   planPatientTreatmentSchema,
   recordPatientDiagnosisSchema,
   removePresenceQuerySchema,
+  seenOnInputSchema,
   setPresenceOnPatientSchema,
   updatePlanSchema,
 } from '@dcm/contracts';
-import { Body, Controller, Delete, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
-import { PatientRecordsService } from '../application/patient-records.service';
+import { PatientRecordsService } from '../application/records/patient-records.service';
 
 class RecordPatientDiagnosisDto extends createZodDto(recordPatientDiagnosisSchema) {}
 class PlanPatientTreatmentDto extends createZodDto(planPatientTreatmentSchema) {}
 class UpdatePlanDto extends createZodDto(updatePlanSchema) {}
-class PlanGroupInputDto extends createZodDto(planGroupInputSchema) {}
+class SeenOnDto extends createZodDto(seenOnInputSchema) {}
 class PatientChartResultDto extends createZodDto(patientChartResultSchema) {}
 class SetPresenceDto extends createZodDto(setPresenceOnPatientSchema) {}
 class RemovePresenceQueryDto extends createZodDto(removePresenceQuerySchema) {}
@@ -26,12 +26,12 @@ class PatientPresenceResultDto extends createZodDto(patientPresenceResultSchema)
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class DiagnosisParamsDto extends createZodDto(z.object({ id: idSchema, recordId: idSchema })) {}
 class PlanParamsDto extends createZodDto(z.object({ id: idSchema, planId: idSchema })) {}
-class GroupParamsDto extends createZodDto(z.object({ id: idSchema, groupId: idSchema })) {}
 
 /**
  * Charting on the patient record, outside a visit (docs/modules/clinical.md, ADR-0031):
- * diagnoses, plans, named plans and tooth presence. Every route needs `chart:write` and answers `{ chart }`, the
- * patient's chart as it now is, so the client replaces its cache without a refetch.
+ * diagnoses, plans — their priority and the patient's acceptance too (ADR-0045) — and tooth
+ * presence. Every route needs `chart:write` and answers `{ chart }`, the patient's chart as it
+ * now is, so the client replaces its cache without a refetch.
  */
 @Controller('clinical/patients')
 export class PatientRecordsController {
@@ -67,6 +67,13 @@ export class PatientRecordsController {
     return this.records.removeDiagnosis(params.id, params.recordId);
   }
 
+  @Patch(':id/diagnoses/:recordId/seen-on')
+  @RequirePermission('chart:write')
+  @ZodResponse({ type: PatientChartResultDto })
+  setSeenOn(@Param() params: DiagnosisParamsDto, @Body() body: SeenOnDto) {
+    return this.records.setSeenOn(params.id, params.recordId, body);
+  }
+
   @Post(':id/plans')
   @RequirePermission('chart:write')
   @ZodResponse({ status: 201, type: PatientChartResultDto })
@@ -81,6 +88,21 @@ export class PatientRecordsController {
     return this.records.updatePlan(params.id, params.planId, body);
   }
 
+  /** The patient accepted the proposed treatment; DELETE withdraws it while still planned. */
+  @Put(':id/plans/:planId/acceptance')
+  @RequirePermission('chart:write')
+  @ZodResponse({ type: PatientChartResultDto })
+  acceptPlan(@Param() params: PlanParamsDto) {
+    return this.records.setAcceptance(params.id, params.planId, true);
+  }
+
+  @Delete(':id/plans/:planId/acceptance')
+  @RequirePermission('chart:write')
+  @ZodResponse({ type: PatientChartResultDto })
+  unacceptPlan(@Param() params: PlanParamsDto) {
+    return this.records.setAcceptance(params.id, params.planId, false);
+  }
+
   @Post(':id/plans/:planId/cancel')
   @RequirePermission('chart:write')
   @ZodResponse({ status: 200, type: PatientChartResultDto })
@@ -93,26 +115,5 @@ export class PatientRecordsController {
   @ZodResponse({ type: PatientChartResultDto })
   removePlan(@Param() params: PlanParamsDto) {
     return this.records.removePlan(params.id, params.planId);
-  }
-
-  @Post(':id/plan-groups')
-  @RequirePermission('chart:write')
-  @ZodResponse({ status: 201, type: PatientChartResultDto })
-  createGroup(@Param() params: PatientParamsDto, @Body() body: PlanGroupInputDto) {
-    return this.records.createGroup(params.id, body);
-  }
-
-  @Patch(':id/plan-groups/:groupId')
-  @RequirePermission('chart:write')
-  @ZodResponse({ type: PatientChartResultDto })
-  updateGroup(@Param() params: GroupParamsDto, @Body() body: PlanGroupInputDto) {
-    return this.records.updateGroup(params.id, params.groupId, body);
-  }
-
-  @Delete(':id/plan-groups/:groupId')
-  @RequirePermission('chart:write')
-  @ZodResponse({ type: PatientChartResultDto })
-  deleteGroup(@Param() params: GroupParamsDto) {
-    return this.records.deleteGroup(params.id, params.groupId);
   }
 }

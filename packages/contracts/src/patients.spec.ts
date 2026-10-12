@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   dentitionOverrideSchema,
   MERGE_FIELDS,
-  medicalAlertsSchema,
   patientArchiveSchema,
   patientCreateSchema,
   patientInputSchema,
@@ -41,43 +40,6 @@ describe('profileCompleteness', () => {
   });
 });
 
-describe('medicalAlertsSchema', () => {
-  it('trims and de-duplicates case-insensitively, keeping the first occurrence', () => {
-    expect(medicalAlertsSchema.parse([' Penicillin ', 'penicillin', 'Latex'])).toEqual([
-      'Penicillin',
-      'Latex',
-    ]);
-  });
-
-  it('collapses NFC/NFD variants of the same alert (e.g. "Café")', () => {
-    const nfd = 'Café'; // "e" + combining acute accent (U+0301)
-    const nfc = 'Café'; // precomposed "é" (U+00E9)
-    expect(medicalAlertsSchema.parse([nfd, nfc])).toEqual(['Café']);
-    // The stored value is normalized to NFC even when it's the only occurrence.
-    expect(medicalAlertsSchema.parse([nfd])[0]).toBe('Café');
-  });
-
-  it('caps at 20 items and rejects an item over 60 characters', () => {
-    expect(
-      medicalAlertsSchema.safeParse(Array.from({ length: 21 }, (_, i) => `Alert ${i}`)).success,
-    ).toBe(false);
-    expect(medicalAlertsSchema.safeParse(['A'.repeat(61)]).success).toBe(false);
-    expect(
-      medicalAlertsSchema.safeParse(Array.from({ length: 20 }, (_, i) => `Alert ${i}`)).success,
-    ).toBe(true);
-  });
-
-  it('normalizes to NFC before enforcing the 60-character max, not after', () => {
-    // 60 composed characters, typed in decomposed form: "e" + combining acute (U+0301) each,
-    // so the raw string is 120 UTF-16 code units before normalization collapses it to 60.
-    const decomposed = 'é'.repeat(60);
-    const composed = 'é'.repeat(60);
-    expect(decomposed).toHaveLength(120);
-    expect(composed).toHaveLength(60);
-    expect(medicalAlertsSchema.parse([decomposed])).toEqual([composed]);
-  });
-});
-
 describe('patientInputSchema', () => {
   const input = { fullName: '  Jane Doe ', phone: ' 03 123 456 ' };
 
@@ -89,10 +51,26 @@ describe('patientInputSchema', () => {
     expect(parsed.email).toBeNull();
   });
 
-  it('defaults sex to unknown and medicalAlerts to an empty array', () => {
+  it('defaults sex to unknown and the medical history to "not asked"', () => {
     const parsed = patientInputSchema.parse(input);
     expect(parsed.sex).toBe('unknown');
-    expect(parsed.medicalAlerts).toEqual([]);
+    expect(parsed.medicalHistory).toEqual({
+      noKnownAllergies: false,
+      allergyIds: [],
+      noConditions: false,
+      conditionIds: [],
+      medication: null,
+    });
+    expect(parsed.firstVisitType).toBeNull();
+  });
+
+  it('takes the visit a new patient comes for, but never a treatment', () => {
+    expect(patientInputSchema.parse({ ...input, firstVisitType: 'hygiene' }).firstVisitType).toBe(
+      'hygiene',
+    );
+    expect(patientInputSchema.safeParse({ ...input, firstVisitType: 'treatment' }).success).toBe(
+      false,
+    );
   });
 
   it('treats a blank, null or absent date of birth as null', () => {
@@ -163,11 +141,11 @@ describe('patientPatchSchema', () => {
     expect(patientPatchSchema.safeParse({}).success).toBe(false);
   });
 
-  it('never injects the sex or medicalAlerts defaults for an untouched patch', () => {
+  it('never injects the sex or medical history defaults for an untouched patch', () => {
     const parsed = patientPatchSchema.parse({ notes: 'Follow up' });
     expect(parsed).toEqual({ notes: 'Follow up' });
     expect(parsed).not.toHaveProperty('sex');
-    expect(parsed).not.toHaveProperty('medicalAlerts');
+    expect(parsed).not.toHaveProperty('medicalHistory');
   });
 
   it('clears the date of birth when explicitly patched to null, without touching other fields', () => {
@@ -253,7 +231,8 @@ describe('patientPageSchema', () => {
       phone: '+9613123456',
       dateOfBirth: null,
       sex: 'unknown',
-      medicalAlerts: [],
+      allergyNames: [],
+      conditionNames: [],
       primaryDentistId: null,
       email: null,
       archivedAt: null,
@@ -274,7 +253,8 @@ describe('patientPageSchema', () => {
       phone: null,
       dateOfBirth: '2020-01-01',
       sex: 'unknown',
-      medicalAlerts: [],
+      allergyNames: [],
+      conditionNames: [],
       primaryDentistId: ID_B,
       email: null,
       archivedAt: null,
@@ -300,7 +280,8 @@ describe('patientPageSchema', () => {
       phone: null,
       dateOfBirth: null,
       sex: 'unknown',
-      medicalAlerts: [],
+      allergyNames: [],
+      conditionNames: [],
       primaryDentistId: null,
       email: null,
       archivedAt: null,
@@ -432,6 +413,7 @@ describe('patientMergeSchema', () => {
       'email',
       'address',
       'insurance',
+      'medication',
       'primaryDentistId',
       'notes',
     ]);
@@ -466,7 +448,14 @@ describe('patientSchema', () => {
     email: null,
     address: null,
     insurance: null,
-    medicalAlerts: [],
+    medicalHistory: {
+      noKnownAllergies: false,
+      allergies: [],
+      noConditions: false,
+      conditions: [],
+      medication: null,
+    },
+    firstVisitType: null,
     primaryDentistId: null,
     notes: null,
     dentitionOverride: null,

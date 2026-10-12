@@ -79,7 +79,7 @@ describe('files: upload, read, edit, archive and merge', () => {
   const startVisit = async (patient: Patient): Promise<Visit> => {
     const response = await dentist.agent
       .post('/api/v1/visits')
-      .send({ patientId: patient.id, dentistId: dentist.user.profileId });
+      .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as StartVisitResult).visit;
   };

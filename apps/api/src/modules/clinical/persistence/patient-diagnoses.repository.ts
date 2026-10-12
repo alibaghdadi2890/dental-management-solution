@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, getTableColumns, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, isNotNull, isNull } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { RecordNotFoundError } from '../domain/visit-errors';
 import { patientDiagnoses, visits } from './schema';
@@ -19,6 +19,8 @@ export type NewDiagnosisRecord = Pick<
   | 'name'
   | 'category'
   | 'note'
+  | 'seenOn'
+  | 'seenOnFileId'
   | 'dentistId'
   | 'recordedBy'
   | 'recordedInVisitId'
@@ -32,9 +34,13 @@ export interface DatedDiagnosisRecord {
   visitDate: string | null;
 }
 
-/** Resolve, reopen (the pair is set or cleared together) or the soft delete. */
+/** Resolve, reopen (the pair is set or cleared together), what it was seen on (the pair too),
+ * or the soft delete. */
 export type DiagnosisRecordPatch = Partial<
-  Pick<StoredDiagnosisRecord, 'status' | 'resolvedInVisitId' | 'resolvedAt' | 'deletedAt'>
+  Pick<
+    StoredDiagnosisRecord,
+    'status' | 'resolvedInVisitId' | 'resolvedAt' | 'seenOn' | 'seenOnFileId' | 'deletedAt'
+  >
 >;
 
 function toStored({ tenantId: _tenantId, ...record }: DiagnosisRow): StoredDiagnosisRecord {
@@ -126,6 +132,28 @@ export class PatientDiagnosesRepository {
         .returning({ id: patientDiagnoses.id }),
     );
     return rows.length;
+  }
+
+  /**
+   * The patient's diagnoses that were seen on a file (ADR-0049), resolved ones included, in the
+   * order recorded: the image viewer's "diagnoses that cite this image".
+   */
+  citingFiles(patientId: string): Promise<StoredDiagnosisRecord[]> {
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(patientDiagnoses)
+          .where(
+            and(
+              eq(patientDiagnoses.patientId, patientId),
+              isNotNull(patientDiagnoses.seenOnFileId),
+              isNull(patientDiagnoses.deletedAt),
+            ),
+          )
+          .orderBy(asc(patientDiagnoses.recordedAt), asc(patientDiagnoses.id))
+      ).map(toStored),
+    );
   }
 
   /** The id of the tooth's most recently recorded active diagnosis, or null (spec §drawer). */

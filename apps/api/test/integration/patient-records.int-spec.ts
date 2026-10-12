@@ -98,7 +98,7 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
   const startVisit = async (patient: Patient): Promise<Visit> => {
     const response = await dentist.agent
       .post('/api/v1/visits')
-      .send({ patientId: patient.id, dentistId: dentist.user.profileId });
+      .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as StartVisitResult).visit;
   };
@@ -159,7 +159,9 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
       201,
     );
     const chart = await charted(
-      dentist.agent.post(record(patient, 'plans')).send({ procedureId: fill.id, toothCode: '16' }),
+      dentist.agent
+        .post(record(patient, 'plans'))
+        .send({ priority: 'high', procedureId: fill.id, toothCode: '16' }),
       201,
     );
     expect(chart.diagnoses).toMatchObject([
@@ -178,7 +180,6 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
         toothCode: '16',
         status: 'planned',
         recordedInVisitId: null,
-        groupId: null,
         price: { amount: '50.00', currency: 'USD' },
         diagnosisRecordId: diagnosis?.id,
         dentistId: dentist.user.profileId,
@@ -200,7 +201,7 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
 
   it('resolves the dentist: the one named, else the caller when a dentist, else 422', async () => {
     const patient = await createPatient('Whose Record');
-    const body = { procedureId: fill.id, toothCode: '26' };
+    const body = { procedureId: fill.id, toothCode: '26', priority: 'high' };
     const named = await charted(
       owner
         .post(record(patient, 'plans'))
@@ -233,7 +234,11 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
       diagnosisId: caries.id,
       toothCode: '36',
     });
-    const visitPlan = await inVisit<PlanResult>('plans', { procedureId: fill.id, toothCode: '36' });
+    const visitPlan = await inVisit<PlanResult>('plans', {
+      procedureId: fill.id,
+      toothCode: '36',
+      priority: 'high',
+    });
     const before = await charted(
       dentist.agent
         .post(record(patient, 'diagnoses'))
@@ -242,7 +247,9 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
     );
     const own = before.diagnoses.find((item) => item.toothCode === '46');
     const planned = await charted(
-      dentist.agent.post(record(patient, 'plans')).send({ procedureId: fill.id, toothCode: '46' }),
+      dentist.agent
+        .post(record(patient, 'plans'))
+        .send({ priority: 'high', procedureId: fill.id, toothCode: '46' }),
       201,
     );
     const ownPlan = planned.plans.find((item) => item.toothCode === '46');
@@ -299,7 +306,9 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
       201,
     );
     const chart = await charted(
-      dentist.agent.post(record(patient, 'plans')).send({ procedureId: fill.id, toothCode: '11' }),
+      dentist.agent
+        .post(record(patient, 'plans'))
+        .send({ priority: 'high', procedureId: fill.id, toothCode: '11' }),
       201,
     );
     const [diagnosis] = chart.diagnoses;
@@ -337,74 +346,33 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
     expect((performed.body as PlanResult).visit.services).toMatchObject([{ planId: plan.id }]);
   });
 
-  it('groups plans under named plans; deleting one ungroups its plans', async () => {
-    const patient = await createPatient('Named Plans');
-    const withGroup = await charted(
-      dentist.agent
-        .post(record(patient, 'plan-groups'))
-        .send({ title: '  Full rehabilitation  ', note: '' }),
-      201,
-    );
-    expect(withGroup.planGroups).toMatchObject([{ title: 'Full rehabilitation', note: null }]);
-    const [group] = withGroup.planGroups;
-    if (!group) throw new Error('no named plan');
-
-    const inGroup = await charted(
+  it("edits an open plan's note", async () => {
+    const patient = await createPatient('Plan Note');
+    const planned = await charted(
       dentist.agent
         .post(record(patient, 'plans'))
-        .send({ procedureId: fill.id, toothCode: '16', groupId: group.id }),
+        .send({ priority: 'high', procedureId: fill.id, toothCode: '16' }),
       201,
     );
-    const loose = await charted(
-      dentist.agent.post(record(patient, 'plans')).send({ procedureId: fill.id, toothCode: '17' }),
-      201,
-    );
-    const [first] = inGroup.plans;
-    const second = loose.plans.find((item) => item.toothCode === '17');
-    if (!first || !second) throw new Error('the plans were not made');
-    expect(first.groupId).toBe(group.id);
+    const [plan] = planned.plans;
+    if (!plan) throw new Error('the plan was not made');
 
-    const moved = await charted(
-      dentist.agent.patch(record(patient, `plans/${second.id}`)).send({ groupId: group.id }),
+    const noted = await charted(
+      dentist.agent.patch(record(patient, `plans/${plan.id}`)).send({ note: 'Upper right first' }),
     );
-    expect(moved.plans.map((item) => item.groupId)).toEqual([group.id, group.id]);
-    const renamed = await charted(
-      dentist.agent
-        .patch(record(patient, `plan-groups/${group.id}`))
-        .send({ title: 'Phase 1', note: 'Upper right first' }),
-    );
-    expect(renamed.planGroups).toMatchObject([{ title: 'Phase 1', note: 'Upper right first' }]);
+    expect(noted.plans).toMatchObject([{ id: plan.id, note: 'Upper right first' }]);
 
-    // Another patient's named plan reads as not found, here and in a visit.
-    const stranger = await createPatient('Named Stranger');
+    await charted(dentist.agent.post(record(patient, `plans/${plan.id}/cancel`)));
     await expectProblem(
-      dentist.agent
-        .post(record(stranger, 'plans'))
-        .send({ procedureId: fill.id, toothCode: '16', groupId: group.id }),
-      404,
-      'record.not_found',
+      dentist.agent.patch(record(patient, `plans/${plan.id}`)).send({ note: 'Too late' }),
+      409,
+      'plan.not_open',
     );
-    const visit = await startVisit(patient);
-    const planned = await dentist.agent
-      .post(`/api/v1/visits/${visit.id}/plans`)
-      .send({ procedureId: fill.id, toothCode: '18', groupId: group.id });
-    expect(planned.status, JSON.stringify(planned.body)).toBe(201);
-    expect((planned.body as PlanResult).record.groupId).toBe(group.id);
-
-    const deleted = await charted(dentist.agent.delete(record(patient, `plan-groups/${group.id}`)));
-    expect(deleted.planGroups).toEqual([]);
-    expect(deleted.plans.map((item) => item.groupId)).toEqual([null, null, null]);
-    const audit = await auditOf(`resourceType=plan_group&resourceId=${group.id}`);
-    expect(audit.map((entry) => entry.action).sort()).toEqual([
-      'plan_group.create',
-      'plan_group.delete',
-      'plan_group.update',
-    ]);
   });
 
   it('refuses without chart:write, and an archived, merged or unknown patient', async () => {
     const patient = await createPatient('Refused');
-    const body = { procedureId: fill.id, toothCode: '16' };
+    const body = { procedureId: fill.id, toothCode: '16', priority: 'high' };
     const forbidden = await assistant.agent.post(record(patient, 'plans')).send(body);
     expect(forbidden.status).toBe(403);
 

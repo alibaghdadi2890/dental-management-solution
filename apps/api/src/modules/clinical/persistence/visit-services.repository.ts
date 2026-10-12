@@ -24,7 +24,10 @@ export type NewVisitService = Pick<
   | 'baseAmount'
   | 'planId'
   | 'recordedBy'
->;
+> & {
+  /** Added at start because the catalog adds it on visits of this type (ADR-0047). */
+  autoAdded?: boolean;
+};
 
 /** A price edit (W6), an amendment's new tooth and surfaces (4b), or the soft delete. */
 export type VisitServicePatch = Partial<

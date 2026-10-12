@@ -1,40 +1,44 @@
 import type {
   PatientChartResult,
   PatientPresenceResult,
-  PlanGroupInput,
   PlanPatientTreatmentInput,
   RecordPatientDiagnosisInput,
+  SeenOnInput,
   SetPresenceOnPatientInput,
   UpdatePlanInput,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
-import { CLOCK } from '../../../platform/clock/clock.module';
-import { RequestContext } from '../../../platform/cls/request-context';
-import { TenantDb } from '../../../platform/db/tenant-db';
-import { EventBus } from '../../../platform/events/event-bus';
-import type { Clock } from '../../../platform/kernel/clock';
-import { localDate } from '../../../platform/kernel/local-date';
-import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
-import { AuditService } from '../../audit';
-import { PatientArchivedError, PatientsService } from '../../patients';
-import { TenancyService } from '../../tenancy';
-import { UsersService } from '../../users';
-import { assertOpen } from '../domain/plan-lifecycle';
-import { isRemovableOutsideVisit } from '../domain/record-rules';
+import { CLOCK } from '../../../../platform/clock/clock.module';
+import { RequestContext } from '../../../../platform/cls/request-context';
+import { TenantDb } from '../../../../platform/db/tenant-db';
+import { EventBus } from '../../../../platform/events/event-bus';
+import type { Clock } from '../../../../platform/kernel/clock';
+import { localDate } from '../../../../platform/kernel/local-date';
+import { ValidationFailedError } from '../../../../platform/kernel/validation-failed.error';
+import { AuditService } from '../../../audit';
+import { PatientArchivedError, PatientsService } from '../../../patients';
+import { TenancyService } from '../../../tenancy';
+import { UsersService } from '../../../users';
+import { acceptancePatch, assertOpen } from '../../domain/plan-lifecycle';
+import { isRemovableOutsideVisit } from '../../domain/record-rules';
 import {
   DentistInvalidError,
   PlanNotOpenError,
   RecordDentistRequiredError,
   RecordNotFoundError,
   RecordNotRemovableError,
-} from '../domain/visit-errors';
-import { TREATMENT_CANCELLED, type TreatmentCancelled } from '../events/record-events';
-import { PatientDiagnosesRepository } from '../persistence/patient-diagnoses.repository';
-import { PlanGroupsRepository } from '../persistence/plan-groups.repository';
-import { ToothPresenceRepository } from '../persistence/tooth-presence.repository';
-import { TreatmentPlansRepository } from '../persistence/treatment-plans.repository';
-import { ChartService } from './chart.service';
-import { planStatusOf } from './plan-unperformer';
+} from '../../domain/visit-errors';
+import {
+  TREATMENT_ACCEPTED,
+  TREATMENT_CANCELLED,
+  type TreatmentAccepted,
+  type TreatmentCancelled,
+} from '../../events/record-events';
+import { PatientDiagnosesRepository } from '../../persistence/patient-diagnoses.repository';
+import { ToothPresenceRepository } from '../../persistence/tooth-presence.repository';
+import { TreatmentPlansRepository } from '../../persistence/treatment-plans.repository';
+import { ChartService } from '../reads/chart.service';
+import { planStatusOf } from '../plan/plan-unperformer';
 import { PresenceWriter } from './presence-writer';
 import { RecordWriter } from './record-writer';
 
@@ -47,15 +51,14 @@ interface Change {
 
 const DIAGNOSIS = 'diagnosis_record';
 const PLAN = 'treatment_plan';
-const GROUP = 'plan_group';
 
 /**
  * Charting on the patient record, outside a visit (docs/modules/clinical.md, ADR-0031): a dentist
  * records what they found and what they intend to do without starting a visit. Diagnoses are
  * recorded and, when recorded here, removed; plans are added, edited, cancelled and, when added
- * here, removed; named plans group them; and what is at a tooth position is set (feature 7): the
+ * here, removed; and what is at a tooth position is set (feature 7): the
  * gaps and implants a new patient arrives with, a tooth lost between visits. Resolving a
- * diagnosis, performing a plan and services stay inside a visit (`VisitRecordsService`): they
+ * diagnosis, performing a plan and services stay inside a visit (the charting services): they
  * describe what happened in the chair.
  *
  * Every method re-checks `chart:write`, runs in one `TenantDb` transaction and locks the patient
@@ -77,7 +80,6 @@ export class PatientRecordsService {
     private readonly writer: RecordWriter,
     private readonly diagnoses: PatientDiagnosesRepository,
     private readonly plans: TreatmentPlansRepository,
-    private readonly groups: PlanGroupsRepository,
     private readonly tenancy: TenancyService,
     private readonly presences: ToothPresenceRepository,
     private readonly presence: PresenceWriter,
@@ -175,6 +177,17 @@ export class PatientRecordsService {
     });
   }
 
+  /**
+   * What a diagnosis was seen on (ADR-0049), whichever visit (or none) recorded it: the clinical
+   * exam, one of the patient's images, or null to unsay it.
+   */
+  setSeenOn(patientId: string, recordId: string, input: SeenOnInput): Promise<PatientChartResult> {
+    return this.onPatient(patientId, async () => {
+      const { record } = await this.diagnoses.lockForPatient(recordId, patientId);
+      await this.writer.setSeenOn(record, input.seenOn);
+    });
+  }
+
   // --- Plans ---
 
   /** A catalog service planned at its catalog price (a snapshot). `TreatmentPlanned`, no visit. */
@@ -186,9 +199,9 @@ export class PatientRecordsService {
   }
 
   /**
-   * Moves an open plan (planned or in progress) into one of the patient's named plans (or out,
-   * `groupId: null`) and edits its note. A plan that is no longer open → 409 `plan.not_open`.
-   * Unchanged → no audit.
+   * The priority — the phase of the treatment plan it belongs to (ADR-0045) — and the note of an
+   * open plan (planned or in progress), wherever it was made. A plan that is no longer open → 409
+   * `plan.not_open`. Unchanged → no audit.
    */
   updatePlan(
     patientId: string,
@@ -196,21 +209,45 @@ export class PatientRecordsService {
     input: UpdatePlanInput,
   ): Promise<PatientChartResult> {
     return this.onPatient(patientId, async () => {
-      // The target group first, then the plan: `deleteGroup` locks in the same order.
-      if (input.groupId) await this.groups.lockForPatient(input.groupId, patientId);
       const before = await this.plans.lockForPatient(planId, patientId);
       assertOpen(before);
-      const groupId = input.groupId === undefined ? before.groupId : input.groupId;
-      const note = input.note === undefined ? before.note : input.note;
-      if (groupId === before.groupId && note === before.note) return;
-      const after = await this.plans.update(planId, { groupId, note });
+      if (input.priority !== undefined) await this.writer.prioritise(before, input.priority, null);
+      if (input.note === undefined || input.note === before.note) return;
+      const after = await this.plans.update(planId, { note: input.note });
       await this.audit.record({
         action: `${PLAN}.update`,
         resourceType: PLAN,
         resourceId: planId,
-        before: { groupId: before.groupId, note: before.note },
-        after: { groupId: after.groupId, note: after.note },
+        before: { note: before.note },
+        after: { note: after.note },
       });
+    });
+  }
+
+  /**
+   * The patient accepted a proposed treatment, or the acceptance is withdrawn (ADR-0045).
+   * Accepting needs an open plan (409 `plan.not_open`); withdrawing one that is still only
+   * planned (409 `plan.acceptance_locked`). Already so → nothing written. `TreatmentAccepted`.
+   */
+  setAcceptance(patientId: string, planId: string, accepted: boolean): Promise<PatientChartResult> {
+    return this.onPatient(patientId, async ({ userId, now }) => {
+      const before = await this.plans.lockForPatient(planId, patientId);
+      const patch = acceptancePatch(before, accepted, { userId, now });
+      if (!patch) return;
+      const after = await this.plans.update(planId, patch);
+      await this.audit.record({
+        action: accepted ? `${PLAN}.accept` : `${PLAN}.unaccept`,
+        resourceType: PLAN,
+        resourceId: planId,
+        before: { acceptedAt: before.acceptedAt },
+        after: { acceptedAt: after.acceptedAt },
+      });
+      const event: TreatmentAccepted = this.events.create(TREATMENT_ACCEPTED, {
+        planId,
+        patientId,
+        accepted,
+      });
+      await this.events.publish(event);
     });
   }
 
@@ -258,61 +295,6 @@ export class PatientRecordsService {
         resourceId: planId,
         before,
         after: { deletedAt: after.deletedAt },
-      });
-    });
-  }
-
-  // --- Named plans ---
-
-  createGroup(patientId: string, input: PlanGroupInput): Promise<PatientChartResult> {
-    return this.onPatient(patientId, async ({ userId }) => {
-      const group = await this.groups.insert({
-        patientId,
-        title: input.title,
-        note: input.note,
-        createdBy: userId,
-      });
-      await this.audit.record({
-        action: `${GROUP}.create`,
-        resourceType: GROUP,
-        resourceId: group.id,
-        after: group,
-      });
-    });
-  }
-
-  /** The title and note. Unchanged → no audit. */
-  updateGroup(
-    patientId: string,
-    groupId: string,
-    input: PlanGroupInput,
-  ): Promise<PatientChartResult> {
-    return this.onPatient(patientId, async () => {
-      const before = await this.groups.lockForPatient(groupId, patientId);
-      if (before.title === input.title && before.note === input.note) return;
-      const after = await this.groups.update(groupId, { title: input.title, note: input.note });
-      await this.audit.record({
-        action: `${GROUP}.update`,
-        resourceType: GROUP,
-        resourceId: groupId,
-        before: { title: before.title, note: before.note },
-        after: { title: after.title, note: after.note },
-      });
-    });
-  }
-
-  /** Ungroups its plans (they stay as they are), then soft-deletes the named plan. */
-  deleteGroup(patientId: string, groupId: string): Promise<PatientChartResult> {
-    return this.onPatient(patientId, async ({ now }) => {
-      const before = await this.groups.lockForPatient(groupId, patientId);
-      const ungroupedPlanIds = await this.plans.ungroup(patientId, groupId);
-      const after = await this.groups.update(groupId, { deletedAt: now });
-      await this.audit.record({
-        action: `${GROUP}.delete`,
-        resourceType: GROUP,
-        resourceId: groupId,
-        before,
-        after: { deletedAt: after.deletedAt, ungroupedPlanIds },
       });
     });
   }

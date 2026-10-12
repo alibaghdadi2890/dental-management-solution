@@ -1,5 +1,5 @@
-import { dedupeAlerts, MEDICAL_ALERTS_MAX, MERGE_FIELDS, type MergeField } from '@dcm/contracts';
-import { MergeAlertsOverflowError } from './patient-errors';
+import { MERGE_FIELDS, type MergeField } from '@dcm/contracts';
+import { type MergedMedicalItems, mergeMedicalItems } from './medical-history';
 import type { DomainPatient } from './patient';
 
 /** The patch `resolveMerge` writes onto the kept record; only the fields that actually change. */
@@ -13,14 +13,20 @@ export type MergePatch = Partial<
     | 'email'
     | 'address'
     | 'insurance'
+    | 'medication'
     | 'primaryDentistId'
     | 'notes'
-    | 'medicalAlerts'
   >
->;
+> & {
+  /** The unioned allergies and conditions, when they differ from the kept record's. */
+  medicalItems?: MergedMedicalItems;
+};
+
+/** The fields a merge picks from one record or the other. */
+type PickedKey = Exclude<keyof MergePatch, 'medicalItems'>;
 
 /** Where each merge field lives on a `DomainPatient` (and, 1:1, on the `MergePatch`). */
-const FIELD_KEYS: Record<MergeField, keyof MergePatch> = {
+const FIELD_KEYS: Record<MergeField, PickedKey> = {
   fullName: 'fullName',
   phone: 'phone',
   dateOfBirth: 'dateOfBirth',
@@ -28,28 +34,25 @@ const FIELD_KEYS: Record<MergeField, keyof MergePatch> = {
   email: 'email',
   address: 'address',
   insurance: 'insurance',
+  medication: 'medication',
   primaryDentistId: 'primaryDentistId',
   notes: 'notes',
 };
 
 /** Writes `patch[key] = value`, keeping `patch` and `value` tied to the same field (no `any`). */
-function assign<K extends keyof MergePatch>(patch: MergePatch, key: K, value: DomainPatient[K]) {
+function assign<K extends PickedKey>(patch: MergePatch, key: K, value: DomainPatient[K]) {
   patch[key] = value;
-}
-
-function sameAlerts(a: readonly string[], b: readonly string[]): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
 /**
  * Resolves a patient merge (design Q8, Q11): each pickable field comes from `kept` unless
  * `choices` says `'drop'`, in which case it comes from `dropped`; a missing choice means "keep"
- * (a phone may resolve to null: a minor recorded without one). Medical alerts are
- * always the case-insensitive union of both records (kept's own alerts first) — never a field
- * choice, and never truncated: a dropped allergy is a clinical risk, so a union bigger than
- * `MEDICAL_ALERTS_MAX` throws `MergeAlertsOverflowError` rather than silently losing alerts;
- * the caller must remove some first. Returns only the fields whose resolved value differs from
- * `kept`'s own (the audit's before/after shows what changed), so an all-kept merge with an unchanged alert union produces an empty patch.
+ * (a phone may resolve to null: a minor recorded without one). Allergies and
+ * conditions are always the union of both records (`mergeMedicalItems`, ADR-0046) — never a
+ * field choice: a dropped allergy is a clinical risk. The medication line is picked like any
+ * other field. Returns only the fields whose resolved value differs from `kept`'s own (the
+ * audit's before/after shows what changed), so an all-kept merge with nothing to union produces
+ * an empty patch.
  */
 export function resolveMerge(
   kept: DomainPatient,
@@ -67,15 +70,8 @@ export function resolveMerge(
     }
   }
 
-  const unionAlerts = dedupeAlerts([...kept.medicalAlerts, ...dropped.medicalAlerts]);
-  if (unionAlerts.length > MEDICAL_ALERTS_MAX) {
-    throw new MergeAlertsOverflowError(
-      `Merging would leave ${unionAlerts.length} medical alerts, more than the ${MEDICAL_ALERTS_MAX} allowed; remove some alerts before merging`,
-    );
-  }
-  if (!sameAlerts(unionAlerts, kept.medicalAlerts)) {
-    patch.medicalAlerts = unionAlerts;
-  }
+  const medicalItems = mergeMedicalItems(kept, dropped);
+  if (medicalItems) patch.medicalItems = medicalItems;
 
   return patch;
 }

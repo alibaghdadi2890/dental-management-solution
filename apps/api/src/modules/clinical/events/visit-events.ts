@@ -1,3 +1,4 @@
+import type { VisitType } from '@dcm/contracts';
 import type { DomainEvent } from '../../../platform/events/domain-event';
 
 /**
@@ -9,7 +10,20 @@ import type { DomainEvent } from '../../../platform/events/domain-event';
 export const VISIT_STARTED = 'VisitStarted';
 export type VisitStarted = DomainEvent<
   typeof VISIT_STARTED,
-  { visitId: string; patientId: string; dentistId: string; roomId: string | null }
+  {
+    visitId: string;
+    patientId: string;
+    dentistId: string;
+    roomId: string | null;
+    type: VisitType;
+  }
+>;
+
+/** A dentist confirmed the patient's medical history with the patient, in a visit (ADR-0046). */
+export const MEDICAL_HISTORY_CONFIRMED = 'MedicalHistoryConfirmed';
+export type MedicalHistoryConfirmed = DomainEvent<
+  typeof MEDICAL_HISTORY_CONFIRMED,
+  { visitId: string; patientId: string }
 >;
 
 export const VISIT_PAUSED = 'VisitPaused';

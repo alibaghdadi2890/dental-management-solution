@@ -1,15 +1,15 @@
 // Public API of the clinical module. Other modules import from this file only (CLAUDE.md §4).
 export { ClinicalModule } from './clinical.module';
-export { CatalogService } from './application/catalog.service';
-export { ChartService } from './application/chart.service';
-export { PatientRecordsService } from './application/patient-records.service';
-export { VisitRecordsService } from './application/visit-records.service';
+export { CatalogService } from './application/catalog/catalog.service';
+export { ChartService } from './application/reads/chart.service';
+export { PatientRecordsService } from './application/records/patient-records.service';
+export { type VisitSearchInternal, VisitListService } from './application/reads/visit-list.service';
 export {
   type VisitChargeFacts,
+  VisitFactsService,
   type VisitMoneyFacts,
-  type VisitSearchInternal,
-  VisitsService,
-} from './application/visits.service';
+} from './application/visits/visit-facts.service';
+export { VisitsService } from './application/visits/visits.service';
 export type { VisitRef } from './persistence/visits.repository';
 export {
   CatalogItemInactiveError,
@@ -18,6 +18,15 @@ export {
 } from './domain/catalog-errors';
 export { VisitNotLiveError } from './domain/visit-errors';
 export { CATALOG_CHANGED, type CatalogChanged } from './events/catalog-changed';
+export {
+  DIAGNOSIS_EVIDENCE_CITED,
+  type DiagnosisEvidenceCited,
+  TREATMENT_ACCEPTED,
+  TREATMENT_PRIORITISED,
+  type TreatmentAccepted,
+  type TreatmentPrioritised,
+} from './events/record-events';
+export { EvidenceInvalidError } from './domain/visit-errors';
 export {
   DIAGNOSIS_RECORDED,
   DIAGNOSIS_REOPENED,
@@ -36,6 +45,7 @@ export {
   type TreatmentPlanned,
   type TreatmentStarted,
 } from './events/record-events';
+export { MEDICAL_HISTORY_CONFIRMED, type MedicalHistoryConfirmed } from './events/visit-events';
 export {
   VISIT_AMENDED,
   VISIT_COMPLETED,

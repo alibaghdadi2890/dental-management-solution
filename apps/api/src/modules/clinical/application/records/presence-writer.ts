@@ -1,13 +1,13 @@
 import { toothCodeSchema, type ToothPresenceChange, type ToothPresenceState } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { EventBus } from '../../../platform/events/event-bus';
-import { AuditService } from '../../audit';
-import { TOOTH_PRESENCE_CHANGED, type ToothPresenceChanged } from '../events/record-events';
-import { ProceduresRepository } from '../persistence/procedures.repository';
+import { EventBus } from '../../../../platform/events/event-bus';
+import { AuditService } from '../../../audit';
+import { TOOTH_PRESENCE_CHANGED, type ToothPresenceChanged } from '../../events/record-events';
+import { ProceduresRepository } from '../../persistence/procedures.repository';
 import {
   type StoredToothPresence,
   ToothPresenceRepository,
-} from '../persistence/tooth-presence.repository';
+} from '../../persistence/tooth-presence.repository';
 
 const PRESENCE = 'tooth_presence';
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { reasonSchema } from './audit.js';
 import { balanceAmountSchema, ledgerEntryKindSchema, paymentMethodSchema } from './billing.js';
+import { visitTypeSchema } from './visit-flow.js';
 import {
   blankToUndefined,
   currencySchema,
@@ -85,6 +86,8 @@ export const chargeRefSchema = z.object({
   kind: ledgerEntryKindSchema,
   visitId: idSchema.nullable(),
   visitNumber: z.number().int().positive().nullable(),
+  /** The visit's type, shown under its number on a receipt (feature 10); null without a visit. */
+  visitType: visitTypeSchema.nullable(),
   date: isoDateSchema,
 });
 export type ChargeRef = z.infer<typeof chargeRefSchema>;

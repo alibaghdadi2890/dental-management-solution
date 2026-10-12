@@ -1,4 +1,10 @@
-import type { ContactRelationship, DentitionStage, PatientSex } from '@dcm/contracts';
+import type {
+  ContactRelationship,
+  DentitionStage,
+  EntryVisitType,
+  PatientSex,
+} from '@dcm/contracts';
+import type { StoredMedicalHistory } from './medical-history';
 
 /**
  * The domain shape of a patient row: mirrors the contract `Patient` plus two internal fields the
@@ -8,7 +14,7 @@ import type { ContactRelationship, DentitionStage, PatientSex } from '@dcm/contr
  * ISO strings when it builds the contract response. `dateOfBirth` is a plain ISO date string
  * (`YYYY-MM-DD`, no time, no zone) since the column is a `date`.
  */
-export interface DomainPatient {
+export interface DomainPatient extends StoredMedicalHistory {
   id: string;
   displayNumber: string;
   fullName: string;
@@ -24,7 +30,8 @@ export interface DomainPatient {
   address: string | null;
   insurance: string | null;
   notes: string | null;
-  medicalAlerts: string[];
+  /** What a new patient came for (feature 10); read only to suggest their first visit's type. */
+  firstVisitType: EntryVisitType | null;
   /** `staff_profiles.id` (ADR-0020). */
   primaryDentistId: string | null;
   /** Null means "auto": the chart derives the stage from age (spec W14). */

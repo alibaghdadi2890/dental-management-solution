@@ -15,6 +15,7 @@ import {
   moneySchema,
 } from './common.js';
 import { surfacesSchema, toothCodeSchema } from './tooth.js';
+import { visitStepSchema, visitTypeSchema } from './visit-flow.js';
 import { discountModeSchema, visitStatusSchema } from './visits.js';
 
 /**
@@ -43,6 +44,7 @@ export const visitFiltersSchema = z.object({
   /** A staff profile id (ADR-0020). */
   dentistId: blankToUndefined(idSchema.optional()),
   roomId: blankToUndefined(idSchema.optional()),
+  type: blankToUndefined(visitTypeSchema.optional()),
   /** A visit number (`V-123` or `123`), a service code or name, or a patient (name, number, phone). */
   q: z
     .string()
@@ -77,6 +79,10 @@ export type VisitListService = z.infer<typeof visitListServiceSchema>;
 export const visitListItemSchema = z.object({
   id: idSchema,
   displayNumber: z.number().int().positive(),
+  type: visitTypeSchema,
+  /** The step a live visit is on (`resolveStep`); `complete` once it is finished. */
+  currentStep: visitStepSchema,
+  reason: z.string().nullable(),
   status: visitStatusSchema,
   localDate: isoDateSchema,
   startedAt: isoDateTimeSchema,

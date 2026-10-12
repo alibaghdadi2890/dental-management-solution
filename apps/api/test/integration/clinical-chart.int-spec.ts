@@ -1,6 +1,5 @@
 import type {
   Branch,
-  ClinicalSummary,
   DiagnosisItem,
   DiagnosisResult,
   LastVisit,
@@ -98,7 +97,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
   const startVisit = async (patient: Patient): Promise<Visit> => {
     const response = await dentist.agent
       .post('/api/v1/visits')
-      .send({ patientId: patient.id, dentistId: dentist.user.profileId });
+      .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId });
     expect(response.status, JSON.stringify(response.body)).toBe(201);
     return (response.body as StartVisitResult).visit;
   };
@@ -135,9 +134,9 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
          returning last_value
        )
        insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
-                           started_by, status, local_date, started_at, completed_at, completed_by,
+                           started_by, type, current_step, status, local_date, started_at, completed_at, completed_by,
                            duration_minutes, notes, currency, subtotal, discount_amount, total)
-       select $1, $2, minted.last_value, $3, $4, $5, $6, 'completed', $7::date, $8::timestamptz,
+       select $1, $2, minted.last_value, $3, $4, $5, $6, 'treatment', 'complete', 'completed', $7::date, $8::timestamptz,
               $9::timestamptz, $6, $10, $11, 'USD', $12::numeric, 0, $12::numeric
        from minted`,
       [
@@ -298,7 +297,6 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         presence: [],
         diagnoses: [],
         plans: [],
-        planGroups: [],
         history: [],
         liveVisitId: null,
         voidedVisitIds: [],
@@ -364,8 +362,8 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       // An older live visit (a merge can leave two): the chart follows the latest one.
       await database.ownerPool.query(
         `insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
-                             started_by, status, local_date, started_at, currency)
-         values ($1, $2, 1000000, $3, $4, $5, $6, 'in_progress', $7, $8, 'USD')`,
+                             started_by, type, current_step, status, local_date, started_at, currency)
+         values ($1, $2, 1000000, $3, $4, $5, $6, 'treatment', 'today', 'in_progress', $7, $8, 'USD')`,
         [
           newId(),
           tenant.id,
@@ -383,9 +381,12 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
           .send({ diagnosisId: diagnosis.caries.id, toothCode: '26', surfaces: ['O'] }),
       );
       const plan = await created<PlanResult>(
-        dentist.agent
-          .post(visitPath(visit.id, 'plans'))
-          .send({ procedureId: service.fill.id, toothCode: '26', surfaces: ['O'] }),
+        dentist.agent.post(visitPath(visit.id, 'plans')).send({
+          priority: 'high',
+          procedureId: service.fill.id,
+          toothCode: '26',
+          surfaces: ['O'],
+        }),
       );
       await created<ServiceResult>(
         dentist.agent
@@ -609,7 +610,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       const plan = await created<PlanResult>(
         dentist.agent
           .post(visitPath(visit.id, 'plans'))
-          .send({ procedureId: service.crown.id, toothCode: '46' }),
+          .send({ priority: 'high', procedureId: service.crown.id, toothCode: '46' }),
       );
 
       const history = await read<ToothHistory>(patientPath(patient.id, 'teeth/46/history'));
@@ -641,7 +642,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
         plan = await created<PlanResult>(
           dentist.agent
             .post(visitPath(visit.id, 'plans'))
-            .send({ procedureId: service.crown.id, toothCode: '36' }),
+            .send({ priority: 'high', procedureId: service.crown.id, toothCode: '36' }),
         );
       });
       if (!finding || !plan) throw new Error('visit 1 recorded nothing');
@@ -736,6 +737,9 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
 
       expect(await read<LastVisit>(patientPath(patient.id, 'last-visit'))).toEqual({
         id: latest.id,
+        displayNumber: latest.displayNumber,
+        type: 'treatment',
+        reason: null,
         date: EARLIER,
         dentistName: dentist.user.displayName,
         durationMinutes: 42,
@@ -745,56 +749,6 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
           { name: 'Test cleaning', toothCode: null, jaw: null },
         ],
         notes: 'Check again in six months',
-      });
-    });
-  });
-
-  describe('summary', () => {
-    it('counts completed visits, open records, treated teeth and performed services', async () => {
-      const patient = await createPatient('Summary Counts');
-      const first = await completedVisit(patient, { localDate: EARLIEST });
-      const second = await completedVisit(patient, { localDate: EARLIER });
-      await completedService(first, { item: service.fill, toothCode: '16' });
-      await completedService(second, { item: service.fill, toothCode: '16' });
-      await completedService(second, { item: service.crown, toothCode: '21' });
-      await completedService(second, { item: service.clean });
-      await completedService(second, { item: service.fill, toothCode: '31', removed: true });
-
-      const visit = await startVisit(patient);
-      const post = (rest: string, body: object = {}) =>
-        dentist.agent.post(visitPath(visit.id, rest)).send(body);
-      await created(post('services', { procedureId: service.fill.id, toothCode: '41' }));
-      await created(post('diagnoses', { diagnosisId: diagnosis.caries.id, toothCode: '36' }));
-      const resolved = await created<DiagnosisResult>(
-        post('diagnoses', { diagnosisId: diagnosis.caries.id, toothCode: '37' }),
-      );
-      expect((await post(`diagnoses/${resolved.record.id}/resolve`)).status).toBe(200);
-      const dropped = await created<DiagnosisResult>(
-        post('diagnoses', { diagnosisId: diagnosis.caries.id, toothCode: '38' }),
-      );
-      expect(
-        (await dentist.agent.delete(visitPath(visit.id, `diagnoses/${dropped.record.id}`))).status,
-      ).toBe(200);
-      await created(post('plans', { procedureId: service.fill.id, toothCode: '26' }));
-      const performed = await created<PlanResult>(
-        post('plans', { procedureId: service.fill.id, toothCode: '25' }),
-      );
-      expect((await post(`plans/${performed.record.id}/perform`)).status).toBe(200);
-      const removedPlan = await created<PlanResult>(
-        post('plans', { procedureId: service.fill.id, toothCode: '24' }),
-      );
-      expect(
-        (await dentist.agent.delete(visitPath(visit.id, `plans/${removedPlan.record.id}`))).status,
-      ).toBe(200);
-
-      expect(await read<ClinicalSummary>(patientPath(patient.id, 'summary'))).toEqual({
-        visits: 2,
-        activeDiagnoses: 1,
-        plannedProcedures: 1,
-        teethTreated: 2,
-        servicesPerformed: 4,
-        missingTeeth: 0,
-        implants: 0,
       });
     });
   });
@@ -836,7 +790,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
   describe('access', () => {
     it('lets front desk read every view', async () => {
       const patient = await createPatient('Chart Front Desk');
-      for (const rest of ['chart', 'summary', 'last-visit', 'teeth/16/history']) {
+      for (const rest of ['chart', 'last-visit', 'teeth/16/history']) {
         const response = await frontdesk.agent.get(patientPath(patient.id, rest));
         expect(response.status, rest).toBe(200);
       }
@@ -858,7 +812,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
       expect(theirs.status, JSON.stringify(theirs.body)).toBe(201);
       const theirId = (theirs.body as Patient).id;
 
-      for (const rest of ['chart', 'summary', 'last-visit', 'teeth/16/history']) {
+      for (const rest of ['chart', 'last-visit', 'teeth/16/history']) {
         const response = await dentist.agent.get(patientPath(theirId, rest));
         expect(response.status, rest).toBe(404);
         expect(problem(response.body).code, rest).toBe('patient.not_found');

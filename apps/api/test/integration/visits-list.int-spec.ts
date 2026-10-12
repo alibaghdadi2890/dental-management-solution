@@ -66,6 +66,7 @@ describe('clinical + billing: the visits list, its summary and the visit-based p
     (
       await ok<StartVisitResult>(
         dentist.agent.post('/api/v1/visits').send({
+          type: 'treatment',
           patientId: patient.id,
           dentistId: dentist.user.profileId,
           ...(roomId ? { roomId } : { roomId: room.id }),
@@ -152,9 +153,9 @@ describe('clinical + billing: the visits list, its summary and the visit-based p
          returning last_value
        )
        insert into visits (id, tenant_id, display_number, patient_id, branch_id, dentist_id,
-                           started_by, status, local_date, started_at, completed_at, completed_by,
+                           started_by, type, current_step, status, local_date, started_at, completed_at, completed_by,
                            duration_minutes, currency, subtotal, discount_amount, total)
-       select $1, $2, minted.last_value, $3, $4, $5, $6, 'completed', $7::date,
+       select $1, $2, minted.last_value, $3, $4, $5, $6, 'treatment', 'complete', 'completed', $7::date,
               ($7 || 'T09:00:00Z')::timestamptz, ($7 || 'T09:30:00Z')::timestamptz, $6, 30,
               'USD', 20, 0, 20
        from minted`,

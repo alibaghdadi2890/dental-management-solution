@@ -105,7 +105,7 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
       await ok<StartVisitResult>(
         dentist.agent
           .post('/api/v1/visits')
-          .send({ patientId: patient.id, dentistId: dentist.user.profileId }),
+          .send({ type: 'treatment', patientId: patient.id, dentistId: dentist.user.profileId }),
         201,
       )
     ).visit;
@@ -127,7 +127,7 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
     const plan = await ok<PlanResult>(
       dentist.agent
         .post(`/api/v1/visits/${visit.id}/plans`)
-        .send({ procedureId: service.crown.id, toothCode: '21' }),
+        .send({ procedureId: service.crown.id, toothCode: '21', priority: 'high' }),
       201,
     );
     const performed = await ok<PlanResult>(

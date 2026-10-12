@@ -3,6 +3,7 @@ import {
   type ValidationIssue,
   ValidationFailedError,
 } from '../../../platform/kernel/validation-failed.error';
+import { historyChanged } from '../domain/medical-history';
 import type { MergePatch } from '../domain/merge';
 import type { DomainPatient } from '../domain/patient';
 import type {
@@ -118,12 +119,10 @@ const PLAIN_FIELDS = [
   'email',
   'address',
   'insurance',
+  'firstVisitType',
   'primaryDentistId',
   'notes',
 ] as const satisfies readonly (PatientPatchField & keyof PatientRecordPatch)[];
-
-const sameList = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && a.every((value, index) => value === b[index]);
 
 /**
  * The repository patch for the fields of `patch` whose stored value changes, and their names in
@@ -147,9 +146,9 @@ export function changesOf(
     Object.assign(set, { [field]: value });
     fields.push(field);
   }
-  if (patch.medicalAlerts && !sameList(patch.medicalAlerts, before.medicalAlerts)) {
-    set.medicalAlerts = patch.medicalAlerts;
-    fields.push('medicalAlerts');
+  if (patch.medicalHistory && historyChanged(before, patch.medicalHistory)) {
+    set.medicalHistory = patch.medicalHistory;
+    fields.push('medicalHistory');
   }
   return { set, fields };
 }
@@ -159,8 +158,25 @@ export function changesOf(
  * yields the same number whatever the country; it is only needed for the national search digits.
  * A null phone (the picked record had none) clears it.
  */
-export function mergeSet(patch: MergePatch, country: Tenant['country']): PatientRecordPatch {
-  const { phone, ...rest } = patch;
+export function mergeSet(
+  kept: DomainPatient,
+  patch: MergePatch,
+  country: Tenant['country'],
+): PatientRecordPatch {
+  const { phone, medication, medicalItems, ...fields } = patch;
+  const rest: PatientRecordPatch = { ...fields };
+  // The repository stores a history whole: the unioned items with the picked medication line.
+  if (medication !== undefined || medicalItems !== undefined) {
+    rest.medicalHistory = {
+      ...(medicalItems ?? {
+        noKnownAllergies: kept.noKnownAllergies,
+        allergyIds: kept.allergies.map((item) => item.id),
+        noConditions: kept.noConditions,
+        conditionIds: kept.conditions.map((item) => item.id),
+      }),
+      medication: medication === undefined ? kept.medication : medication,
+    };
+  }
   if (phone === undefined) return rest;
   if (phone === null) return { ...rest, phone: null };
   const normalized = normalizePhone(phone, country);

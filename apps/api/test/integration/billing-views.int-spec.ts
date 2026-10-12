@@ -15,6 +15,7 @@ import { PatientExportService } from '../../src/modules/billing/application/pati
 import { Settlement } from '../../src/modules/billing/application/settlement';
 import { exportLabels } from '../../src/modules/billing/http/export-headers';
 import { newId } from '../../src/platform/kernel/id';
+import { historyInput, medicalOptions } from '../support/medical-options';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
@@ -247,7 +248,12 @@ describe('billing: patient views, CSV export and merge re-point', () => {
       // Equal debts: ordered by name, whatever the insertion order.
       carl = await openWithBalance(
         clinic.owner,
-        { fullName: 'Carl Chami', medicalAlerts: ['Latex'] },
+        {
+          fullName: 'Carl Chami',
+          medicalHistory: historyInput({
+            allergyIds: [(await medicalOptions(clinic.owner)).id('allergy', 'Latex')],
+          }),
+        },
         '100.00',
       );
       adel = await openWithBalance(clinic.owner, { fullName: 'Adel Ammar' }, '100.00');

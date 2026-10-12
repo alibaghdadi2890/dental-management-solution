@@ -1,0 +1,1 @@
+ALTER TABLE "visit_plan_items" DROP COLUMN "skipped_at";
