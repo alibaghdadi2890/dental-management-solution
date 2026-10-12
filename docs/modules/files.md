@@ -1,7 +1,8 @@
 # `files` module
 
 **Status:** built in feature 8 (patient files). Spec
-`docs/superpowers/specs/2026-10-07-patient-files-design.md`; ADR-0038 to ADR-0040.
+`docs/superpowers/specs/2026-10-07-patient-files-design.md`; ADR-0038 to ADR-0040. Feature 10
+adds the evidence veto: a diagnosis may cite a file, and this module checks the file (ADR-0049).
 
 ## Purpose
 
@@ -104,6 +105,25 @@ by default.
 - **Storage location** is returned only to callers with `tenant:write` (owners; platform admins
   acting in the clinic).
 
+## Cited by a diagnosis (feature 10, ADR-0049)
+
+A diagnosis may say it was seen on one of the patient's files ("Seen on"). `clinical` owns and
+stores that link (`patient_diagnoses.seen_on_file_id`); nothing is stored here.
+
+- **The evidence veto** (`application/evidence-veto.subscriber.ts`): `clinical` cannot read
+  `files`, so it publishes `DiagnosisEvidenceCited { recordId, patientId, fileId }` inside the
+  transaction that writes the link. `EvidenceVetoSubscriber` handles it in that transaction
+  (`@OnDomainEventInTransaction`) and throws `clinical`'s `EvidenceInvalidError` (422
+  `record.evidence_invalid`) unless the file is a saved, unarchived image of that patient. The
+  refusal rolls the diagnosis write back, the way `billing` vetoes a void (ADR-0026).
+- A pending upload, an archived file, a document, another patient's file and an unknown id are
+  all refused.
+- A file archived after it was cited stays cited.
+- Not permission-gated: the write it guards already was.
+- **The citations read lives in `clinical`**: `GET /clinical/patients/:id/file-citations`
+  (`ChartService.fileCitations`, `visit:read`) answers, per file id, the diagnoses that cite it.
+  The SPA joins it with `GET /files`.
+
 ## Public API (`index.ts`)
 
 `FilesModule`, `FilesService`, the events.
@@ -148,10 +168,15 @@ and discarding one is not audited.
 Events (ids, category, tooth, visit): `FileUploaded`, `FileUpdated` (with the changed `fields`),
 `FileArchived`, `FileRestored`.
 
+Consumes, in the publisher's transaction: `PatientsMerged` (the re-point) and
+`DiagnosisEvidenceCited` (the [evidence veto](#cited-by-a-diagnosis-feature-10-adr-0049), which
+writes and audits nothing).
+
 ## Depends on
 
 `patients` (`lockForDependentWrite`; consumes `PatientsMerged` in the merge transaction),
-`clinical` (`VisitsService.refsFor`), `users` (`namesByUserIds`), `tenancy` (the time zone),
+`clinical` (`VisitFactsService.refsFor`; the `DiagnosisEvidenceCited` event and
+`EvidenceInvalidError`), `users` (`namesByUserIds`), `tenancy` (the time zone),
 `audit`. Platform: `ObjectStorage`. Nothing imports `files`.
 
 ## Permissions
@@ -172,6 +197,10 @@ dentist. Migration `0038_files` grants them to the system roles of tenants seede
   groups (`gallery/gallery-filter.ts`), the viewer's zoom (`viewer/zoom.ts`), EXIF reading
   (`exif.ts`), rotation (`rotation.ts`).
 - `?tab=files&file=<id>` on the record opens the viewer on that file (the Activity screen's link).
+- The viewer's details panel (`viewer/details-panel.tsx`) lists the diagnoses that cite the file,
+  from `clinical`'s citations read.
+- `evidence-strip.tsx` is the Evidence strip of a visit's steps: the patient's images, newest
+  first, with Upload and Take photo, which open the upload panel with the visit pre-filled.
 - The last category and type saved in a browser session are remembered in `sessionStorage` and
   pre-selected for the next upload of images.
 
@@ -180,4 +209,5 @@ dentist. Migration `0038_files` grants them to the system roles of tenants seede
 `apps/api/test/integration/files.int-spec.ts`; the `files` block of
 `tenant-isolation-services.int-spec.ts`; domain specs (`taken-at`, `file-changes`); contracts
 `files.spec.ts` (accepted types, the archive rule); web `features/files/*.spec.ts(x)`; Playwright
-`apps/web/e2e/files.spec.ts`.
+`apps/web/e2e/files.spec.ts`. The evidence veto is covered by
+`apps/api/test/integration/visit-flows.int-spec.ts`.

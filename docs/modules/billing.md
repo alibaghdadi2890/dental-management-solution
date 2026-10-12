@@ -7,6 +7,7 @@ Feature 7 also adds the Adjust balance screen, retry safety on opening balances 
 and the currency lock (ADR-0035). Feature 4a adds the visit charge, posted
 in the completion's transaction, and a completed visit's financial summary (ADR-0024). Feature 5 adds payments, refunds and voids on the patient account, their stored allocations,
 receivables (KPIs, aging, outstanding) and the data of the printables (ADR-0027 to ADR-0029).
+Feature 10 adds the visit's type to allocation lines and open charges.
 Stored invoices and price lists come later.
 
 ## Purpose
@@ -197,6 +198,13 @@ Spec `docs/superpowers/specs/2026-10-02-payments-design.md` (P1–P16).
   cursor on `(oldest, patient id)`; `group=payer` groups owing patients into families by primary billing contact, the cursor on `(oldest, group key)`), `family` and `familyStatement` (a billing contact's family, ADR-0028 seen from the payer), `account` (balance card, credit, open charges, payer, payers,
   household, history with the running Remaining, the balance adjustments), `receipt` and
   `statement`.
+- **The visit's type on a charge** (feature 10): a `ChargeRef` (`chargeRefSchema`) names what
+  money was applied to: `kind`, `visitId`, `visitNumber`, `visitType`, `date`. Allocation lines
+  (`allocationLineSchema`: the preview, the recorded payment, the history, the receipt) and the
+  account's open charges (`openChargeSchema`) extend it, so each carries the type of its visit,
+  or null for a target that is not a visit. `ChargeLabels.visitsOf`
+  (`application/charge-labels.ts`) reads number, date and type in one
+  `VisitFactsService.numbersFor` call. The receipt prints the type under the visit number.
 - Errors: 422 `payment.over_outstanding`, `payment.nothing_outstanding`, `payment.invalid_target`,
   `payment.invalid_payer`, `payment.invalid_cursor`; 404 `payment.not_found`; 409
   `payment.over_refund`, `payment.has_refunds`, `payment.not_reversible`,
@@ -209,7 +217,7 @@ Spec `docs/superpowers/specs/2026-10-02-payments-design.md` (P1–P16).
 request context, before commit (spec W2).
 
 - A total of 0 posts nothing (W20: the ledger refuses 0).
-- Otherwise it reads `VisitsService.chargeFacts(visitId)` (`visit:read`) through the open
+- Otherwise it reads `VisitFactsService.chargeFacts(visitId)` (`visit:read`) through the open
   transaction, so it sees the completion; calls `lockForDependentWrite` (already held by
   `complete`); and appends, through `LedgerWriter`, the `visit_charge` entry — the frozen total,
   in the visit currency, `effective_date` = the visit's local date, `created_by` = the
@@ -241,8 +249,9 @@ voided one's is 0.
 
 ### Visit views (`application/visit-views.service.ts`, feature 4b)
 
-The Visits screen's money, composed on `VisitsService` like the patient views on
-`PatientsService`. Every method requires `payment:read`; `VisitsService` re-checks `visit:read`.
+The Visits screen's money, composed on `clinical`'s `VisitListService` like the patient views on
+`PatientsService`. Every method requires `payment:read`; `VisitListService` re-checks
+`visit:read`. The visit filters include `type` (feature 10).
 
 - `unpaid(query)`: the visits list restricted to `visitIdsOwing()` (visits whose entries sum
   above 0) through `search`'s internal `idsIn`.
@@ -446,11 +455,14 @@ voidIds, patientIds }`, `CreditApplied { patientId, currency, allocations }`.
   id); "Recorded by" names (`namesByUserIds`, feature 5).
 - `patients` (feature 5): `ContactsService.contactsOf` and `patientsBilledBy` for the payer and the
   household.
-- `clinical` (feature 5): `VisitsService.numbersFor` (visit numbers on allocations) and `search`
-  (the Transactions visit search).
-- `clinical` (feature 4a, W21, ADR-0024): `VisitsService.chargeFacts` for the visit charge,
-  `VisitsService.visitMoney` and `VisitNotLiveError` for the summary; the `VisitCompleted`
-  event, handled in the transaction.
+- `clinical`, `VisitFactsService`: `chargeFacts` for the visit charge (feature 4a, W21,
+  ADR-0024), `visitMoney` for the summary, `numbersFor` for the visit number, date and type on
+  allocation lines and open charges (feature 5, feature 10).
+- `clinical`, `VisitListService`: `search` (the Unpaid tab, the visits export, the Transactions
+  visit search), `aggregate` (the Unpaid summary), `lastVisitFor` (the patients export) and
+  `patientIdsSeenWithin` (the Not seen view and the Never filter).
+- `clinical`: `VisitNotLiveError` for the summary; the `VisitCompleted`, `VisitAmended` and
+  `VisitVoided` events, handled in the transaction.
 - `audit`.
 
 None of them imports `billing` (ADR-0017, ADR-0024).
@@ -462,7 +474,7 @@ None of them imports `billing` (ADR-0017, ADR-0024).
 - `payment:refund` (refund and void a payment; adjust a balance, feature 7): owner, dentist.
 - A platform admin acting in the tenant holds both.
 - Completing a visit needs no `payment:*` permission (ADR-0024), but it does need `visit:read` and
-  `patient:read` on top of `visit:write`: `VisitChargeSubscriber` calls `VisitsService.chargeFacts`
+  `patient:read` on top of `visit:write`: `VisitChargeSubscriber` calls `VisitFactsService.chargeFacts`
   (`visit:read`) and `PatientsService.lockForDependentWrite` (`patient:read`) inside `complete`'s
   own transaction, so a completer missing either would fail the completion partway through, not
   just the charge. Every system role that holds `visit:write` (owner, dentist, assistant) also

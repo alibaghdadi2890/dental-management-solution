@@ -47,21 +47,43 @@ the surrounding `about()`, the resource itself when it is a patient or a visit, 
 An action is `<resource>.<verb>`; its first segment decides its area (`areaOfAction` in
 `packages/contracts/src/audit.ts`):
 
-| Area       | Action prefixes                                                                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `patients` | `patient.`                                                                                                                                          |
-| `contacts` | `contact.`                                                                                                                                          |
-| `visits`   | `visit.`, `visit_service.`, `diagnosis_record.`, `treatment_plan.`, `plan_group.`, `tooth_presence.`, `clinical.` (and the retired `tooth_status.`) |
-| `payments` | `payment.`, `ledger_entry.`                                                                                                                         |
-| `catalog`  | `catalog.`                                                                                                                                          |
-| `users`    | `user.`, `role.`                                                                                                                                    |
-| `settings` | `tenant.`, `branch.`, `room.`                                                                                                                       |
-| `files`    | `file.` (feature 8: `file.upload`, `file.update`, `file.archive`, `file.restore`, `file.repoint`)                                                   |
+| Area       | Action prefixes                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `patients` | `patient.`                                                                                                                           |
+| `contacts` | `contact.`                                                                                                                           |
+| `visits`   | `visit.`, `visit_service.`, `diagnosis_record.`, `treatment_plan.`, `tooth_presence.`, `clinical.` (and the retired `tooth_status.`) |
+| `payments` | `payment.`, `ledger_entry.`                                                                                                          |
+| `catalog`  | `catalog.`, `medical_option.` (the medical-history lists of `patients`, feature 10)                                                  |
+| `users`    | `user.`, `role.`                                                                                                                     |
+| `settings` | `tenant.`, `branch.`, `room.`                                                                                                        |
+| `files`    | `file.` (feature 8: `file.upload`, `file.update`, `file.archive`, `file.restore`, `file.repoint`)                                    |
 
 A row has **no area**, and so is never on the Activity screen, when it is a stored domain event
 (`resource_type = 'event'`; an event name has no `resource.verb` shape) or when its writer marks
 it `hidden`: the ledger entry of a payment, a refund, a void or a visit change only shadows that
 action's own row. Opening balances and adjustments are actions of their own and are shown.
+Navigation in a visit is hidden too (feature 10): `visit.step`, `visit.view`,
+`visit.worklist_add` and `visit.worklist_remove`. These rows stay in the visit's own timeline
+(`resourceType=visit`); in the feed, every step change would bury the other rows.
+
+Actions added by feature 10 (visit flows):
+
+- `visit.update` also records a change of the visit's reason, or of an emergency's pain score
+  and "since", with before and after.
+- `visit.history_confirm` / `visit.history_unconfirm`: a dentist confirmed the patient's medical
+  history in a visit, or took the confirmation back.
+- `visit_service.create` for a service the visit type added at start: its `after` carries
+  `autoAdded: true`.
+- `diagnosis_record.seen_on`: what a diagnosis was seen on changed (`{ seenOn }` before and
+  after).
+- `treatment_plan.prioritise`: a plan moved to another priority.
+- `treatment_plan.accept` / `treatment_plan.unaccept`: the patient accepted a plan, or the
+  acceptance was withdrawn.
+- `treatment_plan.start` is also written when a session is recorded on a plan that was still
+  planned.
+- `medical_option.create` / `update` / `delete` / `deactivate` (resource type `medical_option`):
+  the clinic's allergy and condition lists.
+- A patient's medical history changes inside `patient.update`.
 
 A new action needs a sentence in `apps/web/src/locales/*/activity.json` (`actions.<action>`);
 `features/audit/sentence.spec.ts` lists the actions the API emits and fails when one has none. A

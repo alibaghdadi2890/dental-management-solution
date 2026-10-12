@@ -29,12 +29,29 @@ there is no UI or API to create them yet. Permissions come from the catalog in `
 | `file:archive`                          | ✓     | ✓       | –         | –         |
 
 `visit:amend` and `visit:void` are enforced by `POST /visits/:id/amend` and `/void` and
-re-checked in `VisitsService` (feature 4b); the SPA shows front desk "Request a change" instead.
+re-checked in `VisitCorrectionsService` (feature 4b); the SPA shows front desk "Request a change"
+instead.
 `visit:discount` is the visit discount at checkout, on the visit's day (ADR-0030); migration
 `0026_checkout_discount` grants it to the system roles of tenants seeded before it.
 `chart:write` is charting on the patient record, outside a visit (ADR-0031): diagnoses, plans and
-named plans; in-visit charting stays on `visit:write`. Migration `0028_records_without_visit`
+tooth presence; in-visit charting stays on `visit:write`. Migration `0028_records_without_visit`
 grants it likewise.
+
+Visit flows (feature 10) added no permission. What each existing one covers:
+
+| Action                                                                                                                        | Permission      |
+| ----------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| Start a visit with a type, read the start options; set the step, the view, the reason and the complaint; skip a worklist item | `visit:write`   |
+| In a visit: what a diagnosis was seen on; the priority of a plan made in that visit                                           | `visit:write`   |
+| Confirm the medical history in a visit, or take the confirmation back (ADR-0046)                                              | `chart:write`   |
+| On the patient record: a plan's priority and acceptance; what a diagnosis was seen on (ADR-0045, ADR-0049)                    | `chart:write`   |
+| A patient's medical history (part of the patient create and update)                                                           | `patient:write` |
+| Read the medical-history lists                                                                                                | `patient:read`  |
+| Edit the medical-history lists; "Added on" and "Sessions" on a catalog service (ADR-0047)                                     | `catalog:write` |
+| Read the history confirmation and the file citations of a patient                                                             | `visit:read`    |
+
+So an assistant, who holds `visit:write` and not `chart:write`, runs the visit flow and cannot
+confirm the medical history; front desk, without `visit:write`, starts no visit.
 
 `file:read`, `file:write` and `file:archive` are patient files (feature 8): everyone reads and
 uploads, and archiving is the owner's and the dentist's — plus, by rule and not by permission, the
