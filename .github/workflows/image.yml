@@ -1,0 +1,29 @@
+# The box images (x86_64) as one downloadable artifact: the 512 MB box cannot build, and the laptop
+# that ships is ARM. infra/scripts/ship.sh load starts this workflow, has the box download the images
+# and deletes the artifact. No registry, no token on the box. It runs only when started (never on
+# push) and keeps the artifact one day at most (mhdb-studio DECISIONS #11).
+name: image
+on:
+  workflow_dispatch:
+permissions: { contents: read }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the api and web images
+        run: |
+          sha="${GITHUB_SHA::7}"
+          docker build -f apps/api/Dockerfile -t "dcm-api:$sha" .
+          docker build -f apps/web/Dockerfile -t "dcm-web:$sha" .
+          docker save "dcm-api:$sha" "dcm-web:$sha" | gzip -1 > images.tar.gz
+          ls -l images.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          {
+            name: 'image-${{ github.sha }}',
+            path: images.tar.gz,
+            retention-days: 1,
+            if-no-files-found: error,
+          }

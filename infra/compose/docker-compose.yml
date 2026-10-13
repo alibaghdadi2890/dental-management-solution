@@ -1,0 +1,147 @@
+name: dcm
+
+# One Lightsail box, no domain. The browser reaches nginx (the web container) on the box's public
+# IP over plain HTTP: the firewall opens :80 to everyone. nginx serves the SPA, proxies /api and
+# /health to the API, and /dcm/ (the bucket's path) to the object store, so the presigned upload
+# and download URLs the API signs for http://<ip> work from the browser (apps/web/nginx.conf).
+# State on disk: /var/lib/dcm/{postgres-data,redis,s3}. Lives on the box as /opt/dcm/docker-compose.yml,
+# next to .env, s3.json, seaweedfs-start.sh and postgres-init/, all written by infra/scripts/ship.sh config.
+#
+# Memory on the 512 MB box (+ 2 GB swap): ceilings, not reservations. See infra/RUNBOOK.md → Sizing.
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: '10m', max-file: '3' }
+
+services:
+  web:
+    image: ${WEB_IMAGE:-dcm-web:latest}
+    restart: unless-stopped
+    ports: ['80:80']
+    depends_on: [api]
+    mem_limit: 32m
+    logging: *logging
+
+  api:
+    image: ${API_IMAGE:-dcm-api:latest}
+    restart: unless-stopped
+    expose: ['3000']
+    env_file: [.env]
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: postgres://dcm_app:${DCM_APP_PASSWORD}@postgres:5432/dcm
+      DATABASE_ADMIN_URL: postgres://dcm_admin:${DCM_ADMIN_PASSWORD}@postgres:5432/dcm
+      DATABASE_MIGRATION_URL: postgres://dcm_owner:${POSTGRES_PASSWORD}@postgres:5432/dcm
+      DATABASE_POOL_MAX: '5'
+      REDIS_URL: redis://redis:6379
+      # The API reaches the store on the compose network; the URLs it signs for the browser name
+      # the public address, where nginx proxies the bucket's path (apps/web/nginx.conf).
+      S3_ENDPOINT: http://s3:8333
+      S3_PUBLIC_ENDPOINT: http://${PUBLIC_IP}
+      S3_REGION: us-east-1
+      S3_BUCKET: dcm
+      S3_FORCE_PATH_STYLE: 'true'
+      AUTH_BASE_URL: http://${PUBLIC_IP}
+      # Plain HTTP on a bare address: the browser would drop a Secure cookie (config.schema.ts).
+      AUTH_COOKIE_SECURE: 'false'
+      OTEL_SDK_DISABLED: 'true'
+      NODE_OPTIONS: --max-old-space-size=192
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      s3: { condition: service_healthy }
+    mem_limit: 320m
+    logging: *logging
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/health/ready >/dev/null || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    command:
+      [
+        'postgres',
+        '-c',
+        'shared_buffers=48MB',
+        '-c',
+        'max_connections=30',
+        '-c',
+        'work_mem=4MB',
+        '-c',
+        'maintenance_work_mem=32MB',
+        '-c',
+        'effective_cache_size=128MB',
+        '-c',
+        'jit=off',
+        '-c',
+        'max_parallel_workers=0',
+        '-c',
+        'max_parallel_workers_per_gather=0',
+      ]
+    environment:
+      POSTGRES_USER: dcm_owner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: dcm
+      # Read by postgres-init/01-roles.sh, which runs on the first start only (empty data dir).
+      DCM_APP_PASSWORD: ${DCM_APP_PASSWORD}
+      DCM_ADMIN_PASSWORD: ${DCM_ADMIN_PASSWORD}
+    volumes:
+      - /var/lib/dcm/postgres-data:/var/lib/postgresql/data
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    shm_size: 64m
+    mem_limit: 160m
+    logging: *logging
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dcm_owner -d dcm']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # BullMQ's state: appended to disk, and noeviction so a full Redis fails loudly instead of losing jobs.
+    command:
+      [
+        'redis-server',
+        '--appendonly',
+        'yes',
+        '--save',
+        '',
+        '--maxmemory',
+        '32mb',
+        '--maxmemory-policy',
+        'noeviction',
+      ]
+    volumes: ['/var/lib/dcm/redis:/data']
+    mem_limit: 64m
+    logging: *logging
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  s3:
+    # S3-compatible object storage (ADR-0006): the image local dev uses, with the one bucket created at start.
+    image: chrislusf/seaweedfs:4.47
+    restart: unless-stopped
+    entrypoint: ['/bin/sh', '/start.sh']
+    environment:
+      S3_BUCKET: dcm
+    volumes:
+      - /var/lib/dcm/s3:/data
+      - ./s3.json:/etc/seaweedfs/s3.json:ro
+      - ./seaweedfs-start.sh:/start.sh:ro
+    mem_limit: 160m
+    logging: *logging
+    healthcheck:
+      test: ['CMD', 'test', '-f', '/tmp/ready']
+      interval: 10s
+      timeout: 3s
+      retries: 30
