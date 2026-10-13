@@ -54,6 +54,24 @@ describe('ObjectStorage', () => {
     expect(url).toContain('X-Amz-Expires=300');
   });
 
+  it("signs the browser's URLs for the public address when the API reaches the store elsewhere", async () => {
+    const split = { ...config, S3_PUBLIC_ENDPOINT: 'http://clinic.example' } as AppConfig;
+    const storage = new ObjectStorage(createS3Client(split), split, context);
+    const upload = await inTenant('tenant-a', () =>
+      storage.presignUpload({
+        key: 'tenants/tenant-a/files/f1/original',
+        contentType: 'image/jpeg',
+      }),
+    );
+    const download = await inTenant('tenant-a', () =>
+      storage.presignDownload({ key: 'tenants/tenant-a/files/f1/original' }),
+    );
+    expect(upload).toMatch(
+      /^http:\/\/clinic\.example\/dcm-test\/tenants\/tenant-a\/files\/f1\/original\?/,
+    );
+    expect(download).toMatch(/^http:\/\/clinic\.example\/dcm-test\//);
+  });
+
   it('does not pin an empty-body checksum into presigned uploads', async () => {
     // Regression: SDK default checksums signed CRC32 of an empty body, so real uploads failed.
     const url = await inTenant('tenant-a', () =>

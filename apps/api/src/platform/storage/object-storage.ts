@@ -25,10 +25,10 @@ export class ForeignObjectKeyError extends DomainError {
   readonly kind = 'forbidden';
 }
 
-export function createS3Client(config: AppConfig): S3Client {
+export function createS3Client(config: AppConfig, endpoint = config.S3_ENDPOINT): S3Client {
   return new S3Client({
     region: config.S3_REGION,
-    ...(config.S3_ENDPOINT === undefined ? {} : { endpoint: config.S3_ENDPOINT }),
+    ...(endpoint === undefined ? {} : { endpoint }),
     forcePathStyle: config.S3_FORCE_PATH_STYLE,
     // Default flexible checksums would sign the CRC32 of an empty body into presigned PUT URLs,
     // making every browser upload fail with BadDigest.
@@ -77,11 +77,19 @@ const DEFAULT_EXPIRY_SECONDS = 300;
  */
 @Injectable()
 export class ObjectStorage {
+  /** Signs the browser's URLs: for the store's public address when the API reaches it elsewhere. */
+  private readonly presigner: S3Client;
+
   constructor(
     @Inject(S3) private readonly s3: S3Client,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly context: RequestContext,
-  ) {}
+  ) {
+    this.presigner =
+      config.S3_PUBLIC_ENDPOINT === undefined
+        ? s3
+        : createS3Client(config, config.S3_PUBLIC_ENDPOINT);
+  }
 
   /** `tenants/<tenantId>/<segments...>` for the current tenant. */
   tenantKey(...segments: string[]): string {
@@ -98,7 +106,7 @@ export class ObjectStorage {
   }): Promise<string> {
     this.assertOwnKey(input.key);
     return getSignedUrl(
-      this.s3,
+      this.presigner,
       new PutObjectCommand({
         Bucket: this.config.S3_BUCKET,
         Key: input.key,
@@ -117,7 +125,7 @@ export class ObjectStorage {
   }): Promise<string> {
     this.assertOwnKey(input.key);
     return getSignedUrl(
-      this.s3,
+      this.presigner,
       new GetObjectCommand({
         Bucket: this.config.S3_BUCKET,
         Key: input.key,
