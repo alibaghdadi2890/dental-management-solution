@@ -8,6 +8,8 @@ OUT=/var/backups/dcm
 STAMP=$(date -u +%Y%m%d-%H%M%S)
 cd /opt/dcm
 docker compose exec -T postgres pg_dump -U dcm_owner -d dcm --format=custom --no-owner > "$OUT/dcm-$STAMP.dump" </dev/null
-sudo tar -C /var/lib/dcm -czf "$OUT/dcm-$STAMP.s3.tgz" s3
+# The store's files are root-owned, so tar runs as root; sudo does not keep this script's umask,
+# so the archive's mode is set inside and the file handed back to deploy.
+sudo sh -c "umask 077 && tar -C /var/lib/dcm -czf '$OUT/dcm-$STAMP.s3.tgz' s3 && chown deploy:deploy '$OUT/dcm-$STAMP.s3.tgz'"
 find "$OUT" -name 'dcm-*' -mtime +14 -delete
 echo "backup $STAMP written to $OUT"
