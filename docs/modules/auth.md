@@ -82,6 +82,9 @@ No other better-auth endpoint is reachable.
 `pnpm --filter @dcm/api admin:bootstrap --email … --password … [--name …]` creates or promotes the
 first platform admin (system actor, `withoutTenant`, idempotent, never changes a password).
 
+Where a one-off command cannot be run, set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD`
+(optionally `BOOTSTRAP_ADMIN_NAME`) and the API does the same at startup (`main.ts`), every boot.
+
 ## Events
 
 - Emits: `MemberJoined` (`syncMembership` added the membership), `MemberRemoved`

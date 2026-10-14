@@ -53,4 +53,26 @@ describe('loadConfig', () => {
         .AUTH_TRUSTED_ORIGINS,
     ).toEqual(['https://a.example', 'https://b.example']);
   });
+
+  it('takes an optional startup platform admin, email and password together', () => {
+    expect(loadConfig(validEnv).BOOTSTRAP_ADMIN_EMAIL).toBeUndefined();
+    const config = loadConfig({
+      ...validEnv,
+      BOOTSTRAP_ADMIN_EMAIL: 'admin@example.com',
+      BOOTSTRAP_ADMIN_PASSWORD: 'a-long-password',
+    });
+    expect(config.BOOTSTRAP_ADMIN_EMAIL).toBe('admin@example.com');
+    expect(config.BOOTSTRAP_ADMIN_NAME).toBe('Platform admin');
+
+    expect(() => loadConfig({ ...validEnv, BOOTSTRAP_ADMIN_EMAIL: 'admin@example.com' })).toThrow(
+      /BOOTSTRAP_ADMIN_PASSWORD/,
+    );
+    expect(() =>
+      loadConfig({
+        ...validEnv,
+        BOOTSTRAP_ADMIN_EMAIL: 'admin@example.com',
+        BOOTSTRAP_ADMIN_PASSWORD: 'short',
+      }),
+    ).toThrow(/BOOTSTRAP_ADMIN_PASSWORD/);
+  });
 });

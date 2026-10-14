@@ -33,7 +33,9 @@ There is no sign-up. Create the first platform admin once, then sign in at
 pnpm --filter @dcm/api admin:bootstrap --email you@example.com --password 'at-least-10-chars'
 ```
 
-The command is idempotent: an existing account is promoted, never re-passworded.
+The command is idempotent: an existing account is promoted, never re-passworded. Where you cannot
+run it (e.g. a hosted deploy), set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_PASSWORD` on the API
+and it does the same at startup.
 
 Infrastructure listens on non-default host ports so it does not clash with locally installed
 services: Postgres `55432`, Redis `56379`, S3 (SeaweedFS) `58333`. Override with
