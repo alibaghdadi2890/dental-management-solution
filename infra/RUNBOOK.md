@@ -36,18 +36,36 @@ and `~/.secrets/dcm-*`.
 Names: instance `dcm-dev`, static IP `dcm-dev-ip`, key pair `dcm-dev-deploy`, images `dcm-api:<sha>`
 and `dcm-web:<sha>` (loaded on the box, no registry), AWS profile `mhdb-hosting`.
 
-## Shipping (`infra/scripts/ship.sh`)
+## Deploy (a push to main does it)
 
-| Command                 | What it does                                                                                                                                                                                                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ship.sh config`        | Looks the box's IP up, writes `/opt/dcm/.env` (secrets from `~/.secrets/dcm-*`), `s3.json`, the compose file, the Postgres role init and the store's start script; validates the compose file on the box                                                                                          |
-| `ship.sh load [<run>]`  | Starts the `image` workflow on `main` (or takes run `<run>`'s artifact), has the box download and `docker load` both images, deletes the artifact, sets `API_IMAGE`/`WEB_IMAGE` in `.env`. Refuses a commit whose CI did not succeed; `CI_GATE=off` overrides, `DCM_REF=<branch>` builds a branch |
-| `ship.sh up`            | Starts the stores, applies the migrations as the schema owner (`node dist/cli/migrate.js`), starts the stack, waits for `/health/ready`                                                                                                                                                           |
-| `ship.sh admin <email>` | Creates (or promotes) the platform admin with the password in `~/.secrets/dcm-platform-admin-password`                                                                                                                                                                                            |
-| `ship.sh status`        | `free -m`, `docker stats`, the containers, disk                                                                                                                                                                                                                                                   |
-| `ship.sh backup`        | Installs the nightly local backup (cron 00:00 UTC) and runs it once                                                                                                                                                                                                                               |
+Every push to `main` deploys by itself once CI passes on it: `.github/workflows/deploy.yml` finds the
+box, builds both images on GitHub's runner (free: the repo is public), copies the non-secret files,
+streams the images over SSH, migrates and restarts, then checks `/health/ready` from outside. The run
+summary names the address. Actions → **Deploy** → **Run workflow** deploys `main` by hand, for example
+after the box was started again.
 
-Order on a fresh box: `config`, `load`, `up`, `admin`, `backup`. A code change: `load`, `up`.
+No secret is set in this repo. The workflow assumes the AWS role `dcm-deploy`, which trusts only
+this repo's `main` and may only find the box and read its deploy key from AWS Parameter Store
+(`/dcm/deploy-ssh-key`; the public half is on the box). It cannot start, stop or change the box,
+and it never touches `.env`: secrets still change through `ship.sh config` (see **Configuration**).
+While the box is parked, Deploy does nothing and says so. Made by the studio's
+`infra/erp/scripts/setup-deploy-role.sh`; to rotate the key, generate a new `~/.ssh/dcm-ci`, run
+that script and `ship.sh config` (and remove the old line from the box's `authorized_keys`).
+
+## Shipping by hand (`infra/scripts/ship.sh`)
+
+| Command                     | What it does                                                                                                                                                                                                                                                                                      |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ship.sh config`            | Looks the box's IP up, writes `/opt/dcm/.env` (secrets from `~/.secrets/dcm-*`) and `s3.json`, then runs `files`; installs CI's public deploy key                                                                                                                                                 |
+| `ship.sh files`             | The non-secret files only: the compose file, the Postgres role init, the store's start script, `on-boot.sh` and its unit; validates the compose file on the box. Deploy runs it every time                                                                                                        |
+| `ship.sh push-images <tag>` | Streams `dcm-api:<tag>` and `dcm-web:<tag>` from this machine's Docker into the box's and sets them in `.env`. Deploy runs it every time                                                                                                                                                          |
+| `ship.sh load [<run>]`      | Starts the `image` workflow on `main` (or takes run `<run>`'s artifact), has the box download and `docker load` both images, deletes the artifact, sets `API_IMAGE`/`WEB_IMAGE` in `.env`. Refuses a commit whose CI did not succeed; `CI_GATE=off` overrides, `DCM_REF=<branch>` builds a branch |
+| `ship.sh up`                | Starts the stores, applies the migrations as the schema owner (`node dist/cli/migrate.js`), starts the stack, waits for `/health/ready`                                                                                                                                                           |
+| `ship.sh admin <email>`     | Creates (or promotes) the platform admin with the password in `~/.secrets/dcm-platform-admin-password`                                                                                                                                                                                            |
+| `ship.sh status`            | `free -m`, `docker stats`, the containers, disk                                                                                                                                                                                                                                                   |
+| `ship.sh backup`            | Installs the nightly local backup (cron 00:00 UTC) and runs it once                                                                                                                                                                                                                               |
+
+Order on a fresh box: `config`, `load`, `up`, `admin`, `backup`. A code change: a push to `main`.
 A configuration change: see **Configuration** below.
 
 ## Configuration (where every variable lives)
@@ -59,7 +77,7 @@ environment comes from two files in `/opt/dcm`:
 | File on the box               | Holds                                                                                                                                                        | Written by                                                                                | To change                                                                                                                                                                                                 |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/opt/dcm/.env` (0600)        | the secrets (`POSTGRES_PASSWORD`, `DCM_APP_PASSWORD`, `DCM_ADMIN_PASSWORD`, `AUTH_SECRET`, `S3_SECRET_ACCESS_KEY`), `PUBLIC_IP`, `LOG_LEVEL`, the image tags | `ship.sh config`, from `~/.secrets/dcm-*` on the laptop; `PUBLIC_IP` also by `on-boot.sh` | a secret: edit `~/.secrets/dcm-<name>`, then `ship.sh config` and `ship.sh up` (a Postgres role password needs `ALTER ROLE` first). Never edit `.env` on the box by hand: the next `config` overwrites it |
-| `/opt/dcm/docker-compose.yml` | everything that is not secret: database URLs, `REDIS_URL`, the store endpoints, `AUTH_BASE_URL`, `AUTH_COOKIE_SECURE`, `OTEL_*`, pool size, memory caps      | `ship.sh config`, from `infra/compose/docker-compose.yml`                                 | edit the file in this repo, commit, then `ship.sh config` and `ship.sh up`                                                                                                                                |
+| `/opt/dcm/docker-compose.yml` | everything that is not secret: database URLs, `REDIS_URL`, the store endpoints, `AUTH_BASE_URL`, `AUTH_COOKIE_SECURE`, `OTEL_*`, pool size, memory caps      | Deploy (and `ship.sh files`), from `infra/compose/docker-compose.yml`                     | edit the file in this repo and push to `main`: Deploy ships it once CI passes                                                                                                                             |
 | `/opt/dcm/s3.json` (0600)     | the store's access key and secret                                                                                                                            | `ship.sh config`                                                                          | as a secret above (`~/.secrets/dcm-s3-secret`)                                                                                                                                                            |
 
 The variables themselves are listed with their meaning in `apps/api/.env.example`.

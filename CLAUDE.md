@@ -361,10 +361,12 @@ Even in phase 1, write application services so they can be exposed as tools late
   (`mhdb-studio/infra/erp/dcm`), served on the box's public IP over plain HTTP. No domain yet, so
   the session cookie is not `Secure` (`AUTH_COOKIE_SECURE=false`) — a staging posture, not one for
   real patients. `infra/RUNBOOK.md` is the operations guide.
-- Shipping is `infra/scripts/ship.sh` from a laptop with the studio checkout: `load` builds both
-  images with the `image` workflow (`workflow_dispatch` only) and loads them on the box, `up`
-  migrates (`node dist/cli/migrate.js`, drizzle-orm's migrator over the same journal) and starts
-  the stack. Nothing deploys on push; CI must be green on the commit shipped.
+- A push to `main` deploys by itself once CI passes on it (`.github/workflows/deploy.yml`): it
+  builds both images, ships the non-secret files and the images over SSH, migrates
+  (`node dist/cli/migrate.js`, drizzle-orm's migrator over the same journal) and restarts. No
+  secret is set in this repo: an AWS role trusting only `main` finds the box and reads its deploy
+  key from Parameter Store. Secrets (`/opt/dcm/.env`) change only through `infra/scripts/ship.sh
+  config` from the studio's laptop, which is also the manual path for everything else.
 - The images: `apps/api/Dockerfile` (production dependencies + `dist` + `migrations`) and
   `apps/web/Dockerfile` (nginx; `apps/web/nginx.conf` proxies `/api`, `/health` and the bucket's
   path `/dcm/`, so presigned URLs stay on the app's origin — `S3_PUBLIC_ENDPOINT`).

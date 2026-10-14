@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Ship the clinic app to its Lightsail box FROM A LAPTOP that has the studio checkout (mhdb-studio) and
 # the mhdb-hosting AWS profile. Secrets are read from ~/.secrets at the moment of use and never printed.
-#   ship.sh config         compose file, object-store config, Postgres role init and /opt/dcm/.env, from the box's current IP
+#   ship.sh config         files, then /opt/dcm/.env and the object store's keys from ~/.secrets, with the box's current IP
+#   ship.sh files          the non-secret files only: compose file, Postgres role init, store start script, on-boot unit
+#   ship.sh push-images <tag>  stream dcm-api:<tag> and dcm-web:<tag> from this machine's Docker to the box, set them in .env
 #   ship.sh load [<run>]   build with the "image" workflow (or take run <run>'s images), load them on the box, delete the artifact;
 #                          refuses a commit whose CI did not succeed, and waits for a CI run still going
 #   ship.sh up             apply the migrations, start / update the stack, wait until it answers
@@ -10,12 +12,13 @@
 #   ship.sh backup         install the nightly local backup (pg_dump + the object store) and run it once
 # Needs: ~/.ssh/dcm; ~/.secrets/dcm-{postgres-password,app-password,admin-password,auth-secret,s3-secret,platform-admin-password}.
 # Order on a fresh box: config, load, up, admin. After a Start the box adopts its new IP by itself (on-boot.sh).
-# DCM_HOST=<ip> skips the lookup of the box's address; DCM_REF=<branch> builds that branch instead of main;
-# CI_GATE=off ships a commit whose CI did not pass (say why in the run's notes).
+# A push to main deploys by itself (.github/workflows/deploy.yml: files, push-images, up); this script is the manual path.
+# DCM_HOST=<ip> skips the lookup of the box's address; DCM_SSH_KEY=<file> uses another key than ~/.ssh/dcm;
+# DCM_REF=<branch> builds that branch instead of main; CI_GATE=off ships a commit whose CI did not pass.
 set -euo pipefail
 
 usage() { awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0"; }
-case "${1:-}" in config | load | up | admin | status | backup) ;; *) usage; exit 1 ;; esac
+case "${1:-}" in config | files | push-images | load | up | admin | status | backup) ;; *) usage; exit 1 ;; esac
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"          # infra/
 ROOT="$(cd "$HERE/.." && pwd)"                      # the repo
@@ -25,8 +28,9 @@ REF="${DCM_REF:-main}"
 S=~/.secrets
 HOST="${DCM_HOST:-$(AWS_PROFILE=mhdb-hosting "$STUDIO/infra/erp/scripts/find-host.sh" "$HERE/lightsail.env")}"
 [ -n "$HOST" ] || { echo "the box is parked (no instance): start it first (mhdb-studio/infra/erp/scripts/start.sh)" >&2; exit 1; }
-SSH=(ssh -i "$HOME/.ssh/dcm" -o StrictHostKeyChecking=accept-new "deploy@$HOST")
-SCP=(scp -q -i "$HOME/.ssh/dcm" -o StrictHostKeyChecking=accept-new)
+KEY="${DCM_SSH_KEY:-$HOME/.ssh/dcm}"
+SSH=(ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 "deploy@$HOST")
+SCP=(scp -q -i "$KEY" -o StrictHostKeyChecking=accept-new)
 TMP_ENV="" TMP_S3="" HDR_FILE=""
 trap '[ -z "$TMP_ENV" ] || rm -f "$TMP_ENV"; [ -z "$TMP_S3" ] || rm -f "$TMP_S3"; [ -z "$HDR_FILE" ] || rm -f "$HDR_FILE"' EXIT
 
@@ -35,6 +39,22 @@ secret() { [ -s "$S/$1" ] || { echo "missing or empty: $S/$1" >&2; exit 1; }; ca
 
 # umask 077 first: .env.next holds every secret, so it must never exist world-readable, not even until the chmod.
 set_env() { "${SSH[@]}" "cd /opt/dcm && umask 077 && { grep -v '^$1=' .env; echo '$1=$2'; } > .env.next && mv .env.next .env && chmod 600 .env"; }
+
+# The non-secret files. CI runs this on every deploy; config runs it before writing the secrets.
+files() {
+  "${SSH[@]}" "sudo install -d -m 0755 -o deploy -g deploy /opt/dcm /opt/dcm/postgres-init /var/lib/dcm/redis /var/lib/dcm/s3 /var/backups/dcm"
+  "${SCP[@]}" "$HERE/compose/docker-compose.yml" "deploy@$HOST:/opt/dcm/docker-compose.yml"
+  "${SCP[@]}" "$HERE/compose/postgres-init/01-roles.sh" "deploy@$HOST:/opt/dcm/postgres-init/01-roles.sh"
+  "${SCP[@]}" "$HERE/compose/seaweedfs-start.sh" "deploy@$HOST:/opt/dcm/seaweedfs-start.sh"
+  "${SCP[@]}" "$HERE/scripts/on-boot.sh" "deploy@$HOST:/opt/dcm/on-boot.sh"
+  "${SSH[@]}" "chmod +x /opt/dcm/postgres-init/01-roles.sh /opt/dcm/seaweedfs-start.sh /opt/dcm/on-boot.sh"
+  # At every boot the box checks its public IP and rewrites PUBLIC_IP when a Start changed it (on-boot.sh).
+  "${SSH[@]}" "printf '%s\n' '[Unit]' 'Description=dcm: adopt the box public IP into /opt/dcm/.env' 'After=docker.service' 'Requires=docker.service' '' \
+    '[Service]' 'Type=oneshot' 'User=deploy' 'ExecStart=/opt/dcm/on-boot.sh' '' '[Install]' 'WantedBy=multi-user.target' \
+    | sudo tee /etc/systemd/system/dcm-boot.service >/dev/null && sudo systemctl daemon-reload && sudo systemctl enable -q dcm-boot.service"
+  # The compose file must still resolve against the .env already on the box (a fresh box gets it from config).
+  "${SSH[@]}" "cd /opt/dcm && { [ ! -f .env ] || docker compose config -q; } && echo 'files shipped (compose valid)'"
+}
 
 config() {
   local pg app adm auth s3 api_image web_image
@@ -61,19 +81,26 @@ config() {
   TMP_S3="$(umask 077; mktemp)"
   printf '{ "identities": [ { "name": "dcm", "credentials": [ { "accessKey": "dcm", "secretKey": "%s" } ], "actions": ["Admin", "Read", "List", "Tagging", "Write"] } ] }\n' "$s3" >"$TMP_S3"
 
-  "${SSH[@]}" "sudo install -d -m 0755 -o deploy -g deploy /opt/dcm /opt/dcm/postgres-init /var/lib/dcm/redis /var/lib/dcm/s3 /var/backups/dcm"
-  "${SCP[@]}" "$HERE/compose/docker-compose.yml" "deploy@$HOST:/opt/dcm/docker-compose.yml"
-  "${SCP[@]}" "$HERE/compose/postgres-init/01-roles.sh" "deploy@$HOST:/opt/dcm/postgres-init/01-roles.sh"
-  "${SCP[@]}" "$HERE/compose/seaweedfs-start.sh" "deploy@$HOST:/opt/dcm/seaweedfs-start.sh"
-  "${SCP[@]}" "$TMP_ENV" "deploy@$HOST:/opt/dcm/.env"
-  "${SCP[@]}" "$TMP_S3" "deploy@$HOST:/opt/dcm/s3.json"
-  "${SCP[@]}" "$HERE/scripts/on-boot.sh" "deploy@$HOST:/opt/dcm/on-boot.sh"
-  "${SSH[@]}" "chmod 600 /opt/dcm/.env /opt/dcm/s3.json && chmod +x /opt/dcm/postgres-init/01-roles.sh /opt/dcm/seaweedfs-start.sh /opt/dcm/on-boot.sh \
-    && cd /opt/dcm && docker compose config -q && echo 'config shipped and valid (PUBLIC_IP=$HOST)'"
-  # At every boot the box checks its public IP and rewrites PUBLIC_IP when a Start changed it (on-boot.sh).
-  "${SSH[@]}" "printf '%s\n' '[Unit]' 'Description=dcm: adopt the box public IP into /opt/dcm/.env' 'After=docker.service' 'Requires=docker.service' '' \
-    '[Service]' 'Type=oneshot' 'User=deploy' 'ExecStart=/opt/dcm/on-boot.sh' '' '[Install]' 'WantedBy=multi-user.target' \
-    | sudo tee /etc/systemd/system/dcm-boot.service >/dev/null && sudo systemctl daemon-reload && sudo systemctl enable -q dcm-boot.service && echo 'dcm-boot.service installed'"
+  "${SCP[@]}" "$TMP_ENV" "deploy@$HOST:/opt/dcm/.env.new"
+  "${SCP[@]}" "$TMP_S3" "deploy@$HOST:/opt/dcm/s3.json.new"
+  "${SSH[@]}" "cd /opt/dcm && chmod 600 .env.new s3.json.new && mv .env.new .env && mv s3.json.new s3.json"
+  files
+  # CI's deploy key (its private half is in AWS Parameter Store, see infra/RUNBOOK.md → Deploy): kept on the box.
+  if [ -s "$HOME/.ssh/dcm-ci.pub" ]; then
+    "${SSH[@]}" "grep -qxF '$(cat "$HOME/.ssh/dcm-ci.pub")' ~/.ssh/authorized_keys || echo '$(cat "$HOME/.ssh/dcm-ci.pub")' >> ~/.ssh/authorized_keys"
+  fi
+  echo "config shipped (PUBLIC_IP=$HOST)"
+}
+
+# push_images <tag>: dcm-api:<tag> and dcm-web:<tag> from this machine's Docker straight into the box's,
+# compressed on the wire; then the tags go into .env for the next up. No registry, no artifact.
+push_images() {
+  local tag="${1:?ship.sh push-images <tag>}"
+  docker image inspect "dcm-api:$tag" "dcm-web:$tag" >/dev/null
+  docker save "dcm-api:$tag" "dcm-web:$tag" | gzip -1 | "${SSH[@]}" "gunzip | docker load"
+  set_env API_IMAGE "dcm-api:$tag"
+  set_env WEB_IMAGE "dcm-web:$tag"
+  echo "box now has dcm-api:$tag and dcm-web:$tag"
 }
 
 # wait_run <run id>: until that workflow run has completed (30 minutes at most).
@@ -182,6 +209,8 @@ backup() {
 
 case "$1" in
   config) config ;;
+  files) files ;;
+  push-images) push_images "${2:-}" ;;
   load) load "${2:-}" ;;
   up) up ;;
   admin) admin "${2:-}" ;;
