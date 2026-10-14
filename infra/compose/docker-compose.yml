@@ -35,6 +35,9 @@ services:
       DATABASE_MIGRATION_URL: postgres://dcm_owner:${POSTGRES_PASSWORD}@postgres:5432/dcm
       DATABASE_POOL_MAX: '5'
       REDIS_URL: redis://redis:6379
+      BOOTSTRAP_ADMIN_EMAIL: superadmin@dentalclinic.com
+      BOOTSTRAP_ADMIN_PASSWORD: Admin@123456
+      BOOTSTRAP_ADMIN_NAME: Super Admin
       # The API reaches the store on the compose network; the URLs it signs for the browser name
       # the public address, where nginx proxies the bucket's path (apps/web/nginx.conf).
       S3_ENDPOINT: http://s3:8333
