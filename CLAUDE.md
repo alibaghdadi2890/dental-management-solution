@@ -354,6 +354,24 @@ Even in phase 1, write application services so they can be exposed as tools late
 - Docker Compose for local dev (Postgres, Redis, S3-compatible storage — SeaweedFS, see
   ADR-0006). One command to boot everything: `pnpm dev`.
 
+### Deployment (one Lightsail box, on its IP)
+
+- The app runs as a Docker Compose stack (`infra/compose/docker-compose.yml`: nginx + SPA, API,
+  Postgres 17, Redis 7, SeaweedFS as the S3 store) on one Lightsail box in the studio's AWS account
+  (`mhdb-studio/infra/erp/dcm`), served on the box's public IP over plain HTTP. No domain yet, so
+  the session cookie is not `Secure` (`AUTH_COOKIE_SECURE=false`) — a staging posture, not one for
+  real patients. `infra/RUNBOOK.md` is the operations guide.
+- Shipping is `infra/scripts/ship.sh` from a laptop with the studio checkout: `load` builds both
+  images with the `image` workflow (`workflow_dispatch` only) and loads them on the box, `up`
+  migrates (`node dist/cli/migrate.js`, drizzle-orm's migrator over the same journal) and starts
+  the stack. Nothing deploys on push; CI must be green on the commit shipped.
+- The images: `apps/api/Dockerfile` (production dependencies + `dist` + `migrations`) and
+  `apps/web/Dockerfile` (nginx; `apps/web/nginx.conf` proxies `/api`, `/health` and the bucket's
+  path `/dcm/`, so presigned URLs stay on the app's origin — `S3_PUBLIC_ENDPOINT`).
+- The box's names (`infra/lightsail.env`) must stay in step with the studio root; park/start run
+  from the laptop with the studio's shared scripts, and a Start gives the box a new IP
+  (`ship.sh config`, then `up`).
+
 ## 16. How to work in this repo (for the AI agent and humans)
 
 1. Before writing code, identify which module owns the change. If none does, propose a new module
