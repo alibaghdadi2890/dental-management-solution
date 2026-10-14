@@ -9,7 +9,7 @@
 #   ship.sh status         memory, containers, disk
 #   ship.sh backup         install the nightly local backup (pg_dump + the object store) and run it once
 # Needs: ~/.ssh/dcm; ~/.secrets/dcm-{postgres-password,app-password,admin-password,auth-secret,s3-secret,platform-admin-password}.
-# Order on a fresh box: config, load, up, admin. After a Start (the IP changes): config, then up.
+# Order on a fresh box: config, load, up, admin. After a Start the box adopts its new IP by itself (on-boot.sh).
 # DCM_HOST=<ip> skips the lookup of the box's address; DCM_REF=<branch> builds that branch instead of main;
 # CI_GATE=off ships a commit whose CI did not pass (say why in the run's notes).
 set -euo pipefail
@@ -67,8 +67,13 @@ config() {
   "${SCP[@]}" "$HERE/compose/seaweedfs-start.sh" "deploy@$HOST:/opt/dcm/seaweedfs-start.sh"
   "${SCP[@]}" "$TMP_ENV" "deploy@$HOST:/opt/dcm/.env"
   "${SCP[@]}" "$TMP_S3" "deploy@$HOST:/opt/dcm/s3.json"
-  "${SSH[@]}" "chmod 600 /opt/dcm/.env /opt/dcm/s3.json && chmod +x /opt/dcm/postgres-init/01-roles.sh /opt/dcm/seaweedfs-start.sh \
+  "${SCP[@]}" "$HERE/scripts/on-boot.sh" "deploy@$HOST:/opt/dcm/on-boot.sh"
+  "${SSH[@]}" "chmod 600 /opt/dcm/.env /opt/dcm/s3.json && chmod +x /opt/dcm/postgres-init/01-roles.sh /opt/dcm/seaweedfs-start.sh /opt/dcm/on-boot.sh \
     && cd /opt/dcm && docker compose config -q && echo 'config shipped and valid (PUBLIC_IP=$HOST)'"
+  # At every boot the box checks its public IP and rewrites PUBLIC_IP when a Start changed it (on-boot.sh).
+  "${SSH[@]}" "printf '%s\n' '[Unit]' 'Description=dcm: adopt the box public IP into /opt/dcm/.env' 'After=docker.service' 'Requires=docker.service' '' \
+    '[Service]' 'Type=oneshot' 'User=deploy' 'ExecStart=/opt/dcm/on-boot.sh' '' '[Install]' 'WantedBy=multi-user.target' \
+    | sudo tee /etc/systemd/system/dcm-boot.service >/dev/null && sudo systemctl daemon-reload && sudo systemctl enable -q dcm-boot.service && echo 'dcm-boot.service installed'"
 }
 
 # wait_run <run id>: until that workflow run has completed (30 minutes at most).

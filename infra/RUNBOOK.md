@@ -38,18 +38,31 @@ and `dcm-web:<sha>` (loaded on the box, no registry), AWS profile `mhdb-hosting`
 
 ## Shipping (`infra/scripts/ship.sh`)
 
-| Command                 | What it does                                                                                                   |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `ship.sh config`        | Looks the box's IP up, writes `/opt/dcm/.env` (secrets from `~/.secrets/dcm-*`), `s3.json`, the compose file, the Postgres role init and the store's start script; validates the compose file on the box |
+| Command                 | What it does                                                                                                                                                                                                                                                                                      |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ship.sh config`        | Looks the box's IP up, writes `/opt/dcm/.env` (secrets from `~/.secrets/dcm-*`), `s3.json`, the compose file, the Postgres role init and the store's start script; validates the compose file on the box                                                                                          |
 | `ship.sh load [<run>]`  | Starts the `image` workflow on `main` (or takes run `<run>`'s artifact), has the box download and `docker load` both images, deletes the artifact, sets `API_IMAGE`/`WEB_IMAGE` in `.env`. Refuses a commit whose CI did not succeed; `CI_GATE=off` overrides, `DCM_REF=<branch>` builds a branch |
-| `ship.sh up`            | Starts the stores, applies the migrations as the schema owner (`node dist/cli/migrate.js`), starts the stack, waits for `/health/ready` |
-| `ship.sh admin <email>` | Creates (or promotes) the platform admin with the password in `~/.secrets/dcm-platform-admin-password` |
-| `ship.sh status`        | `free -m`, `docker stats`, the containers, disk                                                                 |
-| `ship.sh backup`        | Installs the nightly local backup (cron 00:00 UTC) and runs it once                                             |
+| `ship.sh up`            | Starts the stores, applies the migrations as the schema owner (`node dist/cli/migrate.js`), starts the stack, waits for `/health/ready`                                                                                                                                                           |
+| `ship.sh admin <email>` | Creates (or promotes) the platform admin with the password in `~/.secrets/dcm-platform-admin-password`                                                                                                                                                                                            |
+| `ship.sh status`        | `free -m`, `docker stats`, the containers, disk                                                                                                                                                                                                                                                   |
+| `ship.sh backup`        | Installs the nightly local backup (cron 00:00 UTC) and runs it once                                                                                                                                                                                                                               |
 
 Order on a fresh box: `config`, `load`, `up`, `admin`, `backup`. A code change: `load`, `up`.
-A secret change: edit `~/.secrets/dcm-*`, then `config`, `up` (a Postgres role password also
-needs `ALTER ROLE` first: the init script runs only on an empty data dir).
+A configuration change: see **Configuration** below.
+
+## Configuration (where every variable lives)
+
+The API reads its configuration from the container's environment only
+(`apps/api/src/platform/config/config.schema.ts` validates it at boot). On the box that
+environment comes from two files in `/opt/dcm`:
+
+| File on the box               | Holds                                                                                                                                                        | Written by                                                                                | To change                                                                                                                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/opt/dcm/.env` (0600)        | the secrets (`POSTGRES_PASSWORD`, `DCM_APP_PASSWORD`, `DCM_ADMIN_PASSWORD`, `AUTH_SECRET`, `S3_SECRET_ACCESS_KEY`), `PUBLIC_IP`, `LOG_LEVEL`, the image tags | `ship.sh config`, from `~/.secrets/dcm-*` on the laptop; `PUBLIC_IP` also by `on-boot.sh` | a secret: edit `~/.secrets/dcm-<name>`, then `ship.sh config` and `ship.sh up` (a Postgres role password needs `ALTER ROLE` first). Never edit `.env` on the box by hand: the next `config` overwrites it |
+| `/opt/dcm/docker-compose.yml` | everything that is not secret: database URLs, `REDIS_URL`, the store endpoints, `AUTH_BASE_URL`, `AUTH_COOKIE_SECURE`, `OTEL_*`, pool size, memory caps      | `ship.sh config`, from `infra/compose/docker-compose.yml`                                 | edit the file in this repo, commit, then `ship.sh config` and `ship.sh up`                                                                                                                                |
+| `/opt/dcm/s3.json` (0600)     | the store's access key and secret                                                                                                                            | `ship.sh config`                                                                          | as a secret above (`~/.secrets/dcm-s3-secret`)                                                                                                                                                            |
+
+The variables themselves are listed with their meaning in `apps/api/.env.example`.
 
 ## First-time bootstrap
 
@@ -74,8 +87,15 @@ AWS_PROFILE=mhdb-hosting ~/dev/mhdb-studio/infra/erp/scripts/start.sh infra/ligh
 
 Park stops the box, snapshots it (`dcm-dev-parked-<UTC>`, the one kept), deletes the instance
 and releases the IP. Start recreates it from the snapshot with a **new IP** and reopens the
-firewall from `lightsail.env`. The app then needs the new address: `ship.sh config`, then
-`ship.sh up`. The parked snapshot is also the off-box backup.
+firewall from `lightsail.env`. At boot the box reads its new address from the instance metadata
+service and rewrites `PUBLIC_IP` in `.env` itself (`infra/scripts/on-boot.sh`, the
+`dcm-boot.service` unit `ship.sh config` installs), so nothing has to be shipped after a Start.
+The parked snapshot is also the off-box backup.
+
+The same two operations run as GitHub Actions workflows in the studio's repo,
+`mahdibaghdadi/mhdb-studio` → Actions → **dcm: Shut down** (type `shutdown` to confirm) and
+**dcm: Start** (the new address is in the run summary). They live there, not here, because this
+repo cannot use the studio's private actions and its secrets are not the studio's to set.
 
 To grow the box (the snapshot restores into a larger bundle, never a smaller one): park, set
 `BUNDLE=micro_3_0` in `infra/lightsail.env` (and `bundle_id` in the studio root, for the record),
@@ -121,10 +141,10 @@ re-applied by this recipe. Rehearse before relying on it.)
 adds. The compose ceilings (`mem_limit`) are caps, not reservations: web 32, api 320, postgres 160,
 redis 64, s3 160 MB.
 
-| Moment                                         | used | available | swap used |
-| ---------------------------------------------- | ---- | --------- | --------- |
-| After the bootstrap, no containers             | 245  | 167       | 43        |
-| Stack up, after the end-to-end upload test     | 259  | 152       | 295       |
+| Moment                                     | used | available | swap used |
+| ------------------------------------------ | ---- | --------- | --------- |
+| After the bootstrap, no containers         | 245  | 167       | 43        |
+| Stack up, after the end-to-end upload test | 259  | 152       | 295       |
 
 Container RSS at that second moment: api 34 MB, s3 22, postgres 11, redis 3, web 3 (most of the
 API's heap is paged out between requests). No OOM kill in `dmesg`. From a laptop, the first
