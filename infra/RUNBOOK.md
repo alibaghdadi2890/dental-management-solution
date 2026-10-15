@@ -153,7 +153,7 @@ docker compose up -d
 re-applied by hand; the append-only tables' revokes live in the migrations too and are not
 re-applied by this recipe. Rehearse before relying on it.)
 
-## Sizing (measured 2026-10-14, the first deploy)
+## Sizing (measured 2026-10-14 on nano_3_0; the box is micro_3_0 since 2026-10-15)
 
 `nano_3_0`: 2 vCPU, 512 MB (412 MB usable), 20 GB SSD, the 2 GB swap file the studio bootstrap
 adds. The compose ceilings (`mem_limit`) are caps, not reservations: web 32, api 320, postgres 160,
@@ -172,5 +172,14 @@ and `/health/ready` settle at about 120–130 ms. Disk: 39 % after the five imag
 Timings: the `image` workflow 1 min 16 s (one 184 MB artifact for both images), `ship.sh load`
 59 s, `ship.sh up` 1 min 21 s (stores, migrations, stack), the box's first boot about 4 min.
 
-The box runs, but on swap. If `ship.sh status` shows swap climbing past ~500 MB, requests staying
-slow once warm, or an OOM kill: park, `BUNDLE=micro_3_0` (1 GB, $7/month), start.
+The box ran, but on swap, and it felt slow, so on 2026-10-15 it moved to `micro_3_0` (park, then
+start with `BUNDLE=micro_3_0`; 7 min 20 s down, new IP):
+
+| `micro_3_0`, 2026-10-15, stack just up | used | available | swap used |
+| -------------------------------------- | ---- | --------- | --------- |
+| 1 GB (909 MB usable), 40 GB disk       | 531  | 377       | 104       |
+
+Container RSS: api 122 MB (its heap now stays in memory), s3 67, postgres 18, redis 2, web 2. The
+root filesystem grew to the bundle's 38 GB by itself (23 % used). From a laptop, `/api/v1/session`
+and `/health/ready` answer in 110–125 ms from the first request. Next step up, if ever needed:
+`small_3_0` (2 GB, $12/month), the same way.
