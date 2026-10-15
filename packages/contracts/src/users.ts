@@ -2,13 +2,16 @@ import { z } from 'zod';
 import { reasonSchema } from './audit.js';
 import { emailSchema, passwordSchema } from './auth.js';
 import { idSchema, isoDateTimeSchema, nameSchema, optionalText } from './common.js';
+import {
+  practitionerTypeSchema,
+  SPECIALTIES_MISFIT,
+  sentSpecialtiesFit,
+  specialtiesAgree,
+  specialtiesSchema,
+  specialtySchema,
+} from './practitioners.js';
 import { roleKeySchema, roleRefSchema } from './roles.js';
 import { branchRefSchema } from './session.js';
-
-/** What kind of clinician a staff user is; text + Zod so a tenant may extend it later. */
-export const PRACTITIONER_TYPES = ['dentist', 'assistant', 'frontdesk', 'other'] as const;
-export const practitionerTypeSchema = z.enum(PRACTITIONER_TYPES);
-export type PractitionerType = z.infer<typeof practitionerTypeSchema>;
 
 /**
  * A clinic staff member. `id` is the global auth user id (D7); `profileId` is this tenant's
@@ -22,6 +25,9 @@ export const staffUserSchema = z.object({
   displayName: z.string(),
   title: z.string().nullable(),
   practitionerType: practitionerTypeSchema,
+  /** Null and empty unless a dentist (ADR-0050). */
+  primarySpecialty: specialtySchema.nullable(),
+  specialties: z.array(specialtySchema),
   phone: z.string().nullable(),
   active: z.boolean(),
   roles: z.array(roleRefSchema),
@@ -36,28 +42,45 @@ const assignments = {
 };
 
 /** Created by a platform admin with a temporary password to change at first sign-in (D6). */
-export const staffUserCreateSchema = z.object({
-  displayName: nameSchema,
-  email: emailSchema,
-  title: optionalText(80),
-  practitionerType: practitionerTypeSchema,
-  phone: optionalText(40),
-  ...assignments,
-  temporaryPassword: passwordSchema,
-});
+export const staffUserCreateSchema = z
+  .object({
+    displayName: nameSchema,
+    email: emailSchema,
+    title: optionalText(80),
+    practitionerType: practitionerTypeSchema,
+    /** Optional as a pair: a dentist created without them starts on `DEFAULT_SPECIALTY`. */
+    primarySpecialty: specialtySchema.nullable().optional(),
+    specialties: specialtiesSchema.optional(),
+    phone: optionalText(40),
+    ...assignments,
+    temporaryPassword: passwordSchema,
+  })
+  .refine(sentSpecialtiesFit, SPECIALTIES_MISFIT);
 export type StaffUserCreate = z.infer<typeof staffUserCreateSchema>;
 
-/** Profile, roles and branches; the email and password are not edited here. */
+/**
+ * Profile, roles and branches; the email and password are not edited here. The specialties travel
+ * as a pair; whether they fit the type is checked against the stored profile (`users` module).
+ */
 export const staffUserPatchSchema = z
   .object({
     displayName: nameSchema,
     title: optionalText(80),
     practitionerType: practitionerTypeSchema,
+    primarySpecialty: specialtySchema.nullable(),
+    specialties: specialtiesSchema,
     phone: optionalText(40),
     ...assignments,
   })
   .partial()
-  .refine((patch) => Object.keys(patch).length > 0, { message: 'Change at least one field' });
+  .refine((patch) => Object.keys(patch).length > 0, { message: 'Change at least one field' })
+  .refine(
+    (patch) =>
+      patch.specialties === undefined || patch.primarySpecialty === undefined
+        ? patch.specialties === patch.primarySpecialty
+        : specialtiesAgree(patch.primarySpecialty, patch.specialties),
+    SPECIALTIES_MISFIT,
+  );
 export type StaffUserPatch = z.infer<typeof staffUserPatchSchema>;
 
 /** Body of `POST /users/:id/deactivate` and `/reactivate` (reason dialog). */

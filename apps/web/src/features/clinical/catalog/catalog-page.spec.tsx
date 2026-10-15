@@ -63,6 +63,7 @@ const DIAGNOSES: DiagnosisItem[] = [
 function sessionWith(permissions: Permission[]): Session {
   return {
     user: { id: id(90), displayName: 'Jamie Ortiz', email: 'j@example.com' },
+    profile: null,
     platformAdmin: false,
     mustChangePassword: false,
     tenant: {

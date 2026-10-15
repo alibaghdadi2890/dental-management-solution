@@ -121,10 +121,22 @@ describe('provisioning (platform admin)', () => {
 
   it("makes the owner a dentist by default, listed as the new clinic's practitioner", async () => {
     const tenant = (await provision(request())).body as Tenant;
+    const users = (await admin.get('/api/v1/users').set('X-Tenant-Id', tenant.id))
+      .body as StaffUser[];
+    expect(users).toMatchObject([{ primarySpecialty: 'general', specialties: ['general'] }]);
     const practitioners = (
       await admin.get('/api/v1/users/practitioners').set('X-Tenant-Id', tenant.id)
     ).body as Practitioner[];
     expect(practitioners).toMatchObject([{ displayName: 'Dr. Owner' }]);
+  });
+
+  it("keeps the owner's specialties when the platform admin chooses them", async () => {
+    const body = request();
+    const owner = { ...body.owner, primarySpecialty: 'pediatric', specialties: ['pediatric'] };
+    const tenant = (await provision({ ...body, owner })).body as Tenant;
+    const users = (await admin.get('/api/v1/users').set('X-Tenant-Id', tenant.id))
+      .body as StaffUser[];
+    expect(users).toMatchObject([{ primarySpecialty: 'pediatric', specialties: ['pediatric'] }]);
   });
 
   it('keeps an owner of another practitioner type out of the practitioners list', async () => {

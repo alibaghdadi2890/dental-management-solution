@@ -252,6 +252,8 @@
     "frequent": "كثير الاستخدام",
     "active": "مفعّل",
     "practitionerType": "النوع",
+    "primarySpecialty": "التخصص الرئيسي",
+    "specialties": "التخصصات",
     "roles": "الأدوار",
     "timeZone": "المنطقة الزمنية",
     "currency": "العملة",

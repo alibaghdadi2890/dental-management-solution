@@ -26,7 +26,8 @@ Dentist selected): most owners treat patients, and a clinic whose only user is n
 an empty primary dentist picker (`GET /users/practitioners`) until one is added. Clinics
 provisioned before this default had an owner of type `other`; migration 0033 (feature 7) made
 those owners dentists. A platform admin can still change an owner's type in the tenant's Users
-tab.
+tab. A dentist owner starts on General dentistry unless the form chose other specialties
+(ADR-0050).
 
 ## Owns
 

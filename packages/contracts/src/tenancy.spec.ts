@@ -71,6 +71,20 @@ describe('provisionTenantRequestSchema', () => {
     expect(provisionTenantRequestSchema.safeParse(unknown).success).toBe(false);
   });
 
+  it('takes the owner specialties as a pair that fits the type, or leaves them out', () => {
+    const owner = (fields: Record<string, unknown>) => ({
+      ...request,
+      owner: { ...request.owner, ...fields },
+    });
+    expect(provisionTenantRequestSchema.parse(request).owner.specialties).toBeUndefined();
+    const ortho = { primarySpecialty: 'orthodontics', specialties: ['general', 'orthodontics'] };
+    expect(provisionTenantRequestSchema.parse(owner(ortho)).owner).toMatchObject(ortho);
+    const half = owner({ specialties: ['general'] });
+    expect(provisionTenantRequestSchema.safeParse(half).success).toBe(false);
+    const notDentist = owner({ ...ortho, practitionerType: 'frontdesk' });
+    expect(provisionTenantRequestSchema.safeParse(notDentist).success).toBe(false);
+  });
+
   it('applies the password policy to the temporary password', () => {
     const weak = { ...request, owner: { ...request.owner, temporaryPassword: 'short' } };
     expect(provisionTenantRequestSchema.safeParse(weak).success).toBe(false);

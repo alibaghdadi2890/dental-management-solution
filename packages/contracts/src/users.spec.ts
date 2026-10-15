@@ -18,6 +18,8 @@ describe('staffUserCreateSchema', () => {
     displayName: '  Dr. Ana Reyes ',
     email: 'Ana@Northgate.Dental',
     practitionerType: 'dentist',
+    primarySpecialty: 'general',
+    specialties: ['general'],
     roleKeys: ['dentist'],
     branchIds: [BRANCH_ID],
     temporaryPassword: 'temporary-pw-1',
@@ -37,6 +39,22 @@ describe('staffUserCreateSchema', () => {
     expect(staffUserCreateSchema.safeParse({ ...input, branchIds: [] }).success).toBe(false);
   });
 
+  it('gives a dentist a primary specialty among their specialties, and no one else any', () => {
+    const ortho = { primarySpecialty: 'orthodontics', specialties: ['general', 'orthodontics'] };
+    expect(staffUserCreateSchema.parse({ ...input, ...ortho })).toMatchObject(ortho);
+    const none = { primarySpecialty: null, specialties: [] };
+    expect(staffUserCreateSchema.safeParse({ ...input, ...none }).success).toBe(false);
+    const { primarySpecialty: _p, specialties: _s, ...withoutThem } = input;
+    expect(staffUserCreateSchema.parse(withoutThem).specialties).toBeUndefined();
+    const half = { ...withoutThem, specialties: ['general'] };
+    expect(staffUserCreateSchema.safeParse(half).success).toBe(false);
+    const outside = { primarySpecialty: 'cosmetic', specialties: ['general'] };
+    expect(staffUserCreateSchema.safeParse({ ...input, ...outside }).success).toBe(false);
+    const assistant = { ...input, ...none, practitionerType: 'assistant' };
+    expect(staffUserCreateSchema.safeParse(assistant).success).toBe(true);
+    expect(staffUserCreateSchema.safeParse({ ...assistant, ...ortho }).success).toBe(false);
+  });
+
   it('applies the password policy and the practitioner types', () => {
     expect(staffUserCreateSchema.safeParse({ ...input, temporaryPassword: 'short' }).success).toBe(
       false,
@@ -51,6 +69,21 @@ describe('staffUserPatchSchema', () => {
   it('leaves absent fields absent and refuses an empty patch', () => {
     expect(staffUserPatchSchema.parse({ title: 'Hygienist' })).toEqual({ title: 'Hygienist' });
     expect(staffUserPatchSchema.safeParse({}).success).toBe(false);
+  });
+
+  it('takes the specialties as a pair that agrees with itself', () => {
+    const pair = { primarySpecialty: 'general', specialties: ['general', 'implantology'] };
+    expect(staffUserPatchSchema.parse(pair)).toEqual(pair);
+    expect(staffUserPatchSchema.parse({ primarySpecialty: null, specialties: [] })).toEqual({
+      primarySpecialty: null,
+      specialties: [],
+    });
+    expect(staffUserPatchSchema.safeParse({ specialties: ['general'] }).success).toBe(false);
+    expect(staffUserPatchSchema.safeParse({ primarySpecialty: 'general' }).success).toBe(false);
+    const outside = { primarySpecialty: 'cosmetic', specialties: ['general'] };
+    expect(staffUserPatchSchema.safeParse(outside).success).toBe(false);
+    const twice = { primarySpecialty: 'general', specialties: ['general', 'general'] };
+    expect(staffUserPatchSchema.safeParse(twice).success).toBe(false);
   });
 
   it('cannot change the email or password', () => {
@@ -104,6 +137,8 @@ describe('staffUserSchema', () => {
       displayName: 'Dr. Ana Reyes',
       title: null,
       practitionerType: 'dentist',
+      primarySpecialty: 'general',
+      specialties: ['general'],
       phone: null,
       active: true,
       roles: [],
@@ -121,6 +156,8 @@ describe('staffUserSchema', () => {
       displayName: 'Dr. Ana Reyes',
       title: null,
       practitionerType: 'dentist',
+      primarySpecialty: 'general',
+      specialties: ['general'],
       phone: null,
       active: true,
       roles: [],

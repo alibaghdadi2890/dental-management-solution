@@ -16,6 +16,7 @@ export * from './patients.js';
 export * from './payments.js';
 export * from './permissions.js';
 export * from './phone.js';
+export * from './practitioners.js';
 export * from './roles.js';
 export * from './session.js';
 export * from './tenancy.js';

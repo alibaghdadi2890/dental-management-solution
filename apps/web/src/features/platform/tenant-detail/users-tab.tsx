@@ -141,6 +141,7 @@ export function UsersTab({
         </span>
         <span className="truncate text-[12.5px] text-ink-secondary">
           {user.title ?? t(`users.practitionerTypes.${user.practitionerType}`)}
+          {user.primarySpecialty && ` · ${t(`users.specialties.${user.primarySpecialty}`)}`}
         </span>
         <span className="flex flex-wrap gap-1">
           {user.roles.map((role) => (

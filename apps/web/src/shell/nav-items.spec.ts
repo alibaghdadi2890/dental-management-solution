@@ -4,6 +4,7 @@ import { patientActions, visibleNav } from './nav-items';
 
 const base: Session = {
   user: { id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e', displayName: 'Jamie Ortiz', email: 'j@x.io' },
+  profile: null,
   platformAdmin: false,
   mustChangePassword: false,
   tenant: {

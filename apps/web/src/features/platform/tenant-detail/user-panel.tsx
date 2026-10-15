@@ -15,6 +15,8 @@ import {
   rolesQuery,
   updateUser,
 } from '@/features/platform/platform-api';
+import { choiceOnTypeChange } from '@/features/platform/specialty-choice';
+import { SpecialtyFields } from '@/features/platform/specialty-fields';
 import { generateTemporaryPassword } from '@/features/platform/temporary-password';
 import { ApiError } from '@/lib/api';
 import {
@@ -113,6 +115,7 @@ export function UserPanel({
       const code = error instanceof ApiError ? error.code : undefined;
       if (code === 'user.email_taken') setErrors({ email: 'emailTaken' });
       else if (code === 'user.last_owner') setErrors({ roleKeys: 'lastOwner' });
+      else if (code === 'user.specialty_required') setErrors({ specialties: 'specialties' });
       else setFailure(t('users.panel.failed'));
     }
   };
@@ -180,7 +183,9 @@ export function UserPanel({
               value={form.practitionerType}
               onChange={(event) => {
                 const type = PRACTITIONER_TYPES.find((value) => value === event.target.value);
-                if (type) edit('practitionerType', type);
+                if (!type) return;
+                edit('practitionerType', type);
+                edit('specialties', choiceOnTypeChange(type, form.specialties));
               }}
             >
               {PRACTITIONER_TYPES.map((type) => (
@@ -192,6 +197,15 @@ export function UserPanel({
           )}
         </Field>
       </div>
+      {form.practitionerType === 'dentist' && (
+        <SpecialtyFields
+          choice={form.specialties}
+          onChange={(choice) => {
+            edit('specialties', choice);
+          }}
+          error={message(errors.specialties)}
+        />
+      )}
       {text('phone', t('users.fields.phone'), { type: 'tel' })}
 
       <Eyebrow className="mt-2">{t('users.panel.sections.access')}</Eyebrow>

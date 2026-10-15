@@ -117,6 +117,42 @@ describe('users: staff profiles with identity, branches and roles', () => {
       branch: { id: main.id, name: 'Main St' },
     });
     expect(session.user.displayName).toBe('Dr. Ana Reyes');
+    expect(session.profile).toEqual({
+      practitionerType: 'dentist',
+      primarySpecialty: 'general',
+      specialties: ['general'],
+    });
+  });
+
+  it('keeps a dentist’s specialties, clears them on a change of type and requires one back', async () => {
+    const ortho = { primarySpecialty: 'orthodontics', specialties: ['general', 'orthodontics'] };
+    const dentist = await createUser(ortho);
+    expect(dentist).toMatchObject(ortho);
+    const [created] = await auditOf(dentist.id);
+    expect(created).toMatchObject({ action: 'user.create', after: ortho });
+
+    const endo = { primarySpecialty: 'endodontics', specialties: ['endodontics'] };
+    const changed = await api.patch(`/users/${dentist.id}`, endo);
+    expect(changed.body).toMatchObject(endo);
+    const [update] = await auditOf(dentist.id);
+    expect(update).toMatchObject({ action: 'user.update', before: ortho, after: endo });
+
+    const assistant = await api.patch(`/users/${dentist.id}`, { practitionerType: 'assistant' });
+    expect(assistant.body).toMatchObject({ primarySpecialty: null, specialties: [] });
+
+    const without = await api.patch(`/users/${dentist.id}`, { practitionerType: 'dentist' });
+    expect(without.status).toBe(422);
+    expect(without.body).toMatchObject({ code: 'user.specialty_required' });
+    const back = await api.patch(`/users/${dentist.id}`, { practitionerType: 'dentist', ...endo });
+    expect(back.body).toMatchObject({ practitionerType: 'dentist', ...endo });
+
+    const frontdesk = await createUser({ practitionerType: 'frontdesk', roleKeys: ['frontdesk'] });
+    expect(frontdesk).toMatchObject({ primarySpecialty: null, specialties: [] });
+    const refused = await api.patch(`/users/${frontdesk.id}`, endo);
+    expect(refused.status).toBe(422);
+    expect(refused.body).toMatchObject({ code: 'user.specialty_not_allowed' });
+    const misfit = await api.post('/users', staff({ practitionerType: 'assistant', ...endo }));
+    expect(misfit.status).toBe(400);
   });
 
   it('rolls the identity back when assigning roles fails', async () => {

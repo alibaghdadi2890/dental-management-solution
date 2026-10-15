@@ -96,7 +96,8 @@
       "email": "Enter a valid email",
       "emailTaken": "This email already has an account",
       "password": "At least {{count}} characters",
-      "generic": "Couldn’t create the tenant. Check the form and try again."
+      "generic": "Couldn’t create the tenant. Check the form and try again.",
+      "specialties": "Choose at least one specialty"
     }
   },
   "locales": {
@@ -201,6 +202,17 @@
       "frontdesk": "Front desk",
       "other": "Other"
     },
+    "specialties": {
+      "general": "General dentistry",
+      "orthodontics": "Orthodontics",
+      "endodontics": "Endodontics",
+      "periodontics": "Periodontics",
+      "prosthodontics": "Prosthodontics",
+      "oral_surgery": "Oral & maxillofacial surgery",
+      "pediatric": "Pediatric dentistry",
+      "implantology": "Implantology",
+      "cosmetic": "Cosmetic dentistry"
+    },
     "menu": {
       "label": "Actions for {{name}}",
       "edit": "Edit",
@@ -225,6 +237,8 @@
       "email": "Email",
       "title": "Title",
       "practitionerType": "Practitioner type",
+      "specialties": "Specialties",
+      "primarySpecialty": "Primary specialty",
       "phone": "Phone",
       "roles": "Roles",
       "branches": "Branches"
@@ -255,6 +269,7 @@
       "password": "At least {{count}} characters",
       "roles": "Choose at least one role",
       "branches": "Choose at least one active branch",
+      "specialties": "Choose at least one specialty",
       "invalid": "Check this value",
       "emailTaken": "This email already has an account",
       "lastOwner": "The clinic must keep at least one active owner"

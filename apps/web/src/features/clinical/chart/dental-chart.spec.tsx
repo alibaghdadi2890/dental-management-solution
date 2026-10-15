@@ -35,6 +35,7 @@ function sessionWith({
 }: Settings): Session {
   return {
     user: { id: id(90), displayName: 'Dr. Reyes', email: 'reyes@example.com' },
+    profile: null,
     platformAdmin: false,
     mustChangePassword: false,
     tenant: {

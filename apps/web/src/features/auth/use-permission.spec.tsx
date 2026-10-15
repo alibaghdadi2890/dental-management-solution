@@ -12,6 +12,7 @@ const session: Session = {
     displayName: 'Dr. Reyes',
     email: 'reyes@example.com',
   },
+  profile: null,
   platformAdmin: false,
   mustChangePassword: false,
   tenant: {

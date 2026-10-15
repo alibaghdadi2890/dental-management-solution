@@ -179,7 +179,12 @@ describe('session: role-based permissions, branch switch and password change', (
 
     it('lets a platform admin outside a tenant hold only platform:admin', async () => {
       const session = await sessionOf(admin);
-      expect(session).toMatchObject({ platformAdmin: true, tenant: null, roles: [] });
+      expect(session).toMatchObject({
+        platformAdmin: true,
+        tenant: null,
+        profile: null,
+        roles: [],
+      });
       expect(session.permissions).toEqual(['platform:admin']);
     });
   });

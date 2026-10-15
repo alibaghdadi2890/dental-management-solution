@@ -316,6 +316,13 @@
       "when": 1791746458213,
       "tag": "0044_worklist_ticks",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792061884151,
+      "tag": "0045_dentist_specialties",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ const session: Session = {
     displayName: 'Maria Reyes',
     email: 'reyes@example.com',
   },
+  profile: null,
   platformAdmin: false,
   mustChangePassword: false,
   tenant: {

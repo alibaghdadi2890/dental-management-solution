@@ -70,6 +70,8 @@ describe('new tenant form', () => {
           email: 'ana@northgate.dental',
           temporaryPassword: 'Kp7r-Wm2x-9tQa',
           practitionerType: 'dentist',
+          primarySpecialty: 'general',
+          specialties: ['general'],
         },
       },
     });
@@ -96,6 +98,24 @@ describe('new tenant form', () => {
     );
     expect(isDirty(form)).toBe(true);
     const result = toProvisionRequest(form);
-    expect(result.ok && result.request.owner.practitionerType).toBe('other');
+    expect(result.ok && result.request.owner).toMatchObject({
+      practitionerType: 'other',
+      primarySpecialty: null,
+      specialties: [],
+    });
+  });
+
+  it('starts a dentist owner on General dentistry and reports an owner left without one', () => {
+    const other = editNewTenant(EMPTY_NEW_TENANT, 'ownerPractitionerType', 'other');
+    const none = { ...other, ownerSpecialties: { primarySpecialty: null, specialties: [] } };
+    expect(editNewTenant(none, 'ownerPractitionerType', 'dentist').ownerSpecialties).toEqual({
+      primarySpecialty: 'general',
+      specialties: ['general'],
+    });
+    const result = toProvisionRequest({ ...none, ownerPractitionerType: 'dentist' });
+    expect(result.ok || result.errors.ownerSpecialties).toBe('specialties');
+    expect(
+      isDirty({ ...EMPTY_NEW_TENANT, ownerSpecialties: { ...EMPTY_NEW_TENANT.ownerSpecialties } }),
+    ).toBe(false);
   });
 });

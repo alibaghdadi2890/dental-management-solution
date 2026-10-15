@@ -64,6 +64,8 @@ export class ProvisioningService {
             email: request.owner.email,
             title: null,
             practitionerType: request.owner.practitionerType,
+            primarySpecialty: request.owner.primarySpecialty,
+            specialties: request.owner.specialties,
             phone: null,
             roleKeys: ['owner'],
             branchIds: [branch.id],

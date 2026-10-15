@@ -34,6 +34,7 @@ export class SessionService {
         displayName: member?.displayName ?? session.name,
         email: session.email,
       },
+      profile: member?.profile ?? null,
       platformAdmin: session.platformAdmin,
       mustChangePassword: session.mustChangePassword,
       tenant: clinic?.tenant ?? null,
@@ -51,6 +52,13 @@ export class SessionService {
       const roles = (await this.roles.rolesFor([userId])).get(userId) ?? [];
       return {
         displayName: profile?.displayName,
+        profile: profile
+          ? {
+              practitionerType: profile.practitionerType,
+              primarySpecialty: profile.primarySpecialty,
+              specialties: profile.specialties,
+            }
+          : null,
         roles: roles.map((role) => ({ key: role.key, name: role.name })),
       };
     });

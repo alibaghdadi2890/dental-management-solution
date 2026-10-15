@@ -252,6 +252,8 @@
     "frequent": "Souvent utilisé",
     "active": "Actif",
     "practitionerType": "Type",
+    "primarySpecialty": "Spécialité principale",
+    "specialties": "Spécialités",
     "roles": "Rôles",
     "timeZone": "Fuseau horaire",
     "currency": "Devise",

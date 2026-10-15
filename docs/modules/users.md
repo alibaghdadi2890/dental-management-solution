@@ -5,15 +5,16 @@
 ## Purpose
 
 Who are you here. The staff record of a person inside one tenant — display name, professional
-title, practitioner type (`dentist`, `assistant`, `frontdesk`, `other`), phone, active flag — and
-the branches they work in. Keyed by `(tenant_id, auth_user_id)`: the identity is global (`auth`),
-the profile is per tenant (D7). Creating a staff user orchestrates `auth` (identity and membership
+title, practitioner type (`dentist`, `assistant`, `frontdesk`, `other`), a dentist's specialties
+(ADR-0050), phone, active flag — and the branches they work in. Keyed by
+`(tenant_id, auth_user_id)`: the identity is global (`auth`), the profile is per tenant (D7). Creating a staff user orchestrates `auth` (identity and membership
 mirror) and `roles` (assignments) in one transaction. Knows nothing about permission evaluation.
 
 ## Owns
 
 - `staff_profiles` — tenant RLS; unique `(tenant_id, auth_user_id)`; `practitioner_type` is text
-  validated by Zod.
+  validated by Zod. `primary_specialty` and `specialties text[]` (ADR-0050): a dentist has at least
+  one specialty, the primary among them; anyone else has none (three CHECKs).
 - `staff_branches` — tenant RLS; PK `(auth_user_id, branch_id)`; `position` keeps the assignment
   order (the first branch is the default one); composite FK to `staff_profiles`. Branch ids are
   validated through `TenancyService`, not by a foreign key into `tenancy`'s table.
@@ -46,12 +47,15 @@ mirror) and `roles` (assignments) in one transaction. Knows nothing about permis
 - `profileIdOf(userId)` — the user's `staff_profiles.id` in this tenant, or `null` (a platform
   admin acting in the tenant has no profile). Not permission-gated either: `clinical`'s
   `live({ mine: true })` matches the caller's visits as dentist through it (feature 4a, W18).
-- `createStaffUser(input)` (`user:write`, roles also need `role:write`): identity with a temporary
-  password (D6) → membership mirror → profile → branches → roles, one transaction; a failure in any
-  step rolls the identity back. `409 user.email_taken` for a registered email (D7 extension point:
+- `createStaffUser(input)` (`user:write`, roles also need `role:write`): a dentist sent without
+  specialties starts on `general`; identity with a temporary password (D6) → membership mirror →
+  profile → branches → roles, one transaction; a failure in any step rolls the identity back. `409 user.email_taken` for a registered email (D7 extension point:
   attach the existing identity instead), `422 user.unknown_branch`, `422 role.unknown`.
-- `updateStaffUser(userId, patch)` (`user:write`): profile fields, roles, branches (re-syncs the
-  mirror). Branches kept from before may since be inactive; new ones must be active.
+- `updateStaffUser(userId, patch)` (`user:write`): profile fields, specialties (as a pair), roles,
+  branches (re-syncs the mirror). Branches kept from before may since be inactive; new ones must be
+  active. Changing a dentist to another type clears the specialties; making someone a dentist
+  needs one (`422 user.specialty_required`); specialties for another type are
+  `422 user.specialty_not_allowed` (`resolveSpecialties`, `domain/staff-rules.ts`).
 - `deactivate(userId, reason)` / `reactivate(userId, reason)` (`user:write`): ban + sessions
   revoked + membership removed (`MemberRemoved`), and back.
 - `resetPassword(userId, temporaryPassword)` (`user:write`): signs the user out;
@@ -77,7 +81,9 @@ Every mutation is audited (`user.create`, `user.update` with before/after, `user
 | `POST /users/:id/reactivate`         | `user:write` (`{ reason }`)            |
 | `POST /users/:id/reset-password`     | `user:write` (`{ temporaryPassword }`) |
 
-`:id` is the auth user id. Another tenant's user is `404 user.not_found` (RLS).
+`GET /session` carries `profile` — the practitioner type and a dentist's specialties (ADR-0050);
+null without a staff profile in the tenant (a platform admin). `:id` is the auth user id. Another
+tenant's user is `404 user.not_found` (RLS).
 
 ## Events
 

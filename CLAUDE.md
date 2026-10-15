@@ -111,7 +111,7 @@ modules/<name>/
 |-----------------|----------------------------------------------------------------------|-----------------------|
 | `tenancy`       | tenants (clinics), branches, rooms (the physical unit a visit happens in; the future bookable resource), tenant settings (timezone, currency, locale, country; the chart display settings: detail, tooth notation, orientation — ADR-0021) | audit |
 | `auth`          | better-auth integration (identity-plane `auth_*` tables), sessions, sign-in/out, lockout, idle timeout, org/team membership mirror, tenant + branch resolution into request context | tenancy |
-| `users`         | app-level user/staff profile (name, title, practitioner type, contact), branch assignments, staff user creation, `GET /session` | auth, tenancy, roles |
+| `users`         | app-level user/staff profile (name, title, practitioner type, a dentist's specialties with the primary one — ADR-0050, contact), branch assignments, staff user creation, `GET /session` | auth, tenancy, roles |
 | `roles`         | role definitions per tenant, system roles, role → permission assignments, user → role assignments (keyed by auth user id) | tenancy |
 | `authorization` | resolves the caller's permissions into CLS, `can(actor, permission, resource)`, global session + permission guards, agent tool guard | auth, roles |
 | `audit`         | append-only audit log (who/what/when/tenant/before/after, and the patient, visit and area a row is about — ADR-0037), query API, the Activity feed | — (consumes events from all) |

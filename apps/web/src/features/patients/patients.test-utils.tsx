@@ -158,6 +158,7 @@ export const ALL_PERMISSIONS: Permission[] = [
 export function sessionWith(permissions: Permission[]): Session {
   return {
     user: { id: SESSION_USER_ID, displayName: 'Jamie Ortiz', email: 'j@example.com' },
+    profile: null,
     platformAdmin: false,
     mustChangePassword: false,
     tenant: {
@@ -187,6 +188,8 @@ const staff = (userId: string, displayName: string, active: boolean) => ({
   displayName,
   title: null,
   practitionerType: 'dentist',
+  primarySpecialty: 'general',
+  specialties: ['general'],
   phone: null,
   active,
   roles: [],

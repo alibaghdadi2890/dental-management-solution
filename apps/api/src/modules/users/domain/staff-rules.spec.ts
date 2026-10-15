@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { assertAssignments, assertKeepsAnOwner, assertNotSelf } from './staff-rules';
+import {
+  assertAssignments,
+  assertKeepsAnOwner,
+  assertNotSelf,
+  resolveSpecialties,
+  SpecialtyNotAllowedError,
+  SpecialtyRequiredError,
+} from './staff-rules';
 
 describe('assertKeepsAnOwner', () => {
   it('refuses to take away the only active owner', () => {
@@ -55,5 +62,69 @@ describe('assertAssignments', () => {
     expect(() => {
       assertAssignments({ roleKeys: ['frontdesk'], branchIds: ['b'] });
     }).not.toThrow();
+  });
+});
+
+describe('resolveSpecialties', () => {
+  const dentist = {
+    practitionerType: 'dentist' as const,
+    primarySpecialty: 'orthodontics' as const,
+    specialties: ['general' as const, 'orthodontics' as const],
+  };
+  const assistant = {
+    practitionerType: 'assistant' as const,
+    primarySpecialty: null,
+    specialties: [],
+  };
+  const endo = { primarySpecialty: 'endodontics' as const, specialties: ['endodontics' as const] };
+
+  it('starts a new dentist created without specialties on General dentistry', () => {
+    expect(resolveSpecialties(null, { practitionerType: 'dentist' })).toEqual({
+      primarySpecialty: 'general',
+      specialties: ['general'],
+    });
+  });
+
+  it('stores the specialties a new dentist is created with, and none for anyone else', () => {
+    expect(resolveSpecialties(null, { practitionerType: 'dentist', ...endo })).toEqual(endo);
+    expect(
+      resolveSpecialties(null, {
+        practitionerType: 'frontdesk',
+        primarySpecialty: null,
+        specialties: [],
+      }),
+    ).toEqual({ primarySpecialty: null, specialties: [] });
+  });
+
+  it('keeps a dentist’s stored specialties unless new ones are sent', () => {
+    expect(resolveSpecialties(dentist, {})).toEqual({
+      primarySpecialty: 'orthodontics',
+      specialties: ['general', 'orthodontics'],
+    });
+    expect(resolveSpecialties(dentist, endo)).toEqual(endo);
+  });
+
+  it('clears them when a dentist becomes another type', () => {
+    expect(resolveSpecialties(dentist, { practitionerType: 'assistant' })).toEqual({
+      primarySpecialty: null,
+      specialties: [],
+    });
+  });
+
+  it('requires one for a dentist', () => {
+    expect(() => resolveSpecialties(assistant, { practitionerType: 'dentist' })).toThrow(
+      SpecialtyRequiredError,
+    );
+    expect(() => resolveSpecialties(dentist, { primarySpecialty: null, specialties: [] })).toThrow(
+      SpecialtyRequiredError,
+    );
+    expect(resolveSpecialties(assistant, { practitionerType: 'dentist', ...endo })).toEqual(endo);
+  });
+
+  it('refuses specialties for anyone but a dentist', () => {
+    expect(() => resolveSpecialties(assistant, endo)).toThrow(SpecialtyNotAllowedError);
+    expect(() => resolveSpecialties(dentist, { practitionerType: 'other', ...endo })).toThrow(
+      SpecialtyNotAllowedError,
+    );
   });
 });

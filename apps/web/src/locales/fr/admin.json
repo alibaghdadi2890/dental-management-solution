@@ -96,7 +96,8 @@
       "email": "Saisissez un e-mail valide",
       "emailTaken": "Cet e-mail a déjà un compte",
       "password": "Au moins {{count}} caractères",
-      "generic": "Impossible de créer le cabinet. Vérifiez le formulaire et réessayez."
+      "generic": "Impossible de créer le cabinet. Vérifiez le formulaire et réessayez.",
+      "specialties": "Choisissez au moins une spécialité"
     }
   },
   "locales": {
@@ -201,6 +202,17 @@
       "frontdesk": "Accueil",
       "other": "Autre"
     },
+    "specialties": {
+      "general": "Omnipratique",
+      "orthodontics": "Orthodontie",
+      "endodontics": "Endodontie",
+      "periodontics": "Parodontologie",
+      "prosthodontics": "Prothèse dentaire",
+      "oral_surgery": "Chirurgie orale et maxillo-faciale",
+      "pediatric": "Pédodontie",
+      "implantology": "Implantologie",
+      "cosmetic": "Dentisterie esthétique"
+    },
     "menu": {
       "label": "Actions pour {{name}}",
       "edit": "Modifier",
@@ -225,6 +237,8 @@
       "email": "E-mail",
       "title": "Fonction",
       "practitionerType": "Type de praticien",
+      "specialties": "Spécialités",
+      "primarySpecialty": "Spécialité principale",
       "phone": "Téléphone",
       "roles": "Rôles",
       "branches": "Sites"
@@ -255,6 +269,7 @@
       "password": "Au moins {{count}} caractères",
       "roles": "Choisissez au moins un rôle",
       "branches": "Choisissez au moins un site actif",
+      "specialties": "Choisissez au moins une spécialité",
       "invalid": "Vérifiez cette valeur",
       "emailTaken": "Cet e-mail a déjà un compte",
       "lastOwner": "Le cabinet doit garder au moins un propriétaire actif"

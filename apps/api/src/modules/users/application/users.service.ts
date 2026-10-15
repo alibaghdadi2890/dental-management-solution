@@ -18,6 +18,7 @@ import {
   assertAssignments,
   assertKeepsAnOwner,
   assertNotSelf,
+  resolveSpecialties,
   StaffUserNotFoundError,
   UnknownBranchError,
 } from '../domain/staff-rules';
@@ -127,6 +128,7 @@ export class UsersService {
   async createStaffUser(input: StaffUserCreate): Promise<StaffUser> {
     this.context.requirePermission('user:write');
     assertAssignments(input);
+    const specialties = resolveSpecialties(null, input);
     const branchIds = distinct(input.branchIds);
     return this.tenantDb.run(async () => {
       await this.assertBranches(branchIds, []);
@@ -141,6 +143,7 @@ export class UsersService {
         displayName: input.displayName,
         title: input.title,
         practitionerType: input.practitionerType,
+        ...specialties,
         phone: input.phone,
       });
       await this.staff.replaceBranches(userId, branchIds);
@@ -160,9 +163,14 @@ export class UsersService {
   async updateStaffUser(userId: string, patch: StaffUserPatch): Promise<StaffUser> {
     this.context.requirePermission('user:write');
     assertAssignments(patch);
-    const { roleKeys, branchIds, ...profile } = patch;
+    const { roleKeys, branchIds, primarySpecialty: _p, specialties: _s, ...profile } = patch;
     return this.tenantDb.run(async () => {
       const before = await this.load(userId);
+      // Written only when the patch is about them, so a roles or phone change never rewrites them.
+      const specialties =
+        patch.practitionerType !== undefined || patch.specialties !== undefined
+          ? resolveSpecialties(before, patch)
+          : {};
       if (roleKeys) {
         if (!roleKeys.includes(OWNER)) {
           assertKeepsAnOwner(await this.activeOwnerIds(), userId);
@@ -180,7 +188,7 @@ export class UsersService {
           await this.auth.syncMembership({ userId, branchIds: ids });
         }
       }
-      await this.staff.update(userId, profile);
+      await this.staff.update(userId, { ...profile, ...specialties });
 
       const after = await this.load(userId);
       await this.audit.record({
@@ -298,6 +306,8 @@ export class UsersService {
           displayName: profile.displayName,
           title: profile.title,
           practitionerType: profile.practitionerType,
+          primarySpecialty: profile.primarySpecialty,
+          specialties: profile.specialties,
           phone: profile.phone,
           active: profile.active,
           roles: roles.get(profile.authUserId) ?? [],

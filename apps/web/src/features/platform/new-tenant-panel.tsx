@@ -13,16 +13,19 @@ import { CountrySelect } from './country-select';
 import {
   EMPTY_NEW_TENANT,
   editNewTenant,
-  type FieldError,
   isDirty,
+  type NewTenantErrors,
   type NewTenantField,
   toProvisionRequest,
 } from './new-tenant-form';
 import { platformKeys, provisionTenant } from './platform-api';
+import { SpecialtyFields } from './specialty-fields';
 import { CURRENCIES, TIME_ZONES } from './tenant-options';
 import { generateTemporaryPassword } from './temporary-password';
 
-type Errors = Partial<Record<NewTenantField, FieldError | 'slugTaken' | 'emailTaken'>>;
+type Errors = {
+  [Field in keyof NewTenantErrors]: NewTenantErrors[Field] | 'slugTaken' | 'emailTaken';
+};
 
 /** New tenant right panel: Clinic · First branch · Owner account (spec: platform admin portal). */
 export function NewTenantPanel({
@@ -48,7 +51,7 @@ export function NewTenantPanel({
     setErrors((current) => ({ ...current, [field]: undefined }));
   };
 
-  const message = (error: Errors[NewTenantField]) =>
+  const message = (error: Errors[keyof Errors]) =>
     error === undefined
       ? undefined
       : error === 'password'
@@ -226,6 +229,7 @@ export function NewTenantPanel({
             value={form.ownerPractitionerType}
             onChange={(event) => {
               set('ownerPractitionerType')(event.target.value);
+              setErrors((current) => ({ ...current, ownerSpecialties: undefined }));
             }}
           >
             {PRACTITIONER_TYPES.map((type) => (
@@ -236,6 +240,16 @@ export function NewTenantPanel({
           </Select>
         )}
       </Field>
+      {form.ownerPractitionerType === 'dentist' && (
+        <SpecialtyFields
+          choice={form.ownerSpecialties}
+          onChange={(choice) => {
+            setForm((current) => ({ ...current, ownerSpecialties: choice }));
+            setErrors((current) => ({ ...current, ownerSpecialties: undefined }));
+          }}
+          error={message(errors.ownerSpecialties)}
+        />
+      )}
       <Field
         label={t('newTenant.fields.password')}
         hint={t('newTenant.fields.passwordHint')}

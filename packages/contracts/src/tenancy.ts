@@ -12,7 +12,13 @@ import {
 } from './common.js';
 import { reasonSchema } from './audit.js';
 import { chartModeSchema, chartOrientationSchema, toothNotationSchema } from './tooth.js';
-import { practitionerTypeSchema } from './users.js';
+import {
+  practitionerTypeSchema,
+  sentSpecialtiesFit,
+  SPECIALTIES_MISFIT,
+  specialtiesSchema,
+  specialtySchema,
+} from './practitioners.js';
 
 /** Tenant defaults (D8); all editable per tenant. Country default LB (feature 3 Q3). Chart
  * settings default to the POC's own defaults (surface detail, FDI, patient's right on the
@@ -149,14 +155,19 @@ export const provisionTenantRequestSchema = z.object({
     country: countrySchema.default(TENANT_DEFAULTS.country),
   }),
   firstBranch: branchCreateSchema.omit({ code: true }),
-  owner: z.object({
-    displayName: nameSchema,
-    email: emailSchema,
-    temporaryPassword: passwordSchema,
-    /** Most owners treat patients: a dentist unless chosen otherwise, so a new clinic has a
-     * practitioner for its primary dentist picker from day one. */
-    practitionerType: practitionerTypeSchema.default('dentist'),
-  }),
+  owner: z
+    .object({
+      displayName: nameSchema,
+      email: emailSchema,
+      temporaryPassword: passwordSchema,
+      /** Most owners treat patients: a dentist unless chosen otherwise, so a new clinic has a
+       * practitioner for its primary dentist picker from day one. */
+      practitionerType: practitionerTypeSchema.default('dentist'),
+      /** Optional as a pair: a dentist owner without them starts on `DEFAULT_SPECIALTY`. */
+      primarySpecialty: specialtySchema.nullable().optional(),
+      specialties: specialtiesSchema.optional(),
+    })
+    .refine(sentSpecialtiesFit, SPECIALTIES_MISFIT),
 });
 /** What the service receives, defaults applied. */
 export type ProvisionTenantRequest = z.infer<typeof provisionTenantRequestSchema>;

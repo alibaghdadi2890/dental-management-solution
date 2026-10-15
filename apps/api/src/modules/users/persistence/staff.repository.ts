@@ -1,4 +1,4 @@
-import type { PractitionerType } from '@dcm/contracts';
+import type { PractitionerType, Specialty } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -12,6 +12,9 @@ export interface StaffProfile {
   displayName: string;
   title: string | null;
   practitionerType: PractitionerType;
+  /** A dentist's specialties, the primary among them; none for anyone else (ADR-0050). */
+  primarySpecialty: Specialty | null;
+  specialties: Specialty[];
   phone: string | null;
   active: boolean;
   createdAt: Date;
@@ -29,6 +32,8 @@ function toProfile(row: ProfileRow): StaffProfile {
     displayName: row.displayName,
     title: row.title,
     practitionerType: row.practitionerType as PractitionerType,
+    primarySpecialty: row.primarySpecialty as Specialty | null,
+    specialties: row.specialties as Specialty[],
     phone: row.phone,
     active: row.active,
     createdAt: row.createdAt,

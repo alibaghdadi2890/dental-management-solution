@@ -52,6 +52,8 @@ export const CHANGE_FIELDS = [
   'frequent',
   'active',
   'practitionerType',
+  'primarySpecialty',
+  'specialties',
   'roles',
   'timeZone',
   'currency',

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { roleRefSchema } from './roles.js';
 import { countrySchema, currencySchema, idSchema, localeSchema, timeZoneSchema } from './common.js';
 import { permissionSchema } from './permissions.js';
+import { practitionerProfileSchema } from './practitioners.js';
 import { chartModeSchema, chartOrientationSchema, toothNotationSchema } from './tooth.js';
 
 export const branchRefSchema = z.object({ id: idSchema, name: z.string() });
@@ -14,6 +15,11 @@ export const sessionSchema = z.object({
     displayName: z.string(),
     email: z.email(),
   }),
+  /**
+   * What kind of clinician the user is in this clinic, with a dentist's specialties (ADR-0050);
+   * null without a staff profile here (a platform admin, or no clinic).
+   */
+  profile: practitionerProfileSchema.nullable(),
   /** Back-office operator; holds no clinic membership (D9). */
   platformAdmin: z.boolean(),
   /** First sign-in with a temporary password: the app is locked until it is changed. */

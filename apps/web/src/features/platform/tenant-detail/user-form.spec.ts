@@ -19,6 +19,8 @@ const user: StaffUser = {
   displayName: 'Dr. Ana Reyes',
   title: null,
   practitionerType: 'dentist',
+  primarySpecialty: 'orthodontics',
+  specialties: ['general', 'orthodontics'],
   phone: null,
   active: true,
   roles: [{ key: 'dentist', name: 'Dentist' }],
@@ -81,11 +83,37 @@ describe('toCreateRequest', () => {
         email: 'ana@northgate.dental',
         title: null,
         practitionerType: 'dentist',
+        primarySpecialty: 'general',
+        specialties: ['general'],
         phone: null,
         roleKeys: ['dentist'],
         branchIds: [NORTH, MAIN],
         temporaryPassword: 'Kp7r-Wm2x-9tQa',
       },
+    });
+  });
+});
+
+describe('specialties', () => {
+  const valid = {
+    ...EMPTY_USER_FORM,
+    displayName: 'Ana',
+    email: 'ana@northgate.dental',
+    roleKeys: ['dentist'],
+    branchIds: [MAIN],
+    password: 'Kp7r-Wm2x-9tQa',
+  };
+
+  it('sends none for a non-dentist, whatever the form still holds', () => {
+    const result = toCreateRequest({ ...valid, practitionerType: 'assistant' });
+    expect(result.ok && result.request).toMatchObject({ primarySpecialty: null, specialties: [] });
+  });
+
+  it('reports a dentist left without a specialty on the specialties field', () => {
+    const none = { primarySpecialty: null, specialties: [] };
+    expect(toCreateRequest({ ...valid, specialties: none })).toEqual({
+      ok: false,
+      errors: { specialties: 'specialties' },
     });
   });
 });
@@ -106,6 +134,41 @@ describe('editing an existing user', () => {
       ok: true,
       patch: { title: 'Orthodontist', roleKeys: ['dentist', 'owner'] },
     });
+  });
+
+  it('sends the specialties as a pair when they change', () => {
+    const endo = {
+      primarySpecialty: 'endodontics' as const,
+      specialties: ['endodontics' as const],
+    };
+    expect(toPatchRequest({ ...initial, specialties: endo }, initial)).toEqual({
+      ok: true,
+      patch: endo,
+    });
+  });
+
+  it('clears them with a change of type, and restores them when the type comes back', () => {
+    expect(toPatchRequest({ ...initial, practitionerType: 'assistant' }, initial)).toEqual({
+      ok: true,
+      patch: { practitionerType: 'assistant', primarySpecialty: null, specialties: [] },
+    });
+    const back = { ...initial, practitionerType: 'dentist' as const };
+    expect(isUserFormDirty(back, initial)).toBe(false);
+  });
+
+  it('treats a non-dentist switched to dentist and back as unchanged', () => {
+    const assistant = userFormFrom({
+      ...user,
+      practitionerType: 'assistant',
+      primarySpecialty: null,
+      specialties: [],
+    });
+    const roundTrip = {
+      ...assistant,
+      specialties: { primarySpecialty: 'general' as const, specialties: ['general' as const] },
+    };
+    expect(isUserFormDirty(roundTrip, assistant)).toBe(false);
+    expect(toPatchRequest(roundTrip, assistant)).toEqual({ ok: true, patch: null });
   });
 
   it('refuses to leave a user without roles or branches', () => {

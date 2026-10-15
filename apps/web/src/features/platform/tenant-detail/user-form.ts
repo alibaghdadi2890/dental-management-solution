@@ -6,6 +6,12 @@ import {
   type StaffUserPatch,
   staffUserPatchSchema,
 } from '@dcm/contracts';
+import {
+  DEFAULT_SPECIALTIES,
+  sameSpecialties,
+  type SpecialtyChoice,
+  specialtiesForType,
+} from '../specialty-choice';
 
 /** The New/Edit user panel. The password is only used when creating. */
 export interface UserForm {
@@ -13,6 +19,8 @@ export interface UserForm {
   email: string;
   title: string;
   practitionerType: PractitionerType;
+  /** Kept while another type is selected; sent only for a dentist. */
+  specialties: SpecialtyChoice;
   phone: string;
   roleKeys: string[];
   branchIds: string[];
@@ -22,7 +30,8 @@ export interface UserForm {
 export type UserField = keyof UserForm;
 
 /** Error keys per field, as the admin namespace names them (`users.errors.*`). */
-export type UserFieldError = 'required' | 'email' | 'password' | 'roles' | 'branches' | 'invalid';
+export type UserFieldError =
+  'required' | 'email' | 'password' | 'roles' | 'branches' | 'specialties' | 'invalid';
 
 export type UserFormErrors = Partial<Record<UserField, UserFieldError>>;
 
@@ -31,6 +40,7 @@ export const EMPTY_USER_FORM: UserForm = {
   email: '',
   title: '',
   practitionerType: 'dentist',
+  specialties: DEFAULT_SPECIALTIES,
   phone: '',
   roleKeys: [],
   branchIds: [],
@@ -43,6 +53,7 @@ export function userFormFrom(user: StaffUser): UserForm {
     email: user.email,
     title: user.title ?? '',
     practitionerType: user.practitionerType,
+    specialties: { primarySpecialty: user.primarySpecialty, specialties: user.specialties },
     phone: user.phone ?? '',
     roleKeys: user.roles.map((role) => role.key),
     branchIds: user.branches.map((branch) => branch.id),
@@ -60,6 +71,13 @@ const sameSet = (a: readonly string[], b: readonly string[]) =>
 
 function changed(form: UserForm, initial: UserForm): UserField[] {
   return (Object.keys(form) as UserField[]).filter((field) => {
+    if (field === 'specialties') {
+      // Compared as sent: what the form holds for another type is never sent.
+      return !sameSpecialties(
+        specialtiesForType(form.practitionerType, form.specialties),
+        specialtiesForType(initial.practitionerType, initial.specialties),
+      );
+    }
     const value = form[field];
     const before = initial[field];
     return Array.isArray(value) && Array.isArray(before)
@@ -77,6 +95,8 @@ const FIELD_BY_PATH: Partial<Record<string, UserField>> = {
   email: 'email',
   title: 'title',
   practitionerType: 'practitionerType',
+  primarySpecialty: 'specialties',
+  specialties: 'specialties',
   phone: 'phone',
   roleKeys: 'roleKeys',
   branchIds: 'branchIds',
@@ -86,6 +106,7 @@ const FIELD_BY_PATH: Partial<Record<string, UserField>> = {
 function errorFor(field: UserField, form: UserForm): UserFieldError {
   if (field === 'roleKeys') return 'roles';
   if (field === 'branchIds') return 'branches';
+  if (field === 'specialties') return 'specialties';
   const value = form[field];
   if (typeof value === 'string' && value.trim() === '') return 'required';
   if (field === 'email') return 'email';
@@ -111,6 +132,7 @@ export function toCreateRequest(
     email: form.email,
     title: form.title,
     practitionerType: form.practitionerType,
+    ...specialtiesForType(form.practitionerType, form.specialties),
     phone: form.phone,
     roleKeys: form.roleKeys,
     branchIds: form.branchIds,
@@ -121,7 +143,10 @@ export function toCreateRequest(
     : { ok: false, errors: errorsOf(result.error.issues, form) };
 }
 
-/** Only the fields that changed; `null` when nothing did. */
+/**
+ * Only the fields that changed; `null` when nothing did. The specialties go with any change of
+ * type, so a dentist made an assistant sends none and an assistant made a dentist sends theirs.
+ */
 export function toPatchRequest(
   form: UserForm,
   initial: UserForm,
@@ -130,9 +155,13 @@ export function toPatchRequest(
     (field) => field !== 'password' && field !== 'email',
   );
   if (fields.length === 0) return { ok: true, patch: null };
-  const result = staffUserPatchSchema.safeParse(
-    Object.fromEntries(fields.map((field) => [field, form[field]])),
-  );
+  const withSpecialties = fields.includes('specialties') || fields.includes('practitionerType');
+  const result = staffUserPatchSchema.safeParse({
+    ...Object.fromEntries(
+      fields.filter((field) => field !== 'specialties').map((field) => [field, form[field]]),
+    ),
+    ...(withSpecialties && specialtiesForType(form.practitionerType, form.specialties)),
+  });
   return result.success
     ? { ok: true, patch: result.data }
     : { ok: false, errors: errorsOf(result.error.issues, form) };
