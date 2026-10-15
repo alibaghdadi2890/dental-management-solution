@@ -1,14 +1,14 @@
 # Operations runbook — the clinic app on its Lightsail box
 
-One Lightsail box in `eu-west-3` (`dcm-dev`), five containers, no orchestrator, no domain:
-the app is served on the box's public IP over plain HTTP. Everything here runs from a laptop
+One Lightsail box in `eu-west-3` (`dcm-dev`), five containers, no orchestrator, behind
+Cloudflare at **https://dental.mahdibaghdadi.com**. Everything here runs from a laptop
 that has the studio checkout (`~/dev/mhdb-studio`), the `mhdb-hosting` AWS profile, `~/.ssh/dcm`
 and `~/.secrets/dcm-*`.
 
 ## Topology
 
 ```
-[Browser] ──HTTP──▶ [Lightsail :80, open to everyone]
+[Browser] ──HTTPS──▶ [Cloudflare edge] ──HTTP──▶ [Lightsail :80, Cloudflare's ranges only]
                         │
        nginx (web container) ─────┤
          ├── /api/*     → api:3000          NestJS (cookie sessions, same origin)
@@ -19,19 +19,22 @@ and `~/.secrets/dcm-*`.
        postgres:17 · redis:7 · seaweedfs (S3) — compose network only
 ```
 
-- **No TLS.** The browser talks plain HTTP to the box, so the session cookie is not `Secure`
-  (`AUTH_COOKIE_SECURE=false`) and everything crosses the internet in clear. This is a staging
-  posture. Before real patients: a domain on Cloudflare (see the studio's `infra/erp/README.md`).
+- **TLS ends at Cloudflare** (a proxied A record on the studio's `mahdibaghdadi.com` zone, in
+  Flexible mode like the studio's other boxes). The session cookie is `Secure`. nginx sends plain
+  HTTP to HTTPS, and takes the client address from `CF-Connecting-IP`, but only from Cloudflare's
+  ranges. The hop from Cloudflare to the box is plain HTTP; `infra/erp/README.md` in the studio
+  tracks origin TLS as a fleet-wide follow-up.
 - **`:22`** accepts SSH from anywhere, key-only (`~/.ssh/dcm`; password auth is off on the
-  Ubuntu blueprint). **`:80`** is open to everyone (`public_web` in the studio root,
-  `WEB_ACCESS=public` in `infra/lightsail.env`).
+  Ubuntu blueprint). **`:80`** accepts Cloudflare's ranges only (`WEB_ACCESS=cloudflare` in
+  `infra/lightsail.env`; `start.sh` reapplies it), so the bare IP does not serve the app.
 - **State on the box's disk:** `/var/lib/dcm/postgres-data`, `/var/lib/dcm/redis` (BullMQ),
   `/var/lib/dcm/s3` (the files). `/var/backups/dcm` holds the nightly local backups.
 - **No git and no source on the box.** `/opt/dcm` holds `docker-compose.yml`, `.env`, `s3.json`,
   `seaweedfs-start.sh`, `postgres-init/` and `backup.sh`, all written by `infra/scripts/ship.sh`.
-- **The IP is configuration.** `.env` carries `PUBLIC_IP`: the origin better-auth trusts
-  (`AUTH_BASE_URL`) and the address the API signs object-store URLs for (`S3_PUBLIC_ENDPOINT`).
-  The API itself reaches the store as `http://s3:8333`.
+- **The address is configuration.** `.env` carries `PUBLIC_ORIGIN` (`https://` + `DOMAIN` from
+  `infra/lightsail.env`): the origin better-auth trusts (`AUTH_BASE_URL`) and the address the API
+  signs object-store URLs for (`S3_PUBLIC_ENDPOINT`). The API itself reaches the store as
+  `http://s3:8333`. Without a `DOMAIN` the scripts fall back to the bare IP over plain HTTP.
 
 Names: instance `dcm-dev`, static IP `dcm-dev-ip`, key pair `dcm-dev-deploy`, images `dcm-api:<sha>`
 and `dcm-web:<sha>` (loaded on the box, no registry), AWS profile `mhdb-hosting`.
@@ -105,9 +108,10 @@ AWS_PROFILE=mhdb-hosting ~/dev/mhdb-studio/infra/erp/scripts/start.sh infra/ligh
 
 Park stops the box, snapshots it (`dcm-dev-parked-<UTC>`, the one kept), deletes the instance
 and releases the IP. Start recreates it from the snapshot with a **new IP** and reopens the
-firewall from `lightsail.env`. At boot the box reads its new address from the instance metadata
-service and rewrites `PUBLIC_IP` in `.env` itself (`infra/scripts/on-boot.sh`, the
-`dcm-boot.service` unit `ship.sh config` installs), so nothing has to be shipped after a Start.
+firewall from `lightsail.env`. **After a Start, point `dental.mahdibaghdadi.com`'s A record
+(Cloudflare, proxied) at the new IP**, which is in the run summary; until then the domain answers
+with a Cloudflare error. The box records the new IP in `.env` itself at boot
+(`infra/scripts/on-boot.sh`), and the app's address stays the domain, so nothing else changes.
 The parked snapshot is also the off-box backup.
 
 The same two operations run as GitHub Actions workflows in the studio's repo,

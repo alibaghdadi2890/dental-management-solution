@@ -64,10 +64,18 @@ config() {
   api_image="${API_IMAGE:-$("${SSH[@]}" "grep -s '^API_IMAGE=' /opt/dcm/.env | cut -d= -f2-")}"
   web_image="${WEB_IMAGE:-$("${SSH[@]}" "grep -s '^WEB_IMAGE=' /opt/dcm/.env | cut -d= -f2-")}"
 
+  # The app's public address: https://<DOMAIN> behind Cloudflare, or the bare box IP over plain HTTP,
+  # where a Secure cookie would be dropped by the browser.
+  local domain origin secure
+  domain="$(awk -F= '$1 == "DOMAIN" { print $2 }' "$HERE/lightsail.env")"
+  if [ -n "$domain" ]; then origin="https://$domain" secure=true; else origin="http://$HOST" secure=false; fi
+
   TMP_ENV="$(umask 077; mktemp)"
   {
     echo "# Written by infra/scripts/ship.sh config. Secrets: edit ~/.secrets on the laptop and ship again."
     echo "PUBLIC_IP=$HOST"
+    echo "PUBLIC_ORIGIN=$origin"
+    echo "AUTH_COOKIE_SECURE=$secure"
     echo "POSTGRES_PASSWORD=$pg"
     echo "DCM_APP_PASSWORD=$app"
     echo "DCM_ADMIN_PASSWORD=$adm"
@@ -89,7 +97,7 @@ config() {
   if [ -s "$HOME/.ssh/dcm-ci.pub" ]; then
     "${SSH[@]}" "grep -qxF '$(cat "$HOME/.ssh/dcm-ci.pub")' ~/.ssh/authorized_keys || echo '$(cat "$HOME/.ssh/dcm-ci.pub")' >> ~/.ssh/authorized_keys"
   fi
-  echo "config shipped (PUBLIC_IP=$HOST)"
+  echo "config shipped (PUBLIC_ORIGIN=$origin)"
 }
 
 # push_images <tag>: dcm-api:<tag> and dcm-web:<tag> from this machine's Docker straight into the box's,

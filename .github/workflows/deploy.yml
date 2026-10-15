@@ -50,6 +50,8 @@ jobs:
           if aws lightsail get-instance --instance-name "$INSTANCE" >/dev/null 2>&1; then
             host="$(aws lightsail get-static-ip --static-ip-name "$STATIC_IP" --query staticIp.ipAddress --output text)"
             echo "host=$host" >> "$GITHUB_OUTPUT"
+            # Behind Cloudflare the box's :80 takes Cloudflare's ranges only: check through the domain.
+            echo "url=${DOMAIN:+https://$DOMAIN}" >> "$GITHUB_OUTPUT"
             echo "Box $INSTANCE is at $host"
           else
             echo "::notice::The box is parked: nothing deployed. After the studio's 'dcm: Start', run Deploy by hand."
@@ -85,15 +87,15 @@ jobs:
       - name: Check from outside
         if: steps.box.outputs.host != ''
         env:
-          HOST: ${{ steps.box.outputs.host }}
+          URL: ${{ steps.box.outputs.url || format('http://{0}', steps.box.outputs.host) }}
         run: |
           for i in $(seq 1 10); do
-            if curl -fsS --max-time 10 "http://$HOST/health/ready"; then
+            if curl -fsS --max-time 10 "$URL/health/ready"; then
               echo
-              { echo "### Deployed \`$TAG\`"; echo "- The app: http://$HOST/"; } >> "$GITHUB_STEP_SUMMARY"
+              { echo "### Deployed \`$TAG\`"; echo "- The app: $URL/"; } >> "$GITHUB_STEP_SUMMARY"
               exit 0
             fi
             sleep 6
           done
-          echo "http://$HOST/health/ready did not answer" >&2
+          echo "$URL/health/ready did not answer" >&2
           exit 1

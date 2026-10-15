@@ -1,13 +1,16 @@
 name: dcm
 
-# One Lightsail box, no domain. The browser reaches nginx (the web container) on the box's public
-# IP over plain HTTP: the firewall opens :80 to everyone. nginx serves the SPA, proxies /api and
-# /health to the API, and /dcm/ (the bucket's path) to the object store, so the presigned upload
-# and download URLs the API signs for http://<ip> work from the browser (apps/web/nginx.conf).
+# One Lightsail box behind Cloudflare: the browser reaches https://dental.mahdibaghdadi.com, TLS ends
+# at Cloudflare's edge, and Cloudflare forwards plain HTTP to nginx (the web container) on :80, which
+# the firewall opens to Cloudflare's ranges only. nginx serves the SPA, proxies /api and /health to
+# the API, and /dcm/ (the bucket's path) to the object store, so the presigned upload and download
+# URLs the API signs for PUBLIC_ORIGIN work from the browser (apps/web/nginx.conf). PUBLIC_ORIGIN and
+# AUTH_COOKIE_SECURE come from .env, written by infra/scripts/ship.sh config from infra/lightsail.env
+# (DOMAIN set: https://<domain>, Secure cookies; no DOMAIN: http://<box IP>, cookies not Secure).
 # State on disk: /var/lib/dcm/{postgres-data,redis,s3}. Lives on the box as /opt/dcm/docker-compose.yml,
 # next to .env, s3.json, seaweedfs-start.sh and postgres-init/, all written by infra/scripts/ship.sh config.
 #
-# Memory on the 512 MB box (+ 2 GB swap): ceilings, not reservations. See infra/RUNBOOK.md → Sizing.
+# Memory on the 1 GB box (+ 2 GB swap): ceilings, not reservations. See infra/RUNBOOK.md → Sizing.
 
 x-logging: &logging
   driver: json-file
@@ -41,13 +44,13 @@ services:
       # The API reaches the store on the compose network; the URLs it signs for the browser name
       # the public address, where nginx proxies the bucket's path (apps/web/nginx.conf).
       S3_ENDPOINT: http://s3:8333
-      S3_PUBLIC_ENDPOINT: http://${PUBLIC_IP}
+      S3_PUBLIC_ENDPOINT: ${PUBLIC_ORIGIN}
       S3_REGION: us-east-1
       S3_BUCKET: dcm
       S3_FORCE_PATH_STYLE: 'true'
-      AUTH_BASE_URL: http://${PUBLIC_IP}
-      # Plain HTTP on a bare address: the browser would drop a Secure cookie (config.schema.ts).
-      AUTH_COOKIE_SECURE: 'false'
+      AUTH_BASE_URL: ${PUBLIC_ORIGIN}
+      # Secure session cookies, except on a bare-IP box served over plain HTTP (config.schema.ts).
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
       OTEL_SDK_DISABLED: 'true'
       NODE_OPTIONS: --max-old-space-size=192
     depends_on:

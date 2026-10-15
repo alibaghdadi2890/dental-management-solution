@@ -354,13 +354,14 @@ Even in phase 1, write application services so they can be exposed as tools late
 - Docker Compose for local dev (Postgres, Redis, S3-compatible storage — SeaweedFS, see
   ADR-0006). One command to boot everything: `pnpm dev`.
 
-### Deployment (one Lightsail box, on its IP)
+### Deployment (one Lightsail box, behind Cloudflare)
 
 - The app runs as a Docker Compose stack (`infra/compose/docker-compose.yml`: nginx + SPA, API,
   Postgres 17, Redis 7, SeaweedFS as the S3 store) on one Lightsail box in the studio's AWS account
-  (`mhdb-studio/infra/erp/dcm`), served on the box's public IP over plain HTTP. No domain yet, so
-  the session cookie is not `Secure` (`AUTH_COOKIE_SECURE=false`) — a staging posture, not one for
-  real patients. `infra/RUNBOOK.md` is the operations guide.
+  (`mhdb-studio/infra/erp/dcm`), served at https://dental.mahdibaghdadi.com: TLS ends at
+  Cloudflare, the box's `:80` takes Cloudflare's ranges only, and session cookies are `Secure`.
+  The app's public address is `PUBLIC_ORIGIN` in the box's `.env`. `infra/RUNBOOK.md` is the
+  operations guide.
 - A push to `main` deploys by itself once CI passes on it (`.github/workflows/deploy.yml`): it
   builds both images, ships the non-secret files and the images over SSH, migrates
   (`node dist/cli/migrate.js`, drizzle-orm's migrator over the same journal) and restarts. No
@@ -371,8 +372,8 @@ Even in phase 1, write application services so they can be exposed as tools late
   `apps/web/Dockerfile` (nginx; `apps/web/nginx.conf` proxies `/api`, `/health` and the bucket's
   path `/dcm/`, so presigned URLs stay on the app's origin — `S3_PUBLIC_ENDPOINT`).
 - The box's names (`infra/lightsail.env`) must stay in step with the studio root; park/start run
-  from the laptop with the studio's shared scripts, and a Start gives the box a new IP
-  (`ship.sh config`, then `up`).
+  as the studio's **dcm: Shut down** / **dcm: Start** workflows, and a Start gives the box a new
+  IP that the domain's DNS record must be repointed to.
 
 ## 16. How to work in this repo (for the AI agent and humans)
 
