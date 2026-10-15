@@ -20,6 +20,13 @@ export const configSchema = z
     QUEUE_PREFIX: z.string().min(1).default('bull'),
 
     S3_ENDPOINT: z.url().optional(),
+    /**
+     * Where the browser reaches the store, when that differs from S3_ENDPOINT: the API talks to the
+     * store on its own network, and the upload and download URLs it signs must name the public
+     * address instead (a deployment proxies the bucket's path on the app's origin). Unset, the URLs
+     * use S3_ENDPOINT.
+     */
+    S3_PUBLIC_ENDPOINT: z.url().optional(),
     S3_REGION: z.string().min(1),
     S3_BUCKET: z.string().min(1),
     S3_ACCESS_KEY_ID: z.string().min(1),
@@ -30,6 +37,12 @@ export const configSchema = z
     AUTH_SECRET: z.string().min(32),
     /** Public origin of the SPA, which proxies /api on the same origin (CLAUDE.md §6). */
     AUTH_BASE_URL: z.url(),
+    /**
+     * `Secure` on the session cookies. Unset, it follows NODE_ENV (on in production). Browsers drop
+     * a Secure cookie set over plain HTTP, so a deployment served on a bare address with no TLS in
+     * front turns it off explicitly, and turns it back on the day a domain fronts it.
+     */
+    AUTH_COOKIE_SECURE: z.stringbool().optional(),
     /** Extra origins allowed to call the auth endpoints, comma-separated. */
     AUTH_TRUSTED_ORIGINS: z
       .string()

@@ -1,0 +1,99 @@
+# Deploys main to the Lightsail box after CI passes on it, and on demand (Actions → Deploy → Run workflow).
+# No secret is set in this repo: the role below trusts only this repo's main and may only find the box
+# and read its deploy key from AWS Parameter Store (mhdb-studio infra/erp/scripts/setup-deploy-role.sh).
+# It cannot start, stop or change the box. The box's own secrets (.env) are not touched here: those
+# change through infra/scripts/ship.sh config from the studio's laptop (infra/RUNBOOK.md → Configuration).
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time, never cancelled midway: a cancelled run could leave a migration half-applied.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    # After CI: only a push to main that passed. By hand: whatever main is now.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      AWS_ROLE: arn:aws:iam::813554192680:role/dcm-deploy
+      SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SHA }}
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: eu-west-3
+
+      # The box gets a new IP on every Start, so it is looked up. Parked (no instance): nothing to do.
+      - name: Find the box
+        id: box
+        run: |
+          set -a; . infra/lightsail.env; set +a
+          if aws lightsail get-instance --instance-name "$INSTANCE" >/dev/null 2>&1; then
+            host="$(aws lightsail get-static-ip --static-ip-name "$STATIC_IP" --query staticIp.ipAddress --output text)"
+            echo "host=$host" >> "$GITHUB_OUTPUT"
+            echo "Box $INSTANCE is at $host"
+          else
+            echo "::notice::The box is parked: nothing deployed. After the studio's 'dcm: Start', run Deploy by hand."
+          fi
+
+      - name: Deploy key
+        if: steps.box.outputs.host != ''
+        run: |
+          install -d -m 700 ~/.ssh
+          aws ssm get-parameter --name /dcm/deploy-ssh-key --with-decryption \
+            --query Parameter.Value --output text > ~/.ssh/dcm-ci
+          chmod 600 ~/.ssh/dcm-ci
+
+      - name: Build the images
+        if: steps.box.outputs.host != ''
+        run: |
+          tag="${SHA::7}"
+          docker build -f apps/api/Dockerfile -t "dcm-api:$tag" .
+          docker build -f apps/web/Dockerfile -t "dcm-web:$tag" .
+          echo "TAG=$tag" >> "$GITHUB_ENV"
+
+      # The same script as the manual path: non-secret files, the images over SSH, migrate + up.
+      - name: Ship
+        if: steps.box.outputs.host != ''
+        env:
+          DCM_HOST: ${{ steps.box.outputs.host }}
+        run: |
+          export DCM_SSH_KEY="$HOME/.ssh/dcm-ci"
+          infra/scripts/ship.sh files
+          infra/scripts/ship.sh push-images "$TAG"
+          infra/scripts/ship.sh up
+
+      - name: Check from outside
+        if: steps.box.outputs.host != ''
+        env:
+          HOST: ${{ steps.box.outputs.host }}
+        run: |
+          for i in $(seq 1 10); do
+            if curl -fsS --max-time 10 "http://$HOST/health/ready"; then
+              echo
+              { echo "### Deployed \`$TAG\`"; echo "- The app: http://$HOST/"; } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 6
+          done
+          echo "http://$HOST/health/ready did not answer" >&2
+          exit 1

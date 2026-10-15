@@ -107,7 +107,7 @@ export function createBetterAuth({ db, config, clock }: BetterAuthDeps) {
     },
     advanced: {
       cookiePrefix: 'dcm',
-      useSecureCookies: config.NODE_ENV === 'production',
+      useSecureCookies: config.AUTH_COOKIE_SECURE ?? config.NODE_ENV === 'production',
       defaultCookieAttributes: { sameSite: 'lax', httpOnly: true },
       database: { generateId: () => newId() },
     },

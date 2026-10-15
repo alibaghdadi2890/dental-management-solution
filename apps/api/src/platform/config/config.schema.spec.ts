@@ -23,6 +23,7 @@ describe('loadConfig', () => {
     expect(config.DATABASE_POOL_MAX).toBe(10);
     expect(config.S3_FORCE_PATH_STYLE).toBe(true);
     expect(config.S3_ENDPOINT).toBeUndefined();
+    expect(config.S3_PUBLIC_ENDPOINT).toBeUndefined();
     expect(config.QUEUE_PREFIX).toBe('bull');
   });
 
@@ -43,6 +44,15 @@ describe('loadConfig', () => {
   it('rejects malformed values', () => {
     expect(() => loadConfig({ ...validEnv, PORT: 'eighty' })).toThrow(/PORT/);
     expect(() => loadConfig({ ...validEnv, LOG_LEVEL: 'loud' })).toThrow(/LOG_LEVEL/);
+  });
+
+  it('leaves the cookie Secure flag to NODE_ENV unless told otherwise', () => {
+    expect(loadConfig(validEnv).AUTH_COOKIE_SECURE).toBeUndefined();
+    expect(loadConfig({ ...validEnv, AUTH_COOKIE_SECURE: 'false' }).AUTH_COOKIE_SECURE).toBe(false);
+    expect(loadConfig({ ...validEnv, AUTH_COOKIE_SECURE: 'true' }).AUTH_COOKIE_SECURE).toBe(true);
+    expect(() => loadConfig({ ...validEnv, AUTH_COOKIE_SECURE: 'maybe' })).toThrow(
+      /AUTH_COOKIE_SECURE/,
+    );
   });
 
   it('requires a strong auth secret and splits trusted origins', () => {

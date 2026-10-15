@@ -1,0 +1,10 @@
+# Build context for apps/*/Dockerfile (built from the repo root): sources and manifests only.
+.git
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/test-results
+**/playwright-report
+.tanstack
+docs
