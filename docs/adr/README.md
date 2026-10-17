@@ -54,3 +54,4 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0047](0047-a-service-can-be-added-on-a-visit-type.md)              | A catalog service can be added on visits of one type          | Accepted                             |
 | [0048](0048-the-worklist-replaces-the-unfinished-prompt.md)         | A treatment visit keeps a list of planned work for today      | Accepted (amends 0032)               |
 | [0049](0049-a-diagnosis-cites-what-it-was-seen-on.md)               | A diagnosis cites an image; `files` vetoes in the transaction | Accepted                             |
+| [0051](0051-advance-payments-are-held-for-the-treatment-plan.md)   | An advance payment is held for the treatment plan             | Accepted (amends 0029)               |

@@ -507,6 +507,20 @@ How a tooth looks is decided in the SPA, from the derived teeth (`features/clini
 - **Marks in the workspace** (`use-chart-marks.ts`): the chart read's `marks` under the cached
   catalogs, so a service added in the live visit is coloured before the chart is read again.
 
+### Open diagnoses at Complete visit
+
+Entering the **Complete step** from another step (the footer or the stepper) first checks, in
+its own dialog (`dialogs/resolve-before-complete-dialog.tsx`), and lets the dentist go back or
+move on. The Visit Summary's **Complete visit** checks again, after it sends unsaved edits and
+waits for writes in flight, for the ones not already shown there. Both look for **active**
+diagnoses on a tooth one of today's services touches, or treated by a
+plan performed today (`dialogs/diagnoses-to-resolve.ts`). With any, the dialog turns into a check
+(`dialogs/resolve-check.tsx`): each with what was done today and an unticked **Resolve**. The
+ticked ones are resolved one by one (`POST /visits/:id/diagnoses/:recordId/resolve`), then the
+dialog moves on (to the step, or completes the visit); a failed resolve does neither. Back changes
+nothing. Spec
+`docs/superpowers/specs/2026-10-17-unresolved-diagnoses-check-design.md`; no API change.
+
 ### Merge re-point
 
 `MergeClinicalSubscriber` handles `PatientsMerged` **in the merge transaction** (spec V10, W24;
@@ -544,7 +558,7 @@ and the events
 `VisitCompleted`, `VisitAmended`, `VisitVoided`, `MedicalHistoryConfirmed`, `DiagnosisRecorded`,
 `DiagnosisResolved`, `DiagnosisReopened`, `DiagnosisEvidenceCited`,
 `TreatmentPlanned`, `TreatmentStarted`, `TreatmentPerformed`, `TreatmentCancelled`,
-`TreatmentPrioritised`, `TreatmentAccepted` and `ToothPresenceChanged`.
+`TreatmentRemoved`, `TreatmentPrioritised`, `TreatmentAccepted` and `ToothPresenceChanged`.
 
 The other application services are internal and reached through the module's controllers:
 `VisitFlowService`, `VisitCorrectionsService` (amend, checkout discount, checkout, void; see
@@ -600,11 +614,13 @@ that changes nothing writes and audits nothing.
 
 A hidden audit row has no area: it is in the visit's own trail and not on the Activity screen.
 
-`VisitFactsService`: what other modules read about visits. Every method needs `visit:read`.
+`VisitFactsService`: what other modules read about visits. Every method needs `visit:read`, but
+`planWork`.
 
 | Method                 | Notes                                                                                                                                                                                                                                                                                                                                                                       |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chargeFacts(visitId)` | For `billing`'s in-transaction `VisitCompleted` handler (ADR-0024): `{ patientId, currency, total, localDate, lines }` of a completed visit, the lines being its services that aren't removed, in order (`code`, `name`, `toothCode`, `surfaces`, `amount` = base − line discount). Reads through the open transaction. A visit that isn't completed throws (a caller bug). |
+| `chargeFacts(visitId)` | For `billing`'s in-transaction `VisitCompleted` and `VisitAmended` handlers (ADR-0024, ADR-0051): `{ patientId, currency, total, localDate, lines }` of a completed or amended visit, the lines being its services that aren't removed, in order (`planId`: the plan item a line performs, `code`, `name`, `toothCode`, `surfaces`, `amount` = base − line discount). Reads through the open transaction. Any other status throws (a caller bug). |
+| `planWork(patientId, currency)` | No permission (read inside `billing`'s settle, like `paidOn`). For `billing`'s advances held for the plan (ADR-0051): `{ open, estimate }`: whether the patient has plan work still to charge (an item planned or in progress, or performed on a visit still in progress or paused), and Σ the price snapshots of those items in `currency`. |
 | `visitMoney(visitId)`  | For `billing`'s visit summary: `{ visitId, patientId, status, currency, subtotal, discount, total, completedAt, durationMinutes, serviceCount }`, the money computed while live and frozen once completed. Unknown or discarded → 404.                                                                                                                                      |
 | `numbersFor(visitIds)` | Also `GET /visits/numbers` (the Activity screen, feature 7). For `billing`'s receipts, payment history and statements (feature 5): `{ visitId, displayNumber, localDate, type }` of each visit, any status, in no particular order; unknown ids are absent.                                                                                                                 |
 | `refsFor(visitIds)`    | For `files` (feature 8): `{ visitId, patientId, displayNumber, localDate, startedAt, status }` of each visit that is not discarded, in no particular order; unknown and discarded ids are absent.                                                                                                                                                                           |
@@ -637,7 +653,7 @@ updated `Visit` and the record created or changed (a removed one included). Unkn
 | `removeSession(visitId, planId)`                                                                           | `treatment_plan.session_delete`                                                                                     | This visit's session (404 `record.not_found`); the last one removed returns the plan to `planned`. No event.                                                                                                                                                                      |
 | `performPlan(visitId, planId)`                                                                             | `visit_service.create` and `treatment_plan.perform`                                                                 | An open plan (409 `plan.not_open`); currency must match. Accepts a plan that was not accepted. `TreatmentPerformed`.                                                                                                                                                              |
 | `cancelPlan(visitId, planId)`                                                                              | `treatment_plan.cancel`                                                                                             | Not made in this visit (409 `plan.not_cancellable`), open (409 `plan.not_open`). `TreatmentCancelled`.                                                                                                                                                                            |
-| `removePlan(visitId, planId)`                                                                              | `treatment_plan.delete`                                                                                             | Made in this visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`). Soft delete. No event.                                                                                                                                                                       |
+| `removePlan(visitId, planId)`                                                                              | `treatment_plan.delete`                                                                                             | Made in this visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`). Soft delete. `TreatmentRemoved`.                                                                                                                                                             |
 | `setPresence(visitId, toothCode, { presence })`                                                            | `tooth_presence.set` (`tooth_presence`)                                                                             | Adds a row dated by the visit; nothing when unchanged (`record: null`). `ToothPresenceChanged`.                                                                                                                                                                                   |
 | `removePresence(visitId, presenceId)`                                                                      | `tooth_presence.remove`                                                                                             | A row set by hand in this visit (409 `record.not_removable`); the presence before it applies again. `ToothPresenceChanged`.                                                                                                                                                       |
 
@@ -654,7 +670,7 @@ audited like its in-visit twin and answers `{ chart }`.
 | `updatePlan(patientId, planId, { priority?, note? })`                       | `treatment_plan.prioritise`; `treatment_plan.update` for the note | An open plan (409 `plan.not_open`); no-op when unchanged. `TreatmentPrioritised` with `visitId: null` for the priority.                                  |
 | `setAcceptance(patientId, planId, accepted)`                                | `treatment_plan.accept` / `treatment_plan.unaccept`               | Accept: an open plan (409 `plan.not_open`). Withdraw: a plan still `planned` (409 `plan.acceptance_locked`). No-op when already so. `TreatmentAccepted`. |
 | `cancelPlan(patientId, planId)`                                             | `treatment_plan.cancel`                                           | An open plan, wherever it was made. `TreatmentCancelled` with `visitId: null`.                                                                           |
-| `removePlan(patientId, planId)`                                             | `treatment_plan.delete`                                           | Made without a visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`).                                                                   |
+| `removePlan(patientId, planId)`                                             | `treatment_plan.delete`                                           | Made without a visit (409 `record.not_removable`) and `planned` (409 `plan.not_open`). `TreatmentRemoved` with `visitId: null`.                           |
 | `setPresence(patientId, { teeth, when, reason?, dentistId? })`              | `tooth_presence.set`                                              | One row per tooth that changes; answers `{ chart, presenceIds }`.                                                                                        |
 | `removePresence(patientId, ids)`                                            | `tooth_presence.remove`                                           | Rows set on the record (409 `record.not_removable`); unknown id → 404.                                                                                   |
 
@@ -734,6 +750,8 @@ see `recordSession` above.
     `TreatmentStarted { planId, visitId, patientId, toothCode }`,
     `TreatmentPerformed { planId, visitId, patientId, serviceId, toothCode }`,
     `TreatmentCancelled { planId, visitId, patientId, toothCode }`,
+    `TreatmentRemoved { planId, visitId, patientId }` (a plan still planned, removed; `billing`
+    ends money held for a plan left without work, ADR-0051),
     `TreatmentPrioritised { planId, visitId, patientId, priority }`,
     `TreatmentAccepted { planId, patientId, accepted }`. `visitId` is null on
     `DiagnosisRecorded`, `TreatmentPlanned`, `TreatmentCancelled` and `TreatmentPrioritised` for
@@ -767,7 +785,7 @@ see `recordSession` above.
 
 None of them imports `clinical`. `files` imports `clinical` (`VisitFactsService.refsFor`,
 ADR-0038; `DiagnosisEvidenceCited` and `EvidenceInvalidError` for its veto, ADR-0049). `billing`
-imports `clinical` (`VisitFactsService`: `chargeFacts`, `visitMoney`, `numbersFor`;
+imports `clinical` (`VisitFactsService`: `chargeFacts`, `visitMoney`, `numbersFor`, `planWork`;
 `VisitListService`: `search` / `aggregate` / `lastVisitFor` /
 `patientIdsSeenWithin` for its visit and patient views; `VisitNotLiveError` and the visit
 events; ADR-0024); `clinical` never imports `billing` or `files`.

@@ -7,7 +7,8 @@ Feature 7 also adds the Adjust balance screen, retry safety on opening balances 
 and the currency lock (ADR-0035). Feature 4a adds the visit charge, posted
 in the completion's transaction, and a completed visit's financial summary (ADR-0024). Feature 5 adds payments, refunds and voids on the patient account, their stored allocations,
 receivables (KPIs, aging, outstanding) and the data of the printables (ADR-0027 to ADR-0029).
-Feature 10 adds the visit's type to allocation lines and open charges.
+Feature 10 adds the visit's type to allocation lines and open charges. Advance payments add
+money paid ahead, held for the treatment plan or kept as credit (ADR-0051).
 Stored invoices and price lists come later.
 
 ## Purpose
@@ -98,6 +99,16 @@ ADR-0017).
   (signed, non-zero: a release is negative), `kind` (`allocation_kind`: `allocation`, `credit_applied`,
   `release`), `manual` (B4), timestamps. Append-only. A pair's allocation is Σ its rows. Named
   for payments, but write-offs are sources too (ADR-0027).
+- `payments.advance` (`plan` | `credit`, null for an ordinary payment and for refunds and voids;
+  ADR-0051): how a payment was made in advance.
+- `payment_holds` (tenant RLS, ADR-0051): `id`, `tenant_id`, `payment_id` (unique, FK to
+  `payments`), `released_at?`, `released_kind?` (`plan_closed` | `manual`), `released_by?` (auth
+  user id), `release_reason?` (iff `manual`), timestamps. One row per payment held for the plan,
+  written with it; the release columns are set once (`dcm_app` may update only them, and delete
+  nothing; migration 0046).
+- `visit_plan_shares` (tenant RLS, ADR-0051): `id`, `tenant_id`, `visit_id` (unique, no FK),
+  `amount ≥ 0`, `currency`, timestamps. A charged visit's plan share: Σ the final amounts of its
+  lines that perform a plan item, upserted at completion and at each amendment. A cache.
 
 ## Public API (`index.ts`)
 
@@ -206,9 +217,41 @@ Spec `docs/superpowers/specs/2026-10-02-payments-design.md` (P1–P16).
   (`application/charge-labels.ts`) reads number, date and type in one
   `VisitFactsService.numbersFor` call. The receipt prints the type under the visit number.
 - Errors: 422 `payment.over_outstanding`, `payment.nothing_outstanding`, `payment.invalid_target`,
-  `payment.invalid_payer`, `payment.invalid_cursor`; 404 `payment.not_found`; 409
-  `payment.over_refund`, `payment.has_refunds`, `payment.not_reversible`,
-  `payment.idempotency_mismatch`.
+  `payment.invalid_payer`, `payment.invalid_cursor`, `payment.over_plan_remaining`,
+  `payment.no_open_plan`; 404 `payment.not_found`; 409 `payment.over_refund`,
+  `payment.has_refunds`, `payment.not_reversible`, `payment.idempotency_mismatch`,
+  `payment.not_held`.
+
+### Advance payments (ADR-0051)
+
+Spec `docs/superpowers/specs/2026-10-17-advance-payments-design.md` (A1–A13).
+
+- **Making one**: `advance` on `PaymentInput` lifts the outstanding cap; it pays this patient only
+  (no household, no `targetEntryId`; a `plan` advance no `contextVisitId`). `credit`: allocated
+  like any payment, the rest is credit. `plan`: the whole payment is held for the treatment plan;
+  it writes no allocation of its own, the settle that follows covers plan charges with it. Its cap
+  is `planRemaining` (`domain/allocate.ts`): the open plan estimate
+  (`VisitFactsService.planWork`) + the plan share still owed − held money not spent
+  (`heldPosition`); without plan work, 422 `payment.no_open_plan`. The preview reports `advance`,
+  `held` and `planRemaining`; a replayed key must carry the same `advance`.
+- **Held money in settle**: a source is `held` while its payment's hold has not ended; a target
+  carries its `planShare`. Held money covers at most `heldRoom` = `min(planShare, max(net, 0))` of
+  a target, all held sources together; allocations above it are released, newest first. Held
+  sources cover plan charges first, then the free sources run as before.
+- **The end of a hold** (`Settlement`): after each pass, when the account has an active hold (one
+  not released, on a payment not voided or fully refunded) and `planWork(...).open` is false, every
+  hold ends (`plan_closed`) and settle runs again. The merge re-point settles with
+  `closeHolds: false`: `clinical` may not have moved the dropped patient's plans yet.
+  `PlanClosureSubscriber` settles in the transaction of `TreatmentCancelled`, `TreatmentRemoved`,
+  `VisitDiscarded` and a `VisitCompleted` at no charge (under the account lock, when the patient
+  holds money), since those end plan work without a ledger write. `PaymentsService.release` ends one by hand (reason
+  required). Each release is audited `payment.release` (`after: { kind, released }`) and publishes
+  `AdvanceReleased`.
+- **Reads**: the account has `held` (held money not spent), `credit` (free credit only) and
+  `planRemaining`; history, Transactions and receipt rows have `advance`, `heldUnspent` and
+  `releasedAt`; allocation lines have `fromAdvance` (the source payment was held, now or before);
+  the visit summary has `held`, leaves it out of `totalOutstanding` and `previous`, and marks each
+  payment `fromAdvance`. The patient balance (`balances`) stays Σ ledger.
 
 ### Visit charge (`application/visit-charge.subscriber.ts`, ADR-0024)
 
@@ -388,6 +431,7 @@ the merge already required `patient:write`.
 | `POST /billing/payments/preview`             | `payment:write`  | Body `PaymentInput`. 200 `PaymentPreview`.                                                                                                                                                                                                                                                                                               |
 | `POST /billing/payments/:id/refund`          | `payment:refund` | Body `{ amount, reason, method?, refundedAt? }`. 201 `{ ids }`.                                                                                                                                                                                                                                                                          |
 | `POST /billing/payments/:id/void`            | `payment:refund` | Body `{ reason }`. 201 `{ ids }` (one per voided row).                                                                                                                                                                                                                                                                                   |
+| `POST /billing/payments/:id/release`         | `payment:write`  | Body `{ reason }`. What a payment held for the plan has not spent becomes credit (ADR-0051). 201 `{ ids }`; not held or already released → 409 `payment.not_held`.                                                                                                                                                                       |
 | `GET /billing/payments`                      | `payment:read`   | Transactions filters + cursor. 200 `TransactionPage`.                                                                                                                                                                                                                                                                                    |
 | `GET /billing/payments/export`               | `payment:read`   | Transactions filters + `lang?`. 200 `text/csv`, `payments-<today>.csv`.                                                                                                                                                                                                                                                                  |
 | `GET /billing/payments/:id/receipt`          | `payment:read`   | A payment, refund or void id (the latter two give their payment's receipt). 200 `Receipt`.                                                                                                                                                                                                                                               |
@@ -431,7 +475,9 @@ pipe a `Readable`: stream callbacks run outside the request's async context, whe
   `LedgerEntryRecorded { entryId, patientId, kind }`; `PaymentRecorded { receiptNumber, paymentIds,
 patientIds, householdGroupId, amount, currency, allocations }`, `PaymentRefunded { paymentId,
 refundId, patientId, amount, currency, releases }`, `PaymentVoided { receiptNumber, paymentIds,
-voidIds, patientIds }`, `CreditApplied { patientId, currency, allocations }`.
+voidIds, patientIds }`, `CreditApplied { patientId, currency, allocations }`, `AdvanceReleased
+{ paymentId, patientId, currency, amount, kind }` (ADR-0051); `PaymentRecorded` also carries
+`advance`.
 - Consumes:
   - `PatientsMerged { keptId, droppedId }` (from `patients`), **in the merge transaction**, to
     re-point the dropped patient's entries and payments (ADR-0036).
@@ -440,7 +486,11 @@ voidIds, patientIds }`, `CreditApplied { patientId, currency, allocations }`.
   - `VisitCompleted { visitId, patientId, currency, total, localDate }` (from `clinical`),
     **in the completion's transaction**, to post the visit charge (ADR-0024).
   - `VisitAmended` and `VisitVoided` (from `clinical`), **in the amend or void transaction**, to
-    post the adjustment or the reversal, or to veto the void (ADR-0025, ADR-0026).
+    post the adjustment or the reversal, or to veto the void (ADR-0025, ADR-0026). Completion and
+    amendment also store the visit's plan share (ADR-0051).
+  - `TreatmentCancelled`, `TreatmentRemoved`, `VisitDiscarded` and a `VisitCompleted` at no charge
+    (from `clinical`), **in their transactions**, to end the holds of a plan left without work
+    (ADR-0051).
 
 ## Depends on
 
@@ -456,8 +506,9 @@ voidIds, patientIds }`, `CreditApplied { patientId, currency, allocations }`.
 - `patients` (feature 5): `ContactsService.contactsOf` and `patientsBilledBy` for the payer and the
   household.
 - `clinical`, `VisitFactsService`: `chargeFacts` for the visit charge (feature 4a, W21,
-  ADR-0024), `visitMoney` for the summary, `numbersFor` for the visit number, date and type on
-  allocation lines and open charges (feature 5, feature 10).
+  ADR-0024) and the plan share (its lines' `planId`, ADR-0051), `visitMoney` for the summary,
+  `numbersFor` for the visit number, date and type on allocation lines and open charges (feature
+  5, feature 10), `planWork` for held advances (ADR-0051).
 - `clinical`, `VisitListService`: `search` (the Unpaid tab, the visits export, the Transactions
   visit search), `aggregate` (the Unpaid summary), `lastVisitFor` (the patients export) and
   `patientIdsSeenWithin` (the Not seen view and the Never filter).

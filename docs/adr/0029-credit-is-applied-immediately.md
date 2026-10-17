@@ -1,6 +1,6 @@
 # ADR-0029: Credit is applied immediately
 
-- Status: Accepted
+- Status: Accepted; amended by ADR-0051 (money held for the treatment plan)
 - Date: 2026-10-02
 
 ## Context
