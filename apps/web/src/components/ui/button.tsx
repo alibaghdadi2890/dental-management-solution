@@ -25,6 +25,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: keyof typeof VARIANTS;
   size?: keyof typeof SIZES;
   busy?: boolean;
+  ref?: Ref<HTMLButtonElement>;
 }
 
 export function Button({

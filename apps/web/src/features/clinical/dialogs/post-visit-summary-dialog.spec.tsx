@@ -33,6 +33,7 @@ const OWING: VisitFinancialSummary = {
   visit: { total: '162.00', paid: '0.00', outstanding: '162.00' },
   previous: '50.00',
   totalOutstanding: '212.00',
+  held: '0.00',
   payments: [],
 };
 
@@ -49,6 +50,7 @@ const CLEAR: VisitFinancialSummary = {
   visit: { total: '0.00', paid: '0.00', outstanding: '0.00' },
   previous: '0.00',
   totalOutstanding: '0.00',
+  held: '0.00',
   payments: [],
 };
 

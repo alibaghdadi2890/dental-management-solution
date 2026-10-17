@@ -32,14 +32,19 @@
     "balanceAfter": "Balance after · {{name}}",
     "refunded": "Refunded {{amount}} on {{date}} — {{reason}}",
     "voided": "Voided on {{date}} — {{reason}}",
-    "recordedBy": "Recorded by {{name}}"
+    "recordedBy": "Recorded by {{name}}",
+    "advanceTitle": "Advance payment receipt",
+    "heldForPlan": "Held for the treatment plan",
+    "heldNote": "Paid in advance for the treatment plan. It pays plan work as it is done; what is not used is refundable.",
+    "creditNote": "Paid in advance. What is not owed now is kept as credit for the next charge, and is refundable."
   },
   "invoice": {
     "title": "Invoice",
     "visit": "Visit",
     "paid": "Paid",
     "due": "Balance due",
-    "payments": "Payments received"
+    "payments": "Payments received",
+    "advance": "advance"
   },
   "statement": {
     "title": "Account statement",
@@ -68,7 +73,9 @@
     "empty": "This patient has no open treatment plans.",
     "validity": "This estimate is valid for {{days}} days, until {{date}}. Prices may change if the treatment plan changes.",
     "signPatient": "Patient signature",
-    "signDentist": "Dentist signature"
+    "signDentist": "Dentist signature",
+    "paidInAdvance": "Paid in advance",
+    "stillToPay": "Still to pay"
   },
   "formatMulti": "A4",
   "familyStatement": {

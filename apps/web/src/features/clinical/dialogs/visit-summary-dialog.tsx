@@ -1,7 +1,7 @@
 import { toCents, type PatientChart, type Visit } from '@dcm/contracts';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog } from 'radix-ui';
-import { type ReactNode, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useStaffNames } from '@/features/users/use-staff-names';
@@ -16,6 +16,7 @@ import {
 import { useFlushSaveGroups, useLocalValues } from '../save-groups-context';
 import { useVisitTimer } from '../use-visit-timer';
 import { useVisitMutations, useVisitMutationsSettled } from '../visit-mutations';
+import { chartQuery, visitQuery } from '../visits-api';
 import { servicePriceKey } from '../workspace/charting-actions';
 import { DiscountControl } from '../workspace/discount-control';
 import { NOTES_KEY } from '../workspace/notes-card';
@@ -23,6 +24,8 @@ import { plansTotal } from '../workspace/tooth-panel/tooth-records';
 import { unfinishedWork } from '../workspace/unfinished';
 import { type PriceDraft, priceDraftOf, priceOf } from '../workspace/tooth-panel/service-price';
 import { useLiveMoney, useVisitDiscount } from '../workspace/visit-discount';
+import { type DiagnosisToResolve, diagnosesToResolve } from './diagnoses-to-resolve';
+import { ResolveCheck } from './resolve-check';
 
 const MICRO =
   'm-0 text-[11.5px] leading-none font-medium tracking-[.05em] uppercase [&:lang(ar)]:tracking-normal';
@@ -35,6 +38,8 @@ export interface VisitSummaryDialogProps {
   open: boolean;
   /** Continue editing, `Esc` or the scrim; never while the visit is being recorded. */
   onClose: () => void;
+  /** Diagnoses the check on the way to the Complete step already showed: not asked again. */
+  acknowledged?: ReadonlySet<string>;
 }
 
 /**
@@ -47,13 +52,22 @@ export interface VisitSummaryDialogProps {
  *
  * **Complete visit** first sends every unsaved edit (V6); if any fails, the visit is not completed
  * on stale values and the dialog says so. It then waits for the visit's writes still in flight (a
- * Perform now, a removal), so the visit it freezes has them. Then `POST /visits/:id/complete`
+ * Perform now, a removal), so the visit it freezes has them. If a tooth treated today still has
+ * an active diagnosis (`diagnosesToResolve`), the dialog turns into `ResolveCheck`: the dentist
+ * resolves the ones the treatment fixed, or none, before it completes. Then
+ * `POST /visits/:id/complete`
  * ("Recording…": the timer shown stops and the discount turns read-only): the
  * cached visit turns `completed` and the workspace page leaves for the record's Overview with the
  * post-visit summary (W16) — the page navigates, never this dialog, so there is one navigation.
  * A modal: focus is trapped, `Esc` closes it and focus goes back to what opened it.
  */
-export function VisitSummaryDialog({ visit, chart, open, onClose }: VisitSummaryDialogProps) {
+export function VisitSummaryDialog({
+  visit,
+  chart,
+  open,
+  onClose,
+  acknowledged,
+}: VisitSummaryDialogProps) {
   const [recording, setRecording] = useState(false);
   // Radix only hands focus back to a `Dialog.Trigger`, and this dialog is opened by code.
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -87,6 +101,7 @@ export function VisitSummaryDialog({ visit, chart, open, onClose }: VisitSummary
           <SummaryContent
             visit={visit}
             chart={chart}
+            acknowledged={acknowledged}
             recording={recording}
             onRecording={setRecording}
             onClose={onClose}
@@ -100,6 +115,7 @@ export function VisitSummaryDialog({ visit, chart, open, onClose }: VisitSummary
 function SummaryContent({
   visit,
   chart,
+  acknowledged,
   recording,
   onRecording,
   onClose,
@@ -113,35 +129,110 @@ function SummaryContent({
   const { dentistNames } = useStaffNames();
   const flush = useFlushSaveGroups();
   const settled = useVisitMutationsSettled(visit.id);
-  const complete = useMutation(useVisitMutations(visit.id).complete);
+  const queryClient = useQueryClient();
+  const mutations = useVisitMutations(visit.id);
+  const complete = useMutation(mutations.complete);
+  const resolve = useMutation(mutations.resolveDiagnosis);
   const [error, setError] = useState<string | null>(null);
+  /** The diagnoses to check before completing; null while the summary shows. */
+  const [check, setCheck] = useState<DiagnosisToResolve[] | null>(null);
+  /** Back from the check: focus returns to Complete visit, which the summary re-mounts. */
+  const completeButton = useRef<HTMLButtonElement>(null);
+  const backFromCheck = useRef(false);
+  useEffect(() => {
+    if (!backFromCheck.current || check !== null) return;
+    backFromCheck.current = false;
+    completeButton.current?.focus();
+  }, [check]);
   const [notes] = useLocalValues<string>([NOTES_KEY]);
   const text = notes ?? visit.notes;
   // The duration as it stood on Complete: what is recorded, so it no longer ticks.
   const [frozenTimer, setFrozenTimer] = useState<string | null>(null);
   const shownTimer = frozenTimer ?? timer;
 
-  const onComplete = async () => {
+  const start = () => {
     setError(null);
     onRecording(true);
     setFrozenTimer(timer);
-    const stop = (message: string) => {
-      setError(message);
-      setFrozenTimer(null);
-      onRecording(false);
-    };
+  };
+  const stop = (message: string | null) => {
+    setError(message);
+    setFrozenTimer(null);
+    onRecording(false);
+  };
+  const reason = (failure: unknown) => (failure instanceof Error ? failure.message : '');
+
+  const finish = async () => {
+    try {
+      await complete.mutateAsync();
+    } catch (failure) {
+      setCheck(null);
+      stop(t('summary.failed', { reason: reason(failure) }));
+    }
+    // Completed: the page, which reads the cached visit, leaves for the record (W16).
+  };
+
+  const onComplete = async () => {
+    start();
     if (!(await flush())) {
       stop(t('summary.unsaved'));
       return;
     }
     await settled();
-    try {
-      await complete.mutateAsync();
-    } catch (failure) {
-      stop(t('summary.failed', { reason: failure instanceof Error ? failure.message : '' }));
+    // The writes just settled refreshed the cache; the props may not have re-rendered yet.
+    const current = queryClient.getQueryData(visitQuery(visit.id).queryKey) ?? visit;
+    const currentChart = queryClient.getQueryData(chartQuery(visit.patientId).queryKey) ?? chart;
+    const open = (currentChart ? diagnosesToResolve(current, currentChart) : []).filter(
+      (item) => acknowledged?.has(item.record.id) !== true,
+    );
+    if (open.length > 0) {
+      setCheck(open);
+      stop(null);
+      return;
     }
-    // Completed: the page, which reads the cached visit, leaves for the record (W16).
+    await finish();
   };
+
+  /** Resolves the ticked diagnoses one by one, then completes; a failure completes nothing. */
+  const onConfirm = async (recordIds: string[]) => {
+    start();
+    for (const [done, recordId] of recordIds.entries()) {
+      try {
+        await resolve.mutateAsync(recordId);
+      } catch (failure) {
+        // Those resolved before it stay resolved: the check no longer lists them.
+        const resolved = new Set(recordIds.slice(0, done));
+        setCheck((items) => items?.filter((item) => !resolved.has(item.record.id)) ?? null);
+        stop(t('summary.resolve.failed', { reason: reason(failure) }));
+        return;
+      }
+    }
+    await finish();
+  };
+
+  if (check !== null) {
+    return (
+      <ResolveCheck
+        items={check}
+        busy={recording}
+        error={error}
+        backLabel={t('summary.resolve.back')}
+        confirmLabel={(ticked) =>
+          ticked > 0
+            ? t('summary.resolve.resolveAndComplete', { count: ticked })
+            : t('summary.complete')
+        }
+        onBack={() => {
+          setCheck(null);
+          setError(null);
+          backFromCheck.current = true;
+        }}
+        onConfirm={(recordIds) => {
+          void onConfirm(recordIds);
+        }}
+      />
+    );
+  }
 
   return (
     <>
@@ -205,6 +296,7 @@ function SummaryContent({
           {t('summary.timerStops', { time: shownTimer })}
         </span>
         <Button
+          ref={completeButton}
           variant="primary"
           disabled={recording}
           onClick={() => {

@@ -38,6 +38,7 @@ import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { AdjustBalanceMenu } from '../adjust/adjust-entry';
 import { useRecordPayment } from '../payments/payment-dialog-context';
+import { useReleaseHold } from '../payments/use-release-hold';
 import {
   agingQuery,
   downloadTransactionsExport,
@@ -582,6 +583,7 @@ function TransactionRow({
 }) {
   const { t, i18n } = useTranslation(['payments', 'billing']);
   const canRefund = usePermission('payment:refund');
+  const release = useReleaseHold(locale);
   const confirm = useConfirm();
   const toast = useToast();
   const queryClient = useQueryClient();
@@ -621,6 +623,11 @@ function TransactionRow({
     type = (
       <span className="flex flex-wrap items-center gap-1.5">
         <Pill tone="neutral">{t(`billing:methods.${item.method}`)}</Pill>
+        {item.advance && (
+          <Pill tone="indigo">
+            {t(item.advance === 'plan' ? 'billing:payments.advancePlan' : 'billing:payments.advanceCredit')}
+          </Pill>
+        )}
         {item.partial && <span className="text-[12px] text-ink-muted">{t('type.partial')}</span>}
       </span>
     );
@@ -680,6 +687,19 @@ function TransactionRow({
         >
           {t('actions.receipt')}
         </Button>
+        {release && !item.voided && toCents(item.heldUnspent) > 0n && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-1.5"
+            disabled={stale}
+            onClick={() => {
+              release(item);
+            }}
+          >
+            {t('billing:release.action')}
+          </Button>
+        )}
         {reversible &&
           (canRefund ? (
             <>

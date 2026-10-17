@@ -365,7 +365,21 @@
     "unsaved": "Certaines modifications n’ont pas pu être enregistrées, la visite n’a donc pas été terminée. Réessayez-les, puis terminez à nouveau la visite.",
     "failed": "Impossible de terminer la visite : {{reason}}",
     "session": "{{name}} · visite {{number}}",
-    "unfinished": "Non terminé · à poursuivre"
+    "unfinished": "Non terminé · à poursuivre",
+    "resolve": {
+      "title": "Résoudre ces diagnostics ?",
+      "subtitle": "Avant d’enregistrer la visite.",
+      "warning_one": "Ce diagnostic est toujours ouvert sur une dent traitée aujourd’hui. Vous avez peut-être oublié de le résoudre.",
+      "warning_other": "{{count}} diagnostics sont toujours ouverts sur les dents traitées aujourd’hui. Vous avez peut-être oublié de les résoudre.",
+      "tick": "Résoudre {{name}} sur {{tooth}}",
+      "doneToday": "Fait aujourd’hui : {{services}}",
+      "resolve": "Résoudre",
+      "back": "Retour au récapitulatif",
+      "resolveAndComplete_one": "Résoudre 1 et terminer",
+      "resolveAndComplete_other": "Résoudre {{count}} et terminer",
+      "failed": "Impossible de résoudre un diagnostic, la visite n’a donc pas été terminée : {{reason}}",
+      "working": "En cours…"
+    }
   },
   "postVisit": {
     "title": "Visite enregistrée",
@@ -396,7 +410,9 @@
     "applyDiscount": "Appliquer",
     "printInvoice": "Imprimer la facture",
     "frontDesk": "L’accueil encaissera le paiement.",
-    "discountReasonShort": "Saisissez au moins 3 caractères, ou laissez vide."
+    "discountReasonShort": "Saisissez au moins 3 caractères, ou laissez vide.",
+    "coveredByAdvance": "Couvert par l’avance",
+    "held": "{{amount}} restent réservés pour le plan de traitement."
   },
   "errors": {
     "visit": {
@@ -762,6 +778,12 @@
       "chooseFirst": "Choisissez où va le traitement pour voir les actes correspondants.",
       "noServices": "Le catalogue n’a aucun acte pour cela.",
       "search": "Rechercher un autre traitement dans le catalogue"
+    },
+    "resolve": {
+      "back": "Retour à {{step}}",
+      "resolveAndContinue_one": "Résoudre 1 et passer à {{step}}",
+      "resolveAndContinue_other": "Résoudre {{count}} et passer à {{step}}",
+      "failed": "Impossible de résoudre un diagnostic : {{reason}}"
     }
   },
   "planTab": {
@@ -783,6 +805,9 @@
     "acceptNamed": "Marquer {{name}} accepté",
     "proposed": "Proposé",
     "withdraw": "Retirer l’acceptation",
-    "withdrawNamed": "Retirer l’acceptation de {{name}}"
+    "withdrawNamed": "Retirer l’acceptation de {{name}}",
+    "paidInAdvance": "Payé d’avance",
+    "stillToPay": "Reste à payer",
+    "advanceHint": "Réservé pour ce plan : il paie chaque soin au fur et à mesure."
   }
 }

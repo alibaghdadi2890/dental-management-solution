@@ -25,7 +25,8 @@
     "record": "Enregistrer un paiement",
     "recordFirst": "Enregistrer un premier paiement",
     "credit": "Avoir de {{amount}} — appliqué au prochain acte, ou remboursé sur le paiement.",
-    "statement": "Relevé"
+    "statement": "Relevé",
+    "held": "Payé d’avance · plan de traitement"
   },
   "payments": {
     "title": "Historique des paiements",
@@ -45,7 +46,11 @@
     "voided": "Annulé",
     "receipt": "Reçu",
     "loading": "Chargement des paiements",
-    "adjustment": "Ajustement"
+    "adjustment": "Ajustement",
+    "advancePlan": "Avance · plan de traitement",
+    "advanceCredit": "Avance",
+    "held": "{{amount}} réservés",
+    "released": "Libéré le {{date}}"
   },
   "methods": {
     "cash": "Espèces",
@@ -99,7 +104,24 @@
     "recorded": "{{amount}} enregistré",
     "stillOwed": "Il reste {{amount}} dû",
     "clear": "Le compte du patient est soldé",
-    "receipt": "Reçu"
+    "receipt": "Reçu",
+    "advance": {
+      "start": "Payer d’avance",
+      "title": "Paiement d’avance",
+      "back": "Payer plutôt ce qui est dû",
+      "plan": "Réserver pour le plan de traitement",
+      "credit": "Garder en crédit",
+      "noPlan": "Il ne reste aucun soin du plan à payer.",
+      "planRule": "Il ne paie que les soins du plan, au fur et à mesure, et le reste est toujours remboursable.",
+      "planNeeds": "Le plan demande encore {{amount}}.",
+      "creditRule": "Il paie d’abord les {{amount}} dus ; le reste reste en crédit.",
+      "creditOnly": "Il reste en crédit et paie le prochain acte.",
+      "wholePlan": "Tout le plan {{amount}}",
+      "over": "Le montant ne peut pas dépasser les {{amount}} que le plan demande encore.",
+      "submit": "Enregistrer l’avance",
+      "held": "Réservé pour le plan de traitement",
+      "kept": "Le reste est gardé en crédit"
+    }
   },
   "errors": {
     "payment": {
@@ -111,7 +133,10 @@
       "has_refunds": "Une partie de ce paiement a été remboursée ; remboursez le reste au lieu de l’annuler.",
       "not_reversible": "Ce paiement ne peut plus être remboursé ni annulé.",
       "not_found": "Ce paiement n’existe plus.",
-      "idempotency_mismatch": "Ce paiement a déjà été enregistré autrement. Fermez et recommencez."
+      "idempotency_mismatch": "Ce paiement a déjà été enregistré autrement. Fermez et recommencez.",
+      "over_plan_remaining": "Le montant dépasse ce que le plan demande encore. Actualisez et réessayez.",
+      "no_open_plan": "Ce patient n’a plus de soins du plan à payer d’avance.",
+      "not_held": "Ce paiement n’est plus réservé pour le plan de traitement."
     },
     "ledger": {
       "idempotency_mismatch": "Ce formulaire a déjà été envoyé avec d’autres informations. Fermez-le et recommencez."
@@ -164,5 +189,13 @@
       "more": "Ajouter {{amount}} au solde"
     },
     "saved": "Solde ajusté"
+  },
+  "release": {
+    "action": "Libérer en crédit",
+    "title": "Libérer {{receipt}} en crédit ?",
+    "body": "Les {{amount}} encore réservés pour le plan de traitement deviennent un crédit : ils paient ce qui est dû maintenant, le plus ancien d’abord, ou le prochain acte. Ils restent remboursables.",
+    "ok": "Libérer en crédit",
+    "reason": "Motif",
+    "done": "{{amount}} libérés en crédit"
   }
 }

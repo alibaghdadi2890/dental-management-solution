@@ -18,6 +18,8 @@ const ACCOUNT: PatientAccount = {
   currency: 'USD',
   balance: '120.00',
   credit: '0.00',
+  held: '0.00',
+  planRemaining: null,
   lastVisit: null,
   previousOutstanding: '120.00',
   openCharges: [],

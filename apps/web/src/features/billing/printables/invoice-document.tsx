@@ -102,6 +102,7 @@ export function InvoiceDocument({ visitId }: { visitId: string }) {
                     formatCalendarDate(payment.paidAt, locale),
                     formatReceiptNumber(payment.receiptNumber),
                     t(`billing:methods.${payment.method}`),
+                    ...(payment.fromAdvance ? [t('invoice.advance')] : []),
                     money(payment.amount),
                   ].join(' · ')}
                 </p>

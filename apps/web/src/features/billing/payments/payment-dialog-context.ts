@@ -12,6 +12,8 @@ export interface PaymentRequestOptions {
   /** Opened for a payer (a family): that billing contact pays, and the household is preset. */
   payerContactId?: string | undefined;
   household?: boolean | undefined;
+  /** Opens on "Pay in advance" (ADR-0051): held for the plan when there is plan work. */
+  advance?: boolean | undefined;
   /** After the payment is saved (the toast has been shown). */
   onRecorded?: (result: RecordPaymentResult) => void;
 }

@@ -9,7 +9,8 @@ import { ItemsTable, Parties, PrintSheet, Totals } from './print-sheet';
 /**
  * A receipt (B9: per payment, `RCT-`): who paid, for whom, how, and which charges it covered —
  * a household receipt lists each patient's part. Refunds are noted ("Refunded … on …"); a voided
- * receipt carries a VOID mark.
+ * receipt carries a VOID mark. An advance (ADR-0051) is titled so; one held for the treatment plan
+ * says what it is for and that what is not used is refundable.
  */
 export function ReceiptDocument({ paymentId }: { paymentId: string }) {
   const { t, i18n } = useTranslation(['printables', 'billing', 'clinical']);
@@ -22,10 +23,11 @@ export function ReceiptDocument({ paymentId }: { paymentId: string }) {
   const refunded = data
     ? data.refunds.reduce((sum, refund) => sum + toCents(refund.amount), 0n)
     : 0n;
+  const advance = data?.rows[0]?.advance ?? null;
 
   return (
     <PrintSheet
-      title={t('receipt.title')}
+      title={advance ? t('receipt.advanceTitle') : t('receipt.title')}
       number={data ? formatReceiptNumber(data.receiptNumber) : ''}
       state={receipt.isError ? 'error' : data ? undefined : 'loading'}
       watermark={data?.voided ? t('void') : undefined}
@@ -69,7 +71,13 @@ export function ReceiptDocument({ paymentId }: { paymentId: string }) {
                     </span>,
                     money(line.amount),
                   ])
-                : [[row.patient.fullName, '—', money(row.amount)]],
+                : [
+                    [
+                      row.patient.fullName,
+                      row.advance === 'plan' ? t('receipt.heldForPlan') : '—',
+                      money(row.amount),
+                    ],
+                  ],
             )}
           />
           <Totals
@@ -85,6 +93,11 @@ export function ReceiptDocument({ paymentId }: { paymentId: string }) {
             ]}
           />
           <div className="mt-6 flex flex-col gap-1 text-[11.5px] text-ink-secondary">
+            {advance && (
+              <p className="m-0">
+                {advance === 'plan' ? t('receipt.heldNote') : t('receipt.creditNote')}
+              </p>
+            )}
             {data.refunds.map((refund, index) => (
               <p key={index} className="m-0">
                 {t('receipt.refunded', {

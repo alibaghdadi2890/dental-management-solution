@@ -8,10 +8,12 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSession } from '@/features/auth/session';
+import { usePermission } from '@/features/auth/use-permission';
 import { useToothLabel } from '@/features/clinical/chart/use-chart-settings';
 import { chartQuery } from '@/features/clinical/visits-api';
 import { patientQuery } from '@/features/patients/patients-api';
 import { formatCalendarDate, formatMoney, todayIn } from '@/lib/format';
+import { accountQuery } from '../payments-api';
 import { ItemsTable, Parties, PrintSheet, Totals } from './print-sheet';
 
 const VALID_DAYS = 60;
@@ -27,7 +29,9 @@ function addDays(date: string, days: number): string {
  * A treatment-plan quote (B9, Q3): the patient's open plans at the prices they were planned at,
  * grouped by priority — the phases of the plan (feature 10, ADR-0045) — each with its total, then
  * the estimate; valid 60 days, with two signature lines. With `priority` it is that phase alone.
- * Printed on demand, not stored: its number is `EST-<patient number>-<date>`.
+ * Printed on demand, not stored: its number is `EST-<patient number>-<date>`. The whole plan's
+ * quote, for `payment:read`, adds what was paid in advance for it and what is still to pay
+ * (ADR-0051).
  */
 export function QuoteDocument({
   patientId,
@@ -42,6 +46,11 @@ export function QuoteDocument({
   const toothLabel = useToothLabel();
   const patient = useQuery(patientQuery(patientId));
   const chart = useQuery(chartQuery(patientId));
+  const canRead = usePermission('payment:read');
+  const account = useQuery({
+    ...accountQuery(patientId),
+    enabled: canRead && priority === undefined,
+  });
   const today = session?.tenant ? todayIn(session.tenant.timeZone) : '';
   const phases = planPhases(chart.data?.plans ?? []).filter(
     (phase) => phase.open.length > 0 && (priority === undefined || phase.priority === priority),
@@ -50,6 +59,9 @@ export function QuoteDocument({
   const currency = plans[0]?.price.currency ?? session?.tenant?.currency ?? 'USD';
   const total = plans.reduce((sum, plan) => sum + toCents(plan.price.amount), 0n);
   const dentists = [...new Set(plans.map((plan) => plan.dentistName))];
+  const held = account.data ? toCents(account.data.held) : 0n;
+  // What the plan still needs (the cap of a plan advance), as the plan tab shows it.
+  const left = toCents(account.data?.planRemaining ?? '0');
 
   return (
     <PrintSheet
@@ -102,8 +114,21 @@ export function QuoteDocument({
               {
                 label: t('quote.estimate'),
                 amount: formatMoney({ amount: fromCents(total), currency }, locale),
-                strong: true,
+                strong: held === 0n,
               },
+              ...(held > 0n
+                ? [
+                    {
+                      label: t('quote.paidInAdvance'),
+                      amount: `−${formatMoney({ amount: fromCents(held), currency }, locale)}`,
+                    },
+                    {
+                      label: t('quote.stillToPay'),
+                      amount: formatMoney({ amount: fromCents(left), currency }, locale),
+                      strong: true,
+                    },
+                  ]
+                : []),
             ]}
           />
           <p className="mt-6 mb-0 text-[11.5px] text-ink-secondary">

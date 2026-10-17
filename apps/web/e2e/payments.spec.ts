@@ -118,3 +118,85 @@ test('a partial payment, its receipt, a refund, and the balance restored', async
     );
   });
 });
+
+test('an advance held for the treatment plan pays the plan visit, and its hold ends with the plan', async ({
+  page,
+}) => {
+  test.slow();
+  await signIn(page, owner.email, owner.password);
+  await expect(page).toHaveURL(/\/patients$/);
+  const api = async <T>(method: 'GET' | 'POST', path: string, data?: object) => {
+    const response = await page.request.fetch(`/api/v1${path}`, { method, data });
+    expect(response.ok(), await response.text()).toBe(true);
+    return (await response.json()) as T;
+  };
+
+  let patientId = '';
+  let planId = '';
+  await test.step('a patient with a zircon crown planned on #16', async () => {
+    await page.getByRole('banner').getByRole('button', { name: 'New patient' }).click();
+    const form = page.getByRole('complementary', { name: 'Register a patient' });
+    await form.getByRole('textbox', { name: /^Full name/ }).fill('Omar Advance');
+    await form.getByRole('textbox', { name: /^Phone/ }).fill('03 555 778');
+    await form.getByRole('button', { name: 'Create patient' }).click();
+    await expect(form).toBeHidden();
+    const table = page.getByRole('table', { name: 'Patients' });
+    await expect(table).toHaveAttribute('aria-busy', 'false');
+    await table.getByRole('row').filter({ hasText: 'Omar Advance' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Omar Advance' })).toBeVisible();
+    patientId = /\/patients\/([0-9a-f-]{36})/.exec(page.url())?.[1] ?? '';
+    const services = await api<{ id: string; code: string }[]>('GET', '/catalog/services');
+    const crown = services.find((service) => service.code === 'ZIR');
+    const { chart } = await api<{ chart: { plans: { id: string }[] } }>(
+      'POST',
+      `/clinical/patients/${patientId}/plans`,
+      { procedureId: crown?.id, toothCode: '16', priority: 'high' },
+    );
+    planId = chart.plans[0]?.id ?? '';
+    await page.reload();
+    await page.getByRole('tab', { name: 'Treatment plan' }).click();
+  });
+
+  await test.step('takes the whole plan in advance, held for it', async () => {
+    await page.getByRole('button', { name: 'Pay in advance' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Record payment' });
+    await expect(
+      dialog.getByRole('radio', { name: 'Hold for the treatment plan' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    await expect(dialog).toContainText('The plan still needs $350.');
+    await dialog.getByRole('button', { name: 'Whole plan $350' }).click();
+    await dialog.getByRole('button', { name: 'Record advance' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Held for the treatment plan' }),
+    ).toBeVisible();
+    const advance = page.getByRole('region', { name: 'Paid in advance' });
+    await expect(advance).toContainText('$350');
+    await expect(advance).toContainText('Still to pay');
+  });
+
+  await test.step('the balance shows it apart from what is owed', async () => {
+    await page.getByRole('tab', { name: 'Balance & payments' }).click();
+    await expect(page.getByRole('main')).toContainText('Paid in advance · treatment plan');
+    await expect(page.getByRole('table', { name: 'Payment history' })).toContainText(
+      'Advance · treatment plan',
+    );
+  });
+
+  await test.step('the crown is done: the advance pays it and the hold ends', async () => {
+    const [dentist] = await api<{ id: string }[]>('GET', '/users/practitioners');
+    const { visit } = await api<{ visit: { id: string } }>('POST', '/visits', {
+      type: 'treatment',
+      patientId,
+      dentistId: dentist?.id,
+    });
+    await api('POST', `/visits/${visit.id}/plans/${planId}/perform`);
+    await api('POST', `/visits/${visit.id}/complete`);
+    await page.reload();
+    await expect(page.getByRole('main')).not.toContainText('Paid in advance · treatment plan');
+    await expect(page.getByRole('table', { name: 'Payment history' })).toContainText('Released');
+    await expect(
+      page.getByText('Nothing outstanding. This patient’s account is fully settled.'),
+    ).toBeVisible();
+  });
+});

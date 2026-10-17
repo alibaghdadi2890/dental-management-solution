@@ -249,6 +249,9 @@ export interface MockApi {
   lookup?: ContactLookupItem[];
   /** `GET /patients/duplicates/check` answer. */
   twins?: PatientListItem[];
+  /** Money paid in advance for the plan per patient id (the account's `held`), and what the plan
+   * still needs (`planRemaining`); none by default. */
+  held?: Record<string, { held: string; planRemaining: string | null }>;
   /** Overrides a mutation's answer (`POST /patients`, `PATCH /patients/:id`, …); a pending
    * promise keeps the save in flight. */
   mutation?: (
@@ -275,6 +278,7 @@ export function mockApi({
   contacts = {},
   lookup = [],
   twins = [],
+  held = {},
   mutation,
   get,
 }: MockApi = {}): FetchMock {
@@ -367,6 +371,28 @@ export function mockApi({
     if (bare === '/audit') {
       const resourceId = new URLSearchParams(path.split('?')[1]).get('resourceId') ?? '';
       return Promise.resolve(json({ items: audit[resourceId] ?? [], nextCursor: null }));
+    }
+    const accountOf = /^\/billing\/patients\/([^/]+)\/account$/.exec(bare)?.[1];
+    if (accountOf) {
+      return Promise.resolve(
+        json({
+          patientId: accountOf,
+          currency: 'USD',
+          balance: '0.00',
+          credit: '0.00',
+          held: held[accountOf]?.held ?? '0.00',
+          planRemaining: held[accountOf]?.planRemaining ?? null,
+          lastVisit: null,
+          previousOutstanding: '0.00',
+          openCharges: [],
+          payer: { contactId: null, name: '', patientId: null },
+          payers: [],
+          household: null,
+          payerFor: null,
+          history: [],
+          adjustments: [],
+        }),
+      );
     }
     const balanceOf = /^\/billing\/patients\/([^/]+)\/balance$/.exec(bare)?.[1];
     if (balanceOf) {

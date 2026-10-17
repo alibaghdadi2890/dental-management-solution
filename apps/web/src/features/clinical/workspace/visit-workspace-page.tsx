@@ -11,6 +11,7 @@ import {
   type ToothState,
   type TreatmentPlan,
   type Visit,
+  type VisitStep,
   type VisitType,
 } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
@@ -32,6 +33,8 @@ import { cn } from '@/lib/utils';
 import { useChartMarks } from '../chart/use-chart-marks';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
+import { type DiagnosisToResolve, diagnosesToResolve } from '../dialogs/diagnoses-to-resolve';
+import { ResolveBeforeCompleteDialog } from '../dialogs/resolve-before-complete-dialog';
 import { VisitSummaryDialog } from '../dialogs/visit-summary-dialog';
 import { FlowFooter } from '../flow/flow-footer';
 import { LastHygieneLine } from '../flow/last-hygiene-line';
@@ -228,7 +231,33 @@ function Workspace({
   const closeReview = useCallback(() => {
     setReviewing(false);
   }, []);
-  const flow = useVisitFlow(visit, chart.data);
+  const visitFlow = useVisitFlow(visit, chart.data);
+  // Entering the Complete step first asks about the diagnoses still open on teeth treated today
+  // (the stepper and the footer go through this `goTo`); those shown are not asked about again,
+  // here or in the Visit Summary.
+  const [checking, setChecking] = useState<{
+    from: VisitStep;
+    items: DiagnosisToResolve[];
+  } | null>(null);
+  const [acknowledged, setAcknowledged] = useState<ReadonlySet<string>>(new Set());
+  const { goTo: flowGoTo, current: currentStep } = visitFlow;
+  const onComplete = visitFlow.view === 'steps' && currentStep === 'complete';
+  const guardedGoTo = useCallback(
+    (next: VisitStep) => {
+      if (next === 'complete' && !onComplete && canWrite && chart.data) {
+        const open = diagnosesToResolve(visit, chart.data).filter(
+          (item) => !acknowledged.has(item.record.id),
+        );
+        if (open.length > 0) {
+          setChecking({ from: currentStep, items: open });
+          return;
+        }
+      }
+      flowGoTo(next);
+    },
+    [onComplete, canWrite, chart.data, visit, acknowledged, currentStep, flowGoTo],
+  );
+  const flow = useMemo(() => ({ ...visitFlow, goTo: guardedGoTo }), [visitFlow, guardedGoTo]);
   const { select, selectArea, area: selectedArea } = selection;
   /** Selects where a record is: its tooth, or its jaw or the whole mouth. */
   const focusTarget = useCallback(
@@ -547,7 +576,24 @@ function Workspace({
             chart={chart.data}
             open={reviewing && canWrite}
             onClose={closeReview}
+            acknowledged={acknowledged}
           />
+          {checking && (
+            <ResolveBeforeCompleteDialog
+              visitId={visit.id}
+              type={visit.type}
+              from={checking.from}
+              items={checking.items}
+              onBack={() => {
+                setChecking(null);
+              }}
+              onContinue={(shown) => {
+                setAcknowledged((current) => new Set([...current, ...shown]));
+                setChecking(null);
+                flowGoTo('complete');
+              }}
+            />
+          )}
           {drawer !== null && canWrite && (
             <>
               <div

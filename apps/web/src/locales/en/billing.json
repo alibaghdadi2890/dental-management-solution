@@ -25,7 +25,8 @@
     "record": "Record payment",
     "recordFirst": "Record first payment",
     "credit": "Credit {{amount}} — applied to the next charge, or refunded from the payment.",
-    "statement": "Statement"
+    "statement": "Statement",
+    "held": "Paid in advance · treatment plan"
   },
   "payments": {
     "title": "Payment history",
@@ -44,7 +45,11 @@
     "voided": "Voided",
     "receipt": "Receipt",
     "loading": "Loading payments",
-    "adjustment": "Adjustment"
+    "adjustment": "Adjustment",
+    "advancePlan": "Advance · treatment plan",
+    "advanceCredit": "Advance",
+    "held": "{{amount}} held",
+    "released": "Released {{date}}"
   },
   "methods": {
     "cash": "Cash",
@@ -97,7 +102,24 @@
     "recorded": "{{amount}} recorded",
     "stillOwed": "{{amount}} still outstanding",
     "clear": "Patient balance is now clear",
-    "receipt": "Receipt"
+    "receipt": "Receipt",
+    "advance": {
+      "start": "Pay in advance",
+      "title": "Paying in advance",
+      "back": "Pay what is owed instead",
+      "plan": "Hold for the treatment plan",
+      "credit": "Keep as credit",
+      "noPlan": "There is no plan work left to pay for.",
+      "planRule": "It pays plan work only, as it is done, and what is left is always refundable.",
+      "planNeeds": "The plan still needs {{amount}}.",
+      "creditRule": "It pays the {{amount}} owed first; the rest stays as credit.",
+      "creditOnly": "It stays as credit and pays the next charge.",
+      "wholePlan": "Whole plan {{amount}}",
+      "over": "The amount can’t be more than the {{amount}} the plan still needs.",
+      "submit": "Record advance",
+      "held": "Held for the treatment plan",
+      "kept": "The rest is kept as credit"
+    }
   },
   "errors": {
     "payment": {
@@ -109,7 +131,10 @@
       "has_refunds": "Part of this payment was refunded; refund the rest instead of voiding it.",
       "not_reversible": "This payment can no longer be refunded or voided.",
       "not_found": "This payment no longer exists.",
-      "idempotency_mismatch": "This payment was already recorded differently. Close and start again."
+      "idempotency_mismatch": "This payment was already recorded differently. Close and start again.",
+      "over_plan_remaining": "The amount is more than the plan still needs. Refresh and try again.",
+      "no_open_plan": "This patient has no plan work left to pay for in advance.",
+      "not_held": "This payment is no longer held for the treatment plan."
     },
     "ledger": {
       "idempotency_mismatch": "This form was already submitted with different details. Close it and start again."
@@ -162,5 +187,13 @@
       "more": "Add {{amount}} to balance"
     },
     "saved": "Balance adjusted"
+  },
+  "release": {
+    "action": "Release to credit",
+    "title": "Release {{receipt}} to credit?",
+    "body": "The {{amount}} still held for the treatment plan becomes credit: it pays what is owed now, oldest first, or the next charge. It stays refundable.",
+    "ok": "Release to credit",
+    "reason": "Reason",
+    "done": "{{amount}} released to credit"
   }
 }

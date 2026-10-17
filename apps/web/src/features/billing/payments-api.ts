@@ -12,6 +12,7 @@ import {
   receivablesSchema,
   recordPaymentResultSchema,
   type RefundInput,
+  type ReleaseHoldInput,
   statementSchema,
   type TransactionFilters,
   type TransactionQuery,
@@ -112,6 +113,14 @@ export function refundPayment(paymentId: string, input: RefundInput) {
 
 export function voidPayment(paymentId: string, input: VoidPaymentInput) {
   return apiFetch(`/billing/payments/${paymentId}/void`, paymentWriteResultSchema, {
+    method: 'POST',
+    json: input,
+  });
+}
+
+/** `POST /billing/payments/:id/release`: what a held advance has not spent becomes credit. */
+export function releaseHold(paymentId: string, input: ReleaseHoldInput) {
+  return apiFetch(`/billing/payments/${paymentId}/release`, paymentWriteResultSchema, {
     method: 'POST',
     json: input,
   });

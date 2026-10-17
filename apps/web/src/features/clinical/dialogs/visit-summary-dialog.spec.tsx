@@ -51,6 +51,7 @@ const SUMMARY: VisitFinancialSummary = {
   visit: { total: '162.00', paid: '0.00', outstanding: '162.00' },
   previous: '50.00',
   totalOutstanding: '212.00',
+  held: '0.00',
   payments: [],
 };
 
@@ -450,6 +451,130 @@ describe('VisitSummaryDialog', () => {
     expect((await within(dialog).findByRole('alert')).textContent).toBe(
       "Couldn't complete the visit: The ledger is unavailable",
     );
+    expect(router.state.location.pathname).toBe(`/visits/${VISIT_ID}`);
+  });
+});
+
+describe('VisitSummaryDialog: diagnoses still open on teeth treated today', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  /** Caries on #26 (filled today) and on #16 (sealed today); a third on #11, not treated. */
+  const CARIES = diagnosisRecord(80, 'Occlusal caries', '26');
+  const PITS = diagnosisRecord(82, 'Deep pits', '16');
+  const UNTREATED = diagnosisRecord(84, 'Enamel crack', '11');
+
+  /** The live visit's server: resolve answers (or fails for `failOn`), complete completes. */
+  function diagnosedServer({ failOn }: { failOn?: string } = {}) {
+    let current: Visit = CHARTED;
+    return mockWorkspace({
+      visit: () => current,
+      chart: chart({ diagnoses: [CARIES, PITS, UNTREATED] }),
+      visitSummary: SUMMARY,
+      mutation: (method, path) => {
+        const resolved = /\/diagnoses\/([^/]+)\/resolve$/.exec(path)?.[1];
+        if (method === 'POST' && resolved) {
+          if (resolved === failOn) return problem(500, 'internal');
+          const record = [CARIES, PITS].find((candidate) => candidate.id === resolved);
+          return json({ visit: current, record: { ...record, status: 'resolved' } });
+        }
+        if (method === 'POST' && path === `/visits/${VISIT_ID}/complete`) {
+          current = completed(current);
+          return json({ visit: current });
+        }
+        return undefined;
+      },
+    });
+  }
+
+  const writesOf = (fetchMock: ReturnType<typeof mockWorkspace>) =>
+    fetchMock.mock.calls
+      .filter(([, init]) => (init?.method ?? 'GET') !== 'GET')
+      .map(([url]) => url.replace(`/api/v1/visits/${VISIT_ID}/`, ''));
+
+  const reachCheck = async () => {
+    const dialog = await openSummary();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
+    expect(await within(dialog).findByText('Resolve these diagnoses?')).toBeTruthy();
+    return dialog;
+  };
+
+  it('warns before completing, lists the open diagnoses of treated teeth, and Back changes nothing', async () => {
+    const fetchMock = diagnosedServer();
+    renderWorkspace({ permissions: WITH_PAYMENTS });
+    const dialog = await reachCheck();
+    expect(
+      within(dialog).getByText(
+        '2 diagnoses are still open on the teeth you treated today. You may have forgotten to resolve them.',
+      ),
+    ).toBeTruthy();
+    const boxes = within(dialog).getAllByRole('checkbox');
+    expect(boxes.map((box) => box.getAttribute('aria-label'))).toEqual([
+      'Resolve Deep pits on #16',
+      'Resolve Occlusal caries on #26',
+    ]);
+    expect(boxes.every((box) => !(box as HTMLInputElement).checked)).toBe(true);
+    expect(within(dialog).getByText('Done today: Composite filling')).toBeTruthy();
+
+    // The new body is announced: focus is on its title, then back on Complete visit.
+    expect(document.activeElement?.textContent).toBe('Resolve these diagnoses?');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Back to summary' }));
+    expect(await within(dialog).findByText('Teeth treated')).toBeTruthy();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(
+        within(dialog).getByRole('button', { name: 'Complete visit' }),
+      );
+    });
+    expect(writesOf(fetchMock)).toEqual([]);
+  });
+
+  it('resolves the ticked diagnoses, then completes', async () => {
+    const fetchMock = diagnosedServer();
+    const { router } = renderWorkspace({ realRecord: true, permissions: WITH_PAYMENTS });
+    const dialog = await reachCheck();
+    fireEvent.click(
+      within(dialog).getByRole('checkbox', { name: 'Resolve Occlusal caries on #26' }),
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Resolve 1 and complete' }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
+    });
+    expect(writesOf(fetchMock)).toEqual([`diagnoses/${CARIES.id}/resolve`, 'complete']);
+  });
+
+  it('completes without resolving when nothing is ticked', async () => {
+    const fetchMock = diagnosedServer();
+    const { router } = renderWorkspace({ realRecord: true, permissions: WITH_PAYMENTS });
+    const dialog = await reachCheck();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
+    });
+    expect(writesOf(fetchMock)).toEqual(['complete']);
+  });
+
+  it('keeps the check open and completes nothing when a resolve fails', async () => {
+    const fetchMock = diagnosedServer({ failOn: CARIES.id });
+    const { router } = renderWorkspace({ realRecord: true, permissions: WITH_PAYMENTS });
+    const dialog = await reachCheck();
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Resolve Deep pits on #16' }));
+    fireEvent.click(
+      within(dialog).getByRole('checkbox', { name: 'Resolve Occlusal caries on #26' }),
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Resolve 2 and complete' }));
+    expect(
+      await within(dialog).findByText(
+        /^Couldn’t resolve a diagnosis, so the visit wasn’t completed/,
+      ),
+    ).toBeTruthy();
+    // The one resolved first is no longer listed.
+    expect(within(dialog).queryByRole('checkbox', { name: 'Resolve Deep pits on #16' })).toBeNull();
+    expect(writesOf(fetchMock)).toEqual([
+      `diagnoses/${PITS.id}/resolve`,
+      `diagnoses/${CARIES.id}/resolve`,
+    ]);
     expect(router.state.location.pathname).toBe(`/visits/${VISIT_ID}`);
   });
 });

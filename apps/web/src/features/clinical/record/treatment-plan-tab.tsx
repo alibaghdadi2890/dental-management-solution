@@ -5,15 +5,18 @@ import {
   type PlanPhase,
   planPhases,
   type PlanPriority,
+  toCents,
   type TreatmentPlan,
 } from '@dcm/contracts';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { Button } from '@/components/ui/button';
 import { CardSkeleton } from '@/components/ui/card';
 import { ErrorState } from '@/components/ui/list';
 import { useToast } from '@/components/ui/toast-context';
 import { usePermission } from '@/features/auth/use-permission';
-import { openPrintable, printPath } from '@/features/billing/payments-api';
+import { accountQuery, openPrintable, printPath } from '@/features/billing/payments-api';
+import { useRecordPayment } from '@/features/billing/payments/payment-dialog-context';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -37,7 +40,9 @@ const TONE: Record<PlanPriority, { rule: string; label: string }> = {
  * **Quote**, which prints that phase alone — over a table: tooth, treatment with its surfaces,
  * the diagnosis it is *for*, its status, whether the patient accepted it, its price and its
  * priority. Changing the priority moves the row to the other phase; a done row stays in its
- * phase, dimmed, last. Accepting and prioritising need `chart:write` on a live record.
+ * phase, dimmed, last. Accepting and prioritising need `chart:write` on a live record. With
+ * `payment:read`, money paid in advance for the plan (ADR-0051) is shown over the phases, with
+ * what is still to pay; with `payment:write` and open plan work, **Pay in advance**.
  */
 export function TreatmentPlanTab({ patient }: { patient: Patient }) {
   const { t } = useTranslation('clinical');
@@ -63,6 +68,10 @@ export function TreatmentPlanTab({ patient }: { patient: Patient }) {
   const empty = phases.every((phase) => phase.open.length + phase.done.length === 0);
   return (
     <div className="flex flex-col gap-4">
+      <PaidInAdvance
+        patientId={patient.id}
+        canPay={patient.archivedAt === null && patient.mergedIntoId === null}
+      />
       {empty && (
         <p className="m-0 rounded-xl border border-border bg-surface px-[18px] py-4 text-[12.5px] leading-[1.45] text-ink-muted">
           {t('planTab.empty')}
@@ -78,6 +87,67 @@ export function TreatmentPlanTab({ patient }: { patient: Patient }) {
         />
       ))}
     </div>
+  );
+}
+
+/**
+ * "Paid in advance" and "Still to pay" (ADR-0051), when the patient holds money for the plan:
+ * still to pay is what the plan still needs (`planRemaining`), the cap of a plan advance.
+ */
+function PaidInAdvance({
+  patientId,
+  canPay,
+}: {
+  patientId: string;
+  /** The record is live: an advance may be taken. */
+  canPay: boolean;
+}) {
+  const { t, i18n } = useTranslation(['clinical', 'billing']);
+  const locale = i18n.resolvedLanguage ?? 'en';
+  const canRead = usePermission('payment:read');
+  const openPayment = useRecordPayment();
+  const account = useQuery({ ...accountQuery(patientId), enabled: canRead });
+  const payButton =
+    openPayment && canPay && account.data?.planRemaining != null ? (
+      <Button
+        variant="secondary"
+        size="sm"
+        className="ms-auto"
+        onClick={() => {
+          openPayment({ patientId, advance: true });
+        }}
+      >
+        {t('billing:record.advance.start')}
+      </Button>
+    ) : null;
+  if (!account.data) return null;
+  if (toCents(account.data.held) <= 0n) {
+    return payButton ? <div className="flex">{payButton}</div> : null;
+  }
+  const { held, currency, planRemaining } = account.data;
+  const money = (amount: string) => formatMoney({ amount, currency }, locale);
+  return (
+    <section
+      aria-label={t('planTab.paidInAdvance')}
+      className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-success-border bg-success-bg px-[18px] py-3.5"
+    >
+      <span className="flex items-baseline gap-2">
+        <span className="text-[12.5px] font-medium text-success">{t('planTab.paidInAdvance')}</span>
+        <span dir="ltr" className="font-mono text-[15px] font-bold text-success tabular-nums">
+          {money(held)}
+        </span>
+      </span>
+      <span className="flex items-baseline gap-2">
+        <span className="text-[12.5px] font-medium text-ink-secondary">
+          {t('planTab.stillToPay')}
+        </span>
+        <span dir="ltr" className="font-mono text-[15px] font-bold tabular-nums">
+          {money(planRemaining ?? '0')}
+        </span>
+      </span>
+      <span className="text-[12px] leading-snug text-ink-muted">{t('planTab.advanceHint')}</span>
+      {payButton}
+    </section>
   );
 }
 

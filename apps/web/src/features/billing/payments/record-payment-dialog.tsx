@@ -26,6 +26,7 @@ import type { PaymentRequestOptions } from './payment-dialog-context';
 import { useChargeLabel } from './use-charge-label';
 import {
   capOf,
+  defaultAdvance,
   halfOf,
   initialDraft,
   type PaymentDraft,
@@ -41,6 +42,8 @@ const FIGURE = 'font-mono leading-none tabular-nums';
  * The Record payment modal (workspace spec §Record Payment; feature 5 §Screens 1): what is owed,
  * the amount taken now (empty, the outstanding as placeholder, Full / Half chips), the method,
  * date and reference, the payer, the household switch (B5) and "Apply to a specific visit" (B4).
+ * "Pay in advance" (ADR-0051) takes more than is owed: held for the treatment plan, or kept as
+ * credit.
  * A payment is one Idempotency-Key for the life of the form, so a retry after a lost response
  * never pays twice. The form itself (`RecordPaymentForm`) is also the checkout dialog's payment
  * step, inside that dialog rather than over it.
@@ -139,9 +142,16 @@ function PaymentForm({
   const preselected = options.preselectVisitId
     ? account.openCharges.find((charge) => charge.visitId === options.preselectVisitId)?.entryId
     : undefined;
-  const [draft, setDraft] = useState<PaymentDraft>(() =>
-    initialDraft(today, preselected, options.household === true && account.household !== null),
-  );
+  const [draft, setDraft] = useState<PaymentDraft>(() => {
+    const initial = initialDraft(
+      today,
+      preselected,
+      options.household === true && account.household !== null,
+    );
+    return options.advance
+      ? { ...initial, advance: defaultAdvance(account), household: false, targetEntryId: undefined }
+      : initial;
+  });
   const [advanced, setAdvanced] = useState(preselected !== undefined);
   const [choosingPayer, setChoosingPayer] = useState(false);
   const [key] = useState(() => crypto.randomUUID());
@@ -193,9 +203,17 @@ function PaymentForm({
     await invalidateVisitData(queryClient);
     // Computed from the pre-payment total, not from refreshed data (spec §Record Payment).
     const left = before - status.amount;
+    const body =
+      draft.advance === 'plan'
+        ? t('record.advance.held')
+        : draft.advance === 'credit' && status.amount > before
+          ? t('record.advance.kept')
+          : left > 0n
+            ? t('record.stillOwed', { amount: money(left) })
+            : t('record.clear');
     toast(t('record.recorded', { amount: money(status.amount) }), {
       tone: 'success',
-      body: left > 0n ? t('record.stillOwed', { amount: money(left) }) : t('record.clear'),
+      body,
       actionLabel: t('record.receipt'),
       onAction: () => {
         const [first] = result.paymentIds;
@@ -209,16 +227,40 @@ function PaymentForm({
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-[22px] py-[18px]">
-        <div className="flex items-center justify-between rounded-lg border border-border bg-faint px-3.5 py-3">
-          <span className="text-[12.5px] font-medium text-ink-secondary">
-            {t('record.outstanding')}
-          </span>
-          <span dir="ltr" className={cn(FIGURE, 'text-[17px] font-bold')}>
-            {money(cap)}
-          </span>
-        </div>
+        {draft.advance === null ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between rounded-lg border border-border bg-faint px-3.5 py-3">
+              <span className="text-[12.5px] font-medium text-ink-secondary">
+                {t('record.outstanding')}
+              </span>
+              <span dir="ltr" className={cn(FIGURE, 'text-[17px] font-bold')}>
+                {money(cap)}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="cursor-pointer self-start border-0 bg-transparent p-0 text-[12.5px] font-medium text-primary hover:underline"
+              onClick={() => {
+                set({ advance: defaultAdvance(account), household: false, targetEntryId: undefined });
+                setAdvanced(false);
+              }}
+            >
+              {t('record.advance.start')}
+            </button>
+          </div>
+        ) : (
+          <AdvanceChoice
+            draft={draft}
+            account={account}
+            cap={cap}
+            money={money}
+            onChange={(advance) => {
+              set({ advance });
+            }}
+          />
+        )}
 
-        {account.household && draft.payerContactId === undefined && (
+        {draft.advance === null && account.household && draft.payerContactId === undefined && (
           <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5">
             <span className="text-[12.5px] leading-snug">
               {draft.household
@@ -258,30 +300,36 @@ function PaymentForm({
             aria-invalid={status.problem !== null}
             className="h-11 text-[18px] font-semibold"
           />
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <Chip
-              onClick={() => {
-                set({ amountText: fromCents(cap) });
-              }}
-              disabled={cap <= 0n}
-            >
-              {t('record.full', { amount: money(cap) })}
-            </Chip>
-            <Chip
-              onClick={() => {
-                set({ amountText: halfOf(cap) });
-              }}
-              disabled={cap <= 1n}
-            >
-              {t('record.half', { amount: money(toCents(halfOf(cap))) })}
-            </Chip>
-            {draft.amountText === '' && (
-              <span className="text-[12px] text-ink-muted">{t('record.partialHint')}</span>
-            )}
-          </div>
+          {draft.advance !== 'credit' && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <Chip
+                onClick={() => {
+                  set({ amountText: fromCents(cap) });
+                }}
+                disabled={cap <= 0n}
+              >
+                {draft.advance === 'plan'
+                  ? t('record.advance.wholePlan', { amount: money(cap) })
+                  : t('record.full', { amount: money(cap) })}
+              </Chip>
+              <Chip
+                onClick={() => {
+                  set({ amountText: halfOf(cap) });
+                }}
+                disabled={cap <= 1n}
+              >
+                {t('record.half', { amount: money(toCents(halfOf(cap))) })}
+              </Chip>
+              {draft.amountText === '' && (
+                <span className="text-[12px] text-ink-muted">{t('record.partialHint')}</span>
+              )}
+            </div>
+          )}
           {status.problem && (
             <p role="alert" className="m-0 mt-1.5 text-[12px] font-medium text-danger">
-              {t(`record.problem.${status.problem}`, { amount: money(cap) })}
+              {status.problem === 'over' && draft.advance === 'plan'
+                ? t('record.advance.over', { amount: money(cap) })
+                : t(`record.problem.${status.problem}`, { amount: money(cap) })}
             </p>
           )}
         </div>
@@ -391,7 +439,7 @@ function PaymentForm({
           )}
         </div>
 
-        {!draft.household && account.openCharges.length > 1 && (
+        {draft.advance === null && !draft.household && account.openCharges.length > 1 && (
           <details
             open={advanced}
             onToggle={(event) => {
@@ -443,12 +491,92 @@ function PaymentForm({
         <Button variant="primary" disabled={!valid || saving} onClick={() => void submit()}>
           {saving
             ? t('record.recording')
-            : status.full
-              ? t('record.submitFull')
-              : t('record.submit')}
+            : draft.advance
+              ? t('record.advance.submit')
+              : status.full
+                ? t('record.submitFull')
+                : t('record.submit')}
         </Button>
       </div>
     </>
+  );
+}
+
+/**
+ * "Pay in advance" (ADR-0051): hold the money for the treatment plan (only while there is plan
+ * work to pay for) or keep it as credit, with what that means, and the way back to an ordinary
+ * payment.
+ */
+function AdvanceChoice({
+  draft,
+  account,
+  cap,
+  money,
+  onChange,
+}: {
+  draft: PaymentDraft;
+  account: PatientAccount;
+  cap: bigint;
+  money: (cents: bigint) => string;
+  onChange: (advance: PaymentDraft['advance']) => void;
+}) {
+  const { t } = useTranslation('billing');
+  const noPlan = account.planRemaining === null;
+  const owed = account.openCharges.reduce(
+    (total, charge) => total + toCents(charge.outstanding),
+    0n,
+  );
+  const choices = [
+    { value: 'plan', label: t('record.advance.plan'), disabled: noPlan },
+    { value: 'credit', label: t('record.advance.credit'), disabled: false },
+  ] as const;
+  return (
+    <div className="flex flex-col gap-2.5 rounded-lg border border-border bg-faint px-3.5 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[12.5px] font-medium text-ink-secondary">
+          {t('record.advance.title')}
+        </span>
+        <button
+          type="button"
+          className="cursor-pointer border-0 bg-transparent p-0 text-[12.5px] font-medium text-primary hover:underline"
+          onClick={() => {
+            onChange(null);
+          }}
+        >
+          {t('record.advance.back')}
+        </button>
+      </div>
+      <div role="radiogroup" aria-label={t('record.advance.title')} className="flex flex-wrap gap-2">
+        {choices.map((choice) => (
+          <button
+            key={choice.value}
+            type="button"
+            role="radio"
+            aria-checked={draft.advance === choice.value}
+            disabled={choice.disabled}
+            onClick={() => {
+              onChange(choice.value);
+            }}
+            className={cn(
+              'h-[34px] cursor-pointer rounded-[7px] border px-3 text-[12.5px] font-medium disabled:cursor-default disabled:opacity-50',
+              draft.advance === choice.value
+                ? 'border-ink bg-ink text-white'
+                : 'border-border-control bg-surface text-ink hover:border-ink',
+            )}
+          >
+            {choice.label}
+          </button>
+        ))}
+      </div>
+      <p className="m-0 text-[12px] leading-snug text-ink-muted">
+        {draft.advance === 'plan'
+          ? `${t('record.advance.planRule')} ${t('record.advance.planNeeds', { amount: money(cap) })}`
+          : owed > 0n
+            ? t('record.advance.creditRule', { amount: money(owed) })
+            : t('record.advance.creditOnly')}
+        {noPlan && ` ${t('record.advance.noPlan')}`}
+      </p>
+    </div>
   );
 }
 

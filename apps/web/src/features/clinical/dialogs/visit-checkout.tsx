@@ -1,4 +1,4 @@
-import { toCents, type Visit, type VisitFinancialSummary } from '@dcm/contracts';
+import { fromCents, toCents, type Visit, type VisitFinancialSummary } from '@dcm/contracts';
 import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -142,6 +142,10 @@ function Figures({
   const format = (amount: string) => formatMoney({ amount, currency: summary.currency }, locale);
   const discounted = toCents(visit.money.discount) > 0n;
   const clear = !owes(summary.totalOutstanding);
+  // Paid in advance for the treatment plan (ADR-0051): what covered this visit, what is still held.
+  const byAdvance = summary.payments
+    .filter((payment) => payment.fromAdvance)
+    .reduce((sum, payment) => sum + toCents(payment.amount), 0n);
 
   return (
     <>
@@ -191,6 +195,13 @@ function Figures({
               {format(summary.visit.paid)}
             </span>
           </Row>
+          {byAdvance > 0n && (
+            <Row label={t('postVisit.coveredByAdvance')}>
+              <span dir="ltr" className={cn(FIGURE, 'text-[12.5px] font-medium text-success')}>
+                {format(fromCents(byAdvance))}
+              </span>
+            </Row>
+          )}
           <Row
             label={<span className="font-semibold text-ink">{t('postVisit.outstanding')}</span>}
             className="mt-1 border-t border-primary-tint-border pt-2 pb-0.5"
@@ -242,6 +253,11 @@ function Figures({
           {format(summary.totalOutstanding)}
         </dd>
       </dl>
+      {toCents(summary.held) > 0n && (
+        <p className="m-0 mt-3.5 text-[12.5px] leading-normal text-ink-muted">
+          {t('postVisit.held', { amount: format(summary.held) })}
+        </p>
+      )}
       {clear && (
         <p className="m-0 mt-3.5 rounded-lg border border-success-border bg-success-bg px-[13px] py-[11px] text-[12.5px] leading-normal font-medium text-success">
           {t('postVisit.settled')}

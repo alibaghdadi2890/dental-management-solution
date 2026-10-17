@@ -203,6 +203,11 @@ test('the owner charts a visit, completes it and sees its figures with the openi
     await expect(summary).toContainText(/Total due\s*\$360/);
     await summary.getByRole('button', { name: 'Complete visit' }).click();
 
+    // The crown treated #16, whose caries is still open: the check offers to resolve it.
+    const check = page.getByRole('dialog', { name: 'Resolve these diagnoses?' });
+    await check.getByRole('checkbox', { name: 'Resolve Dental caries on #16' }).check();
+    await check.getByRole('button', { name: 'Resolve 1 and complete' }).click();
+
     await expect(page).toHaveURL(/\/patients\/[0-9a-f-]{36}(\?.*)?$/);
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
     await expect(recorded.getByText('Unpaid', { exact: true })).toBeVisible();

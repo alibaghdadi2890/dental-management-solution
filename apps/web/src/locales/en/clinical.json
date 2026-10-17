@@ -365,7 +365,21 @@
     "unsaved": "Some changes couldn't be saved, so the visit wasn't completed. Retry them, then complete the visit again.",
     "failed": "Couldn't complete the visit: {{reason}}",
     "session": "{{name}} · visit {{number}}",
-    "unfinished": "Not finished · continues next visit"
+    "unfinished": "Not finished · continues next visit",
+    "resolve": {
+      "title": "Resolve these diagnoses?",
+      "subtitle": "Before the visit is recorded.",
+      "warning_one": "This diagnosis is still open on a tooth you treated today. You may have forgotten to resolve it.",
+      "warning_other": "{{count}} diagnoses are still open on the teeth you treated today. You may have forgotten to resolve them.",
+      "tick": "Resolve {{name}} on {{tooth}}",
+      "doneToday": "Done today: {{services}}",
+      "resolve": "Resolve",
+      "back": "Back to summary",
+      "resolveAndComplete_one": "Resolve 1 and complete",
+      "resolveAndComplete_other": "Resolve {{count}} and complete",
+      "failed": "Couldn’t resolve a diagnosis, so the visit wasn’t completed: {{reason}}",
+      "working": "Working…"
+    }
   },
   "postVisit": {
     "title": "Visit recorded",
@@ -396,7 +410,9 @@
     "applyDiscount": "Apply",
     "printInvoice": "Print invoice",
     "frontDesk": "The front desk will collect the payment.",
-    "discountReasonShort": "Use at least 3 characters, or leave it empty."
+    "discountReasonShort": "Use at least 3 characters, or leave it empty.",
+    "coveredByAdvance": "Covered by advance",
+    "held": "{{amount}} is still held for the treatment plan."
   },
   "errors": {
     "visit": {
@@ -762,6 +778,12 @@
       "chooseFirst": "Choose where the treatment goes to see the services for it.",
       "noServices": "The catalog has no service for this.",
       "search": "Search the services catalog for other treatment"
+    },
+    "resolve": {
+      "back": "Back to {{step}}",
+      "resolveAndContinue_one": "Resolve 1 and continue to {{step}}",
+      "resolveAndContinue_other": "Resolve {{count}} and continue to {{step}}",
+      "failed": "Couldn’t resolve a diagnosis: {{reason}}"
     }
   },
   "planTab": {
@@ -783,6 +805,9 @@
     "acceptNamed": "Mark {{name}} accepted",
     "proposed": "Proposed",
     "withdraw": "Take the acceptance back",
-    "withdrawNamed": "Take back the acceptance of {{name}}"
+    "withdrawNamed": "Take back the acceptance of {{name}}",
+    "paidInAdvance": "Paid in advance",
+    "stillToPay": "Still to pay",
+    "advanceHint": "Held for this plan: it pays each treatment as it is done."
   }
 }

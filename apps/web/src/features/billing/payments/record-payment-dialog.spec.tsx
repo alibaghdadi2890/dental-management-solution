@@ -15,6 +15,8 @@ const ACCOUNT: PatientAccount = {
   currency: 'USD',
   balance: '300.00',
   credit: '0.00',
+  held: '0.00',
+  planRemaining: null,
   lastVisit: null,
   previousOutstanding: '300.00',
   openCharges: [
@@ -157,5 +159,55 @@ describe('Record payment (spec §Record Payment)', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Pay for the whole household' }));
     expect(screen.getByText('Pay for: household (2 patients · $380)')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Full amount $380' })).toBeTruthy();
+  });
+
+  it('pays in advance: held for the plan up to what it still needs, without the context visit', async () => {
+    const fetchMock = mockApi({ ...ACCOUNT, planRemaining: '900.00' });
+    renderDialog();
+    fireEvent.click(await screen.findByRole('button', { name: 'Pay in advance' }));
+    expect(
+      screen.getByRole('radio', { name: 'Hold for the treatment plan' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(screen.getByText(/The plan still needs \$900\./)).toBeTruthy();
+    const amount = screen.getByLabelText('Amount taken now');
+    fireEvent.change(amount, { target: { value: '950' } });
+    expect(
+      screen.getByText('The amount can’t be more than the $900 the plan still needs.'),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Whole plan $900' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Record advance' }));
+    expect(await screen.findByText('Held for the treatment plan')).toBeTruthy();
+    const post = fetchMock.mock.calls.find(
+      ([url, init]) => url === '/api/v1/billing/payments' && init?.method === 'POST',
+    );
+    const body = JSON.parse(typeof post?.[1]?.body === 'string' ? post[1].body : '') as Record<
+      string,
+      unknown
+    >;
+    expect(body).toMatchObject({ amount: '900.00', advance: 'plan', scope: 'patient' });
+    expect(body.contextVisitId).toBeUndefined();
+  });
+
+  it('keeps an advance as credit, with no cap, when there is no plan work', async () => {
+    const fetchMock = mockApi();
+    renderDialog();
+    fireEvent.click(await screen.findByRole('button', { name: 'Pay in advance' }));
+    const plan = screen.getByRole<HTMLButtonElement>('radio', {
+      name: 'Hold for the treatment plan',
+    });
+    expect(plan.disabled).toBe(true);
+    expect(screen.getByText(/It pays the \$300 owed first; the rest stays as credit\./)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Amount taken now'), { target: { value: '500' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Record advance' }));
+    expect(await screen.findByText('The rest is kept as credit')).toBeTruthy();
+    const post = fetchMock.mock.calls.find(
+      ([url, init]) => url === '/api/v1/billing/payments' && init?.method === 'POST',
+    );
+    expect(JSON.parse(typeof post?.[1]?.body === 'string' ? post[1].body : '')).toMatchObject({
+      amount: '500.00',
+      advance: 'credit',
+      contextVisitId: id(20),
+    });
+
   });
 });

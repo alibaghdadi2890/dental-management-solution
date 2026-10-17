@@ -8,7 +8,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardSkeleton } from '@/components/ui/card';
-import { formatCalendarDate, formatMoney } from '@/lib/format';
+import { useSession } from '@/features/auth/session';
+import { formatCalendarDate, formatDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useAdjustmentReasonLabel } from './adjust/reason-label';
 import { BalanceCard } from './balance-card';
@@ -16,6 +17,7 @@ import { FamilyCards } from './family-card';
 import { useRecordPayment } from './payments/payment-dialog-context';
 import { accountQuery, openPrintable, printPath } from './payments-api';
 import { useChargeLabel } from './payments/use-charge-label';
+import { useReleaseHold } from './payments/use-release-hold';
 
 const GRID = 'grid grid-cols-[96px_84px_116px_minmax(0,1fr)_88px_64px] items-baseline gap-3';
 
@@ -24,7 +26,8 @@ const GRID = 'grid grid-cols-[96px_84px_116px_minmax(0,1fr)_88px_64px] items-bas
  * Record payment and the credit note) and the payment history, newest first, with the running
  * **Remaining** (charges dated on or before each payment, less payments up to it), "n visits" for
  * a split payment, refunds and voids, and a Receipt link per row; balance adjustments are rows of
- * their own among them (feature 7, H4). Statement prints the account.
+ * their own among them (feature 7, H4). An advance (ADR-0051) says so, with what it still holds
+ * for the plan and "Release to credit", or when its hold ended. Statement prints the account.
  * Under the balance, the families the patient is in (`FamilyCards`).
  */
 export function BalanceTab({
@@ -194,8 +197,11 @@ function AdjustmentLine({ item, locale }: { item: AccountAdjustment; locale: str
 function HistoryLine({ item, locale }: { item: PaymentHistoryItem; locale: string }) {
   const { t } = useTranslation('billing');
   const chargeLabel = useChargeLabel();
+  const release = useReleaseHold(locale);
+  const { data: session } = useSession();
   const money = (amount: string) => formatMoney({ amount, currency: item.currency }, locale);
   const refund = item.kind === 'refund';
+  const holding = toCents(item.heldUnspent) > 0n;
   const visits = item.allocations.filter((line) => line.visitNumber !== null);
   const [only] = visits;
   let target = '';
@@ -205,6 +211,17 @@ function HistoryLine({ item, locale }: { item: PaymentHistoryItem; locale: strin
     target = `${formatVisitNumber(only.visitNumber)} · ${formatCalendarDate(only.date, locale)}`;
   else if (item.allocations[0]) target = chargeLabel(item.allocations[0]);
   const notes = [
+    item.advance === 'plan'
+      ? t('payments.advancePlan')
+      : item.advance === 'credit'
+        ? t('payments.advanceCredit')
+        : null,
+    holding ? t('payments.held', { amount: money(item.heldUnspent) }) : null,
+    item.releasedAt && session?.tenant
+      ? t('payments.released', {
+          date: formatDate(item.releasedAt, { timeZone: session.tenant.timeZone, locale }),
+        })
+      : null,
     item.reference,
     toCents(item.refunded) > 0n ? t('payments.refunded', { amount: money(item.refunded) }) : null,
     item.voided ? t('payments.voided') : null,
@@ -243,7 +260,7 @@ function HistoryLine({ item, locale }: { item: PaymentHistoryItem; locale: strin
       <span role="cell" dir="ltr" className="text-end font-mono font-medium text-ink-muted">
         {money(item.remaining)}
       </span>
-      <span role="cell" className="text-end">
+      <span role="cell" className="flex flex-col items-end gap-1">
         {!refund && (
           <button
             type="button"
@@ -253,6 +270,17 @@ function HistoryLine({ item, locale }: { item: PaymentHistoryItem; locale: strin
             }}
           >
             {t('payments.receipt')}
+          </button>
+        )}
+        {holding && !item.voided && release && (
+          <button
+            type="button"
+            className="cursor-pointer border-0 bg-transparent p-0 text-end text-[12px] font-medium text-primary hover:underline"
+            onClick={() => {
+              release(item);
+            }}
+          >
+            {t('release.action')}
           </button>
         )}
       </span>

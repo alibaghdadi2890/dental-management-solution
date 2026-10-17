@@ -39,6 +39,9 @@ const PAYMENT: Transaction = {
   visits: [{ visitId: id(3), visitNumber: 42 }],
   recordedBy: { userId: id(4), name: 'Jamie Ortiz' },
   recordedAt: '2026-09-30T09:00:00.000Z',
+  advance: null,
+  heldUnspent: '0.00',
+  releasedAt: null,
 };
 
 const AGING: Receivables = {

@@ -418,4 +418,96 @@ describe('visit flows', () => {
     expect(perform.dataset.done).toBe('true');
     expect(perform.textContent).not.toContain('optional');
   });
+
+  describe('the open diagnoses on the way to Complete', () => {
+    const caries = diagnosisRecord(80, 'Occlusal caries', '16', OLD);
+    const filled = visit({
+      viewMode: 'steps',
+      currentStep: 'perform',
+      services: [visitService(82, 'Composite filling', '16')],
+    });
+
+    /** The flow server, with resolve marking the diagnosis resolved and complete completing. */
+    function treated() {
+      const { state, fetchMock } = server(filled, chart({ diagnoses: [caries] }));
+      const base = fetchMock.getMockImplementation();
+      fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+        const bare = url.replace('/api/v1', '');
+        if (init?.method === 'POST' && bare === path(`diagnoses/${caries.id}/resolve`)) {
+          const record = { ...caries, status: 'resolved' as const, resolvedInVisitId: VISIT_ID };
+          state.chart = { ...state.chart, diagnoses: [record] };
+          return Promise.resolve(json({ visit: state.visit, record }));
+        }
+        if (init?.method === 'POST' && bare === path('complete')) {
+          state.visit = {
+            ...state.visit,
+            status: 'completed',
+            completedAt: '2026-09-04T09:20:00.000Z',
+          };
+          return Promise.resolve(json({ visit: state.visit }));
+        }
+        return base ? base(url, init) : Promise.resolve(json(null));
+      });
+      return { state, fetchMock };
+    }
+
+    const current = (nav: HTMLElement) =>
+      within(nav)
+        .getAllByRole('button')
+        .find((button) => button.getAttribute('aria-current') === 'step')?.textContent;
+    const writes = (fetchMock: ReturnType<typeof server>['fetchMock']) =>
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method === 'POST')
+        .map(([url]) => url.replace(`/api/v1/visits/${VISIT_ID}/`, ''));
+
+    it('asks before Complete, stays on Perform when asked to, and resolves on the way', async () => {
+      const { fetchMock } = treated();
+      renderWorkspace({ permissions: DENTIST });
+      const nav = await steps('Treatment');
+      fireEvent.click(await screen.findByRole('button', { name: 'Continue to Complete' }));
+      const check = await screen.findByRole('dialog', { name: 'Resolve these diagnoses?' });
+      expect(within(check).getByText('Done today: Composite filling')).toBeTruthy();
+
+      fireEvent.click(within(check).getByRole('button', { name: /^Back to Perform/ }));
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog')).toBeNull();
+      });
+      expect(current(nav)).toMatch(/Perform/);
+
+      // The stepper asks too.
+      fireEvent.click(stepButton(nav, /^3?\s*Complete/));
+      const again = await screen.findByRole('dialog', { name: 'Resolve these diagnoses?' });
+      fireEvent.click(
+        within(again).getByRole('checkbox', { name: 'Resolve Occlusal caries on #16' }),
+      );
+      fireEvent.click(
+        within(again).getByRole('button', { name: 'Resolve 1 and continue to Complete' }),
+      );
+      await waitFor(() => {
+        expect(current(nav)).toMatch(/Complete/);
+      });
+      expect(screen.queryByRole('dialog', { name: 'Resolve these diagnoses?' })).toBeNull();
+      expect(writes(fetchMock)).toEqual([`diagnoses/${caries.id}/resolve`]);
+    });
+
+    it('moves on without resolving, and Complete visit does not ask again', async () => {
+      const { fetchMock } = treated();
+      renderWorkspace({ permissions: DENTIST });
+      const nav = await steps('Treatment');
+      fireEvent.click(await screen.findByRole('button', { name: 'Continue to Complete' }));
+      const check = await screen.findByRole('dialog', { name: 'Resolve these diagnoses?' });
+      fireEvent.click(within(check).getByRole('button', { name: 'Continue to Complete' }));
+      await waitFor(() => {
+        expect(current(nav)).toMatch(/Complete/);
+      });
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Complete visit' }));
+      const summary = await screen.findByRole('dialog', { name: 'Complete visit' });
+      fireEvent.click(within(summary).getByRole('button', { name: 'Complete visit' }));
+      await waitFor(() => {
+        expect(writes(fetchMock)).toEqual(['complete']);
+      });
+      expect(screen.queryByText('Resolve these diagnoses?')).toBeNull();
+    });
+  });
 });

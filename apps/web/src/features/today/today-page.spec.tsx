@@ -28,6 +28,7 @@ const SUMMARY: VisitFinancialSummary = {
   visit: { total: '140.00', paid: '0.00', outstanding: '140.00' },
   previous: '0.00',
   totalOutstanding: '140.00',
+  held: '0.00',
   payments: [],
 };
 

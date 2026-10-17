@@ -1,6 +1,13 @@
 import type { PatientAccount } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
-import { capOf, halfOf, initialDraft, requestOf, statusOf } from './payment-draft';
+import {
+  capOf,
+  defaultAdvance,
+  halfOf,
+  initialDraft,
+  requestOf,
+  statusOf,
+} from './payment-draft';
 
 const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
 
@@ -22,6 +29,8 @@ const ACCOUNT: PatientAccount = {
   currency: 'USD',
   balance: '500.00',
   credit: '0.00',
+  held: '0.00',
+  planRemaining: '900.00',
   lastVisit: null,
   previousOutstanding: '500.00',
   openCharges: [charge(10, '200.00'), charge(11, '300.00')],
@@ -116,5 +125,39 @@ describe('the Record payment draft (B2–B5)', () => {
         payerContactId: id(2),
       }),
     ).toMatchObject({ scope: 'household', payerContactId: id(2) });
+  });
+});
+
+describe('paying in advance (ADR-0051)', () => {
+  const context = { patientId: id(1), contextVisitId: id(60) };
+
+  it('opens on the plan when there is plan work, else on credit', () => {
+    expect(defaultAdvance(ACCOUNT)).toBe('plan');
+    expect(defaultAdvance({ ...ACCOUNT, planRemaining: null })).toBe('credit');
+  });
+
+  it('caps a plan advance at what the plan still needs, and a credit advance not at all', () => {
+    const plan = draft({ advance: 'plan', household: true });
+    expect(capOf(plan, ACCOUNT)).toBe(90000n);
+    expect(statusOf({ ...plan, amountText: '950' }, ACCOUNT, 'en').problem).toBe('over');
+    expect(statusOf({ ...plan, amountText: '900' }, ACCOUNT, 'en').problem).toBeNull();
+    expect(
+      statusOf(draft({ advance: 'credit', amountText: '2000' }), ACCOUNT, 'en'),
+    ).toMatchObject({ problem: null, remaining: 0n, full: false });
+  });
+
+  it('pays this patient only: no household, no chosen visit, and no context visit for the plan', () => {
+    const chosen = { household: true, targetEntryId: id(10) };
+    expect(requestOf(draft({ ...chosen, advance: 'plan' }), ACCOUNT, 10000n, context)).toEqual({
+      patientId: id(1),
+      amount: '100.00',
+      method: 'cash',
+      paidAt: '2026-10-02',
+      scope: 'patient',
+      advance: 'plan',
+    });
+    expect(
+      requestOf(draft({ ...chosen, advance: 'credit' }), ACCOUNT, 10000n, context),
+    ).toMatchObject({ scope: 'patient', advance: 'credit', contextVisitId: id(60) });
   });
 });

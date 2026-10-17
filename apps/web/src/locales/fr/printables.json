@@ -32,14 +32,19 @@
     "balanceAfter": "Solde après · {{name}}",
     "refunded": "{{amount}} remboursé le {{date}} — {{reason}}",
     "voided": "Annulé le {{date}} — {{reason}}",
-    "recordedBy": "Saisi par {{name}}"
+    "recordedBy": "Saisi par {{name}}",
+    "advanceTitle": "Reçu de paiement d’avance",
+    "heldForPlan": "Réservé pour le plan de traitement",
+    "heldNote": "Payé d’avance pour le plan de traitement. Il paie les soins du plan au fur et à mesure ; ce qui n’est pas utilisé est remboursable.",
+    "creditNote": "Payé d’avance. Ce qui n’est pas dû maintenant reste en crédit pour le prochain acte et est remboursable."
   },
   "invoice": {
     "title": "Facture",
     "visit": "Visite",
     "paid": "Payé",
     "due": "Reste à payer",
-    "payments": "Paiements reçus"
+    "payments": "Paiements reçus",
+    "advance": "avance"
   },
   "statement": {
     "title": "Relevé de compte",
@@ -68,7 +73,9 @@
     "empty": "Ce patient n’a aucun plan de traitement en cours.",
     "validity": "Ce devis est valable {{days}} jours, jusqu’au {{date}}. Les prix peuvent changer si le plan de traitement change.",
     "signPatient": "Signature du patient",
-    "signDentist": "Signature du dentiste"
+    "signDentist": "Signature du dentiste",
+    "paidInAdvance": "Payé d’avance",
+    "stillToPay": "Reste à payer"
   },
   "formatMulti": "A4",
   "familyStatement": {

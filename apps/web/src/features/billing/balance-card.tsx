@@ -1,4 +1,4 @@
-import type { BalanceMoney } from '@dcm/contracts';
+import { type BalanceMoney, fromCents, toCents } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { AdjustBalanceButton, AdjustBalanceMenu } from './adjust/adjust-entry';
 import { balanceQuery, visitSummaryQuery } from './billing-api';
 import { owedBalances } from './owed-balances';
+import { accountQuery } from './payments-api';
 import { useRecordPayment } from './payments/payment-dialog-context';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -37,7 +38,8 @@ const amountClass = 'font-mono text-[14px] leading-none font-semibold tabular-nu
  * success-toned when clear, and a credit (a negative total) gets its note. With `payment:write`,
  * Record payment while anything is owed (feature 5). Adjust balance (feature 7, H4) is a
  * secondary button on the detailed card and a ⋯ menu on the compact one. Without `visit:read`
- * there is no split, only the ledger balance.
+ * there is no split, only the ledger balance. Money paid in advance for the treatment plan
+ * (ADR-0051) has its own row and stays out of the total: it pays plan work only.
  */
 export function BalanceCard({
   patientId,
@@ -62,11 +64,14 @@ export function BalanceCard({
     ...visitSummaryQuery(visitId ?? ''),
     enabled: visitId !== undefined,
   });
+  // What is held for the plan: the visit summary carries it; without a visit, the account does.
+  const noVisit = !canVisits || (lastVisit.isSuccess && visitId === undefined);
+  const account = useQuery({ ...accountQuery(patientId), enabled: noVisit });
 
   let body: ReactNode;
-  if (balance.isPending || lastVisit.isLoading || summary.isLoading) {
+  if (balance.isPending || lastVisit.isLoading || summary.isLoading || account.isLoading) {
     body = <CardSkeleton label={t('balance.loading')} />;
-  } else if (balance.isError || lastVisit.isError || summary.isError) {
+  } else if (balance.isError || account.isError || lastVisit.isError || summary.isError) {
     body = (
       <p role="alert" className="text-[12.5px] leading-snug text-ink-muted">
         {t('balanceFailed')}
@@ -79,7 +84,14 @@ export function BalanceCard({
     const figures = summary.data;
     const money = (amount: string) =>
       formatMoney({ amount, currency: figures?.currency ?? currency }, locale);
-    const total = figures ? { amount: figures.totalOutstanding, currency: figures.currency } : lead;
+    const held = toCents(figures?.held ?? account.data?.held ?? '0');
+    const heldCurrency = figures?.currency ?? account.data?.currency ?? currency;
+    // The summary already leaves the held money out; the ledger balance does not.
+    const total = figures
+      ? { amount: figures.totalOutstanding, currency: figures.currency }
+      : lead.currency === heldCurrency
+        ? { ...lead, amount: fromCents(toCents(lead.amount) + held) }
+        : lead;
     body = (
       <>
         {figures && lastVisit.data ? (
@@ -141,6 +153,13 @@ export function BalanceCard({
             })}
           </p>
         )}
+        {held > 0n && (
+          <Row label={t('balance.held')}>
+            <span className={cn(amountClass, 'text-success')}>
+              {formatMoney({ amount: fromCents(held), currency: heldCurrency }, locale)}
+            </span>
+          </Row>
+        )}
         <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-divider-strong pt-[11px]">
           <span className="text-[13px] leading-none font-semibold">{t('balance.total')}</span>
           <span
@@ -159,7 +178,7 @@ export function BalanceCard({
             })}
           </p>
         )}
-        {detailed && !anyOwing && Number(total.amount) === 0 && (
+        {detailed && !anyOwing && Number(total.amount) === 0 && held === 0n && (
           <p className="m-0 mt-2.5 text-[12.5px] leading-snug text-ink-muted">
             {t('balance.settled')}
           </p>
@@ -174,6 +193,17 @@ export function BalanceCard({
             }}
           >
             {t('balance.record')}
+          </Button>
+        )}
+        {openPayment && !anyOwing && Number(total.amount) <= 0 && (
+          <Button
+            variant="secondary"
+            className="mt-3"
+            onClick={() => {
+              openPayment({ patientId, advance: true });
+            }}
+          >
+            {t('record.advance.start')}
           </Button>
         )}
         {detailed && <AdjustBalanceButton patientId={patientId} className="mt-2" />}

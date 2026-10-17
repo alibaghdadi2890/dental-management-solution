@@ -41,7 +41,7 @@ const CHART: PatientChart = {
 };
 
 /** A fake server: priority and acceptance writes answer the chart as it then is. */
-function server() {
+function server(held: NonNullable<Parameters<typeof mockApi>[0]>['held'] = {}) {
   const state = { chart: CHART };
   const patch = (planId: string, change: Partial<PatientChart['plans'][number]>) => {
     state.chart = {
@@ -52,6 +52,7 @@ function server() {
   };
   const fetchMock = mockApi({
     patients: [RANA],
+    held,
     get: (path) => (path.endsWith('/chart') ? json(state.chart) : undefined),
     mutation: (method, path, body) => {
       const acceptance = /\/plans\/([^/]+)\/acceptance$/.exec(path)?.[1];
@@ -151,5 +152,20 @@ describe('TreatmentPlanTab', () => {
     expect(open).toHaveBeenCalledWith(`/print/quote/${RANA.id}?priority=urgent`, '_blank');
     // A phase with nothing open has nothing to quote.
     expect(screen.queryByRole('button', { name: 'Quote: Elective' })).toBeNull();
+  });
+
+  it('shows what was paid in advance for the plan and what is still to pay, with payment:read', async () => {
+    server({ [RANA.id]: { held: '500.00', planRemaining: '300.00' } });
+    renderRecord({ url: URL_, permissions: READ });
+    const advance = await screen.findByRole('region', { name: 'Paid in advance' });
+    expect(within(advance).getByText('$500')).toBeTruthy();
+    expect(within(advance).getByText('$300')).toBeTruthy();
+  });
+
+  it('shows nothing about advances without payment:read', async () => {
+    server({ [RANA.id]: { held: '500.00', planRemaining: '300.00' } });
+    renderRecord({ url: URL_, permissions: READ.filter((p) => p !== 'payment:read') });
+    await phase('High');
+    expect(screen.queryByRole('region', { name: 'Paid in advance' })).toBeNull();
   });
 });
