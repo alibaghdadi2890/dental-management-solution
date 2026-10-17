@@ -26,6 +26,7 @@ function toDomain(row: PaymentRow): Payment {
     householdGroupId: row.householdGroupId,
     payerContactId: row.payerContactId,
     reversesPaymentId: row.reversesPaymentId,
+    advance: row.advance,
     ledgerEntryId: row.ledgerEntryId,
     idempotencyKey: row.idempotencyKey,
     balanceAfter: row.balanceAfter,

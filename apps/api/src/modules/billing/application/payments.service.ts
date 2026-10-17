@@ -1,4 +1,5 @@
 import {
+  type AdvanceKind,
   fromCents,
   type PaymentInput,
   type PaymentPreview,
@@ -7,6 +8,7 @@ import {
   type Tenant,
   toCents,
   type PaymentWriteResult,
+  type ReleaseHoldInput,
   type VoidPaymentInput,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -19,25 +21,32 @@ import { newId } from '../../../platform/kernel/id';
 import { localDate } from '../../../platform/kernel/local-date';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { AuditService } from '../../audit';
+import { VisitFactsService } from '../../clinical';
 import { ContactsService, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import {
+  heldPosition,
   type NewAllocation,
   outstandingByTarget,
   type PlannedAllocation,
   planPayment,
+  planRemaining,
   refundReleases,
+  settle,
 } from '../domain/allocate';
 import type { AccountTarget, Payment } from '../domain/payment';
 import {
   IdempotencyMismatchError,
+  NoOpenPlanError,
   NothingOutstandingError,
   OverRefundError,
   PayerNotBillingContactError,
   PaymentHasRefundsError,
   PaymentNotFoundError,
+  PaymentNotHeldError,
   PaymentNotReversibleError,
   PaymentOverOutstandingError,
+  PaymentOverPlanRemainingError,
   PaymentTargetInvalidError,
 } from '../domain/payment-errors';
 import {
@@ -49,6 +58,7 @@ import {
   type PaymentVoided,
 } from '../events/payment-events';
 import { AllocationsRepository } from '../persistence/allocations.repository';
+import { HoldsRepository } from '../persistence/holds.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
 import { PaymentsRepository } from '../persistence/payments.repository';
 import { ChargeLabels } from './charge-labels';
@@ -70,7 +80,13 @@ interface PaymentPlan {
   amount: bigint;
   allocations: PlannedAllocation[];
   error: PaymentPreview['error'];
+  advance: AdvanceKind | null;
+  /** ADR-0051 A8: the `plan` advance's cap; null otherwise. */
+  planRemaining: bigint | null;
 }
+
+/** The id the dry run gives a `plan` advance's entry, to see what settle would cover with it. */
+const DRY_RUN_SOURCE = 'dry-run';
 
 const sum = (values: Iterable<bigint>) => [...values].reduce((total, value) => total + value, 0n);
 
@@ -80,6 +96,11 @@ const sum = (values: Iterable<bigint>) => [...values].reduce((total, value) => t
  * `FOR SHARE` (a merge waits), then the account lock(s), then the ledger entry through
  * `LedgerWriter`, the `payments` row, its allocations and a settle; audited in the transaction,
  * events after commit. Patient and contact reads need `patient:read` (every role holds it).
+ *
+ * An advance (ADR-0051) lifts the outstanding cap. A `credit` advance allocates like any payment
+ * and leaves the rest as credit. A `plan` advance is held for the treatment plan: it writes no
+ * allocation of its own (settle covers plan charges with it) and is capped at what the plan
+ * still needs.
  */
 @Injectable()
 export class PaymentsService {
@@ -96,7 +117,9 @@ export class PaymentsService {
     private readonly payments: PaymentsRepository,
     private readonly allocations: AllocationsRepository,
     private readonly entries: LedgerEntriesRepository,
+    private readonly holds: HoldsRepository,
     private readonly labels: ChargeLabels,
+    private readonly visits: VisitFactsService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -106,11 +129,15 @@ export class PaymentsService {
     return this.tenantDb.run(async () => {
       const { currency } = await this.tenancy.currentTenant();
       const plan = await this.plan(input, currency);
+      const covered = sum(plan.allocations.map((line) => line.amount));
       return {
         currency,
         outstanding: fromCents(plan.outstanding),
-        remaining: fromCents(plan.error ? plan.outstanding : plan.outstanding - plan.amount),
+        remaining: fromCents(plan.error ? plan.outstanding : plan.outstanding - covered),
         allocations: await this.labelPlanned(plan),
+        advance: plan.advance,
+        held: fromCents(plan.advance === 'plan' && !plan.error ? plan.amount : 0n),
+        planRemaining: plan.planRemaining === null ? null : fromCents(plan.planRemaining),
         error: plan.error,
       };
     });
@@ -305,10 +332,20 @@ export class PaymentsService {
         `The amount is more than the ${fromCents(plan.outstanding)} owed`,
       );
     }
+    if (plan.error === 'payment.no_open_plan') {
+      throw new NoOpenPlanError('This patient has no plan work left to pay in advance');
+    }
+    if (plan.error === 'payment.over_plan_remaining') {
+      throw new PaymentOverPlanRemainingError(
+        `The amount is more than the ${fromCents(plan.planRemaining ?? 0n)} the plan still needs`,
+      );
+    }
 
     const owner = new Map(plan.state.targets.map((target) => [target.entryId, target.patientId]));
     const byPatient = new Map<string, PlannedAllocation[]>();
-    for (const line of plan.allocations) {
+    // An advance pays this patient even when nothing is owed; a `plan` one allocates nothing itself.
+    if (plan.advance) byPatient.set(input.patientId, []);
+    for (const line of plan.advance === 'plan' ? [] : plan.allocations) {
       const patientId = owner.get(line.targetId) ?? input.patientId;
       byPatient.set(patientId, [...(byPatient.get(patientId) ?? []), line]);
     }
@@ -324,7 +361,7 @@ export class PaymentsService {
 
     for (const patientId of paidIds) {
       const lines = byPatient.get(patientId) ?? [];
-      const amount = sum(lines.map((line) => line.amount));
+      const amount = plan.advance ? plan.amount : sum(lines.map((line) => line.amount));
       const entry = await this.writer.append({
         patientId,
         kind: 'payment',
@@ -345,7 +382,6 @@ export class PaymentsService {
         manual: line.manual,
       }));
       await this.allocations.insert(rows);
-      await this.settlement.settle(patientId, new Set([entry.id]));
       const balanceAfter = await this.balanceIn(patientId, tenant.currency);
       remaining += balanceAfter;
       const payment = await this.payments.insert({
@@ -362,19 +398,27 @@ export class PaymentsService {
         householdGroupId,
         payerContactId: plan.payer.contactId,
         reversesPaymentId: null,
+        advance: plan.advance,
         ledgerEntryId: entry.id,
         idempotencyKey: key ?? null,
         balanceAfter: fromCents(balanceAfter),
         branchId: this.context.branchId ?? null,
         recordedBy,
       });
+      if (plan.advance === 'plan') await this.holds.insert(payment.id);
+      // The hold is in place, so a `plan` advance's first cover is settle's (plan charges only).
+      const settled = await this.settlement.settle(patientId, new Set([entry.id]));
+      const allocated = [
+        ...rows,
+        ...settled.filter((row) => row.sourceId === entry.id && row.kind === 'allocation'),
+      ];
       written.push(payment);
-      facts.push(...rows.map(toFact));
+      facts.push(...allocated.map(toFact));
       await this.audit.record({
         action: 'payment.create',
         resourceType: 'payment',
         resourceId: payment.id,
-        after: { ...payment, allocations: rows.map(toFact) },
+        after: { ...payment, allocations: allocated.map(toFact) },
       });
     }
 
@@ -386,6 +430,7 @@ export class PaymentsService {
       amount: fromCents(plan.amount),
       currency: tenant.currency,
       allocations: facts,
+      advance: plan.advance,
     });
     await this.events.publish(event);
     return {
@@ -407,7 +452,12 @@ export class PaymentsService {
       // A household payment writes rows only for the accounts it paid, maybe not the patient's.
       (input.scope === 'household' || rows.some((row) => row.patientId === input.patientId)) &&
       sum(rows.map((row) => toCents(row.amount))) === toCents(input.amount) &&
-      rows.every((row) => row.method === input.method && row.paidAt === input.paidAt);
+      rows.every(
+        (row) =>
+          row.method === input.method &&
+          row.paidAt === input.paidAt &&
+          row.advance === (input.advance ?? null),
+      );
     if (!same) {
       throw new IdempotencyMismatchError('This Idempotency-Key was used for another payment');
     }
@@ -467,12 +517,19 @@ export class PaymentsService {
       ? state.targets.find((target) => target.visitId === input.contextVisitId)
       : undefined;
     const amount = toCents(input.amount);
+    const advance = input.advance ?? null;
+    if (advance === 'plan') {
+      const held = await this.planHeld(input, state, amount, currency);
+      return { accountIds, payer, state, outstanding, amount, advance, ...held };
+    }
     const error: PaymentPreview['error'] =
-      outstanding <= 0n
-        ? 'payment.nothing_outstanding'
-        : amount > outstanding
-          ? 'payment.over_outstanding'
-          : null;
+      advance === 'credit'
+        ? null
+        : outstanding <= 0n
+          ? 'payment.nothing_outstanding'
+          : amount > outstanding
+            ? 'payment.over_outstanding'
+            : null;
     const { allocations } = planPayment({
       amount: amount > outstanding ? outstanding : amount,
       targets: state.targets,
@@ -480,7 +537,78 @@ export class PaymentsService {
       ...(manual ? { manualTargetId: manual.entryId } : {}),
       ...(isOpen(context) && context ? { contextTargetId: context.entryId } : {}),
     });
-    return { accountIds, payer, state, outstanding, amount, allocations, error };
+    return {
+      accountIds,
+      payer,
+      state,
+      outstanding,
+      amount,
+      allocations,
+      error,
+      advance,
+      planRemaining: null,
+    };
+  }
+
+  /**
+   * A `plan` advance (ADR-0051 A8): the cap is the plan work still to charge, plus its charges
+   * still owed, less the held money not spent; what it would cover now is settle's answer with
+   * the payment added as a held source.
+   */
+  private async planHeld(
+    input: PaymentInput,
+    state: AccountState,
+    amount: bigint,
+    currency: string,
+  ): Promise<Pick<PaymentPlan, 'allocations' | 'error' | 'planRemaining'>> {
+    const work = await this.visits.planWork(input.patientId, currency);
+    const remaining = planRemaining(toCents(work.estimate), heldPosition(state));
+    const error: PaymentPreview['error'] = !work.open
+      ? 'payment.no_open_plan'
+      : amount > remaining
+        ? 'payment.over_plan_remaining'
+        : null;
+    const dryRun = {
+      entryId: DRY_RUN_SOURCE,
+      date: input.paidAt,
+      createdAt: this.clock.now().getTime(),
+      capacity: amount,
+      held: true,
+    };
+    const allocations = settle({
+      targets: state.targets,
+      sources: [...state.sources, dryRun],
+      pairs: state.pairs,
+    })
+      .filter((row) => row.sourceId === DRY_RUN_SOURCE && row.amount > 0n)
+      .map((row) => ({ targetId: row.targetId, amount: row.amount, manual: false }));
+    return { allocations, error, planRemaining: remaining };
+  }
+
+  /**
+   * `POST /billing/payments/:id/release` (ADR-0051 A7): what a held payment has not spent becomes
+   * free credit at once; it covers open charges, oldest first, or stays as credit. `payment:write`.
+   */
+  async release(paymentId: string, input: ReleaseHoldInput): Promise<PaymentWriteResult> {
+    this.context.requirePermission('payment:write');
+    return this.tenantDb.run(async () => {
+      const payment = await this.payments.findById(paymentId);
+      if (!payment) throw new PaymentNotFoundError('Payment not found');
+      await this.patients.lockForDependentWrite(payment.patientId);
+      await this.settlement.lock([payment.patientId]);
+      const held = (await this.holds.activeFor(payment.patientId)).filter(
+        (row) => row.paymentId === payment.id,
+      );
+      const released = await this.settlement.releaseHolds(payment.patientId, held, {
+        kind: 'manual',
+        reason: input.reason,
+      });
+      if (released.length === 0) {
+        throw new PaymentNotHeldError('This payment is not held for the treatment plan');
+      }
+      await this.settlement.settle(payment.patientId);
+      return { ids: [payment.id] };
+    });
   }
 
   /**
@@ -543,6 +671,7 @@ export class PaymentsService {
                 visitId: target.visitId,
                 date: target.date,
                 amount: line.amount,
+                fromAdvance: plan.advance === 'plan',
               },
             ]
           : [];
@@ -571,6 +700,7 @@ export class PaymentsService {
       householdGroupId: payment.householdGroupId,
       payerContactId: payment.payerContactId,
       reversesPaymentId: payment.id,
+      advance: null,
       ledgerEntryId,
       idempotencyKey: null,
       balanceAfter: null,

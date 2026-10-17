@@ -434,6 +434,9 @@ describe('tenant isolation through the public services', () => {
         ownerA
           .post(`/api/v1/billing/payments/${paymentId}/void`)
           .send({ reason: 'Hijack attempt' }),
+        ownerA
+          .post(`/api/v1/billing/payments/${paymentId}/release`)
+          .send({ reason: 'Hijack attempt' }),
       ])) {
         expect(response.status).toBe(404);
         expect(response.body).toMatchObject({ code: 'payment.not_found' });
@@ -1140,6 +1143,8 @@ describe('tenant isolation through the public services', () => {
       'payments',
       'payment_counters',
       'payment_allocations',
+      'payment_holds',
+      'visit_plan_shares',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

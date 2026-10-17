@@ -97,6 +97,16 @@ export type TreatmentCancelled = DomainEvent<
 >;
 
 /**
+ * A plan still `planned` was removed (soft delete): in the visit that made it, or on the record
+ * when made there. `billing` ends money held for a plan left with no work (ADR-0051).
+ */
+export const TREATMENT_REMOVED = 'TreatmentRemoved';
+export type TreatmentRemoved = DomainEvent<
+  typeof TREATMENT_REMOVED,
+  { planId: string; visitId: string | null; patientId: string }
+>;
+
+/**
  * What is at a tooth position changed (feature 7, H1): set by hand or by a service, or taken
  * back. `presence` is what the tooth has now; `visitId` is null for a change on the patient
  * record.

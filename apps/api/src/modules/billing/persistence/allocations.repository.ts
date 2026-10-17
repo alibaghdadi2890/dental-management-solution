@@ -16,6 +16,7 @@ interface TargetRow extends Record<string, unknown> {
   currency: string;
   net: string;
   allocated: string;
+  plan_share: string;
 }
 
 interface SourceRow extends Record<string, unknown> {
@@ -26,6 +27,7 @@ interface SourceRow extends Record<string, unknown> {
   created_ms: string;
   currency: string;
   capacity: string;
+  held: boolean;
 }
 
 interface PairRow extends Record<string, unknown> {
@@ -43,7 +45,13 @@ interface LineRow extends Record<string, unknown> {
   visit_id: string | null;
   date: string;
   amount: string;
+  from_advance: boolean;
 }
+
+/** Whether the payment of source entry `entry` was an advance held for the plan (ADR-0051). */
+const fromAdvanceSql = (entry: SQL) => sql`exists (
+  select 1 from payments hp join payment_holds h on h.payment_id = hp.id
+  where hp.ledger_entry_id = ${entry})`;
 
 const uuids = (ids: readonly string[]) => sql`${sql.param([...ids])}::uuid[]`;
 
@@ -53,7 +61,8 @@ const uuids = (ids: readonly string[]) => sql`${sql.param([...ids])}::uuid[]`;
  * - an `opening_balance` or `adjustment` above zero is its own target;
  * - a visit is one target: its `visit_charge` (else its first entry — a visit charged 0 then
  *   amended up), netted with every entry of the visit.
- * `scope` narrows the entries (always a condition on `e`, a `ledger_entries` alias).
+ * `scope` narrows the entries (always a condition on `e`, a `ledger_entries` alias). A visit
+ * carries its plan share (ADR-0051), what held money may cover of it.
  */
 function targetsQuery(scope: SQL): SQL {
   return sql`
@@ -83,8 +92,10 @@ function targetsQuery(scope: SQL): SQL {
       t.net::text as net,
       coalesce((
         select sum(a.amount) from payment_allocations a where a.target_entry_id = t.id
-      ), 0)::text as allocated
-    from targets t`;
+      ), 0)::text as allocated,
+      coalesce(ps.amount, 0)::text as plan_share
+    from targets t
+    left join visit_plan_shares ps on ps.visit_id = t.visit_id`;
 }
 
 function toTarget(row: TargetRow): AccountTarget {
@@ -98,6 +109,7 @@ function toTarget(row: TargetRow): AccountTarget {
     currency: row.currency,
     net: toCents(row.net),
     allocated: toCents(row.allocated),
+    planShare: toCents(row.plan_share),
   };
 }
 
@@ -146,7 +158,8 @@ export class AllocationsRepository {
 
   /**
    * The sources of `patientIds`: payments (capacity = amount − refunds − voids) and credit
-   * entries (`opening_balance` / `adjustment` below zero).
+   * entries (`opening_balance` / `adjustment` below zero). `held`: a payment whose hold for the
+   * plan has not ended (ADR-0051).
    */
   async sourcesOf(patientIds: readonly string[]): Promise<AccountSource[]> {
     if (patientIds.length === 0) return [];
@@ -158,7 +171,10 @@ export class AllocationsRepository {
             then greatest(-e.amount - coalesce((
               select sum(r.amount) from payments r where r.reverses_payment_id = p.id
             ), 0), 0)
-            else -e.amount end)::text as capacity
+            else -e.amount end)::text as capacity,
+          exists (
+            select 1 from payment_holds h where h.payment_id = p.id and h.released_at is null
+          ) as held
         from ledger_entries e
         left join payments p on p.ledger_entry_id = e.id
         where e.patient_id = any(${uuids(patientIds)})
@@ -173,6 +189,7 @@ export class AllocationsRepository {
       createdAt: Number(row.created_ms),
       currency: row.currency,
       capacity: toCents(row.capacity),
+      held: row.held,
     }));
   }
 
@@ -208,7 +225,8 @@ export class AllocationsRepository {
     const { rows } = await this.db.run((tx) =>
       tx.execute<LineRow>(sql`
         select a.source_entry_id, a.target_entry_id, t.patient_id, t.kind, t.visit_id,
-          t.effective_date::text as date, sum(a.amount)::text as amount
+          t.effective_date::text as date, sum(a.amount)::text as amount,
+          ${fromAdvanceSql(sql`a.source_entry_id`)} as from_advance
         from payment_allocations a
         join ledger_entries t on t.id = a.target_entry_id
         where a.source_entry_id = any(${uuids(sourceIds)})
@@ -226,7 +244,27 @@ export class AllocationsRepository {
       visitId: row.visit_id,
       date: row.date,
       amount: toCents(row.amount),
+      fromAdvance: row.from_advance,
     }));
+  }
+
+  /**
+   * What each payment entry among `entryIds` has not allocated (its amount less refunds and
+   * voids, less what it covers), never below 0: what an advance still holds (ADR-0051).
+   */
+  async unallocatedOf(entryIds: readonly string[]): Promise<Map<string, bigint>> {
+    if (entryIds.length === 0) return new Map();
+    const { rows } = await this.db.run((tx) =>
+      tx.execute<{ id: string; left: string }>(sql`
+        select p.ledger_entry_id as id, greatest(p.amount
+          - coalesce((select sum(r.amount) from payments r where r.reverses_payment_id = p.id), 0)
+          - coalesce((
+            select sum(a.amount) from payment_allocations a where a.source_entry_id = p.ledger_entry_id
+          ), 0), 0)::text as left
+        from payments p
+        where p.ledger_entry_id = any(${uuids(entryIds)})`),
+    );
+    return new Map(rows.map((row) => [row.id, toCents(row.left)]));
   }
 
   /**
@@ -263,6 +301,7 @@ export class AllocationsRepository {
       paidAt: string;
       method: PaymentMethod;
       amount: string;
+      fromAdvance: boolean;
     }[]
   > {
     const { rows } = await this.db.run((tx) =>
@@ -272,9 +311,11 @@ export class AllocationsRepository {
         paid_at: string;
         method: PaymentMethod;
         amount: string;
+        from_advance: boolean;
       }>(sql`
         select p.id, p.receipt_number, p.paid_at::text as paid_at, p.method,
-          sum(a.amount)::text as amount
+          sum(a.amount)::text as amount,
+          exists (select 1 from payment_holds h where h.payment_id = p.id) as from_advance
         from payment_allocations a
         join ledger_entries t on t.id = a.target_entry_id
         join payments p on p.ledger_entry_id = a.source_entry_id
@@ -289,6 +330,7 @@ export class AllocationsRepository {
       paidAt: row.paid_at,
       method: row.method,
       amount: fromCents(toCents(row.amount)),
+      fromAdvance: row.from_advance,
     }));
   }
 

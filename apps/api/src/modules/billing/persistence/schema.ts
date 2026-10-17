@@ -1,4 +1,6 @@
 import {
+  ADVANCE_KINDS,
+  HOLD_RELEASE_KINDS,
   LEDGER_ENTRY_KINDS,
   PAYMENT_KINDS,
   PAYMENT_METHODS,
@@ -18,6 +20,7 @@ import {
   pgEnum,
   pgTable,
   text,
+  timestamp,
   unique,
   uniqueIndex,
   uuid,
@@ -200,6 +203,9 @@ export const payments = pgTable(
     payerContactId: uuid(),
     /** The payment a refund or void reverses. */
     reversesPaymentId: uuid(),
+    /** A payment made in advance (ADR-0051): held for the plan (`plan`, see `payment_holds`) or
+     * a plain advance (`credit`); null for an ordinary payment and for refunds and voids. */
+    advance: text({ enum: ADVANCE_KINDS }),
     ledgerEntryId: uuid().notNull(),
     idempotencyKey: uuid(),
     /** The account's balance (tenant currency) right after a payment; the "partial" pill. */
@@ -242,6 +248,10 @@ export const payments = pgTable(
     check(
       'payments_reverses_iff_correction',
       sql`(${table.reversesPaymentId} is not null) = (${table.kind}::text <> 'payment')`,
+    ),
+    check(
+      'payments_advance_only_on_payment',
+      sql`${table.advance} is null or ${table.kind}::text = 'payment'`,
     ),
     check(
       'payments_reason_iff_correction',
@@ -297,6 +307,70 @@ export const paymentAllocations = pgTable(
       foreignColumns: [ledgerEntries.tenantId, ledgerEntries.id],
     }),
     check('payment_allocations_amount_non_zero', sql`${table.amount} <> 0`),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/**
+ * A payment held for the patient's treatment plan (ADR-0051): it covers only plan charges until
+ * the hold ends — the plan closed (`plan_closed`) or released by hand (`manual`, with a reason) —
+ * and the rest of it becomes free credit. One row per held payment, written with it; the release
+ * columns are set once and never again (the runtime role may update only them). No patient id:
+ * the hold follows its payment through a merge.
+ */
+export const paymentHolds = pgTable(
+  'payment_holds',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    paymentId: uuid().notNull(),
+    releasedAt: timestamp({ withTimezone: true }),
+    releasedKind: text({ enum: HOLD_RELEASE_KINDS }),
+    /** The auth user id of whoever's action ended the hold (CLAUDE.md §7). */
+    releasedBy: uuid(),
+    releaseReason: text(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('payment_holds_tenant_idx').on(table.tenantId),
+    uniqueIndex('payment_holds_payment_unique').on(table.tenantId, table.paymentId),
+    foreignKey({
+      name: 'payment_holds_payment_fk',
+      columns: [table.tenantId, table.paymentId],
+      foreignColumns: [payments.tenantId, payments.id],
+    }),
+    check(
+      'payment_holds_release_complete',
+      sql`(${table.releasedAt} is null) = (${table.releasedKind} is null) and (${table.releasedAt} is null) = (${table.releasedBy} is null)`,
+    ),
+    check(
+      'payment_holds_reason_iff_manual',
+      sql`(${table.releaseReason} is not null) = (${table.releasedKind} is not distinct from 'manual')`,
+    ),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/**
+ * A charged visit's plan share (ADR-0051 A4): Σ the final amounts of its services that perform a
+ * plan item, as it stands now — written at completion, rewritten at each amendment. A derived
+ * cache keyed by visit (no foreign key: `clinical` owns `visits`), read by settle as the most held
+ * money may cover of the visit.
+ */
+export const visitPlanShares = pgTable(
+  'visit_plan_shares',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    visitId: uuid().notNull(),
+    amount: money().notNull(),
+    currency: char({ length: 3 }).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('visit_plan_shares_tenant_idx').on(table.tenantId),
+    uniqueIndex('visit_plan_shares_visit_unique').on(table.tenantId, table.visitId),
+    check('visit_plan_shares_amount_non_negative', sql`${table.amount} >= 0`),
     tenantIsolationPolicy(),
   ],
 );

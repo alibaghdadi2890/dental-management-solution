@@ -19,6 +19,7 @@ import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import type { NewLedgerEntry } from '../persistence/ledger-entries.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
+import { PlanSharesRepository } from '../persistence/plan-shares.repository';
 import { VisitHasPaymentsError } from '../domain/visit-payment-errors';
 import { BillingService } from './billing.service';
 import { LedgerWriter } from './ledger-writer';
@@ -40,7 +41,8 @@ import { Settlement } from './settlement';
  *   sit on the visit (ADR-0026).
  *
  * Each entry is followed by a settle (feature 5, P4): credit covers a new charge, and an amount
- * taken off a covered visit is released and re-applied.
+ * taken off a covered visit is released and re-applied. Before it, a completion or an amendment
+ * stores the visit's plan share (ADR-0051 A4): what money held for the plan may cover of it.
  *
  * Adjustments and reversals are dated the tenant's today and carry the reason, but no lines: the
  * before/after is `clinical`'s `visit_amendments` row (D7). Not gated by `payment:write`: the
@@ -55,6 +57,7 @@ export class VisitChargeSubscriber {
     private readonly visits: VisitFactsService,
     private readonly billing: BillingService,
     private readonly entries: LedgerEntriesRepository,
+    private readonly planShares: PlanSharesRepository,
     private readonly writer: LedgerWriter,
     private readonly settlement: Settlement,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -64,6 +67,7 @@ export class VisitChargeSubscriber {
   async onVisitCompleted(event: VisitCompleted): Promise<void> {
     if (toCents(event.payload.total) === 0n) return;
     const facts = await this.visits.chargeFacts(event.payload.visitId);
+    await this.storePlanShare(event.payload.visitId, facts);
     await this.recordVisitCharge(event.payload.visitId, facts);
   }
 
@@ -71,6 +75,7 @@ export class VisitChargeSubscriber {
   async onVisitAmended(event: VisitAmended): Promise<void> {
     const { visitId, patientId, amendmentId, currency, delta, reason } = event.payload;
     if (toCents(delta) === 0n) return;
+    await this.storePlanShare(visitId, await this.visits.chargeFacts(visitId));
     await this.appendCorrection({
       kind: 'visit_charge_adjustment',
       visitId,
@@ -136,6 +141,14 @@ export class VisitChargeSubscriber {
     );
     // Existing credit covers the new charge at once (P4).
     await this.settlement.settle(facts.patientId);
+  }
+
+  /** Σ the lines that perform a plan item, as the visit stands now (ADR-0051 A4). */
+  private async storePlanShare(visitId: string, facts: VisitChargeFacts): Promise<void> {
+    const share = facts.lines
+      .filter((line) => line.planId !== null)
+      .reduce((sum, line) => sum + toCents(line.amount), 0n);
+    await this.planShares.upsert(visitId, fromCents(share), facts.currency);
   }
 
   /** An adjustment or reversal on the tenant's today; `amend`/`void` hold the patient lock. */

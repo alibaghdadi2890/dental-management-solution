@@ -26,9 +26,11 @@ import {
 } from '../../domain/visit-errors';
 import {
   TREATMENT_CANCELLED,
+  TREATMENT_REMOVED,
   TREATMENT_PERFORMED,
   TREATMENT_STARTED,
   type TreatmentCancelled,
+  type TreatmentRemoved,
   type TreatmentPerformed,
   type TreatmentStarted,
 } from '../../events/record-events';
@@ -342,6 +344,12 @@ export class PlanChartingService {
         before,
         after: { deletedAt: after.deletedAt },
       });
+      const event: TreatmentRemoved = this.events.create(TREATMENT_REMOVED, {
+        planId,
+        visitId,
+        patientId: visit.patientId,
+      });
+      await this.events.publish(event);
       return this.presenter.plan(after);
     });
   }

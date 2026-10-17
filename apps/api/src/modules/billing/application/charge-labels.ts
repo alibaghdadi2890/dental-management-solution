@@ -14,6 +14,8 @@ interface ChargeLine {
   visitId: string | null;
   date: string;
   amount: bigint;
+  /** ADR-0051: the money came from a payment held for the plan. */
+  fromAdvance: boolean;
 }
 
 /**
@@ -50,6 +52,7 @@ export class ChargeLabels {
       visitType: visitOf(line)?.type ?? null,
       date: line.date,
       amount: fromCents(line.amount),
+      fromAdvance: line.fromAdvance,
     }));
   }
 }

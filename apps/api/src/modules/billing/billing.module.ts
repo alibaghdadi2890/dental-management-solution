@@ -13,6 +13,7 @@ import { PatientExportService } from './application/patient-export.service';
 import { PatientViewsService } from './application/patient-views.service';
 import { PaymentViewsService } from './application/payment-views.service';
 import { PaymentsService } from './application/payments.service';
+import { PlanClosureSubscriber } from './application/plan-closure.subscriber';
 import { Settlement } from './application/settlement';
 import { VisitChargeSubscriber } from './application/visit-charge.subscriber';
 import { VisitViewsService } from './application/visit-views.service';
@@ -22,7 +23,9 @@ import { BillingVisitsController } from './http/billing-visits.controller';
 import { BillingController } from './http/billing.controller';
 import { AllocationsRepository } from './persistence/allocations.repository';
 import { LedgerEntriesRepository } from './persistence/ledger-entries.repository';
+import { HoldsRepository } from './persistence/holds.repository';
 import { PaymentsRepository } from './persistence/payments.repository';
+import { PlanSharesRepository } from './persistence/plan-shares.repository';
 
 /**
  * See docs/modules/billing.md, ADR-0017 and ADR-0024. Depends on `patients` (existence, create
@@ -30,6 +33,8 @@ import { PaymentsRepository } from './persistence/payments.repository';
  * `users` (dentist names in the export) and `clinical` (a visit's charge facts and money, W21);
  * none of them imports `billing`. Consumes `PatientsMerged`, `VisitCompleted`, `VisitAmended`,
  * `VisitVoided` and `TenantCurrencyChanged` in their transactions. Payments (feature 5): ADR-0027–0029.
+ * Advance payments (ADR-0051): `TreatmentCancelled`, `TreatmentRemoved`, `VisitDiscarded` and a
+ * free `VisitCompleted` end holds when the plan closes.
  */
 @Module({
   imports: [AuditModule, ClinicalModule, PatientsModule, TenancyModule, UsersModule],
@@ -46,6 +51,8 @@ import { PaymentsRepository } from './persistence/payments.repository';
     LedgerEntriesRepository,
     AllocationsRepository,
     PaymentsRepository,
+    HoldsRepository,
+    PlanSharesRepository,
     Settlement,
     ChargeLabels,
     PaymentsService,
@@ -55,6 +62,7 @@ import { PaymentsRepository } from './persistence/payments.repository';
     MergeLedgerSubscriber,
     VisitChargeSubscriber,
     CurrencyLockSubscriber,
+    PlanClosureSubscriber,
     VisitViewsService,
   ],
   exports: [BillingService],

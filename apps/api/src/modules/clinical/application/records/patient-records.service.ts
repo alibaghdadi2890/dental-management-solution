@@ -31,8 +31,10 @@ import {
 import {
   TREATMENT_ACCEPTED,
   TREATMENT_CANCELLED,
+  TREATMENT_REMOVED,
   type TreatmentAccepted,
   type TreatmentCancelled,
+  type TreatmentRemoved,
 } from '../../events/record-events';
 import { PatientDiagnosesRepository } from '../../persistence/patient-diagnoses.repository';
 import { ToothPresenceRepository } from '../../persistence/tooth-presence.repository';
@@ -296,6 +298,12 @@ export class PatientRecordsService {
         before,
         after: { deletedAt: after.deletedAt },
       });
+      const event: TreatmentRemoved = this.events.create(TREATMENT_REMOVED, {
+        planId,
+        visitId: null,
+        patientId,
+      });
+      await this.events.publish(event);
     });
   }
 

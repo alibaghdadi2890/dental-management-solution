@@ -9,6 +9,7 @@ import {
   paymentWriteResultSchema,
   recordPaymentResultSchema,
   refundInputSchema,
+  releaseHoldInputSchema,
   voidPaymentInputSchema,
 } from '@dcm/contracts';
 import {
@@ -40,6 +41,7 @@ class PaymentPreviewDto extends createZodDto(paymentPreviewSchema) {}
 class RecordPaymentResultDto extends createZodDto(recordPaymentResultSchema) {}
 class RefundInputDto extends createZodDto(refundInputSchema) {}
 class VoidPaymentInputDto extends createZodDto(voidPaymentInputSchema) {}
+class ReleaseHoldInputDto extends createZodDto(releaseHoldInputSchema) {}
 class PaymentWriteResultDto extends createZodDto(paymentWriteResultSchema) {}
 class PaymentParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class TransactionQueryDto extends createZodDto(transactionQuerySchema) {}
@@ -52,7 +54,8 @@ const EXPORT_IDLE_TIMEOUT_MS = 60_000;
 
 /**
  * Payments (feature 5, docs/modules/billing.md): the Transactions list and export, receipts,
- * and recording, previewing, refunding and voiding.
+ * and recording, previewing, refunding and voiding; releasing an advance held for the plan
+ * (ADR-0051).
  */
 @Controller('billing/payments')
 export class BillingPaymentsController {
@@ -131,5 +134,12 @@ export class BillingPaymentsController {
   @ZodResponse({ status: 201, type: PaymentWriteResultDto })
   void(@Param() params: PaymentParamsDto, @Body() body: VoidPaymentInputDto) {
     return this.payments.void(params.id, body);
+  }
+
+  @Post(':id/release')
+  @RequirePermission('payment:write')
+  @ZodResponse({ status: 201, type: PaymentWriteResultDto })
+  release(@Param() params: PaymentParamsDto, @Body() body: ReleaseHoldInputDto) {
+    return this.payments.release(params.id, body);
   }
 }

@@ -24,6 +24,7 @@ import { ValidationFailedError } from '../../../platform/kernel/validation-faile
 import { VisitNotLiveError, VisitFactsService } from '../../clinical';
 import { PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
+import { heldUnspent } from '../domain/allocate';
 import { patientBalance, sumBalances } from '../domain/balances';
 import type { LedgerEntry } from '../domain/ledger-entry';
 import { LedgerIdempotencyMismatchError } from '../domain/ledger-errors';
@@ -282,9 +283,11 @@ export class BillingService {
       const chargeCents = visitEntries.reduce((total, entry) => total + toCents(entry.amount), 0n);
       const paidCents =
         (await this.allocations.allocatedToVisits([visitId])).get(visitId)?.all ?? 0n;
-      const balanceCents = sums
-        .filter(({ currency }) => currency === visit.currency)
-        .reduce((total, sum) => total + toCents(sum.amount), 0n);
+      const heldCents = await this.heldIn(visit.patientId, visit.currency);
+      const balanceCents =
+        sums
+          .filter(({ currency }) => currency === visit.currency)
+          .reduce((total, sum) => total + toCents(sum.amount), 0n) + heldCents;
       return {
         visitId,
         currency: visit.currency,
@@ -295,9 +298,19 @@ export class BillingService {
         },
         previous: fromCents(balanceCents - (chargeCents - paidCents)),
         totalOutstanding: fromCents(balanceCents),
+        held: fromCents(heldCents),
         payments: await this.allocations.paymentsForVisit(visitId),
       };
     });
+  }
+
+  /** What the patient holds for the plan in `currency`, not spent yet (ADR-0051). */
+  private async heldIn(patientId: string, currency: string): Promise<bigint> {
+    const held = (await this.allocations.sourcesOf([patientId])).filter(
+      (source) => source.held === true && source.currency === currency,
+    );
+    if (held.length === 0) return 0n;
+    return heldUnspent(held, await this.allocations.pairsOf([patientId]));
   }
 
   // --- Shared rules ---

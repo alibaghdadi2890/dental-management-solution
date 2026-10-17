@@ -57,3 +57,21 @@ export class InvalidPaymentCursorError extends DomainError {
   readonly code = 'payment.invalid_cursor';
   readonly kind = 'invalid';
 }
+
+/** A `plan` advance above what the plan still needs (ADR-0051 A8). */
+export class PaymentOverPlanRemainingError extends DomainError {
+  readonly code = 'payment.over_plan_remaining';
+  readonly kind = 'invalid';
+}
+
+/** A `plan` advance for a patient with no plan work left to charge (ADR-0051 A8). */
+export class NoOpenPlanError extends DomainError {
+  readonly code = 'payment.no_open_plan';
+  readonly kind = 'invalid';
+}
+
+/** A release of a payment that is not held for the plan, or no longer (ADR-0051 A7). */
+export class PaymentNotHeldError extends DomainError {
+  readonly code = 'payment.not_held';
+  readonly kind = 'conflict';
+}

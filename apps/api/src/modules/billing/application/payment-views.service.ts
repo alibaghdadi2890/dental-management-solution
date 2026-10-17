@@ -36,18 +36,26 @@ import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
-import { VisitListService } from '../../clinical';
+import { VisitFactsService, VisitListService } from '../../clinical';
 import { ContactsService, PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
 import { addDays, agingBucket, agingTotals } from '../domain/aging';
-import { byAge, outstandingByTarget, unallocatedBySource } from '../domain/allocate';
+import {
+  byAge,
+  heldPosition,
+  heldUnspent,
+  outstandingByTarget,
+  planRemaining,
+  unallocatedBySource,
+} from '../domain/allocate';
 import { csvRow, UTF8_BOM } from '../domain/csv';
 import type { AccountTarget, Payment } from '../domain/payment';
 import { decodeDateIdCursor, encodeDateIdCursor } from '../domain/payment-cursor';
 import { PaymentNotFoundError } from '../domain/payment-errors';
 import { runningBalance } from '../domain/running-balance';
 import { AllocationsRepository } from '../persistence/allocations.repository';
+import { HoldsRepository } from '../persistence/holds.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
 import { type TransactionCriteria, PaymentsRepository } from '../persistence/payments.repository';
 import { ChargeLabels } from './charge-labels';
@@ -78,6 +86,9 @@ const max0 = (value: bigint) => (value > 0n ? value : 0n);
 /** Rows read per page while exporting. */
 const EXPORT_PAGE = 200;
 
+/** The advance fields of a payment that was not made in advance (and of refunds, voids). */
+const NOT_AN_ADVANCE = { advance: null, heldUnspent: '0.00', releasedAt: null } as const;
+
 /**
  * The read side of payments (feature 5, screens 2–5): Transactions and its export, the KPI cards
  * and aging, the Outstanding list, a patient's account (balance card, history with Remaining),
@@ -94,10 +105,12 @@ export class PaymentViewsService {
     private readonly contacts: ContactsService,
     private readonly users: UsersService,
     private readonly visits: VisitListService,
+    private readonly visitFacts: VisitFactsService,
     private readonly paymentsService: PaymentsService,
     private readonly payments: PaymentsRepository,
     private readonly allocations: AllocationsRepository,
     private readonly entries: LedgerEntriesRepository,
+    private readonly holds: HoldsRepository,
     private readonly labels: ChargeLabels,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -358,7 +371,8 @@ export class PaymentViewsService {
       const sources = inCurrency(await this.allocations.sourcesOf([patientId]));
       const pairs = await this.allocations.pairsOf([patientId]);
       const owed = outstandingByTarget(targets, pairs);
-      const credit = sum(unallocatedBySource(sources, pairs).values());
+      const held = heldUnspent(sources, pairs);
+      const credit = sum(unallocatedBySource(sources, pairs).values()) - held;
       const visits = await this.labels.visitsOf(targets.map((target) => target.visitId));
 
       const openCharges: OpenCharge[] = targets
@@ -372,6 +386,7 @@ export class PaymentViewsService {
       const totalOwed = sum(owed.values());
       const lastOwed = last ? (owed.get(last.entryId) ?? 0n) : 0n;
       const balance = await this.balanceIn(patientId, currency);
+      const work = await this.visitFacts.planWork(patientId, currency);
 
       const payers = await this.payersOf(patientId);
       const payer = await this.paymentsService.resolvePayer(patientId, payerContactId);
@@ -384,6 +399,12 @@ export class PaymentViewsService {
         currency,
         balance: fromCents(balance),
         credit: fromCents(credit),
+        held: fromCents(held),
+        planRemaining: work.open
+          ? fromCents(
+              planRemaining(toCents(work.estimate), heldPosition({ targets, sources, pairs })),
+            )
+          : null,
         lastVisit:
           last && last.visitId
             ? {
@@ -429,6 +450,7 @@ export class PaymentViewsService {
       const refs = await this.patientRefs(rows.map((row) => row.patientId));
       const names = await this.users.namesByUserIds([payment.recordedBy]);
       const voided = reversals.find((row) => row.kind === 'void');
+      const advances = await this.advancesOf(rows);
       return {
         receiptNumber: payment.receiptNumber,
         paidAt: payment.paidAt,
@@ -452,6 +474,7 @@ export class PaymentViewsService {
           amount: fromCents(toCents(row.amount)),
           allocations: labelled.filter((_, index) => lines[index]?.sourceId === row.ledgerEntryId),
           balanceAfter: fromCents(toCents(row.balanceAfter ?? '0')),
+          ...(advances.get(row.id) ?? NOT_AN_ADVANCE),
         })),
       };
     });
@@ -609,6 +632,7 @@ export class PaymentViewsService {
       paymentRows.map((row) => row.ledgerEntryId),
     );
     const numbers = await this.labels.visitNumbers(lines.map((line) => line.visitId));
+    const advances = await this.advancesOf(paymentRows);
     return rows.map((row) => {
       const own = reversals.filter((reversal) => reversal.reversesPaymentId === row.id);
       const visitIds = [
@@ -640,8 +664,39 @@ export class PaymentViewsService {
         visits: visitIds.map((visitId) => ({ visitId, visitNumber: numbers.get(visitId) ?? 0 })),
         recordedBy: { userId: row.recordedBy, name: names.get(row.recordedBy) ?? null },
         recordedAt: row.createdAt.toISOString(),
+        ...(advances.get(row.id) ?? NOT_AN_ADVANCE),
       };
     });
+  }
+
+  /**
+   * How each payment of `rows` is an advance (ADR-0051): its kind and, for one held for the plan,
+   * what it still holds (0 once the hold ended) and when the hold ended. Ordinary payments are
+   * absent.
+   */
+  private async advancesOf(
+    rows: readonly Payment[],
+  ): Promise<Map<string, Pick<Transaction, 'advance' | 'heldUnspent' | 'releasedAt'>>> {
+    const advances = rows.filter((row) => row.advance !== null);
+    if (advances.length === 0) return new Map();
+    const holds = await this.holds.forPayments(advances.map((row) => row.id));
+    const unspent = await this.allocations.unallocatedOf(
+      advances.map((row) => row.ledgerEntryId),
+    );
+    return new Map(
+      advances.map((row) => {
+        const hold = holds.get(row.id);
+        const held = hold !== undefined && hold.releasedAt === null;
+        return [
+          row.id,
+          {
+            advance: row.advance,
+            heldUnspent: fromCents(held ? (unspent.get(row.ledgerEntryId) ?? 0n) : 0n),
+            releasedAt: hold?.releasedAt?.toISOString() ?? null,
+          },
+        ];
+      }),
+    );
   }
 
   private async *exportChunks(

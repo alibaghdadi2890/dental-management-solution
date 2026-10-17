@@ -1,4 +1,4 @@
-import type { LedgerEntryKind, PaymentKind, PaymentMethod } from '@dcm/contracts';
+import type { AdvanceKind, LedgerEntryKind, PaymentKind, PaymentMethod } from '@dcm/contracts';
 import type { AllocationSource, AllocationTarget } from './allocate';
 
 /** One `payments` row, as the repository maps it (CLAUDE.md §7). */
@@ -19,6 +19,8 @@ export interface Payment {
   householdGroupId: string | null;
   payerContactId: string | null;
   reversesPaymentId: string | null;
+  /** ADR-0051: made in advance (held for the plan, or plain credit); null otherwise. */
+  advance: AdvanceKind | null;
   ledgerEntryId: string;
   idempotencyKey: string | null;
   balanceAfter: string | null;
@@ -52,4 +54,6 @@ export interface AllocatedLine {
   visitId: string | null;
   date: string;
   amount: bigint;
+  /** The source is a payment held for the plan, now or before its release (ADR-0051). */
+  fromAdvance: boolean;
 }

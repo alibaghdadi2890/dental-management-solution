@@ -15,7 +15,8 @@ import { Settlement } from './settlement';
  * order every ledger writer uses.
  *
  * P15: one account now — the settle lets the credit of one side meet the open charges of the
- * other. Audited as `ledger_entry.repoint` on the kept patient when anything moved. A merge chain
+ * other. It ends no hold for the plan (ADR-0051): `clinical`'s handler may not have moved the
+ * dropped patient's plans yet; the next settle of the account does that. Audited as `ledger_entry.repoint` on the kept patient when anything moved. A merge chain
  * (A into B, then B into C) needs nothing more: each merge re-points in its own transaction.
  *
  * Not permission-gated: the merge already required `patient:write`.
@@ -42,6 +43,6 @@ export class MergeLedgerSubscriber {
       resourceId: keptId,
       after: { droppedId, keptId, count, payments },
     });
-    await this.settlement.settle(keptId);
+    await this.settlement.settle(keptId, new Set(), { closeHolds: false });
   }
 }

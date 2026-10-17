@@ -10,6 +10,9 @@
  *   It can cover up to `capacity` (its amount, less refunds; 0 once voided).
  * - **Pairs** are the current allocation sums per (source, target), with `order` = the position of
  *   their latest row, so "newest first" releases undo the most recent allocations.
+ * - A **held** source is a payment held for the treatment plan (ADR-0051): it covers only a
+ *   target's *held room*, `min(planShare, max(net, 0))` — the part of a visit charge that comes
+ *   from plan items — shared by every held source.
  */
 
 export interface AllocationTarget {
@@ -19,6 +22,8 @@ export interface AllocationTarget {
   /** Epoch ms of the entry, the tie-break after the date. */
   createdAt: number;
   net: bigint;
+  /** ADR-0051: Σ the visit's lines that perform a plan item; absent = 0 (not plan work). */
+  planShare?: bigint;
 }
 
 export interface AllocationSource {
@@ -26,6 +31,8 @@ export interface AllocationSource {
   date: string;
   createdAt: number;
   capacity: bigint;
+  /** ADR-0051: held for the treatment plan; absent = free. */
+  held?: boolean;
 }
 
 export interface AllocationPair {
@@ -60,6 +67,11 @@ export function byAge<T extends { date: string; createdAt: number; entryId: stri
 const max0 = (value: bigint) => (value > 0n ? value : 0n);
 const min = (a: bigint, b: bigint) => (a < b ? a : b);
 
+/** What held money may cover of a target, all held sources together (ADR-0051 A4). */
+export function heldRoom(target: AllocationTarget): bigint {
+  return min(max0(target.planShare ?? 0n), max0(target.net));
+}
+
 function sumBy(pairs: Iterable<AllocationPair>, key: 'sourceId' | 'targetId'): Map<string, bigint> {
   const sums = new Map<string, bigint>();
   for (const pair of pairs) sums.set(pair[key], (sums.get(pair[key]) ?? 0n) + pair.amount);
@@ -92,6 +104,54 @@ export function unallocatedBySource(
       max0(source.capacity - (allocated.get(source.entryId) ?? 0n)),
     ]),
   );
+}
+
+/** ADR-0051: Σ what the held sources have not allocated: the money held for the plan, unspent. */
+export function heldUnspent(
+  sources: readonly AllocationSource[],
+  pairs: readonly AllocationPair[],
+): bigint {
+  const unspent = unallocatedBySource(
+    sources.filter((source) => source.held === true),
+    pairs,
+  );
+  return [...unspent.values()].reduce((sum, value) => sum + value, 0n);
+}
+
+/**
+ * ADR-0051 A8: the account's held money not spent yet (`unspent`), and what of its plan charges
+ * still open that money could cover now (`openRoom`: Σ the open part of each target's held room).
+ */
+export function heldPosition(input: {
+  targets: readonly AllocationTarget[];
+  sources: readonly AllocationSource[];
+  pairs: readonly AllocationPair[];
+}): { unspent: bigint; openRoom: bigint } {
+  const heldIds = new Set(
+    input.sources.filter((source) => source.held === true).map((source) => source.entryId),
+  );
+  const outstanding = outstandingByTarget(input.targets, input.pairs);
+  const heldOn = sumBy(
+    input.pairs.filter((pair) => heldIds.has(pair.sourceId)),
+    'targetId',
+  );
+  let openRoom = 0n;
+  for (const target of input.targets) {
+    const room = heldRoom(target) - (heldOn.get(target.entryId) ?? 0n);
+    openRoom += max0(min(outstanding.get(target.entryId) ?? 0n, room));
+  }
+  return { unspent: heldUnspent(input.sources, input.pairs), openRoom };
+}
+
+/**
+ * ADR-0051 A8: what a `plan` advance may still take: the plan work still to charge (`estimate`),
+ * plus its charges still owed, less the held money not spent yet.
+ */
+export function planRemaining(
+  estimate: bigint,
+  position: { unspent: bigint; openRoom: bigint },
+): bigint {
+  return max0(estimate + position.openRoom - position.unspent);
 }
 
 export interface PaymentPlanInput {
@@ -173,12 +233,19 @@ export interface SettleInput {
  * 1. A target allocated above `max(net, 0)` (amended down, voided) releases the excess, newest
  *    first.
  * 2. A source allocated above its capacity (voided) releases the excess, newest first.
- * 3. Every source with unallocated money, oldest first, covers open targets oldest first — so
- *    credit is applied at once to what is owed, and otherwise waits for the next charge.
+ * 3. Held sources allocated to a target above its held room (a plan service removed or made
+ *    cheaper) release the excess, newest first (ADR-0051).
+ * 4. Held sources with unallocated money, oldest first, cover the held room of open targets,
+ *    oldest first — before free credit, which stays for the rest.
+ * 5. Every other source with unallocated money, oldest first, covers open targets oldest first —
+ *    so credit is applied at once to what is owed, and otherwise waits for the next charge.
  */
 export function settle(input: SettleInput): NewAllocation[] {
   const pairs = input.pairs.map((pair) => ({ ...pair }));
   const out: NewAllocation[] = [];
+  const heldIds = new Set(
+    input.sources.filter((source) => source.held === true).map((source) => source.entryId),
+  );
 
   for (const target of input.targets) {
     const own = pairs.filter((pair) => pair.targetId === target.entryId);
@@ -192,18 +259,36 @@ export function settle(input: SettleInput): NewAllocation[] {
     const excess = allocated - max0(source.capacity);
     if (excess > 0n) releaseNewestFirst(own, excess, out);
   }
+  const heldOn = new Map<string, bigint>();
+  for (const target of input.targets) {
+    const own = pairs.filter(
+      (pair) => pair.targetId === target.entryId && heldIds.has(pair.sourceId),
+    );
+    const allocated = own.reduce((sum, pair) => sum + pair.amount, 0n);
+    const excess = allocated - heldRoom(target);
+    if (excess > 0n) releaseNewestFirst(own, excess, out);
+    heldOn.set(target.entryId, allocated - max0(excess));
+  }
 
   const outstanding = outstandingByTarget(input.targets, pairs);
   const free = unallocatedBySource(input.sources, pairs);
   const targets = [...input.targets].sort(byAge);
-  for (const source of [...input.sources].sort(byAge)) {
+  const sources = [...input.sources].sort(byAge);
+  const ordered = [
+    ...sources.filter((source) => heldIds.has(source.entryId)),
+    ...sources.filter((source) => !heldIds.has(source.entryId)),
+  ];
+  for (const source of ordered) {
+    const held = heldIds.has(source.entryId);
     let left = free.get(source.entryId) ?? 0n;
     for (const target of targets) {
       if (left <= 0n) break;
       const owed = outstanding.get(target.entryId) ?? 0n;
-      const take = min(left, owed);
+      const room = held ? heldRoom(target) - (heldOn.get(target.entryId) ?? 0n) : owed;
+      const take = min(left, min(owed, room));
       if (take <= 0n) continue;
       outstanding.set(target.entryId, owed - take);
+      if (held) heldOn.set(target.entryId, (heldOn.get(target.entryId) ?? 0n) + take);
       left -= take;
       out.push({
         sourceId: source.entryId,

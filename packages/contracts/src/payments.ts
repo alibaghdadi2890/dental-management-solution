@@ -53,6 +53,18 @@ const positiveAmountSchema = decimalAmountSchema.refine(
   'Must be greater than zero',
 );
 
+/**
+ * An advance (ADR-0051): `plan` is held for the patient's treatment plan and covers only plan
+ * charges; `credit` is a plain advance, allocated like any payment with the rest left as credit.
+ */
+export const ADVANCE_KINDS = ['plan', 'credit'] as const;
+export const advanceKindSchema = z.enum(ADVANCE_KINDS);
+export type AdvanceKind = z.infer<typeof advanceKindSchema>;
+
+/** How a hold ended: every plan item charged or cancelled, or released by hand with a reason. */
+export const HOLD_RELEASE_KINDS = ['plan_closed', 'manual'] as const;
+export type HoldReleaseKind = (typeof HOLD_RELEASE_KINDS)[number];
+
 const REFERENCE_MAX = 80;
 const PAYMENT_NOTE_MAX = 200;
 
@@ -61,20 +73,37 @@ const PAYMENT_NOTE_MAX = 200;
  * household (B5). `contextVisitId` puts that visit's charge first (opened from a visit);
  * `targetEntryId` is the advanced "Apply to a specific visit" pick (B4), capped at its
  * outstanding. `payerContactId` omitted → the patient's primary billing contact; `null` → the
- * patient pays.
+ * patient pays. `advance` lifts the outstanding cap (ADR-0051): it pays this patient only, with no
+ * specific visit, and a `plan` advance is not opened from a visit either.
  */
-export const paymentInputSchema = z.object({
-  patientId: idSchema,
-  amount: positiveAmountSchema,
-  method: paymentMethodSchema,
-  paidAt: notFutureDateSchema(),
-  reference: optionalText(REFERENCE_MAX),
-  note: optionalText(PAYMENT_NOTE_MAX),
-  payerContactId: idSchema.nullable().optional(),
-  scope: z.enum(['patient', 'household']).default('patient'),
-  contextVisitId: idSchema.optional(),
-  targetEntryId: idSchema.optional(),
-});
+export const paymentInputSchema = z
+  .object({
+    patientId: idSchema,
+    amount: positiveAmountSchema,
+    method: paymentMethodSchema,
+    paidAt: notFutureDateSchema(),
+    reference: optionalText(REFERENCE_MAX),
+    note: optionalText(PAYMENT_NOTE_MAX),
+    payerContactId: idSchema.nullable().optional(),
+    scope: z.enum(['patient', 'household']).default('patient'),
+    contextVisitId: idSchema.optional(),
+    targetEntryId: idSchema.optional(),
+    advance: advanceKindSchema.optional(),
+  })
+  .superRefine((input, context) => {
+    if (input.advance === undefined) return;
+    const misfit =
+      input.scope === 'household' ||
+      input.targetEntryId !== undefined ||
+      (input.advance === 'plan' && input.contextVisitId !== undefined);
+    if (misfit) {
+      context.addIssue({
+        code: 'custom',
+        path: ['advance'],
+        message: 'An advance pays this patient only, not a specific visit',
+      });
+    }
+  });
 export type PaymentInput = z.infer<typeof paymentInputSchema>;
 export type PaymentRequest = z.input<typeof paymentInputSchema>;
 
@@ -92,20 +121,36 @@ export const chargeRefSchema = z.object({
 });
 export type ChargeRef = z.infer<typeof chargeRefSchema>;
 
-export const allocationLineSchema = chargeRefSchema.extend({ amount: balanceAmountSchema });
+export const allocationLineSchema = chargeRefSchema.extend({
+  amount: balanceAmountSchema,
+  /** The money came from a payment held for the treatment plan (ADR-0051). */
+  fromAdvance: z.boolean(),
+});
 export type AllocationLine = z.infer<typeof allocationLineSchema>;
+
+export const PAYMENT_PREVIEW_ERRORS = [
+  'payment.over_outstanding',
+  'payment.nothing_outstanding',
+  'payment.over_plan_remaining',
+  'payment.no_open_plan',
+] as const;
 
 /**
  * The dry run (and the outcome) of a payment: the cap (`outstanding` across the paid accounts),
  * what each charge would absorb, and what stays owing. `error` is set when the amount can't be
- * taken (over the cap, or nothing owed).
+ * taken (over the cap, nothing owed; for a `plan` advance, over what the plan still needs or no
+ * open plan work). For an advance, `held` is what the payment would hold for the plan (0 for
+ * `credit`), and `planRemaining` the `plan` cap (ADR-0051 A8), null otherwise.
  */
 export const paymentPreviewSchema = z.object({
   currency: currencySchema,
   outstanding: balanceAmountSchema,
   remaining: balanceAmountSchema,
   allocations: z.array(allocationLineSchema),
-  error: z.enum(['payment.over_outstanding', 'payment.nothing_outstanding']).nullable(),
+  advance: advanceKindSchema.nullable(),
+  held: balanceAmountSchema,
+  planRemaining: balanceAmountSchema.nullable(),
+  error: z.enum(PAYMENT_PREVIEW_ERRORS).nullable(),
 });
 export type PaymentPreview = z.infer<typeof paymentPreviewSchema>;
 
@@ -134,6 +179,19 @@ export type RefundInput = z.infer<typeof refundInputSchema>;
 /** `POST /billing/payments/:id/void`: a mis-entry; the whole receipt is cancelled (P7). */
 export const voidPaymentInputSchema = z.object({ reason: reasonSchema });
 export type VoidPaymentInput = z.infer<typeof voidPaymentInputSchema>;
+
+/** `POST /billing/payments/:id/release`: a held advance's rest becomes free credit (ADR-0051). */
+export const releaseHoldInputSchema = z.object({ reason: reasonSchema });
+export type ReleaseHoldInput = z.infer<typeof releaseHoldInputSchema>;
+
+/** How a payment is an advance (ADR-0051), on history, Transactions and receipt rows. For a
+ * held payment, `heldUnspent` is what it still holds for the plan (0 once released) and
+ * `releasedAt` when the hold ended; both empty for other payments. */
+const advanceFields = {
+  advance: advanceKindSchema.nullable(),
+  heldUnspent: balanceAmountSchema,
+  releasedAt: isoDateTimeSchema.nullable(),
+};
 
 /** A refund or void: the rows it wrote (one per paid account for a household void). */
 export const paymentWriteResultSchema = z.object({ ids: z.array(idSchema).min(1) });
@@ -201,6 +259,7 @@ export const transactionSchema = z.object({
   visits: z.array(z.object({ visitId: idSchema, visitNumber: z.number().int().positive() })),
   recordedBy: z.object({ userId: idSchema, name: z.string().nullable() }),
   recordedAt: isoDateTimeSchema,
+  ...advanceFields,
 });
 export type Transaction = z.infer<typeof transactionSchema>;
 
@@ -314,9 +373,14 @@ export type Household = z.infer<typeof householdSchema>;
 export const patientAccountSchema = z.object({
   patientId: idSchema,
   currency: currencySchema,
-  /** Σ ledger in the tenant currency; negative = credit. */
+  /** Σ ledger in the tenant currency; negative = credit or held money. */
   balance: balanceAmountSchema,
+  /** Free credit: money no charge has used that is not held for the plan. */
   credit: balanceAmountSchema,
+  /** Paid in advance for the treatment plan and not spent yet (ADR-0051). */
+  held: balanceAmountSchema,
+  /** What a `plan` advance may still take (ADR-0051 A8); null without plan work to charge. */
+  planRemaining: balanceAmountSchema.nullable(),
   lastVisit: z
     .object({
       visitId: idSchema,
@@ -395,6 +459,7 @@ export const receiptSchema = z.object({
       allocations: z.array(allocationLineSchema),
       /** The account's balance right after this payment. */
       balanceAfter: balanceAmountSchema,
+      ...advanceFields,
     }),
   ),
 });

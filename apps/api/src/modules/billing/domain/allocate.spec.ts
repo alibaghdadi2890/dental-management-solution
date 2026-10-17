@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  heldPosition,
   type AllocationPair,
   type AllocationSource,
   type AllocationTarget,
@@ -309,5 +310,94 @@ describe('refundReleases (P6)', () => {
       { targetId: 'v2', amount: $(80) },
     ]);
     expect(refundReleases({ amount: $(40), capacity: $(240), pairs })).toEqual([]);
+  });
+});
+
+describe('settle with money held for the plan (ADR-0051)', () => {
+  const planVisit = (entryId: string, date: string, net: number, planShare: number) => ({
+    ...target(entryId, date, net),
+    planShare: $(planShare),
+  });
+  const held = (entryId: string, date: string, capacity: number) => ({
+    ...source(entryId, date, capacity),
+    held: true,
+  });
+  const rows = (input: Parameters<typeof settle>[0]) =>
+    settle(input).map((row) => [row.sourceId, row.targetId, row.amount, row.kind]);
+
+  it('covers only the plan share of a visit and leaves other charges open', () => {
+    const targets = [
+      target('cleaning', '2026-02-01', 50),
+      planVisit('crown', '2026-03-01', 700, 600),
+    ];
+    expect(rows({ targets, sources: [held('adv', '2026-01-15', 1000)], pairs: [] })).toEqual([
+      ['adv', 'crown', $(600), 'credit_applied'],
+    ]);
+  });
+
+  it('caps the held room at the net when a visit discount brings the charge under its plan lines', () => {
+    const targets = [planVisit('crown', '2026-03-01', 550, 600)];
+    expect(rows({ targets, sources: [held('adv', '2026-01-15', 1000)], pairs: [] })).toEqual([
+      ['adv', 'crown', $(550), 'credit_applied'],
+    ]);
+  });
+
+  it('uses held money before free credit on plan work, so the credit pays the rest', () => {
+    const targets = [
+      target('cleaning', '2026-02-01', 50),
+      planVisit('crown', '2026-03-01', 700, 600),
+    ];
+    const sources = [source('credit', '2026-01-10', 200), held('adv', '2026-01-15', 1000)];
+    expect(rows({ targets, sources, pairs: [] })).toEqual([
+      ['adv', 'crown', $(600), 'credit_applied'],
+      ['credit', 'cleaning', $(50), 'credit_applied'],
+      ['credit', 'crown', $(100), 'credit_applied'],
+    ]);
+  });
+
+  it('shares the held room between two held payments', () => {
+    const targets = [planVisit('crown', '2026-03-01', 600, 600)];
+    const sources = [held('adv1', '2026-01-10', 400), held('adv2', '2026-01-15', 400)];
+    expect(rows({ targets, sources, pairs: [] })).toEqual([
+      ['adv1', 'crown', $(400), 'credit_applied'],
+      ['adv2', 'crown', $(200), 'credit_applied'],
+    ]);
+  });
+
+  it('releases held money when an amendment removes a plan service, and keeps it held', () => {
+    const targets = [planVisit('crown', '2026-03-01', 700, 0), target('cleaning', '2026-02-01', 50)];
+    const sources = [held('adv', '2026-01-15', 1000)];
+    expect(rows({ targets, sources, pairs: [pair('adv', 'crown', 600)] })).toEqual([
+      ['adv', 'crown', -$(600), 'release'],
+    ]);
+  });
+
+  it('marks a new held payment’s first cover as an allocation', () => {
+    const targets = [planVisit('crown', '2026-03-01', 700, 600)];
+    const result = settle({
+      targets,
+      sources: [held('adv', '2026-04-01', 300)],
+      pairs: [],
+      newSourceIds: new Set(['adv']),
+    });
+    expect(result.map((row) => row.kind)).toEqual(['allocation']);
+  });
+
+  it('lets a refund take the unspent held money first', () => {
+    expect(
+      refundReleases({ amount: $(300), capacity: $(1000), pairs: [pair('adv', 'crown', 600)] }),
+    ).toEqual([]);
+  });
+});
+
+describe('heldPosition (ADR-0051 A8)', () => {
+  it('reports the unspent held money and the plan charges it could still cover', () => {
+    const targets = [
+      { ...target('crown', '2026-03-01', 700), planShare: $(600) },
+      target('cleaning', '2026-02-01', 50),
+    ];
+    const sources = [{ ...source('adv', '2026-01-15', 400), held: true }, source('p', '2026-03-02', 100)];
+    const pairs = [pair('adv', 'crown', 400), pair('p', 'crown', 100)];
+    expect(heldPosition({ targets, sources, pairs })).toEqual({ unspent: 0n, openRoom: $(200) });
   });
 });

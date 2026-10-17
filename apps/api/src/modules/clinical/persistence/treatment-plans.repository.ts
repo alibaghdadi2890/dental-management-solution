@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { RecordNotFoundError } from '../domain/visit-errors';
-import { treatmentPlans } from './schema';
+import { treatmentPlans, visits } from './schema';
 
 type PlanRow = typeof treatmentPlans.$inferSelect;
 
@@ -129,6 +129,35 @@ export class TreatmentPlansRepository {
           )
           .orderBy(asc(treatmentPlans.recordedAt), asc(treatmentPlans.id))
       ).map(toStored),
+    );
+  }
+
+  /**
+   * The patient's plan work not charged yet (ADR-0051): planned or in progress, or performed in a
+   * visit still live (in progress or paused), so its charge is still to post.
+   */
+  listUncharged(patientId: string): Promise<StoredTreatmentPlan[]> {
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select({ plan: treatmentPlans })
+          .from(treatmentPlans)
+          .leftJoin(visits, eq(visits.id, treatmentPlans.performedInVisitId))
+          .where(
+            and(
+              eq(treatmentPlans.patientId, patientId),
+              isNull(treatmentPlans.deletedAt),
+              or(
+                inArray(treatmentPlans.status, ['planned', 'in_progress']),
+                and(
+                  eq(treatmentPlans.status, 'performed'),
+                  inArray(visits.status, ['in_progress', 'paused']),
+                ),
+              ),
+            ),
+          )
+          .orderBy(asc(treatmentPlans.recordedAt), asc(treatmentPlans.id))
+      ).map((row) => toStored(row.plan)),
     );
   }
 

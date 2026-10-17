@@ -5,6 +5,7 @@ export { ChartService } from './application/reads/chart.service';
 export { PatientRecordsService } from './application/records/patient-records.service';
 export { type VisitSearchInternal, VisitListService } from './application/reads/visit-list.service';
 export {
+  type PlanWorkFacts,
   type VisitChargeFacts,
   VisitFactsService,
   type VisitMoneyFacts,
@@ -39,10 +40,12 @@ export {
   TREATMENT_CANCELLED,
   TREATMENT_PERFORMED,
   TREATMENT_PLANNED,
+  TREATMENT_REMOVED,
   TREATMENT_STARTED,
   type TreatmentCancelled,
   type TreatmentPerformed,
   type TreatmentPlanned,
+  type TreatmentRemoved,
   type TreatmentStarted,
 } from './events/record-events';
 export { MEDICAL_HISTORY_CONFIRMED, type MedicalHistoryConfirmed } from './events/visit-events';

@@ -1,3 +1,4 @@
+import type { AdvanceKind, HoldReleaseKind } from '@dcm/contracts';
 import type { DomainEvent } from '../../../platform/events/domain-event';
 
 /**
@@ -23,6 +24,8 @@ export type PaymentRecorded = DomainEvent<
     amount: string;
     currency: string;
     allocations: AllocationFact[];
+    /** ADR-0051: how the payment was made in advance; null for an ordinary payment. */
+    advance: AdvanceKind | null;
   }
 >;
 
@@ -50,4 +53,14 @@ export const CREDIT_APPLIED = 'CreditApplied';
 export type CreditApplied = DomainEvent<
   typeof CREDIT_APPLIED,
   { patientId: string; currency: string; allocations: AllocationFact[] }
+>;
+
+/**
+ * A payment's hold for the plan ended (ADR-0051 A7): the plan closed or it was released by hand.
+ * `amount` is what it still held, now free credit.
+ */
+export const ADVANCE_RELEASED = 'AdvanceReleased';
+export type AdvanceReleased = DomainEvent<
+  typeof ADVANCE_RELEASED,
+  { paymentId: string; patientId: string; currency: string; amount: string; kind: HoldReleaseKind }
 >;

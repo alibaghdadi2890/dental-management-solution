@@ -238,7 +238,10 @@ export const visitFinancialSummarySchema = z.object({
     outstanding: balanceAmountSchema,
   }),
   previous: balanceAmountSchema,
+  /** The balance with the money held for the plan left out: it pays plan work only (ADR-0051). */
   totalOutstanding: balanceAmountSchema,
+  /** Paid in advance for the treatment plan and not spent yet. */
+  held: balanceAmountSchema,
   payments: z.array(
     z.object({
       paymentId: idSchema,
@@ -246,6 +249,8 @@ export const visitFinancialSummarySchema = z.object({
       paidAt: isoDateSchema,
       method: paymentMethodSchema,
       amount: balanceAmountSchema,
+      /** An advance held for the plan (ADR-0051): "Covered by advance". */
+      fromAdvance: z.boolean(),
     }),
   ),
 });

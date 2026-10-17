@@ -123,6 +123,7 @@ describe('visitFinancialSummarySchema', () => {
     visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
     previous: '40.00',
     totalOutstanding: '157.00',
+    held: '0.00',
     payments: [],
   };
 
