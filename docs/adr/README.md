@@ -55,3 +55,5 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0048](0048-the-worklist-replaces-the-unfinished-prompt.md)         | A treatment visit keeps a list of planned work for today      | Accepted (amends 0032)               |
 | [0049](0049-a-diagnosis-cites-what-it-was-seen-on.md)               | A diagnosis cites an image; `files` vetoes in the transaction | Accepted                             |
 | [0051](0051-advance-payments-are-held-for-the-treatment-plan.md)   | An advance payment is held for the treatment plan             | Accepted (amends 0029)               |
+| [0052](0052-phones-are-optional-and-kept-as-typed.md)              | A phone is optional and kept as typed; the record says what is missing | Accepted (supersedes C3, C10)  |
+| [0053](0053-imports-write-through-services-and-never-charge-visits.md) | Imports write through the owning services; imported visits are never charged | Accepted |

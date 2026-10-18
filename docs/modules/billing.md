@@ -83,7 +83,7 @@ ADR-0017).
   `0018_ledger_lines_append_only`). A merge re-point moves the entry, and its lines with it.
 - `payments` (tenant RLS, feature 5): `id`, `tenant_id`, `patient_id` (no FK), `kind`
   (`payment_kind`: `payment`, `refund`, `void`), `amount numeric(12,2) > 0`, `currency`, `method`
-  (`payment_method`: `cash`, `card`, `bank_transfer`, `insurance`), `paid_at date`, `reference?`,
+  (`payment_method`: `cash`, `card`, `bank_transfer`, `whish`, `insurance`; ADR-0052), `paid_at date`, `reference?`,
   `note?`, `reason?` (set iff a refund or void), `receipt_number` (the `RCT-` sequence; refunds and
   voids carry their payment's; indexed, not unique: a household shares one, and a merge may bring two rows of one receipt onto one patient (migration `0025_payments_indexes`)), `household_group_id?`,
   `payer_contact_id?` (no FK), `reverses_payment_id?` (set iff a refund or void, FK),

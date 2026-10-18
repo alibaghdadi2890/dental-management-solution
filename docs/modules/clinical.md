@@ -230,6 +230,20 @@ letter; the stored key stays `B` (`surfaceShort` in `locales/fr/clinical.json`).
   `visit.not_live`. An archived patient's live visit still completes.
 - Every actor column (`started_by`, `discarded_by`, …) is the auth user id (W10).
 
+### Imported visits (feature 6, ADR-0053)
+
+`VisitImportService.importVisit` writes a visit from a previous system in one go, in the caller's
+transaction (`visit:write`): `imported_at` and `external_id` set (unique per tenant; a CHECK keeps
+both only on a completed visit), type `treatment`, completed on its date and clinic times (no
+times: the day's start, 1 minute), its done lines as visit services at the amounts charged, as
+recorded, with their presence effect (`PresenceWriter.applyService`); a line not done → a plan
+item `in_progress`, started and accepted in the visit with a session there, priority `high`,
+price 0, note "Charged … before the migration". The dentist must be a staff member of the clinic
+(one who has left included), a room a room of the branch (active or not), the date not after the
+tenant's today, an end time after a start time. Audited `visit.import`;
+**no `VisitCompleted`**, so no ledger charge. An external id already imported answers with that
+visit (`created: false`). Amend and void refuse an imported visit: 409 `visit.imported`.
+
 ### Visit flows (feature 10)
 
 A visit has a type, and the type decides which steps the visit shows (ADR-0044). The steps are
