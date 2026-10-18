@@ -532,7 +532,7 @@ describe('Add contact panel', () => {
     expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
   });
 
-  it('flips a minor’s completeness once a guardian is added, the roles defaulting to all three', async () => {
+  it('fills a phoneless minor’s missing phone with a guardian, the roles defaulting to all three', async () => {
     const fetchMock = mockApi({
       patients: [KARIM],
       contacts: { [KARIM.id]: [] },
@@ -547,7 +547,7 @@ describe('Add contact panel', () => {
       ]),
     });
     renderRecord({ url: infoOf(KARIM) });
-    expect(await screen.findByText('Partly complete')).toBeTruthy();
+    expect(await screen.findByText('Missing: phone or guardian')).toBeTruthy();
     const card = await contactsCard();
     expect(await within(card).findByText('No guardian recorded')).toBeTruthy();
     fireEvent.click(within(card).getByRole('button', { name: 'Add contact' }));
@@ -565,7 +565,7 @@ describe('Add contact panel', () => {
     fireEvent.click(within(staged).getByRole('button', { name: 'Add contact' }));
 
     expect(await screen.findByText('Complete')).toBeTruthy();
-    expect(screen.queryByText('Partly complete')).toBeNull();
+    expect(screen.queryByText('Missing: phone or guardian')).toBeNull();
     expect(sent(fetchMock, 'POST', `/patients/${KARIM.id}/contacts`)).toEqual({
       target: { contactId: MARIA_ID },
       relationship: 'parent',

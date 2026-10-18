@@ -14,7 +14,6 @@ import {
   addPendingContact,
   type ContactDisplay,
   type PatientFormValues,
-  phoneOptional,
   removePendingContact,
   setLinkContactId,
   showGuardianBlock,
@@ -46,8 +45,6 @@ function withoutContactErrors(errors: FormErrors): FormErrors {
  * show (client-side ones only once a save was attempted, plus whatever the server rejected), and
  * the tenant facts every field reads (country, today in the tenant's zone, DOB order). `formRef`
  * is the caller's `<form>`: each save attempt that shows errors focuses its first invalid field.
- * In `edit` mode the phone rule only applies to an edit that touches the phone or the date of
- * birth (`phoneOptional`), as on the server.
  */
 export function usePatientForm(
   start: () => PatientFormValues,
@@ -78,9 +75,7 @@ export function usePatientForm(
     formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
   }, [attempts, formRef]);
 
-  const baseline = mode === 'edit' ? initial : undefined;
-  const clientErrors = (): FormErrors =>
-    validate(values, { country, today, ...(baseline ? { initial: baseline } : {}) });
+  const clientErrors = (): FormErrors => validate(values, { today });
   const errors: FormErrors = { ...(attempts > 0 ? clientErrors() : {}), ...serverErrors };
 
   const set = (field: TextField) => (value: string) => {
@@ -116,8 +111,6 @@ export function usePatientForm(
     country,
     today,
     order,
-    /** The phone is optional while the DOB makes the patient a minor (design addendum C3). */
-    phoneOptional: phoneOptional(values, today, baseline),
     set,
     setSex: (sex: PatientSex) => {
       setValues((current) => ({ ...current, sex }));

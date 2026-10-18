@@ -56,7 +56,6 @@ describe('usePatientForm — guardian block', () => {
       result.current.set('dateOfBirth')('2015-03-02');
     });
     expect(result.current.showGuardianBlock).toBe(true);
-    expect(result.current.phoneOptional).toBe(true);
     act(() => {
       result.current.set('dateOfBirth')('1990-03-02');
     });

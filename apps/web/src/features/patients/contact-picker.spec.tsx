@@ -275,18 +275,21 @@ describe('ContactPicker', () => {
       expect(field('Name').value).toBe('');
     });
 
-    it('requires a name and a valid phone for the tenant country', () => {
+    it('requires a name and a phone, in any format (ADR-0052)', () => {
       mockApi();
       const onSelect = renderPicker();
       open();
       add();
       expect(screen.getAllByText('Required')).toHaveLength(2);
+      expect(onSelect).not.toHaveBeenCalled();
       fireEvent.change(field('Name'), { target: { value: 'Nadia Haddad' } });
       fireEvent.change(field('Phone'), { target: { value: '12' } });
       add();
-      expect(screen.getByText('Enter a valid phone number')).toBeTruthy();
-      expect(field('Phone').getAttribute('aria-invalid')).toBe('true');
-      expect(onSelect).not.toHaveBeenCalled();
+      expect(onSelect).toHaveBeenCalledWith(
+        expect.objectContaining({
+          target: { newContact: { fullName: 'Nadia Haddad', phone: '12', email: null } },
+        }),
+      );
     });
 
     it('emits a new contact with its relationship, closes, and returns to the search', async () => {

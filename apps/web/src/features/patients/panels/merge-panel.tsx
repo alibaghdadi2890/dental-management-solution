@@ -7,7 +7,7 @@ import { useConfirm } from '@/components/ui/confirm-context';
 import { RightPanel } from '@/components/ui/right-panel';
 import { useToast } from '@/components/ui/toast-context';
 import { useStaffNames } from '@/features/users/use-staff-names';
-import { formatCalendarDate, formatPhone, todayIn } from '@/lib/format';
+import { formatCalendarDate, formatPhone } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { PatientPanel } from '../list-query';
 import { AlertChips } from '../medical-history/alert-chips';
@@ -16,7 +16,6 @@ import {
   type MergeDraft,
   mergeDraft,
   mergeValue,
-  mergePhoneMissing,
   preview,
   swapKeep,
   toMergePayload,
@@ -126,8 +125,6 @@ function MergeEditor({
   const dropped = keepsA ? b : a;
   const fields = differingFields(a, b);
   const result = preview(draft);
-  // The server refuses to leave an adult without a phone (422 at `phone`): say so before Merge.
-  const phoneMissing = mergePhoneMissing(draft, todayIn(tenant.timeZone));
   const hasAlerts = result.allergies.length > 0 || result.conditions.length > 0;
 
   const valueOf = (patient: Patient, field: MergeField): string => {
@@ -197,7 +194,7 @@ function MergeEditor({
       footer={
         <>
           <Button onClick={onClose}>{t('common:cancel')}</Button>
-          <Button variant="dangerSolid" disabled={phoneMissing} onClick={submit}>
+          <Button variant="dangerSolid" onClick={submit}>
             {t('merge.submit')}
           </Button>
         </>
@@ -299,15 +296,6 @@ function MergeEditor({
       </div>
 
       <MergeContactsList kept={kept} dropped={dropped} country={tenant.country} />
-
-      {phoneMissing && (
-        <p
-          role="alert"
-          className="rounded-lg border border-danger-border bg-danger-bg px-3 py-2.5 text-[12.5px] leading-[1.45] font-medium text-danger"
-        >
-          {t('merge.phoneRequired')}
-        </p>
-      )}
 
       <p className="text-[12.5px] leading-normal text-ink-secondary">
         {MERGE_FIELDS.length > fields.length &&

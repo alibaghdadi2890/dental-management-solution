@@ -59,6 +59,7 @@
     "cash": "نقدًا",
     "card": "بطاقة",
     "bank_transfer": "تحويل مصرفي",
+    "whish": "ويش",
     "insurance": "تأمين"
   },
   "charge": {

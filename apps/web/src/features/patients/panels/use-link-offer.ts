@@ -1,4 +1,4 @@
-import { type ContactLookupItem, normalizePhone } from '@dcm/contracts';
+import { type ContactLookupItem, storedPhone } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
@@ -93,7 +93,8 @@ function phoneOf(item: ContactLookupItem): string | null {
 export function useLinkOffer(form: PatientForm, enabled: boolean) {
   const { values, country } = form;
   const minor = form.showGuardianBlock;
-  const e164 = enabled ? (normalizePhone(values.phone, country)?.e164 ?? null) : null;
+  // As the server stores it (ADR-0052): E.164 when valid, otherwise as typed.
+  const e164 = enabled ? (storedPhone(values.phone, country)?.value ?? null) : null;
   const digits = e164 === null ? '' : e164.replace(/\D/g, '');
   const settled = useDebouncedValue(digits, DEBOUNCE_MS);
   const lookup = useQuery({ ...contactLookupQuery(settled), enabled: settled !== '' });

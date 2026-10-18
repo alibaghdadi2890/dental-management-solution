@@ -137,42 +137,15 @@ describe('MergePanel', () => {
     );
   });
 
-  it('blocks Merge while an adult survivor would be left without a phone', async () => {
+  it('lets the survivor take a missing phone, an adult included (ADR-0052)', async () => {
     mockApi({ patients: [OLDER, { ...NEWER, phone: null }] });
     renderPanels({ url: URL });
     const aside = await mergePanel();
-    const merge = within(aside).getByRole('button', { name: 'Merge records' });
-    expect(within(aside).queryByRole('alert')).toBeNull();
-    expect(merge).toHaveProperty('disabled', false);
-
     fireEvent.click(radio('Phone from P-000002: —'));
-    expect(within(aside).getByRole('alert').textContent).toBe(
-      'An adult patient needs a phone number. Keep a phone, or a date of birth under 18.',
-    );
-    expect(merge).toHaveProperty('disabled', true);
-
-    fireEvent.click(radio('Phone from P-000001: 03 123 456'));
     expect(within(aside).queryByRole('alert')).toBeNull();
-    expect(merge).toHaveProperty('disabled', false);
-  });
-
-  it("names the server's phone rule when it refuses the merge", async () => {
-    mockApi({
-      patients: [OLDER, NEWER],
-      mutation: (method, path) =>
-        path === '/patients/merge'
-          ? problem(422, 'validation_failed', [
-              { path: 'phone', code: 'required', message: 'A phone number is required for adults' },
-            ])
-          : undefined,
-    });
-    renderPanels({ url: URL });
-    await mergePanel();
-    const dialog = await openConfirm();
-    fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'Duplicate' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Merge records' }));
-    expect((await within(dialog).findByRole('alert')).textContent).toBe(
-      "Couldn't merge: an adult patient needs a phone number",
+    expect(within(aside).getByRole('button', { name: 'Merge records' })).toHaveProperty(
+      'disabled',
+      false,
     );
   });
 

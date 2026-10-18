@@ -1,5 +1,4 @@
 import {
-  isMinor,
   type MedicalItem,
   MERGE_FIELDS,
   patientMergeSchema,
@@ -122,21 +121,6 @@ export function preview(draft: MergeDraft): MergePreview {
     allergies: unionNames(kept.medicalHistory.allergies, dropped.medicalHistory.allergies),
     conditions: unionNames(kept.medicalHistory.conditions, dropped.medicalHistory.conditions),
   };
-}
-
-/**
- * True when the merge would leave an adult without a phone — the server's phone rule (design
- * addendum C3), which refuses it with 422: the resolved phone is missing while the resolved date
- * of birth is not a minor's on the tenant's `today` (no date of birth = adult). Like the server,
- * only a merge that changes the survivor's phone or date of birth is checked, so a phoneless
- * patient who has since come of age can still be merged when neither changes.
- */
-export function mergePhoneMissing(draft: MergeDraft, today: string): boolean {
-  const kept = keptOf(draft);
-  const result = preview(draft);
-  const touched = result.phone !== kept.phone || result.dateOfBirth !== kept.dateOfBirth;
-  if (!touched || result.phone !== null) return false;
-  return result.dateOfBirth === null || !isMinor(result.dateOfBirth, today);
 }
 
 /**

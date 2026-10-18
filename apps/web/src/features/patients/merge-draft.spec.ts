@@ -1,13 +1,6 @@
 import type { Patient } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
-import {
-  differingFields,
-  mergeDraft,
-  mergePhoneMissing,
-  preview,
-  swapKeep,
-  toMergePayload,
-} from './merge-draft';
+import { differingFields, mergeDraft, preview, swapKeep, toMergePayload } from './merge-draft';
 import { history } from './patients.test-utils';
 
 const ID_A = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e';
@@ -138,44 +131,6 @@ describe('preview', () => {
     expect(preview(merge).medication).toBeNull();
     const dropped = { ...merge, choices: { ...merge.choices, medication: 'drop' as const } };
     expect(preview(dropped).medication).toBe('Warfarin');
-  });
-});
-
-describe('mergePhoneMissing', () => {
-  const TODAY = '2026-09-27';
-  const phoneless = patient({ id: ID_B, displayNumber: 'P-000002', phone: null });
-
-  it('is true when an adult survivor would take the missing phone', () => {
-    const draft = mergeDraft(older, phoneless);
-    expect(mergePhoneMissing(draft, TODAY)).toBe(false);
-    expect(mergePhoneMissing({ ...draft, choices: { phone: 'drop' } }, TODAY)).toBe(true);
-  });
-
-  it('treats a survivor without a date of birth as an adult', () => {
-    const noDob = patient({ dateOfBirth: null });
-    const draft = mergeDraft(noDob, { ...phoneless, dateOfBirth: null });
-    expect(mergePhoneMissing({ ...draft, choices: { phone: 'drop' } }, TODAY)).toBe(true);
-  });
-
-  it("is false for a minor on the tenant's today", () => {
-    const minor = patient({ dateOfBirth: '2015-01-01' });
-    const draft = mergeDraft(minor, { ...phoneless, dateOfBirth: '2015-01-01' });
-    expect(mergePhoneMissing({ ...draft, choices: { phone: 'drop' } }, TODAY)).toBe(false);
-  });
-
-  it('is true when a phoneless minor survivor takes an adult date of birth', () => {
-    const minor = patient({ phone: null, dateOfBirth: '2015-01-01' });
-    const adult = patient({ id: ID_B, displayNumber: 'P-000002', phone: null });
-    const draft = mergeDraft(minor, adult);
-    expect(mergePhoneMissing(draft, TODAY)).toBe(false);
-    expect(mergePhoneMissing({ ...draft, choices: { dateOfBirth: 'drop' } }, TODAY)).toBe(true);
-  });
-
-  it('is false when the merge changes neither the phone nor the date of birth', () => {
-    // A phoneless patient who has since come of age, merged with an identical twin record.
-    const agedOut = patient({ phone: null });
-    const twin = patient({ id: ID_B, displayNumber: 'P-000002', phone: null, notes: 'x' });
-    expect(mergePhoneMissing({ ...mergeDraft(agedOut, twin), choices: {} }, TODAY)).toBe(false);
   });
 });
 

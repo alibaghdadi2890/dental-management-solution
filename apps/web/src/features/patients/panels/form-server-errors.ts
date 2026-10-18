@@ -32,7 +32,6 @@ const SERVER_FIELDS: Record<string, ErrorField> = {
 
 /** The message a field gets for a server error; anything not listed reads "Check this value". */
 const SERVER_ERROR_KEYS: Partial<Record<ErrorField, ErrorKey>> = {
-  phone: 'invalidPhone',
   email: 'invalidEmail',
   openingBalanceAmount: 'invalidAmount',
 };
@@ -62,7 +61,6 @@ function contactErrorOf(rest: string | undefined, code: string): ErrorKey {
     if (code === 'merged') return 'contactMerged';
     return 'invalid';
   }
-  if (rest === 'target.newContact.phone') return 'invalidPhone';
   if (rest === 'isGuardian') return 'roleRequired';
   return 'invalid';
 }
@@ -81,8 +79,6 @@ function fieldErrorOf(path: string, code: string): [ErrorField, ErrorKey] | unde
   if (bare === 'linkContactId') return ['linkContactId', linkContactErrorOf(code)];
   const field = fieldOfPath(path);
   if (!field) return undefined;
-  // The phone rule (a missing phone for an adult) reads "Required", not "invalid number".
-  if (field === 'phone' && code === 'required') return [field, 'required'];
   return [field, SERVER_ERROR_KEYS[field] ?? 'invalid'];
 }
 
@@ -119,7 +115,6 @@ export type PatientFailure =
   | 'archived'
   | 'merged'
   | 'unknownDentist'
-  | 'phoneRequired'
   | 'notFound'
   | 'conflict'
   | 'forbidden'
@@ -197,9 +192,6 @@ export function failureOf(error: unknown, sent: SentContext = {}): PatientFailur
   if (known) return known;
   if (error.code === 'validation_failed') {
     const issues = error.problem.errors ?? [];
-    if (issues.some(({ path, code }) => fieldOfPath(path) === 'phone' && code === 'required')) {
-      return 'phoneRequired';
-    }
     const contact = contactIssueFailure(issues);
     if (contact) return contact;
   }

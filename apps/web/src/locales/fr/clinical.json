@@ -441,7 +441,8 @@
       "checkout_closed": "La remise ne peut être définie qu’à l’encaissement, le jour de la visite. Demandez à un dentiste de corriger la visite.",
       "not_completed": "Seule une visite terminée peut être encaissée.",
       "jaw_required": "Choisissez l’arcade supérieure ou inférieure.",
-      "jaw_not_allowed": "Cet acte ne s’enregistre pas sur une arcade."
+      "jaw_not_allowed": "Cet acte ne s’enregistre pas sur une arcade.",
+      "imported": "Cette visite a été importée de l’ancien système : elle ne peut être ni modifiée ni annulée."
     },
     "record": {
       "not_removable": "Seuls les éléments saisis dans cette visite peuvent être retirés.",

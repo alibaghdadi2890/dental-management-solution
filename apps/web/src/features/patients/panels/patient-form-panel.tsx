@@ -195,7 +195,7 @@ function PatientForm({
   }, []);
 
   const dirty = editing ? isEditDirty(initial, values, country) : isDirty(initial, values);
-  const ready = values.fullName.trim() !== '' && (values.phone.trim() !== '' || form.phoneOptional);
+  const ready = values.fullName.trim() !== '';
   // Contact work not yet applied (a staged pick, a role editor's changes) is unsaved too, though
   // Save has nothing to send for it.
   const drafts = useContactDrafts();

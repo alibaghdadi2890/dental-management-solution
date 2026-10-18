@@ -65,7 +65,7 @@ export function PatientField({
   const { t } = useTranslation(['patients', 'common']);
   const { values, set } = form;
   const tone: Tone = variant === 'page' ? 'page' : PROMINENT.has(name) ? 'required' : 'demoted';
-  const isRequired = name === 'fullName' || (name === 'phone' && !form.phoneOptional);
+  const isRequired = name === 'fullName';
   const wrapper = cn(tone === 'demoted' && 'text-ink-muted', className);
 
   const message = form.messageOf;

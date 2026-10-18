@@ -254,7 +254,6 @@
     "archived": "Archived patients can't be edited. Restore the record from the Archived view first.",
     "errors": {
       "required": "Required",
-      "invalidPhone": "Enter a valid phone number",
       "invalidEmail": "Check the email address",
       "invalidDate": "Enter a full date",
       "futureDate": "Can't be in the future",
@@ -309,7 +308,6 @@
     "matching_one": "{{count, number}} other field matches.",
     "matching_other": "{{count, number}} other fields match.",
     "summary": "{{drop}} will be archived. Its balance moves to {{keep}}.",
-    "phoneRequired": "An adult patient needs a phone number. Keep a phone, or a date of birth under 18.",
     "unavailable": "One of these records is archived or already merged, so they can't be merged.",
     "submit": "Merge records",
     "confirmTitle": "Merge {{drop}} into {{keep}}?",
@@ -322,7 +320,6 @@
     "archived": "the record is archived",
     "merged": "the record has already been merged into another",
     "unknownDentist": "the chosen dentist is no longer available",
-    "phoneRequired": "an adult patient needs a phone number",
     "notFound": "the patient no longer exists",
     "conflict": "someone else changed this record — reload and try again",
     "forbidden": "you don’t have permission to do this",
@@ -386,7 +383,7 @@
     "form": {
       "title": "Patient information",
       "complete": "Complete",
-      "partial": "Partly complete",
+      "missing": "Missing: {{fields}}",
       "intro": "Nothing here is required. Fill it in when it becomes relevant.",
       "archived": "This record is archived, so its details can’t be changed. Restore it to edit them.",
       "merged": "This record was merged into another one, so its details can’t be changed."
@@ -428,7 +425,9 @@
       "recordPayment": "Record payment",
       "examination": "No examination yet",
       "examinationReason": "Registered, never examined in this clinic",
-      "startExamination": "Start examination"
+      "startExamination": "Start examination",
+      "details": "Missing information",
+      "completeDetails": "Complete details"
     }
   },
   "contacts": {
@@ -458,8 +457,7 @@
       "add": "Add contact",
       "errors": {
         "required": "Required",
-        "tooLong": "Too long",
-        "invalidPhone": "Enter a valid phone number"
+        "tooLong": "Too long"
       }
     },
     "list": "Contacts",
@@ -571,5 +569,10 @@
     "add": "Add “{{name}}”",
     "remove": "Remove {{name}}",
     "addFailed": "Couldn’t add {{name}}: {{reason}}"
+  },
+  "missingInformation": {
+    "dateOfBirth": "date of birth",
+    "sex": "sex",
+    "phone": "phone or guardian"
   }
 }

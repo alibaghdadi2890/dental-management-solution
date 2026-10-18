@@ -1,4 +1,4 @@
-import type { Patient, Session } from '@dcm/contracts';
+import { missingInformation, type Patient, type Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useId } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,8 @@ import { PriorityChip, SessionChip } from '@/features/clinical/flow/priority-chi
 import { useTargetLabel } from '@/features/clinical/flow/use-target-label';
 import type { StartPreset } from '@/features/clinical/start-visit-popover';
 import { chartQuery, lastVisitQuery } from '@/features/clinical/visits-api';
-import { formatCalendarDate, formatDate, formatMoney } from '@/lib/format';
+import { formatCalendarDate, formatDate, formatList, formatMoney } from '@/lib/format';
+import { contactsQuery } from '../contacts-api';
 import { cn } from '@/lib/utils';
 import { type AttentionItem, needsAttention } from './needs-attention';
 
@@ -32,18 +33,23 @@ interface Row {
  * The Overview's **Needs attention** card (feature 10, V11): what to do next for this patient,
  * most pressing first (`needsAttention`) — work in progress → **Continue**, an urgent plan the
  * patient accepted → **Treat**, money owed → **Record payment**, never examined → **Start
- * examination** — or "Nothing needs attention". A row whose action the caller may not take
- * shows without its button. The plan rows need `visit:read`, the balance `payment:read`.
+ * examination**, important details missing → **Complete details** (ADR-0052) — or "Nothing
+ * needs attention". A row whose action the caller may not take shows without its button. The
+ * plan rows need `visit:read`, the balance `payment:read`. A patient without a phone is reached
+ * through a guardian or billing contact, so their contacts are read only then.
  */
 export function NeedsAttentionCard({
   patient,
   tenant,
   onStart,
+  onCompleteDetails,
 }: {
   patient: Patient;
   tenant: Tenant;
   /** Starts (or resumes) a visit; left out when the caller may not, or the record is closed. */
   onStart: ((preset: StartPreset) => void) | undefined;
+  /** Opens the Patient information tab; left out when the caller may not edit the record. */
+  onCompleteDetails: (() => void) | undefined;
 }) {
   const { t, i18n } = useTranslation(['patients', 'clinical']);
   const locale = i18n.resolvedLanguage ?? 'en';
@@ -56,12 +62,23 @@ export function NeedsAttentionCard({
   const chart = useQuery({ ...chartQuery(patient.id), enabled: canVisits });
   const lastVisit = useQuery({ ...lastVisitQuery(patient.id), enabled: canVisits });
   const balance = useQuery({ ...balanceQuery(patient.id), enabled: canPay });
+  const contacts = useQuery({ ...contactsQuery(patient.id), enabled: patient.phone === null });
+  const reachable = contacts.data?.some((link) => link.isGuardian || link.isBillingContact);
   const [lead] = owedBalances(balance.data?.balances ?? [], tenant.currency);
 
   const items = needsAttention({
     chart: chart.data,
     owed: lead && Number(lead.amount) > 0 ? lead : null,
     hasVisits: lastVisit.data === undefined ? undefined : lastVisit.data !== null,
+    missing:
+      patient.phone === null && reachable === undefined
+        ? undefined
+        : missingInformation({
+            dateOfBirth: patient.dateOfBirth,
+            sex: patient.sex,
+            phone: patient.phone,
+            hasReachableContact: reachable ?? false,
+          }),
   });
   const start = (preset: StartPreset) =>
     onStart && {
@@ -140,6 +157,21 @@ export function NeedsAttentionCard({
           action: action ? { label: t('record.attention.startExamination'), ...action } : null,
         };
       }
+      case 'details':
+        return {
+          key: 'details',
+          chip: '—',
+          muted: true,
+          title: t('record.attention.details'),
+          reason: formatList(
+            item.missing.map((field) => t(`missingInformation.${field}`)),
+            locale,
+          ),
+          tag: null,
+          action: onCompleteDetails
+            ? { label: t('record.attention.completeDetails'), run: onCompleteDetails }
+            : null,
+        };
     }
   };
   const rows = items.map(rowOf);

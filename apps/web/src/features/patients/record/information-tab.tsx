@@ -1,4 +1,4 @@
-import { type Patient, profileCompleteness, type Session } from '@dcm/contracts';
+import { missingInformation, type Patient, type Session } from '@dcm/contracts';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,18 +7,12 @@ import { SaveState, type SaveStatus } from '@/components/ui/save-state';
 import { useToast } from '@/components/ui/toast-context';
 import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 import { usePermission } from '@/features/auth/use-permission';
-import { todayIn } from '@/lib/format';
+import { formatList } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { ContactDraftContext, useContactDrafts } from '../contact-drafts';
 import { contactsQuery } from '../contacts-api';
 import { failureOf, failureText, fieldErrorsOf } from '../panels/form-server-errors';
-import {
-  fromPatient,
-  isEditDirty,
-  minorOn,
-  type PatientFormValues,
-  toPatchPayload,
-} from '../patient-form';
+import { fromPatient, isEditDirty, type PatientFormValues, toPatchPayload } from '../patient-form';
 import { PatientField, type PatientFieldName } from '../patient-form-fields';
 import { invalidatePatientData, patientQuery, updatePatient } from '../patients-api';
 import type { ContactActions } from '../use-contact-actions';
@@ -43,34 +37,35 @@ const leavesPanel = (current: GuardLocation, next: GuardLocation) =>
 type Phase = 'idle' | 'saving' | 'saved' | 'failed';
 
 /**
- * Complete once email and address are recorded and, for a minor on the tenant's today, a guardian
- * is among the contacts (design addendum C10); an adult's contacts are never read for it. A
- * minor's guardian is unknown while the contacts load or when they cannot be read: then there is
- * no badge, rather than a "Partly complete" that may be wrong.
+ * "Complete" once the record has a date of birth, a sex and a way to reach someone — the
+ * patient's phone, or else a guardian or billing contact — otherwise "Missing: …" names what it
+ * lacks (`missingInformation`, ADR-0052). Without a phone the contacts decide: while they load,
+ * or when they cannot be read, there is no badge rather than one that may be wrong.
  */
-function CompletenessBadge({ patient, tenant }: { patient: Patient; tenant: Tenant }) {
-  const { t } = useTranslation('patients');
-  const minor = minorOn(patient.dateOfBirth, todayIn(tenant.timeZone));
-  const contacts = useQuery({ ...contactsQuery(patient.id), enabled: minor });
-  const hasGuardian = contacts.data?.some((link) => link.isGuardian);
-  if (minor && hasGuardian === undefined) return null;
-  const complete =
-    profileCompleteness({
-      email: patient.email,
-      address: patient.address,
-      minor,
-      hasGuardian: hasGuardian ?? false,
-    }) === 'complete';
+function MissingInformationBadge({ patient }: { patient: Patient }) {
+  const { t, i18n } = useTranslation('patients');
+  const contacts = useQuery({ ...contactsQuery(patient.id), enabled: patient.phone === null });
+  const reachable = contacts.data?.some((link) => link.isGuardian || link.isBillingContact);
+  if (patient.phone === null && reachable === undefined) return null;
+  const missing = missingInformation({
+    dateOfBirth: patient.dateOfBirth,
+    sex: patient.sex,
+    phone: patient.phone,
+    hasReachableContact: reachable ?? false,
+  });
+  const fields = missing.map((field) => t(`missingInformation.${field}`));
   return (
     <span
       className={cn(
         'rounded-[5px] border px-2 py-[3px] text-[12.5px] leading-none font-medium whitespace-nowrap',
-        complete
+        missing.length === 0
           ? 'border-success-border bg-success-bg text-success'
           : 'border-warning-border bg-warning-bg text-warning',
       )}
     >
-      {complete ? t('record.form.complete') : t('record.form.partial')}
+      {missing.length === 0
+        ? t('record.form.complete')
+        : t('record.form.missing', { fields: formatList(fields, i18n.resolvedLanguage ?? 'en') })}
     </span>
   );
 }
@@ -231,7 +226,7 @@ export function InformationTab({
           <h2 id={titleId} className="m-0 text-[14px] leading-none font-semibold">
             {t('record.form.title')}
           </h2>
-          <CompletenessBadge patient={patient} tenant={tenant} />
+          <MissingInformationBadge patient={patient} />
         </div>
         <p className="mb-5 text-[12.5px] leading-normal text-ink-muted">{t('record.form.intro')}</p>
         {archived && !dirty && (

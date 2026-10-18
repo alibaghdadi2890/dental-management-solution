@@ -55,6 +55,7 @@
     "cash": "Cash",
     "card": "Card",
     "bank_transfer": "Bank transfer",
+    "whish": "Whish",
     "insurance": "Insurance"
   },
   "charge": {

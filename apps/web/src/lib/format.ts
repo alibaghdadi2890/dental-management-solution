@@ -133,8 +133,13 @@ export function formatAgeLine(
     : { kind: 'full', age, dob: formattedDob };
 }
 
-/** The stored E.164 number, formatted for display: national format for the tenant's own country,
- * international format otherwise (wraps the contracts' pure `formatPhoneFor` so call sites reach
+/** Items as a list in `locale`'s own words and punctuation ("Date of birth, sex and phone"). */
+export function formatList(items: readonly string[], locale: string): string {
+  return new Intl.ListFormat(locale, { type: 'conjunction' }).format(items);
+}
+
+/** A stored phone, formatted for display: an E.164 number in national format for the tenant's own
+ * country, international format otherwise; a phone kept as typed (ADR-0052) unchanged (wraps the contracts' pure `formatPhoneFor` so call sites reach
  * for the one shared formatter, CLAUDE.md §13, instead of hand-rolling phone display). */
 export function formatPhone(e164: string, country: string): string {
   return formatPhoneFor(e164, country as Parameters<typeof formatPhoneFor>[1]);

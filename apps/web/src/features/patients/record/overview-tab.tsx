@@ -188,6 +188,7 @@ export function OverviewTab({
   onAllVisits,
   onAllFiles,
   onOpenPlan,
+  onCompleteDetails,
 }: {
   patient: Patient;
   tenant: Tenant;
@@ -200,15 +201,27 @@ export function OverviewTab({
   onAllFiles: () => void;
   /** The Treatment plan card's "Open plan →": the Treatment plan tab. */
   onOpenPlan: () => void;
+  /** Needs attention's "Complete details": the Patient information tab. */
+  onCompleteDetails: () => void;
 }) {
   const canPay = usePermission('payment:read');
   const canVisits = usePermission('visit:read');
   const canFiles = usePermission('file:read');
+  const canEdit = usePermission('patient:write');
   const [historyTooth, setHistoryTooth] = useState<ToothCode | null>(null);
   return (
     <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr))]">
       <div className="flex min-w-0 flex-col gap-4">
-        <NeedsAttentionCard patient={patient} tenant={tenant} onStart={onStart} />
+        <NeedsAttentionCard
+          patient={patient}
+          tenant={tenant}
+          onStart={onStart}
+          onCompleteDetails={
+            canEdit && patient.archivedAt === null && patient.mergedIntoId === null
+              ? onCompleteDetails
+              : undefined
+          }
+        />
         {canVisits && (
           <LastVisitCard patientId={patient.id} locale={locale} onAllVisits={onAllVisits} />
         )}

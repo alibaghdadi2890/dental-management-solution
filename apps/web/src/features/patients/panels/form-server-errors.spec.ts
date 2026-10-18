@@ -19,20 +19,11 @@ const CONTACT_ID = '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d70';
 describe('fieldErrorsOf', () => {
   it('maps patient paths, with or without the opening-balance route’s prefix', () => {
     expect(fieldErrorsOf(apiError(422, 'validation_failed', ['phone']))).toEqual({
-      phone: 'invalidPhone',
+      phone: 'invalid',
     });
     expect(
       fieldErrorsOf(apiError(422, 'validation_failed', ['patient.email', 'patient.address'])),
     ).toEqual({ email: 'invalidEmail', address: 'invalid' });
-  });
-
-  it("puts the phone rule's missing phone as Required, not as an invalid number", () => {
-    expect(fieldErrorsOf(apiError(422, 'validation_failed', ['phone'], 'required'))).toEqual({
-      phone: 'required',
-    });
-    expect(
-      fieldErrorsOf(apiError(422, 'validation_failed', ['patient.phone'], 'required')),
-    ).toEqual({ phone: 'required' });
   });
 
   it('maps opening-balance paths to the Account fields', () => {
@@ -75,7 +66,7 @@ describe('fieldErrorsOf', () => {
       fieldErrorsOf(
         apiError(422, 'validation_failed', ['patient.contacts.0.target.newContact.phone']),
       ),
-    ).toEqual({ 'contacts.0': 'invalidPhone' });
+    ).toEqual({ 'contacts.0': 'invalid' });
     expect(
       fieldErrorsOf(apiError(422, 'validation_failed', ['contacts.0.target.newContact.fullName'])),
     ).toEqual({ 'contacts.0': 'invalid' });
@@ -138,15 +129,6 @@ describe('fieldErrorsOf', () => {
 });
 
 describe('failureOf', () => {
-  it('names the phone rule for a 422 on phone with code required', () => {
-    expect(failureOf(apiError(422, 'validation_failed', ['phone'], 'required'))).toBe(
-      'phoneRequired',
-    );
-    expect(failureOf(apiError(422, 'validation_failed', ['phone'], 'invalid_phone'))).toBe(
-      'unexpected',
-    );
-  });
-
   it('names the known patient failures', () => {
     expect(failureOf(apiError(409, 'patient.archived'))).toBe('archived');
     expect(failureOf(apiError(409, 'patient.merged'))).toBe('merged');

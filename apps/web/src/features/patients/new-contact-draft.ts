@@ -2,7 +2,7 @@ import {
   type ContactLinkTarget,
   type ContactRelationship,
   nameSchema,
-  normalizePhone,
+  storedPhone,
   toAsciiDigits,
 } from '@dcm/contracts';
 import type { ContactDisplay } from './patient-form';
@@ -39,24 +39,27 @@ export function newContactDraft(typed: string, relationship: ContactRelationship
   };
 }
 
-type PhoneCountry = Parameters<typeof normalizePhone>[1];
+type PhoneCountry = Parameters<typeof storedPhone>[1];
 
-export type NewContactError = 'required' | 'tooLong' | 'invalidPhone';
+/** The contract's limit on a typed phone. */
+const PHONE_MAX = 40;
+
+export type NewContactError = 'required' | 'tooLong';
 
 /** The name and phone errors of a draft, keyed by `contacts.picker.errors.*`. */
-export function draftErrors(draft: NewContactDraft, country: string) {
+export function draftErrors(draft: NewContactDraft) {
   const errors: { fullName?: NewContactError; phone?: NewContactError } = {};
   if (draft.fullName.trim() === '') errors.fullName = 'required';
   else if (!nameSchema.safeParse(draft.fullName).success) errors.fullName = 'tooLong';
   if (draft.phone.trim() === '') errors.phone = 'required';
-  else if (!normalizePhone(draft.phone, country as PhoneCountry)) errors.phone = 'invalidPhone';
+  else if (draft.phone.trim().length > PHONE_MAX) errors.phone = 'tooLong';
   return errors;
 }
 
 /** A valid draft (`draftErrors` empty) as what the picker hands its parent: a new contact, its
- * phone normalised to E.164 with the tenant's `country`. */
+ * phone as the server will store it (`storedPhone`: E.164 when valid, else as typed). */
 export function selectionOf(draft: NewContactDraft, country: string): ContactSelection {
-  const phone = normalizePhone(draft.phone, country as PhoneCountry)?.e164 ?? draft.phone.trim();
+  const phone = storedPhone(draft.phone, country as PhoneCountry)?.value ?? draft.phone.trim();
   const fullName = draft.fullName.trim();
   return {
     target: { newContact: { fullName, phone, email: null } },

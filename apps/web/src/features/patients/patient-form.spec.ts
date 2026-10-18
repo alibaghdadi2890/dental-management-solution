@@ -9,7 +9,6 @@ import {
   isDirty,
   isEditDirty,
   pendingExclusions,
-  phoneOptional,
   removePendingContact,
   setLinkContactId,
   showGuardianBlock,
@@ -26,7 +25,7 @@ import { history } from './patients.test-utils';
 
 const TODAY = '2026-09-27';
 const PENICILLIN = history(['Penicillin']).allergies[0]?.id ?? '';
-const CTX = { country: 'LB', today: TODAY };
+const CTX = { today: TODAY };
 
 const PATIENT: Patient = {
   id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e',
@@ -85,37 +84,15 @@ describe('emptyForm / fromPatient', () => {
 describe('validate', () => {
   const base = emptyForm();
 
-  it('requires a full name and a phone', () => {
+  it('requires a full name, and nothing else', () => {
     const errors = validate(base, CTX);
-    expect(errors.fullName).toBe('required');
-    expect(errors.phone).toBe('required');
+    expect(errors).toEqual({ fullName: 'required' });
   });
 
-  it("makes the phone optional for a minor on the tenant's today, not for an adult", () => {
+  it('takes any patient without a phone, an adult or one with no date of birth (ADR-0052)', () => {
     const named = { ...base, fullName: 'Jane' };
-    // 16 on TODAY: a minor.
-    expect(validate({ ...named, dateOfBirth: '2009-09-28' }, CTX).phone).toBeUndefined();
-    // Exactly 18 on TODAY: an adult.
-    expect(validate({ ...named, dateOfBirth: '2008-09-27' }, CTX).phone).toBe('required');
-    // No date of birth means an adult.
-    expect(validate(named, CTX).phone).toBe('required');
-    // A minor's phone, when typed, is still checked.
-    expect(validate({ ...named, dateOfBirth: '2009-09-28', phone: '12' }, CTX).phone).toBe(
-      'invalidPhone',
-    );
-  });
-
-  it('in edit mode, requires the phone only when the edit touches the phone or date of birth', () => {
-    // A phoneless patient recorded as a minor who has since come of age.
-    const agedOut = fromPatient({ ...PATIENT, phone: null, dateOfBirth: '2000-01-01' }, 'LB');
-    const edit = { ...CTX, initial: agedOut };
-    expect(validate({ ...agedOut, notes: 'Follow up' }, edit).phone).toBeUndefined();
-    expect(validate({ ...agedOut, dateOfBirth: '1999-01-01' }, edit).phone).toBe('required');
-    // Clearing an adult's phone is still refused.
-    const adult = fromPatient(PATIENT, 'LB');
-    expect(validate({ ...adult, phone: '' }, { ...CTX, initial: adult }).phone).toBe('required');
-    // Create mode (no `initial`) always applies the rule.
-    expect(validate({ ...agedOut, notes: 'Follow up' }, CTX).phone).toBe('required');
+    expect(validate({ ...named, dateOfBirth: '1990-01-01' }, CTX).phone).toBeUndefined();
+    expect(validate(named, CTX).phone).toBeUndefined();
   });
 
   it('flags a full name over the contract limit (120 chars)', () => {
@@ -123,9 +100,11 @@ describe('validate', () => {
     expect(errors.fullName).toBe('tooLong');
   });
 
-  it('rejects a phone that is not valid for the tenant country', () => {
-    const errors = validate({ ...base, fullName: 'Jane', phone: '12' }, CTX);
-    expect(errors.phone).toBe('invalidPhone');
+  it('accepts a phone in any format, and flags one over the contract limit (40 chars)', () => {
+    expect(validate({ ...base, fullName: 'Jane', phone: '12' }, CTX).phone).toBeUndefined();
+    expect(validate({ ...base, fullName: 'Jane', phone: '7'.repeat(41) }, CTX).phone).toBe(
+      'tooLong',
+    );
   });
 
   it('accepts a valid LB local number', () => {
@@ -261,36 +240,6 @@ describe('validate', () => {
       expect(errors.openingBalanceAsOf).toBeUndefined();
       expect(errors.openingBalanceNote).toBeUndefined();
     }
-  });
-});
-
-describe('phoneOptional', () => {
-  it('in edit mode, is true for an untouched phoneless adult, false once the DOB changes', () => {
-    const agedOut = fromPatient({ ...PATIENT, phone: null, dateOfBirth: '2000-01-01' }, 'LB');
-    expect(phoneOptional(agedOut, TODAY, agedOut)).toBe(true);
-    expect(phoneOptional({ ...agedOut, dateOfBirth: '1999-01-01' }, TODAY, agedOut)).toBe(false);
-    const adult = fromPatient(PATIENT, 'LB');
-    expect(phoneOptional(adult, TODAY, adult)).toBe(false);
-  });
-
-  it('is false at exactly 18', () => {
-    expect(phoneOptional({ ...emptyForm(), dateOfBirth: '2008-09-27' }, TODAY)).toBe(false);
-  });
-
-  it('is true at 17', () => {
-    expect(phoneOptional({ ...emptyForm(), dateOfBirth: '2009-09-27' }, TODAY)).toBe(true);
-  });
-
-  it('is false with no date of birth set', () => {
-    expect(phoneOptional(emptyForm(), TODAY)).toBe(false);
-  });
-
-  it('is false for a date of birth after today', () => {
-    expect(phoneOptional({ ...emptyForm(), dateOfBirth: '2027-01-01' }, TODAY)).toBe(false);
-  });
-
-  it('is false while the date of birth is still partly typed', () => {
-    expect(phoneOptional({ ...emptyForm(), dateOfBirth: '07/03/20' }, TODAY)).toBe(false);
   });
 });
 
@@ -515,13 +464,13 @@ describe('pending contacts', () => {
     expect(validate({ ...values, phone: '03123456' }, CTX)['contacts.0']).toBeUndefined();
   });
 
-  it('flags a new contact whose phone is not valid for the tenant country', () => {
+  it('takes a new contact whose phone is in any format', () => {
     const values = addPendingContact(
       base,
       guardianLink({ newContact: { fullName: 'Maria', phone: '12', email: null } }, 'parent'),
       display('Maria'),
     );
-    expect(validate({ ...values, phone: '03123456' }, CTX)['contacts.0']).toBe('invalidPhone');
+    expect(validate({ ...values, phone: '03123456' }, CTX)['contacts.0']).toBeUndefined();
   });
 });
 
@@ -761,7 +710,7 @@ describe('validate/payload-builder parity (property-style)', () => {
       checkedAtLeastOneValidCombination = true;
 
       expect(() => toCreatePayload(values)).not.toThrow();
-      expect(() => toPatchPayload(emptyForm(), values, CTX.country)).not.toThrow();
+      expect(() => toPatchPayload(emptyForm(), values, 'LB')).not.toThrow();
       if (wantsOpeningBalance(values)) {
         expect(() => toOpeningBalance(values, TODAY)).not.toThrow();
       }

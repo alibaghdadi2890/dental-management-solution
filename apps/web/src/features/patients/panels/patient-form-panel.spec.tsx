@@ -237,40 +237,31 @@ describe('PatientFormPanel — create', () => {
     expect(screen.queryByRole('textbox', { name: 'Opening balance' })).toBeNull();
   });
 
-  it('makes the phone optional for a minor, sent as null, with no guardian text fields', async () => {
+  it('creates any patient without a phone, sent as null (ADR-0052)', async () => {
     const fetchMock = mockApi();
     renderPanels({ url: '/?panel=new' });
     await panel('Register a patient');
-    type('Full name', 'Lina Aoun');
     const create = screen.getByRole('button', { name: 'Create patient' });
     expect(create).toHaveProperty('disabled', true);
-    expect(field('Phone').getAttribute('aria-required')).toBe('true');
-
-    type('Date of birth', dobYearsAgo(7));
-    expect(screen.getByText('7 yrs · primary dentition')).toBeTruthy();
+    type('Full name', 'Lina Aoun');
     expect(field('Phone').getAttribute('aria-required')).toBeNull();
-    // Contacts replace the guardian and emergency-contact text fields (J1–J3 add their UI).
-    expect(screen.queryByRole('textbox', { name: /Guardian/ })).toBeNull();
-    expect(screen.queryByRole('textbox', { name: /Emergency/ })).toBeNull();
+    type('Date of birth', dobYearsAgo(30));
     expect(create).toHaveProperty('disabled', false);
     fireEvent.click(create);
     await screen.findByText('Patient created');
     expect(sent(fetchMock, 'POST', '/patients')).toMatchObject({ phone: null });
   });
 
-  it('keeps the phone required for an adult (or no date of birth)', async () => {
-    const fetchMock = mockApi();
+  it('shows a minor no guardian text fields', async () => {
+    mockApi();
     renderPanels({ url: '/?panel=new' });
     await panel('Register a patient');
     type('Full name', 'Lina Aoun');
-    type('Date of birth', dobYearsAgo(18));
-    const create = screen.getByRole('button', { name: 'Create patient' });
-    expect(create).toHaveProperty('disabled', true);
-    expect(field('Phone').getAttribute('aria-required')).toBe('true');
     type('Date of birth', dobYearsAgo(7));
-    type('Date of birth', '');
-    expect(create).toHaveProperty('disabled', true);
-    expect(sent(fetchMock, 'POST', '/patients')).toBeUndefined();
+    expect(screen.getByText('7 yrs · primary dentition')).toBeTruthy();
+    // Contacts replace the guardian and emergency-contact text fields (J1–J3 add their UI).
+    expect(screen.queryByRole('textbox', { name: /Guardian/ })).toBeNull();
+    expect(screen.queryByRole('textbox', { name: /Emergency/ })).toBeNull();
   });
 
   it("sends the chosen dentist's staff profile id", async () => {
@@ -536,7 +527,7 @@ describe('PatientFormPanel — edit', () => {
     const aside = await panel('Rana Haddad');
     type('Phone', '03 999 999');
     fireEvent.click(within(aside).getByRole('button', { name: 'Save changes' }));
-    expect(await screen.findByText('Enter a valid phone number')).toBeTruthy();
+    expect(await screen.findByText('Check this value')).toBeTruthy();
     expect(field('Phone').getAttribute('aria-invalid')).toBe('true');
   });
 

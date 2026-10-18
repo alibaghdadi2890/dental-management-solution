@@ -254,7 +254,6 @@
     "archived": "Un patient archivé ne peut pas être modifié. Restaurez d’abord le dossier depuis la vue Archivés.",
     "errors": {
       "required": "Obligatoire",
-      "invalidPhone": "Saisissez un numéro de téléphone valide",
       "invalidEmail": "Vérifiez l’adresse e-mail",
       "invalidDate": "Saisissez une date complète",
       "futureDate": "Ne peut pas être dans le futur",
@@ -309,7 +308,6 @@
     "matching_one": "{{count, number}} autre champ est identique.",
     "matching_other": "{{count, number}} autres champs sont identiques.",
     "summary": "{{drop}} sera archivé. Son solde passe sur {{keep}}.",
-    "phoneRequired": "Un patient adulte doit avoir un numéro de téléphone. Gardez un téléphone, ou une date de naissance de moins de 18 ans.",
     "unavailable": "L’un de ces dossiers est archivé ou déjà fusionné : ils ne peuvent pas être fusionnés.",
     "submit": "Fusionner les dossiers",
     "confirmTitle": "Fusionner {{drop}} dans {{keep}} ?",
@@ -322,7 +320,6 @@
     "archived": "le dossier est archivé",
     "merged": "le dossier a déjà été fusionné avec un autre",
     "unknownDentist": "le dentiste choisi n’est plus disponible",
-    "phoneRequired": "un patient adulte doit avoir un numéro de téléphone",
     "notFound": "le patient n’existe plus",
     "conflict": "quelqu’un d’autre a modifié ce dossier — rechargez et réessayez",
     "forbidden": "vous n’avez pas l’autorisation de le faire",
@@ -386,7 +383,7 @@
     "form": {
       "title": "Informations patient",
       "complete": "Complet",
-      "partial": "Partiellement complet",
+      "missing": "Manquant : {{fields}}",
       "intro": "Rien n’est obligatoire ici. Complétez-le quand cela devient utile.",
       "archived": "Ce dossier est archivé : ses informations ne peuvent pas être modifiées. Restaurez-le pour les modifier.",
       "merged": "Ce dossier a été fusionné avec un autre : ses informations ne peuvent pas être modifiées."
@@ -428,7 +425,9 @@
       "recordPayment": "Enregistrer un paiement",
       "examination": "Pas encore d’examen",
       "examinationReason": "Enregistré, jamais examiné dans cette clinique",
-      "startExamination": "Commencer l’examen"
+      "startExamination": "Commencer l’examen",
+      "details": "Informations manquantes",
+      "completeDetails": "Compléter la fiche"
     }
   },
   "contacts": {
@@ -458,8 +457,7 @@
       "add": "Ajouter le contact",
       "errors": {
         "required": "Obligatoire",
-        "tooLong": "Trop long",
-        "invalidPhone": "Saisissez un numéro de téléphone valide"
+        "tooLong": "Trop long"
       }
     },
     "list": "Contacts",
@@ -571,5 +569,10 @@
     "add": "Ajouter « {{name}} »",
     "remove": "Retirer {{name}}",
     "addFailed": "Impossible d’ajouter {{name}} : {{reason}}"
+  },
+  "missingInformation": {
+    "dateOfBirth": "date de naissance",
+    "sex": "sexe",
+    "phone": "téléphone ou tuteur"
   }
 }

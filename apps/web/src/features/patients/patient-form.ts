@@ -10,7 +10,7 @@ import {
   isoDateSchema,
   type MedicalHistoryInput,
   nameSchema,
-  normalizePhone,
+  storedPhone,
   openingBalanceInputSchema,
   PATIENT_CREATE_CONTACTS_MAX,
   patientCreateSchema,
@@ -37,7 +37,7 @@ import { sameHistory } from './medical-history/history-model';
  */
 export interface PatientFormValues {
   fullName: string;
-  /** Required unless the date of birth makes the patient a minor (`phoneOptional`). */
+  /** Optional, any format: stored as typed when it is not a valid number (ADR-0052). */
   phone: string;
   /** ISO `YYYY-MM-DD`, or `''` for not set — an `<input type="date">`'s own empty value. */
   dateOfBirth: string;
@@ -161,7 +161,6 @@ export type FormErrorKey =
   | 'roleRequired'
   | 'invalid'
   | 'required'
-  | 'invalidPhone'
   | 'invalidEmail'
   | 'invalidDate'
   | 'futureDate'
@@ -178,9 +177,12 @@ export type FormErrors = Partial<Record<FormField, FormErrorKey>>;
  * the server's own check rejects the same date. Also the date picker's first selectable day. */
 export const DATE_OF_BIRTH_FLOOR = '1900-01-01';
 
-/** A country as `normalizePhone` (`@dcm/contracts`) wants it; kept as `string` at this module's
+/** A country as `storedPhone` (`@dcm/contracts`) wants it; kept as `string` at this module's
  * boundary so `apps/web` doesn't need its own `libphonenumber-js` dependency just for the type. */
-type PhoneCountry = Parameters<typeof normalizePhone>[1];
+type PhoneCountry = Parameters<typeof storedPhone>[1];
+
+/** The contract's limit on a typed phone (`optionalText(40)`). */
+const PHONE_MAX = 40;
 
 const OPENING_BALANCE_NOTE_MAX = 200;
 
@@ -198,40 +200,13 @@ const TEXT_FIELD_MAX: Record<TextLimitField, number> = {
 };
 
 export interface ValidateContext {
-  /** ISO 3166-1 alpha-2, e.g. the tenant's `country` (phones are parsed against it, design Q3). */
-  country: string;
   /** Today in the tenant's own timezone (`todayIn`), never the browser's. */
   today: string;
-  /**
-   * Edit mode only: the form's starting values. The phone rule then applies only when the edit
-   * touches the phone or the date of birth, as on the server (`phoneOptional`).
-   */
-  initial?: PatientFormValues;
 }
 
-/** True once a valid, not-in-the-future date of birth makes the patient under 18 on `today` (the
- * tenant's today) — then the phone is optional (design addendum C3, the server's own rule). An
- * unset, half-typed, or future-dated DOB never does: no date of birth means an adult, and
- * `isMinor`'s age arithmetic goes negative for a future date, which is not "a minor" by any
- * reading. In edit mode (`initial` given) it is also optional for a patient stored without a
- * phone while the edit leaves both the phone and the date of birth alone — a minor who has since
- * come of age can still be edited, as the server allows. */
-export function phoneOptional(
-  values: PatientFormValues,
-  today: string,
-  initial?: PatientFormValues,
-): boolean {
-  const untouchedWithoutPhone =
-    initial !== undefined &&
-    initial.phone.trim() === '' &&
-    values.phone.trim() === '' &&
-    values.dateOfBirth === initial.dateOfBirth;
-  return untouchedWithoutPhone || minorByDateOfBirth(values, today);
-}
-
-/** A valid date of birth, not after `today` (the tenant's), under 18 on `today` (see
- * `phoneOptional`); `''` or `null` (no date of birth) is an adult. Shared with the record's
- * completeness (design addendum C10). */
+/** A valid date of birth, not after `today` (the tenant's), under 18 on `today`; `''` or `null`
+ * (no date of birth) is an adult. An unset, half-typed or future date is never a minor's:
+ * `isMinor`'s age arithmetic goes negative for a future date. */
 export function minorOn(dateOfBirth: string | null, today: string): boolean {
   return (
     dateOfBirth !== null &&
@@ -241,15 +216,11 @@ export function minorOn(dateOfBirth: string | null, today: string): boolean {
   );
 }
 
-function minorByDateOfBirth(values: PatientFormValues, today: string): boolean {
-  return minorOn(values.dateOfBirth, today);
-}
-
 /** The create panel's Guardian block (design addendum "Create panel"): shown while the date of
  * birth makes the patient a minor on the tenant's `today`; adults get the optional "Contacts &
  * family" disclosure instead. */
 export function showGuardianBlock(values: PatientFormValues, today: string): boolean {
-  return minorByDateOfBirth(values, today);
+  return minorOn(values.dateOfBirth, today);
 }
 
 /** A guardian added from the Guardian block: always the guardian, and — the two toggles, on by
@@ -382,10 +353,7 @@ function normalizeAmountText(text: string): string {
 /** Field-level validation, keyed by i18n error code rather than message text (CLAUDE.md §13).
  * Covers every field the payload builders (`toCreatePayload`/`toPatchPayload`/`toOpeningBalance`)
  * actually parse, so that whenever this returns `{}` those builders never throw. */
-export function validate(
-  values: PatientFormValues,
-  { country, today, initial }: ValidateContext,
-): FormErrors {
+export function validate(values: PatientFormValues, { today }: ValidateContext): FormErrors {
   const errors: FormErrors = {};
 
   if (values.fullName.trim() === '') {
@@ -394,11 +362,7 @@ export function validate(
     errors.fullName = 'tooLong';
   }
 
-  if (values.phone.trim() === '') {
-    if (!phoneOptional(values, today, initial)) errors.phone = 'required';
-  } else if (!normalizePhone(values.phone, country as PhoneCountry)) {
-    errors.phone = 'invalidPhone';
-  }
+  if (values.phone.trim().length > PHONE_MAX) errors.phone = 'tooLong';
 
   if (values.dateOfBirth !== '') {
     if (!isoDateSchema.safeParse(values.dateOfBirth).success) {
@@ -447,7 +411,7 @@ export function validate(
   }
 
   values.pendingContacts.forEach(({ link }, index) => {
-    const error = contactLinkError(link, country);
+    const error = contactLinkError(link);
     if (error) errors[contactErrorField(index)] = error;
   });
 
@@ -457,14 +421,14 @@ export function validate(
 /** What `patientCreateSchema` would refuse in one pending link: no role, or a new contact whose
  * name or phone does not hold (the picker checks both before adding it; this keeps
  * `toCreatePayload` from ever throwing on a link added some other way). */
-function contactLinkError(link: ContactLinkInput, country: string): FormErrorKey | undefined {
+function contactLinkError(link: ContactLinkInput): FormErrorKey | undefined {
   if (!link.isGuardian && !link.isBillingContact && !link.isEmergencyContact) {
     return 'roleRequired';
   }
   if (!('newContact' in link.target)) return undefined;
   const { fullName, phone } = link.target.newContact;
   if (!nameSchema.safeParse(fullName).success) return 'invalid';
-  if (!normalizePhone(phone, country as PhoneCountry)) return 'invalidPhone';
+  if (phone.trim() === '' || phone.trim().length > PHONE_MAX) return 'invalid';
   return undefined;
 }
 
@@ -496,7 +460,7 @@ export function wantsOpeningBalance(values: PatientFormValues): boolean {
   return Number(normalizeAmountText(values.openingBalanceAmount) || '0') > 0;
 }
 
-/** The create payload; a blank phone is sent as `null` (allowed for a minor, `validate`). The
+/** The create payload; a blank phone is sent as `null` (any patient may have none, ADR-0052). The
  * pending contacts go as `contacts` (their `ContactLinkInput`s, in order: a server error at
  * `contacts.<i>` is the i-th pending contact), and `linkContactId` only once set. */
 export function toCreatePayload(values: PatientFormValues): PatientCreate {
@@ -529,12 +493,11 @@ const PATCHABLE_TEXT_FIELDS = [
 ] as const;
 
 function normalizedPhoneOf(text: string, country: string): string {
-  const parsed = normalizePhone(text, country as PhoneCountry);
-  return parsed ? parsed.e164 : text.trim();
+  return storedPhone(text, country as PhoneCountry)?.value ?? '';
 }
 
 /** Compares each patchable field the way it should be compared for "did this actually change":
- * phone by its parsed E.164 (re-typing the same number in a different format isn't a change),
+ * phone as stored (re-typing a valid number in a different format isn't a change),
  * email case/whitespace-insensitively (the server lowercases it anyway), everything else trimmed. */
 function normalizedFieldValue(
   field: (typeof PATCHABLE_TEXT_FIELDS)[number],

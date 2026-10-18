@@ -56,6 +56,7 @@
     "cash": "Espèces",
     "card": "Carte",
     "bank_transfer": "Virement",
+    "whish": "Whish",
     "insurance": "Assurance"
   },
   "charge": {

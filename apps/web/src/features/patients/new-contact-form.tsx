@@ -42,12 +42,12 @@ export function NewContactForm({
     nameRef.current?.focus();
   }, []);
 
-  const errors = draft.checked ? draftErrors(draft, country) : {};
+  const errors = draft.checked ? draftErrors(draft) : {};
   const message = (key: NewContactError | undefined) =>
     key === undefined ? undefined : t(`contacts.picker.errors.${key}`);
 
   const confirm = () => {
-    const found = draftErrors(draft, country);
+    const found = draftErrors(draft);
     if (found.fullName || found.phone) {
       onChange({ ...draft, checked: true });
       return;

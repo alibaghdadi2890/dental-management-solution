@@ -267,6 +267,9 @@ function PatientRecord({
               onOpenPlan={() => {
                 onTab('plan');
               }}
+              onCompleteDetails={() => {
+                onTab('information');
+              }}
             />
           ) : tab === 'history' ? (
             <HistoryTab

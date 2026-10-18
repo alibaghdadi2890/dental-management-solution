@@ -1,5 +1,6 @@
 import {
   type DiagnosisRecord,
+  type MissingInformation,
   type Money,
   type PatientChart,
   planPhases,
@@ -9,13 +10,15 @@ import {
 /**
  * One row of the Overview's **Needs attention** card (feature 10, V11), in the order the card
  * lists them: work in progress to continue, an urgent plan the patient accepted that is not done,
- * money owed, and a patient who was never examined here.
+ * money owed, a patient who was never examined here, and important details the record lacks
+ * (ADR-0052).
  */
 export type AttentionItem =
   | { kind: 'continue'; plan: TreatmentPlan }
   | { kind: 'treat'; plan: TreatmentPlan; diagnosis: DiagnosisRecord | undefined }
   | { kind: 'balance'; owed: Money }
-  | { kind: 'examination' };
+  | { kind: 'examination' }
+  | { kind: 'details'; missing: MissingInformation[] };
 
 export interface AttentionFacts {
   /** Undefined until the chart is in (or without `visit:read`): no plan rows. */
@@ -24,13 +27,20 @@ export interface AttentionFacts {
   owed: Money | null;
   /** Whether the patient has a completed visit; undefined while unknown. */
   hasVisits: boolean | undefined;
+  /** The important fields the record lacks (`missingInformation`); undefined while unknown. */
+  missing: MissingInformation[] | undefined;
 }
 
 /**
  * What needs attention on a patient's record. Pure: every card that names a next step for the
  * patient reads the same list. Empty means "Nothing needs attention".
  */
-export function needsAttention({ chart, owed, hasVisits }: AttentionFacts): AttentionItem[] {
+export function needsAttention({
+  chart,
+  owed,
+  hasVisits,
+  missing,
+}: AttentionFacts): AttentionItem[] {
   const phases = planPhases(chart?.plans ?? []);
   const open = phases.flatMap((phase) => phase.open);
   const urgent = phases.find((phase) => phase.priority === 'urgent')?.open ?? [];
@@ -47,5 +57,8 @@ export function needsAttention({ chart, owed, hasVisits }: AttentionFacts): Atte
       })),
     ...(owed ? [{ kind: 'balance', owed } satisfies AttentionItem] : []),
     ...(hasVisits === false ? [{ kind: 'examination' } satisfies AttentionItem] : []),
+    ...(missing && missing.length > 0
+      ? [{ kind: 'details', missing } satisfies AttentionItem]
+      : []),
   ];
 }

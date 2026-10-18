@@ -354,6 +354,28 @@ describe('OverviewTab', () => {
       expect(within(attention).getAllByRole('listitem')).toHaveLength(1);
     });
 
+    it('names the missing details and opens Patient information for them (ADR-0052)', async () => {
+      const unknown = { ...RANA, dateOfBirth: null, sex: 'unknown' as const };
+      mockApi({ patients: [unknown], lastVisits: { [RANA.id]: LAST_VISIT } });
+      renderRecord({ url: URL_, permissions: CLINICAL });
+      const attention = await card('Needs attention');
+      expect(await within(attention).findByText('Missing information')).toBeTruthy();
+      expect(within(attention).getByText('date of birth and sex')).toBeTruthy();
+      fireEvent.click(within(attention).getByRole('button', { name: 'Complete details' }));
+      expect(
+        await screen.findByRole('tab', { name: 'Patient information', selected: true }),
+      ).toBeTruthy();
+    });
+
+    it('shows the missing details without their action to someone who cannot edit', async () => {
+      const unknown = { ...RANA, sex: 'unknown' as const };
+      mockApi({ patients: [unknown], lastVisits: { [RANA.id]: LAST_VISIT } });
+      renderRecord({ url: URL_, permissions: ['patient:read', 'visit:read'] });
+      const attention = await card('Needs attention');
+      expect(await within(attention).findByText('Missing information')).toBeTruthy();
+      expect(within(attention).queryByRole('button')).toBeNull();
+    });
+
     it('says so when nothing needs attention', async () => {
       mockApi({ patients: [RANA], lastVisits: { [RANA.id]: LAST_VISIT } });
       renderRecord({ url: URL_, permissions: CLINICAL });

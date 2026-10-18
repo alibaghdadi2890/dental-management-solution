@@ -10,7 +10,6 @@ import {
   renderRecord,
   sent,
 } from '../patients.test-utils';
-import { todayIn } from '@/lib/format';
 import { patientKeys } from '../patients-api';
 import { SAVED_SHOWN_MS } from './information-tab';
 
@@ -69,7 +68,7 @@ describe('InformationTab', () => {
     mockApi({ patients: [RANA] });
     renderRecord({ url: URL_ });
     const form = await card();
-    expect(within(form).getByText('Partly complete')).toBeTruthy();
+    expect(within(form).getByText('Complete')).toBeTruthy();
     expect(
       within(form).getByText('Nothing here is required. Fill it in when it becomes relevant.'),
     ).toBeTruthy();
@@ -88,29 +87,29 @@ describe('InformationTab', () => {
     expect(await indicator()).toBe('');
   });
 
-  describe('completeness (design addendum C10)', () => {
-    const reachable = { email: 'k@example.com', address: '12 Hamra St' };
-    // Born on 1 January 10 (or 30) years before the tenant's today: 9–10 years old (a minor),
-    // or 29–30 (an adult), whatever day the tests run.
-    const year = Number(todayIn('Asia/Beirut').slice(0, 4));
-    const bornYearsAgo = (years: number) => `${String(year - years)}-01-01`;
-    const KARIM = patient(2, 'Karim Haddad', { ...reachable, dateOfBirth: bornYearsAgo(10) });
+  describe('missing information (ADR-0052)', () => {
+    const KARIM = patient(2, 'Karim Haddad', { phone: null, sex: 'male' });
     const badge = async (name: string) => within(await card()).findByText(name);
     const noBadge = async () => {
       const region = await card();
-      expect(within(region).queryByText('Partly complete')).toBeNull();
+      expect(within(region).queryByText(/^Missing/)).toBeNull();
       expect(within(region).queryByText('Complete')).toBeNull();
     };
     const contactReads = (fetchMock: ReturnType<typeof mockApi>) =>
       fetchMock.mock.calls.filter(([url]) => url.endsWith('/contacts'));
+    const pending = (path: string) =>
+      path === `/patients/${KARIM.id}/contacts`
+        ? new Promise<Response>(() => undefined)
+        : undefined;
 
-    it('asks a minor for a guardian as well as email and address', async () => {
-      mockApi({ patients: [KARIM], contacts: { [KARIM.id]: [] } });
+    it('names what is missing: the date of birth, the sex, a phone or guardian', async () => {
+      const unknown = { ...KARIM, dateOfBirth: null, sex: 'unknown' as const };
+      mockApi({ patients: [unknown], contacts: { [KARIM.id]: [] } });
       renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
-      expect(await badge('Partly complete')).toBeTruthy();
+      expect(await badge('Missing: date of birth, sex, and phone or guardian')).toBeTruthy();
     });
 
-    it('is complete for a minor with a guardian among the contacts', async () => {
+    it('takes a guardian or billing contact for a missing phone', async () => {
       mockApi({
         patients: [KARIM],
         contacts: {
@@ -129,27 +128,14 @@ describe('InformationTab', () => {
       expect(await badge('Complete')).toBeTruthy();
     });
 
-    it('never asks an adult for a guardian, nor waits for their contacts', async () => {
-      const adult = { ...KARIM, dateOfBirth: bornYearsAgo(30) };
-      mockApi({
-        patients: [adult],
-        get: (path) =>
-          path === `/patients/${KARIM.id}/contacts`
-            ? new Promise<Response>(() => undefined)
-            : undefined,
-      });
+    it('never waits for the contacts of a patient with a phone', async () => {
+      mockApi({ patients: [{ ...KARIM, phone: '+9613123456' }], get: pending });
       renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
       expect(await badge('Complete')).toBeTruthy();
     });
 
-    it('shows no badge for a minor while the contacts load', async () => {
-      const fetchMock = mockApi({
-        patients: [KARIM],
-        get: (path) =>
-          path === `/patients/${KARIM.id}/contacts`
-            ? new Promise<Response>(() => undefined)
-            : undefined,
-      });
+    it('shows no badge for a phoneless patient while the contacts load', async () => {
+      const fetchMock = mockApi({ patients: [KARIM], get: pending });
       renderRecord({ url: `/patients/${KARIM.id}?tab=information` });
       await waitFor(() => {
         expect(contactReads(fetchMock)).toHaveLength(1);
@@ -157,7 +143,7 @@ describe('InformationTab', () => {
       await noBadge();
     });
 
-    it("shows no badge for a minor whose contacts can't be read", async () => {
+    it("shows no badge for a phoneless patient whose contacts can't be read", async () => {
       const fetchMock = mockApi({
         patients: [KARIM],
         get: (path) =>
@@ -188,13 +174,12 @@ describe('InformationTab', () => {
     expect(field(/Phone/).getAttribute('aria-invalid')).not.toBe('true');
   });
 
-  it('makes the phone optional for a minor, with no guardian text fields', async () => {
+  it('never requires the phone, and has no guardian text fields', async () => {
     mockApi({ patients: [RANA] });
     renderRecord({ url: URL_ });
     await card();
-    expect(field(/Phone/).getAttribute('aria-required')).toBe('true');
-    type(/Date of birth/, '01/05/2020');
     expect(field(/Phone/).getAttribute('aria-required')).toBeNull();
+    type(/Date of birth/, '01/05/2020');
     expect(screen.queryByRole('textbox', { name: /Guardian/ })).toBeNull();
   });
 
@@ -231,7 +216,6 @@ describe('InformationTab', () => {
       expect(await indicator()).toBe('✓Saved just now');
     });
     expect(within(form).getByText('Complete')).toBeTruthy();
-    expect(within(form).queryByText('Partly complete')).toBeNull();
     // The indicator confirms the save; there is no toast, and the tick is decoration.
     expect(screen.queryByText('Patient information updated')).toBeNull();
     expect(screen.getByText('✓').getAttribute('aria-hidden')).toBe('true');
