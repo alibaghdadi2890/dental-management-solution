@@ -18,6 +18,7 @@ import { TenancyService } from '../../../tenancy';
 import { type AmendableService, planAmendment } from '../../domain/visit-amendment';
 import {
   VisitCheckoutClosedError,
+  VisitImportedError,
   VisitNotCompletedError,
   VisitStaleError,
 } from '../../domain/visit-errors';
@@ -52,6 +53,15 @@ const toAmendable = (service: StoredVisitService): AmendableService => ({
   discountAmount: service.discountAmount,
   planId: service.planId,
 });
+
+/** An imported visit was never charged here: no amendment or void applies (ADR-0053). */
+function assertNotImported(visit: StoredVisit): void {
+  if (visit.importedAt !== null) {
+    throw new VisitImportedError(
+      'This visit was imported from the previous system; it cannot be corrected',
+    );
+  }
+}
 
 /** D8: the client's `expectedUpdatedAt` must be the visit's current `updated_at`. */
 function assertFresh(visit: StoredVisit, expectedUpdatedAt: string): void {
@@ -129,6 +139,7 @@ export class VisitCorrectionsService {
       const before = await this.locks.patientThenVisit(id, (visitId) =>
         this.visits.lockForCorrection(visitId),
       );
+      assertNotImported(before);
       const amended = correct(before.status, 'amend');
       if (change.kind === 'checkout_discount' && before.localDate !== (await this.today())) {
         throw new VisitCheckoutClosedError(
@@ -258,6 +269,7 @@ export class VisitCorrectionsService {
       const before = await this.locks.patientThenVisit(id, (visitId) =>
         this.visits.lockForCorrection(visitId),
       );
+      assertNotImported(before);
       const status = correct(before.status, 'void');
       assertFresh(before, input.expectedUpdatedAt);
       const now = this.clock.now();

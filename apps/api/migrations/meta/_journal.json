@@ -330,6 +330,20 @@
       "when": 1792253814369,
       "tag": "0046_advance_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792265018156,
+      "tag": "0047_whish_payment_method",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792325039024,
+      "tag": "0048_visit_imports",
+      "breakpoints": true
     }
   ]
 }

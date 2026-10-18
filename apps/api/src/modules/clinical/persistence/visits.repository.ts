@@ -51,6 +51,20 @@ export type NewVisit = Pick<
   | 'currency'
 >;
 
+/** A visit imported from a previous system (feature 6, ADR-0053), written completed at once. */
+export type ImportedVisit = NewVisit &
+  Pick<
+    StoredVisit,
+    | 'notes'
+    | 'completedAt'
+    | 'completedBy'
+    | 'durationMinutes'
+    | 'subtotal'
+    | 'discountAmount'
+    | 'total'
+    | 'externalId'
+  > & { status: 'completed'; importedAt: Date };
+
 /** A visit as another module refers to it: whose it is, its number, its day and its status. */
 export type VisitRef = Pick<
   StoredVisit,
@@ -223,6 +237,25 @@ export class VisitsRepository {
         .for('share');
       return row && toStored(row);
     });
+  }
+
+  /** An imported visit, completed as it came (ADR-0053). */
+  async insertImported(visit: ImportedVisit): Promise<StoredVisit> {
+    const [row] = await this.db.run((tx) => tx.insert(visits).values(visit).returning());
+    if (!row) throw new Error('imported visit insert returned no row');
+    return toStored(row);
+  }
+
+  /** The imported visits among `externalIds`, keyed by external id (a re-run finds them). */
+  async findIdsByExternalIds(externalIds: readonly string[]): Promise<Map<string, string>> {
+    if (externalIds.length === 0) return new Map();
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({ id: visits.id, externalId: visits.externalId })
+        .from(visits)
+        .where(inArray(visits.externalId, [...externalIds])),
+    );
+    return new Map(rows.flatMap((row) => (row.externalId ? [[row.externalId, row.id]] : [])));
   }
 
   /** A room another live visit holds → 409 `visit.room_busy` (`visits_room_live_unique`). */

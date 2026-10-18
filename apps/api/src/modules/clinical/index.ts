@@ -10,6 +10,11 @@ export {
   VisitFactsService,
   type VisitMoneyFacts,
 } from './application/visits/visit-facts.service';
+export {
+  type VisitImport,
+  type VisitImportResult,
+  VisitImportService,
+} from './application/visits/visit-import.service';
 export { VisitsService } from './application/visits/visits.service';
 export type { VisitRef } from './persistence/visits.repository';
 export {

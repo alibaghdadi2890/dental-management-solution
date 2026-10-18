@@ -1,3 +1,4 @@
+import type { StoredPhone } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, eq, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -13,7 +14,7 @@ import {
   resolvedPhoneSearch,
 } from './contact-resolution.sql';
 import { byNameKey, idAmong, lookupMatch } from './patient-search.sql';
-import { type NormalizedPhoneInput, phoneColumns } from './patients.repository';
+import { phoneColumns } from './patients.repository';
 import { contacts } from './schema';
 
 type ContactRow = typeof contacts.$inferSelect;
@@ -74,15 +75,15 @@ export interface ContactRecord {
 
 export interface NewContactRow {
   fullName: string;
-  /** Already normalised against the tenant's country (as for patients). */
-  phone: NormalizedPhoneInput | null;
+  /** Stored as for patients (`storedPhone`, ADR-0052). */
+  phone: StoredPhone | null;
   email: string | null;
 }
 
 /** Only the fields present change; `fullName`/`phone` rewrite `name_key`/`phone_search`. */
 export interface ContactFieldsPatch {
   fullName?: string;
-  phone?: NormalizedPhoneInput | null;
+  phone?: StoredPhone | null;
   email?: string | null;
 }
 
@@ -285,11 +286,11 @@ export class ContactsRepository {
   }
 
   /**
-   * Live contacts whose resolved phone is exactly `e164` (e.g. a number normalised with the
-   * tenant's country, C12).
+   * Live contacts whose resolved phone is exactly `phone`, as stored (`storedPhone`: E.164, or
+   * the text as typed for a number the library cannot place; C12, ADR-0052).
    */
-  findByPhone(e164: string): Promise<ContactRecord[]> {
-    return this.findWhere(sql`${resolvedPhone} = ${e164}`);
+  findByPhone(phone: string): Promise<ContactRecord[]> {
+    return this.findWhere(sql`${resolvedPhone} = ${phone}`);
   }
 
   /**

@@ -20,9 +20,9 @@ export interface DomainPatient extends StoredMedicalHistory {
   fullName: string;
   /** Normalized form of `fullName` for diacritics-insensitive search (`domain/name-key.ts`). */
   nameKey: string;
-  /** E.164, as stored; null only for a minor recorded without one (design addendum C3). */
+  /** E.164, or the text as typed when not a valid number; null without one (ADR-0052). */
   phone: string | null;
-  /** E.164 digits + national digits, space-separated, for phone search; null without a phone. */
+  /** The phone's search digits (`storedPhone`); null without a phone. */
   phoneSearch: string | null;
   dateOfBirth: string | null;
   sex: PatientSex;

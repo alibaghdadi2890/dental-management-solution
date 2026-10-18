@@ -16,7 +16,13 @@ const LABELS: Record<ExportLanguage, TransactionExportLabels> = {
     reference: 'Reference',
     reason: 'Reason',
     kinds: { payment: 'Payment', refund: 'Refund', void: 'Void' },
-    methods: { cash: 'Cash', card: 'Card', bank_transfer: 'Bank transfer', insurance: 'Insurance' },
+    methods: {
+      cash: 'Cash',
+      card: 'Card',
+      bank_transfer: 'Bank transfer',
+      whish: 'Whish',
+      insurance: 'Insurance',
+    },
   },
   ar: {
     date: 'التاريخ',
@@ -31,7 +37,13 @@ const LABELS: Record<ExportLanguage, TransactionExportLabels> = {
     reference: 'المرجع',
     reason: 'السبب',
     kinds: { payment: 'دفعة', refund: 'استرداد', void: 'إلغاء' },
-    methods: { cash: 'نقدًا', card: 'بطاقة', bank_transfer: 'تحويل مصرفي', insurance: 'تأمين' },
+    methods: {
+      cash: 'نقدًا',
+      card: 'بطاقة',
+      bank_transfer: 'تحويل مصرفي',
+      whish: 'ويش',
+      insurance: 'تأمين',
+    },
   },
   fr: {
     date: 'Date',
@@ -50,6 +62,7 @@ const LABELS: Record<ExportLanguage, TransactionExportLabels> = {
       cash: 'Espèces',
       card: 'Carte',
       bank_transfer: 'Virement',
+      whish: 'Whish',
       insurance: 'Assurance',
     },
   },

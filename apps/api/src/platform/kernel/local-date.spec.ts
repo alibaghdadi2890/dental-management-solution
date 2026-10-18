@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localDate } from './local-date';
+import { localDate, zonedInstant } from './local-date';
 
 describe('localDate', () => {
   it('is the UTC date when the zone is UTC', () => {
@@ -22,5 +22,28 @@ describe('localDate', () => {
 
   it('crosses a year boundary', () => {
     expect(localDate(new Date('2026-12-31T22:30:00Z'), 'Asia/Baghdad')).toBe('2027-01-01');
+  });
+});
+
+describe('zonedInstant', () => {
+  it('reads a Beirut wall clock in winter (UTC+2) and in summer (UTC+3)', () => {
+    expect(zonedInstant('2026-01-02', '12:53', 'Asia/Beirut').toISOString()).toBe(
+      '2026-01-02T10:53:00.000Z',
+    );
+    expect(zonedInstant('2026-07-01', '00:30', 'Asia/Beirut').toISOString()).toBe(
+      '2026-06-30T21:30:00.000Z',
+    );
+  });
+
+  it('round-trips with localDate across a day boundary west of UTC', () => {
+    const instant = zonedInstant('2026-03-01', '23:30', 'America/New_York');
+    expect(instant.toISOString()).toBe('2026-03-02T04:30:00.000Z');
+    expect(localDate(instant, 'America/New_York')).toBe('2026-03-01');
+  });
+
+  it('is the UTC wall clock in UTC', () => {
+    expect(zonedInstant('2026-03-29', '00:00', 'UTC').toISOString()).toBe(
+      '2026-03-29T00:00:00.000Z',
+    );
   });
 });

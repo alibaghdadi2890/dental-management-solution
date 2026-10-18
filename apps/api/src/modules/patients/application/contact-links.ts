@@ -1,7 +1,7 @@
 import {
   type ContactLinkInput,
   type ContactLinkTarget,
-  normalizePhone,
+  storedPhone,
   type Tenant,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -357,12 +357,12 @@ export class ContactLinks {
         fullName: patient.fullName,
       };
     }
-    const phone = normalizePhone(target.newContact.phone, tenant.country);
+    const phone = storedPhone(target.newContact.phone, tenant.country);
     if (!phone) {
       issues.push({
         path: joinPath(path, 'target.newContact.phone'),
-        code: 'invalid_phone',
-        message: 'Not a valid phone number',
+        code: 'required',
+        message: 'A contact needs a phone number',
       });
       return undefined;
     }

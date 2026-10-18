@@ -24,6 +24,7 @@ import { VisitFactsService } from './application/visits/visit-facts.service';
 import { VisitFlowService } from './application/visits/visit-flow.service';
 import { VisitLocks } from './application/visits/visit-locks';
 import { VisitPresenter } from './application/visits/visit-presenter';
+import { VisitImportService } from './application/visits/visit-import.service';
 import { VisitsService } from './application/visits/visits.service';
 import { CatalogController } from './http/catalog.controller';
 import { ClinicalPatientsController } from './http/clinical-patients.controller';
@@ -68,6 +69,7 @@ import { VisitsRepository } from './persistence/visits.repository';
     VisitsRepository,
     VisitServicesRepository,
     VisitCorrectionsService,
+    VisitImportService,
     VisitListService,
     VisitFactsService,
     VisitFlowService,
@@ -97,6 +99,7 @@ import { VisitsRepository } from './persistence/visits.repository';
   exports: [
     CatalogService,
     VisitsService,
+    VisitImportService,
     VisitListService,
     VisitFactsService,
     PatientRecordsService,

@@ -96,7 +96,7 @@ const COLUMNS: readonly Column[] = [
   // injection guard then prefixes with `'` (a leading `+` would be evaluated).
   {
     key: 'phone',
-    // A minor may have no phone of their own (design addendum C3).
+    // Any patient may have no phone (ADR-0052).
     value: ({ patient, tenant }) =>
       patient.phone === null ? '' : formatPhoneFor(patient.phone, tenant.country),
   },

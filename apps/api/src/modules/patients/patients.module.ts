@@ -37,6 +37,6 @@ import { PatientsRepository } from './persistence/patients.repository';
     ContactsRepository,
     PatientContactsRepository,
   ],
-  exports: [PatientsService, ContactsService],
+  exports: [PatientsService, ContactsService, MedicalOptionsService],
 })
 export class PatientsModule {}

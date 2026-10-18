@@ -59,13 +59,14 @@ export const patients = pgTable(
     fullName: text().notNull(),
     nameKey: text().notNull(),
     /**
-     * E.164, as normalised against the tenant's country at write time. Null only for a minor
-     * recorded without one (design addendum C3, enforced by the service against the tenant's TZ).
+     * E.164 when valid for the tenant's country at write time, otherwise the text as typed;
+     * null without one — no patient must have a phone (`storedPhone`, ADR-0052).
      */
     phone: text(),
     /**
-     * E.164 digits + national digits, space-separated — matches a typed local or E.164 query.
-     * Null when there is no phone, so a digit search never matches the record by phone.
+     * E.164 digits + national digits, space-separated — matches a typed local or E.164 query —
+     * or the digits of a phone kept as typed. Null without a digit, so a digit search never
+     * matches the record by phone.
      */
     phoneSearch: text(),
     dateOfBirth: date(),
@@ -221,7 +222,7 @@ export const contacts = pgTable(
     fullName: text(),
     /** `nameKey(fullName)` (`domain/name-key.ts`) for the lookup; null exactly when `fullName` is. */
     nameKey: text(),
-    /** E.164, as normalised against the tenant's country at write time. */
+    /** As for patients: E.164 when valid, otherwise as typed (`storedPhone`, ADR-0052). */
     phone: text(),
     phoneSearch: text(),
     email: text(),

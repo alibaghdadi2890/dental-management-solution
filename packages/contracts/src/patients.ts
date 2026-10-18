@@ -54,9 +54,9 @@ const dateOfBirthSchema = optionalDate('Date of birth cannot be in the future').
 const patientFields = {
   fullName: nameSchema,
   /**
-   * Raw text as typed; the server normalises it against the tenant's country (`phone.ts`). Blank
-   * → null: the phone is required for adults only, a rule the server enforces against the tenant's
-   * time zone (design addendum C3), so the schema alone cannot decide it.
+   * Raw text as typed, any format; the server stores it with `storedPhone` (`phone.ts`): E.164
+   * when valid for the tenant's country, otherwise as typed. Blank → null: no patient must have
+   * one (ADR-0052).
    */
   phone: optionalText(40),
   dateOfBirth: dateOfBirthSchema,
@@ -141,7 +141,7 @@ export const patientSchema = z.object({
   id: idSchema,
   displayNumber: displayNumberSchema,
   fullName: z.string(),
-  /** E.164, as stored; null only for a minor recorded without one (addendum C3). */
+  /** As stored (`storedPhone`): E.164, or the text as typed; null without one (ADR-0052). */
   phone: z.string().nullable(),
   dateOfBirth: isoDateSchema.nullable(),
   sex: patientSexSchema,
@@ -313,20 +313,28 @@ export const patientMergeSchema = z
   });
 export type PatientMerge = z.infer<typeof patientMergeSchema>;
 
+/** The important fields a patient record may lack (ADR-0052), in the order they are listed. */
+export const MISSING_INFORMATION = ['dateOfBirth', 'sex', 'phone'] as const;
+export type MissingInformation = (typeof MISSING_INFORMATION)[number];
+
 /**
- * `complete` when email and address are recorded (README §Patient information) and, for a minor,
- * a guardian too (design addendum C10). `minor` is the caller's: `isMinor` on the date of birth
- * against the tenant's today (no date of birth is an adult); `hasGuardian` is whether any of the
- * patient's contacts holds the guardian role.
+ * What the record lacks of the important fields (ADR-0052): a date of birth, a sex other than
+ * `unknown`, and a way to reach someone — the patient's phone, or else a guardian or billing
+ * contact (`hasReachableContact`, from the patient's contacts). Empty means nothing is missing.
+ * Any of them may be absent on a saved record; this only says so.
  */
-export function profileCompleteness(patient: {
-  email: string | null;
-  address: string | null;
-  minor: boolean;
-  hasGuardian: boolean;
-}): 'complete' | 'partial' {
-  const reachable = Boolean(patient.email) && Boolean(patient.address);
-  return reachable && (!patient.minor || patient.hasGuardian) ? 'complete' : 'partial';
+export function missingInformation(patient: {
+  dateOfBirth: string | null;
+  sex: PatientSex;
+  phone: string | null;
+  hasReachableContact: boolean;
+}): MissingInformation[] {
+  const missing: Record<MissingInformation, boolean> = {
+    dateOfBirth: patient.dateOfBirth === null,
+    sex: patient.sex === 'unknown',
+    phone: patient.phone === null && !patient.hasReachableContact,
+  };
+  return MISSING_INFORMATION.filter((field) => missing[field]);
 }
 
 /** How many ids one lookup takes (`GET /patients/names`). */

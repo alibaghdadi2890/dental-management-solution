@@ -3,10 +3,10 @@ import type {
   EntryVisitType,
   MedicalHistoryInput,
   PatientSex,
+  StoredPhone,
 } from '@dcm/contracts';
-import { phoneDigits } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { and, eq, getTableColumns, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, eq, getTableColumns, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import type { Transaction } from '../../../platform/db/database';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { newId } from '../../../platform/kernel/id';
@@ -152,32 +152,21 @@ function historyColumns(history: MedicalHistoryInput) {
 }
 
 /**
- * A phone already normalised against the tenant's country (`@dcm/contracts` `normalizePhone`).
- * The repository stores `e164` and derives `phone_search` from both fields — passed in explicit
- * form rather than a raw string so a caller can never accidentally write an unnormalised number.
+ * The stored phone and its search digits (`@dcm/contracts` `storedPhone`, ADR-0052); both null
+ * without one (digit queries never match). Contacts store theirs the same way
+ * (`ContactsRepository`).
  */
-export interface NormalizedPhoneInput {
-  e164: string;
-  national: string;
-}
-
-/**
- * The stored phone and its search digits; both null without one (digit queries never match).
- * Contacts store theirs the same way (`ContactsRepository`).
- */
-export function phoneColumns(phone: NormalizedPhoneInput | null): {
+export function phoneColumns(phone: StoredPhone | null): {
   phone: string | null;
   phoneSearch: string | null;
 } {
-  if (phone === null) return { phone: null, phoneSearch: null };
-  return { phone: phone.e164, phoneSearch: `${phoneDigits(phone.e164)} ${phone.national}` };
+  return { phone: phone?.value ?? null, phoneSearch: phone?.search ?? null };
 }
 
 export interface NewPatient {
   displayNumber: string;
   fullName: string;
-  /** Null only for a minor recorded without one (the service enforces the phone rule). */
-  phone: NormalizedPhoneInput | null;
+  phone: StoredPhone | null;
   dateOfBirth: string | null;
   sex: PatientSex;
   email: string | null;
@@ -199,7 +188,7 @@ export interface NewPatient {
  */
 export interface PatientPatch {
   fullName?: string;
-  phone?: NormalizedPhoneInput | null;
+  phone?: StoredPhone | null;
   dateOfBirth?: string | null;
   sex?: PatientSex;
   email?: string | null;
@@ -347,6 +336,21 @@ export class PatientsRepository {
   async findById(id: string): Promise<DomainPatient | undefined> {
     const [row] = await this.db.run((tx) => tx.select().from(patients).where(eq(patients.id, id)));
     return row ? this.one(row) : undefined;
+  }
+
+  /**
+   * The ids of the records whose import key is among `externalIds`, archived and merged-away ones
+   * included (the key stays theirs, `patients_external_id_unique`), keyed by that external id.
+   */
+  async findIdsByExternalIds(externalIds: readonly string[]): Promise<Map<string, string>> {
+    if (externalIds.length === 0) return new Map();
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({ id: patients.id, externalId: patients.externalId })
+        .from(patients)
+        .where(inArray(patients.externalId, [...externalIds])),
+    );
+    return new Map(rows.flatMap((row) => (row.externalId ? [[row.externalId, row.id]] : [])));
   }
 
   async findByIds(ids: readonly string[]): Promise<DomainPatient[]> {

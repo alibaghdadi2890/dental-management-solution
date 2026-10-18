@@ -42,7 +42,7 @@ export const contactRolesSchema = z
   .refine(hasRole, { message: ROLE_REQUIRED, path: ['isGuardian'] });
 export type ContactRoles = z.infer<typeof contactRolesSchema>;
 
-/** Raw phone as typed (required): the server normalises it against the tenant's country. */
+/** Raw phone as typed (required, any format): the server stores it with `storedPhone` (ADR-0052). */
 const contactPhoneSchema = z.string().trim().min(1).max(40);
 
 /** A contact created on the spot by the search-or-create control. */
@@ -135,7 +135,7 @@ export type ContactPatch = z.infer<typeof contactPatchSchema>;
 export const contactViewSchema = z.object({
   id: idSchema,
   fullName: z.string(),
-  /** E.164; null only for a contact linked to a patient who has no phone (a minor). */
+  /** As stored (`storedPhone`); null only for a contact linked to a patient who has no phone. */
   phone: z.string().nullable(),
   email: z.string().nullable(),
   linkedPatient: z

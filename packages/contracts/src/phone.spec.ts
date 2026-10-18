@@ -4,6 +4,7 @@ import {
   formatPhoneFor,
   normalizePhone,
   phoneDigits,
+  storedPhone,
   SUPPORTED_COUNTRIES,
 } from './phone.js';
 
@@ -37,6 +38,31 @@ describe('normalizePhone', () => {
 
   it('rejects a number that is not valid under the full metadata build (LB)', () => {
     expect(normalizePhone('07682462', 'LB')).toBeNull();
+  });
+});
+
+describe('storedPhone', () => {
+  it('stores a valid number as E.164, searchable by its E.164 and national digits', () => {
+    expect(storedPhone(' 03 123 456 ', 'LB')).toEqual({
+      value: '+9613123456',
+      search: '9613123456 03123456',
+    });
+  });
+
+  it('keeps a number the library cannot place as typed, spaces collapsed (ADR-0052)', () => {
+    expect(storedPhone('70  122 9951', 'LB')).toEqual({
+      value: '70 122 9951',
+      search: '701229951',
+    });
+    expect(storedPhone('03 123 456 ext. 12', 'LB')).toEqual({
+      value: '03 123 456 ext. 12',
+      search: '0312345612',
+    });
+  });
+
+  it('has no search digits for text without a digit, and no phone for blank text', () => {
+    expect(storedPhone('ask the mother', 'LB')).toEqual({ value: 'ask the mother', search: null });
+    expect(storedPhone('   ', 'LB')).toBeNull();
   });
 });
 

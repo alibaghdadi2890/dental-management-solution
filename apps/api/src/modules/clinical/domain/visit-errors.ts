@@ -26,6 +26,15 @@ export class VisitNotLiveError extends IllegalVisitTransitionError {
 }
 
 /**
+ * The visit was imported from a previous system (ADR-0053): it was never charged here, so an
+ * amendment or a void, which post or reverse a charge, does not apply to it.
+ */
+export class VisitImportedError extends DomainError {
+  readonly code = 'visit.imported';
+  readonly kind = 'conflict';
+}
+
+/**
  * Defensive guard in `lockPatientThenVisit` (ADR-0023, W24): after locking the visit's patient,
  * the visit's own row locked a different patient than that. It should be unreachable — a merge
  * re-points a visit inside the same transaction that locks the visit's old patient `FOR UPDATE`

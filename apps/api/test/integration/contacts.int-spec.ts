@@ -256,19 +256,6 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
         errors: [{ path: 'contacts.1.target.contactId', code: 'not_found' }],
       });
 
-      const invalidPhone = await clinic.owner
-        .post('/api/v1/patients')
-        .set('Idempotency-Key', newId())
-        .send({
-          fullName: 'Never Created',
-          dateOfBirth: CHILD_DOB,
-          contacts: [linkInput(newContact('Bad Phone', '12'), 'parent')],
-        });
-      expect(invalidPhone.status).toBe(422);
-      expect(problem(invalidPhone.body).errors?.[0]?.path).toBe(
-        'contacts.0.target.newContact.phone',
-      );
-
       const leftovers = await database.ownerPool.query<{ patients: number; contacts: number }>(
         `select (select count(*) from patients where tenant_id = $1 and full_name = 'Never Created')::int as patients,
                 (select count(*) from contacts where tenant_id = $1)::int as contacts`,
@@ -786,9 +773,10 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
       expect(event?.after).toEqual({ contactId });
       expect((await lookup(main.owner, '600 002')).length).toBe(1);
 
-      const invalid = await main.owner.patch(`/api/v1/contacts/${contactId}`).send({ phone: '12' });
-      expect(invalid.status).toBe(422);
-      expect(problem(invalid.body).errors?.[0]?.path).toBe('phone');
+      // Any format is kept as typed (ADR-0052).
+      const typed = await main.owner.patch(`/api/v1/contacts/${contactId}`).send({ phone: '12' });
+      expect(typed.status).toBe(200);
+      expect(typed.body).toMatchObject({ phone: '12' });
 
       const patient = await createPatient(main.owner, {
         fullName: 'Edit Patient',

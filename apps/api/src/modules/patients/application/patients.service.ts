@@ -64,7 +64,7 @@ import {
   PatientsRepository,
 } from '../persistence/patients.repository';
 import { ContactLinks, type LinkRequest } from './contact-links';
-import { assertMergePhoneRule, changesOf, mergeSet, normalizeFields } from './patient-changes';
+import { changesOf, mergeSet, normalizeFields } from './patient-changes';
 import { toListItem, toPatient } from './patient-mapping';
 
 /**
@@ -135,8 +135,14 @@ export class PatientsService {
    * With an `idempotencyKey` (`POST /patients`, feature 7 H5) a retry of the same request answers
    * with the patient the first one created, as it is now, and creates nothing; another request
    * under the key → 409 `patient.idempotency_mismatch`. Requests sharing a key run one at a time.
+   *
+   * `externalId` is the record's key in a previous system, set only by the import (feature 6,
+   * ADR-0053); a key another record holds → the unique index refuses the create.
    */
-  async create(input: PatientCreate, options: { idempotencyKey?: string } = {}): Promise<Patient> {
+  async create(
+    input: PatientCreate,
+    options: { idempotencyKey?: string; externalId?: string } = {},
+  ): Promise<Patient> {
     this.context.requirePermission('patient:write');
     return this.tenantDb.run(async () => {
       const idempotency =
@@ -156,7 +162,7 @@ export class PatientsService {
         }
       }
       const tenant = await this.tenancy.currentTenant();
-      const normalized = normalizeFields(input, tenant.country, this.today(tenant), null);
+      const normalized = normalizeFields(input, tenant.country, this.today(tenant));
       if (normalized.phone === undefined) throw new Error('create: phone was not normalised');
       if (input.primaryDentistId !== null) {
         await this.assertActiveDentist(input.primaryDentistId);
@@ -178,7 +184,7 @@ export class PatientsService {
           firstVisitType: input.firstVisitType,
           primaryDentistId: input.primaryDentistId,
           // The import key is set only by the import (feature 6).
-          externalId: null,
+          externalId: options.externalId ?? null,
           idempotency,
         }),
       );
@@ -198,8 +204,8 @@ export class PatientsService {
   /**
    * Changes only the fields whose stored value differs; a patch that changes nothing writes,
    * audits and emits nothing. A dentist kept from before may be inactive; a newly chosen one must
-   * be an active practitioner. The phone rule is re-checked when the patch touches the phone or
-   * the date of birth (`normalizeFields`). A medical history is stored whole: its items must be
+   * be an active practitioner. The phone is stored as `normalizeFields` stores it (ADR-0052). A
+   * medical history is stored whole: its items must be
    * options of the clinic's lists, and an inactive one only if the patient already has it.
    */
   async update(id: string, patch: PatientPatch): Promise<Patient> {
@@ -211,7 +217,7 @@ export class PatientsService {
         throw new PatientArchivedError('Archived patients cannot be edited; restore them first');
       }
       const tenant = await this.tenancy.currentTenant();
-      const normalized = normalizeFields(patch, tenant.country, this.today(tenant), before);
+      const normalized = normalizeFields(patch, tenant.country, this.today(tenant));
       const dentist = patch.primaryDentistId;
       if (dentist !== undefined && dentist !== null && dentist !== before.primaryDentistId) {
         await this.assertActiveDentist(dentist);
@@ -279,6 +285,15 @@ export class PatientsService {
     const patient = await this.patients.findById(id);
     if (!patient) throw new PatientNotFoundError(NOT_FOUND);
     return toPatient(patient);
+  }
+
+  /**
+   * For the import (feature 6): which of `externalIds` a record of the tenant already holds,
+   * archived and merged-away ones included, as external id → patient id.
+   */
+  async idsByExternalId(externalIds: readonly string[]): Promise<Map<string, string>> {
+    this.context.requirePermission('patient:read');
+    return this.patients.findIdsByExternalIds(externalIds);
   }
 
   /**
@@ -480,7 +495,6 @@ export class PatientsService {
       }
       const tenant = await this.tenancy.currentTenant();
       const patch = resolveMerge(kept, dropped, input.fieldChoices);
-      assertMergePhoneRule(kept, patch, this.today(tenant));
       const set = mergeSet(kept, patch, tenant.country);
       const keptAfter =
         Object.keys(set).length === 0 ? kept : await this.patients.update(kept.id, set);

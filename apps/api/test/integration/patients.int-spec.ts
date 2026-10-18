@@ -295,14 +295,13 @@ describe('patients: records, search, duplicates, archive and merge', () => {
       expect((await getPatient(main.owner, created.id)).externalId).toBeNull();
     });
 
-    it('rejects an invalid phone at the field', async () => {
-      const phone = await main.owner
-        .post('/api/v1/patients')
-        .set('Idempotency-Key', newId())
-        .send({ fullName: 'Bad Phone', phone: '12' });
-      expect(phone.status).toBe(422);
-      expect(phone.body).toMatchObject({ code: 'validation_failed' });
-      expect(firstPath(phone.body)).toBe('phone');
+    it('keeps a phone the library cannot place as typed, found by its digits (ADR-0052)', async () => {
+      const created = await createPatient(main.owner, {
+        fullName: 'Typed Phone',
+        phone: ' 70  122 9951 ',
+      });
+      expect(created.phone).toBe('70 122 9951');
+      expect(ids(await search(main.owner, 'q=7012299'))).toEqual([created.id]);
     });
 
     it('ignores the removed guardian and emergency-contact fields', async () => {
@@ -345,102 +344,32 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     });
   });
 
-  describe('the phone rule (addendum C3)', () => {
-    /** The problem body's first issue, for 422 validation responses. */
-    const firstIssue = (body: unknown) => (body as ProblemDetails).errors?.[0];
-    const PHONE_REQUIRED = { path: 'phone', code: 'required' };
-
-    it('requires a phone for an adult, and for a patient without a date of birth', async () => {
-      const adult = await main.owner
-        .post('/api/v1/patients')
-        .set('Idempotency-Key', newId())
-        .send({ fullName: 'Phoneless Adult', dateOfBirth: '1990-01-01' });
-      expect(adult.status).toBe(422);
-      expect(adult.body).toMatchObject({ code: 'validation_failed' });
-      expect(firstIssue(adult.body)).toMatchObject(PHONE_REQUIRED);
-
-      const noDob = await main.owner
-        .post('/api/v1/patients')
-        .set('Idempotency-Key', newId())
-        .send({ fullName: 'Phoneless Unknown Age', phone: '  ' });
-      expect(noDob.status).toBe(422);
-      expect(firstIssue(noDob.body)).toMatchObject(PHONE_REQUIRED);
-    });
-
-    it("lets a minor, in the tenant's time zone, be created without a phone", async () => {
-      // 22:30 UTC on 1 March is already 2 March in Beirut: born 2 March 2008 turns 18 there,
-      // while a UTC clock would still see a 17-year-old.
-      await withClockAt('2026-03-01T22:30:00Z', async () => {
-        const turned18 = await main.owner
-          .post('/api/v1/patients')
-          .set('Idempotency-Key', newId())
-          .send({ fullName: 'Birthday Adult', dateOfBirth: '2008-03-02' });
-        expect(turned18.status).toBe(422);
-        expect(firstIssue(turned18.body)).toMatchObject(PHONE_REQUIRED);
-
-        const minor = await createPatient(main.owner, {
-          fullName: 'Phoneless Minor',
-          dateOfBirth: '2008-03-03',
-        });
-        expect(minor).toMatchObject({ phone: null, dateOfBirth: '2008-03-03' });
-        expect((await getPatient(main.owner, minor.id)).phone).toBeNull();
-        // Listed, found by name and never by phone digits.
-        expect(ids(await search(main.owner, 'q=phoneless minor'))).toEqual([minor.id]);
-      });
-    });
-
-    it("refuses a PATCH that clears an adult's phone", async () => {
+  describe('an optional phone (ADR-0052)', () => {
+    it('creates an adult, or a patient without a date of birth, with no phone', async () => {
       const adult = await createPatient(main.owner, {
-        fullName: 'Keeps Phone',
+        fullName: 'Phoneless Adult',
+        dateOfBirth: '1990-01-01',
+      });
+      expect(adult).toMatchObject({ phone: null, dateOfBirth: '1990-01-01' });
+      const unknownAge = await createPatient(main.owner, {
+        fullName: 'Phoneless Unknown Age',
+        phone: '  ',
+      });
+      expect(unknownAge).toMatchObject({ phone: null, dateOfBirth: null });
+      // Listed, found by name and never by phone digits.
+      expect(ids(await search(main.owner, 'q=phoneless adult'))).toEqual([adult.id]);
+    });
+
+    it("lets an adult's phone be cleared, and the cleared number no longer finds them", async () => {
+      const adult = await createPatient(main.owner, {
+        fullName: 'Clears Phone',
         phone: '71000063',
         dateOfBirth: '1980-01-01',
       });
       const cleared = await main.owner.patch(`/api/v1/patients/${adult.id}`).send({ phone: '' });
-      expect(cleared.status).toBe(422);
-      expect(firstIssue(cleared.body)).toMatchObject(PHONE_REQUIRED);
-      expect((await getPatient(main.owner, adult.id)).phone).toBe('+96171000063');
-    });
-
-    it('refuses a PATCH that gives a phoneless minor an adult (or no) date of birth', async () => {
-      const minor = await createPatient(main.owner, {
-        fullName: 'Growing Up',
-        dateOfBirth: '2020-05-05',
-      });
-      for (const dateOfBirth of ['1990-05-05', null]) {
-        const response = await main.owner
-          .patch(`/api/v1/patients/${minor.id}`)
-          .send({ dateOfBirth });
-        expect(response.status).toBe(422);
-        expect(firstIssue(response.body)).toMatchObject(PHONE_REQUIRED);
-      }
-      // With a phone in the same patch, it goes through; another minor date needs none.
-      const withPhone = await main.owner
-        .patch(`/api/v1/patients/${minor.id}`)
-        .send({ dateOfBirth: '1990-05-05', phone: '71000064' });
-      expect(withPhone.status).toBe(200);
-      expect(withPhone.body).toMatchObject({ phone: '+96171000064', dateOfBirth: '1990-05-05' });
-
-      const other = await createPatient(main.owner, {
-        fullName: 'Still Growing',
-        dateOfBirth: '2019-01-01',
-      });
-      const notes = await main.owner
-        .patch(`/api/v1/patients/${other.id}`)
-        .send({ dateOfBirth: '2018-01-01', notes: 'Corrected' });
-      expect(notes.status).toBe(200);
-      expect(notes.body).toMatchObject({ phone: null, dateOfBirth: '2018-01-01' });
-    });
-
-    it("lets a minor's phone be cleared", async () => {
-      const minor = await createPatient(main.owner, {
-        fullName: 'Minor With Phone',
-        phone: '71000065',
-        dateOfBirth: '2015-01-01',
-      });
-      const cleared = await main.owner.patch(`/api/v1/patients/${minor.id}`).send({ phone: null });
       expect(cleared.status).toBe(200);
       expect(cleared.body).toMatchObject({ phone: null });
-      expect(ids(await search(main.owner, 'q=71000065'))).toEqual([]);
+      expect(ids(await search(main.owner, 'q=71000063'))).toEqual([]);
     });
   });
 
@@ -1051,41 +980,24 @@ describe('patients: records, search, duplicates, archive and merge', () => {
     const merge = (agent: TestAgent, body: Record<string, unknown>) =>
       agent.post('/api/v1/patients/merge').send(body);
 
-    it("refuses to leave an adult without a phone, and takes a minor's missing one", async () => {
+    it("takes the dropped record's missing phone, an adult's included (ADR-0052)", async () => {
       const adult = await createPatient(main.owner, {
         fullName: 'Mergephone Adult',
         phone: '71000066',
         dateOfBirth: '1990-01-01',
       });
-      const phonelessMinor = await createPatient(main.owner, {
-        fullName: 'Mergephone Minor',
-        dateOfBirth: '2016-01-01',
-      });
-      const refused = await merge(main.owner, {
-        keepId: adult.id,
-        dropId: phonelessMinor.id,
-        fieldChoices: { phone: 'drop' },
-        reason: 'Same person',
-      });
-      expect(refused.status).toBe(422);
-      expect((refused.body as ProblemDetails).errors?.[0]).toMatchObject({
-        path: 'phone',
-        code: 'required',
-      });
-
-      const minor = await createPatient(main.owner, {
-        fullName: 'Mergephone Kid',
-        phone: '71000067',
-        dateOfBirth: '2016-01-01',
+      const phoneless = await createPatient(main.owner, {
+        fullName: 'Mergephone Twin',
+        dateOfBirth: '1990-01-01',
       });
       const kept = await merge(main.owner, {
-        keepId: minor.id,
-        dropId: phonelessMinor.id,
+        keepId: adult.id,
+        dropId: phoneless.id,
         fieldChoices: { phone: 'drop' },
         reason: 'Same person',
       });
       expect(kept.status, JSON.stringify(kept.body)).toBe(200);
-      expect(kept.body).toMatchObject({ id: minor.id, phone: null });
+      expect(kept.body).toMatchObject({ id: adult.id, phone: null });
     });
 
     it('takes the chosen fields, unions the allergies and conditions and archives the dropped record', async () => {

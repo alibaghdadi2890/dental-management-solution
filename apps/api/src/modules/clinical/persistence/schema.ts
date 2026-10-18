@@ -267,10 +267,17 @@ export const visits = pgTable(
     subtotal: money(),
     discountAmount: money(),
     total: money(),
+    /** Imported from a previous system (feature 6, ADR-0053): completed as it came, never charged. */
+    importedAt: instant(),
+    /** Its key in that system: a re-run of the import finds it. Set only on imported visits. */
+    externalId: text(),
     ...timestamps(),
   },
   (table) => [
     index('visits_tenant_idx').on(table.tenantId),
+    uniqueIndex('visits_external_id_unique')
+      .on(table.tenantId, table.externalId)
+      .where(sql`${table.externalId} is not null`),
     // Target of the composite foreign keys from the record tables.
     unique('visits_tenant_id_unique').on(table.tenantId, table.id),
     unique('visits_display_number_unique').on(table.tenantId, table.displayNumber),
@@ -327,6 +334,10 @@ export const visits = pgTable(
     check(
       'visits_void_reason_length',
       sql`${table.voidReason} is null or char_length(${table.voidReason}) >= 3`,
+    ),
+    check(
+      'visits_imported_completed',
+      sql`(${table.importedAt} is null and ${table.externalId} is null) or (${table.importedAt} is not null and ${table.externalId} is not null and ${table.status}::text = 'completed')`,
     ),
     check(
       'visits_duration_positive',

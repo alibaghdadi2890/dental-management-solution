@@ -267,16 +267,15 @@ describe('billing: ledger, opening balances and balances', () => {
       const clinic = await provision('Atomic Clinic');
       await openWithBalance(clinic.owner, 'First', '10.00');
 
-      const badPhone = await clinic.owner
+      const badDentist = await clinic.owner
         .post('/api/v1/billing/opening-balances')
         .set('Idempotency-Key', newId())
         .send({
-          patient: { fullName: 'Bad Phone', phone: '12' },
+          patient: { fullName: 'Bad Dentist', phone: '71 000 002', primaryDentistId: newId() },
           openingBalance: { amount: '10.00', asOf: TODAY },
         });
-      expect(badPhone.status).toBe(422);
-      expect(badPhone.body).toMatchObject({ code: 'validation_failed' });
-      expect(firstPath(badPhone.body)).toBe('patient.phone');
+      expect(badDentist.status).toBe(422);
+      expect(badDentist.body).toMatchObject({ code: 'patient.unknown_dentist' });
 
       const insert = vi
         .spyOn(testApp.app.get(LedgerEntriesRepository), 'insert')

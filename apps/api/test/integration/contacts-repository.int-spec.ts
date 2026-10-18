@@ -1,3 +1,4 @@
+import type { StoredPhone } from '@dcm/contracts';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
@@ -18,7 +19,6 @@ import {
 import { PatientContactsRepository } from '../../src/modules/patients/persistence/patient-contacts.repository';
 import {
   type NewPatient,
-  type NormalizedPhoneInput,
   PatientsRepository,
 } from '../../src/modules/patients/persistence/patients.repository';
 import { type ContextSeed, RequestContext } from '../../src/platform/cls/request-context';
@@ -27,7 +27,11 @@ import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createTestApp, type TestApp } from '../support/test-app';
 
-const PHONE = (e164: string, national: string): NormalizedPhoneInput => ({ e164, national });
+/** A valid number as `storedPhone` stores it: E.164, searchable by its E.164 and national digits. */
+const PHONE = (e164: string, national: string): StoredPhone => ({
+  value: e164,
+  search: `${e164.slice(1)} ${national}`,
+});
 
 let displayNumberCounter = 0;
 function nextDisplayNumber(): string {
@@ -107,7 +111,7 @@ describe('patients: contacts repositories', () => {
   const createContact = (
     tenantId: string,
     fullName: string,
-    phone: NormalizedPhoneInput | null = null,
+    phone: StoredPhone | null = null,
     email: string | null = null,
   ) => inTenant(tenantId, () => contactsRepo.insert({ fullName, phone, email }));
   /** Plans and applies one change to `patientId`'s links, as the service will (H2). */

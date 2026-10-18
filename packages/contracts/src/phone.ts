@@ -33,6 +33,32 @@ export function normalizePhone(input: string, country: CountryCode): NormalizedP
   };
 }
 
+/**
+ * A phone as stored (ADR-0052): `value` is E.164 when the number is valid for the country it
+ * resolves to (`normalizePhone`), otherwise the text as typed, spaces collapsed — a clinic keeps
+ * numbers the library cannot place. `search` holds the digits a phone search matches: the E.164
+ * and national digits of a valid number, the typed digits of any other; null without a digit.
+ */
+export interface StoredPhone {
+  value: string;
+  search: string | null;
+}
+
+/** The stored form of a typed phone; null for blank text (no phone). */
+export function storedPhone(input: string, country: CountryCode): StoredPhone | null {
+  const typed = input.trim().replace(/\s+/g, ' ');
+  if (typed === '') return null;
+  const normalized = normalizePhone(typed, country);
+  if (normalized) {
+    return {
+      value: normalized.e164,
+      search: `${phoneDigits(normalized.e164)} ${normalized.national}`,
+    };
+  }
+  const digits = phoneDigits(typed);
+  return { value: typed, search: digits === '' ? null : digits };
+}
+
 /** Formats a stored E.164 number for display, e.g. `+9613123456` → `+961 3 123 456`. */
 export function formatPhone(e164: string): string {
   const phoneNumber = parsePhoneNumberFromString(e164);

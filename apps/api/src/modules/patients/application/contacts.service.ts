@@ -5,7 +5,7 @@ import {
   type ContactLookupQuery,
   type ContactPatch,
   type ContactView,
-  normalizePhone,
+  storedPhone,
   type PatientContact,
   type PatientListItem,
 } from '@dcm/contracts';
@@ -145,15 +145,15 @@ export class ContactsService {
   }
 
   /**
-   * The contacts whose resolved phone is `phone`, normalised with the tenant's country (e.g. an
-   * import matching a guardian's phone). A phone that does not parse matches nobody: `[]`.
+   * The contacts whose resolved phone is `phone` as it would be stored (`storedPhone`: E.164 for
+   * a valid number, else as typed; e.g. an import matching a guardian's phone). Blank: `[]`.
    */
   async findContactsByPhone(phone: string): Promise<ContactView[]> {
     this.context.requirePermission('patient:read');
     const { country } = await this.tenancy.currentTenant();
-    const normalized = normalizePhone(phone, country);
-    if (!normalized) return [];
-    const records = await this.contacts.findByPhone(normalized.e164);
+    const stored = storedPhone(phone, country);
+    if (!stored) return [];
+    const records = await this.contacts.findByPhone(stored.value);
     return records.map((record) => resolveContact(record.contact, record.linkedPatient));
   }
 
@@ -312,14 +312,12 @@ export class ContactsService {
       }
       if (patch.phone !== undefined) {
         const { country } = await this.tenancy.currentTenant();
-        const phone = normalizePhone(patch.phone, country);
+        const phone = storedPhone(patch.phone, country);
         if (!phone) {
-          const message = 'Not a valid phone number';
-          throw new ValidationFailedError(message, [
-            { path: 'phone', code: 'invalid_phone', message },
-          ]);
+          const message = 'A contact needs a phone number';
+          throw new ValidationFailedError(message, [{ path: 'phone', code: 'required', message }]);
         }
-        if (phone.e164 !== before.phone) set.phone = phone;
+        if (phone.value !== before.phone) set.phone = phone;
       }
       if (patch.email !== undefined && patch.email !== before.email) set.email = patch.email;
       if (Object.keys(set).length === 0) return resolveContact(before);

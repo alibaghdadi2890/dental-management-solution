@@ -39,8 +39,11 @@ export const LEDGER_ENTRY_KINDS = [
 export const ledgerEntryKindSchema = z.enum(LEDGER_ENTRY_KINDS);
 export type LedgerEntryKind = z.infer<typeof ledgerEntryKindSchema>;
 
-/** How a payment was taken (feature 5); Insurance is a method, not a claim. */
-export const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'insurance'] as const;
+/**
+ * How a payment was taken (feature 5); Insurance is a method, not a claim. Whish is the Whish
+ * Money transfer app clinics in Lebanon take payments through (ADR-0052).
+ */
+export const PAYMENT_METHODS = ['cash', 'card', 'bank_transfer', 'whish', 'insurance'] as const;
 export const paymentMethodSchema = z.enum(PAYMENT_METHODS);
 export type PaymentMethod = z.infer<typeof paymentMethodSchema>;
 
