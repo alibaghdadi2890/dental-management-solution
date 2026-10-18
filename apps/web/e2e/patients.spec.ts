@@ -121,29 +121,31 @@ test('the owner registers a child with a new guardian and an opening balance, co
     await expect(linaRow).toContainText('$250');
   });
 
-  const recordPath = await test.step('the record: guardian chip and completeness', async () => {
-    await linaRow.click();
-    await expect(page).toHaveURL(/\/patients\/[0-9a-f-]{36}(\?.*)?$/);
-    const path = new URL(page.url()).pathname;
-    await expect(page.getByRole('heading', { level: 1, name: lina.name })).toBeVisible();
-    await expect(page.getByText(`Guardian · ${maria.name} · ${maria.phone}`)).toBeVisible();
-    await expect(page.getByRole('region', { name: 'Balance' })).toContainText(
-      /Total outstanding\s*\$250/,
-    );
+  const recordPath =
+    await test.step('the record: guardian chip and missing information', async () => {
+      await linaRow.click();
+      await expect(page).toHaveURL(/\/patients\/[0-9a-f-]{36}(\?.*)?$/);
+      const path = new URL(page.url()).pathname;
+      await expect(page.getByRole('heading', { level: 1, name: lina.name })).toBeVisible();
+      await expect(page.getByText(`Guardian · ${maria.name} · ${maria.phone}`)).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Balance' })).toContainText(
+        /Total outstanding\s*\$250/,
+      );
 
-    // Patient information: with the guardian, email and address complete the profile.
-    await page.getByRole('tab', { name: 'Patient information' }).click();
-    const information = page.getByRole('region', { name: 'Patient information' });
-    await expect(information.getByText('Partly complete')).toBeVisible();
-    await information.getByRole('textbox', { name: 'Email' }).fill(lina.email);
-    await information.getByRole('textbox', { name: 'Address' }).fill('12 Hamra St, Beirut');
-    await expect(information.getByRole('status')).toHaveText('Unsaved changes');
-    await information.getByRole('button', { name: 'Save changes' }).click();
-    await expect(information.getByRole('status')).toHaveText('✓Saved just now');
-    await expect(information.getByText('Complete', { exact: true })).toBeVisible();
-    await expect(information.getByText('Partly complete')).toBeHidden();
-    return path;
-  });
+      // Patient information: the guardian stands in for her phone; only her sex is missing (ADR-0052).
+      await page.getByRole('tab', { name: 'Patient information' }).click();
+      const information = page.getByRole('region', { name: 'Patient information' });
+      await expect(information.getByText('Missing: sex')).toBeVisible();
+      await information.getByRole('combobox', { name: 'Sex' }).selectOption('female');
+      await information.getByRole('textbox', { name: 'Email' }).fill(lina.email);
+      await information.getByRole('textbox', { name: 'Address' }).fill('12 Hamra St, Beirut');
+      await expect(information.getByRole('status')).toHaveText('Unsaved changes');
+      await information.getByRole('button', { name: 'Save changes' }).click();
+      await expect(information.getByRole('status')).toHaveText('✓Saved just now');
+      await expect(information.getByText('Complete', { exact: true })).toBeVisible();
+      await expect(information.getByText('Missing: sex')).toBeHidden();
+      return path;
+    });
 
   await test.step('⌘K finds her by her guardian’s phone digits', async () => {
     await page.getByRole('link', { name: 'Patients' }).click();

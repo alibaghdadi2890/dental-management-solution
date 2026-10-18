@@ -314,12 +314,14 @@ test('a treatment visit opens on today’s work and continues it', async ({ page
     await page.getByRole('tab', { name: 'Overview' }).click();
     const attention = page.getByRole('region', { name: 'Needs attention' });
     const rows = attention.getByRole('listitem');
-    await expect(rows).toHaveCount(2);
+    await expect(rows).toHaveCount(3);
     await expect(rows.nth(0)).toContainText('Root canal treatment');
     await expect(rows.nth(0)).toContainText('Session 2 of 3 not finished');
     await expect(rows.nth(0).getByRole('button', { name: 'Continue' })).toBeVisible();
     await expect(rows.nth(1)).toContainText('Zircon crown');
     await expect(rows.nth(1).getByRole('button', { name: 'Treat' })).toBeVisible();
+    // Registered without a date of birth or sex: the record says so last (ADR-0052).
+    await expect(rows.nth(2)).toContainText('Missing information');
   });
 
   await test.step('Start visit suggests Treatment and asks nothing about the plan', async () => {
