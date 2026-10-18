@@ -134,7 +134,9 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
 
   const preview = (body: Record<string, unknown>) =>
     ok<PaymentPreview>(
-      owner.post('/api/v1/billing/payments/preview').send({ method: 'cash', paidAt: TODAY, ...body }),
+      owner
+        .post('/api/v1/billing/payments/preview')
+        .send({ method: 'cash', paidAt: TODAY, ...body }),
     );
 
   const account = (patient: Patient) =>
@@ -228,7 +230,12 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
     const fillingPlan = await plan(patient, filling, '26');
 
     expect(await preview({ patientId: patient.id, amount: '1000', advance: 'plan' })).toMatchObject(
-      { advance: 'plan', held: '0.00', planRemaining: '900.00', error: 'payment.over_plan_remaining' },
+      {
+        advance: 'plan',
+        held: '0.00',
+        planRemaining: '900.00',
+        error: 'payment.over_plan_remaining',
+      },
     );
     await expectProblem(
       pay(frontdesk, { patientId: patient.id, amount: '1000', advance: 'plan' }),
@@ -240,7 +247,11 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
       allocations: [],
       error: null,
     });
-    const advance = await paid(frontdesk, { patientId: patient.id, amount: '850', advance: 'plan' });
+    const advance = await paid(frontdesk, {
+      patientId: patient.id,
+      amount: '850',
+      advance: 'plan',
+    });
     expect(advance.allocations).toEqual([]);
     expect(await money(patient)).toEqual({
       balance: '-850.00',
@@ -251,7 +262,11 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
 
     // An unrelated charge is not paid from the advance.
     const clean = await cleaningVisit(patient);
-    expect(await money(patient)).toMatchObject({ balance: '-800.00', held: '850.00', open: ['50.00'] });
+    expect(await money(patient)).toMatchObject({
+      balance: '-800.00',
+      held: '850.00',
+      open: ['50.00'],
+    });
     expect(await summary(clean)).toMatchObject({
       visit: { outstanding: '50.00' },
       totalOutstanding: '50.00',
@@ -265,14 +280,16 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
       held: '250.00',
       payments: [{ fromAdvance: true, amount: '600.00' }],
     });
-    expect((await preview({ patientId: patient.id, amount: '100', advance: 'plan' })).planRemaining).toBe(
-      '50.00',
-    );
+    expect(
+      (await preview({ patientId: patient.id, amount: '100', advance: 'plan' })).planRemaining,
+    ).toBe('50.00');
 
     // The last plan item done: the advance covers what it can, the hold ends, and the rest has
     // nothing left to cover, so the filling owes 50 and the cleaning 50.
     const fillingVisit = await planVisit(patient, [fillingPlan]);
-    expect(await summary(fillingVisit)).toMatchObject({ visit: { paid: '250.00', outstanding: '50.00' } });
+    expect(await summary(fillingVisit)).toMatchObject({
+      visit: { paid: '250.00', outstanding: '50.00' },
+    });
     expect(await money(patient)).toEqual({
       balance: '100.00',
       held: '0.00',
@@ -296,7 +313,9 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
     expect(await money(patient)).toMatchObject({ held: '900.00', open: ['50.00'] });
 
     // The crown is dropped; the filling is still to do, so the money stays held.
-    await ok(dentist.agent.post(`/api/v1/clinical/patients/${patient.id}/plans/${crownPlan}/cancel`));
+    await ok(
+      dentist.agent.post(`/api/v1/clinical/patients/${patient.id}/plans/${crownPlan}/cancel`),
+    );
     expect(await money(patient)).toMatchObject({ held: '900.00', open: ['50.00'] });
 
     await planVisit(patient, [fillingPlan]);
@@ -330,7 +349,11 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
   it('releases a held advance by hand, with a reason, to the open charges', async () => {
     const patient = await newPatient('Released Patient');
     await plan(patient, filling, '26');
-    const advance = await paid(frontdesk, { patientId: patient.id, amount: '200', advance: 'plan' });
+    const advance = await paid(frontdesk, {
+      patientId: patient.id,
+      amount: '200',
+      advance: 'plan',
+    });
     await cleaningVisit(patient);
     const paymentId = advance.paymentIds[0] ?? '';
 
@@ -348,7 +371,9 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
     });
     expect(await releases(paymentId)).toEqual([{ kind: 'manual', released: '200.00' }]);
     await expectProblem(
-      frontdesk.post(`/api/v1/billing/payments/${paymentId}/release`).send({ reason: 'Again please' }),
+      frontdesk
+        .post(`/api/v1/billing/payments/${paymentId}/release`)
+        .send({ reason: 'Again please' }),
       409,
       'payment.not_held',
     );
@@ -380,7 +405,12 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
         .send({ reason: 'Entered on the wrong patient' }),
       201,
     );
-    expect(await money(patient)).toEqual({ balance: '0.00', held: '0.00', credit: '0.00', open: [] });
+    expect(await money(patient)).toEqual({
+      balance: '0.00',
+      held: '0.00',
+      credit: '0.00',
+      open: [],
+    });
     // Neither holds anything any more: there is nothing to release.
     for (const payment of [refunded, voided]) {
       await expectProblem(
@@ -453,7 +483,11 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
       422,
       'payment.no_open_plan',
     );
-    await expectProblem(pay(owner, { patientId: patient.id, amount: '100' }), 422, 'payment.nothing_outstanding');
+    await expectProblem(
+      pay(owner, { patientId: patient.id, amount: '100' }),
+      422,
+      'payment.nothing_outstanding',
+    );
 
     await cleaningVisit(patient);
     const credit = await paid(owner, { patientId: patient.id, amount: '200', advance: 'credit' });

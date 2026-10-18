@@ -1,13 +1,6 @@
 import type { PatientAccount } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
-import {
-  capOf,
-  defaultAdvance,
-  halfOf,
-  initialDraft,
-  requestOf,
-  statusOf,
-} from './payment-draft';
+import { capOf, defaultAdvance, halfOf, initialDraft, requestOf, statusOf } from './payment-draft';
 
 const id = (n: number) => `01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d${String(n).padStart(2, '0')}`;
 
@@ -141,9 +134,9 @@ describe('paying in advance (ADR-0051)', () => {
     expect(capOf(plan, ACCOUNT)).toBe(90000n);
     expect(statusOf({ ...plan, amountText: '950' }, ACCOUNT, 'en').problem).toBe('over');
     expect(statusOf({ ...plan, amountText: '900' }, ACCOUNT, 'en').problem).toBeNull();
-    expect(
-      statusOf(draft({ advance: 'credit', amountText: '2000' }), ACCOUNT, 'en'),
-    ).toMatchObject({ problem: null, remaining: 0n, full: false });
+    expect(statusOf(draft({ advance: 'credit', amountText: '2000' }), ACCOUNT, 'en')).toMatchObject(
+      { problem: null, remaining: 0n, full: false },
+    );
   });
 
   it('pays this patient only: no household, no chosen visit, and no context visit for the plan', () => {

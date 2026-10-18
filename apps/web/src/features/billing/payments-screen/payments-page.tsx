@@ -625,7 +625,11 @@ function TransactionRow({
         <Pill tone="neutral">{t(`billing:methods.${item.method}`)}</Pill>
         {item.advance && (
           <Pill tone="indigo">
-            {t(item.advance === 'plan' ? 'billing:payments.advancePlan' : 'billing:payments.advanceCredit')}
+            {t(
+              item.advance === 'plan'
+                ? 'billing:payments.advancePlan'
+                : 'billing:payments.advanceCredit',
+            )}
           </Pill>
         )}
         {item.partial && <span className="text-[12px] text-ink-muted">{t('type.partial')}</span>}

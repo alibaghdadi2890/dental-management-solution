@@ -1,10 +1,4 @@
-import {
-  fromCents,
-  lineFinal,
-  toCents,
-  type VisitNumber,
-  type VisitStatus,
-} from '@dcm/contracts';
+import { fromCents, lineFinal, toCents, type VisitNumber, type VisitStatus } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../../platform/cls/request-context';
 import { TenantDb } from '../../../../platform/db/tenant-db';

@@ -44,6 +44,7 @@ cover the plan's charges as they post, and not be eaten by unrelated charges.
 
   Held money is used before free credit on plan charges, so free credit stays available for the
   rest.
+
 - **A6 — ADR-0029, amended.** Free credit and open charges still never coexist. Held money may sit
   beside open charges that are not plan work.
 - **A7 — When a hold ends.** A hold is stored (`payment_holds`), and once it ends it never comes
@@ -85,7 +86,7 @@ cover the plan's charges as they post, and not be eaten by unrelated charges.
   - Plan prices are snapshots, so the hold follows the items that are left. Nothing new to build.
   - Tax is out of scope.
 - **A12 — Events and audit.** `PaymentRecorded` gains `advance`. New `AdvanceReleased { paymentId,
-  patientId, currency, amount, kind: 'plan_closed' | 'manual' }`. Audit `payment.release` (reason
+patientId, currency, amount, kind: 'plan_closed' | 'manual' }`. Audit `payment.release` (reason
   for `manual`; `after.kind`), area `billing`, about the patient. Held money covering a charge is an
   `allocation` (new payment) or `credit_applied` row as today; `CreditApplied` still fires.
 - **A13 — Merge.** Holds are keyed by payment, so they follow the re-pointed payments. The kept
@@ -104,7 +105,7 @@ cover the plan's charges as they post, and not be eaten by unrelated charges.
     `releasedAt`.
   - `releaseHoldInputSchema = { reason }`.
 - Route: `POST /billing/payments/:id/release` → `paymentWriteResultSchema`, `@RequirePermission(
-  'payment:write')`.
+'payment:write')`.
 - `clinical` (`VisitFactsService`, `visit:read`, which every system role holds):
   - `chargeFacts` lines gain `planId`, and it also answers for an `amended` visit.
   - New `planWork(patientId) → { open: boolean, estimate: string, currency }`.
@@ -112,7 +113,7 @@ cover the plan's charges as they post, and not be eaten by unrelated charges.
 ## Schema (migration 0046)
 
 - `payment_holds` (tenant RLS): `payment_id` (PK with `tenant_id`, FK to `payments`), `released_at
-  timestamptz null`, `released_kind text null` (`plan_closed` | `manual`), `released_by uuid null`,
+timestamptz null`, `released_kind text null` (`plan_closed` | `manual`), `released_by uuid null`,
   `release_reason text null`, timestamps. CHECK: the three release columns are all null or all
   set (`release_reason` only for `manual`). It is written once at record. The only update allowed
   is the release, while `released_at` is null (repository plus `WHERE released_at IS NULL`).
@@ -121,12 +122,12 @@ cover the plan's charges as they post, and not be eaten by unrelated charges.
 
 ## Errors
 
-| Code                              | HTTP | When                                                     |
-|-----------------------------------|------|----------------------------------------------------------|
-| `payment.over_plan_remaining`     | 422  | A `plan` advance above what the plan still needs (A8)   |
-| `payment.no_open_plan`            | 422  | A `plan` advance with no open plan work                  |
-| `payment.not_held`                | 409  | Release of a payment that is not held, or already released |
-| validation (`advance`)            | 400  | Advance with household scope, a target, or (plan) a context visit |
+| Code                          | HTTP | When                                                              |
+| ----------------------------- | ---- | ----------------------------------------------------------------- |
+| `payment.over_plan_remaining` | 422  | A `plan` advance above what the plan still needs (A8)             |
+| `payment.no_open_plan`        | 422  | A `plan` advance with no open plan work                           |
+| `payment.not_held`            | 409  | Release of a payment that is not held, or already released        |
+| validation (`advance`)        | 400  | Advance with household scope, a target, or (plan) a context visit |
 
 ## Tests
 

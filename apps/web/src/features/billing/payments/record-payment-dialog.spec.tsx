@@ -166,7 +166,9 @@ describe('Record payment (spec §Record Payment)', () => {
     renderDialog();
     fireEvent.click(await screen.findByRole('button', { name: 'Pay in advance' }));
     expect(
-      screen.getByRole('radio', { name: 'Hold for the treatment plan' }).getAttribute('aria-checked'),
+      screen
+        .getByRole('radio', { name: 'Hold for the treatment plan' })
+        .getAttribute('aria-checked'),
     ).toBe('true');
     expect(screen.getByText(/The plan still needs \$900\./)).toBeTruthy();
     const amount = screen.getByLabelText('Amount taken now');
@@ -196,7 +198,9 @@ describe('Record payment (spec §Record Payment)', () => {
       name: 'Hold for the treatment plan',
     });
     expect(plan.disabled).toBe(true);
-    expect(screen.getByText(/It pays the \$300 owed first; the rest stays as credit\./)).toBeTruthy();
+    expect(
+      screen.getByText(/It pays the \$300 owed first; the rest stays as credit\./),
+    ).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Amount taken now'), { target: { value: '500' } });
     fireEvent.click(screen.getByRole('button', { name: 'Record advance' }));
     expect(await screen.findByText('The rest is kept as credit')).toBeTruthy();
@@ -208,6 +212,5 @@ describe('Record payment (spec §Record Payment)', () => {
       advance: 'credit',
       contextVisitId: id(20),
     });
-
   });
 });

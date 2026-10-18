@@ -680,9 +680,7 @@ export class PaymentViewsService {
     const advances = rows.filter((row) => row.advance !== null);
     if (advances.length === 0) return new Map();
     const holds = await this.holds.forPayments(advances.map((row) => row.id));
-    const unspent = await this.allocations.unallocatedOf(
-      advances.map((row) => row.ledgerEntryId),
-    );
+    const unspent = await this.allocations.unallocatedOf(advances.map((row) => row.ledgerEntryId));
     return new Map(
       advances.map((row) => {
         const hold = holds.get(row.id);

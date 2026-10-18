@@ -365,7 +365,10 @@ describe('settle with money held for the plan (ADR-0051)', () => {
   });
 
   it('releases held money when an amendment removes a plan service, and keeps it held', () => {
-    const targets = [planVisit('crown', '2026-03-01', 700, 0), target('cleaning', '2026-02-01', 50)];
+    const targets = [
+      planVisit('crown', '2026-03-01', 700, 0),
+      target('cleaning', '2026-02-01', 50),
+    ];
     const sources = [held('adv', '2026-01-15', 1000)];
     expect(rows({ targets, sources, pairs: [pair('adv', 'crown', 600)] })).toEqual([
       ['adv', 'crown', -$(600), 'release'],
@@ -396,7 +399,10 @@ describe('heldPosition (ADR-0051 A8)', () => {
       { ...target('crown', '2026-03-01', 700), planShare: $(600) },
       target('cleaning', '2026-02-01', 50),
     ];
-    const sources = [{ ...source('adv', '2026-01-15', 400), held: true }, source('p', '2026-03-02', 100)];
+    const sources = [
+      { ...source('adv', '2026-01-15', 400), held: true },
+      source('p', '2026-03-02', 100),
+    ];
     const pairs = [pair('adv', 'crown', 400), pair('p', 'crown', 100)];
     expect(heldPosition({ targets, sources, pairs })).toEqual({ unspent: 0n, openRoom: $(200) });
   });

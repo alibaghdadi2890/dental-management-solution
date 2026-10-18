@@ -477,7 +477,7 @@ patientIds, householdGroupId, amount, currency, allocations }`, `PaymentRefunded
 refundId, patientId, amount, currency, releases }`, `PaymentVoided { receiptNumber, paymentIds,
 voidIds, patientIds }`, `CreditApplied { patientId, currency, allocations }`, `AdvanceReleased
 { paymentId, patientId, currency, amount, kind }` (ADR-0051); `PaymentRecorded` also carries
-`advance`.
+  `advance`.
 - Consumes:
   - `PatientsMerged { keptId, droppedId }` (from `patients`), **in the merge transaction**, to
     re-point the dropped patient's entries and payments (ADR-0036).

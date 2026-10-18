@@ -241,7 +241,11 @@ function PaymentForm({
               type="button"
               className="cursor-pointer self-start border-0 bg-transparent p-0 text-[12.5px] font-medium text-primary hover:underline"
               onClick={() => {
-                set({ advance: defaultAdvance(account), household: false, targetEntryId: undefined });
+                set({
+                  advance: defaultAdvance(account),
+                  household: false,
+                  targetEntryId: undefined,
+                });
                 setAdvanced(false);
               }}
             >
@@ -546,7 +550,11 @@ function AdvanceChoice({
           {t('record.advance.back')}
         </button>
       </div>
-      <div role="radiogroup" aria-label={t('record.advance.title')} className="flex flex-wrap gap-2">
+      <div
+        role="radiogroup"
+        aria-label={t('record.advance.title')}
+        className="flex flex-wrap gap-2"
+      >
         {choices.map((choice) => (
           <button
             key={choice.value}

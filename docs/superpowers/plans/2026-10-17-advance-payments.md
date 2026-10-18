@@ -37,7 +37,7 @@ Done: clinical suites and API typecheck green.
 ## 3. Domain: settle with held money (A5)
 
 - `billing/domain/allocate.ts`: `AllocationSource.held: boolean`, `AllocationTarget.planShare:
-  bigint`. In `settle`, the new step 2 (release above held room, held pairs only, newest first)
+bigint`. In `settle`, the new step 2 (release above held room, held pairs only, newest first)
   and step 3 (held sources first, up to held room), then the existing pass for the rest.
   `planPayment` is unchanged (a `plan` advance never calls it).
 - `billing/domain/allocate.spec.ts`: the five domain cases of the spec. Existing cases keep

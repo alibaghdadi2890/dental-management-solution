@@ -37,8 +37,8 @@ implant would quietly pay an unrelated cleaning, and the implant would later loo
      `TreatmentCancelled`, `TreatmentRemoved` (new), `VisitDiscarded` and a `VisitCompleted` at no
      charge, in their transactions;
    - **by hand**: `POST /billing/payments/:id/release` with a reason (`payment:write`).
-   What the payment still held becomes free credit at once. Audited `payment.release`;
-   `AdvanceReleased`.
+     What the payment still held becomes free credit at once. Audited `payment.release`;
+     `AdvanceReleased`.
 6. **Always refundable.** A refund takes the unspent part first and a void cancels it; neither
    needs a case of its own. No part of an advance is kept by policy.
 7. **A cap on a held advance**: what the plan still needs = the open plan estimate + its charges

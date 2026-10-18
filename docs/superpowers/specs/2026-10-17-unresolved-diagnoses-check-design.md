@@ -20,6 +20,7 @@ Before the visit is recorded, the dentist is warned and can resolve those diagno
   slip. Work only started today (a session, "Not finished") adds no service and lists nothing.
   Jaw-level and whole-mouth services list nothing, because diagnoses are per tooth. The rule is
   one pure function, `diagnosesToResolve(visit, chart)`, in `features/clinical/dialogs/`.
+
 - **D2: where it happens.** First on the way to the **Complete step**. Entering it from any step
   (Perform's **Continue to Complete**, or the stepper) opens the check in its own dialog
   (`ResolveBeforeCompleteDialog`). **Back to {step}** stays where the dentist was. The primary
