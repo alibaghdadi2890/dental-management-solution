@@ -65,8 +65,9 @@ export const serviceItemSchema = z.object({
   frequent: z.boolean(),
   active: z.boolean(),
   toothEffect: toothEffectSchema,
-  /** The chart mark (feature 9): a per-tooth service always has a colour. Any other has none,
-   * unless it was a per-tooth service once: it keeps its mark for the records made then. */
+  /** The chart mark (feature 9): a per-tooth service has a colour, an icon or both, never neither
+   * (ADR-0054). Any other has none, unless it was a per-tooth service once: it keeps its mark for
+   * the records made then. */
   color: markColorSchema.nullable(),
   icon: markIconSchema.nullable(),
   markPriority: markPrioritySchema,
@@ -93,8 +94,9 @@ export type DiagnosisItem = z.infer<typeof diagnosisItemSchema>;
 
 /**
  * The chart mark of a row being saved. All optional: a new row without a colour gets the least
- * used one of its catalog, and a saved row keeps what it has. For a service that is not charged
- * per tooth what is sent is ignored.
+ * used one of its catalog, and a saved row keeps what it has. A service's `color: null` is no
+ * colour, which needs an icon (ADR-0054); a diagnosis's is the same as not sending one. For a
+ * service that is not charged per tooth what is sent is ignored.
  */
 const markInput = {
   color: markColorSchema.nullable().optional(),
@@ -131,6 +133,13 @@ export const serviceItemInputSchema = z
         code: 'custom',
         path: ['toothEffect'],
         message: 'Only a service charged per tooth can change a tooth',
+      });
+    }
+    if (row.chargeUnit === 'per_tooth' && row.color === null && row.icon === null) {
+      context.addIssue({
+        code: 'custom',
+        path: ['color'],
+        message: 'A service on a tooth needs a colour or an icon',
       });
     }
   });

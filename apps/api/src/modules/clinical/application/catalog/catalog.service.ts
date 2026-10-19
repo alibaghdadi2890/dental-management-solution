@@ -91,7 +91,8 @@ export class CatalogService {
    * takes the tenant's current currency when it is created or changed. Returns the catalog.
    *
    * Chart marks (feature 9): a mark field that is not sent keeps its stored value; a per-tooth
-   * service left without a colour gets the least used one. For a service on a jaw or the mouth
+   * service left without a colour gets the least used one, unless it has an icon and `color: null`
+   * was sent: then it has no colour (ADR-0054). For a service on a jaw or the mouth
    * what is sent is ignored: a new one has no mark, and one moved off the tooth keeps the mark it
    * had, which its earlier tooth records are still drawn with.
    */
@@ -105,6 +106,7 @@ export class CatalogService {
         batch.items,
         (row: ServiceItemInput, id, before, stored): ServiceItem => {
           const perTooth = row.chargeUnit === 'per_tooth';
+          const icon = perTooth && row.icon !== undefined ? row.icon : (before?.icon ?? null);
           return {
             id,
             code: row.code,
@@ -118,10 +120,12 @@ export class CatalogService {
             frequent: row.frequent,
             active: row.active,
             toothEffect: row.toothEffect,
-            color: perTooth
-              ? (row.color ?? before?.color ?? pickColor(stored))
-              : (before?.color ?? null),
-            icon: perTooth && row.icon !== undefined ? row.icon : (before?.icon ?? null),
+            color: !perTooth
+              ? (before?.color ?? null)
+              : row.color === null && icon !== null
+                ? null
+                : (row.color ?? before?.color ?? pickColor(stored)),
+            icon,
             markPriority: row.markPriority ?? before?.markPriority ?? MARK_PRIORITY_DEFAULT,
             addedOnVisitType: row.addedOnVisitType,
             typicalSessions: row.typicalSessions,

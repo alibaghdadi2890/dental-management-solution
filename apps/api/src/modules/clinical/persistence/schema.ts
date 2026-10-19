@@ -107,11 +107,11 @@ export const procedures = pgTable(
     ),
     check('procedures_color_known', sql`${table.color} in (${keyList(MARK_COLORS)})`),
     check('procedures_icon_known', sql`${table.icon} in (${keyList(MARK_ICONS)})`),
-    // A service on a tooth always has a colour. One moved to a jaw or the mouth keeps the mark it
-    // had, for the tooth records that still point at it.
+    // A service on a tooth has a colour, an icon or both (ADR-0054). One moved to a jaw or the
+    // mouth keeps the mark it had, for the tooth records that still point at it.
     check(
       'procedures_mark_per_tooth',
-      sql`${table.chargeUnit} <> 'per_tooth' or ${table.color} is not null`,
+      sql`${table.chargeUnit} <> 'per_tooth' or ${table.color} is not null or ${table.icon} is not null`,
     ),
     check('procedures_mark_priority_range', sql`${table.markPriority} between 0 and 9`),
     check(

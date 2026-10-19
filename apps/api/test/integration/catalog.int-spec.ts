@@ -390,6 +390,32 @@ describe('clinical: service and diagnosis catalogs', () => {
       });
       expect(refused.status).toBe(400);
     });
+
+    it('saves a service on a tooth with an icon and no colour, never with neither (ADR-0054)', async () => {
+      const cmp = await service('MK2');
+      const iconOnly = await api.put('/catalog/services', {
+        items: [{ ...input(cmp), color: null, icon: 'root_canal' }],
+      });
+      expect(iconOnly.status, JSON.stringify(iconOnly.body)).toBe(200);
+      expect((iconOnly.body as ServiceItem[]).find((item) => item.id === cmp.id)).toMatchObject({
+        color: null,
+        icon: 'root_canal',
+      });
+
+      const neither = await api.put('/catalog/services', {
+        items: [{ ...input(cmp), color: null, icon: null }],
+      });
+      expect(neither.status).toBe(400);
+
+      // No colour asked for and no icon sent: the stored icon stays, and so does no colour.
+      const kept = await api.put('/catalog/services', {
+        items: [{ ...input(cmp), color: null }],
+      });
+      expect((kept.body as ServiceItem[]).find((item) => item.id === cmp.id)).toMatchObject({
+        color: null,
+        icon: 'root_canal',
+      });
+    });
   });
 
   describe('delete and deactivate', () => {

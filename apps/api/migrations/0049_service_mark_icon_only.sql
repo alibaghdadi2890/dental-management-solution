@@ -1,0 +1,2 @@
+ALTER TABLE "procedures" DROP CONSTRAINT "procedures_mark_per_tooth";--> statement-breakpoint
+ALTER TABLE "procedures" ADD CONSTRAINT "procedures_mark_per_tooth" CHECK ("procedures"."charge_unit" <> 'per_tooth' or "procedures"."color" is not null or "procedures"."icon" is not null);

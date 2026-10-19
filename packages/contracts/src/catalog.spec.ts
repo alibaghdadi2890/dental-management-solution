@@ -155,6 +155,23 @@ describe('chart marks on a catalog row (feature 9)', () => {
       diagnosisItemInputSchema.safeParse({ code: 'DX-CAR', name: 'Caries', icon: 'crown' }).data,
     ).not.toHaveProperty('icon');
   });
+
+  it('let a service on a tooth go without a colour only with an icon (ADR-0054)', () => {
+    expect(serviceItemInputSchema.parse({ ...service, color: null, icon: 'crown' })).toMatchObject({
+      color: null,
+      icon: 'crown',
+    });
+    const neither = serviceItemInputSchema.safeParse({ ...service, color: null, icon: null });
+    expect(neither.error?.issues[0]?.path).toEqual(['color']);
+    expect(
+      serviceItemInputSchema.safeParse({
+        ...service,
+        chargeUnit: 'per_mouth',
+        color: null,
+        icon: null,
+      }).success,
+    ).toBe(true);
+  });
 });
 
 describe('catalog batches', () => {
