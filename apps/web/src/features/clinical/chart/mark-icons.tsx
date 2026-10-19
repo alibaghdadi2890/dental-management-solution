@@ -42,7 +42,20 @@ const ICONS: Record<MarkIcon, ReactNode> = {
   ),
 };
 
-export function MarkIconGlyph({ icon, size }: { icon: MarkIcon; size: number }) {
+/** Under this an icon is strokes thinner than a pixel: it is not drawn. */
+export const MIN_ICON = 8;
+
+/** `halo`: an outline in the surface colour under the strokes, so the icon reads over the
+ * mixed colours of a tooth's surfaces (ADR-0054). */
+export function MarkIconGlyph({
+  icon,
+  size,
+  halo = false,
+}: {
+  icon: MarkIcon;
+  size: number;
+  halo?: boolean;
+}) {
   return (
     <svg
       aria-hidden
@@ -57,6 +70,11 @@ export function MarkIconGlyph({ icon, size }: { icon: MarkIcon; size: number }) 
       strokeLinejoin="round"
       className="flex-none"
     >
+      {halo && (
+        <g stroke="var(--color-surface)" strokeWidth="3">
+          {ICONS[icon]}
+        </g>
+      )}
       {ICONS[icon]}
     </svg>
   );

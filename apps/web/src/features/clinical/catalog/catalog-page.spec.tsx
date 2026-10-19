@@ -226,7 +226,11 @@ describe('CatalogPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Chart colour of Composite: Blue' }));
     const colours = screen.getByRole('dialog', { name: 'Chart colour' });
-    expect(colours.querySelectorAll('[data-color]')).toHaveLength(16);
+    // Sixteen colours, and No colour, which needs an icon first (ADR-0054).
+    expect(colours.querySelectorAll('[data-color]')).toHaveLength(17);
+    expect(
+      within(colours).getByRole('button', { name: 'No colour' }).hasAttribute('disabled'),
+    ).toBe(true);
     expect(within(colours).getByRole('button', { name: 'Blue' }).getAttribute('aria-pressed')).toBe(
       'true',
     );
@@ -248,6 +252,21 @@ describe('CatalogPage', () => {
     fireEvent.click(within(icons).getByRole('button', { name: 'Filling' }));
     expect(screen.getByRole('button', { name: 'Chart icon of Composite: Filling' })).toBeTruthy();
     expect(screen.getByRole('region', { name: '1 unsaved change' })).toBeTruthy();
+
+    // With an icon, the colour can go; then the icon can't.
+    fireEvent.click(screen.getByRole('button', { name: 'Chart colour of Composite: Green' }));
+    fireEvent.click(
+      within(screen.getByRole('dialog', { name: 'Chart colour' })).getByRole('button', {
+        name: 'No colour',
+      }),
+    );
+    expect(screen.getByRole('button', { name: 'Chart colour of Composite: none' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Chart icon of Composite: Filling' }));
+    expect(
+      within(screen.getByRole('dialog', { name: 'Chart icon' }))
+        .getByRole('button', { name: 'None' })
+        .hasAttribute('disabled'),
+    ).toBe(true);
   });
 
   it('offers no mark for a service that is not on a tooth, and no icon for a diagnosis', async () => {

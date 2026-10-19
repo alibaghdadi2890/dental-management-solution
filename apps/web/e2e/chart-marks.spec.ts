@@ -187,12 +187,13 @@ test('catalog colours and icons show on the chart, in each view, today told from
       page.getByRole('status').filter({ hasText: 'Dental caries recorded' }),
     ).toBeVisible();
 
-    // Today's work is the saturated fill; the crown paints every surface and has its chip.
+    // Today's work is the saturated fill; the crown paints every surface, its icon across them
+    // (ADR-0054).
     await expect(cell(chart, '36', 'O')).toHaveAttribute('data-fill', 'blue/today');
     await expect(cell(chart, '16', 'O')).toHaveAttribute('data-fill', 'amber/today');
     // The palette reaches the page: the theme's blue, at full strength.
     await expect(cell(chart, '36', 'O')).toHaveCSS('background-color', 'rgb(47, 85, 212)');
-    await expect(column(chart, '16').locator('[data-chip="service:ZIR"]')).toBeVisible();
+    await expect(column(chart, '16').locator('[data-crown-icon="crown/today"]')).toBeVisible();
 
     await page.getByRole('button', { name: 'Review & complete' }).click();
     await page
@@ -216,7 +217,7 @@ test('catalog colours and icons show on the chart, in each view, today told from
     await expect(cell(chart, '36', 'O')).toHaveCSS('background-color', 'rgb(154, 169, 238)');
     await expect(cell(chart, '36', 'M')).toHaveAttribute('data-fill', 'none');
     await expect(cell(chart, '16', 'B')).toHaveAttribute('data-fill', 'amber/past');
-    await expect(column(chart, '16').locator('[data-chip="service:ZIR"]')).toBeVisible();
+    await expect(column(chart, '16').locator('[data-crown-icon="crown/past"]')).toBeVisible();
     await expect(column(chart, '46').locator('[data-diagnosis-dot="magenta"]')).toHaveCount(1);
     await expect(cell(chart, '46', 'M')).toHaveAttribute('data-fill', 'none');
     await expect(tooth(chart, '#36')).toHaveAccessibleName(
@@ -227,7 +228,7 @@ test('catalog colours and icons show on the chart, in each view, today told from
     await expect(cell(chart, '46', 'M')).toHaveAttribute('data-fill', 'magenta/today');
     await expect(cell(chart, '36', 'O')).toHaveAttribute('data-fill', 'none');
     await expect(cell(chart, '16', 'B')).toHaveAttribute('data-fill', 'none');
-    await expect(column(chart, '16').locator('[data-chip]')).toHaveCount(0);
+    await expect(column(chart, '16').locator('[data-chip], [data-crown-icon]')).toHaveCount(0);
 
     await views.getByRole('radio', { name: 'Diagnoses' }).press('ArrowRight');
     await expect(views.getByRole('radio', { name: 'Services' })).toBeChecked();

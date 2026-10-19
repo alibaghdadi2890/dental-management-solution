@@ -68,7 +68,8 @@ describe('toToothRender: which item paints (M2–M4)', () => {
   });
 
   it('paints every surface for a whole-tooth item, and gives it a band chip too', () => {
-    const render = renderOf(toothState({ code: '16', services: [crown] }));
+    const plain = toothService({ code: 'ZIR', name: 'Zircon crown', color: 'amber', icon: null });
+    const render = renderOf(toothState({ code: '16', services: [plain] }));
     expect(cellsOf(render)).toEqual({
       M: 'amber/past',
       D: 'amber/past',
@@ -76,13 +77,14 @@ describe('toToothRender: which item paints (M2–M4)', () => {
       L: 'amber/past',
       O: 'amber/past',
     });
+    expect(render.crownIcon).toBeNull();
     expect(render.band).toEqual([
       {
         kind: 'service',
         id: 'ZIR',
         code: 'ZIR',
         color: 'amber',
-        icon: 'crown',
+        icon: null,
         tone: 'past',
         label: 'Zircon crown',
         ringed: false,
@@ -93,7 +95,9 @@ describe('toToothRender: which item paints (M2–M4)', () => {
   it('lets a surface item ahead of a whole-tooth one keep its surfaces', () => {
     const render = renderOf(toothState({ code: '16', services: [filling, crown] }));
     expect(cellsOf(render)).toMatchObject({ O: 'blue/past', D: 'blue/past', M: 'amber/past' });
-    expect(chips(render)).toEqual(['service:ZIR']);
+    // The crown's icon is drawn across the crown, so it has no chip.
+    expect(render.crownIcon).toEqual({ icon: 'crown', tone: 'past' });
+    expect(chips(render)).toEqual([]);
   });
 
   it('puts a surface item that won no surface in the band, so it is not lost', () => {
@@ -106,7 +110,7 @@ describe('toToothRender: which item paints (M2–M4)', () => {
   });
 
   it('shows three chips of five whole-tooth services, in order, and +2', () => {
-    const services = ['A', 'B', 'C', 'D', 'E'].map((code) => toothService({ code }));
+    const services = ['A', 'B', 'C', 'D', 'E'].map((code) => toothService({ code, icon: null }));
     const render = renderOf(toothState({ code: '16', services }));
     expect(chips(render)).toEqual(['service:A', 'service:B', 'service:C']);
     expect(render.bandOverflow).toBe(2);
@@ -127,6 +131,67 @@ describe('toToothRender: which item paints (M2–M4)', () => {
     expect(cellsOf(render).O).toBe('none/past');
     expect(render.band[0]).toMatchObject({ color: null, label: 'Old service' });
     expect(render.title).toContain('Old service');
+  });
+});
+
+describe('toToothRender: the icon inside the tooth (ADR-0054)', () => {
+  const rootCanal = toothService({
+    code: 'RCT',
+    name: 'Root canal',
+    color: null,
+    icon: 'root_canal',
+    status: 'treated_today',
+  });
+  const wholeCaries = toothDiagnosis({ code: 'CAR', color: 'orange' });
+
+  it('simple mode: the body carries the icon of the service that paints it', () => {
+    const render = renderOf(toothState({ code: '16', services: [crown] }), { mode: 'simple' });
+    expect(render.body).toMatchObject({ color: 'amber', tone: 'past', icon: 'crown' });
+    expect(render.band).toEqual([]);
+  });
+
+  it('Services: a service with no colour is a plain body with its icon', () => {
+    const render = renderOf(
+      toothState({ code: '16', services: [rootCanal], diagnoses: [wholeCaries] }),
+      {
+        view: 'services',
+        mode: 'simple',
+      },
+    );
+    expect(render.body).toMatchObject({ color: 'none', tone: 'today', icon: 'root_canal' });
+  });
+
+  it('Both: a service with no colour shows the diagnosis colour under its icon', () => {
+    const tooth = toothState({ code: '16', services: [rootCanal], diagnoses: [wholeCaries] });
+    const simple = renderOf(tooth, { mode: 'simple' });
+    expect(simple.body).toMatchObject({ color: 'orange', tone: 'today', icon: 'root_canal' });
+    expect(simple.dots).toHaveLength(1);
+
+    const surfaces = renderOf(tooth);
+    expect(cellsOf(surfaces)).toMatchObject({ O: 'orange/today', M: 'orange/today' });
+    expect(surfaces.crownIcon).toEqual({ icon: 'root_canal', tone: 'today' });
+    expect(surfaces.band).toEqual([]);
+  });
+
+  it('Both: a service with a colour keeps painting over the diagnosis', () => {
+    const tooth = toothState({ code: '16', services: [crown], diagnoses: [wholeCaries] });
+    expect(renderOf(tooth, { mode: 'simple' }).body).toMatchObject({
+      color: 'amber',
+      icon: 'crown',
+    });
+  });
+
+  it('Both, surface mode: only the surfaces a diagnosis is on take its colour', () => {
+    const onM = toothDiagnosis({ code: 'CAR', color: 'orange', surfaces: ['M'] });
+    const render = renderOf(toothState({ code: '16', services: [rootCanal], diagnoses: [onM] }));
+    expect(cellsOf(render)).toMatchObject({ M: 'orange/today', O: 'none/today' });
+  });
+
+  it('draws no crown icon for a service on some surfaces only', () => {
+    const sealant = toothService({ code: 'SEA', icon: 'sealant', surfaces: ['O'] });
+    const render = renderOf(toothState({ code: '16', services: [sealant] }));
+    expect(render.crownIcon).toBeNull();
+    expect(cellsOf(render)).toEqual({ O: 'blue/past' });
   });
 });
 
@@ -192,7 +257,7 @@ describe('toToothRender: plans, rings and presence', () => {
   it('draws an implant like any tooth', () => {
     const render = renderOf(toothState({ code: '24', presence: 'implant', services: [crown] }));
     expect(render.presence).toBe('implant');
-    expect(chips(render)).toEqual(['service:ZIR']);
+    expect(render.crownIcon).toEqual({ icon: 'crown', tone: 'past' });
   });
 });
 
@@ -218,7 +283,10 @@ describe('toToothRender: the legend highlight (M11)', () => {
     expect(render.faded).toBe(false);
     expect(render.cells.M?.ringed).toBe(true);
     expect(render.cells.O?.ringed).toBe(false);
-    expect(render.band[0]?.ringed).toBe(true);
+    const banded = toothState({ code: '16', services: [toothService({ code: 'B', icon: null })] });
+    expect(renderOf(banded, { highlight: { kind: 'service', id: 'B' } }).band[0]?.ringed).toBe(
+      true,
+    );
   });
 
   it('rings a highlighted diagnosis dot', () => {

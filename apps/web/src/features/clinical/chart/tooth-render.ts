@@ -24,16 +24,25 @@ export interface ChartHighlight {
 
 /**
  * One painted area. `color` is the catalog colour of the item that painted it (`none` when the
- * item has none), or `planned` for the wash of an open plan. `tone` is the status cue (M2):
+ * item has none), or `planned` for the wash of an open plan. In the Both view a service with no
+ * colour lets the diagnosis under it give the colour (ADR-0054). `tone` is the status cue (M2):
  * done or found now, done before, or the wash.
  */
 export interface Fill {
   color: MarkColor | 'planned' | 'none';
   tone: 'today' | 'past' | 'wash';
+  /** The icon of the service that painted it, drawn inside the tooth in simple mode. */
+  icon: MarkIcon | null;
   /** The item that painted it, for a surface's accessible name; null for the wash. */
   label: string | null;
   /** It is the legend's highlighted item. */
   ringed: boolean;
+}
+
+/** Surface mode: the icon of a whole-tooth service, drawn across the crown (ADR-0054). */
+export interface CrownIcon {
+  icon: MarkIcon;
+  tone: 'today' | 'past';
 }
 
 export interface BandItem {
@@ -71,6 +80,8 @@ export interface ToothRender {
   body: Fill | null;
   /** Surface mode: the surfaces that carry a fill; the others are plain. */
   cells: Partial<Record<SurfaceKey, Fill>>;
+  /** Surface mode: the first whole-tooth service with an icon, which then has no band chip. */
+  crownIcon: CrownIcon | null;
   /** Up to three chips at the root end, and how many more there are. */
   band: BandItem[];
   bandOverflow: number;
@@ -216,7 +227,12 @@ function titleOf(
  * - **Surface mode**: each surface is painted by the first item that names it; an item on the
  *   whole tooth names all five. Whole-tooth items also get a band chip, and so does a surface
  *   item that won no surface, so nothing recorded is invisible.
- * - **Simple mode**: the first item paints the body; the others are band chips.
+ * - **Simple mode**: the first item paints the body, its icon inside it; the others are band
+ *   chips.
+ * - **Surface mode** also draws the first whole-tooth service with an icon across the crown; it
+ *   then has no band chip.
+ * - **Both view**: a service with no colour takes the colour of the diagnosis under it, on the
+ *   tooth or the surface, and keeps its icon (ADR-0054).
  * - An open plan washes whatever carries no mark, and sets the planned or in-progress ring.
  * - A missing or not-erupted position draws no fill, band or dots: only its box and the rings.
  */
@@ -236,36 +252,55 @@ export function toToothRender(
   const inProgress = openPlans && (tooth?.planInProgress ?? false);
   const absent = presence === 'missing' || presence === 'not_erupted';
 
-  const fillOf = (mark: Mark | undefined): Fill | null => {
+  const covers = (mark: Mark, surface: SurfaceKey) =>
+    mark.surfaces.length === 0 || mark.surfaces.includes(surface);
+  /** `under`: in the Both view, the diagnosis whose colour a colourless service lets show. */
+  const fillOf = (mark: Mark | undefined, under: Mark | undefined): Fill | null => {
     if (mark) {
+      const backdrop = mark.color === null && under?.color ? under : undefined;
       return {
-        color: mark.color ?? 'none',
-        tone: mark.tone,
+        color: mark.color ?? backdrop?.color ?? 'none',
+        tone: backdrop ? backdrop.tone : mark.tone,
+        icon: mark.icon,
         label: mark.label,
-        ringed: isHighlighted(mark),
+        ringed: isHighlighted(mark) || (backdrop !== undefined && isHighlighted(backdrop)),
       };
     }
-    return openPlans ? { color: 'planned', tone: 'wash', label: null, ringed: false } : null;
+    return openPlans
+      ? { color: 'planned', tone: 'wash', icon: null, label: null, ringed: false }
+      : null;
   };
 
   let body: Fill | null = null;
   const cells: Partial<Record<SurfaceKey, Fill>> = {};
+  let crownIcon: CrownIcon | null = null;
   let banded: Mark[] = [];
   if (!absent && mode === 'simple') {
     const [first, ...rest] = painters;
-    body = fillOf(first) ?? { color: 'none', tone: 'past', label: null, ringed: false };
+    body = fillOf(first, dotted[0]) ?? {
+      color: 'none',
+      tone: 'past',
+      icon: null,
+      label: null,
+      ringed: false,
+    };
     banded = rest;
   } else if (!absent) {
     const painted = new Set<Mark>();
     for (const surface of surfacesOf(code)) {
-      const mark = painters.find(
-        (candidate) => candidate.surfaces.length === 0 || candidate.surfaces.includes(surface),
-      );
+      const mark = painters.find((candidate) => covers(candidate, surface));
       if (mark) painted.add(mark);
-      const fill = fillOf(mark);
+      const fill = fillOf(
+        mark,
+        dotted.find((candidate) => covers(candidate, surface)),
+      );
       if (fill) cells[surface] = fill;
     }
-    banded = painters.filter((mark) => mark.surfaces.length === 0 || !painted.has(mark));
+    const iconed = painters.find((mark) => mark.surfaces.length === 0 && mark.icon !== null);
+    if (iconed?.icon) crownIcon = { icon: iconed.icon, tone: iconed.tone };
+    banded = painters.filter(
+      (mark) => mark !== iconed && (mark.surfaces.length === 0 || !painted.has(mark)),
+    );
   }
 
   const band = banded.slice(0, MAX_BAND).map((mark): BandItem => ({
@@ -298,6 +333,7 @@ export function toToothRender(
     compact,
     body,
     cells,
+    crownIcon,
     band,
     // The compact chart is a summary: it shows up to three and does not count the rest.
     bandOverflow: compact ? 0 : Math.max(0, banded.length - MAX_BAND),

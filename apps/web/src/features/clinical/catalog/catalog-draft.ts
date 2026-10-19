@@ -153,9 +153,12 @@ export function editRow(
       // Only a service for the whole mouth can be added to a visit by itself.
       const next =
         merged.chargeUnit === 'per_mouth' ? merged : { ...merged, addedOnVisitType: null };
-      // A service that becomes one on a tooth needs a colour.
+      // A service on a tooth needs a colour or an icon (ADR-0054): one that becomes one with
+      // neither gets a colour.
       if (next.chargeUnit === 'per_tooth') {
-        return next.color === null ? { ...next, color: freeColor(draft, tab) } : next;
+        return next.color === null && next.icon === null
+          ? { ...next, color: freeColor(draft, tab) }
+          : next;
       }
       // Only a per-tooth service changes a tooth: a row that stops being one loses its effect.
       // Its mark stays (the row no longer shows it): tooth records made with it are still drawn.

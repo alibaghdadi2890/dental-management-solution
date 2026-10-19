@@ -1,17 +1,18 @@
 import { type MarkColor, type MarkIcon, markColorVars } from '@dcm/contracts';
 import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
-import { MarkIconGlyph } from './mark-icons';
-
-/** Under this an icon is strokes thinner than a pixel: the chip shows its colour alone. */
-const MIN_ICON = 8;
+import { MarkIconGlyph, MIN_ICON } from './mark-icons';
 
 /** How a mark is filled (feature 9, M2): work of today is the saturated fill with a strong edge;
- * earlier work is the same hue as a mid-tone with the default border. An item whose catalog
- * colour is unknown is a plain bordered box. */
+ * earlier work is the same hue as a mid-tone with the default border. A service with no colour
+ * (ADR-0054), or an item whose colour is unknown, is a plain bordered box, its icon in ink. */
 function markFillStyle(color: MarkColor | null, tone: 'today' | 'past'): CSSProperties {
   if (color === null) {
-    return { backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border-strong)' };
+    return {
+      backgroundColor: 'var(--color-surface)',
+      borderColor: 'var(--color-border-strong)',
+      color: tone === 'today' ? 'var(--color-ink)' : 'var(--color-ink-muted)',
+    };
   }
   const vars = markColorVars(color);
   return tone === 'today'
@@ -25,7 +26,7 @@ function markFillStyle(color: MarkColor | null, tone: 'today' | 'past'): CSSProp
 
 /**
  * One chart mark as a chip: a diagnosis is its colour (round), a service its icon on its colour
- * (square; the colour alone when it has no icon). The same chip sits in a tooth's band, in the
+ * (square; the colour alone when it has no icon, the icon on a plain chip when it has no colour). The same chip sits in a tooth's band, in the
  * legend, in the lists and in the Catalog pickers, so they all read alike. Decorative: whoever
  * shows it names the item in text.
  */

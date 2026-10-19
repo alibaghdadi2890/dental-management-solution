@@ -144,6 +144,15 @@ describe('catalog draft', () => {
     ).toMatchObject({ color: 'rose', icon: null });
   });
 
+  it('keeps a service on a tooth with an icon and no colour, and sends the null (ADR-0054)', () => {
+    const draft = editRow(fresh(), 'services', id(2), { color: null });
+    expect(row(draft, 'services', id(2))).toMatchObject({ color: null, icon: 'filling' });
+    expect(batchOf('services', changedRows(draft, 'services')).items[0]).toMatchObject({
+      color: null,
+      icon: 'filling',
+    });
+  });
+
   it('lets only a whole-mouth service be added to a visit by itself (feature 10)', () => {
     let draft = editRow(fresh(), 'services', id(3), { chargeUnit: 'per_mouth' });
     draft = editRow(draft, 'services', id(3), { addedOnVisitType: 'hygiene', typicalSessions: 2 });

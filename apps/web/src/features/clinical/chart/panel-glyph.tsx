@@ -8,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { CELL_MAP, fillName, fillStyle, gridStyle } from './glyph-style';
+import { MarkIconGlyph } from './mark-icons';
 import { ImplantPost } from './presence-glyph';
 import { IMPLANT_OUTLINE, isAbsent, rootSide } from './presence-style';
 import type { Fill, ToothRender } from './tooth-render';
@@ -30,11 +31,15 @@ export interface PanelGlyphProps {
 const CELL = 24;
 /** The simple-mode panel glyph is a fixed 52×64 cell (spec §Selected Tooth Panel). */
 const SIMPLE = { width: 52, height: 64, radius: 8 } as const;
+/** A service's icon in the simple body (ADR-0054). */
+const SIMPLE_ICON = 34;
 
 /** The panel shows what is on each surface, not the plan wash: a planned surface reads as a
- * plain one. */
+ * plain one. A service with an icon and no colour is marked (ADR-0054). */
 function marked(fill: Fill | null | undefined): Fill | undefined {
-  return fill && fill.color !== 'planned' && fill.color !== 'none' ? fill : undefined;
+  return fill && fill.color !== 'planned' && (fill.color !== 'none' || fill.icon !== null)
+    ? fill
+    : undefined;
 }
 
 /**
@@ -99,9 +104,11 @@ export function PanelGlyph({
         <span
           data-body
           data-fill={fillName(absent ? undefined : fill)}
-          className={cn('border', cellBorder)}
+          className={cn('grid place-items-center border', cellBorder)}
           style={{ borderRadius: SIMPLE.radius, ...fillStyle(absent ? undefined : fill, true) }}
-        />
+        >
+          {!absent && fill?.icon && <MarkIconGlyph icon={fill.icon} size={SIMPLE_ICON} />}
+        </span>
         {overlay}
       </span>
     );

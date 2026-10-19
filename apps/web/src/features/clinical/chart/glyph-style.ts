@@ -58,9 +58,23 @@ export function chartGlyphBox(mode: ChartMode, size: number): { width: number; h
  * the tone says when: today is the saturated fill with a 1.5 px strong edge, earlier work the
  * same hue as a mid-tone with the default border. The planned wash and the plain cell are the
  * only fills that are not a catalog colour; on a selected tooth they take the accent edge, as
- * in the POC, while a mark keeps its own.
+ * in the POC, while a mark keeps its own. `color` is what an icon drawn on the fill takes.
  */
 export function fillStyle(fill: Fill | undefined, accentEdge: boolean): CSSProperties {
+  if (fill?.color === 'none' && fill.icon !== null) {
+    // A service with an icon and no colour (ADR-0054): a plain body, its icon in ink, and for
+    // today the strong edge a coloured mark has.
+    return {
+      backgroundColor: 'var(--color-surface)',
+      borderColor: accentEdge
+        ? 'var(--color-primary)'
+        : fill.tone === 'today'
+          ? 'var(--color-ink-secondary)'
+          : 'var(--color-border-control)',
+      borderWidth: fill.tone === 'today' ? 1.5 : 1,
+      color: fill.tone === 'today' ? 'var(--color-ink)' : 'var(--color-ink-muted)',
+    };
+  }
   if (fill === undefined || fill.color === 'none' || fill.color === 'planned') {
     const planned = fill?.color === 'planned';
     return {

@@ -19,7 +19,9 @@ export function ServiceMark({
   className?: string;
 }) {
   const item = useQuery(servicesQuery()).data?.find((service) => service.id === procedureId);
-  if (!item || item.color === null || item.chargeUnit !== 'per_tooth') return null;
+  if (!item || item.chargeUnit !== 'per_tooth' || (item.color === null && item.icon === null)) {
+    return null;
+  }
   return (
     <MarkChip
       kind="service"

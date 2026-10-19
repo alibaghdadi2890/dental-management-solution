@@ -137,7 +137,7 @@ export function CatalogRow({
         }}
         className={cn(cell(readOnly), 'text-[12.5px] leading-none')}
       />
-      {row.color === null || row.chargeUnit !== 'per_tooth' ? (
+      {(row.color === null && row.icon === null) || row.chargeUnit !== 'per_tooth' ? (
         // A service on a jaw or the whole mouth is never drawn on a tooth: no mark to choose.
         <span title={t('mark.none')} className="ps-2 text-ink-muted">
           <span aria-hidden>—</span>
@@ -151,17 +151,27 @@ export function CatalogRow({
             icon={row.icon}
             size={18}
           />
-          <span className="sr-only">{t(`markColor.${row.color}`)}</span>
+          <span className="sr-only">
+            {row.color !== null
+              ? t(`markColor.${row.color}`)
+              : row.icon !== null && t(`markIcon.${row.icon}`)}
+          </span>
         </span>
       ) : (
         <span data-mark className="flex items-center gap-1">
           <ColorPicker
             name={name}
             color={row.color}
+            icon={row.icon}
             priority={row.markPriority}
             onColor={(color) => {
               onChange({ color });
             }}
+            {...(tab === 'services' && {
+              onNoColor: () => {
+                onChange({ color: null });
+              },
+            })}
             onPriority={(markPriority) => {
               onChange({ markPriority });
             }}

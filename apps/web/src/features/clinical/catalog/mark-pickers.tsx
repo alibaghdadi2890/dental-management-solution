@@ -21,6 +21,9 @@ const CONTENT =
 const OPTION =
   'grid size-8 cursor-pointer place-items-center rounded-md border-0 bg-transparent p-0 hover:bg-background';
 const CHOSEN = 'shadow-[0_0_0_2px_var(--color-primary)]';
+/** A picker's "None" / "No colour" button, under its grid. */
+const NONE =
+  'mt-2 h-7 w-full cursor-pointer rounded-md border border-border bg-surface text-[12.5px] leading-none font-medium disabled:cursor-default disabled:opacity-40';
 
 function Picker({
   label,
@@ -62,21 +65,28 @@ function Picker({
 
 /**
  * The colour a catalog row shows on the dental chart (feature 9, M12): a swatch button that opens
- * the sixteen palette colours in a 4×4 grid. Choosing one closes the popover. Under the grid, the
- * row's chart priority: which marks show first when a tooth has more than fit.
+ * the sixteen palette colours in a 4×4 grid. Choosing one closes the popover. A service also has
+ * **No colour** under the grid, which needs an icon (ADR-0054). Then the row's chart priority:
+ * which marks show first when a tooth has more than fit.
  */
 export function ColorPicker({
   name,
   color,
+  icon = null,
   priority,
   onColor,
+  onNoColor,
   onPriority,
 }: {
   /** The row's name, for the button's accessible name. */
   name: string;
-  color: MarkColor;
+  color: MarkColor | null;
+  /** A service's icon: the trigger shows it when there is no colour, and No colour needs it. */
+  icon?: MarkIcon | null;
   priority: number;
   onColor: (color: MarkColor) => void;
+  /** Offers No colour (services only). */
+  onNoColor?: () => void;
   onPriority: (priority: number) => void;
 }) {
   const { t } = useTranslation('catalog');
@@ -85,9 +95,21 @@ export function ColorPicker({
     'grid size-7 cursor-pointer place-items-center rounded-md border border-border bg-surface p-0 font-mono text-[14px] leading-none disabled:cursor-default disabled:opacity-40';
   return (
     <Picker
-      label={t('mark.color', { name, color: t(`markColor.${color}`) })}
+      label={t('mark.color', {
+        name,
+        color: color === null ? t('mark.noColorName') : t(`markColor.${color}`),
+      })}
       title={t('mark.colorTitle')}
-      trigger={<MarkChip kind="service" color={color} size={16} />}
+      trigger={
+        color === null ? (
+          <span
+            aria-hidden
+            className="size-4 rounded-[4px] border border-dashed border-border-strong"
+          />
+        ) : (
+          <MarkChip kind="service" color={color} size={16} />
+        )
+      }
     >
       {(close) => (
         <>
@@ -114,6 +136,22 @@ export function ColorPicker({
               </button>
             ))}
           </div>
+          {onNoColor && (
+            <button
+              type="button"
+              aria-pressed={color === null}
+              data-color="none"
+              disabled={icon === null}
+              title={icon === null ? t('mark.noColorNeedsIcon') : undefined}
+              onClick={() => {
+                onNoColor();
+                close();
+              }}
+              className={cn(NONE, color === null && 'border-primary text-primary')}
+            >
+              {t('mark.noColor')}
+            </button>
+          )}
           <div className="mt-3 border-t border-inner-divider pt-3">
             <div className="flex items-center justify-between gap-3">
               <span className="text-[12.5px] leading-none font-medium">{t('mark.priority')}</span>
@@ -163,8 +201,9 @@ export function ColorPicker({
 }
 
 /**
- * The icon a service shows on its chart chip (feature 9, M12): a button holding the icon, or a
- * dashed placeholder, that opens the twelve icons in a 4×3 grid, and **None**.
+ * The icon a service shows on the chart (feature 9, M12): a button holding the icon, or a
+ * dashed placeholder, that opens the twelve icons in a 4×3 grid, and **None**, which needs a
+ * colour (ADR-0054).
  */
 export function IconPicker({
   name,
@@ -174,7 +213,7 @@ export function IconPicker({
 }: {
   name: string;
   /** The row's colour: the icons are shown on it, as on the chart. */
-  color: MarkColor;
+  color: MarkColor | null;
   icon: MarkIcon | null;
   onIcon: (icon: MarkIcon | null) => void;
 }) {
@@ -220,14 +259,13 @@ export function IconPicker({
             type="button"
             aria-pressed={icon === null}
             data-icon="none"
+            disabled={color === null}
+            title={color === null ? t('mark.noIconNeedsColor') : undefined}
             onClick={() => {
               onIcon(null);
               close();
             }}
-            className={cn(
-              'mt-2 h-7 w-full cursor-pointer rounded-md border border-border bg-surface text-[12.5px] leading-none font-medium',
-              icon === null && 'border-primary text-primary',
-            )}
+            className={cn(NONE, icon === null && 'border-primary text-primary')}
           >
             {t('mark.noIcon')}
           </button>

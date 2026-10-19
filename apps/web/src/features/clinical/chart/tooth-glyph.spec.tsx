@@ -159,15 +159,45 @@ describe('ToothGlyph: the band (M4)', () => {
     expect(lower.lastElementChild?.hasAttribute('data-band')).toBe(true);
   });
 
-  it('shows a whole-tooth service as its icon on its colour', () => {
-    const container = chartGlyph(toothState({ code: '16', services: [crown] }));
+  it('draws a whole-tooth service icon across the crown, and the next one as a chip', () => {
+    const composite = toothService({ code: 'CMP' });
+    const container = chartGlyph(toothState({ code: '16', services: [crown, composite] }));
+    // ADR-0054: the first whole-tooth service with an icon is drawn on the crown, not the band.
+    const overlay = container.querySelector<HTMLElement>('[data-crown-icon]');
+    expect(overlay?.dataset.crownIcon).toBe('crown/past');
+    expect(overlay?.querySelector('svg')?.getAttribute('width')).toBe('30');
     expect(glyphBox(container).dataset.bandCount).toBe('1');
-    const chip = container.querySelector<HTMLElement>('[data-chip="service:ZIR"]');
-    expect(chip?.style.backgroundColor).toBe('var(--color-mark-amber-tint)');
-    expect(chip?.querySelector('[data-mark-icon="crown"]')).not.toBeNull();
+    const chip = container.querySelector<HTMLElement>('[data-chip="service:CMP"]');
+    expect(chip?.style.backgroundColor).toBe('var(--color-mark-blue-tint)');
+    expect(chip?.querySelector('[data-mark-icon="filling"]')).not.toBeNull();
     // 12 px cells: a chip is 10 px.
     expect(chip?.style.height).toBe('10px');
     expect(chip?.style.width).toBe('10px');
+  });
+
+  it('draws the icon inside the body in simple mode, and an icon alone on a plain body', () => {
+    const coloured = chartGlyph(toothState({ code: '16', services: [crown] }), { mode: 'simple' });
+    const body = coloured.querySelector<HTMLElement>('[data-body]');
+    expect(body?.dataset.fill).toBe('amber/past');
+    // 26 × 32 body: the icon is 70 % of its width.
+    expect(body?.querySelector('[data-mark-icon="crown"]')?.getAttribute('width')).toBe('18');
+    expect(glyphBox(coloured).dataset.bandCount).toBe('0');
+    cleanup();
+
+    const rootCanal = toothService({ code: 'RCT', color: null, icon: 'root_canal' });
+    const caries = toothDiagnosis({ code: 'CAR', color: 'orange' });
+    const tooth = toothState({ code: '16', services: [rootCanal], diagnoses: [caries] });
+    const plain = chartGlyph(tooth, { mode: 'simple', view: 'services' });
+    const plainBody = plain.querySelector<HTMLElement>('[data-body]');
+    expect(plainBody?.dataset.fill).toBe('none');
+    expect(plainBody?.style.color).toBe('var(--color-ink-muted)');
+    expect(plainBody?.querySelector('[data-mark-icon="root_canal"]')).not.toBeNull();
+    cleanup();
+
+    // Both view: the diagnosis gives the colour, the service the icon.
+    const both = chartGlyph(tooth, { mode: 'simple' }).querySelector<HTMLElement>('[data-body]');
+    expect(both?.dataset.fill).toBe('orange/today');
+    expect(both?.querySelector('[data-mark-icon="root_canal"]')).not.toBeNull();
   });
 
   it('shows a whole-tooth diagnosis as a round swatch, in the Diagnoses view', () => {
@@ -181,7 +211,8 @@ describe('ToothGlyph: the band (M4)', () => {
   });
 
   it('shows three chips and +N, narrowed to share the tooth’s width', () => {
-    const services = ['A', 'B', 'C', 'D', 'E'].map((code) => toothService({ code }));
+    // The crown takes the first one's icon; the other five go to the band.
+    const services = [crown, ...['A', 'B', 'C', 'D', 'E'].map((code) => toothService({ code }))];
     const container = chartGlyph(toothState({ code: '16', services }));
     expect(chipsOf(container)).toEqual(['service:A', 'service:B', 'service:C']);
     expect(container.querySelector('[data-band-overflow]')?.textContent).toBe('+2');
@@ -194,7 +225,7 @@ describe('ToothGlyph: the band (M4)', () => {
     // Three chips, +N and three 1 px gaps fit the 38 px crown.
     expect(widths.reduce((sum, width) => sum + width, 0) + plus + 3).toBeLessThanOrEqual(38);
     // Too narrow for an icon: the colour alone.
-    expect(container.querySelector('[data-mark-icon]')).toBeNull();
+    expect(container.querySelector('[data-band] [data-mark-icon]')).toBeNull();
   });
 
   it('collapses to dots on the compact chart, with no +N', () => {
@@ -210,7 +241,10 @@ describe('ToothGlyph: the band (M4)', () => {
 
   it('rings the highlighted item’s chip and cells, and fades a tooth without it', () => {
     const highlight = { kind: 'service', id: 'ZIR' } as const;
-    const container = chartGlyph(toothState({ code: '16', services: [crown] }), { highlight });
+    const plainCrown = { ...crown, icon: null };
+    const container = chartGlyph(toothState({ code: '16', services: [plainCrown] }), {
+      highlight,
+    });
     expect(container.querySelector('[data-chip]')?.getAttribute('data-ringed')).toBe('true');
     expect(cellOf(container, 'O').dataset.ringed).toBe('true');
     expect(glyphBox(container).dataset.faded).toBeUndefined();
@@ -298,7 +332,7 @@ describe('ToothGlyph: presence (feature 7)', () => {
     const box = glyphBox(container);
     expect(box.className).toContain('outline-ink');
     expect(container.querySelectorAll('[data-surface]')).toHaveLength(5);
-    expect(chipsOf(container)).toEqual(['service:ZIR']);
+    expect(container.querySelector('[data-crown-icon]')).not.toBeNull();
     // The post is on the root side of the whole glyph, beyond the band.
     const post = container.querySelector<SVGElement>('[data-implant-post]');
     expect(post?.parentElement).toBe(box);
@@ -407,7 +441,7 @@ describe('ToothGlyph: the panel and history variants', () => {
   });
 
   it('renders the history glyph read-only at 15 px, with its band', () => {
-    const tooth = toothState({ code: '16', services: [crown] });
+    const tooth = toothState({ code: '16', services: [{ ...crown, icon: null }] });
     const { container } = render(
       <ToothGlyph
         variant="history"

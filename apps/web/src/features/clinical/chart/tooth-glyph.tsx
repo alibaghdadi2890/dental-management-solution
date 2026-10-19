@@ -21,6 +21,7 @@ import {
   simpleBox,
 } from './glyph-style';
 import { MarkChip } from './mark-chip';
+import { MarkIconGlyph, MIN_ICON } from './mark-icons';
 import { PanelGlyph, type PanelGlyphProps } from './panel-glyph';
 import { AbsentBox, ImplantPost } from './presence-glyph';
 import { IMPLANT_OUTLINE, isAbsent, rootSide } from './presence-style';
@@ -61,10 +62,11 @@ const RING = {
  * A tooth glyph (feature 9): a renderer of `ToothRender`, with no derivation of its own. The
  * crown is a 3×3 grid of five surface cells, laid out anatomically by `surfaceCells` and never
  * mirrored, or in simple mode one whole-tooth body. Each cell or body is painted in the colour of
- * the catalog item `toToothRender` gave it, its tone saying when (`fillStyle`). The **band** sits
- * at the root end — above an upper tooth, below a lower one: up to three chips for the marks that
- * are on the whole tooth or did not fit the crown, then `+N`. One ring at most goes around the
- * glyph: selected, in progress or planned. The panel variant is `PanelGlyph`.
+ * the catalog item `toToothRender` gave it, its tone saying when (`fillStyle`). A service's icon
+ * is drawn inside the tooth: in the body, or across the crown on a halo (ADR-0054). The **band**
+ * sits at the root end — above an upper tooth, below a lower one: up to three chips for the
+ * marks that are on the whole tooth or did not fit the crown, then `+N`. One ring at most goes
+ * around the glyph: selected, in progress or planned. The panel variant is `PanelGlyph`.
  *
  * A position that is not a plain natural tooth is drawn by its presence (feature 7, H1): a
  * missing or not-erupted one as a single outlined box where the crown would be, with no band; an
@@ -187,6 +189,7 @@ function GlyphFrame({
   const crownSide = cell * 3 + gap * 2;
   const width = mode === 'simple' ? simple.width : crownSide;
   const bandHeight = mode === 'simple' ? simple.band - gap : cell;
+  const bodyIcon = Math.floor(Math.min(simple.width, simple.height) * 0.7);
 
   let crown: ReactNode;
   if (isAbsent(presence)) {
@@ -207,7 +210,7 @@ function GlyphFrame({
         data-fill={fillName(render.body ?? undefined)}
         data-ringed={render.body?.ringed || undefined}
         className={cn(
-          'block border',
+          'grid place-items-center border',
           render.body?.ringed && 'outline outline-[1.5px] outline-offset-1 outline-ink',
         )}
         style={{
@@ -216,12 +219,17 @@ function GlyphFrame({
           borderRadius: simple.radius,
           ...fillStyle(render.body ?? undefined, rings.selected),
         }}
-      />
+      >
+        {render.body?.icon && bodyIcon >= MIN_ICON && (
+          <MarkIconGlyph icon={render.body.icon} size={bodyIcon} />
+        )}
+      </span>
     );
   } else {
     const surfaces = surfaceCells(code, orientation);
+    const { crownIcon } = render;
     crown = (
-      <span className="grid" style={gridStyle(cell, gap, 0)}>
+      <span className="relative grid" style={gridStyle(cell, gap, 0)}>
         {CELL_MAP.map((index, position) => {
           if (index === null) return <span key={position} />;
           const surface = surfaces[index];
@@ -240,6 +248,17 @@ function GlyphFrame({
             />
           );
         })}
+        {crownIcon && (
+          <span
+            data-crown-icon={`${crownIcon.icon}/${crownIcon.tone}`}
+            className={cn(
+              'pointer-events-none absolute inset-0 z-[2] grid place-items-center',
+              crownIcon.tone === 'today' ? 'text-ink' : 'text-ink-muted',
+            )}
+          >
+            <MarkIconGlyph icon={crownIcon.icon} size={Math.round(crownSide * 0.8)} halo />
+          </span>
+        )}
       </span>
     );
   }
