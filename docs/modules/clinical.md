@@ -50,10 +50,12 @@ module was renamed from `treatments` (ADR-0001) and owns the catalogs (ADR-0002)
   deleted code can be reused. The batch rule (`domain/catalog-batch.ts`) checks the state after
   the batch, so rows may swap codes.
 - Service prices are money in the tenant currency at the time they were set (ADR-0015).
-- **Chart marks** (feature 9, ADR-0042): every diagnosis and every service charged per tooth has
-  a `color`, one of the sixteen palette keys of `@dcm/contracts` (`MARK_COLORS`); a per-tooth
-  service may have an `icon` (`MARK_ICONS`, twelve); every row has a `markPriority` (0–9, default
-  5: which marks show first on a crowded tooth). A service on a jaw or the whole mouth is not drawn on a tooth: what is sent for it is ignored, a new one has no mark, and one moved off the tooth keeps the mark its earlier tooth records are drawn with. A mark field left out of a batch row keeps its stored value; a row that
+- **Chart marks** (feature 9, ADR-0042, ADR-0054): every diagnosis has a `color`, one of the
+  sixteen palette keys of `@dcm/contracts` (`MARK_COLORS`); a service charged per tooth has a
+  `color`, an `icon` (`MARK_ICONS`, twelve) or both, never neither (`procedures_mark_per_tooth`);
+  every row has a `markPriority` (0–9, default
+  5: which marks show first on a crowded tooth). A service on a jaw or the whole mouth is not drawn on a tooth: what is sent for it is ignored, a new one has no mark, and one moved off the tooth keeps the mark its earlier tooth records are drawn with. A mark field left out of a batch row keeps its stored value; a service's
+  `color: null` with an icon is no colour (with neither, the schema refuses it), and a row that
   needs a colour and has none gets the one its catalog uses least (`leastUsedMarkColor`). The
   default template assigns each seeded row its own colour, and icons where one fits. Marks are on
   the catalog item, never on a record, so changing one recolours every chart.

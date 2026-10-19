@@ -1,6 +1,7 @@
 # ADR-0042: Chart marks live on catalog items and recolour retroactively
 
-- Status: Accepted
+- Status: Accepted; a service with an icon may have no colour, and its icon is drawn inside the
+  tooth: ADR-0054
 - Date: 2026-10-08
 
 ## Context
