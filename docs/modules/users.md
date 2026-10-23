@@ -70,19 +70,27 @@ Every mutation is audited (`user.create`, `user.update` with before/after, `user
 
 ## HTTP
 
-| Route                                | Access                                 |
-| ------------------------------------ | -------------------------------------- |
-| `GET /session`                       | Authenticated, pending password ok     |
-| `GET /users`, `GET /users/:id`       | `user:read`                            |
-| `GET /users/practitioners?branchId=` | `user:read`                            |
-| `POST /users`                        | `user:write`                           |
-| `PATCH /users/:id`                   | `user:write`                           |
-| `POST /users/:id/deactivate`         | `user:write` (`{ reason }`)            |
-| `POST /users/:id/reactivate`         | `user:write` (`{ reason }`)            |
-| `POST /users/:id/reset-password`     | `user:write` (`{ temporaryPassword }`) |
+| Route                                | Access                                              |
+| ------------------------------------ | --------------------------------------------------- |
+| `GET /session`                       | Authenticated, pending password ok                  |
+| `GET /users`, `GET /users/:id`       | `user:read`                                         |
+| `GET /users/practitioners?branchId=` | `user:read`                                         |
+| `POST /users`                        | `user:write`                                        |
+| `PATCH /users/:id`                   | `user:write`                                        |
+| `POST /users/:id/deactivate`         | `user:write` (`{ reason }`)                         |
+| `POST /users/:id/reactivate`         | `user:write` (`{ reason }`)                         |
+| `POST /users/:id/reset-password`     | `user:write` (`{ temporaryPassword }`)              |
+| `PUT /users/:id/grants`              | `role:write` (`{ permissions, reason? }`, ADR-0055) |
 
-`GET /session` carries `profile` — the practitioner type and a dentist's specialties (ADR-0050);
-null without a staff profile in the tenant (a platform admin). `:id` is the auth user id. Another
+A staff user carries `grants` (their additional permissions) and `effectivePermissions` (roles and
+grants) only for a caller with `role:read`; both are null otherwise. Role assignment and grants
+follow the rules of widening in `roles` (an editor gives only what they hold; no self-lockout).
+The clinic's owner manages staff from Settings › Staff, the admin portal's table and panel on the
+clinic's own tenant.
+
+`GET /session` carries `profile` — its id (the staff profile id the visit scope compares with a
+visit's dentist, ADR-0055), the practitioner type and a dentist's specialties (ADR-0050); null
+without a staff profile in the tenant (a platform admin). `:id` is the auth user id. Another
 tenant's user is `404 user.not_found` (RLS).
 
 ## Events

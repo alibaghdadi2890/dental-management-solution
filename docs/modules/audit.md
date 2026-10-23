@@ -36,11 +36,20 @@ visitId?, hidden? })` — joins the caller's open `TenantDb` transaction and sta
 - `AuditService.about({ patientId?, visitId? }, work)` — runs `work` as being about a patient, a
   visit or both: every entry recorded inside it carries them unless it names its own. A service
   calls it once, where it locks the visit or the patient.
-- `AuditService.list(query)` — newest first, opaque `(occurred_at, id)` cursor.
+- `AuditService.list(query)` — newest first, opaque `(occurred_at, id)` cursor. A caller sees rows
+  about a visit only within their visit scope, and without `finance:read` no `payment.*` or
+  `ledger_entry.*` rows and no raw domain events (ADR-0055).
+- `AuditVisitScope` — the port through which `clinical` tells the feed which visits the caller
+  may see (`audit` cannot depend on `clinical`); without a registration a scoped caller sees no
+  visit's rows.
 
 What a row is about, most explicit first (`domain/audit-subject.ts`): what `record()` was given,
 the surrounding `about()`, the resource itself when it is a patient or a visit, then the
 `patientId` / `visitId` its `after` or `before` snapshot carries.
+
+- `AuditService.listAcrossTenants(query)` (`platform:admin`, ADR-0057) — every clinic's feed,
+  newest first, each row with its `tenantId`, narrowed to one clinic, an area, an actor and a start
+  instant; read through `withoutTenant()`. The admin portal's **Activity**.
 
 ## Vocabulary
 
@@ -112,9 +121,10 @@ platform admin acting in the clinic). `apps/web/src/features/audit/`:
 
 ## HTTP
 
-| Route        | Access                                                                                                                                                                                                            |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /audit` | `audit:read` — `?resourceType=&resourceId=&cursor=&limit=` (a record's timeline), and the feed: `feed=true` (rows with an area) with `area=`, `actorUserId=`, `platformAdmin=`, `from=`, `patientId=`, `visitId=` |
+| Route                 | Access                                                                                                                                                                                                            |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /platform/audit` | `platform:admin` — `?tenantId=&area=&actorUserId=&from=&cursor=&limit=` (ADR-0057)                                                                                                                                |
+| `GET /audit`          | `audit:read` — `?resourceType=&resourceId=&cursor=&limit=` (a record's timeline), and the feed: `feed=true` (rows with an area) with `area=`, `actorUserId=`, `platformAdmin=`, `from=`, `patientId=`, `visitId=` |
 
 ## Events
 

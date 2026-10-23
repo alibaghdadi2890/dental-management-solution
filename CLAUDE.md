@@ -112,9 +112,9 @@ modules/<name>/
 | `tenancy`       | tenants (clinics), branches, rooms (the physical unit a visit happens in; the future bookable resource), tenant settings (timezone, currency, locale, country; the chart display settings: detail, tooth notation, orientation — ADR-0021) | audit |
 | `auth`          | better-auth integration (identity-plane `auth_*` tables), sessions, sign-in/out, lockout, idle timeout, org/team membership mirror, tenant + branch resolution into request context | tenancy |
 | `users`         | app-level user/staff profile (name, title, practitioner type, a dentist's specialties with the primary one — ADR-0050, contact), branch assignments, staff user creation, `GET /session` | auth, tenancy, roles |
-| `roles`         | role definitions per tenant, system roles, role → permission assignments, user → role assignments (keyed by auth user id) | tenancy |
-| `authorization` | resolves the caller's permissions into CLS, `can(actor, permission, resource)`, global session + permission guards, agent tool guard | auth, roles |
-| `audit`         | append-only audit log (who/what/when/tenant/before/after, and the patient, visit and area a row is about — ADR-0037), query API, the Activity feed | — (consumes events from all) |
+| `roles`         | role definitions per tenant (system roles, the clinic's custom roles), role → permission assignments, user → role assignments and per-user permission grants (`user_permission_grants`), keyed by auth user id; the rules of widening (ADR-0055); the platform's default roles (`role_templates`, global, written only through `withoutTenant()`, ADR-0056) | tenancy |
+| `authorization` | resolves the caller's permissions (roles ∪ grants) and staff profile into CLS, `can(actor, permission, resource)` (the visit scope, ADR-0055), global session + permission guards, agent tool guard | auth, roles, users |
+| `audit`         | append-only audit log (who/what/when/tenant/before/after, and the patient, visit and area a row is about — ADR-0037), query API, the Activity feed; the feed keeps to the caller's visit scope through a port `clinical` answers (`AuditVisitScope`, ADR-0055) | — (consumes events from all) |
 | `patients`      | `patients` (records: demographics, phone (optional, any format — ADR-0052), insurance text, primary dentist by staff profile id, notes, the chart's dentition override, what a new patient comes for; archive = soft delete; merge), `patient_counters` (the per-tenant display-number sequence), `contacts` and `patient_contacts` (guardians, billing and emergency contacts, who may themselves be patients; ADR-0019), the structured medical history (`medical_history_options`: the tenant's allergy and condition lists; `patient_medical_items`; the "none" answers and the medication line on the patient; ADR-0046) | tenancy (country, time zone), users (practitioners, ADR-0016, ADR-0020); reacts to `TenantProvisioned` (the default lists) |
 | `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
 | `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`, each row with its chart mark: a palette colour, for services an icon (a service may have the icon alone, drawn inside the tooth, ADR-0054), a priority, ADR-0042; a service may name the visit type it is added on, ADR-0047), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, timer, services performed, notes, discount, status; a type, the step and view it is on, a reason, an emergency's complaint and the dentist's confirmation of the medical history, ADR-0044, ADR-0046; the planned work a visit took on at start, `visit_plan_items`, ADR-0048; amend and void, ADR-0025; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, each with what it was seen on, ADR-0049; `treatment_plans`, each with a priority — the phase of the plan — and the patient's acceptance, ADR-0045; recorded in a visit or on the patient record, ADR-0031; what is at each tooth position — missing, not erupted, implant — `tooth_presences`, ADR-0034; work over several visits, `treatment_plan_sessions`, charged when done, ADR-0032) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
@@ -171,10 +171,16 @@ tenant (display name, professional title, practitioner type, contact, active fla
 **`roles` — what roles exist and who holds them.** Permission catalog lives in
 `packages/contracts/permissions.ts` as a typed constant (`patient:read`, `appointment:write`,
 `invoice:void`, `assistant:use`, …). Roles are per tenant: system roles seeded on provisioning
-(`owner`, `dentist`, `assistant`, `frontdesk`, with the permission matrix in
-`docs/modules/roles.md`) plus, later, custom roles a tenant admin can create. A user may hold
-multiple roles in a tenant. Staff accounts are created with a temporary password that must be
-changed at first sign-in (ADR-0012).
+(`owner`, `dentist`, `assistant`, `frontdesk`, with the default matrix in
+`docs/modules/roles.md`) plus custom roles the clinic creates. A user may hold multiple roles in
+a tenant and per-user grants on top (additive only, no denies); they may do the union, and an
+`owner` holds every permission by rule (ADR-0055). The owner manages roles, grants and staff from
+the clinic's Settings: deny by default, and only the owner widens. Clinics that would rather not
+are served by the platform admin, who edits a clinic's roles from its tenant page and the
+default roles new clinics start with (`role_templates`; existing clinics never change with them,
+their Reset to default does, ADR-0056). An editor gives only what they
+hold and never takes their own `role:write` / `user:write`. Staff accounts are created with a
+temporary password that must be changed at first sign-in (ADR-0012).
 
 **`authorization` — may you do this.** One evaluation function:
 `can(actor, permission, resource?)`. Exposed three ways: a `@RequirePermission()` route decorator
@@ -184,7 +190,20 @@ default. The resolved permission set is carried in CLS, and `RequestContext.hasP
 can re-check without depending on it (ADR-0010). Resource-level rules (e.g. a dentist sees only their
 own appointments if the tenant enables that setting) live here, not scattered in repositories.
 A rule that needs only the caller and the row, and that the SPA must apply too, is a pure function
-in `packages/contracts` used by both (who may archive a file, `canArchiveFile`, ADR-0040).
+in `packages/contracts` used by both (who may archive a file, `canArchiveFile`, ADR-0040; who
+reads a visit, `canReadVisit`, ADR-0055).
+
+The decided meanings (ADR-0055):
+- **Visit scope.** `visit:read` is the caller's own visits (dentist by staff profile, or
+  starter); `visit:read_all` every visit. Applied through `RequestContext.visitScope()` to every
+  visit read and every write that loads a visit: out of scope is a 404. Patient records (chart,
+  diagnoses, plans, tooth history, files) are never scoped by dentist.
+- **Two money tiers.** `payment:read` is one patient's account (and a visit's money);
+  `finance:read` is money across patients (Payments, receivables, unpaid visits, balances in
+  lists, every export with money, money rows of the audit feed).
+- **Explicit discounts.** `visit:discount` is every change that lowers or sets a price: line
+  base or discount, visit discount, an amendment that changes it, the checkout discount.
+- A platform admin in a tenant holds everything but `compensation:*`.
 
 Rules:
 - Every controller route declares its access: `@RequirePermission(p)`, `@Authenticated()` (any
@@ -196,6 +215,9 @@ Rules:
   tools. Never invent one inline; add it to the catalog. Renaming one ships a migration that
   rewrites stored grants (unknown text grants nothing) — e.g. `procedure:read`/`procedure:write`
   became `catalog:read`/`catalog:write`, covering the service and diagnosis catalogs (feature 2).
+- System roles are edited by clinics, so a migration only ever **adds** a permission to them (as
+  the default matrix says, `ON CONFLICT DO NOTHING`), never removes or rewrites their grants.
+  Migration `0050` was the last full rewrite (ADR-0055).
 - SPA and API sit under one domain (cookie sessions). If that changes, use the better-auth bearer
   plugin — never a hand-rolled JWT.
 
@@ -267,7 +289,8 @@ Rules:
   `actor_kind = 'user'` with `actor_platform_admin = true` (ADR-0008); `reason` holds the text of
   reason dialogs. `patient_id` / `visit_id` say what the row is about and `area` files it for the
   Activity screen (null = not shown there); a service sets the first two once with
-  `AuditService.about()` (ADR-0037).
+  `AuditService.about()` (ADR-0037). Platform admins read every clinic's feed through `GET /platform/audit`
+  (`withoutTenant()`, ADR-0057).
 - Every mutation through application services produces an audit entry. Agent tool calls produce
   an entry with `actor_kind = 'agent'` plus the originating user id and the tool arguments.
 

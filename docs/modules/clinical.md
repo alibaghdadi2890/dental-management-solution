@@ -716,7 +716,8 @@ audited like its in-visit twin and answers `{ chart }`.
 | `GET /visits/live?patientId=&mine=` → `LiveVisitRef[]`                                                                                                                                                                                                                    | `visit:read`     |
 | `GET /visits/:id` → `Visit`                                                                                                                                                                                                                                               | `visit:read`     |
 | `POST /visits/:id/{pause,resume,discard,complete}` → `{ visit }`                                                                                                                                                                                                          | `visit:write`    |
-| `PATCH /visits/:id/notes`, `PATCH /visits/:id/discount` → `{ visit }`                                                                                                                                                                                                     | `visit:write`    |
+| `PATCH /visits/:id/notes` → `{ visit }`                                                                                                                                                                                                                                   | `visit:write`    |
+| `PATCH /visits/:id/discount` → `{ visit }` (and `visit:write` in the service, ADR-0055)                                                                                                                                                                                   | `visit:discount` |
 | `PATCH /visits/:id/step` `{ step }`, `PATCH /visits/:id/view` `{ viewMode }`, `PATCH /visits/:id/reason` `{ reason }`, `PATCH /visits/:id/complaint` `{ painScore, painSince }` → `{ visit }`                                                                             | `visit:write`    |
 | `PUT` / `DELETE /visits/:id/history-confirmation` → `{ visit }`                                                                                                                                                                                                           | `chart:write`    |
 | `PUT` / `DELETE /visits/:id/worklist/:planId` → `{ visit }`                                                                                                                                                                                                               | `visit:write`    |
@@ -808,11 +809,20 @@ events; ADR-0024); `clinical` never imports `billing` or `files`.
 
 ## Permissions
 
-- `visit:read`, `visit:write`. The visit flow writes (step, view, reason, complaint, worklist
-  skip) and, in a visit, Seen on and the priority of a plan made in that visit need
-  `visit:write`. The start options need `visit:write` too.
+- `visit:read` is the caller's own visits — their staff profile is the dentist, or they started
+  it — and `visit:read_all` every visit (ADR-0055). The list, its summary and tab counts, `get`,
+  `live`, the visit summary's `visitMoney` and every write that loads a visit (`VisitLocks`, the
+  live and correction locks) keep to it: a visit outside scope is 404 `visit.not_found`. The
+  patient's record is not scoped: the chart, diagnoses, plans, tooth history, last visit date,
+  counts, `chargeFacts`, `numbersFor`, `refsFor`, `planWork`. A visit row's money (list, detail,
+  last-visit card) shows only with `payment:read` or on the caller's own visit; the billed footer
+  needs `finance:read`. `clinical` answers the audit feed's visit scope (`AuditVisitScope`).
+- `visit:write`. The visit flow writes (step, view, reason, complaint, worklist skip) and, in a
+  visit, Seen on and the priority of a plan made in that visit need it. The start options too.
 - `visit:amend`, `visit:void`: owner and dentist (feature 4b).
-- `visit:discount`: owner, dentist and front desk (checkout handoff, ADR-0030).
+- `visit:discount`: owner (ADR-0055): every change that lowers or sets a price — the visit
+  discount (`PATCH /visits/:id/discount`), a line's base or discount, an amendment that changes
+  the discount, the checkout discount (ADR-0030).
 - `chart:write`: owner and dentist — charting on the patient record, outside a visit (ADR-0031),
   including a plan's priority and acceptance and a diagnosis's Seen on; and confirming the
   medical history in a visit (ADR-0046).

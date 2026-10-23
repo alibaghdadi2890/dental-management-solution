@@ -58,3 +58,6 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0052](0052-phones-are-optional-and-kept-as-typed.md)                  | A phone is optional and kept as typed; the record says what is missing       | Accepted (supersedes C3, C10)        |
 | [0053](0053-imports-write-through-services-and-never-charge-visits.md) | Imports write through the owning services; imported visits are never charged | Accepted                             |
 | [0054](0054-a-service-icon-is-drawn-inside-the-tooth.md)               | A service icon is drawn inside the tooth; a service may have no colour       | Accepted (amends 0042)               |
+| [0055](0055-permissions-from-roles-and-grants.md)                      | Permissions from roles and grants; money tiers, visit scope, discounts       | Accepted (amends 0008, 0010, 0030)   |
+| [0056](0056-platform-default-roles.md)                                 | The platform manages default roles and, for a clinic, its roles              | Accepted (amends 0055)               |
+| [0057](0057-platform-activity-across-clinics.md)                       | Platform admins see the Activity of every clinic                             | Accepted                             |
