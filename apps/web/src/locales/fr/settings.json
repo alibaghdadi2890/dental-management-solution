@@ -71,5 +71,11 @@
         "body": "Trente-deux dents permanentes, numérotées 1–32."
       }
     }
+  },
+  "tabs": {
+    "label": "Sections des paramètres",
+    "chart": "Schéma dentaire",
+    "staff": "Équipe",
+    "roles": "Rôles"
   }
 }

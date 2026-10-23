@@ -9,7 +9,8 @@
     "failed": "تعذّر تحميل الزيارات بانتظار الدفع.",
     "finished": "انتهت {{time}}",
     "action": "تحصيل",
-    "actionFor": "تحصيل {{name}}"
+    "actionFor": "تحصيل {{name}}",
+    "awaitingFrontDesk": "بانتظار الدفع · الاستقبال"
   },
   "chair": {
     "title": "على الكرسي",

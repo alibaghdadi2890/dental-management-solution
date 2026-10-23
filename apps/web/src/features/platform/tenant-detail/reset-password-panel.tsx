@@ -8,6 +8,7 @@ import { RightPanel } from '@/components/ui/right-panel';
 import { useToast } from '@/components/ui/toast-context';
 import { resetUserPassword } from '@/features/platform/platform-api';
 import { generateTemporaryPassword } from '@/features/platform/temporary-password';
+import { ApiError } from '@/lib/api';
 
 /**
  * Sets a new temporary password (ADR-0012): the user is signed out everywhere and must choose
@@ -22,7 +23,7 @@ export function ResetPasswordPanel({
   user: StaffUser;
   onClose: () => void;
 }) {
-  const { t } = useTranslation(['admin', 'common']);
+  const { t } = useTranslation(['admin', 'common', 'roles']);
   const toast = useToast();
   const [password, setPassword] = useState(generateTemporaryPassword);
   const [error, setError] = useState<string>();
@@ -39,8 +40,11 @@ export function ResetPasswordPanel({
       await mutation.mutateAsync(password);
       toast(t('users.reset.done', { name: user.displayName }));
       onClose();
-    } catch {
-      toast(t('common:unexpected'), { tone: 'danger' });
+    } catch (error) {
+      const outranked = error instanceof ApiError && error.code === 'role.cannot_manage';
+      toast(outranked ? t('roles:errors.cannotManage') : t('common:unexpected'), {
+        tone: 'danger',
+      });
     }
   };
 

@@ -1,0 +1,197 @@
+{
+  "group": {
+    "patients": "Patients",
+    "visits": "Visites",
+    "clinical": "Clinique",
+    "money": "Argent",
+    "catalog": "Catalogue",
+    "files": "Fichiers",
+    "staff": "Équipe et rôles",
+    "compensation": "Rémunération",
+    "activity": "Activité",
+    "clinic": "Cabinet"
+  },
+  "capability": {
+    "patient_read": {
+      "label": "Voir les patients",
+      "description": "La liste et les dossiers des patients : schéma, plans, fichiers et antécédents."
+    },
+    "patient_write": {
+      "label": "Ajouter et modifier des patients",
+      "description": "Créer, modifier, fusionner et archiver les dossiers et les contacts."
+    },
+    "visit_read": {
+      "label": "Voir ses visites",
+      "description": "Les visites dont il est le dentiste ou qu’il a commencées."
+    },
+    "visit_read_all": {
+      "label": "Voir toutes les visites du cabinet",
+      "description": "Chaque visite du cabinet, y compris celles des autres dentistes."
+    },
+    "visit_write": {
+      "label": "Mener les visites",
+      "description": "Commencer, saisir et terminer les visites."
+    },
+    "visit_amend": {
+      "label": "Rectifier les visites terminées",
+      "description": "Corriger les actes d’une visite terminée."
+    },
+    "visit_void": {
+      "label": "Annuler des visites",
+      "description": "Annuler une visite terminée et contrepasser son montant."
+    },
+    "chart_write": {
+      "label": "Saisir dans le dossier",
+      "description": "Saisir diagnostics, plans et état des dents hors visite, et confirmer les antécédents."
+    },
+    "payment_read": {
+      "label": "Voir soldes et paiements des patients",
+      "description": "Le solde, les paiements, reçus et relevés d’un patient, et la file d’encaissement."
+    },
+    "payment_write": {
+      "label": "Enregistrer des paiements",
+      "description": "Encaisser paiements et acomptes, saisir des soldes d’ouverture et libérer des acomptes."
+    },
+    "payment_refund": {
+      "label": "Rembourser et ajuster",
+      "description": "Rembourser et annuler des paiements, ajuster un solde."
+    },
+    "finance_read": {
+      "label": "Voir les finances du cabinet",
+      "description": "L’écran Paiements, les créances, les visites impayées, les soldes dans les listes et tout export avec montants."
+    },
+    "visit_discount": {
+      "label": "Accorder des remises",
+      "description": "Remise sur une visite ou une ligne, modification du prix d’une ligne, remise à l’encaissement."
+    },
+    "catalog_read": {
+      "label": "Voir le catalogue",
+      "description": "Actes et diagnostics, avec leurs prix."
+    },
+    "catalog_write": {
+      "label": "Modifier le catalogue",
+      "description": "Ajouter et modifier actes, diagnostics, prix et listes d’antécédents."
+    },
+    "file_read": {
+      "label": "Voir images et documents",
+      "description": "Les radios, photos et documents d’un patient."
+    },
+    "file_write": {
+      "label": "Ajouter et modifier des fichiers",
+      "description": "Ajouter des images et documents et modifier leurs détails."
+    },
+    "file_archive": {
+      "label": "Archiver des fichiers",
+      "description": "Retirer un fichier du dossier patient."
+    },
+    "user_read": {
+      "label": "Voir l’équipe",
+      "description": "Les noms de l’équipe, pour choisir le dentiste."
+    },
+    "user_write": {
+      "label": "Gérer l’équipe",
+      "description": "Ajouter des membres, modifier leurs profils, les désactiver et réinitialiser les mots de passe."
+    },
+    "role_read": {
+      "label": "Voir rôles et accès",
+      "description": "Ce que chaque rôle et chaque personne peut faire."
+    },
+    "role_write": {
+      "label": "Gérer rôles et accès",
+      "description": "Modifier les rôles, en créer et donner des permissions supplémentaires."
+    },
+    "compensation_read": {
+      "label": "Voir sa rémunération",
+      "description": "Réservé à la rémunération des dentistes, bientôt."
+    },
+    "compensation_manage": {
+      "label": "Gérer les rémunérations",
+      "description": "Réservé aux accords de rémunération et aux versements, bientôt."
+    },
+    "audit_read": {
+      "label": "Voir l’activité",
+      "description": "Le journal d’activité du cabinet et l’historique d’une visite."
+    },
+    "tenant_read": {
+      "label": "Voir les paramètres du cabinet",
+      "description": "Les informations du cabinet, ses sites et ses salles."
+    },
+    "tenant_write": {
+      "label": "Modifier les paramètres du cabinet",
+      "description": "Informations du cabinet, sites, salles et affichage du schéma."
+    },
+    "import_run": {
+      "label": "Importer des données",
+      "description": "Reprendre actes, patients et visites d’un autre logiciel."
+    }
+  },
+  "matrix": {
+    "fromRole": "par {{role}}",
+    "implied": "Requis par {{permission}}",
+    "key": "Clé de permission : {{key}}"
+  },
+  "roles": {
+    "list": "Rôles",
+    "system": "Système",
+    "custom": "Personnalisé",
+    "holders_one": "{{count}} personne",
+    "holders_other": "{{count}} personnes",
+    "newRole": "Nouveau rôle",
+    "active": "Actif",
+    "inactive": "Inactif",
+    "activeLabel": "Rôle {{role}} actif",
+    "ownerNote": "Le rôle propriétaire a toujours toutes les permissions.",
+    "readOnly": "Vous pouvez voir les rôles mais pas les modifier.",
+    "resetToDefault": "Rétablir par défaut",
+    "resetTitle": "Rétablir les permissions par défaut de {{role}} ?",
+    "resetBody": "Toutes les modifications de ce rôle sont annulées. Les personnes qui l’ont reçoivent les permissions par défaut à leur prochaine action.",
+    "resetConfirm": "Rétablir le rôle",
+    "reset": "Rôle rétabli par défaut",
+    "unsaved_one": "{{count}} modification non enregistrée",
+    "unsaved_other": "{{count}} modifications non enregistrées",
+    "saved": "Rôle enregistré",
+    "name": "Nom",
+    "description": "Description",
+    "heading": "Ce que ce rôle peut faire",
+    "switchedOff": "Rôle désactivé",
+    "switchedOn": "Rôle activé",
+    "hasHolders_one": "Attribué à {{count}} personne : retirez-le-lui d’abord.",
+    "hasHolders_other": "Attribué à {{count}} personnes : retirez-le-leur d’abord.",
+    "loadFailed": "Impossible de charger les rôles",
+    "loadFailedBody": "Vérifiez votre connexion et réessayez.",
+    "nameRequired": "Donnez un nom au rôle"
+  },
+  "newRole": {
+    "title": "Nouveau rôle",
+    "name": "Nom",
+    "description": "Description",
+    "descriptionHint": "Facultatif. À quoi sert ce rôle.",
+    "startFrom": "Partir de",
+    "startEmpty": "Aucune permission",
+    "create": "Créer le rôle",
+    "created": "Rôle créé"
+  },
+  "access": {
+    "tab": "Accès",
+    "profileTab": "Profil",
+    "roles": "Rôles",
+    "additional": "Permissions supplémentaires",
+    "additionalHint": "En plus de ce que donnent ses rôles, pour cette personne seulement.",
+    "readOnly": "Vous pouvez voir cet accès mais pas le modifier.",
+    "saved": "Accès enregistré",
+    "extraCount_one": "+{{count}} permission",
+    "extraCount_other": "+{{count}} permissions"
+  },
+  "errors": {
+    "cannotGrant": "Vous ne pouvez pas accorder ceci : vous ne l’avez pas vous-même.",
+    "cannotGrantOwner": "Seul un propriétaire peut nommer un propriétaire.",
+    "selfLockout": "Vous ne pouvez pas retirer votre propre accès à la gestion des rôles ou de l’équipe.",
+    "ownerLocked": "Le rôle propriétaire a toujours toutes les permissions.",
+    "notAllowed": "Impossible pour un rôle système.",
+    "cannotManage": "Vous ne pouvez pas modifier le compte de cette personne : elle a des accès que vous n’avez pas."
+  },
+  "defaults": {
+    "title": "Rôles par défaut",
+    "subtitle": "Ce avec quoi chaque nouveau cabinet démarre, et ce que « Rétablir par défaut » restaure dans un cabinet. Les cabinets existants ne changent pas. Le propriétaire a toujours toutes les permissions."
+  }
+}

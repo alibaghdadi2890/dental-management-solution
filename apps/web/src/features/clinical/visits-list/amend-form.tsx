@@ -59,7 +59,9 @@ function AmendServiceRow({
         >
           {service.name}
         </span>
-        <span className="font-mono text-[12.5px]">{formatMoney(service.final, locale)}</span>
+        <span className="font-mono text-[12.5px]">
+          {service.final ? formatMoney(service.final, locale) : '—'}
+        </span>
         <Button
           variant="ghost"
           size="sm"

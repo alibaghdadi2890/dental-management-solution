@@ -194,6 +194,7 @@ export function CatalogDrawer({
             title={t('drawer.failedTitle')}
             body={t('drawer.failedBody')}
             requestId={catalog.error instanceof ApiError ? catalog.error.requestId : undefined}
+            error={catalog.error}
             onRetry={() => void catalog.refetch()}
           />
         ) : (

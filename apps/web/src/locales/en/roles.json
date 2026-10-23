@@ -1,0 +1,197 @@
+{
+  "group": {
+    "patients": "Patients",
+    "visits": "Visits",
+    "clinical": "Clinical",
+    "money": "Money",
+    "catalog": "Catalog",
+    "files": "Files",
+    "staff": "Staff & roles",
+    "compensation": "Compensation",
+    "activity": "Activity",
+    "clinic": "Clinic"
+  },
+  "capability": {
+    "patient_read": {
+      "label": "See patients",
+      "description": "The patient list and records: chart, plans, files and medical history."
+    },
+    "patient_write": {
+      "label": "Add and edit patients",
+      "description": "Create, edit, merge and archive patient records and contacts."
+    },
+    "visit_read": {
+      "label": "See own visits",
+      "description": "Visits where they are the dentist or that they started."
+    },
+    "visit_read_all": {
+      "label": "See all clinic visits",
+      "description": "Every visit in the clinic, other dentists' included."
+    },
+    "visit_write": {
+      "label": "Run visits",
+      "description": "Start, chart and complete visits."
+    },
+    "visit_amend": {
+      "label": "Amend finished visits",
+      "description": "Correct the services of a completed visit."
+    },
+    "visit_void": {
+      "label": "Void visits",
+      "description": "Cancel a completed visit and reverse its charge."
+    },
+    "chart_write": {
+      "label": "Chart on the patient record",
+      "description": "Record diagnoses, plans and tooth status outside a visit, and confirm the medical history."
+    },
+    "payment_read": {
+      "label": "See patient balances & payments",
+      "description": "One patient's balance, payments, receipts and statements, and the checkout queue."
+    },
+    "payment_write": {
+      "label": "Record payments",
+      "description": "Take payments and advances, record opening balances and release advances."
+    },
+    "payment_refund": {
+      "label": "Refund and adjust",
+      "description": "Refund and void payments, and adjust a balance."
+    },
+    "finance_read": {
+      "label": "See clinic finances",
+      "description": "The Payments screen, receivables, unpaid visits, balances in lists and every export with money."
+    },
+    "visit_discount": {
+      "label": "Apply discounts",
+      "description": "Discount a visit or a line, change a line's price, and discount at checkout."
+    },
+    "catalog_read": {
+      "label": "See the catalog",
+      "description": "Services and diagnoses, with their prices."
+    },
+    "catalog_write": {
+      "label": "Edit the catalog",
+      "description": "Add and change services, diagnoses, prices and the medical-history lists."
+    },
+    "file_read": {
+      "label": "See images and documents",
+      "description": "A patient's X-rays, photos and documents."
+    },
+    "file_write": {
+      "label": "Upload and edit files",
+      "description": "Add images and documents and edit their details."
+    },
+    "file_archive": {
+      "label": "Archive files",
+      "description": "Take a file out of the patient record."
+    },
+    "user_read": {
+      "label": "See staff",
+      "description": "Staff names, for the dentist pickers."
+    },
+    "user_write": {
+      "label": "Manage staff",
+      "description": "Add staff, edit their profiles, deactivate them and reset passwords."
+    },
+    "role_read": {
+      "label": "See roles and access",
+      "description": "What each role and each person can do."
+    },
+    "role_write": {
+      "label": "Manage roles and access",
+      "description": "Edit roles, create custom ones and give people extra permissions."
+    },
+    "compensation_read": {
+      "label": "See own compensation",
+      "description": "Reserved for dentist compensation, coming soon."
+    },
+    "compensation_manage": {
+      "label": "Manage compensation",
+      "description": "Reserved for compensation agreements and payouts, coming soon."
+    },
+    "audit_read": {
+      "label": "See activity",
+      "description": "The clinic's activity log and a visit's history."
+    },
+    "tenant_read": {
+      "label": "See clinic settings",
+      "description": "The clinic's details, branches and rooms."
+    },
+    "tenant_write": {
+      "label": "Edit clinic settings",
+      "description": "Clinic details, branches, rooms and the chart display."
+    },
+    "import_run": {
+      "label": "Import data",
+      "description": "Bring services, patients and visits in from another system."
+    }
+  },
+  "matrix": {
+    "fromRole": "from {{role}}",
+    "implied": "Needed by {{permission}}",
+    "key": "Permission key: {{key}}"
+  },
+  "roles": {
+    "list": "Roles",
+    "system": "System",
+    "custom": "Custom",
+    "holders_one": "{{count}} person",
+    "holders_other": "{{count}} people",
+    "newRole": "New role",
+    "active": "Active",
+    "inactive": "Inactive",
+    "activeLabel": "Role {{role}} active",
+    "ownerNote": "The owner role always has every permission.",
+    "readOnly": "You can see the roles but not change them.",
+    "resetToDefault": "Reset to default",
+    "resetTitle": "Reset {{role}} to its default permissions?",
+    "resetBody": "Every change made to this role is undone. People who hold it get the default permissions on their next action.",
+    "resetConfirm": "Reset role",
+    "reset": "Role reset to default",
+    "unsaved_one": "{{count}} unsaved change",
+    "unsaved_other": "{{count}} unsaved changes",
+    "saved": "Role saved",
+    "name": "Name",
+    "description": "Description",
+    "heading": "What this role can do",
+    "switchedOff": "Role switched off",
+    "switchedOn": "Role switched on",
+    "hasHolders_one": "Held by {{count}} person: take it from them first.",
+    "hasHolders_other": "Held by {{count}} people: take it from them first.",
+    "loadFailed": "Couldn’t load the roles",
+    "loadFailedBody": "Check your connection and try again.",
+    "nameRequired": "Give the role a name"
+  },
+  "newRole": {
+    "title": "New role",
+    "name": "Name",
+    "description": "Description",
+    "descriptionHint": "Optional. What this role is for.",
+    "startFrom": "Start from",
+    "startEmpty": "No permissions",
+    "create": "Create role",
+    "created": "Role created"
+  },
+  "access": {
+    "tab": "Access",
+    "profileTab": "Profile",
+    "roles": "Roles",
+    "additional": "Additional permissions",
+    "additionalHint": "On top of what their roles give, for this person only.",
+    "readOnly": "You can see this access but not change it.",
+    "saved": "Access saved",
+    "extraCount_one": "+{{count}} permission",
+    "extraCount_other": "+{{count}} permissions"
+  },
+  "errors": {
+    "cannotGrant": "You can’t grant this: you don’t have it yourself.",
+    "cannotGrantOwner": "Only an owner can make someone an owner.",
+    "selfLockout": "You can’t take away your own access to manage roles or staff.",
+    "ownerLocked": "The owner role always has every permission.",
+    "notAllowed": "This can’t be done to a system role.",
+    "cannotManage": "You can’t change this person’s account: they have access you don’t."
+  },
+  "defaults": {
+    "title": "Default roles",
+    "subtitle": "What every new clinic starts with, and what a clinic’s Reset to default restores. Existing clinics don’t change. The owner always has every permission."
+  }
+}

@@ -73,7 +73,8 @@ function LastVisitCard({
       },
       {
         key: 'total',
-        value: visit ? formatMoney(visit.total, locale) : NONE,
+        // The total is null when the caller may not see that visit's money (ADR-0055).
+        value: visit?.total ? formatMoney(visit.total, locale) : NONE,
         className: 'font-mono font-semibold tabular-nums',
       },
     ] as const;

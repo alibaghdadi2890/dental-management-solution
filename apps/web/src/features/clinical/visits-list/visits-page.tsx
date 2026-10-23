@@ -100,7 +100,11 @@ function VisitsList({
   const { t, i18n } = useTranslation(['visits', 'common']);
   const { t: tClinical } = useTranslation('clinical');
   const toast = useToast();
+  // One visit's money (row balance, panel) with payment:read; receivables across patients — the
+  // Unpaid tab, its footer, the export — with finance:read (ADR-0055).
   const canPay = usePermission('payment:read');
+  const canFinance = usePermission('finance:read');
+  const allVisits = usePermission('visit:read_all');
   const locale = i18n.resolvedLanguage ?? 'en';
   const count = (value: number) => new Intl.NumberFormat(locale).format(value);
   const { practitioners } = useStaffNames();
@@ -109,8 +113,8 @@ function VisitsList({
     enabled: branchId !== null,
   });
 
-  // Unpaid needs `payment:read`; without it the tab falls back to All.
-  const tab = search.tab === 'unpaid' && !canPay ? 'all' : search.tab;
+  // Unpaid needs `finance:read`; without it the tab falls back to All.
+  const tab = search.tab === 'unpaid' && !canFinance ? 'all' : search.tab;
   const unpaid = tab === 'unpaid';
   const effective = { ...search, tab };
   const filters = filtersOf(effective);
@@ -127,7 +131,7 @@ function VisitsList({
     placeholderData: keepPreviousData,
   });
   const summary = useQuery(visitListSummaryQuery(filters));
-  const unpaidSummary = useQuery(unpaidSummaryQuery(filters, canPay));
+  const unpaidSummary = useQuery(unpaidSummaryQuery(filters, canFinance));
   const items = list.data?.items ?? [];
   const balances = useQuery(
     visitBalancesQuery(
@@ -187,6 +191,7 @@ function VisitsList({
         title={t('states.errorTitle')}
         body={t('states.errorBody')}
         requestId={list.error instanceof ApiError ? list.error.requestId : undefined}
+        error={list.error}
         onRetry={() => void list.refetch()}
       />
     );
@@ -245,7 +250,8 @@ function VisitsList({
                   count: footerFigures.count,
                   formatted: count(footerFigures.count),
                 }),
-                ...footerFigures.billed.map((billed) =>
+                // Σ billed is clinic money: null without finance:read (ADR-0055).
+                ...(footerFigures.billed ?? []).map((billed) =>
                   t('footer.billed', { amount: formatMoney(billed, locale) }),
                 ),
               ].join(' · ')
@@ -301,7 +307,7 @@ function VisitsList({
           title={t('title')}
           subtitle={subtitle}
           actions={
-            canPay ? (
+            canFinance ? (
               <Button variant="outline" busy={exporting} onClick={runExport}>
                 {t('exportCsv')}
               </Button>
@@ -314,7 +320,7 @@ function VisitsList({
             onChange={(next) => {
               set({ tab: next, visit: undefined });
             }}
-            tabs={VISIT_TABS.filter((key) => canPay || key !== 'unpaid').map((key) => {
+            tabs={VISIT_TABS.filter((key) => canFinance || key !== 'unpaid').map((key) => {
               const value = tabCounts[key];
               return {
                 key,
@@ -342,17 +348,20 @@ function VisitsList({
                 set({ range });
               }}
             />
-            <FilterChip
-              label={t('filters.dentist')}
-              value={search.dentist ?? ''}
-              options={[
-                { value: '', label: t('filters.any') },
-                ...(practitioners ?? []).map((p) => ({ value: p.id, label: p.displayName })),
-              ]}
-              onChange={(value) => {
-                set({ dentist: value || undefined });
-              }}
-            />
+            {/* Own visits only (ADR-0055): there is no other dentist to pick. */}
+            {allVisits && (
+              <FilterChip
+                label={t('filters.dentist')}
+                value={search.dentist ?? ''}
+                options={[
+                  { value: '', label: t('filters.any') },
+                  ...(practitioners ?? []).map((p) => ({ value: p.id, label: p.displayName })),
+                ]}
+                onChange={(value) => {
+                  set({ dentist: value || undefined });
+                }}
+              />
+            )}
             <FilterChip
               label={t('filters.room')}
               value={search.room ?? ''}

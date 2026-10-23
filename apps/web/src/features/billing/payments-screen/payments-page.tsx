@@ -460,6 +460,7 @@ function ListBody({
         title={t('states.errorTitle')}
         body={t('states.errorBody')}
         requestId={error instanceof ApiError ? error.requestId : undefined}
+        error={error}
         onRetry={onRetry}
       />
     );

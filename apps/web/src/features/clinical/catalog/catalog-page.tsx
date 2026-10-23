@@ -534,6 +534,7 @@ function CatalogsTab({
             title={t('error.title')}
             body={t('error.body')}
             requestId={failed instanceof ApiError ? failed.requestId : undefined}
+            error={failed}
             onRetry={() => {
               void services.refetch();
               void diagnoses.refetch();

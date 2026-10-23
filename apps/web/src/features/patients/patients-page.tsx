@@ -99,18 +99,20 @@ function PatientsList({
   const { t, i18n } = useTranslation(['patients', 'common']);
   const toast = useToast();
   const canWrite = usePermission('patient:write');
-  const canPay = usePermission('payment:read');
+  // Balances across patients — the Balance column, Owes balance, the sort and the export — need
+  // finance:read (ADR-0055); Not seen and Never are about the patient.
+  const canFinance = usePermission('finance:read');
   const router = useRouter();
   const { openPatient } = usePatientNavigation();
   const locale = i18n.resolvedLanguage ?? 'en';
   const count = (value: number) => new Intl.NumberFormat(locale).format(value);
 
   const requested = listQueryOf(search);
-  const query = canPay ? requested : withoutBalanceViews(requested);
+  const query = canFinance ? requested : withoutBalanceViews(requested);
   const fellBack = query !== requested;
   const panel = parsePanel(search.panel);
 
-  const data = usePatientsListData(query, { canPay });
+  const data = usePatientsListData(query, { canFinance });
   const { list, rows } = data;
   const stale = list.isPlaceholderData;
 
@@ -165,7 +167,7 @@ function PatientsList({
   useEffect(() => {
     if (steppingBack) stepBack(lastPage);
   }, [steppingBack, lastPage]);
-  // Without `payment:read` a balance view has already been swapped for its fallback above; make
+  // Without `finance:read` a balance view has already been swapped for its fallback above; make
   // the URL say so too.
   const showFallback = useEffectEvent(() => {
     setQuery(query, { replace: true });
@@ -194,6 +196,7 @@ function PatientsList({
     currency: tenant.currency,
     locale,
     dentistNames: data.dentistNames,
+    showBalance: canFinance,
   };
 
   const viewCounts = {
@@ -237,7 +240,7 @@ function PatientsList({
           subtitle={subtitle}
           actions={
             <>
-              {canPay && (
+              {canFinance && (
                 <Button
                   variant="outline"
                   busy={exporting}
@@ -258,16 +261,14 @@ function PatientsList({
             onChange={(view) => {
               setQuery(withFilter(query, { view }));
             }}
-            tabs={VIEWS.filter((view) => canPay || (view !== 'owing' && view !== 'notSeen')).map(
-              (view) => {
-                const value = viewCounts[view];
-                return {
-                  key: view,
-                  label: t(`views.${view}`),
-                  count: value === undefined ? undefined : count(value),
-                };
-              },
-            )}
+            tabs={VIEWS.filter((view) => canFinance || view !== 'owing').map((view) => {
+              const value = viewCounts[view];
+              return {
+                key: view,
+                label: t(`views.${view}`),
+                count: value === undefined ? undefined : count(value),
+              };
+            })}
           />
           {query.view === 'active' && data.duplicateCount > 0 && (
             <DuplicateBanner
@@ -303,7 +304,7 @@ function PatientsList({
                       : undefined
                   }
                   onExport={
-                    canPay
+                    canFinance
                       ? () => {
                           runExport({ ids: selectedRows.map((row) => row.id) });
                         }
@@ -356,7 +357,7 @@ function PatientsList({
                 onSort={(column) => {
                   setQuery(withFilter(query, sortPatch(query, column)));
                 }}
-                canSortBalance={canPay}
+                showBalance={canFinance}
                 selection={pageSelection}
                 selectable={rows.length > 0 && !stale}
                 onToggleAll={() => {
@@ -414,6 +415,7 @@ function PatientsList({
                     }
                   />
                 )}
+                showBalance={canFinance}
               />
             </div>
           </TableCard>

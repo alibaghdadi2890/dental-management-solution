@@ -9,7 +9,8 @@
     "failed": "Impossible de charger les visites à encaisser.",
     "finished": "terminée à {{time}}",
     "action": "Encaisser",
-    "actionFor": "Encaisser {{name}}"
+    "actionFor": "Encaisser {{name}}",
+    "awaitingFrontDesk": "En attente de paiement · accueil"
   },
   "chair": {
     "title": "Au fauteuil",

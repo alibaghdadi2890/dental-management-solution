@@ -16,7 +16,11 @@ import { minorOn } from './patient-form';
 
 /** POC column widths: checkbox · Patient · Age·sex · Phone · Last visit · Dentist · Visits ·
  * Balance · ⋯ (README §Patients, list anatomy 5). */
-const PATIENT_COLUMNS = '40px minmax(200px,1.6fr) 80px 128px 112px 118px 58px 92px 44px';
+/** The Balance column shows only with `finance:read` (balances across patients, ADR-0055). */
+const columnsFor = (showBalance: boolean) =>
+  showBalance
+    ? '40px minmax(200px,1.6fr) 80px 128px 112px 118px 58px 92px 44px'
+    : '40px minmax(200px,1.6fr) 80px 128px 112px 118px 58px 44px';
 export const PATIENT_TABLE_MIN_WIDTH = 940;
 
 const NONE = '—';
@@ -79,18 +83,18 @@ function PlainHeader({ label, end = false }: { label: string; end?: boolean }) {
 const checkboxClass = 'ms-0.5 size-[15px] cursor-pointer accent-primary';
 
 /** 40px header row with the page's select-all checkbox and the sortable column labels. Visits and
- * Last visit are not sortable (4b, D18); Balance only with `payment:read`. */
+ * Last visit are not sortable (4b, D18); Balance is there only with `finance:read` (ADR-0055). */
 export function PatientsTableHead({
   query,
   onSort,
-  canSortBalance,
+  showBalance,
   selection,
   onToggleAll,
   selectable,
 }: {
   query: PatientListQuery;
   onSort: (column: SortableColumn) => void;
-  canSortBalance: boolean;
+  showBalance: boolean;
   /** How much of the page is selected; `some` shows the select-all box as indeterminate. */
   selection: 'none' | 'some' | 'all';
   onToggleAll: () => void;
@@ -101,7 +105,7 @@ export function PatientsTableHead({
     <div
       role="row"
       className="grid h-10 items-center gap-2.5 border-b border-border bg-faint px-3"
-      style={{ gridTemplateColumns: PATIENT_COLUMNS }}
+      style={{ gridTemplateColumns: columnsFor(showBalance) }}
     >
       <span role="columnheader">
         <input
@@ -122,7 +126,7 @@ export function PatientsTableHead({
       <PlainHeader label={t('columns.lastVisit')} />
       <SortHeader column="dentist" label={t('columns.dentist')} query={query} onSort={onSort} />
       <PlainHeader label={t('columns.visits')} end />
-      {canSortBalance ? (
+      {showBalance && (
         <SortHeader
           column="balance"
           label={t('columns.balance')}
@@ -130,8 +134,6 @@ export function PatientsTableHead({
           onSort={onSort}
           end
         />
-      ) : (
-        <PlainHeader label={t('columns.balance')} end />
       )}
       <span role="columnheader">
         <span className="sr-only">{t('columns.actions')}</span>
@@ -144,14 +146,20 @@ const SKELETON_NAME_WIDTHS = [180, 140, 200, 120, 160, 150, 190, 130];
 const bar = (width: string) => cn('h-2.5', SHIMMER, width);
 
 /** Loading rows shaped like the POC's: checkbox, avatar + name, then each column's typical width. */
-export function PatientsSkeleton({ label }: { label: string }) {
+export function PatientsSkeleton({
+  label,
+  showBalance = true,
+}: {
+  label: string;
+  showBalance?: boolean;
+}) {
   return (
     <div aria-busy="true" aria-label={label}>
       {SKELETON_NAME_WIDTHS.map((width) => (
         <div
           key={width}
           className="grid h-14 items-center gap-2.5 border-t border-row-divider px-3"
-          style={{ gridTemplateColumns: PATIENT_COLUMNS }}
+          style={{ gridTemplateColumns: columnsFor(showBalance) }}
         >
           <span className="size-[15px] rounded-[3px] bg-subtle" />
           <span className="flex items-center gap-2.5">
@@ -163,7 +171,7 @@ export function PatientsSkeleton({ label }: { label: string }) {
           <span className={bar('w-[78px]')} />
           <span className={bar('w-[86px]')} />
           <span className="h-2.5 w-5 rounded-sm bg-subtle" />
-          <span className="h-2.5 w-[52px] justify-self-end rounded-sm bg-subtle" />
+          {showBalance && <span className="h-2.5 w-[52px] justify-self-end rounded-sm bg-subtle" />}
           <span />
         </div>
       ))}
@@ -273,6 +281,8 @@ export interface PatientRowContext {
   currency: string;
   locale: string;
   dentistNames: ReadonlyMap<string, string>;
+  /** `finance:read`: the Balance column is there (ADR-0055). */
+  showBalance: boolean;
 }
 
 export function PatientRow({
@@ -291,7 +301,7 @@ export function PatientRow({
 }: {
   patient: PatientListItem;
   context: PatientRowContext;
-  /** `undefined` without `payment:read`, with no ledger entries, or while `balanceLoading`. */
+  /** `undefined` without `finance:read`, with no ledger entries, or while `balanceLoading`. */
   balances: readonly BalanceMoney[] | undefined;
   /** This page's balances are still loading: the cell shimmers rather than reading "—". */
   balanceLoading: boolean;
@@ -338,7 +348,7 @@ export function PatientRow({
         selected ? 'bg-selected' : highlighted ? 'bg-faint' : 'bg-surface',
         stale ? 'opacity-60' : archived && 'opacity-75',
       )}
-      style={{ gridTemplateColumns: PATIENT_COLUMNS }}
+      style={{ gridTemplateColumns: columnsFor(context.showBalance) }}
     >
       <span
         role="cell"
@@ -410,12 +420,14 @@ export function PatientRow({
       >
         {visitsLoading ? <span className={bar('ms-auto w-5')} /> : String(visits?.visitCount ?? 0)}
       </span>
-      <BalanceCell
-        balances={balances}
-        loading={balanceLoading}
-        currency={context.currency}
-        locale={context.locale}
-      />
+      {context.showBalance && (
+        <BalanceCell
+          balances={balances}
+          loading={balanceLoading}
+          currency={context.currency}
+          locale={context.locale}
+        />
+      )}
       <span
         role="cell"
         className="justify-self-end"

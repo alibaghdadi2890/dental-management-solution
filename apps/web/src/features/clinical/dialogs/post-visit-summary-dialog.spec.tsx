@@ -28,6 +28,7 @@ const COMPLETED: Visit = visit({
 });
 
 const OWING: VisitFinancialSummary = {
+  handedOff: false,
   visitId: VISIT_ID,
   currency: 'USD',
   visit: { total: '162.00', paid: '0.00', outstanding: '162.00' },
@@ -45,6 +46,7 @@ const EXAMINATION: Visit = {
   money: { subtotal: '0.00', discount: '0.00', total: '0.00', capped: false },
 };
 const CLEAR: VisitFinancialSummary = {
+  handedOff: false,
   visitId: VISIT_ID,
   currency: 'USD',
   visit: { total: '0.00', paid: '0.00', outstanding: '0.00' },
@@ -54,11 +56,14 @@ const CLEAR: VisitFinancialSummary = {
   payments: [],
 };
 
+/** Who completes a visit and sees its account: the summary opens with `visit:read` (ADR-0055). */
+const DESK: Permission[] = [...ALL_PERMISSIONS, 'visit:read'];
+
 /** The record as the workspace leaves it after Complete: `postVisit` in the entry's state. */
 async function arriveAfterComplete(
   completed: Visit,
   summary: VisitFinancialSummary | Promise<VisitFinancialSummary>,
-  permissions: Permission[] = ALL_PERMISSIONS,
+  permissions: Permission[] = DESK,
   mutation?: MockApi['mutation'],
 ) {
   const fetchMock = mockApi({
@@ -86,7 +91,7 @@ async function arriveAfterComplete(
 
 /** The same visit, completed on the tenant's today: its discount can still be set at checkout. */
 const TODAYS: Visit = { ...COMPLETED, localDate: todayIn('Asia/Beirut') };
-const WITH_DISCOUNT: Permission[] = [...ALL_PERMISSIONS, 'visit:discount'];
+const WITH_DISCOUNT: Permission[] = [...DESK, 'visit:discount'];
 
 /** The figure beside a label. */
 const figureOf = (scope: HTMLElement, label: string) =>
@@ -208,21 +213,21 @@ describe('PostVisitSummaryDialog', () => {
     expect(within(dialog).getByRole('button', { name: 'Done' })).toBeTruthy();
   });
 
-  it('without payment:write: Done, a note that the front desk collects, and the invoice', async () => {
+  it('without payment:write: Done, handed to front desk, and the invoice', async () => {
     await arriveAfterComplete(
       COMPLETED,
       OWING,
-      ALL_PERMISSIONS.filter((permission) => permission !== 'payment:write'),
+      DESK.filter((permission) => permission !== 'payment:write'),
     );
     const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
     expect(await within(dialog).findByRole('button', { name: 'Done' })).toBeTruthy();
-    expect(within(dialog).getByText('The front desk will collect the payment.')).toBeTruthy();
+    expect(within(dialog).getByText('Handed to front desk for payment')).toBeTruthy();
     expect(within(dialog).getByRole('button', { name: 'Print invoice' })).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: 'Record payment' })).toBeNull();
   });
 
   it.each([
-    ['without visit:discount', TODAYS, OWING, ALL_PERMISSIONS],
+    ['without visit:discount', TODAYS, OWING, DESK],
     ['after the day of the visit', COMPLETED, OWING, WITH_DISCOUNT],
     [
       'once the visit is paid',
@@ -297,12 +302,28 @@ describe('PostVisitSummaryDialog', () => {
     expect(within(dialog).getByRole('button', { name: 'Apply' })).toBeTruthy();
   });
 
-  it('is not shown without payment:read: a toast says the visit was recorded, once', async () => {
-    const { fetchMock, router } = await arriveAfterComplete(
-      COMPLETED,
-      OWING,
-      ALL_PERMISSIONS.filter((permission) => permission !== 'payment:read'),
+  it('without payment:read (a dentist): the visit alone, handed to front desk (ADR-0055)', async () => {
+    await arriveAfterComplete(
+      TODAYS,
+      {
+        handedOff: true,
+        visitId: VISIT_ID,
+        currency: 'USD',
+        visit: { total: '162.00', paid: '0.00', outstanding: '162.00' },
+      },
+      ['patient:read', 'visit:read', 'visit:write'],
     );
+    const dialog = await screen.findByRole('dialog', { name: 'Visit recorded' });
+    expect(await within(dialog).findByText('Handed to front desk for payment')).toBeTruthy();
+    expect(within(dialog).getByRole('region', { name: 'This visit' })).toBeTruthy();
+    expect(within(dialog).queryByText('Total outstanding')).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Print invoice' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Record payment' })).toBeNull();
+    expect(within(dialog).getByText('Ask the owner')).toBeTruthy();
+  });
+
+  it('is not shown without visit:read: a toast says the visit was recorded, once', async () => {
+    const { fetchMock, router } = await arriveAfterComplete(COMPLETED, OWING, ALL_PERMISSIONS);
     expect(await screen.findByText('Visit recorded')).toBeTruthy();
     await waitFor(() => {
       expect(router.state.location.state.postVisit).toBeUndefined();

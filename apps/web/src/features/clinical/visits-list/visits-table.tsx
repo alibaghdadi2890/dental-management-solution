@@ -112,8 +112,9 @@ export function VisitRow({
     hourCycle: 'h23',
     timeZone: context.timeZone,
   }).format(new Date(visit.startedAt));
-  const money = (amount: string) =>
-    formatMoney({ amount, currency: visit.currency }, context.locale);
+  // Null when the caller may not see this visit's money (ADR-0055).
+  const money = (amount: string | null) =>
+    amount === null ? '—' : formatMoney({ amount, currency: visit.currency }, context.locale);
 
   let balanceCell;
   if (live) {

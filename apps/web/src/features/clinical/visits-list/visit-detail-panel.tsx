@@ -102,7 +102,9 @@ export function VisitDetailPanel({
   const [badTeeth, setBadTeeth] = useState<ReadonlySet<string>>(new Set());
 
   const number = formatVisitNumber(visit.displayNumber);
-  const money = (amount: string) => formatMoney({ amount, currency: visit.currency }, locale);
+  // Null when the caller may not see this visit's money (ADR-0055).
+  const money = (amount: string | null) =>
+    amount === null ? '—' : formatMoney({ amount, currency: visit.currency }, locale);
   const correctable = visit.status === 'completed' || visit.status === 'amended';
   const voided = visit.status === 'voided';
   const dirty = draft !== null && isDirty(draft, visit);
@@ -136,7 +138,7 @@ export function VisitDetailPanel({
   const saveAmendment = () => {
     if (!draft) return;
     const after = draftTotal(draft, visit);
-    const delta = toCents(after) - toCents(visit.total);
+    const delta = toCents(after) - toCents(visit.total ?? '0');
     const effect =
       delta < 0n
         ? t('amend.credit', { amount: money(fromCents(-delta)) })
@@ -236,7 +238,8 @@ export function VisitDetailPanel({
           {t('panel.void')}
         </Button>
       )}
-      {correctable && access.amend && (
+      {/* Amending shows the money: only on a visit whose money the caller sees (ADR-0055). */}
+      {correctable && access.amend && visit.total !== null && (
         <Button
           variant="primary"
           onClick={() => {
@@ -322,7 +325,7 @@ export function VisitDetailPanel({
                         .join(' ')}
                 </span>
                 <span className="w-20 text-end font-mono">
-                  {formatMoney(service.final, locale)}
+                  {service.final ? formatMoney(service.final, locale) : '—'}
                 </span>
               </li>
             ))}

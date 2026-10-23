@@ -26,7 +26,12 @@ export function InvoiceDocument({ visitId }: { visitId: string }) {
   const toothLabel = useToothLabel();
   const { dentistNames } = useStaffNames();
   const visit = useQuery(visitQuery(visitId));
-  const summary = useQuery(visitSummaryQuery(visitId));
+  const summaryQuery = useQuery(visitSummaryQuery(visitId));
+  // The invoice needs the account (`payment:read`): the handed-off shape is not enough.
+  const summary = {
+    ...summaryQuery,
+    data: summaryQuery.data?.handedOff === false ? summaryQuery.data : undefined,
+  };
   const patientId = visit.data?.patientId ?? '';
   const patient = useQuery({ ...patientQuery(patientId), enabled: patientId !== '' });
   const contacts = useQuery({ ...contactsQuery(patientId), enabled: patientId !== '' });

@@ -1,11 +1,4 @@
-import {
-  ACTIVITY_AREAS,
-  type AuditEntry,
-  formatVisitNumber,
-  type Session,
-  toothCodeSchema,
-  toothLabel,
-} from '@dcm/contracts';
+import { ACTIVITY_AREAS, type AuditEntry, formatVisitNumber, type Session } from '@dcm/contracts';
 import { useInfiniteQuery, useQueries, useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useEffect, useEffectEvent, useMemo, useState } from 'react';
@@ -21,6 +14,7 @@ import {
   TableCard,
   TableHead,
 } from '@/components/ui/list';
+import { usePermission } from '@/features/auth/use-permission';
 import { openPrintable, printPath } from '@/features/billing/payments-api';
 import { useChartSettings } from '@/features/clinical/chart/use-chart-settings';
 import { PatientAvatar } from '@/features/patients/patients-table';
@@ -44,12 +38,14 @@ import {
   rangeStart,
   searchTerm,
 } from './activity-search';
+import { ACTIVITY_COLUMNS, PLATFORM_ACTIVITY_COLUMNS } from './activity-columns';
+import { buildLookups } from './activity-lookups';
 import { type ChangeWords, changesOf } from './changes';
 import { type Lookups, sentenceOf, type Subject } from './sentence';
 
 type Tenant = NonNullable<Session['tenant']>;
 
-const COLUMNS = '150px 200px minmax(300px,1fr) minmax(140px,240px) 36px';
+const COLUMNS = ACTIVITY_COLUMNS;
 const SEARCH_DEBOUNCE_MS = 300;
 /** Stands where the subject goes in a translated sentence, so it can be rendered as a link. */
 const SUBJECT = '\u0001';
@@ -101,6 +97,7 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
   const locale = i18n.resolvedLanguage ?? 'en';
   const { notation } = useChartSettings();
   const { names: staff } = useStaffNames();
+  const canFinance = usePermission('finance:read');
   const today = todayIn(tenant.timeZone);
 
   const term = search.q === undefined ? null : searchTerm(search.q);
@@ -143,31 +140,10 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
     combine: (results) => results.flatMap((result) => result.data ?? []),
   });
 
-  const lookups: Lookups = useMemo(() => {
-    // Built at run time from the entry's own words, so they can't be typed resource keys.
-    const translate = i18n.t.bind(i18n) as (key: string) => string;
-    return {
-      patients: new Map(patients.map((patient) => [patient.id, patient])),
-      visits: new Map(visits.map((visit) => [visit.visitId, visit])),
-      staff,
-      money: (amount, currency) => formatMoney({ amount, currency }, locale),
-      tooth: (code) => {
-        const known = toothCodeSchema.safeParse(code);
-        return known.success ? toothLabel(known.data, notation) : code;
-      },
-      label: (group, value) => {
-        const key = {
-          method: `billing:methods.${value}`,
-          reason: `billing:adjust.reasons.${value}`,
-          fileCategory: `files:category.${value}`,
-          fileType: `files:subCategory.${value}`,
-          visitType: `clinical:flow.types.${value}`,
-          priority: `clinical:flow.priority.${value}`,
-        }[group];
-        return i18n.exists(key) ? translate(key) : value;
-      },
-    };
-  }, [patients, visits, staff, locale, notation, i18n]);
+  const lookups: Lookups = useMemo(
+    () => buildLookups({ patients, visits, staff, notation, locale, i18n }),
+    [patients, visits, staff, locale, notation, i18n],
+  );
 
   const set = (patch: Partial<ActivitySearch>) => {
     onSearch({ ...search, ...patch }, { replace: true });
@@ -188,6 +164,7 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
         title={t('error.title')}
         body={t('error.body')}
         requestId={error instanceof ApiError ? error.requestId : undefined}
+        error={error}
         onRetry={() => {
           void (match.isError ? match.refetch() : feed.refetch());
         }}
@@ -214,27 +191,31 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
   return (
     <Page title={t('title')} subtitle={t('subtitle')}>
       <div role="group" aria-label={t('filters.area')} className="mb-3 flex flex-wrap gap-1.5">
-        {[undefined, ...ACTIVITY_AREAS].map((area) => {
-          const on = search.area === area;
-          return (
-            <button
-              key={area ?? 'all'}
-              type="button"
-              aria-pressed={on}
-              onClick={() => {
-                set({ area });
-              }}
-              className={cn(
-                'h-[30px] cursor-pointer rounded-[15px] border px-3 text-[12.5px] leading-none font-medium',
-                on
-                  ? 'border-ink bg-ink text-white'
-                  : 'border-border-control bg-surface text-ink-secondary hover:border-ink hover:text-ink',
-              )}
-            >
-              {area === undefined ? t('areas.all') : t(`areas.${area}`)}
-            </button>
-          );
-        })}
+        {/* Money rows are the clinic's finances (ADR-0055): the API leaves them out without
+            finance:read, so neither is the chip offered. */}
+        {[undefined, ...ACTIVITY_AREAS.filter((area) => canFinance || area !== 'payments')].map(
+          (area) => {
+            const on = search.area === area;
+            return (
+              <button
+                key={area ?? 'all'}
+                type="button"
+                aria-pressed={on}
+                onClick={() => {
+                  set({ area });
+                }}
+                className={cn(
+                  'h-[30px] cursor-pointer rounded-[15px] border px-3 text-[12.5px] leading-none font-medium',
+                  on
+                    ? 'border-ink bg-ink text-white'
+                    : 'border-border-control bg-surface text-ink-secondary hover:border-ink hover:text-ink',
+                )}
+              >
+                {area === undefined ? t('areas.all') : t(`areas.${area}`)}
+              </button>
+            );
+          },
+        )}
       </div>
       <div className="mb-3.5 flex flex-wrap items-center gap-2">
         <SearchBox
@@ -356,7 +337,28 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
   );
 }
 
-function SubjectLink({ subject, muted = false }: { subject: Subject; muted?: boolean }) {
+function SubjectLink({
+  subject,
+  muted = false,
+  linkable = true,
+}: {
+  subject: Subject;
+  muted?: boolean;
+  /** Off on the platform's Activity: its records are in a clinic the admin is not inside. */
+  linkable?: boolean;
+}) {
+  if (!linkable) {
+    return (
+      <span
+        className={cn(
+          muted ? 'text-ink-secondary' : 'font-semibold',
+          (subject.kind === 'visit' || subject.kind === 'receipt') && 'font-mono',
+        )}
+      >
+        {subject.label}
+      </span>
+    );
+  }
   const className = cn(
     'hover:underline',
     muted ? 'text-ink-secondary hover:text-primary' : 'font-semibold text-ink hover:text-primary',
@@ -414,17 +416,26 @@ function SubjectLink({ subject, muted = false }: { subject: Subject; muted?: boo
   return <span className={muted ? 'text-ink-secondary' : 'font-semibold'}>{subject.label}</span>;
 }
 
-function ActivityRow({
+/**
+ * One row of the Activity: when (in the clinic's time zone), who, what — a sentence with links to
+ * what it is about — the reason, and the changes on demand. The platform's Activity (ADR-0057)
+ * adds the `clinic` and turns the links off.
+ */
+export function ActivityRow({
   entry,
   lookups,
   tenant,
   locale,
+  clinic,
 }: {
   entry: AuditEntry;
   lookups: Lookups;
-  tenant: Tenant;
+  tenant: Pick<Tenant, 'timeZone' | 'currency'>;
   locale: string;
+  /** The clinic's name, as a column of its own (the platform's Activity). */
+  clinic?: string | undefined;
 }) {
+  const linkable = clinic === undefined;
   const { t, i18n } = useTranslation(['activity', 'common']);
   const [open, setOpen] = useState(false);
   const sentence = sentenceOf(entry, lookups);
@@ -453,7 +464,7 @@ function ActivityRow({
       <div
         role="row"
         className="grid min-h-14 items-center gap-2.5 border-t border-row-divider px-3 py-2 text-[13px] first:border-t-0"
-        style={{ gridTemplateColumns: COLUMNS }}
+        style={{ gridTemplateColumns: linkable ? COLUMNS : PLATFORM_ACTIVITY_COLUMNS }}
       >
         <span role="cell" className="font-mono text-[12px] leading-snug text-ink-secondary">
           <span className="block">{formatDate(when, zone)}</span>
@@ -465,6 +476,11 @@ function ActivityRow({
             }).format(when)}
           </span>
         </span>
+        {clinic !== undefined && (
+          <span role="cell" className="min-w-0 truncate font-medium" title={clinic}>
+            {clinic}
+          </span>
+        )}
         <span role="cell" className="flex min-w-0 items-center gap-2">
           <PatientAvatar name={name} />
           <span className="min-w-0">
@@ -478,12 +494,12 @@ function ActivityRow({
         </span>
         <span role="cell" className="min-w-0 leading-snug">
           {lead}
-          {sentence.subject && <SubjectLink subject={sentence.subject} />}
+          {sentence.subject && <SubjectLink subject={sentence.subject} linkable={linkable} />}
           {tail}
           {sentence.about && (
             <>
               <span className="text-ink-muted">{' · '}</span>
-              <SubjectLink subject={sentence.about} muted />
+              <SubjectLink subject={sentence.about} muted linkable={linkable} />
             </>
           )}
         </span>

@@ -9,7 +9,8 @@
     "failed": "Couldn't load the visits waiting for checkout.",
     "finished": "finished {{time}}",
     "action": "Check out",
-    "actionFor": "Check out {{name}}"
+    "actionFor": "Check out {{name}}",
+    "awaitingFrontDesk": "Awaiting payment · front desk"
   },
   "chair": {
     "title": "In the chair",

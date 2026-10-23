@@ -10,15 +10,18 @@ export function ChipCheckboxGroup({
   selected,
   onToggle,
   error,
+  disabled = false,
 }: {
   label: string;
   options: { value: string; label: string }[];
   selected: readonly string[];
   onToggle: (value: string) => void;
   error?: string | undefined;
+  /** Shown but not changeable (the viewer may not edit them). */
+  disabled?: boolean;
 }) {
   return (
-    <fieldset>
+    <fieldset disabled={disabled} className="disabled:opacity-70">
       <legend className="mb-1.5 text-[12.5px] leading-none font-medium">{label}</legend>
       <div className="flex flex-wrap gap-1.5">
         {options.map((option) => {

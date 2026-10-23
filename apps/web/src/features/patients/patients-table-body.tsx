@@ -21,6 +21,7 @@ export function PatientsTableBody({
   newPatient,
   onClearFilters,
   renderRow,
+  showBalance,
 }: {
   list: UseQueryResult<PatientPage>;
   query: PatientListQuery;
@@ -29,6 +30,8 @@ export function PatientsTableBody({
   newPatient: ReactNode;
   onClearFilters: () => void;
   renderRow: (patient: PatientListItem) => ReactNode;
+  /** `finance:read`: the skeleton keeps the Balance column's place (ADR-0055). */
+  showBalance: boolean;
 }) {
   const { t } = useTranslation('patients');
   const filtered = activeFilterCount(query) > 0;
@@ -40,13 +43,14 @@ export function PatientsTableBody({
         title={t('error.title')}
         body={t('error.body')}
         requestId={list.error instanceof ApiError ? list.error.requestId : undefined}
+        error={list.error}
         onRetry={() => void list.refetch()}
       />
     );
   }
   const rows = list.data?.items ?? [];
   if (list.isPending || steppingBack || (list.isPlaceholderData && rows.length === 0)) {
-    return <PatientsSkeleton label={t('loading')} />;
+    return <PatientsSkeleton label={t('loading')} showBalance={showBalance} />;
   }
   if (rows.length > 0) return rows.map(renderRow);
   if (list.data.total === 0 && query.view === 'active' && !filtered) {

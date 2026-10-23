@@ -46,6 +46,8 @@ const staff = (userId: string, displayName: string, active: boolean) => ({
   phone: null,
   active,
   roles: [],
+  grants: null,
+  effectivePermissions: null,
   branches: [],
   createdAt: '2026-01-01T10:00:00.000Z',
 });
@@ -96,6 +98,7 @@ const ALL_PERMISSIONS: Permission[] = [
   'patient:read',
   'patient:write',
   'payment:read',
+  'finance:read',
   'user:read',
 ];
 
@@ -397,7 +400,7 @@ describe('PatientsPage', () => {
 
   it('falls back to the practitioners for dentist names without user:read', async () => {
     const fetchMock = mockApi();
-    renderPage({ permissions: ['patient:read', 'payment:read'] });
+    renderPage({ permissions: ['patient:read', 'finance:read'] });
     const cells = within(await rowOf('Rana Haddad')).getAllByRole('cell');
     await waitFor(() => {
       expect(cells[5]?.textContent).toBe('Dr. Ana Reyes');
@@ -405,14 +408,19 @@ describe('PatientsPage', () => {
     expect(calledUrls(fetchMock)).not.toContain('/api/v1/users');
   });
 
-  it('without payment:read, turns an Owes balance / balance-sort URL into Active by name', async () => {
+  it('without finance:read, turns an Owes balance / balance-sort URL into Active by name', async () => {
     const fetchMock = mockApi();
     const router = renderPage({
       permissions: ['patient:read', 'user:read'],
       url: '/?view=owing&sort=balance&dir=desc',
     });
     await rowOf('Rana Haddad');
-    expect(calledUrls(fetchMock).some((url) => url.includes('/billing/'))).toBe(false);
+    // Not seen stays (it is about patients, ADR-0055); nothing about balances is asked.
+    expect(
+      calledUrls(fetchMock).some(
+        (url) => url.includes('/billing/') && !url.includes('/billing/patients/not-seen-count'),
+      ),
+    ).toBe(false);
     expect(calledUrls(fetchMock)).toContain('/api/v1/patients');
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({
@@ -544,7 +552,7 @@ describe('PatientsPage', () => {
 
   it('hides New patient, Archive and Merge without patient:write', async () => {
     mockApi({ duplicates: [{ patients: [RANA, SAMI] }] });
-    renderPage({ permissions: ['patient:read', 'payment:read'] });
+    renderPage({ permissions: ['patient:read', 'finance:read'] });
     await screen.findByText('2 possible duplicate records');
     expect(screen.queryByRole('button', { name: 'New patient' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Review & merge' })).toBeNull();

@@ -9,6 +9,7 @@ import type common from '../locales/en/common.json';
 import type patients from '../locales/en/patients.json';
 import type payments from '../locales/en/payments.json';
 import type printables from '../locales/en/printables.json';
+import type roles from '../locales/en/roles.json';
 import type settings from '../locales/en/settings.json';
 import type shell from '../locales/en/shell.json';
 import type today from '../locales/en/today.json';
@@ -35,6 +36,7 @@ declare module 'i18next' {
       today: typeof today;
       activity: typeof activity;
       files: typeof files;
+      roles: typeof roles;
     };
   }
 }

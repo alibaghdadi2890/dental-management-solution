@@ -37,5 +37,10 @@
     "dentist": "Dentist",
     "assistant": "Assistant",
     "frontdesk": "Front desk"
+  },
+  "forbidden": {
+    "title": "You no longer have access to this",
+    "body": "Your access has changed. Ask the clinic owner if you need it back.",
+    "back": "Back to the start"
   }
 }

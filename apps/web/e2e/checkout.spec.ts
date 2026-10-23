@@ -63,10 +63,12 @@ async function provisionClinic(browser: Browser) {
   await userPanel.getByLabel('Full name').fill('Dana Desk');
   await userPanel.getByLabel('Email').fill(frontDesk.email);
   await userPanel.getByLabel('Practitioner type').selectOption('frontdesk');
-  await userPanel.getByRole('checkbox', { name: 'Front desk' }).check();
   await userPanel.getByRole('checkbox', { name: 'Main St' }).check();
   await userPanel.getByRole('button', { name: 'Generate' }).click();
   const deskTemporary = await userPanel.getByLabel('Temporary password').inputValue();
+  // Roles are on the Access tab (ADR-0055).
+  await userPanel.getByRole('tab', { name: 'Access' }).click();
+  await userPanel.getByRole('checkbox', { name: 'Front desk' }).check();
   await userPanel.getByRole('button', { name: 'Create user' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'User created' })).toBeVisible();
   await page.close();
@@ -82,7 +84,7 @@ test.beforeAll(async ({ browser }) => {
   clinic = await provisionClinic(browser);
 });
 
-test('the dentist completes a visit; the front desk discounts it and takes the payment', async ({
+test('the dentist completes a visit; the owner lets front desk discount; it discounts and takes the payment', async ({
   browser,
 }) => {
   test.slow();
@@ -138,6 +140,24 @@ test('the dentist completes a visit; the front desk discounts it and takes the p
     await expect(
       page.getByRole('banner').getByRole('link', { name: 'Checkout · 1' }),
     ).toBeVisible();
+    await page.close();
+  });
+
+  await test.step('the owner lets front desk discount, in Settings › Roles (ADR-0055)', async () => {
+    page = await browser.newPage();
+    await signIn(page, clinic.owner.email, clinic.owner.password);
+    await expect(page).toHaveURL(/\/patients$/);
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await page
+      .getByRole('navigation', { name: 'Settings sections' })
+      .getByRole('link', { name: 'Roles' })
+      .click();
+    await page.getByRole('button', { name: /^Front desk/ }).click();
+    await page.getByRole('switch', { name: 'Apply discounts' }).click();
+    const bar = page.getByRole('region', { name: '1 unsaved change' });
+    await bar.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Role saved' })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Apply discounts' })).toBeChecked();
     await page.close();
   });
 

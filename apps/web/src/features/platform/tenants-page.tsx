@@ -59,6 +59,7 @@ export function TenantsPage() {
           title={t('tenants.error.title')}
           body={t('tenants.error.body')}
           requestId={tenants.error instanceof ApiError ? tenants.error.requestId : undefined}
+          error={tenants.error}
           onRetry={() => void tenants.refetch()}
         />
       );

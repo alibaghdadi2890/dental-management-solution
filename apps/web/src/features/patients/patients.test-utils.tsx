@@ -151,6 +151,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'patient:write',
   'payment:read',
   'payment:write',
+  'finance:read',
   'user:read',
   'audit:read',
 ];
@@ -193,6 +194,8 @@ const staff = (userId: string, displayName: string, active: boolean) => ({
   phone: null,
   active,
   roles: [],
+  grants: null,
+  effectivePermissions: null,
   branches: [],
   createdAt: '2026-01-01T10:00:00.000Z',
 });

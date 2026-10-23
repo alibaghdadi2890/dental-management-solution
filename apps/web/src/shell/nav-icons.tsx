@@ -35,11 +35,18 @@ const PATHS: Record<NavKey, ReactNode> = {
     </>
   ),
   activity: <path d="M1.75 8.25h2.6l1.9-4.75 3.5 9 1.9-4.25h2.6" />,
+  platformActivity: <path d="M1.75 8.25h2.6l1.9-4.75 3.5 9 1.9-4.25h2.6" />,
   settings: (
     <>
       <path d="M1.75 4.5h7M12.25 4.5h2M1.75 11.5h2M7.25 11.5h7" />
       <circle cx="10.5" cy="4.5" r="1.75" />
       <circle cx="5.5" cy="11.5" r="1.75" />
+    </>
+  ),
+  defaultRoles: (
+    <>
+      <path d="M8 1.75 2.75 3.75v4c0 3.1 2.2 5.4 5.25 6.5 3.05-1.1 5.25-3.4 5.25-6.5v-4Z" />
+      <path d="m5.75 8 1.6 1.6 2.9-3.1" />
     </>
   ),
   tenants: (

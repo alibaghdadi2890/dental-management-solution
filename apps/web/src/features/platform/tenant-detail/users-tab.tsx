@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { platformKeys, setUserActive, usersQuery } from '@/features/platform/platform-api';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useAccessRights } from '@/features/roles/use-access-rights';
 import { useRoleLabel } from '@/features/users/role-label';
 
 const COLUMNS =
@@ -46,14 +47,18 @@ export function UsersTab({
   tenantId,
   onNew,
   onEdit,
+  onAccess,
   onResetPassword,
 }: {
   tenantId: string;
   onNew: () => void;
   onEdit: (user: StaffUser) => void;
+  /** Opens the person on their Access tab: roles and additional permissions (ADR-0055). */
+  onAccess: (user: StaffUser) => void;
   onResetPassword: (user: StaffUser) => void;
 }) {
-  const { t } = useTranslation(['admin', 'common']);
+  const { t } = useTranslation(['admin', 'common', 'roles']);
+  const access = useAccessRights();
   const roleLabel = useRoleLabel();
   const confirm = useConfirm();
   const toast = useToast();
@@ -82,8 +87,14 @@ export function UsersTab({
             }),
           );
         } catch (error) {
-          const lastOwner = error instanceof ApiError && error.code === 'user.last_owner';
-          toast(lastOwner ? t('users.errors.lastOwner') : t('common:unexpected'), {
+          const code = error instanceof ApiError ? error.code : undefined;
+          const message =
+            code === 'user.last_owner'
+              ? t('users.errors.lastOwner')
+              : code === 'role.cannot_manage'
+                ? t('roles:errors.cannotManage')
+                : t('common:unexpected');
+          toast(message, {
             tone: 'danger',
           });
         }
@@ -101,6 +112,7 @@ export function UsersTab({
           title={t('users.error.title')}
           body={t('users.error.body')}
           requestId={users.error instanceof ApiError ? users.error.requestId : undefined}
+          error={users.error}
           onRetry={() => void users.refetch()}
         />
       );
@@ -122,8 +134,12 @@ export function UsersTab({
       <div
         key={user.id}
         role="row"
+        onClick={() => {
+          if (access.manageStaff) onEdit(user);
+          else onAccess(user);
+        }}
         className={cn(
-          'grid min-h-14 items-center gap-2.5 border-t border-row-divider bg-surface px-3 py-1.5',
+          'grid min-h-14 cursor-pointer items-center gap-2.5 border-t border-row-divider bg-surface px-3 py-1.5 hover:bg-faint',
           !user.active && 'text-ink-muted',
         )}
         style={{ gridTemplateColumns: COLUMNS }}
@@ -149,6 +165,11 @@ export function UsersTab({
               {roleLabel(role)}
             </Pill>
           ))}
+          {user.grants && user.grants.length > 0 && (
+            <Pill tone="warning">
+              {t('roles:access.extraCount', { count: user.grants.length })}
+            </Pill>
+          )}
         </span>
         <span className="truncate text-[12.5px] text-ink-secondary">
           {user.branches.map((branch) => branch.name).join(', ')}
@@ -158,7 +179,12 @@ export function UsersTab({
             {t(user.active ? 'users.status.active' : 'users.status.inactive')}
           </Pill>
         </span>
-        <span className="justify-self-end">
+        <span
+          className="justify-self-end"
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+        >
           <Menu>
             <MenuTrigger asChild>
               <IconButton aria-label={t('users.menu.label', { name: user.displayName })}>
@@ -170,21 +196,34 @@ export function UsersTab({
               </IconButton>
             </MenuTrigger>
             <MenuContent>
-              <MenuItem
-                onSelect={() => {
-                  onEdit(user);
-                }}
-              >
-                {t('users.menu.edit')}
-              </MenuItem>
-              <MenuItem
-                onSelect={() => {
-                  onResetPassword(user);
-                }}
-              >
-                {t('users.menu.resetPassword')}
-              </MenuItem>
-              {user.active ? (
+              {access.manageStaff && (
+                <MenuItem
+                  onSelect={() => {
+                    onEdit(user);
+                  }}
+                >
+                  {t('users.menu.edit')}
+                </MenuItem>
+              )}
+              {access.read && (
+                <MenuItem
+                  onSelect={() => {
+                    onAccess(user);
+                  }}
+                >
+                  {t('users.menu.access')}
+                </MenuItem>
+              )}
+              {access.manageStaff && (
+                <MenuItem
+                  onSelect={() => {
+                    onResetPassword(user);
+                  }}
+                >
+                  {t('users.menu.resetPassword')}
+                </MenuItem>
+              )}
+              {!access.manageStaff ? null : user.active ? (
                 <MenuItem
                   tone="danger"
                   onSelect={() => {
@@ -215,9 +254,11 @@ export function UsersTab({
         <span className="text-[12.5px] text-ink-tertiary">
           {users.data ? t('users.count', { count: users.data.length }) : ''}
         </span>
-        <Button variant="primary" onClick={onNew}>
-          {t('users.new')}
-        </Button>
+        {access.manageStaff && (
+          <Button variant="primary" onClick={onNew}>
+            {t('users.new')}
+          </Button>
+        )}
       </div>
       <TableCard minWidth={900}>
         <TableHead

@@ -164,6 +164,7 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
               title={t('workspace.failedTitle')}
               body={t('workspace.failedBody')}
               requestId={visit.error instanceof ApiError ? visit.error.requestId : undefined}
+              error={visit.error}
               onRetry={() => void visit.refetch()}
             />
           )}

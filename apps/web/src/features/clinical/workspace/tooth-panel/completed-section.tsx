@@ -2,6 +2,7 @@ import type { HistoryService, ToothCode, TreatmentPlan, VisitService } from '@dc
 import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SaveState } from '@/components/ui/save-state';
+import { usePermission } from '@/features/auth/use-permission';
 import { sanitizeAmountInput } from '@/lib/amount';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { useChartingActions } from '../charting-actions';
@@ -136,9 +137,14 @@ export function CompletedSection({
   );
 }
 
-/** One service of this visit, with its autosaved Base price and Discount. */
+/**
+ * One service of this visit, with its autosaved Base price and Discount. Changing either is
+ * discounting: without `visit:discount` they are read-only, "Ask the owner" (ADR-0055).
+ */
 function ServiceCard({ service, canWrite }: { service: VisitService; canWrite: boolean }) {
   const { t, i18n } = useTranslation('clinical');
+  const canDiscount = usePermission('visit:discount');
+  const canPrice = canWrite && canDiscount;
   const locale = i18n.resolvedLanguage ?? 'en';
   const actions = useChartingActions();
   const price = useServicePrice(service);
@@ -157,7 +163,7 @@ function ServiceCard({ service, canWrite }: { service: VisitService; canWrite: b
         dir="ltr"
         inputMode="decimal"
         maxLength={13}
-        readOnly={!canWrite}
+        readOnly={!canPrice}
         disabled={removing}
         value={price.value[key]}
         onChange={(event) => {
@@ -194,6 +200,11 @@ function ServiceCard({ service, canWrite }: { service: VisitService; canWrite: b
           </span>
         </div>
       </div>
+      {canWrite && !canDiscount && (
+        <p className="m-0 mt-1.5 text-[11.5px] leading-snug font-medium text-ink-muted">
+          {t('askOwner')}
+        </p>
+      )}
       {price.state !== 'idle' && (
         <div className="mt-2">
           <SaveState status={price.state} onRetry={price.retry} />

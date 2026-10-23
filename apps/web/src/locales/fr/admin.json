@@ -115,7 +115,8 @@
       "overview": "Vue d’ensemble",
       "branches": "Sites et salles",
       "users": "Utilisateurs",
-      "settings": "Paramètres"
+      "settings": "Paramètres",
+      "roles": "Rôles"
     },
     "loading": "Chargement du cabinet",
     "error": {
@@ -218,7 +219,8 @@
       "edit": "Modifier",
       "resetPassword": "Réinitialiser le mot de passe",
       "deactivate": "Désactiver",
-      "reactivate": "Réactiver"
+      "reactivate": "Réactiver",
+      "access": "Accès et permissions"
     },
     "status": {
       "active": "Actif",

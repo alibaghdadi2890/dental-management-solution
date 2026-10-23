@@ -85,12 +85,16 @@ export function TodayPage({
   const toast = useToast();
   const { data: session } = useSession();
   const canOpenVisits = usePermission('visit:write');
+  // The chair lane is the caller's visits (their scope, ADR-0055); the checkout lane needs one
+  // patient's money (`payment:read`), and checking out needs `payment:write`.
+  const canSeeVisits = usePermission('visit:read');
+  const canCheckOut = usePermission('payment:write');
   const queue = useCheckoutQueue();
   // The patient of the open dialog, kept once their visit has left the queue (paid in full).
   const [opened, setOpened] = useState<{ id: string; name: string }>();
   const chair = useQuery({
     ...visitPageQuery(IN_THE_CHAIR, false),
-    enabled: queue.enabled,
+    enabled: canSeeVisits,
     refetchInterval: CHECKOUT_REFETCH_MS,
     refetchOnWindowFocus: 'always',
   });
@@ -108,7 +112,7 @@ export function TodayPage({
     .filter(Boolean)
     .join(' · ');
 
-  if (!queue.enabled) {
+  if (!queue.enabled && !canSeeVisits) {
     return (
       <Page title={t('title')} subtitle={subtitle}>
         <p className="text-[13px] leading-snug text-ink-secondary">
@@ -154,6 +158,7 @@ export function TodayPage({
             selected={visit.id === open?.id}
             timeZone={timeZone}
             locale={locale}
+            canCheckOut={canCheckOut}
             onCheckout={() => {
               setOpened({ id: visit.id, name: visit.patient.fullName });
               onOpen(visit.id);
@@ -193,16 +198,20 @@ export function TodayPage({
   return (
     <>
       <Page title={t('title')} subtitle={subtitle}>
-        <Lane
-          title={t('checkout.title')}
-          count={queue.loading ? undefined : waitingVisits.length}
-          framed={waitingVisits.length === 0}
-        >
-          {waiting}
-        </Lane>
-        <Lane title={t('chair.title')} count={chair.isPending ? undefined : inChair.length}>
-          {seated}
-        </Lane>
+        {queue.enabled && (
+          <Lane
+            title={t('checkout.title')}
+            count={queue.loading ? undefined : waitingVisits.length}
+            framed={waitingVisits.length === 0}
+          >
+            {waiting}
+          </Lane>
+        )}
+        {canSeeVisits && (
+          <Lane title={t('chair.title')} count={chair.isPending ? undefined : inChair.length}>
+            {seated}
+          </Lane>
+        )}
       </Page>
       {open && (
         <PostVisitSummaryDialog

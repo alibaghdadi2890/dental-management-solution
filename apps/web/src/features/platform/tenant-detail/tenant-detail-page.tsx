@@ -5,8 +5,11 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { ErrorState, Pill, TenantMark } from '@/components/ui/list';
+import { InPanelSlot, PanelLayout } from '@/components/ui/panel-slot';
 import { startActingIn } from '@/features/platform/acting-tenant';
 import { tenantQuery } from '@/features/platform/platform-api';
+import { clinicRoles } from '@/features/roles/roles-source';
+import { RolesTab } from '@/features/roles/roles-tab';
 import { useTenantStatusAction } from '@/features/platform/use-tenant-status-action';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -15,15 +18,15 @@ import { BranchesTab } from './branches-tab';
 import { OverviewTab } from './overview-tab';
 import { ResetPasswordPanel } from './reset-password-panel';
 import { SettingsTab } from './settings-tab';
-import { UserPanel } from './user-panel';
+import { type PanelTab, UserPanel } from './user-panel';
 import { UsersTab } from './users-tab';
 
-export type TenantTab = 'overview' | 'branches' | 'users' | 'settings';
-const TABS: readonly TenantTab[] = ['overview', 'branches', 'users', 'settings'];
+export type TenantTab = 'overview' | 'branches' | 'users' | 'roles' | 'settings';
+const TABS: readonly TenantTab[] = ['overview', 'branches', 'users', 'roles', 'settings'];
 
 type Panel =
   | { kind: 'addBranch' }
-  | { kind: 'user'; user?: StaffUser }
+  | { kind: 'user'; user?: StaffUser; tab?: PanelTab }
   | { kind: 'resetPassword'; user: StaffUser };
 
 function Header({ tenant }: { tenant: Tenant }) {
@@ -93,8 +96,8 @@ export function TenantDetailPage({ tenantId, tab }: { tenantId: string; tab: Ten
   };
 
   return (
-    <div className="flex h-full">
-      <div className="min-w-0 flex-1 overflow-auto">
+    <PanelLayout>
+      <div className="min-h-0 min-w-0 flex-1 overflow-auto">
         <div className="flex min-h-full max-w-[1320px] flex-col px-[26px] pt-6">
           {tenant.isPending && (
             <div
@@ -108,6 +111,7 @@ export function TenantDetailPage({ tenantId, tab }: { tenantId: string; tab: Ten
               title={t('detail.error.title')}
               body={t('detail.error.body')}
               requestId={tenant.error instanceof ApiError ? tenant.error.requestId : undefined}
+              error={tenant.error}
               onRetry={() => void tenant.refetch()}
             />
           )}
@@ -155,34 +159,42 @@ export function TenantDetailPage({ tenantId, tab }: { tenantId: string; tab: Ten
                     onEdit={(user) => {
                       setPanel({ kind: 'user', user });
                     }}
+                    onAccess={(user) => {
+                      setPanel({ kind: 'user', user, tab: 'access' });
+                    }}
                     onResetPassword={(user) => {
                       setPanel({ kind: 'resetPassword', user });
                     }}
                   />
                 )}
+                {/* The clinic's roles, managed for it by the platform (ADR-0056). */}
+                {tab === 'roles' && <RolesTab source={clinicRoles(tenantId)} />}
                 {tab === 'settings' && <SettingsTab tenant={tenant.data} />}
               </div>
             </>
           )}
         </div>
       </div>
-      {panel?.kind === 'addBranch' && <AddBranchPanel tenantId={tenantId} onClose={closePanel} />}
-      {panel?.kind === 'user' && (
-        <UserPanel
-          key={panel.user?.id ?? 'new'}
-          tenantId={tenantId}
-          user={panel.user}
-          onClose={closePanel}
-        />
-      )}
-      {panel?.kind === 'resetPassword' && (
-        <ResetPasswordPanel
-          key={panel.user.id}
-          tenantId={tenantId}
-          user={panel.user}
-          onClose={closePanel}
-        />
-      )}
-    </div>
+      <InPanelSlot>
+        {panel?.kind === 'addBranch' && <AddBranchPanel tenantId={tenantId} onClose={closePanel} />}
+        {panel?.kind === 'user' && (
+          <UserPanel
+            key={`${panel.user?.id ?? 'new'}:${panel.tab ?? 'profile'}`}
+            tenantId={tenantId}
+            user={panel.user}
+            initialTab={panel.tab}
+            onClose={closePanel}
+          />
+        )}
+        {panel?.kind === 'resetPassword' && (
+          <ResetPasswordPanel
+            key={panel.user.id}
+            tenantId={tenantId}
+            user={panel.user}
+            onClose={closePanel}
+          />
+        )}
+      </InPanelSlot>
+    </PanelLayout>
   );
 }

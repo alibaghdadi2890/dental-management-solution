@@ -17,6 +17,8 @@ import { ToastProvider } from '@/components/ui/toast';
 import { sessionQueryOptions } from '@/features/auth/session';
 import { parsePatientsSearch, type PatientsSearch } from '@/features/patients/list-query';
 import { PatientsScreen } from '@/features/patients/patients-screen';
+import { SettingsPage } from '@/features/tenancy/settings-page';
+import { SETTINGS_TABS } from '@/features/tenancy/settings-tabs';
 import { TodayPage } from '@/features/today/today-page';
 import { AppShell } from './app-shell';
 
@@ -85,6 +87,17 @@ export function renderShell({ url, session }: { url: string; session: Session })
       />
     );
   }
+  // `/settings` wired as its route is: the tab lives in the search.
+  const settingsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/settings',
+    staticData: { navKey: 'settings' },
+    component: SettingsRoute,
+  });
+  function SettingsRoute() {
+    const { tab } = useSearch({ strict: false });
+    return <SettingsPage tab={SETTINGS_TABS.find((key) => key === tab)} />;
+  }
   const router = createRouter({
     routeTree: rootRoute.addChildren([
       patientsRoute,
@@ -92,6 +105,7 @@ export function renderShell({ url, session }: { url: string; session: Session })
       visitsRoute,
       workspaceRoute,
       todayRoute,
+      settingsRoute,
     ]),
     history: createMemoryHistory({ initialEntries: [url] }),
   });

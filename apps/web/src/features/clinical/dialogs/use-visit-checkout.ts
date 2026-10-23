@@ -22,6 +22,8 @@ export interface VisitCheckout {
   canCollect: boolean;
   /** The caller may set the discount now (checkout handoff, C2, C5, C7). */
   discountable: boolean;
+  /** The discount could be set now, but the caller lacks `visit:discount`: "Ask the owner". */
+  discountLocked: boolean;
 }
 
 /**
@@ -37,21 +39,27 @@ export function useVisitCheckout(visitId: string): VisitCheckout {
   const canDiscount = usePermission('visit:discount');
   const today = useTenantToday();
   const failed = visit.isError || summary.isError;
+  const open =
+    visit.data !== undefined &&
+    summary.data !== undefined &&
+    (visit.data.status === 'completed' || visit.data.status === 'amended') &&
+    visit.data.localDate === today &&
+    owes(summary.data.visit.outstanding);
   return {
     visitId,
     visit: visit.data,
     summary: summary.data,
     failed,
     settled: summary.data !== undefined || failed,
-    owing: summary.data ? owes(summary.data.totalOutstanding) : false,
+    // Handed off (no `payment:read`, ADR-0055): only this visit's figures are known.
+    owing: summary.data
+      ? owes(
+          summary.data.handedOff ? summary.data.visit.outstanding : summary.data.totalOutstanding,
+        )
+      : false,
     visitPaid: summary.data ? !owes(summary.data.visit.outstanding) : false,
     canCollect,
-    discountable:
-      canDiscount &&
-      visit.data !== undefined &&
-      summary.data !== undefined &&
-      (visit.data.status === 'completed' || visit.data.status === 'amended') &&
-      visit.data.localDate === today &&
-      owes(summary.data.visit.outstanding),
+    discountable: canDiscount && open,
+    discountLocked: !canDiscount && open,
   };
 }

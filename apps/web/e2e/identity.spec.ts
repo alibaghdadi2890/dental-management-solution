@@ -60,10 +60,12 @@ test('platform admin provisions a clinic and a user, who then signs in to the cl
   await userPanel.getByLabel('Full name').fill(frontDesk.name);
   await userPanel.getByLabel('Email').fill(frontDesk.email);
   await userPanel.getByLabel('Practitioner type').selectOption('frontdesk');
-  await userPanel.getByRole('checkbox', { name: 'Front desk' }).check();
   await userPanel.getByRole('checkbox', { name: 'Main St' }).check();
   await userPanel.getByRole('button', { name: 'Generate' }).click();
   const temporaryPassword = await userPanel.getByLabel('Temporary password').inputValue();
+  // Roles are on the Access tab (ADR-0055).
+  await userPanel.getByRole('tab', { name: 'Access' }).click();
+  await userPanel.getByRole('checkbox', { name: 'Front desk' }).check();
   await userPanel.getByRole('button', { name: 'Create user' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'User created' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: frontDesk.email })).toContainText(

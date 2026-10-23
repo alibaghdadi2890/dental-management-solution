@@ -60,6 +60,7 @@ export function HistoryListsTab({ onTabChange }: { onTabChange: (tab: CatalogVie
             title={t('error.title')}
             body={t('error.body')}
             requestId={options.error instanceof ApiError ? options.error.requestId : undefined}
+            error={options.error}
             onRetry={() => void options.refetch()}
           />
         </section>

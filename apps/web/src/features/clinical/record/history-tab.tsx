@@ -46,7 +46,9 @@ function HistoryRow({
   const surfaceLabel = useSurfaceLabel();
   const rowRef = useRef<HTMLLIElement>(null);
   const voided = visit.status === 'voided';
-  const money = (amount: string) => formatMoney({ amount, currency: visit.currency }, locale);
+  // Null when the caller may not see this visit's money (ADR-0055).
+  const money = (amount: string | null) =>
+    amount === null ? '—' : formatMoney({ amount, currency: visit.currency }, locale);
   const owes = balance !== undefined && Number(balance.outstanding) > 0;
   // Only a visit expanded from the URL scrolls into view; a later toggle scrolls nothing.
   const [linked] = useState(expanded);
@@ -147,7 +149,9 @@ function HistoryRow({
                   <span className="text-ink-muted">
                     {surfaceLabel.format(service.surfaces) || '—'}
                   </span>
-                  <span className="text-end font-mono">{formatMoney(service.final, locale)}</span>
+                  <span className="text-end font-mono">
+                    {service.final ? formatMoney(service.final, locale) : '—'}
+                  </span>
                 </li>
               ))}
             </ul>

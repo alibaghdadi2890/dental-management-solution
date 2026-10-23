@@ -37,5 +37,10 @@
     "dentist": "Dentiste",
     "assistant": "Assistant(e)",
     "frontdesk": "Accueil"
+  },
+  "forbidden": {
+    "title": "Vous n’avez plus accès à ceci",
+    "body": "Vos accès ont changé. Demandez au propriétaire du cabinet si vous en avez besoin.",
+    "back": "Retour à l’accueil"
   }
 }

@@ -25,7 +25,9 @@
     "today": "Aujourd’hui",
     "activity": "Activité",
     "collapse": "Réduire le menu",
-    "expand": "Développer le menu"
+    "expand": "Développer le menu",
+    "defaultRoles": "Rôles par défaut",
+    "platformActivity": "Activité"
   },
   "breadcrumb": "Fil d’Ariane",
   "platformCrumb": "Plateforme",

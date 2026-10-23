@@ -71,5 +71,11 @@
         "body": "Thirty-two permanent teeth, numbered 1–32."
       }
     }
+  },
+  "tabs": {
+    "label": "Settings sections",
+    "chart": "Dental chart",
+    "staff": "Staff",
+    "roles": "Roles"
   }
 }

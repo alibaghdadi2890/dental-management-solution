@@ -25,7 +25,9 @@
     "today": "Today",
     "activity": "Activity",
     "collapse": "Collapse menu",
-    "expand": "Expand menu"
+    "expand": "Expand menu",
+    "defaultRoles": "Default roles",
+    "platformActivity": "Activity"
   },
   "breadcrumb": "Breadcrumb",
   "platformCrumb": "Platform",

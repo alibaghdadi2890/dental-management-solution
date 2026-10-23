@@ -18,6 +18,8 @@ import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
+import { Route as AppAdminActivityRouteImport } from './routes/_app/admin/activity'
+import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
 import { Route as AppPatientsPatientIdRouteImport } from './routes/_app/patients/$patientId'
 import { Route as AppPaymentsIndexRouteImport } from './routes/_app/payments/index'
@@ -73,6 +75,16 @@ const AppTodayRoute = AppTodayRouteImport.update({
 const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminActivityRoute = AppAdminActivityRouteImport.update({
+  id: '/admin/activity',
+  path: '/admin/activity',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminRolesRoute = AppAdminRolesRouteImport.update({
+  id: '/admin/roles',
+  path: '/admin/roles',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPatientsIndexRoute = AppPatientsIndexRouteImport.update({
@@ -145,6 +157,8 @@ export interface FileRoutesByFullPath {
   '/catalog': typeof AppCatalogRoute
   '/settings': typeof AppSettingsRoute
   '/today': typeof AppTodayRoute
+  '/admin/activity': typeof AppAdminActivityRoute
+  '/admin/roles': typeof AppAdminRolesRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
@@ -167,6 +181,8 @@ export interface FileRoutesByTo {
   '/settings': typeof AppSettingsRoute
   '/today': typeof AppTodayRoute
   '/': typeof AppIndexRoute
+  '/admin/activity': typeof AppAdminActivityRoute
+  '/admin/roles': typeof AppAdminRolesRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
@@ -191,6 +207,8 @@ export interface FileRoutesById {
   '/_app/settings': typeof AppSettingsRoute
   '/_app/today': typeof AppTodayRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/admin/activity': typeof AppAdminActivityRoute
+  '/_app/admin/roles': typeof AppAdminRolesRoute
   '/_app/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/_app/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
@@ -215,6 +233,8 @@ export interface FileRouteTypes {
     | '/catalog'
     | '/settings'
     | '/today'
+    | '/admin/activity'
+    | '/admin/roles'
     | '/patients/$patientId'
     | '/visits/$visitId'
     | '/print/family-statement/$contactId'
@@ -237,6 +257,8 @@ export interface FileRouteTypes {
     | '/settings'
     | '/today'
     | '/'
+    | '/admin/activity'
+    | '/admin/roles'
     | '/patients/$patientId'
     | '/visits/$visitId'
     | '/print/family-statement/$contactId'
@@ -260,6 +282,8 @@ export interface FileRouteTypes {
     | '/_app/settings'
     | '/_app/today'
     | '/_app/'
+    | '/_app/admin/activity'
+    | '/_app/admin/roles'
     | '/_app/patients/$patientId'
     | '/_app/visits/$visitId'
     | '/print/family-statement/$contactId'
@@ -344,6 +368,20 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin/'
       preLoaderRoute: typeof AppAdminIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/activity': {
+      id: '/_app/admin/activity'
+      path: '/admin/activity'
+      fullPath: '/admin/activity'
+      preLoaderRoute: typeof AppAdminActivityRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/admin/roles': {
+      id: '/_app/admin/roles'
+      path: '/admin/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AppAdminRolesRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/patients/': {
@@ -439,6 +477,8 @@ interface AppRouteChildren {
   AppSettingsRoute: typeof AppSettingsRoute
   AppTodayRoute: typeof AppTodayRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppAdminActivityRoute: typeof AppAdminActivityRoute
+  AppAdminRolesRoute: typeof AppAdminRolesRoute
   AppPatientsPatientIdRoute: typeof AppPatientsPatientIdRoute
   AppVisitsVisitIdRoute: typeof AppVisitsVisitIdRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
@@ -455,6 +495,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppSettingsRoute: AppSettingsRoute,
   AppTodayRoute: AppTodayRoute,
   AppIndexRoute: AppIndexRoute,
+  AppAdminActivityRoute: AppAdminActivityRoute,
+  AppAdminRolesRoute: AppAdminRolesRoute,
   AppPatientsPatientIdRoute: AppPatientsPatientIdRoute,
   AppVisitsVisitIdRoute: AppVisitsVisitIdRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,

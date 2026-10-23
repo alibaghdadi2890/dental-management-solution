@@ -270,5 +270,12 @@
     "title": "Vous ne pouvez pas ouvrir le journal d’activité",
     "body": "Demandez au propriétaire du cabinet ou à un dentiste."
   },
-  "none": "Aucune"
+  "none": "Aucune",
+  "platform": {
+    "title": "Activité de tous les cabinets",
+    "subtitle": "Ce que chacun a fait dans chaque cabinet, du plus récent au plus ancien. Heures de chaque cabinet.",
+    "clinic": "Cabinet",
+    "anyClinic": "Tous les cabinets",
+    "unknownClinic": "Cabinet inconnu"
+  }
 }

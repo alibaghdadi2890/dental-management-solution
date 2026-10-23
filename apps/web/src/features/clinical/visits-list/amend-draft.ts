@@ -30,9 +30,13 @@ export function draftOf(visit: VisitListItem): AmendDraft {
       toothCode: service.toothCode,
       surfaces: [...service.surfaces],
     })),
-    discount: { ...visit.discount },
+    discount: { ...discountOf(visit) },
   };
 }
+
+/** Amending is offered only on a visit whose money the caller sees; this is for the type. */
+const discountOf = (visit: VisitListItem) =>
+  visit.discount ?? { mode: 'percent' as const, value: '0' };
 
 const sameSurfaces = (a: readonly SurfaceKey[], b: readonly SurfaceKey[]) =>
   [...a].sort().join() === [...b].sort().join();
@@ -42,8 +46,8 @@ const sameAmount = (a: string, b: string) => Number(a) === Number(b);
 /** Anything changed from the visit as it is: Save stays disabled until then. */
 export function isDirty(draft: AmendDraft, visit: VisitListItem): boolean {
   const discountChanged =
-    draft.discount.mode !== visit.discount.mode ||
-    !sameAmount(draft.discount.value || '0', visit.discount.value);
+    draft.discount.mode !== discountOf(visit).mode ||
+    !sameAmount(draft.discount.value || '0', discountOf(visit).value);
   return (
     discountChanged ||
     draft.lines.some((line) => {
@@ -79,7 +83,7 @@ export function problemOf(draft: AmendDraft): AmendProblem | null {
 export function draftTotal(draft: AmendDraft, visit: VisitListItem): string {
   const lines = visit.services
     .filter((service) => draft.lines.some((line) => line.id === service.id && !line.removed))
-    .map((service) => ({ base: service.final.amount, discount: '0' }));
+    .map((service) => ({ base: service.final?.amount ?? '0', discount: '0' }));
   return visitMoney(lines, draft.discount.mode, draft.discount.value.trim() || '0').total;
 }
 

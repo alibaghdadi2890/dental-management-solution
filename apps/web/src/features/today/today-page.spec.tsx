@@ -8,7 +8,9 @@ import { balanceOf, listVisit } from './today.test-utils';
 
 const FRONT_DESK: Permission[] = ['patient:read', 'visit:read', 'payment:read', 'payment:write'];
 const DENTIST: Permission[] = [...FRONT_DESK, 'visit:write'];
-const ASSISTANT: Permission[] = ['patient:read', 'visit:read', 'visit:write', 'payment:read'];
+const ASSISTANT: Permission[] = ['patient:read', 'visit:read', 'visit:read_all', 'visit:write'];
+/** A dentist granted one patient's money but not collecting it (ADR-0055). */
+const READER: Permission[] = ['patient:read', 'visit:read', 'payment:read'];
 
 /** Rana's visit is the one the panel reads (`VISIT_ID`); Karim finished after her. */
 const RANA = listVisit(11, 'Rana Haddad', { id: VISIT_ID });
@@ -23,6 +25,7 @@ const OMAR = listVisit(13, 'Omar Saleh', {
 });
 
 const SUMMARY: VisitFinancialSummary = {
+  handedOff: false,
   visitId: VISIT_ID,
   currency: 'USD',
   visit: { total: '140.00', paid: '0.00', outstanding: '140.00' },
@@ -47,11 +50,15 @@ function mockBoard(board: {
       return method === 'POST' && visitId ? board.onCheckOut?.(visitId) : undefined;
     },
     get: (path) => {
-      if (path.startsWith('/billing/visits/unpaid?')) {
-        return json({ items: board.waiting, nextCursor: null });
-      }
-      if (path.startsWith('/billing/visits/balances')) {
-        return json(board.waiting.map((item) => balanceOf(item, board.paid?.[item.id] ?? '0.00')));
+      if (path === '/billing/checkout-queue') {
+        // As the API answers (ADR-0055): oldest first, without the visits already paid on or
+        // checked out.
+        const unpaid = [...board.waiting]
+          .reverse()
+          .filter(
+            (item) => (board.paid?.[item.id] ?? '0.00') === '0.00' && item.checkedOutAt === null,
+          );
+        return json({ items: unpaid.map((item) => ({ visit: item, balance: balanceOf(item) })) });
       }
       if (path.startsWith('/visits?')) return json({ items: board.chair, nextCursor: null });
       if (path === `/visits/${VISIT_ID}`) {
@@ -213,15 +220,27 @@ describe('TodayPage', () => {
     expect(await dialog.findByRole('button', { name: 'Edit the visit discount' })).toBeTruthy();
   });
 
-  it('has nothing to show without payment:write, and asks nothing', async () => {
+  it('shows the chair lane alone without payment:read, and asks nothing about money', async () => {
     const fetchMock = mockBoard({ waiting: [RANA], chair: [OMAR] });
     renderShell({ url: '/today', session: sessionWith(ASSISTANT) });
-    expect(await screen.findByText('There is nothing for you to collect here.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Go to Patients' }).getAttribute('href')).toBe(
-      '/patients',
-    );
-    expect(fetchMock.mock.calls.some(([url]) => url.includes('/billing/visits/unpaid'))).toBe(
+    expect(await lane(/^In the chair · 1$/)).toBeTruthy();
+    expect(screen.queryByRole('region', { name: /^Ready for checkout/ })).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => url.includes('/billing/checkout-queue'))).toBe(
       false,
     );
+  });
+
+  it('says front desk collects on a card the viewer may not check out (ADR-0055)', async () => {
+    mockBoard({ waiting: [RANA], chair: [] });
+    renderShell({ url: '/today', session: sessionWith(READER) });
+    const waiting = within(await lane(/^Ready for checkout · 1$/));
+    expect(await waiting.findByText('Awaiting payment · front desk')).toBeTruthy();
+    expect(waiting.queryByRole('button', { name: /Check out/ })).toBeNull();
+  });
+
+  it('has nothing to show without visit:read or payment:read', async () => {
+    mockBoard({ waiting: [RANA], chair: [OMAR] });
+    renderShell({ url: '/today', session: sessionWith(['patient:read']) });
+    expect(await screen.findByText('There is nothing for you to collect here.')).toBeTruthy();
   });
 });

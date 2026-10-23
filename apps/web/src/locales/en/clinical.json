@@ -409,7 +409,7 @@
     "discountReason": "Reason (optional)",
     "applyDiscount": "Apply",
     "printInvoice": "Print invoice",
-    "frontDesk": "The front desk will collect the payment.",
+    "frontDesk": "Handed to front desk for payment",
     "discountReasonShort": "Use at least 3 characters, or leave it empty.",
     "coveredByAdvance": "Covered by advance",
     "held": "{{amount}} is still held for the treatment plan."
@@ -810,5 +810,6 @@
     "paidInAdvance": "Paid in advance",
     "stillToPay": "Still to pay",
     "advanceHint": "Held for this plan: it pays each treatment as it is done."
-  }
+  },
+  "askOwner": "Ask the owner"
 }

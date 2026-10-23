@@ -28,22 +28,34 @@ const base: Session = {
 const keys = (items: { key: string }[]) => items.map((item) => item.key);
 
 describe('visibleNav', () => {
-  it('shows front desk Patients, Visits and the read-only Catalog (D5)', () => {
+  it('shows Today, Patients, Visits and the read-only Catalog to whoever sees visits', () => {
     const nav = visibleNav({
       ...base,
       permissions: ['patient:read', 'visit:read', 'catalog:read', 'tenant:read'],
     });
-    expect(keys(nav.main)).toEqual(['patients', 'visits']);
+    expect(keys(nav.main)).toEqual(['today', 'patients', 'visits']);
     expect(keys(nav.admin)).toEqual(['catalog']);
     expect(nav.platform).toEqual([]);
   });
 
-  it('shows Today first to whoever collects (`payment:write`)', () => {
-    const nav = visibleNav({
+  it('shows Payments only with the clinic finances (ADR-0055)', () => {
+    const desk = visibleNav({
       ...base,
       permissions: ['patient:read', 'visit:read', 'payment:read', 'payment:write'],
     });
-    expect(keys(nav.main)).toEqual(['today', 'patients', 'visits', 'payments']);
+    expect(keys(desk.main)).toEqual(['today', 'patients', 'visits']);
+    const owner = visibleNav({
+      ...base,
+      permissions: ['patient:read', 'visit:read', 'payment:read', 'finance:read'],
+    });
+    expect(keys(owner.main)).toEqual(['today', 'patients', 'visits', 'payments']);
+  });
+
+  it('shows Settings with the chart, staff or roles', () => {
+    for (const permission of ['tenant:write', 'user:write', 'role:read'] as const) {
+      expect(keys(visibleNav({ ...base, permissions: [permission] }).admin)).toEqual(['settings']);
+    }
+    expect(keys(visibleNav({ ...base, permissions: ['user:read'] }).admin)).toEqual([]);
   });
 
   it('shows Catalog and Settings to the owner', () => {
@@ -76,7 +88,7 @@ describe('visibleNav', () => {
     });
     expect(nav.main).toEqual([]);
     expect(nav.admin).toEqual([]);
-    expect(keys(nav.platform)).toEqual(['tenants']);
+    expect(keys(nav.platform)).toEqual(['tenants', 'platformActivity', 'defaultRoles']);
   });
 });
 

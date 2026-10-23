@@ -1,4 +1,10 @@
-import { fromCents, toCents, type Visit, type VisitFinancialSummary } from '@dcm/contracts';
+import {
+  type FullVisitSummary,
+  fromCents,
+  toCents,
+  type Visit,
+  type VisitFinancialSummary,
+} from '@dcm/contracts';
 import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -51,6 +57,7 @@ export function CheckoutBody({ checkout }: { checkout: VisitCheckout }) {
         visit={checkout.visit}
         summary={checkout.summary}
         discountable={checkout.discountable}
+        discountLocked={checkout.discountLocked}
       />
     );
   }
@@ -65,9 +72,9 @@ export function CheckoutBody({ checkout }: { checkout: VisitCheckout }) {
 }
 
 /**
- * What follows the caller's own close button: the note that the front desk collects (without
- * `payment:write`), **Print invoice**, and while owed **Record payment**, which the caller turns
- * into its payment step (`onPay`).
+ * What follows the caller's own close button: "Handed to front desk for payment" (without
+ * `payment:write`, F4), **Print invoice** (with the account's figures, `payment:read`), and while
+ * owed **Record payment**, which the caller turns into its payment step (`onPay`).
  */
 export function CheckoutActions({
   checkout,
@@ -86,7 +93,7 @@ export function CheckoutActions({
           {t('postVisit.frontDesk')}
         </span>
       )}
-      {checkout.summary && (
+      {checkout.summary && !checkout.summary.handedOff && (
         <Button
           variant="outline"
           className={cn('h-10 px-[15px] text-[13px]', !payable && 'ms-auto')}
@@ -128,24 +135,27 @@ function Figures({
   visit,
   summary,
   discountable,
+  discountLocked,
 }: {
   visit: Visit;
   summary: VisitFinancialSummary;
   /** The caller may set the discount now (checkout handoff, C2, C5, C7). */
   discountable: boolean;
+  /** It could be set now, but not by the caller (ADR-0055). */
+  discountLocked: boolean;
 }) {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const thisVisitId = useId();
-  const previousId = useId();
   const [editing, setEditing] = useState(false);
   const format = (amount: string) => formatMoney({ amount, currency: summary.currency }, locale);
   const discounted = toCents(visit.money.discount) > 0n;
-  const clear = !owes(summary.totalOutstanding);
   // Paid in advance for the treatment plan (ADR-0051): what covered this visit, what is still held.
-  const byAdvance = summary.payments
-    .filter((payment) => payment.fromAdvance)
-    .reduce((sum, payment) => sum + toCents(payment.amount), 0n);
+  const byAdvance = summary.handedOff
+    ? 0n
+    : summary.payments
+        .filter((payment) => payment.fromAdvance)
+        .reduce((sum, payment) => sum + toCents(payment.amount), 0n);
 
   return (
     <>
@@ -163,6 +173,9 @@ function Figures({
             label={
               <>
                 {t('postVisit.discount')}
+                {discountLocked && (
+                  <span className="ms-2 font-medium text-ink-muted">{t('askOwner')}</span>
+                )}
                 {discountable && !editing && (
                   <button
                     type="button"
@@ -221,6 +234,24 @@ function Figures({
         )}
         <VisitUnfinishedLines patientId={visit.patientId} visitId={visit.id} className="mt-2" />
       </section>
+      {!summary.handedOff && <Account summary={summary} format={format} />}
+    </>
+  );
+}
+
+/** The patient's account around this visit (with `payment:read` only, ADR-0055). */
+function Account({
+  summary,
+  format,
+}: {
+  summary: FullVisitSummary;
+  format: (amount: string) => string;
+}) {
+  const { t } = useTranslation('clinical');
+  const previousId = useId();
+  const clear = !owes(summary.totalOutstanding);
+  return (
+    <>
       <section aria-labelledby={previousId} className="mb-4">
         <h3 id={previousId} className={cn(MICRO, 'mb-2.5 text-ink-muted')}>
           {t('postVisit.previous')}

@@ -23,7 +23,10 @@ export function AppHeader({
   const navKey = useMatches({
     select: (matches) => matches.findLast((match) => match.staticData.navKey)?.staticData.navKey,
   });
-  const context = navKey === 'tenants' ? t('platformCrumb') : session?.tenant?.name;
+  const context =
+    navKey === 'tenants' || navKey === 'defaultRoles' || navKey === 'platformActivity'
+      ? t('platformCrumb')
+      : session?.tenant?.name;
   const actions = patientActions(session);
 
   return (

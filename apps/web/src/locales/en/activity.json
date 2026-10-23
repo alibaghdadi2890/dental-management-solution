@@ -270,5 +270,12 @@
     "title": "You can’t open the activity log",
     "body": "Ask the clinic owner or a dentist."
   },
-  "none": "None"
+  "none": "None",
+  "platform": {
+    "title": "Activity across clinics",
+    "subtitle": "What everyone did in every clinic, newest first. Times are each clinic’s own.",
+    "clinic": "Clinic",
+    "anyClinic": "All clinics",
+    "unknownClinic": "Unknown clinic"
+  }
 }

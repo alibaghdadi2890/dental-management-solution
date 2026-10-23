@@ -1,18 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useTranslation } from 'react-i18next';
-import { Page } from '@/components/page';
-import { ChartSettingsSection } from '@/features/tenancy/chart-settings-section';
+import { z } from 'zod';
+import { SettingsPage } from '@/features/tenancy/settings-page';
+import { SETTINGS_TABS } from '@/features/tenancy/settings-tabs';
 
 export const Route = createFileRoute('/_app/settings')({
   staticData: { navKey: 'settings' },
-  component: SettingsPage,
+  validateSearch: z.object({ tab: z.enum(SETTINGS_TABS).optional() }),
+  component: SettingsRoute,
 });
 
-function SettingsPage() {
-  const { t } = useTranslation('settings');
-  return (
-    <Page title={t('title')} subtitle={t('subtitle')}>
-      <ChartSettingsSection />
-    </Page>
-  );
+function SettingsRoute() {
+  const { tab } = Route.useSearch();
+  return <SettingsPage tab={tab} />;
 }

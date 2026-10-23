@@ -24,6 +24,8 @@ const user: StaffUser = {
   phone: null,
   active: true,
   roles: [{ key: 'dentist', name: 'Dentist' }],
+  grants: [],
+  effectivePermissions: null,
   branches: [
     { id: MAIN, name: 'Main St' },
     { id: NORTH, name: 'North' },

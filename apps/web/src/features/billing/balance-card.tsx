@@ -13,6 +13,7 @@ import { balanceQuery, visitSummaryQuery } from './billing-api';
 import { owedBalances } from './owed-balances';
 import { accountQuery } from './payments-api';
 import { useRecordPayment } from './payments/payment-dialog-context';
+import { ApiError } from '@/lib/api';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -64,14 +65,22 @@ export function BalanceCard({
     ...visitSummaryQuery(visitId ?? ''),
     enabled: visitId !== undefined,
   });
+  // The patient's last visit may be outside the caller's visit scope (ADR-0055): its summary is
+  // then not found, and the card shows the account alone.
+  const outOfScope = summary.error instanceof ApiError && summary.error.status === 404;
   // What is held for the plan: the visit summary carries it; without a visit, the account does.
-  const noVisit = !canVisits || (lastVisit.isSuccess && visitId === undefined);
+  const noVisit = !canVisits || (lastVisit.isSuccess && visitId === undefined) || outOfScope;
   const account = useQuery({ ...accountQuery(patientId), enabled: noVisit });
 
   let body: ReactNode;
   if (balance.isPending || lastVisit.isLoading || summary.isLoading || account.isLoading) {
     body = <CardSkeleton label={t('balance.loading')} />;
-  } else if (balance.isError || account.isError || lastVisit.isError || summary.isError) {
+  } else if (
+    balance.isError ||
+    account.isError ||
+    lastVisit.isError ||
+    (summary.isError && !outOfScope)
+  ) {
     body = (
       <p role="alert" className="text-[12.5px] leading-snug text-ink-muted">
         {t('balanceFailed')}
@@ -81,7 +90,7 @@ export function BalanceCard({
     const owed = owedBalances(balance.data.balances, currency);
     const [lead = { amount: '0', currency }, ...others] = owed;
     const anyOwing = owed.some(owing);
-    const figures = summary.data;
+    const figures = summary.data?.handedOff === false ? summary.data : undefined;
     const money = (amount: string) =>
       formatMoney({ amount, currency: figures?.currency ?? currency }, locale);
     const held = toCents(figures?.held ?? account.data?.held ?? '0');

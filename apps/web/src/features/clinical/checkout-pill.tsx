@@ -5,7 +5,7 @@ import { useCheckoutQueue } from './checkout-queue';
 /**
  * The header's checkout pill (checkout handoff, C8; Today board, T7): how many of today's visits
  * wait for checkout, on every screen but the Today board, which it links to. Nothing without
- * `payment:write` and `visit:read`, or with an empty queue.
+ * `payment:read` (ADR-0055), or with an empty queue.
  */
 export function CheckoutPill() {
   const { t } = useTranslation('shell');

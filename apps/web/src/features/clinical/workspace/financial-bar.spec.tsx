@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { json, problem } from '@/features/patients/patients.test-utils';
 import { SAVE_DEBOUNCE_MS } from '../save-groups-store';
 import {
+  DENTIST_WRITE,
   FRONT_DESK,
   mockWorkspace,
   renderWorkspace,
@@ -15,6 +16,8 @@ import {
 
 const usd = (amount: string) => ({ amount, currency: 'USD' });
 const DISCOUNT_PATH = `/visits/${VISIT_ID}/discount`;
+/** Who prices a visit: discounting needs `visit:discount` (ADR-0055). */
+const PRICER = [...DENTIST_WRITE, 'visit:discount' as const];
 
 /** $80 on #16, $120 − $20 on #16 and a $0 jaw-level check: a $180 subtotal. */
 const SERVICES = [
@@ -112,7 +115,7 @@ describe('FinancialBar', () => {
 
   it('shows the services, the discount, its amount and the total, and counts the work', async () => {
     fakeVisit(visit({ services: SERVICES, discountMode: 'percent', discountValue: '10.00' }));
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     expect(cell(footer, 'Services')?.textContent).toBe('$180');
     expect(discountInput().value).toBe('10');
@@ -131,7 +134,7 @@ describe('FinancialBar', () => {
 
   it('shows a zero discount amount muted', async () => {
     fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     const amount = cell(footer, 'Discount amount');
     expect(amount?.textContent).toBe('$0');
@@ -140,7 +143,7 @@ describe('FinancialBar', () => {
 
   it('keeps a 500 % discount as typed, caps the total and warns on a line of its own', async () => {
     const { fetchMock } = fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     expect(footer.className).toContain('flex-wrap');
 
@@ -161,7 +164,7 @@ describe('FinancialBar', () => {
 
   it('caps a $500 amount discount at the subtotal', async () => {
     const { fetchMock } = fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
 
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -180,7 +183,7 @@ describe('FinancialBar', () => {
 
   it('switching the mode keeps the raw value and saves it with the new mode', async () => {
     const { fetchMock } = fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     fireEvent.change(discountInput(), { target: { value: '50' } });
@@ -206,7 +209,7 @@ describe('FinancialBar', () => {
 
   it('keeps what was typed when the save comes back written another way', async () => {
     const { fetchMock } = fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     await bar();
     vi.useFakeTimers({ shouldAdvanceTime: true });
     fireEvent.change(discountInput(), { target: { value: '10.' } });
@@ -227,7 +230,7 @@ describe('FinancialBar', () => {
 
   it('keeps a typed price the same way', async () => {
     const { fetchMock } = fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     await bar();
     const base = await baseInput();
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -244,7 +247,7 @@ describe('FinancialBar', () => {
 
   it('strips non-numeric input, so a negative cannot be typed', async () => {
     fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     await bar();
     fireEvent.change(discountInput(), { target: { value: '1a2.5x%' } });
     expect(discountInput().value).toBe('12.5');
@@ -254,7 +257,7 @@ describe('FinancialBar', () => {
 
   it('previews a price being typed in the tooth panel before it is saved', async () => {
     fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     const base = await baseInput();
 
@@ -265,7 +268,7 @@ describe('FinancialBar', () => {
 
   it('keeps previewing a saved price until the cached visit catches up', async () => {
     fakeVisit(undefined, 'stale');
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     const base = await baseInput();
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -277,7 +280,7 @@ describe('FinancialBar', () => {
 
   it('keeps previewing a price whose save failed', async () => {
     fakeVisit(undefined, 'fail');
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     const base = await baseInput();
     vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -291,7 +294,7 @@ describe('FinancialBar', () => {
 
   it('Save draft only says the visit stays open', async () => {
     const { fetchMock } = fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     const writes = () => fetchMock.mock.calls.filter(([, init]) => init?.method !== undefined);
     const before = writes().length;
@@ -305,7 +308,7 @@ describe('FinancialBar', () => {
 
   it('Save draft sends what is still waiting to be saved first', async () => {
     const { fetchMock } = fakeVisit();
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     fireEvent.change(discountInput(), { target: { value: '10' } });
     // Well before the 700 ms debounce would have sent it.
@@ -316,7 +319,7 @@ describe('FinancialBar', () => {
 
   it('Save draft says so when a change could not be saved', async () => {
     fakeVisit(undefined, 'fail');
-    renderWorkspace();
+    renderWorkspace({ permissions: PRICER });
     const footer = await bar();
     fireEvent.change(await baseInput(), { target: { value: '100' } });
     fireEvent.click(within(footer).getByRole('button', { name: 'Save draft' }));
@@ -325,6 +328,18 @@ describe('FinancialBar', () => {
       screen.getByText("Some changes couldn't be saved. Retry them, then save the draft again."),
     ).toBeTruthy();
     expect(screen.queryByText('Draft saved')).toBeNull();
+  });
+
+  it('keeps the discount read-only for a dentist without visit:discount: Ask the owner', async () => {
+    fakeVisit();
+    renderWorkspace();
+    const footer = await bar();
+    expect(within(footer).getByText('Ask the owner')).toBeTruthy();
+    expect(
+      within(footer)
+        .getByRole<HTMLInputElement>('textbox', { name: 'Visit discount value' })
+        .hasAttribute('readonly'),
+    ).toBe(true);
   });
 
   it('is read-only for front desk: the discount is shown, nothing can be changed', async () => {

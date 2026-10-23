@@ -46,6 +46,7 @@ const completed = (live: Visit): Visit => ({
 });
 
 const SUMMARY: VisitFinancialSummary = {
+  handedOff: false,
   visitId: VISIT_ID,
   currency: 'USD',
   visit: { total: '162.00', paid: '0.00', outstanding: '162.00' },
@@ -189,7 +190,7 @@ describe('VisitSummaryDialog', () => {
 
   it("edits the footer's discount: one value, live in both directions", async () => {
     mockWorkspace({ visit: CHARTED });
-    renderWorkspace();
+    renderWorkspace({ permissions: [...DENTIST_WRITE, 'visit:discount'] });
     await screen.findByRole('group', { name: 'Upper arch' });
     const footer = screen.getByRole('contentinfo', { name: 'Visit money' });
     // Typed in the footer first: the dialog opens with it.

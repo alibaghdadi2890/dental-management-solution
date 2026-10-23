@@ -16,7 +16,7 @@ const NO_ROWS: readonly PatientListItem[] = [];
 
 /**
  * Every read the Patients list makes, and the lookups derived from them. The page (`view=owing`,
- * `sort=balance` already normalised away without `payment:read`) only renders.
+ * `sort=balance` already normalised away without `finance:read`) only renders.
  *
  * - The list keeps the previous answer while the next one loads (`isPlaceholderData`), so paging
  *   or switching views doesn't flash a skeleton; its rows are dimmed and inert meanwhile.
@@ -27,17 +27,20 @@ const NO_ROWS: readonly PatientListItem[] = [];
  * - Dentist names come from `useStaffNames` (all staff with `user:read`, else the practitioners),
  *   keyed by staff profile id (ADR-0020).
  */
-export function usePatientsListData(query: PatientListQuery, { canPay }: { canPay: boolean }) {
+export function usePatientsListData(
+  query: PatientListQuery,
+  { canFinance }: { canFinance: boolean },
+) {
   const list = useQuery({ ...patientListQuery(query), placeholderData: keepPreviousData });
   const counts = useQuery(patientCountsQuery());
-  const owing = useQuery({ ...owingCountQuery(), enabled: canPay });
-  const notSeen = useQuery({ ...notSeenCountQuery(), enabled: canPay });
+  const owing = useQuery({ ...owingCountQuery(), enabled: canFinance });
+  const notSeen = useQuery(notSeenCountQuery());
   const duplicates = useQuery(duplicatesQuery());
   const staff = useStaffNames();
 
   const rows = list.data?.items ?? NO_ROWS;
   const ids = rows.map((row) => row.id);
-  const balances = useQuery({ ...balancesQuery(ids), enabled: canPay && ids.length > 0 });
+  const balances = useQuery({ ...balancesQuery(ids), enabled: canFinance && ids.length > 0 });
   const visitStats = useQuery(visitStatsQuery(ids));
 
   const visitsById = useMemo(

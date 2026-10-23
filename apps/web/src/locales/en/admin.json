@@ -115,7 +115,8 @@
       "overview": "Overview",
       "branches": "Branches & rooms",
       "users": "Users",
-      "settings": "Settings"
+      "settings": "Settings",
+      "roles": "Roles"
     },
     "loading": "Loading tenant",
     "error": {
@@ -218,7 +219,8 @@
       "edit": "Edit",
       "resetPassword": "Reset password",
       "deactivate": "Deactivate",
-      "reactivate": "Reactivate"
+      "reactivate": "Reactivate",
+      "access": "Access & permissions"
     },
     "status": {
       "active": "Active",

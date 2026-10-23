@@ -6,8 +6,10 @@ import {
   type PlatformTenantQuery,
   platformTenantSchema,
   type ProvisionTenantRequestInput,
-  type RoomBatch,
+  type RoleCreate,
   roleSchema,
+  type RoleUpdate,
+  type RoomBatch,
   roomSchema,
   type StaffUserCreate,
   type StaffUserPatch,
@@ -15,6 +17,7 @@ import {
   type TenantSettingsPatch,
   type TenantStatus,
   tenantSchema,
+  type UserGrantsUpdate,
 } from '@dcm/contracts';
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -129,6 +132,15 @@ export function updateUser(tenantId: string, userId: string, patch: StaffUserPat
   return apiFetch(`/users/${userId}`, staffUserSchema, { method: 'PATCH', json: patch, tenantId });
 }
 
+/** `PUT /users/:id/grants` (ADR-0055): the person's whole set of additional permissions. */
+export function setUserGrants(tenantId: string, userId: string, grants: UserGrantsUpdate) {
+  return apiFetch(`/users/${userId}/grants`, staffUserSchema, {
+    method: 'PUT',
+    json: grants,
+    tenantId,
+  });
+}
+
 export function setUserActive(tenantId: string, userId: string, active: boolean, reason: string) {
   const action = active ? 'reactivate' : 'deactivate';
   return apiFetch(`/users/${userId}/${action}`, staffUserSchema, {
@@ -144,4 +156,22 @@ export function resetUserPassword(tenantId: string, userId: string, temporaryPas
     json: { temporaryPassword },
     tenantId,
   });
+}
+
+/** The clinic's roles (ADR-0055): a custom one, empty or a copy (`copyFrom`, a role key). */
+export function createRole(tenantId: string, role: RoleCreate) {
+  return apiFetch('/roles', roleSchema, { method: 'POST', json: role, tenantId });
+}
+
+export function updateRole(tenantId: string, roleId: string, patch: RoleUpdate) {
+  return apiFetch(`/roles/${roleId}`, roleSchema, { method: 'PATCH', json: patch, tenantId });
+}
+
+/** Switch a custom role off or on, or a system role back to its default permissions. */
+export function roleAction(
+  tenantId: string,
+  roleId: string,
+  action: 'deactivate' | 'reactivate' | 'reset',
+) {
+  return apiFetch(`/roles/${roleId}/${action}`, roleSchema, { method: 'POST', tenantId });
 }

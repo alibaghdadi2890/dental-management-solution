@@ -409,7 +409,7 @@
     "discountReason": "Motif (facultatif)",
     "applyDiscount": "Appliquer",
     "printInvoice": "Imprimer la facture",
-    "frontDesk": "L’accueil encaissera le paiement.",
+    "frontDesk": "Transmise à l’accueil pour le paiement",
     "discountReasonShort": "Saisissez au moins 3 caractères, ou laissez vide.",
     "coveredByAdvance": "Couvert par l’avance",
     "held": "{{amount}} restent réservés pour le plan de traitement."
@@ -810,5 +810,6 @@
     "paidInAdvance": "Payé d’avance",
     "stillToPay": "Reste à payer",
     "advanceHint": "Réservé pour ce plan : il paie chaque soin au fur et à mesure."
-  }
+  },
+  "askOwner": "Demandez au propriétaire"
 }

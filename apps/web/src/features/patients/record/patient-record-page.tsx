@@ -62,9 +62,10 @@ interface RecordNavigation {
  * ships: a fresh record per patient id, and tab and panel changes that replace the history entry
  * — the record is one entry however many tabs or panels were opened, so Back (and "All patients")
  * leaves it. Switching tabs closes a panel. A visit just completed in the workspace
- * (`HistoryState.postVisit`, W16) opens its post-visit summary over the record, for those with
- * `payment:read`, and focus goes to the patient's name when it closes; without it, a "Visit
- * recorded" toast says so. Either way the state is then cleared, so a refresh doesn't repeat it.
+ * (`HistoryState.postVisit`, W16) opens its post-visit summary over the record — the account
+ * with `payment:read`, the visit's own figures handed to front desk without it (ADR-0055) — and
+ * focus goes to the patient's name when it closes; without `visit:read`, a "Visit recorded" toast
+ * says so. Either way the state is then cleared, so a refresh doesn't repeat it.
  */
 export function PatientRecordScreen({ patientId, tab, panel, view, visitId, fileId }: RecordProps) {
   const { t } = useTranslation('clinical');
@@ -72,7 +73,7 @@ export function PatientRecordScreen({ patientId, tab, panel, view, visitId, file
   const toast = useToast();
   const { data: session } = useSession();
   const postVisit = useLocation({ select: (location) => location.state.postVisit });
-  const canPay = usePermission('payment:read');
+  const canSummary = usePermission('visit:read');
   const headingRef = useRef<HTMLHeadingElement>(null);
   // The visit already announced by a toast: an effect may run twice for one arrival.
   const toasted = useRef<string | null>(null);
@@ -88,7 +89,7 @@ export function PatientRecordScreen({ patientId, tab, panel, view, visitId, file
       state: (state) => ({ ...state, postVisit: undefined }),
     });
   }, [navigate, patientId]);
-  const toastInstead = session !== undefined && !canPay && postVisit !== undefined;
+  const toastInstead = session !== undefined && !canSummary && postVisit !== undefined;
 
   useEffect(() => {
     if (!toastInstead || toasted.current === postVisit) return;
@@ -118,7 +119,7 @@ export function PatientRecordScreen({ patientId, tab, panel, view, visitId, file
           go({ tab, panel: next });
         }}
       />
-      {postVisit !== undefined && canPay && (
+      {postVisit !== undefined && canSummary && (
         <PostVisitSummaryDialog
           visitId={postVisit}
           onClose={clearPostVisit}
@@ -214,6 +215,7 @@ function PatientRecord({
                 title={t('panel.failedTitle')}
                 body={t('panel.failedBody')}
                 requestId={patient.error instanceof ApiError ? patient.error.requestId : undefined}
+                error={patient.error}
                 onRetry={() => void patient.refetch()}
               />
             )}

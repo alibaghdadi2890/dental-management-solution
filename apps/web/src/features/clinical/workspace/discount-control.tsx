@@ -1,6 +1,7 @@
 import { DISCOUNT_MODES, type DiscountMode } from '@dcm/contracts';
 import { type KeyboardEvent, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { usePermission } from '@/features/auth/use-permission';
 import { sanitizeAmountInput } from '@/lib/amount';
 import { currencySymbol } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -22,18 +23,21 @@ const ARROW_STEPS: Readonly<Partial<Record<string, number>>> = {
  * `discount` save group it is given (`useVisitDiscount`), so the financial bar and the summary
  * dialog show one value; the checkout dialog gives it a plain draft instead. Typing is cleaned as it goes — anything but digits and one decimal
  * separator is dropped, so a negative can't be typed — and the value is kept as typed above its
- * cap; the cap is the money's business (`visitMoney`). Read-only without `visit:write`.
+ * cap; the cap is the money's business (`visitMoney`). Read-only without `visit:write`, and
+ * without `visit:discount` (ADR-0055), when it says "Ask the owner".
  */
 export function DiscountControl({
   discount,
   currency,
-  readOnly,
+  readOnly: notWritable,
 }: {
   discount: Pick<SaveGroup<DiscountDraft>, 'value' | 'setValue'>;
   currency: string;
   readOnly: boolean;
 }) {
   const { t, i18n } = useTranslation('clinical');
+  const canDiscount = usePermission('visit:discount');
+  const readOnly = notWritable || !canDiscount;
   const locale = i18n.resolvedLanguage ?? 'en';
   const { value, setValue } = discount;
   const radios = useRef<(HTMLButtonElement | null)[]>([]);
@@ -56,6 +60,11 @@ export function DiscountControl({
 
   return (
     <div className="flex items-center gap-[5px]">
+      {!notWritable && !canDiscount && (
+        <span className="me-1 text-[11.5px] leading-none font-medium text-ink-muted">
+          {t('askOwner')}
+        </span>
+      )}
       <input
         aria-label={t('money.discountValue')}
         dir="ltr"

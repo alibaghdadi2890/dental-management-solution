@@ -6,6 +6,8 @@ import {
   formatVisitNumber,
   patientNameSchema,
   patientPageSchema,
+  type PlatformAuditPage,
+  platformAuditPageSchema,
   transactionPageSchema,
   visitNumberSchema,
   visitPageSchema,
@@ -88,23 +90,60 @@ export function activityFeedQuery(filters: FeedFilters) {
 const MAX_IDS = 100;
 const sorted = (ids: readonly string[]) => [...new Set(ids)].sort().slice(0, MAX_IDS);
 
-export function patientNamesQuery(ids: readonly string[]) {
+/** Without `tenantId`, the acting clinic; with it, that clinic (the platform's Activity). */
+export function patientNamesQuery(ids: readonly string[], tenantId?: string) {
   const wanted = sorted(ids);
   return queryOptions({
-    queryKey: activityKeys.patients(actingTenantId(), wanted),
-    queryFn: () => apiFetch(`/patients/names?ids=${wanted.join(',')}`, z.array(patientNameSchema)),
+    queryKey: activityKeys.patients(tenantId ?? actingTenantId(), wanted),
+    queryFn: () =>
+      apiFetch(`/patients/names?ids=${wanted.join(',')}`, z.array(patientNameSchema), {
+        ...(tenantId === undefined ? {} : { tenantId }),
+      }),
     enabled: wanted.length > 0,
     staleTime: 60_000,
   });
 }
 
-export function visitNumbersQuery(ids: readonly string[]) {
+export function visitNumbersQuery(ids: readonly string[], tenantId?: string) {
   const wanted = sorted(ids);
   return queryOptions({
-    queryKey: activityKeys.visits(actingTenantId(), wanted),
-    queryFn: () => apiFetch(`/visits/numbers?ids=${wanted.join(',')}`, z.array(visitNumberSchema)),
+    queryKey: activityKeys.visits(tenantId ?? actingTenantId(), wanted),
+    queryFn: () =>
+      apiFetch(`/visits/numbers?ids=${wanted.join(',')}`, z.array(visitNumberSchema), {
+        ...(tenantId === undefined ? {} : { tenantId }),
+      }),
     enabled: wanted.length > 0,
     staleTime: 60_000,
+  });
+}
+
+/** What narrows the platform's Activity across clinics (ADR-0057). */
+export interface PlatformFeedFilters {
+  tenantId?: string | undefined;
+  area?: ActivityArea | undefined;
+  actorUserId?: string | undefined;
+  from?: string | undefined;
+}
+
+/** `GET /platform/audit`: every clinic's feed, newest first, a page at a time. */
+export function platformActivityQuery(filters: PlatformFeedFilters) {
+  return infiniteQueryOptions({
+    queryKey: ['platform', 'activity', filters] as const,
+    queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
+      apiFetch(
+        `/platform/audit${queryString({
+          limit: PAGE_SIZE,
+          tenantId: filters.tenantId,
+          area: filters.area,
+          actorUserId: filters.actorUserId,
+          from: filters.from,
+          cursor: pageParam,
+        })}`,
+        platformAuditPageSchema,
+      ),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (page: PlatformAuditPage) => page.nextCursor ?? undefined,
+    staleTime: 0,
   });
 }
 

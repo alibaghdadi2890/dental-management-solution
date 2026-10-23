@@ -25,6 +25,7 @@ export function CheckoutCard({
   selected,
   timeZone,
   locale,
+  canCheckOut,
   onCheckout,
 }: {
   visit: VisitListItem;
@@ -33,6 +34,8 @@ export function CheckoutCard({
   selected: boolean;
   timeZone: string;
   locale: string;
+  /** `payment:write`; without it the card says front desk collects (F4). */
+  canCheckOut: boolean;
   onCheckout: () => void;
 }) {
   const { t } = useTranslation(['today', 'clinical']);
@@ -72,14 +75,20 @@ export function CheckoutCard({
           ? formatMoney({ amount: balance.outstanding, currency: visit.currency }, locale)
           : ''}
       </span>
-      <Button
-        variant="dark"
-        className="h-11 flex-none px-[22px] text-[13.5px] font-semibold"
-        aria-label={t('checkout.actionFor', { name: visit.patient.fullName })}
-        onClick={onCheckout}
-      >
-        {t('checkout.action')}
-      </Button>
+      {canCheckOut ? (
+        <Button
+          variant="dark"
+          className="h-11 flex-none px-[22px] text-[13.5px] font-semibold"
+          aria-label={t('checkout.actionFor', { name: visit.patient.fullName })}
+          onClick={onCheckout}
+        >
+          {t('checkout.action')}
+        </Button>
+      ) : (
+        <span className="flex-none text-[12.5px] leading-snug font-medium text-warning">
+          {t('checkout.awaitingFrontDesk')}
+        </span>
+      )}
     </li>
   );
 }

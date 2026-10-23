@@ -1,5 +1,7 @@
+import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Button } from './button';
 import { SearchIcon } from './search-icon';
@@ -229,19 +231,39 @@ export function EmptyState({
   );
 }
 
-/** Error state: red "!" circle, plain-language cause, request id in Mono, "Try again". */
+/**
+ * Error state: red "!" circle, plain-language cause, request id in Mono, "Try again". A 403 on a
+ * screen the user already had open means their access changed meanwhile (ADR-0055): it says so
+ * and links back to the start instead of retrying.
+ */
 export function ErrorState({
   title,
   body,
   requestId,
+  error,
   onRetry,
 }: {
   title: string;
   body: string;
   requestId?: string | undefined;
+  /** The failure, when known: a 403 shows "You no longer have access to this". */
+  error?: unknown;
   onRetry: () => void;
 }) {
   const { t } = useTranslation('common');
+  if (error instanceof ApiError && error.status === 403) {
+    return (
+      <div role="alert" className="px-6 py-14 text-center">
+        <h2 className="mb-1.5 text-[15px] leading-tight font-semibold">{t('forbidden.title')}</h2>
+        <p className="mx-auto mb-4 max-w-[380px] text-[13px] leading-normal text-ink-tertiary">
+          {t('forbidden.body')}
+        </p>
+        <Link to="/" className="text-[13px] font-medium text-primary hover:underline">
+          {t('forbidden.back')}
+        </Link>
+      </div>
+    );
+  }
   return (
     <div role="alert" className="px-6 py-14 text-center">
       <div className="mx-auto mb-3.5 grid size-10 place-items-center rounded-full border border-danger-border bg-danger-bg text-base leading-none font-bold text-danger">
