@@ -35,8 +35,10 @@ const ACTIVE_BY_NAME: PatientListQuery = {
  *   `lastVisit=never`: patients without any (`idsNotIn`, from `clinical`). Both combine with
  *   the others.
  *
- * Every method requires `payment:read`; `search`/`searchIds` re-check `patient:read`, and the
- * visit facts `visit:read`.
+ * The list and the Not seen count need `patient:read`: last visits are about the patient, not
+ * money. What ranks or filters by balance — `view=owing`, `sort=balance`, the Owes count and the
+ * export — is money across patients and needs `finance:read` (ADR-0055). `search`/`searchIds`
+ * re-check `patient:read`, and the visit facts `visit:read`.
  */
 @Injectable()
 export class PatientViewsService {
@@ -52,7 +54,8 @@ export class PatientViewsService {
 
   /** `GET /billing/patients`: any valid list query, same page shape as `GET /patients`. */
   async list(query: PatientListQuery): Promise<PatientPage> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('patient:read');
+    this.requireFinanceFor(query);
     return this.tenantDb.run(async () =>
       this.patients.search(searchable(query), await this.internalFor(query)),
     );
@@ -60,7 +63,7 @@ export class PatientViewsService {
 
   /** The Owes balance tab chip: active patients owing in any currency. */
   async owingCount(): Promise<OwingCount> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     return this.tenantDb.run(async () => {
       const idsIn = await this.billing.patientIdsOwing();
       const page = await this.patients.search(ACTIVE_BY_NAME, { idsIn, size: 1 });
@@ -70,7 +73,7 @@ export class PatientViewsService {
 
   /** The Not seen tab chip: active patients without a counted visit in the last 180 days. */
   async notSeenCount(): Promise<OwingCount> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('patient:read');
     return this.tenantDb.run(async () => {
       const idsNotIn = await this.visits.patientIdsSeenWithin(NOT_SEEN_DAYS);
       const page = await this.patients.search(ACTIVE_BY_NAME, { idsNotIn, size: 1 });
@@ -83,10 +86,17 @@ export class PatientViewsService {
    * export's snapshot, so rows written while it streams never shift or repeat.
    */
   async idsFor(query: PatientViewQuery): Promise<string[]> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     return this.tenantDb.run(async () =>
       this.patients.searchIds(searchable(query), await this.internalFor(query)),
     );
+  }
+
+  /** The owing view and the balance sort show who owes what across patients (ADR-0055). */
+  private requireFinanceFor(query: PatientViewQuery): void {
+    if (query.view === 'owing' || query.sort === 'balance') {
+      this.context.requirePermission('finance:read');
+    }
   }
 
   private async internalFor(query: PatientViewQuery): Promise<PatientSearchInternal> {

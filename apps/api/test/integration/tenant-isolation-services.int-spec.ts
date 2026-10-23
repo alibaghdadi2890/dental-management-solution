@@ -215,13 +215,19 @@ describe('tenant isolation through the public services', () => {
         ownerA.post(`/api/v1/users/${id}/deactivate`).send({ reason: 'Hijack' }),
         ownerA.post(`/api/v1/users/${id}/reactivate`).send({ reason: 'Hijack' }),
         ownerA.post(`/api/v1/users/${id}/reset-password`).send({ temporaryPassword: TEMPORARY }),
+        ownerA.put(`/api/v1/users/${id}/grants`).send({ permissions: ['finance:read'] }),
       ];
       for (const response of await Promise.all(attempts)) {
         expect(response.status).toBe(404);
         expect(response.body).toMatchObject({ code: 'user.not_found' });
       }
-      // B's user is untouched: still active and able to sign in with their password.
+      // B's user is untouched: still active and able to sign in with their password, no grants.
       await signIn(testApp.app, b.staff.email, TEMPORARY);
+      const grants = await database.ownerPool.query(
+        'select 1 from user_permission_grants where user_id = $1',
+        [id],
+      );
+      expect(grants.rowCount).toBe(0);
 
       // B's staff profile id resolves to nothing in A's tenant context either (RLS, not just the
       // controller's own lookup).
@@ -229,6 +235,30 @@ describe('tenant isolation through the public services', () => {
         testApp.app.get(UsersService).practitionersByProfileIds([b.staff.profileId]),
       );
       expect(byProfileId).toEqual([]);
+    });
+
+    it('roles (ADR-0055): not found for every role route, and left unchanged', async () => {
+      const bRoles = (await ownerB.get('/api/v1/roles')).body as Role[];
+      const bDentist = bRoles.find((role) => role.key === 'dentist');
+      if (!bDentist) throw new Error('no dentist role in B');
+      const attempts = [
+        ownerA.patch(`/api/v1/roles/${bDentist.id}`).send({ permissions: ['finance:read'] }),
+        ownerA.post(`/api/v1/roles/${bDentist.id}/deactivate`),
+        ownerA.post(`/api/v1/roles/${bDentist.id}/reactivate`),
+        ownerA.post(`/api/v1/roles/${bDentist.id}/reset`),
+      ];
+      for (const response of await Promise.all(attempts)) {
+        expect(response.status).toBe(404);
+        expect(response.body).toMatchObject({ code: 'role.not_found' });
+      }
+      const copied = await ownerA
+        .post('/api/v1/roles')
+        .send({ name: 'Copy', copyFrom: 'custom_00000000' });
+      expect(copied.status).toBe(422);
+      const after = (await ownerB.get('/api/v1/roles')).body as Role[];
+      expect(after.find((role) => role.id === bDentist.id)?.permissions).toEqual(
+        bDentist.permissions,
+      );
     });
 
     it('branches and rooms: not found', async () => {

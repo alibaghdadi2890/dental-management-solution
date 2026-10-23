@@ -1,10 +1,12 @@
 import type {
+  Permission,
   Practitioner,
   PractitionerQuery,
   StaffUser,
   StaffUserCreate,
   StaffUserPatch,
   SystemRoleKey,
+  UserGrantsUpdate,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../platform/cls/request-context';
@@ -166,6 +168,7 @@ export class UsersService {
     const { roleKeys, branchIds, primarySpecialty: _p, specialties: _s, ...profile } = patch;
     return this.tenantDb.run(async () => {
       const before = await this.load(userId);
+      await this.roles.assertCanManage(userId);
       // Written only when the patch is about them, so a roles or phone change never rewrites them.
       const specialties =
         patch.practitionerType !== undefined || patch.specialties !== undefined
@@ -202,12 +205,24 @@ export class UsersService {
     });
   }
 
+  /** Replaces the user's additional permissions (ADR-0055); `roles` applies the rules. */
+  async setGrants(userId: string, input: UserGrantsUpdate): Promise<StaffUser> {
+    this.context.requirePermission('role:write');
+    return this.tenantDb.run(async () => {
+      await this.load(userId);
+      await this.roles.assertCanManage(userId);
+      await this.roles.setGrants(userId, input);
+      return this.load(userId);
+    });
+  }
+
   /** Signs the user out everywhere and refuses sign-in until reactivated. */
   async deactivate(userId: string, reason: string): Promise<StaffUser> {
     this.context.requirePermission('user:write');
     assertNotSelf(this.context.userId, userId);
     return this.tenantDb.run(async () => {
       const before = await this.load(userId);
+      await this.roles.assertCanManage(userId);
       if (!before.active) {
         return before;
       }
@@ -223,6 +238,7 @@ export class UsersService {
     this.context.requirePermission('user:write');
     return this.tenantDb.run(async () => {
       const before = await this.load(userId);
+      await this.roles.assertCanManage(userId);
       if (before.active) {
         return before;
       }
@@ -241,6 +257,7 @@ export class UsersService {
     this.context.requirePermission('user:write');
     await this.tenantDb.run(async () => {
       await this.load(userId);
+      await this.roles.assertCanManage(userId);
       await this.auth.resetPassword(userId, temporaryPassword);
       await this.audit.record({
         action: 'user.reset_password',
@@ -286,6 +303,8 @@ export class UsersService {
     const ids = profiles.map((profile) => profile.authUserId);
     const identities = await this.auth.identitiesOf(ids);
     const roles = await this.roles.rolesFor(ids);
+    // Who holds what is for those who manage roles (ADR-0055).
+    const access = this.context.hasPermission('role:read') ? await this.accessOf(ids) : null;
     const assignments = await this.staff.branchIdsOf(ids);
     const branchNames = new Map(
       (await this.tenancy.branchesByIds(distinct([...assignments.values()].flat()))).map(
@@ -311,6 +330,8 @@ export class UsersService {
           phone: profile.phone,
           active: profile.active,
           roles: roles.get(profile.authUserId) ?? [],
+          grants: access?.grants.get(profile.authUserId) ?? null,
+          effectivePermissions: access?.effective.get(profile.authUserId) ?? null,
           branches: (assignments.get(profile.authUserId) ?? []).flatMap((id) => {
             const name = branchNames.get(id);
             return name === undefined ? [] : [{ id, name }];
@@ -319,6 +340,16 @@ export class UsersService {
         },
       ];
     });
+  }
+
+  private async accessOf(userIds: readonly string[]) {
+    const grants = await this.roles.grantsFor(userIds);
+    const effective = new Map<string, Permission[]>();
+    for (const userId of userIds) {
+      // Sequential: every read joins the same transaction, i.e. one connection.
+      effective.set(userId, await this.roles.permissionsForUser(userId));
+    }
+    return { grants, effective };
   }
 
   private async activeOwnerIds(): Promise<string[]> {

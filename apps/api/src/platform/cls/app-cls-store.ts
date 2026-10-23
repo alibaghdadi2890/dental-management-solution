@@ -15,4 +15,7 @@ export interface AppClsStore extends ClsStore {
   platformAdmin?: boolean;
   /** Resolved once per request by `authorization` (ADR-0010); undefined until then. */
   permissions?: ReadonlySet<Permission>;
+  /** The caller's staff profile id in the tenant, resolved with the permissions (ADR-0055);
+   * null without one, undefined until resolved. */
+  staffProfileId?: string | null;
 }

@@ -12,7 +12,7 @@ import type {
   StaffUser,
   StartVisitResult,
   Visit,
-  VisitFinancialSummary,
+  FullVisitSummary,
   VisitResult,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
@@ -22,6 +22,7 @@ import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { grant } from '../support/clinic';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -236,8 +237,11 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
     service = { fill: byCode('ZFILL'), crown: byCode('ZCROWN') };
 
     dentist = await createStaff('dentist');
+    await grant(owner, dentist.user.id);
     assistant = await createStaff('assistant');
     frontdesk = await createStaff('frontdesk');
+    // The owner turns discounts on for front desk (ADR-0055: off by default).
+    await grant(owner, frontdesk.user.id, ['visit:discount']);
   });
 
   afterEach(() => {
@@ -309,7 +313,7 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
       before: { total: '117.00' },
       after: { total: '45.00' },
     });
-    const summary = await ok<VisitFinancialSummary>(
+    const summary = await ok<FullVisitSummary>(
       owner.get(`/api/v1/billing/visits/${visit.id}/summary`),
     );
     expect(summary).toMatchObject({

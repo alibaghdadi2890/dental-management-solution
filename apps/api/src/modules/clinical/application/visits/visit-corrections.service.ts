@@ -39,6 +39,7 @@ import { PlanUnperformer } from '../plan/plan-unperformer';
 import { PresenceWriter } from '../records/presence-writer';
 import { VisitLocks } from './visit-locks';
 import { VisitPresenter } from './visit-presenter';
+import { assertVisitInScope } from './visit-scope';
 
 /** A stored service as `planAmendment` sees it (the table's CHECKs admit the contract's values). */
 const toAmendable = (service: StoredVisitService): AmendableService => ({
@@ -101,7 +102,8 @@ export class VisitCorrectionsService {
    * recomputed and frozen again. Locks the patient then the visit (ADR-0023, as `complete`),
    * refuses a stale `expectedUpdatedAt` (409 `visit.stale`), appends a `visit_amendments` row
    * with the before/after snapshots, audits `visit.amend` with the reason, and publishes
-   * `VisitAmended` inside the transaction so `billing` posts the delta before commit.
+   * `VisitAmended` inside the transaction so `billing` posts the delta before commit. An
+   * amendment that changes the discount also needs `visit:discount` (ADR-0055).
    */
   async amend(id: string, input: AmendVisitInput): Promise<VisitResult> {
     this.context.requirePermission('visit:amend');
@@ -162,6 +164,7 @@ export class VisitCorrectionsService {
               : stored.map((service) => ({ id: service.id })),
         },
       );
+      if (plan.discountChanged) this.context.requirePermission('visit:discount');
       const now = this.clock.now();
       // What a service did to its tooth follows the correction (feature 7, H2): gone with a
       // removed service, moved with one that changes tooth.
@@ -236,6 +239,7 @@ export class VisitCorrectionsService {
     this.context.requirePermission('payment:write');
     return this.tenantDb.run(async () => {
       const before = await this.visits.lockForCorrection(id);
+      assertVisitInScope(this.context, before);
       if (before.status !== 'completed' && before.status !== 'amended') {
         throw new VisitNotCompletedError(`Visit is ${before.status}; it has no checkout to close`);
       }

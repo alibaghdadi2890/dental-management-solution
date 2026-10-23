@@ -51,6 +51,13 @@ export class VisitMovedError extends DomainError {
 }
 
 /** Another live visit already holds the room (`visits_room_live_unique`, spec W1). */
+/** The patient's live visit is another dentist's, outside the caller's visit scope (ADR-0055):
+ * starting one would resume it, and it is not theirs to see. */
+export class VisitLiveElsewhereError extends DomainError {
+  readonly code = 'visit.live_elsewhere';
+  readonly kind = 'conflict';
+}
+
 export class RoomBusyError extends DomainError {
   readonly code = 'visit.room_busy';
   readonly kind = 'conflict';

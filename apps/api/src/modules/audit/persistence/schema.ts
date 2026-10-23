@@ -50,6 +50,10 @@ export const auditLog = pgTable(
     index('audit_log_tenant_area_idx')
       .on(table.tenantId, table.area, table.occurredAt.desc(), table.id.desc())
       .where(sql`${table.area} is not null`),
+    // The platform's Activity across every clinic (ADR-0057): the feed, newest first.
+    index('audit_log_feed_idx')
+      .on(table.occurredAt.desc(), table.id.desc())
+      .where(sql`${table.area} is not null`),
     // "View all activity" of one patient.
     index('audit_log_tenant_patient_idx')
       .on(table.tenantId, table.patientId, table.occurredAt.desc())

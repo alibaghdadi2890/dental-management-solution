@@ -17,9 +17,10 @@ export const sessionSchema = z.object({
   }),
   /**
    * What kind of clinician the user is in this clinic, with a dentist's specialties (ADR-0050);
-   * null without a staff profile here (a platform admin, or no clinic).
+   * null without a staff profile here (a platform admin, or no clinic). `id` is the staff profile
+   * id: the visit-scope rule compares it with a visit's dentist (ADR-0055).
    */
-  profile: practitionerProfileSchema.nullable(),
+  profile: practitionerProfileSchema.extend({ id: idSchema }).nullable(),
   /** Back-office operator; holds no clinic membership (D9). */
   platformAdmin: z.boolean(),
   /** First sign-in with a temporary password: the app is locked until it is changed. */

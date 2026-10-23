@@ -29,6 +29,7 @@ import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { grant } from '../support/clinic';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -207,6 +208,7 @@ describe('billing: payments, refunds, voids and credit (feature 5)', () => {
     if (!service) throw new Error('no service');
     procedure = service;
     dentist = await createStaff('dentist', branch);
+    await grant(owner, dentist.user.id);
     frontdesk = await createStaff('frontdesk', branch);
   });
 

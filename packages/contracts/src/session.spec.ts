@@ -3,7 +3,12 @@ import { type Session, sessionSchema } from './session.js';
 
 const session: Session = {
   user: { id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e', displayName: 'Dr. Reyes', email: 'r@x.io' },
-  profile: { practitionerType: 'dentist', primarySpecialty: 'general', specialties: ['general'] },
+  profile: {
+    id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d71',
+    practitionerType: 'dentist',
+    primarySpecialty: 'general',
+    specialties: ['general'],
+  },
   platformAdmin: false,
   mustChangePassword: false,
   tenant: {

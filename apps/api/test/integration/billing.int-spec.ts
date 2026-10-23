@@ -1043,7 +1043,7 @@ describe('billing: ledger, opening balances and balances', () => {
       patient = (await openWithBalance(main.owner, 'Permissions', '40.00')).patient;
     });
 
-    it('the assistant reads balances but cannot record entries', async () => {
+    it('the assistant neither reads balances nor records entries (ADR-0055)', async () => {
       const opening = await assistant
         .post('/api/v1/billing/opening-balances')
         .set('Idempotency-Key', newId())
@@ -1060,11 +1060,11 @@ describe('billing: ledger, opening balances and balances', () => {
       expect(adjustment.status).toBe(403);
 
       expect((await assistant.get(`/api/v1/billing/patients/${patient.id}/balance`)).status).toBe(
-        200,
+        403,
       );
       expect(
         (await assistant.get(`/api/v1/billing/balances?patientIds=${patient.id}`)).status,
-      ).toBe(200);
+      ).toBe(403);
       expect(await patientNames(main.tenant.id)).not.toContain('By Assistant');
     });
 
@@ -1082,13 +1082,11 @@ describe('billing: ledger, opening balances and balances', () => {
       });
     });
 
-    it('a dentist adjusts a balance', async () => {
+    it('a dentist cannot adjust a balance; the owner can (ADR-0055: payment:refund)', async () => {
       const dentist = await staffAgent(main, 'dentist');
-      const adjustment = await adjust(dentist, patient.id, {
-        amount: '-5.00',
-        effectiveDate: TODAY,
-        reason: 'courtesy',
-      });
+      const courtesy = { amount: '-5.00', effectiveDate: TODAY, reason: 'courtesy' };
+      expect((await adjust(dentist, patient.id, courtesy)).status).toBe(403);
+      const adjustment = await adjust(main.owner, patient.id, courtesy);
       expect(adjustment.status, JSON.stringify(adjustment.body)).toBe(201);
     });
   });

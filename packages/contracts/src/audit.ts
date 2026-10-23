@@ -106,5 +106,25 @@ export type AuditQuery = z.infer<typeof auditQuerySchema>;
 export const auditPageSchema = cursorPageSchema(auditEntrySchema);
 export type AuditPage = z.infer<typeof auditPageSchema>;
 
+/**
+ * `GET /platform/audit` (ADR-0057): the Activity feed of every clinic, for platform admins —
+ * rows with an area, newest first, narrowed to one clinic (`tenantId`), an area, an actor and a
+ * start instant.
+ */
+export const platformAuditQuerySchema = cursorPageQuerySchema.extend({
+  tenantId: blankToUndefined(idSchema.optional()),
+  area: blankToUndefined(activityAreaSchema.optional()),
+  actorUserId: blankToUndefined(idSchema.optional()),
+  from: blankToUndefined(isoDateTimeSchema.optional()),
+});
+export type PlatformAuditQuery = z.infer<typeof platformAuditQuerySchema>;
+
+/** A feed row with the clinic it happened in. */
+export const platformAuditEntrySchema = auditEntrySchema.extend({ tenantId: idSchema });
+export type PlatformAuditEntry = z.infer<typeof platformAuditEntrySchema>;
+
+export const platformAuditPageSchema = cursorPageSchema(platformAuditEntrySchema);
+export type PlatformAuditPage = z.infer<typeof platformAuditPageSchema>;
+
 /** Shared by every mutation that the POC guards with a reason dialog (≥ 3 characters). */
 export const reasonSchema = z.string().trim().min(3).max(500);

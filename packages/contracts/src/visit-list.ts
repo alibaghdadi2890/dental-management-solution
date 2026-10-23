@@ -71,7 +71,8 @@ export const visitListServiceSchema = z.object({
   surfaces: surfacesSchema,
   /** Set when the service performed a treatment plan: amend can remove it but not re-tooth it. */
   planId: idSchema.nullable(),
-  final: moneySchema,
+  /** Null when the caller may not see the visit's money (ADR-0055). */
+  final: moneySchema.nullable(),
 });
 export type VisitListService = z.infer<typeof visitListServiceSchema>;
 
@@ -96,12 +97,14 @@ export const visitListItemSchema = z.object({
   dentist: z.object({ id: idSchema, name: z.string() }),
   services: z.array(visitListServiceSchema),
   notes: z.string(),
-  discount: z.object({ mode: discountModeSchema, value: nonNegativeAmountSchema }),
+  /** The money fields are null when the caller may not see the visit's money: without
+   * `payment:read`, on a visit that is not their own (ADR-0055). */
+  discount: z.object({ mode: discountModeSchema, value: nonNegativeAmountSchema }).nullable(),
   currency: currencySchema,
   /** Frozen for completed/amended/voided visits, computed for live ones. */
-  subtotal: aggregateAmountSchema,
-  discountAmount: aggregateAmountSchema,
-  total: aggregateAmountSchema,
+  subtotal: aggregateAmountSchema.nullable(),
+  discountAmount: aggregateAmountSchema.nullable(),
+  total: aggregateAmountSchema.nullable(),
   amendmentCount: z.number().int().nonnegative(),
   /** When the checkout was closed without a payment (ADR-0033): it no longer waits at the desk. */
   checkedOutAt: isoDateTimeSchema.nullable(),
@@ -119,11 +122,12 @@ const billedSchema = z.array(z.object({ currency: currencySchema, amount: aggreg
 
 /**
  * `GET /visits/summary`: `count` and `billed` (Σ total of counted visits, per currency) follow the
- * filters; `tabs` ignore them (D12) but keep the branch scope; `today` = visits started today.
+ * filters; `tabs` ignore them (D12) but keep the branch and visit scope; `today` = visits started
+ * today. `billed` is money across patients: null without `finance:read` (ADR-0055).
  */
 export const visitListSummarySchema = z.object({
   count: z.number().int().nonnegative(),
-  billed: billedSchema,
+  billed: billedSchema.nullable(),
   tabs: z.object({
     all: z.number().int().nonnegative(),
     inProgress: z.number().int().nonnegative(),

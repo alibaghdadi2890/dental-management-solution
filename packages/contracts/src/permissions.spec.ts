@@ -4,7 +4,7 @@ import { PERMISSIONS, isPermission, permissionSchema } from './permissions.js';
 describe('permission catalog', () => {
   it('uses resource:action naming for every entry', () => {
     for (const permission of PERMISSIONS) {
-      expect(permission).toMatch(/^[a-z][a-z-]*:[a-z][a-z-]*$/);
+      expect(permission).toMatch(/^[a-z][a-z-]*:[a-z][a-z_-]*$/);
     }
   });
 

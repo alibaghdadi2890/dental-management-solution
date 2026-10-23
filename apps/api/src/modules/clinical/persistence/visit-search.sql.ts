@@ -2,6 +2,13 @@ import type { VisitStatus, VisitType } from '@dcm/contracts';
 import { and, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { visits, visitServices } from './schema';
 
+/** The caller's own visits (ADR-0055): they are the dentist (by staff profile, when they have
+ * one) or started it (auth user id). */
+export interface VisitOwner {
+  userId: string;
+  profileId: string | null;
+}
+
 /**
  * What the visits list, its summary and the Unpaid/export routes filter on (4b, spec
  * §VisitsService), already resolved by the service: the branch or patient scope, the tab's
@@ -19,6 +26,8 @@ export interface VisitCriteria {
   match?: VisitTextMatch | undefined;
   /** Restricts to these visits (`billing`'s Unpaid tab); an empty list matches nothing. */
   idsIn?: readonly string[] | undefined;
+  /** The visit scope (ADR-0055): only the caller's own visits; absent = every visit. */
+  own?: VisitOwner | undefined;
 }
 
 export interface VisitTextMatch {
@@ -41,6 +50,13 @@ export function scopeCondition(scope: VisitCriteria['scope']): SQL {
   return 'branchId' in scope
     ? eq(visits.branchId, scope.branchId)
     : eq(visits.patientId, scope.patientId);
+}
+
+export function ownCondition(own: VisitOwner): SQL {
+  const startedByCaller = eq(visits.startedBy, own.userId);
+  return own.profileId === null
+    ? startedByCaller
+    : (or(eq(visits.dentistId, own.profileId), startedByCaller) ?? startedByCaller);
 }
 
 function textCondition(match: VisitTextMatch): SQL {
@@ -70,5 +86,6 @@ export function whereFor(criteria: VisitCriteria): SQL {
   if (criteria.idsIn !== undefined) {
     conditions.push(sql`${visits.id} = any(${uuidList(criteria.idsIn)})`);
   }
+  if (criteria.own !== undefined) conditions.push(ownCondition(criteria.own));
   return and(...conditions) ?? sql`true`;
 }

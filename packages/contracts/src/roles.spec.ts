@@ -23,8 +23,11 @@ describe('roleSchema', () => {
       id: '01928c6e-7b8a-7cc2-9d7e-3f1a2b4c5d6e',
       key: 'frontdesk',
       name: 'Front desk',
+      description: null,
       system: true,
+      active: true,
       permissions: ['patient:read'],
+      holders: 2,
     };
     expect(roleSchema.parse(role)).toEqual(role);
     expect(roleSchema.safeParse({ ...role, permissions: ['patient:delete'] }).success).toBe(false);

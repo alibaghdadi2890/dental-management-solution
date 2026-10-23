@@ -7,6 +7,7 @@ import {
   staffUserPatchSchema,
   staffUserSchema,
   staffUserStatusChangeSchema,
+  userGrantsUpdateSchema,
 } from '@dcm/contracts';
 import {
   Body,
@@ -17,6 +18,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
@@ -32,6 +34,7 @@ class ResetPasswordDto extends createZodDto(resetPasswordRequestSchema) {}
 class PractitionerDto extends createZodDto(practitionerSchema) {}
 class PractitionerQueryDto extends createZodDto(practitionerQuerySchema) {}
 class UserParamsDto extends createZodDto(z.object({ id: idSchema })) {}
+class UserGrantsUpdateDto extends createZodDto(userGrantsUpdateSchema) {}
 
 /** Staff users of the current tenant; `:id` is the auth user id (D7). */
 @Controller('users')
@@ -72,6 +75,14 @@ export class UsersController {
   @ZodResponse({ type: StaffUserDto })
   update(@Param() params: UserParamsDto, @Body() body: StaffUserPatchDto) {
     return this.users.updateStaffUser(params.id, body);
+  }
+
+  /** The user's additional permissions (ADR-0055): the whole set, `role:write` and its rules. */
+  @Put(':id/grants')
+  @RequirePermission('role:write')
+  @ZodResponse({ type: StaffUserDto })
+  setGrants(@Param() params: UserParamsDto, @Body() body: UserGrantsUpdateDto) {
+    return this.users.setGrants(params.id, body);
   }
 
   @Post(':id/deactivate')

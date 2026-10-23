@@ -289,8 +289,9 @@ describe('clinical: visit flows (feature 10)', () => {
 
       const priced = await started(await createPatient('Priced Scaling'), { type: 'hygiene' });
       const [scaling] = priced.services;
+      // Pricing a line is discounting (ADR-0055): the owner does it.
       await ok(
-        main.dentist.agent
+        main.owner
           .patch(path(priced, `services/${scaling?.id ?? ''}`))
           .send({ discountAmount: '10' }),
       );

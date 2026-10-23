@@ -1,13 +1,21 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { areaOfAction, type AuditPage, type AuditQuery } from '@dcm/contracts';
+import {
+  areaOfAction,
+  type AuditPage,
+  type AuditQuery,
+  type PlatformAuditPage,
+  type PlatformAuditQuery,
+} from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { CLOCK } from '../../../platform/clock/clock.module';
 import { RequestContext } from '../../../platform/cls/request-context';
+import { PlatformAdminDb } from '../../../platform/db/platform-admin-db';
 import type { Clock } from '../../../platform/kernel/clock';
 import { decodeAuditCursor, encodeAuditCursor } from '../domain/audit-cursor';
 import { type AuditSubject, subjectOf } from '../domain/audit-subject';
 import { redactSecrets } from '../domain/redact-secrets';
 import { AuditRepository } from '../persistence/audit.repository';
+import { AuditVisitScope } from './audit-visit-scope';
 
 export interface AuditRecord {
   /** Dot-separated verb, e.g. `branch.update`. */
@@ -42,6 +50,8 @@ export class AuditService {
   constructor(
     private readonly repository: AuditRepository,
     private readonly context: RequestContext,
+    private readonly visitScope: AuditVisitScope,
+    private readonly adminDb: PlatformAdminDb,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -72,9 +82,17 @@ export class AuditService {
     });
   }
 
+  /**
+   * The feed and a resource's trail. A caller sees rows about a visit only within their visit
+   * scope, and the money rows (payments, ledger entries) only with `finance:read` (ADR-0055).
+   */
   async list(query: AuditQuery): Promise<AuditPage> {
     this.context.requirePermission('audit:read');
+    const visitIds =
+      this.context.visitScope().kind === 'all' ? 'all' : await this.visitScope.visitIdsInScope();
     const items = await this.repository.list({
+      visitIdsIn: visitIds === 'all' ? undefined : visitIds,
+      withoutMoney: !this.context.hasPermission('finance:read'),
       resourceType: query.resourceType,
       resourceId: query.resourceId,
       feed: query.feed,
@@ -87,6 +105,35 @@ export class AuditService {
       after: query.cursor === undefined ? undefined : decodeAuditCursor(query.cursor),
       limit: query.limit + 1,
     });
+    const page = items.slice(0, query.limit);
+    const last = page.at(-1);
+    return {
+      items: page,
+      nextCursor:
+        items.length > query.limit && last
+          ? encodeAuditCursor({ occurredAt: new Date(last.occurredAt), id: last.id })
+          : null,
+    };
+  }
+
+  /**
+   * Every clinic's Activity feed for platform admins (ADR-0057), newest first, narrowed to one
+   * clinic when `tenantId` is given. Read through `withoutTenant()`: RLS does not apply, so it
+   * checks `platform:admin` itself and is logged as cross-tenant access.
+   */
+  async listAcrossTenants(query: PlatformAuditQuery): Promise<PlatformAuditPage> {
+    this.context.requirePermission('platform:admin');
+    const items = await this.adminDb.withoutTenant('platform activity', (tx) =>
+      this.repository.listAcrossTenants(tx, {
+        feed: true,
+        tenantId: query.tenantId,
+        area: query.area,
+        actorUserId: query.actorUserId,
+        from: query.from === undefined ? undefined : new Date(query.from),
+        after: query.cursor === undefined ? undefined : decodeAuditCursor(query.cursor),
+        limit: query.limit + 1,
+      }),
+    );
     const page = items.slice(0, query.limit);
     const last = page.at(-1);
     return {

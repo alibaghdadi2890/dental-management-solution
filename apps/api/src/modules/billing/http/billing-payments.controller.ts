@@ -67,7 +67,7 @@ export class BillingPaymentsController {
   ) {}
 
   @Get()
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ZodResponse({ type: TransactionPageDto })
   transactions(@Query() query: TransactionQueryDto) {
     return this.views.transactions(query);
@@ -75,7 +75,7 @@ export class BillingPaymentsController {
 
   /** `text/csv`, streamed like the visits export; `lang`, else `Accept-Language`. */
   @Get('export')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ApiProduces('text/csv')
   async export(
     @Query() query: TransactionExportQueryDto,

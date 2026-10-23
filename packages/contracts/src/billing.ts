@@ -11,7 +11,7 @@ import {
   optionalText,
 } from './common.js';
 import { patientCreateSchema, patientListQuerySchema, patientSchema } from './patients.js';
-import { VISIT_LIST_TABS, visitFiltersSchema } from './visit-list.js';
+import { VISIT_LIST_TABS, visitFiltersSchema, visitListItemSchema } from './visit-list.js';
 
 /**
  * `billing` (feature 3, ADR-0017): opening balances and adjustments on the patient ledger, and
@@ -232,14 +232,21 @@ export const visitExportQuerySchema = visitFiltersSchema.extend({
 });
 export type VisitExportQuery = z.infer<typeof visitExportQuerySchema>;
 
-export const visitFinancialSummarySchema = z.object({
+const visitFigures = z.object({
+  total: balanceAmountSchema,
+  paid: balanceAmountSchema,
+  outstanding: balanceAmountSchema,
+});
+
+/**
+ * `GET /billing/visits/:id/summary` with `payment:read`: the visit and the patient's account.
+ * Without it the caller gets `handedOffVisitSummarySchema` (ADR-0055).
+ */
+export const fullVisitSummarySchema = z.object({
+  handedOff: z.literal(false),
   visitId: idSchema,
   currency: currencySchema,
-  visit: z.object({
-    total: balanceAmountSchema,
-    paid: balanceAmountSchema,
-    outstanding: balanceAmountSchema,
-  }),
+  visit: visitFigures,
   previous: balanceAmountSchema,
   /** The balance with the money held for the plan left out: it pays plan work only (ADR-0051). */
   totalOutstanding: balanceAmountSchema,
@@ -257,4 +264,29 @@ export const visitFinancialSummarySchema = z.object({
     }),
   ),
 });
+export type FullVisitSummary = z.infer<typeof fullVisitSummarySchema>;
+
+/** Without `payment:read`: only the visit's own figures; front desk takes the payment (F4). */
+export const handedOffVisitSummarySchema = z.object({
+  handedOff: z.literal(true),
+  visitId: idSchema,
+  currency: currencySchema,
+  visit: visitFigures,
+});
+export type HandedOffVisitSummary = z.infer<typeof handedOffVisitSummarySchema>;
+
+export const visitFinancialSummarySchema = z.discriminatedUnion('handedOff', [
+  fullVisitSummarySchema,
+  handedOffVisitSummarySchema,
+]);
 export type VisitFinancialSummary = z.infer<typeof visitFinancialSummarySchema>;
+
+/**
+ * `GET /billing/checkout-queue` (`payment:read`, ADR-0055): the session branch's visits of today
+ * that still owe and that nobody has paid on or checked out yet, oldest first, each with what it
+ * owes. One patient's amount per row, never a sum.
+ */
+export const checkoutQueueSchema = z.object({
+  items: z.array(z.object({ visit: visitListItemSchema, balance: visitBalanceSchema })),
+});
+export type CheckoutQueue = z.infer<typeof checkoutQueueSchema>;

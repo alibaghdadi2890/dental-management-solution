@@ -288,6 +288,8 @@ export const visits = pgTable(
     index('visits_patient_started_idx').on(table.tenantId, table.patientId, table.startedAt.desc()),
     // `lastRoomToday`: the start popover's default room (V3).
     index('visits_started_by_date_idx').on(table.tenantId, table.startedBy, table.localDate),
+    // The visit scope (ADR-0055): a dentist's own visits.
+    index('visits_dentist_idx').on(table.tenantId, table.dentistId),
     // The visits list (4b): a branch's visits, newest first, paged by (started_at, id).
     index('visits_branch_started_idx').on(
       table.tenantId,

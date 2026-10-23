@@ -875,9 +875,16 @@ describe('billing: patient views, CSV export and merge re-point', () => {
 
     const routes = ['/api/v1/billing/patients', '/api/v1/billing/patients/owing-count'];
 
-    it('refuses a role without payment:read (403 at the route)', async () => {
+    it('serves the list with patient:read, and the owing count and export only with finance:read (ADR-0055)', async () => {
       const reader = await agentWith(clinic, ['patient:read', 'user:read']);
-      for (const route of routes) expect((await reader.get(route)).status, route).toBe(403);
+      expect((await reader.get('/api/v1/billing/patients')).status).toBe(200);
+      for (const route of [
+        '/api/v1/billing/patients/owing-count',
+        '/api/v1/billing/patients?view=owing',
+        '/api/v1/billing/patients?sort=balance',
+      ]) {
+        expect((await reader.get(route)).status, route).toBe(403);
+      }
       const csv = await exportCsv(reader, 'view=active');
       expect(csv.status).toBe(403);
       expect(csv.headers['content-type']).toContain('application/problem+json');

@@ -40,6 +40,7 @@ import {
   toTreatmentPlan,
 } from '../records/record-mapping';
 import { toVisitService } from '../visits/visit-mapping';
+import { visitMoneyVisible } from '../visits/visit-scope';
 
 /** A patient's presence rows, diagnoses, plans and finished services, with the dentists' names
  * resolved, and which of the patient's visits were voided (D6). */
@@ -181,7 +182,10 @@ export class ChartService {
         date: visit.localDate,
         dentistName: names.get(visit.dentistId) ?? '',
         durationMinutes,
-        total: { amount: total, currency: visit.currency },
+        // The patient's record is not scoped; the visit's money is (ADR-0055).
+        total: visitMoneyVisible(this.context, visit)
+          ? { amount: total, currency: visit.currency }
+          : null,
         services: services.map((service) => ({
           name: service.name,
           toothCode: service.toothCode === null ? null : toothCodeSchema.parse(service.toothCode),

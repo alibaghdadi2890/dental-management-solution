@@ -1,4 +1,4 @@
-import { type Permission, PERMISSIONS } from '@dcm/contracts';
+import { type Permission, PERMISSIONS, type VisitScope, visitScopeOf } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { CLS_ID, ClsService } from 'nestjs-cls';
 import { PlatformAccessDeniedError } from '../kernel/platform-access-denied.error';
@@ -103,11 +103,22 @@ export class RequestContext {
     this.cls.set('permissions', new Set(permissions));
   }
 
+  /** Called by `authorization` with the permissions: the caller's staff profile (ADR-0055). */
+  setStaffProfileId(profileId: string | null): void {
+    this.cls.set('staffProfileId', profileId);
+  }
+
+  /** The caller's staff profile id in this tenant; null without one (or before it is resolved). */
+  get staffProfileId(): string | null {
+    return this.cls.isActive() ? (this.cls.get('staffProfileId') ?? null) : null;
+  }
+
   /**
    * The single permission evaluation every layer uses (ADR-0010). System tasks pass; a platform
-   * admin in their own request (`actsAsPlatformAdmin`) holds every permission inside a tenant and
-   * only `platform:admin` outside one (ADR-0008); everyone else — jobs included, whatever flag
-   * they carry — is decided by the set `authorization` resolved. Deny by default.
+   * admin in their own request (`actsAsPlatformAdmin`) holds every permission inside a tenant but
+   * the clinic's compensation (`compensation:*`, ADR-0055), and only `platform:admin` outside one
+   * (ADR-0008); everyone else — jobs included, whatever flag they carry — is decided by the set
+   * `authorization` resolved. Deny by default.
    */
   hasPermission(permission: Permission): boolean {
     if (!this.cls.isActive()) {
@@ -117,9 +128,23 @@ export class RequestContext {
       return true;
     }
     if (this.actsAsPlatformAdmin) {
-      return this.tenantId !== undefined || permission === 'platform:admin';
+      return this.tenantId !== undefined
+        ? !permission.startsWith('compensation:')
+        : permission === 'platform:admin';
     }
     return this.cls.get('permissions')?.has(permission) ?? false;
+  }
+
+  /**
+   * Which visits the caller reads (ADR-0055, `visitScopeOf`): every one with `visit:read_all`,
+   * their own (dentist or starter) with `visit:read`, none otherwise. System tasks read all.
+   */
+  visitScope(): VisitScope {
+    return visitScopeOf({
+      permissions: this.grantedPermissions(),
+      userId: this.userId ?? null,
+      profileId: this.staffProfileId,
+    });
   }
 
   /** Every catalog permission the caller holds, for the session (UI visibility only). */

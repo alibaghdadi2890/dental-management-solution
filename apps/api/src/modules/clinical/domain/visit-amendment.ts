@@ -62,6 +62,8 @@ export interface AmendmentPlan {
   after: AmendmentSnapshot;
   /** `after.total − before.total`: what `billing` posts (negative = a credit). */
   delta: string;
+  /** The visit discount changes: that needs `visit:discount` (ADR-0055). */
+  discountChanged: boolean;
 }
 
 const sameSurfaces = (a: readonly SurfaceKey[], b: readonly SurfaceKey[]) =>
@@ -161,5 +163,6 @@ export function planAmendment(
     before,
     after,
     delta: fromCents(toCents(after.total) - toCents(before.total)),
+    discountChanged,
   };
 }

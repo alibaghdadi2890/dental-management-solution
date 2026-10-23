@@ -23,9 +23,11 @@ class PatientExportQueryDto extends createZodDto(patientExportQuerySchema) {}
 const EXPORT_IDLE_TIMEOUT_MS = 60_000;
 
 /**
- * The Patients list views that need balances (design Q5, Q4; docs/modules/billing.md). Static
- * two-segment paths only, so `billing.controller.ts`'s `patients/:id/balance` and
- * `patients/:id/adjustments` never capture them. `patient:read` is re-checked by the services.
+ * The Patients list views that need another module's data (design Q5, Q4; docs/modules/billing.md).
+ * Static two-segment paths only, so `billing.controller.ts`'s `patients/:id/balance` and
+ * `patients/:id/adjustments` never capture them. The list and the Not seen count need
+ * `patient:read`; the owing view, the balance sort, the Owes count and the export
+ * `finance:read` (ADR-0055), re-checked by the services.
  */
 @Controller('billing/patients')
 export class BillingPatientsController {
@@ -41,21 +43,21 @@ export class BillingPatientsController {
    * `view=notSeen` and `lastVisit=never`.
    */
   @Get()
-  @RequirePermission('payment:read')
+  @RequirePermission('patient:read')
   @ZodResponse({ type: PatientPageDto })
   list(@Query() query: PatientListQueryDto) {
     return this.views.list(query);
   }
 
   @Get('owing-count')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ZodResponse({ type: OwingCountDto })
   owingCount() {
     return this.views.owingCount();
   }
 
   @Get('not-seen-count')
-  @RequirePermission('payment:read')
+  @RequirePermission('patient:read')
   @ZodResponse({ type: OwingCountDto })
   notSeenCount() {
     return this.views.notSeenCount();
@@ -68,7 +70,7 @@ export class BillingPatientsController {
    * after that can only abort the download.
    */
   @Get('export')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ApiProduces('text/csv')
   async export(
     @Query() query: PatientExportQueryDto,

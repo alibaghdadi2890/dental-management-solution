@@ -23,7 +23,7 @@ const FRONTDESK = [
   'patient:read',
   'patient:write',
   'visit:read',
-  'visit:discount',
+  'visit:read_all',
   'catalog:read',
   'payment:read',
   'file:read',
@@ -135,7 +135,7 @@ describe('session: role-based permissions, branch switch and password change', (
   });
 
   describe('permissions by role', () => {
-    it('gives front desk exactly its D5 permissions and refuses writes it lacks', async () => {
+    it('gives front desk exactly its default permissions (ADR-0055) and refuses writes it lacks', async () => {
       const { email } = await createUser(['frontdesk'], [main.id]);
       const agent = await signInAndSetPassword(testApp.app, email, TEMPORARY);
 

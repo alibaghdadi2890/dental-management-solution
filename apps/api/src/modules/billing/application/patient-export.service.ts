@@ -152,7 +152,7 @@ export class PatientExportService {
    * possible today: nothing is hard deleted) would be skipped.
    */
   async open(query: PatientExportQuery, labels: ExportLabels): Promise<PatientExport> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     this.context.requirePermission('patient:read');
     const tenant = await this.tenancy.currentTenant();
     const today = localDate(this.clock.now(), tenant.timeZone);

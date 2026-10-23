@@ -14,16 +14,21 @@ import {
   familySchema,
   familyStatementSchema,
   payerQuerySchema,
+  checkoutQueueSchema,
+  fullVisitSummarySchema,
+  handedOffVisitSummarySchema,
   visitFinancialSummarySchema,
 } from '@dcm/contracts';
-import { Body, Controller, Get, Headers, Param, Post, Query } from '@nestjs/common';
-import { ApiHeader } from '@nestjs/swagger';
+import { Body, Controller, Get, Headers, Param, Post, Query, Res } from '@nestjs/common';
+import { ApiExtraModels, ApiHeader, ApiOkResponse, getSchemaPath } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { idempotencyKey } from '../../../platform/http/idempotency-key';
 import { RequirePermission } from '../../../platform/http/route-access';
 import { BillingService } from '../application/billing.service';
 import { PaymentViewsService } from '../application/payment-views.service';
+import { VisitViewsService } from '../application/visit-views.service';
 
 class CreateWithOpeningBalanceDto extends createZodDto(createWithOpeningBalanceSchema) {}
 class OpeningBalanceResultDto extends createZodDto(openingBalanceResultSchema) {}
@@ -32,7 +37,9 @@ class PatientBalanceDto extends createZodDto(patientBalanceSchema) {}
 class BalancesQueryDto extends createZodDto(balancesQuerySchema) {}
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class VisitParamsDto extends createZodDto(z.object({ visitId: idSchema })) {}
-class VisitFinancialSummaryDto extends createZodDto(visitFinancialSummarySchema) {}
+class FullVisitSummaryDto extends createZodDto(fullVisitSummarySchema) {}
+class HandedOffVisitSummaryDto extends createZodDto(handedOffVisitSummarySchema) {}
+class CheckoutQueueDto extends createZodDto(checkoutQueueSchema) {}
 class ReceivablesDto extends createZodDto(receivablesSchema) {}
 class OutstandingQueryDto extends createZodDto(outstandingQuerySchema) {}
 class OutstandingPageDto extends createZodDto(outstandingPageSchema) {}
@@ -55,11 +62,12 @@ export class BillingController {
   constructor(
     private readonly billing: BillingService,
     private readonly payments: PaymentViewsService,
+    private readonly visitViews: VisitViewsService,
   ) {}
 
   /** The Payments KPI cards and aging bar (feature 5). */
   @Get('aging')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ZodResponse({ type: ReceivablesDto })
   aging() {
     return this.payments.receivables();
@@ -67,7 +75,7 @@ export class BillingController {
 
   /** The Payments › Outstanding tab: owing patients, oldest unpaid first. */
   @Get('outstanding')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ZodResponse({ type: OutstandingPageDto })
   outstanding(@Query() query: OutstandingQueryDto) {
     return this.payments.outstanding(query);
@@ -126,7 +134,7 @@ export class BillingController {
   }
 
   @Get('balances')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ZodResponse({ type: [PatientBalanceDto] })
   balances(@Query() query: BalancesQueryDto) {
     return this.billing.balancesFor(query.patientIds);
@@ -152,11 +160,40 @@ export class BillingController {
     return this.billing.adjustBalance(params.id, body, idempotencyKey(key));
   }
 
-  /** `visit:read` is re-checked by the service (the visit's money comes from `clinical`). */
-  @Get('visits/:visitId/summary')
+  /**
+   * The checkout queue (ADR-0055): today's visits waiting at the desk, each with what it owes.
+   * Registered before `visits/:visitId/summary`; it has its own path anyway.
+   */
+  @Get('checkout-queue')
   @RequirePermission('payment:read')
-  @ZodResponse({ type: VisitFinancialSummaryDto })
-  visitSummary(@Param() params: VisitParamsDto) {
-    return this.billing.visitSummary(params.visitId);
+  @ZodResponse({ type: CheckoutQueueDto })
+  checkoutQueue() {
+    return this.visitViews.checkoutQueue();
+  }
+
+  /**
+   * One shape or the other (ADR-0055): the visit and the account with `payment:read`, the visit's
+   * own figures `handedOff` without. A union, so it is parsed here like `last-visit`. The scope
+   * and `payment:read` are applied by the service.
+   */
+  @Get('visits/:visitId/summary')
+  @RequirePermission('visit:read')
+  @ApiExtraModels(FullVisitSummaryDto, HandedOffVisitSummaryDto)
+  @ApiOkResponse({
+    schema: {
+      oneOf: [
+        { $ref: getSchemaPath(FullVisitSummaryDto) },
+        { $ref: getSchemaPath(HandedOffVisitSummaryDto) },
+      ],
+    },
+  })
+  async visitSummary(@Param() params: VisitParamsDto, @Res() response: Response): Promise<void> {
+    const summary = visitFinancialSummarySchema.safeParse(
+      await this.billing.visitSummary(params.visitId),
+    );
+    if (!summary.success) {
+      throw new Error('the visit summary does not match its contract', { cause: summary.error });
+    }
+    response.json(summary.data);
   }
 }

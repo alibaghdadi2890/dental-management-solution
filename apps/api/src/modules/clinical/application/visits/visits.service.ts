@@ -2,6 +2,7 @@ import {
   durationMinutes,
   defaultWorklist,
   firstStep,
+  inVisitScope,
   type LiveVisitQuery,
   type LiveVisitRef,
   type StartDefaults,
@@ -30,6 +31,7 @@ import {
   DentistInvalidError,
   RoomInvalidError,
   RoomRequiredError,
+  VisitLiveElsewhereError,
   VisitNotEmptyError,
   VisitNotFoundError,
   VisitPlanInvalidError,
@@ -58,6 +60,7 @@ import { type StoredVisit, VisitsRepository } from '../../persistence/visits.rep
 import { VisitLocks } from './visit-locks';
 import { computedMoney } from './visit-mapping';
 import { VisitPresenter } from './visit-presenter';
+import { assertVisitInScope, ownedFilter } from './visit-scope';
 
 /** The timer fields a pause or resume changes, for the audit's before/after. */
 const timerOf = ({ status, pausedAt, pausedSeconds }: StoredVisit) => ({
@@ -119,7 +122,12 @@ export class VisitsService {
       const patient = await this.patients.lockForDependentWrite(input.patientId);
       await this.visits.lockPatientStarts(patient.id);
       const existing = await this.visits.findLiveForPatient(patient.id);
-      if (existing) return { visit: await this.presenter.present(existing), resumed: true };
+      if (existing) {
+        if (!inVisitScope(this.context.visitScope(), existing)) {
+          throw new VisitLiveElsewhereError('The patient is in another visit already');
+        }
+        return { visit: await this.presenter.present(existing), resumed: true };
+      }
       const planIds = await this.worklistFor(patient.id, input);
       // `lockForDependentWrite` allows archived records (a ledger write-off). A live visit of a
       // patient archived since it started stays resumable; only a new one is refused.
@@ -273,9 +281,11 @@ export class VisitsService {
 
   /**
    * Stores the raw entry (a percent or an amount, V7); the cap applies only when the money is
-   * computed. Last write wins (W6); an unchanged discount changes and audits nothing.
+   * computed. Last write wins (W6); an unchanged discount changes and audits nothing. Needs
+   * `visit:discount` besides `visit:write` (ADR-0055).
    */
   setDiscount(id: string, input: VisitDiscountInput): Promise<VisitResult> {
+    this.context.requirePermission('visit:discount');
     return this.change(id, async (before) => {
       if (
         before.discountMode === input.mode &&
@@ -410,23 +420,25 @@ export class VisitsService {
     return this.tenantDb.run(async () => {
       const visit = await this.visits.findById(id);
       if (!visit) throw new VisitNotFoundError('Visit not found');
+      assertVisitInScope(this.context, visit);
       return this.presenter.present(visit);
     });
   }
 
   /**
-   * Live visits, oldest first, optionally of one patient. `mine` (W18): the caller is the dentist
-   * (through their staff profile) or started the visit; a platform admin has no staff profile in
-   * the tenant, so only their own starts count. Names come from `patients` and `users`.
+   * Live visits, oldest first, optionally of one patient, within the caller's visit scope
+   * (ADR-0055). `mine` (W18): the caller is the dentist (through their staff profile) or started
+   * the visit; a platform admin has no staff profile in the tenant, so only their own starts
+   * count. Names come from `patients` and `users`.
    */
   async live(query: LiveVisitQuery): Promise<LiveVisitRef[]> {
     this.context.requirePermission('visit:read');
     const userId = this.context.requireUserId();
+    const scoped = ownedFilter(this.context);
+    if (scoped === null) return [];
+    const own = query.mine ? { userId, profileId: this.context.staffProfileId } : scoped;
     return this.tenantDb.run(async () => {
-      const mine = query.mine
-        ? { userId, profileId: await this.users.profileIdOf(userId) }
-        : undefined;
-      const visits = await this.visits.liveRefs({ patientId: query.patientId, mine });
+      const visits = await this.visits.liveRefs({ patientId: query.patientId, own });
       if (visits.length === 0) return [];
       const patientNames = new Map(
         (await this.patients.getMany(visits.map((visit) => visit.patientId))).map((patient) => [
@@ -466,7 +478,9 @@ export class VisitsService {
   ): Promise<VisitResult> {
     this.context.requirePermission('visit:write');
     return this.tenantDb.run(async () => {
-      const after = await work(await this.visits.lockLive(id), this.clock.now());
+      const before = await this.visits.lockLive(id);
+      assertVisitInScope(this.context, before);
+      const after = await work(before, this.clock.now());
       return { visit: await this.presenter.present(after) };
     });
   }

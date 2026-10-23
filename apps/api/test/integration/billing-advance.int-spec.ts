@@ -13,7 +13,7 @@ import type {
   StaffUser,
   StartVisitResult,
   Visit,
-  VisitFinancialSummary,
+  FullVisitSummary,
   VisitResult,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
@@ -22,6 +22,7 @@ import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { grant } from '../support/clinic';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -143,7 +144,7 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
     ok<PatientAccount>(owner.get(`/api/v1/billing/patients/${patient.id}/account`));
 
   const summary = (visit: Visit) =>
-    ok<VisitFinancialSummary>(owner.get(`/api/v1/billing/visits/${visit.id}/summary`));
+    ok<FullVisitSummary>(owner.get(`/api/v1/billing/visits/${visit.id}/summary`));
 
   const money = async (patient: Patient) => {
     const view = await account(patient);
@@ -216,6 +217,7 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
       return { agent: await signInAndSetPassword(testApp.app, email, TEMPORARY), user };
     };
     dentist = await staff('dentist');
+    await grant(owner, dentist.user.id);
     frontdesk = (await staff('frontdesk')).agent;
   });
 

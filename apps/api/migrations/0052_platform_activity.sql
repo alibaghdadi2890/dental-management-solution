@@ -1,0 +1,1 @@
+CREATE INDEX "audit_log_feed_idx" ON "audit_log" USING btree ("occurred_at" DESC NULLS LAST,"id" DESC NULLS LAST) WHERE "audit_log"."area" is not null;

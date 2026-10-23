@@ -54,6 +54,7 @@ export class SessionService {
         displayName: profile?.displayName,
         profile: profile
           ? {
+              id: profile.id,
               practitionerType: profile.practitionerType,
               primarySpecialty: profile.primarySpecialty,
               specialties: profile.specialties,

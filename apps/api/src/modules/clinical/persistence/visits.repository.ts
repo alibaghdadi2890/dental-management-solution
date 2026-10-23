@@ -10,7 +10,6 @@ import {
   isNotNull,
   isNull,
   ne,
-  or,
   sql,
   type SQL,
 } from 'drizzle-orm';
@@ -28,7 +27,13 @@ import {
   visits,
   visitServices,
 } from './schema';
-import { scopeCondition, type VisitCriteria, whereFor } from './visit-search.sql';
+import {
+  ownCondition,
+  scopeCondition,
+  type VisitCriteria,
+  type VisitOwner,
+  whereFor,
+} from './visit-search.sql';
 
 type VisitRow = typeof visits.$inferSelect;
 
@@ -104,11 +109,11 @@ export type VisitPatch = Partial<
   >
 >;
 
-/** `mine` (W18): the caller is the visit's dentist (by staff profile, when they have one) or
- * started it (auth user id). */
+/** `own` (W18 "mine", and the visit scope of ADR-0055): the caller is the visit's dentist (by
+ * staff profile, when they have one) or started it (auth user id). */
 export interface LiveVisitFilter {
   patientId?: string | undefined;
-  mine?: { userId: string; profileId: string | null } | undefined;
+  own?: VisitOwner | undefined;
 }
 
 function toStored({ tenantId: _tenantId, ...visit }: VisitRow): StoredVisit {
@@ -346,13 +351,7 @@ export class VisitsRepository {
   liveRefs(filter: LiveVisitFilter): Promise<StoredVisit[]> {
     const conditions: (SQL | undefined)[] = [live];
     if (filter.patientId !== undefined) conditions.push(eq(visits.patientId, filter.patientId));
-    if (filter.mine) {
-      const { userId, profileId } = filter.mine;
-      const startedByCaller = eq(visits.startedBy, userId);
-      conditions.push(
-        profileId === null ? startedByCaller : or(eq(visits.dentistId, profileId), startedByCaller),
-      );
-    }
+    if (filter.own) conditions.push(ownCondition(filter.own));
     return this.db.run(async (tx) =>
       (
         await tx
@@ -473,6 +472,7 @@ export class VisitsRepository {
   /** The list's tab chips (D12): every filter ignored but the scope; `today` = today's visits. */
   async tabCounts(
     scope: VisitCriteria['scope'],
+    own: VisitOwner | undefined,
     today: string,
   ): Promise<{ all: number; inProgress: number; voidedAmended: number; today: number }> {
     const [row] = await this.db.run((tx) =>
@@ -484,9 +484,23 @@ export class VisitsRepository {
           today: sql<number>`(count(*) filter (where ${eq(visits.localDate, today)}))::int`,
         })
         .from(visits)
-        .where(and(scopeCondition(scope), ne(visits.status, 'discarded'))),
+        .where(
+          and(
+            scopeCondition(scope),
+            ne(visits.status, 'discarded'),
+            own === undefined ? undefined : ownCondition(own),
+          ),
+        ),
     );
     return row ?? { all: 0, inProgress: 0, voidedAmended: 0, today: 0 };
+  }
+
+  /** Every visit id of the caller's own visits (the audit feed's visit scope, ADR-0055). */
+  async idsOwnedBy(own: VisitOwner): Promise<string[]> {
+    const rows = await this.db.run((tx) =>
+      tx.select({ id: visits.id }).from(visits).where(ownCondition(own)),
+    );
+    return rows.map((row) => row.id);
   }
 
   /** Per patient among `patientIds`: the last counted visit's local date and how many (D18). */

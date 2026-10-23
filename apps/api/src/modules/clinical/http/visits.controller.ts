@@ -297,7 +297,7 @@ export class VisitsController {
   }
 
   @Patch(':id/discount')
-  @RequirePermission('visit:write')
+  @RequirePermission('visit:discount')
   @ZodResponse({ type: VisitResultDto })
   setDiscount(@Param() params: VisitParamsDto, @Body() body: VisitDiscountDto) {
     return this.visits.setDiscount(params.id, body);

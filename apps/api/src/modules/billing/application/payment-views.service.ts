@@ -117,7 +117,7 @@ export class PaymentViewsService {
 
   /** `GET /billing/payments`: newest first by (paid date, id), cursor-paged. */
   async transactions(query: TransactionQuery): Promise<TransactionPage> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     return this.tenantDb.run(async () => {
       const tenant = await this.tenancy.currentTenant();
       const criteria = await this.criteriaFor(query, this.today(tenant));
@@ -140,7 +140,7 @@ export class PaymentViewsService {
     query: TransactionExportQuery,
     labels: TransactionExportLabels,
   ): Promise<{ fileName: string; chunks: AsyncGenerator<string> }> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     const tenant = await this.tenancy.currentTenant();
     const today = this.today(tenant);
     const criteria = await this.tenantDb.run(() => this.criteriaFor(query, today));
@@ -152,7 +152,7 @@ export class PaymentViewsService {
 
   /** `GET /billing/aging`: KPI cards and aging buckets, in the tenant currency (P13, P14). */
   async receivables(): Promise<Receivables> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     return this.tenantDb.run(async () => {
       const tenant = await this.tenancy.currentTenant();
       const today = this.today(tenant);
@@ -182,7 +182,7 @@ export class PaymentViewsService {
    * who owes; a patient without a billing contact is their own group.
    */
   async outstanding(query: OutstandingQuery): Promise<OutstandingPage> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     return this.tenantDb.run(async () => {
       const tenant = await this.tenancy.currentTenant();
       const today = this.today(tenant);
@@ -344,6 +344,7 @@ export class PaymentViewsService {
 
   /** `GET /billing/contacts/:id/family/statement`: each member's statement, and the total. */
   async familyStatement(contactId: string): Promise<FamilyStatement> {
+    this.context.requirePermission('payment:read');
     const family = await this.family(contactId);
     const members: Statement[] = [];
     for (const member of family.members) members.push(await this.statement(member.id));

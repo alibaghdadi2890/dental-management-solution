@@ -7,6 +7,7 @@ import { TreatmentPlansRepository } from '../../persistence/treatment-plans.repo
 import { VisitServicesRepository } from '../../persistence/visit-services.repository';
 import { type VisitRef, VisitsRepository } from '../../persistence/visits.repository';
 import { moneyOf } from './visit-mapping';
+import { assertVisitInScope } from './visit-scope';
 
 /** What `billing` charges for a completed visit (`chargeFacts`, ADR-0024), in the visit currency. */
 export interface VisitChargeFacts {
@@ -136,13 +137,16 @@ export class VisitFactsService {
 
   /**
    * A visit's money (computed while live, frozen once completed) and timing, for `billing`'s
-   * visit summary. Unknown or discarded → 404 `visit.not_found`.
+   * visit summary. Unknown, discarded or outside the caller's visit scope (ADR-0055) → 404
+   * `visit.not_found`. The other reads here are labels and internal facts, about the patient's
+   * account rather than a visit, so they are not scoped.
    */
   async visitMoney(visitId: string): Promise<VisitMoneyFacts> {
     this.context.requirePermission('visit:read');
     return this.tenantDb.run(async () => {
       const visit = await this.visits.findById(visitId);
       if (!visit) throw new VisitNotFoundError('Visit not found');
+      assertVisitInScope(this.context, visit);
       const services = await this.services.listForVisit(visitId);
       const { subtotal, discount, total } = moneyOf(visit, services);
       return {

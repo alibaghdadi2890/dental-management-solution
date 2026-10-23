@@ -4,6 +4,7 @@ import type { AuditPage, Role, Tenant } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RolesService } from '../../src/modules/roles';
+import { systemRole } from '../../src/modules/roles/domain/system-roles';
 import { toProblemDetails } from '../../src/platform/errors/problem-details';
 import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
@@ -62,6 +63,12 @@ describe('roles: system roles, assignments and permission lookup', () => {
     expect(listed.find((role) => role.key === 'owner')?.permissions).not.toContain(
       'platform:admin',
     );
+    // The default matrix of ADR-0055, as seeded.
+    for (const key of ['owner', 'dentist', 'assistant', 'frontdesk'] as const) {
+      expect([...(listed.find((role) => role.key === key)?.permissions ?? [])].sort()).toEqual(
+        [...systemRole(key).permissions].sort(),
+      );
+    }
 
     const audit = (await admin.get('/api/v1/audit?resourceType=role').set('X-Tenant-Id', tenant.id))
       .body as AuditPage;
@@ -145,5 +152,82 @@ describe('roles: system roles, assignments and permission lookup', () => {
         "select count(*) as n from role_permissions where tenant_id = $1 and permission like 'procedure:%'",
       ),
     ).toBe(0);
+  });
+
+  it('rewrites the system roles to the 13a matrix and leaves custom data alone (migration 0050)', async () => {
+    const listed = await inTenant((service) => service.listRoles());
+    const idOf = (key: string) => {
+      const found = listed.find((candidate) => candidate.key === key);
+      if (!found) throw new Error(`no role ${key}`);
+      return found.id;
+    };
+    const customId = newId();
+    const holder = newId();
+    // The rewrite touches every tenant: run it in a transaction that is rolled back, so test
+    // files running in parallel never see it.
+    const client = await database.ownerPool.connect();
+    try {
+      await client.query('begin');
+      // A tenant as it was before 0050: the old (D5) matrix, plus a custom role and an assignment.
+      await client.query(
+        `delete from role_permissions where tenant_id = $1 and role_id = any($2::uuid[])`,
+        [tenant.id, [idOf('dentist'), idOf('frontdesk')]],
+      );
+      await client.query(
+        `insert into role_permissions (tenant_id, role_id, permission)
+         select $1::uuid, $2::uuid, unnest($3::text[]) union all
+         select $1::uuid, $4::uuid, unnest($5::text[])`,
+        [
+          tenant.id,
+          idOf('dentist'),
+          ['visit:read', 'visit:discount', 'payment:read', 'payment:write', 'payment:refund'],
+          idOf('frontdesk'),
+          ['visit:read', 'visit:discount', 'payment:read', 'payment:write'],
+        ],
+      );
+      await client.query(
+        `insert into roles (id, tenant_id, key, name, system) values ($1, $2, 'lab_tech', 'Lab', false)`,
+        [customId, tenant.id],
+      );
+      await client.query(
+        `insert into role_permissions (tenant_id, role_id, permission) values ($1, $2, 'payment:refund')`,
+        [tenant.id, customId],
+      );
+      await client.query(
+        `insert into user_roles (tenant_id, user_id, role_id) values ($1, $2, $3)`,
+        [tenant.id, holder, customId],
+      );
+
+      const migration = readFileSync(
+        resolve(__dirname, '../../migrations/0050_financial_access.sql'),
+        'utf8',
+      );
+      const rewrite = migration
+        .split('--> statement-breakpoint')
+        .map((statement) => statement.trim())
+        .filter((statement) => /^(--[^\n]*\n)*(DELETE|INSERT)/.test(statement));
+      expect(rewrite).toHaveLength(2);
+      // Twice: it is idempotent.
+      for (const statement of [...rewrite, ...rewrite]) await client.query(statement);
+
+      const grantsOf = async (roleId: string) =>
+        (
+          await client.query<{ permission: string }>(
+            'select permission from role_permissions where role_id = $1 order by permission',
+            [roleId],
+          )
+        ).rows.map((row) => row.permission);
+      const sorted = (values: readonly string[]) => [...values].sort();
+      for (const key of ['owner', 'dentist', 'assistant', 'frontdesk'] as const) {
+        expect(await grantsOf(idOf(key))).toEqual(sorted(systemRole(key).permissions));
+      }
+      expect(await grantsOf(customId)).toEqual(['payment:refund']);
+      expect(
+        (await client.query('select 1 from user_roles where user_id = $1', [holder])).rowCount,
+      ).toBe(1);
+    } finally {
+      await client.query('rollback');
+      client.release();
+    }
   });
 });

@@ -9,6 +9,7 @@ import { type StoredVisit, VisitsRepository } from '../../persistence/visits.rep
 import { VisitPresenter } from '../visits/visit-presenter';
 import type { PresenceContext } from './presence-writer';
 import type { RecordContext } from './record-writer';
+import { assertVisitInScope } from '../visits/visit-scope';
 
 /** What one charting change sees: the live visit (locked), the actor and the clock. */
 export interface VisitChange {
@@ -61,6 +62,7 @@ export class VisitCharting {
     const userId = this.context.requireUserId();
     return this.tenantDb.run(async () => {
       const visit = await this.visits.lockLive(visitId);
+      assertVisitInScope(this.context, visit);
       const record = await this.audit.about({ patientId: visit.patientId, visitId }, () =>
         work({ visit, userId, now: this.clock.now() }),
       );

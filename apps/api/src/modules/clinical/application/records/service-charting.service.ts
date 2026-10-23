@@ -6,6 +6,7 @@ import {
   type UpdateServiceInput,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
+import { RequestContext } from '../../../../platform/cls/request-context';
 import { AuditService } from '../../../audit';
 import { CatalogItemInactiveError } from '../../domain/catalog-errors';
 import { assertCurrency, assertLinePrice, assertTarget } from '../../domain/record-rules';
@@ -34,6 +35,7 @@ const priceOf = ({ baseAmount, discountAmount }: StoredVisitService) => ({
 @Injectable()
 export class ServiceChartingService {
   constructor(
+    private readonly context: RequestContext,
     private readonly charting: VisitCharting,
     private readonly audit: AuditService,
     private readonly catalog: CatalogService,
@@ -80,12 +82,14 @@ export class ServiceChartingService {
   /**
    * The base price and line discount; last write wins (W6). A discount above the base → 422
    * `validation_failed` at the field that broke it. An unchanged price changes and audits nothing.
+   * Changing a line's price is discounting: it needs `visit:discount` (ADR-0055).
    */
   updateService(
     visitId: string,
     serviceId: string,
     input: UpdateServiceInput,
   ): Promise<ServiceResult> {
+    this.context.requirePermission('visit:discount');
     return this.charting.run(visitId, async ({ visit }) => {
       const before = await this.services.lockInVisit(serviceId, visitId);
       const price = {

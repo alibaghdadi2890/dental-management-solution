@@ -118,6 +118,7 @@ describe('users: staff profiles with identity, branches and roles', () => {
     });
     expect(session.user.displayName).toBe('Dr. Ana Reyes');
     expect(session.profile).toEqual({
+      id: user.profileId,
       practitionerType: 'dentist',
       primarySpecialty: 'general',
       specialties: ['general'],

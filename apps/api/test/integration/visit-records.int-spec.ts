@@ -22,6 +22,7 @@ import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { grant } from '../support/clinic';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -245,6 +246,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
     };
 
     dentist = await createStaff('dentist');
+    await grant(owner, dentist.user.id);
     assistant = await createStaff('assistant');
     frontdesk = await createStaff('frontdesk');
   });

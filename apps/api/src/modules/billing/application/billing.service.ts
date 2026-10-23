@@ -196,7 +196,7 @@ export class BillingService {
    * tenants') ids are omitted, patients without entries get `balances: []`. One aggregate query.
    */
   async balancesFor(patientIds: readonly string[]): Promise<PatientBalance[]> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     return this.tenantDb.run(async () => {
       const visible = new Set((await this.patients.getMany(patientIds)).map(({ id }) => id));
       const known = [...new Set(patientIds)].filter((id) => visible.has(id));
@@ -215,7 +215,7 @@ export class BillingService {
    * A building block for `billing`'s patient views; one SQL aggregate.
    */
   async patientIdsOwing(): Promise<string[]> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('finance:read');
     return this.entries.patientIdsOwing();
   }
 
@@ -265,12 +265,15 @@ export class BillingService {
    * entries were posted in the completion's, amendment's or void's transaction, so they are
    * already there. _This visit_ = Σ its visit entries (the charge, its adjustments, a reversal; 0
    * when none: a zero total, W20), _paid_ = Σ allocated to it (feature 5), with the payments
-   * that cover it; _Previous_ = the balance less this visit's outstanding; the total = the balance. Needs `payment:read`, and `visit:read` for `VisitFactsService.visitMoney`:
-   * unknown or discarded → 404 `visit.not_found`; a live visit → 409 `visit.not_live` (it has no
-   * charge yet). Balances in other currencies are left out — known gap, `docs/modules/billing.md`.
+   * that cover it; _Previous_ = the balance less this visit's outstanding; the total = the balance.
+   * Needs `visit:read` and the visit in the caller's scope (`VisitFactsService.visitMoney`):
+   * unknown, discarded or out of scope → 404 `visit.not_found`; a live visit → 409
+   * `visit.not_live` (it has no charge yet). Without `payment:read` the caller gets the visit's
+   * own figures only, `handedOff`: front desk takes the payment (ADR-0055). Balances in other
+   * currencies are left out — known gap, `docs/modules/billing.md`.
    */
   async visitSummary(visitId: string): Promise<VisitFinancialSummary> {
-    this.context.requirePermission('payment:read');
+    this.context.requirePermission('visit:read');
     return this.tenantDb.run(async () => {
       const visit = await this.visits.visitMoney(visitId);
       if (visit.status === 'in_progress' || visit.status === 'paused') {
@@ -283,19 +286,24 @@ export class BillingService {
       const chargeCents = visitEntries.reduce((total, entry) => total + toCents(entry.amount), 0n);
       const paidCents =
         (await this.allocations.allocatedToVisits([visitId])).get(visitId)?.all ?? 0n;
+      const figures = {
+        total: fromCents(chargeCents),
+        paid: fromCents(paidCents),
+        outstanding: fromCents(chargeCents - paidCents),
+      };
+      if (!this.context.hasPermission('payment:read')) {
+        return { handedOff: true, visitId, currency: visit.currency, visit: figures };
+      }
       const heldCents = await this.heldIn(visit.patientId, visit.currency);
       const balanceCents =
         sums
           .filter(({ currency }) => currency === visit.currency)
           .reduce((total, sum) => total + toCents(sum.amount), 0n) + heldCents;
       return {
+        handedOff: false,
         visitId,
         currency: visit.currency,
-        visit: {
-          total: fromCents(chargeCents),
-          paid: fromCents(paidCents),
-          outstanding: fromCents(chargeCents - paidCents),
-        },
+        visit: figures,
         previous: fromCents(balanceCents - (chargeCents - paidCents)),
         totalOutstanding: fromCents(balanceCents),
         held: fromCents(heldCents),

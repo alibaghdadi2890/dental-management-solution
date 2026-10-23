@@ -142,10 +142,15 @@ describe('staffUserSchema', () => {
       phone: null,
       active: true,
       roles: [],
+      grants: ['finance:read'],
+      effectivePermissions: null,
       branches: [],
       createdAt: '2026-01-01T10:00:00.000Z',
     };
     expect(staffUserSchema.parse(staffUser)).toEqual(staffUser);
+    expect(staffUserSchema.safeParse({ ...staffUser, grants: ['platform:admin'] }).success).toBe(
+      false,
+    );
   });
 
   it('requires the profile id', () => {

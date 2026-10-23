@@ -29,6 +29,7 @@ import {
   VisitsRepository,
 } from '../../persistence/visits.repository';
 import { VisitPresenter } from './visit-presenter';
+import { assertVisitInScope } from './visit-scope';
 
 const VISIT = 'visit';
 
@@ -149,6 +150,7 @@ export class VisitFlowService {
     this.context.requirePermission('visit:write');
     return this.tenantDb.run(async () => {
       const visit = await this.visits.lockLive(id);
+      assertVisitInScope(this.context, visit);
       const list = await this.worklist.listForVisit(id);
       const onList = list.some((item) => item.planId === planId);
       if (listed && !onList) {
@@ -188,6 +190,7 @@ export class VisitFlowService {
     this.context.requirePermission(permission);
     return this.tenantDb.run(async () => {
       const before = await this.visits.lockLive(id);
+      assertVisitInScope(this.context, before);
       const change = decide(before, this.clock.now());
       if (!change) return { visit: await this.presenter.present(before) };
       const after = await this.visits.update(id, change.patch);

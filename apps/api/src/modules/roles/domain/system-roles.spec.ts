@@ -1,52 +1,50 @@
-import { isPermission, PERMISSIONS, SYSTEM_ROLE_KEYS } from '@dcm/contracts';
+import { closeImplied, isPermission, PERMISSIONS, SYSTEM_ROLE_KEYS } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
 import { SYSTEM_ROLES, systemRole } from './system-roles';
 
 const sorted = (values: readonly string[]) => [...values].sort();
 
-/** The D5 permission matrix, written out per role so any change is a visible diff. */
-const D5 = {
+/** The feature 13a default matrix (ADR-0055), written out per role so any change is a visible
+ * diff. */
+const MATRIX = {
   owner: PERMISSIONS.filter((permission) => permission !== 'platform:admin'),
   dentist: [
     'tenant:read',
     'user:read',
+    'catalog:read',
     'patient:read',
     'patient:write',
     'visit:read',
     'visit:write',
     'visit:void',
     'visit:amend',
-    'visit:discount',
     'chart:write',
-    'catalog:read',
-    'payment:read',
-    'payment:write',
-    'payment:refund',
-    'audit:read',
     'file:read',
     'file:write',
     'file:archive',
+    'audit:read',
+    'compensation:read',
   ],
   assistant: [
     'tenant:read',
     'user:read',
+    'catalog:read',
     'patient:read',
     'patient:write',
     'visit:read',
+    'visit:read_all',
     'visit:write',
-    'catalog:read',
-    'payment:read',
     'file:read',
     'file:write',
   ],
   frontdesk: [
     'tenant:read',
     'user:read',
+    'catalog:read',
     'patient:read',
     'patient:write',
     'visit:read',
-    'visit:discount',
-    'catalog:read',
+    'visit:read_all',
     'payment:read',
     'payment:write',
     'file:read',
@@ -54,28 +52,38 @@ const D5 = {
   ],
 } as const;
 
-describe('system roles (D4, D5)', () => {
+describe('system roles (ADR-0055)', () => {
   it('are the four seeded roles, in order', () => {
     expect(SYSTEM_ROLES.map((role) => role.key)).toEqual([...SYSTEM_ROLE_KEYS]);
   });
 
-  it.each(SYSTEM_ROLE_KEYS)('grants %s exactly the D5 permissions', (key) => {
-    expect(sorted(systemRole(key).permissions)).toEqual(sorted(D5[key]));
+  it.each(SYSTEM_ROLE_KEYS)('grants %s exactly the default matrix', (key) => {
+    expect(sorted(systemRole(key).permissions)).toEqual(sorted(MATRIX[key]));
   });
 
   it('gives the owner everything but platform:admin', () => {
     const missing = PERMISSIONS.filter(
-      (permission) => !systemRole('owner').permissions.includes(permission),
+      (permission) => !(systemRole('owner').permissions as readonly string[]).includes(permission),
     );
     expect(missing).toEqual(['platform:admin']);
   });
 
-  it('only uses catalog permissions, never platform:admin, never twice', () => {
+  it('only uses catalog permissions, never twice, and is closed under implies', () => {
     for (const role of SYSTEM_ROLES) {
       expect(role.permissions.every((permission) => isPermission(permission))).toBe(true);
-      expect(role.permissions).not.toContain('platform:admin');
       expect(new Set(role.permissions).size).toBe(role.permissions.length);
+      expect(sorted(closeImplied(role.permissions))).toEqual(sorted(role.permissions));
     }
+  });
+
+  it('keeps money and discounts with the owner, payments with front desk', () => {
+    for (const key of ['dentist', 'assistant', 'frontdesk'] as const) {
+      expect(systemRole(key).permissions).not.toContain('visit:discount');
+      expect(systemRole(key).permissions).not.toContain('finance:read');
+      expect(systemRole(key).permissions).not.toContain('payment:refund');
+    }
+    expect(systemRole('dentist').permissions).not.toContain('payment:read');
+    expect(systemRole('dentist').permissions).not.toContain('visit:read_all');
   });
 
   it('has display names', () => {

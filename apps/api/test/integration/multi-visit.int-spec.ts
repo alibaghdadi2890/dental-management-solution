@@ -21,6 +21,7 @@ import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { grant } from '../support/clinic';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -172,6 +173,7 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
       agent: await signInAndSetPassword(testApp.app, email, TEMPORARY),
       user: created.body as StaffUser,
     };
+    await grant(owner, dentist.user.id);
   });
 
   afterEach(() => {

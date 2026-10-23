@@ -22,6 +22,7 @@ import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { grant } from '../support/clinic';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -276,6 +277,7 @@ describe('clinical: the patient chart, tooth history, last visit and summary', (
     diagnosis = { caries: diagnosisByCode('ZCAR'), fracture: diagnosisByCode('ZFRAC') };
 
     dentist = await createStaff('dentist');
+    await grant(owner, dentist.user.id);
     frontdesk = await createStaff('frontdesk');
   });
 

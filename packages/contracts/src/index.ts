@@ -1,6 +1,7 @@
 export * from './audit.js';
 export * from './auth.js';
 export * from './billing.js';
+export * from './capabilities.js';
 export * from './catalog.js';
 export * from './cents.js';
 export * from './chart.js';
@@ -26,4 +27,5 @@ export * from './users.js';
 export * from './visit-flow.js';
 export * from './visit-list.js';
 export * from './visit-money.js';
+export * from './visit-scope.js';
 export * from './visits.js';

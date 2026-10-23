@@ -42,6 +42,7 @@ import { VisitCountersRepository } from './persistence/visit-counters.repository
 import { VisitPlanItemsRepository } from './persistence/visit-plan-items.repository';
 import { VisitServicesRepository } from './persistence/visit-services.repository';
 import { VisitsRepository } from './persistence/visits.repository';
+import { AuditVisitScopeProvider } from './application/visits/audit-visit-scope.provider';
 
 /**
  * See docs/modules/clinical.md. The service and diagnosis catalogs (feature 2), and the visit
@@ -61,6 +62,7 @@ import { VisitsRepository } from './persistence/visits.repository';
     PatientRecordsController,
   ],
   providers: [
+    AuditVisitScopeProvider,
     CatalogService,
     CatalogSeedingSubscriber,
     ProceduresRepository,

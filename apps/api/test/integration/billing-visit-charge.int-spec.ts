@@ -12,7 +12,7 @@ import type {
   StartVisitResult,
   Tenant,
   Visit,
-  VisitFinancialSummary,
+  FullVisitSummary,
   VisitResult,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
@@ -22,6 +22,7 @@ import { newId } from '../../src/platform/kernel/id';
 import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn, signInAndSetPassword, uniqueEmail } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
+import { grant } from '../support/clinic';
 
 const TEMPORARY = 'temporary-pw-1';
 
@@ -144,7 +145,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
   const summary = async (visitId: string, agent: TestAgent = frontdesk.agent) => {
     const response = await summaryOf(agent, visitId);
     expect(response.status, JSON.stringify(response.body)).toBe(200);
-    return response.body as VisitFinancialSummary;
+    return response.body as FullVisitSummary;
   };
 
   const balanceOf = async (patientId: string): Promise<PatientBalance> => {
@@ -245,6 +246,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
     service = { fill: byCode('ZFILL'), crown: byCode('ZCROWN') };
 
     dentist = await createStaff('dentist');
+    await grant(owner, dentist.user.id);
     assistant = await createStaff('assistant');
     frontdesk = await createStaff('frontdesk');
   });
@@ -268,7 +270,8 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
       surfaces: ['O', 'M'],
     });
     await addService(agent, visit.id, { procedureId: service.crown.id, toothCode: '21' });
-    const discount = await agent
+    // Discounting needs visit:discount (ADR-0055): the dentist here was granted it.
+    const discount = await dentist.agent
       .patch(`/api/v1/visits/${visit.id}/discount`)
       .send({ mode: 'percent', value: '10' });
     expect(discount.status, JSON.stringify(discount.body)).toBe(200);
@@ -344,6 +347,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
 
     await completed(dentist.agent, visit.id);
     expect(await summary(visit.id)).toEqual({
+      handedOff: false,
       visitId: visit.id,
       currency: 'USD',
       visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
@@ -381,6 +385,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
 
     expect(await chargesOf(visit.id)).toEqual([]);
     expect(await summary(visit.id)).toEqual({
+      handedOff: false,
       visitId: visit.id,
       currency: 'USD',
       visit: { total: '0.00', paid: '0.00', outstanding: '0.00' },
@@ -404,7 +409,11 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
     await completed(assistant.agent, visit.id);
     const [charge] = await chargesOf(visit.id);
     expect(charge).toMatchObject({ amount: '117.00', created_by: assistant.user.id });
-    expect((await summary(visit.id, assistant.agent)).totalOutstanding).toBe('117.00');
+    // Without payment:read the assistant gets the visit's figures, handed off (ADR-0055).
+    expect((await summaryOf(assistant.agent, visit.id)).body).toMatchObject({
+      handedOff: true,
+      visit: { outstanding: '117.00' },
+    });
   });
 
   it('rolls the completion back when the ledger write fails: the visit stays live, no entry', async () => {
@@ -483,6 +492,7 @@ describe('billing: the visit charge, posted in the completion transaction (ADR-0
       expect.objectContaining({ patient_id: kept.id, amount: '117.00' }),
     ]);
     expect(await summary(visit.id)).toEqual({
+      handedOff: false,
       visitId: visit.id,
       currency: 'USD',
       visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },

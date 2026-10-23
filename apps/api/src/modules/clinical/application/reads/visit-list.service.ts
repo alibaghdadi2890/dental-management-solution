@@ -26,6 +26,7 @@ import { VisitServicesRepository } from '../../persistence/visit-services.reposi
 import type { VisitCriteria, VisitTextMatch } from '../../persistence/visit-search.sql';
 import { type StoredVisit, VisitsRepository } from '../../persistence/visits.repository';
 import { moneyOf, toVisitService } from '../visits/visit-mapping';
+import { ownedFilter, visitMoneyVisible } from '../visits/visit-scope';
 
 /** Options only other modules' services pass (`billing`'s Unpaid tab), never over HTTP. */
 export interface VisitSearchInternal {
@@ -46,7 +47,10 @@ const VISIT_NUMBER_QUERY = /^(?:v-?)?0*(\d{1,9})$/i;
 
 /**
  * The visits list and the per-patient visit stats (docs/modules/clinical.md, feature 4b), for the
- * Visits screen and for `billing`'s visit and patient views. Every method needs `visit:read`.
+ * Visits screen and for `billing`'s visit and patient views. Every method needs `visit:read`. The
+ * list, its summary and `aggregate` keep to the caller's visit scope (ADR-0055) and show a row's
+ * money only to who may see it (`visitMoneyVisible`); the per-patient facts (`lastVisitFor`,
+ * `patientIdsSeenWithin`) are about the patient, not a visit, and are not scoped.
  */
 @Injectable()
 export class VisitListService {
@@ -100,9 +104,12 @@ export class VisitListService {
           tabs: { all: 0, inProgress: 0, voidedAmended: 0, today: 0 },
         };
       }
+      const { count, billed } = await this.visits.aggregate(criteria);
       return {
-        ...(await this.visits.aggregate(criteria)),
-        tabs: await this.visits.tabCounts(criteria.scope, await this.today()),
+        count,
+        // Σ across patients is clinic money (ADR-0055).
+        billed: this.context.hasPermission('finance:read') ? billed : null,
+        tabs: await this.visits.tabCounts(criteria.scope, criteria.own, await this.today()),
       };
     });
   }
@@ -161,6 +168,8 @@ export class VisitListService {
     query: VisitFilters,
     internal: VisitSearchInternal,
   ): Promise<VisitCriteria | null> {
+    const own = ownedFilter(this.context);
+    if (own === null) return null;
     const branchId = this.context.branchId;
     const scope =
       query.patientId !== undefined
@@ -178,6 +187,7 @@ export class VisitListService {
       type: query.type,
       match: query.q === undefined ? undefined : await this.textMatch(query.q),
       idsIn: internal.idsIn,
+      own,
     };
   }
 
@@ -218,6 +228,7 @@ export class VisitListService {
     return visits.map((visit) => {
       const own = services.filter((service) => service.visitId === visit.id);
       const money = moneyOf(visit, own);
+      const showMoney = visitMoneyVisible(this.context, visit);
       const patient = patients.get(visit.patientId);
       return {
         id: visit.id,
@@ -252,15 +263,15 @@ export class VisitListService {
             jaw: line.jaw,
             surfaces: line.surfaces,
             planId: line.planId,
-            final: line.final,
+            final: showMoney ? line.final : null,
           };
         }),
         notes: visit.notes,
-        discount: { mode: visit.discountMode, value: visit.discountValue },
+        discount: showMoney ? { mode: visit.discountMode, value: visit.discountValue } : null,
         currency: visit.currency,
-        subtotal: money.subtotal,
-        discountAmount: money.discount,
-        total: money.total,
+        subtotal: showMoney ? money.subtotal : null,
+        discountAmount: showMoney ? money.discount : null,
+        total: showMoney ? money.total : null,
         amendmentCount: amendmentCounts.get(visit.id) ?? 0,
         checkedOutAt: visit.checkedOutAt?.toISOString() ?? null,
         voidedAt: visit.voidedAt?.toISOString() ?? null,

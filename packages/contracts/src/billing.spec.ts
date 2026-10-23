@@ -118,6 +118,7 @@ describe('ledgerEntryKindSchema', () => {
 
 describe('visitFinancialSummarySchema', () => {
   const summary = {
+    handedOff: false as const,
     visitId: ID_A,
     currency: 'USD',
     visit: { total: '117.00', paid: '0.00', outstanding: '117.00' },
@@ -134,6 +135,18 @@ describe('visitFinancialSummarySchema', () => {
   it('allows a credit as previous, and only two-decimal aggregates', () => {
     const credit = { ...summary, previous: '-10.00', totalOutstanding: '107.00' };
     expect(visitFinancialSummarySchema.safeParse(credit).success).toBe(true);
+  });
+
+  it('answers the handed-off shape with the visit figures only', () => {
+    const handedOff = {
+      handedOff: true as const,
+      visitId: ID_A,
+      currency: 'USD',
+      visit: summary.visit,
+    };
+    expect(visitFinancialSummarySchema.parse({ ...handedOff, previous: '40.00' })).toEqual(
+      handedOff,
+    );
     expect(visitFinancialSummarySchema.safeParse({ ...summary, previous: '40' }).success).toBe(
       false,
     );

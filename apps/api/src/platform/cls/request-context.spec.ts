@@ -78,6 +78,31 @@ describe('permissions carried in the context (ADR-0010)', () => {
     });
   });
 
+  it("keeps the clinic's compensation from a platform admin (ADR-0055)", async () => {
+    await context.run({ ...user, platformAdmin: true, tenantId: 't1' }, () => {
+      expect(context.hasPermission('compensation:read')).toBe(false);
+      expect(context.hasPermission('compensation:manage')).toBe(false);
+      expect(context.hasPermission('finance:read')).toBe(true);
+      expect(context.visitScope()).toEqual({ kind: 'all' });
+      return Promise.resolve();
+    });
+  });
+
+  it('scopes a caller with visit:read to their own visits, by user and staff profile', async () => {
+    await context.run({ ...user, tenantId: 't1' }, () => {
+      context.setPermissions(['visit:read']);
+      context.setStaffProfileId('profile-1');
+      expect(context.visitScope()).toEqual({
+        kind: 'own',
+        userId: user.userId,
+        profileId: 'profile-1',
+      });
+      context.setPermissions([]);
+      expect(context.visitScope()).toEqual({ kind: 'none' });
+      return Promise.resolve();
+    });
+  });
+
   it('keeps a platform-admin flag outside a user request as a fact for the audit, never authority', async () => {
     for (const actorKind of ['job', 'agent'] as const) {
       await context.run(

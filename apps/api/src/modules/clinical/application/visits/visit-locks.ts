@@ -1,12 +1,15 @@
 import { Injectable } from '@nestjs/common';
+import { RequestContext } from '../../../../platform/cls/request-context';
 import { PatientMergedError, PatientsService } from '../../../patients';
 import { VisitMovedError, VisitNotFoundError } from '../../domain/visit-errors';
 import { type StoredVisit, VisitsRepository } from '../../persistence/visits.repository';
+import { assertVisitInScope } from './visit-scope';
 
 /** Locks for a visit mutation that involves its patient (ADR-0023), in the caller's transaction. */
 @Injectable()
 export class VisitLocks {
   constructor(
+    private readonly context: RequestContext,
     private readonly patients: PatientsService,
     private readonly visits: VisitsRepository,
   ) {}
@@ -25,6 +28,8 @@ export class VisitLocks {
   ): Promise<StoredVisit> {
     const snapshot = await this.visits.findById(id);
     if (!snapshot) throw new VisitNotFoundError('Visit not found');
+    // The visit scope (ADR-0055): every write through here loads the visit for its caller.
+    assertVisitInScope(this.context, snapshot);
     try {
       await this.patients.lockForDependentWrite(snapshot.patientId);
     } catch (error) {

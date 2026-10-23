@@ -509,7 +509,8 @@ export const lastVisitSchema = z
     date: isoDateSchema,
     dentistName: z.string(),
     durationMinutes: z.number().int().positive(),
-    total: moneySchema,
+    /** Null when the caller may not see the visit's money (ADR-0055). */
+    total: moneySchema.nullable(),
     services: z.array(
       z.object({
         name: z.string(),

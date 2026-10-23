@@ -188,6 +188,10 @@ export const problemDetailsSchema = z.object({
   attemptsLeft: z.number().int().nonnegative().optional(),
   /** `auth.account_locked`: when sign-in is allowed again. */
   lockedUntil: isoDateTimeSchema.optional(),
+  /** `role.cannot_grant`, `role.self_lockout` (ADR-0055): the permission (or `owner`) at stake. */
+  permission: z.string().optional(),
+  /** `role.has_holders`: how many people hold the role. */
+  holders: z.number().int().nonnegative().optional(),
 });
 export type ProblemDetails = z.infer<typeof problemDetailsSchema>;
 

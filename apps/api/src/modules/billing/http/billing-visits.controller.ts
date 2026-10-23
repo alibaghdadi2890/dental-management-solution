@@ -30,8 +30,9 @@ class VisitExportQueryDto extends createZodDto(visitExportQuerySchema) {}
 const EXPORT_IDLE_TIMEOUT_MS = 60_000;
 
 /**
- * The Visits screen's money (4b, docs/modules/billing.md): per-visit balances, the *Unpaid* tab
- * and the CSV export. Static paths only; registered before `BillingController`, whose
+ * The Visits screen's money (4b, docs/modules/billing.md): per-visit balances (`payment:read`,
+ * what one patient's visits owe), and the *Unpaid* tab and the CSV export (`finance:read`,
+ * receivables across patients, ADR-0055). Static paths only; registered before `BillingController`, whose
  * `visits/:visitId/summary` would otherwise capture `visits/unpaid/summary`. `visit:read` is
  * re-checked by the services.
  */
@@ -52,14 +53,14 @@ export class BillingVisitsController {
   }
 
   @Get('unpaid')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ZodResponse({ type: VisitPageDto })
   unpaid(@Query() query: VisitListQueryDto) {
     return this.views.unpaid(query);
   }
 
   @Get('unpaid/summary')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ZodResponse({ type: UnpaidVisitsSummaryDto })
   unpaidSummary(@Query() query: VisitFiltersDto) {
     return this.views.unpaidSummary(query);
@@ -67,7 +68,7 @@ export class BillingVisitsController {
 
   /** `text/csv`, streamed like the patients export; `lang`, else `Accept-Language`. */
   @Get('export')
-  @RequirePermission('payment:read')
+  @RequirePermission('finance:read')
   @ApiProduces('text/csv')
   async export(
     @Query() query: VisitExportQueryDto,

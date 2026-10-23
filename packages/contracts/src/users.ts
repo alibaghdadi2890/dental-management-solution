@@ -10,6 +10,7 @@ import {
   specialtiesSchema,
   specialtySchema,
 } from './practitioners.js';
+import { grantablePermissionSchema, permissionSchema } from './permissions.js';
 import { roleKeySchema, roleRefSchema } from './roles.js';
 import { branchRefSchema } from './session.js';
 
@@ -31,6 +32,10 @@ export const staffUserSchema = z.object({
   phone: z.string().nullable(),
   active: z.boolean(),
   roles: z.array(roleRefSchema),
+  /** Per-user additional permissions (ADR-0055); null unless the caller holds `role:read`. */
+  grants: z.array(grantablePermissionSchema).nullable(),
+  /** Roles and grants: what the user may do; null unless the caller holds `role:read`. */
+  effectivePermissions: z.array(permissionSchema).nullable(),
   branches: z.array(branchRefSchema),
   createdAt: isoDateTimeSchema,
 });

@@ -69,6 +69,19 @@ describe('planAmendment', () => {
     expect(plan.after.services.map((service) => service.id)).toEqual([filling.id, crown.id]);
   });
 
+  it('says whether the discount changes: that needs visit:discount (ADR-0055)', () => {
+    const removal = planAmendment(visit(), {
+      discount: { mode: 'percent', value: '0.00' },
+      services: [{ id: filling.id }, { id: crown.id }],
+    });
+    expect(removal.discountChanged).toBe(false);
+    const discounted = planAmendment(visit(), {
+      discount: { mode: 'percent', value: '10' },
+      services: keepAll,
+    });
+    expect(discounted.discountChanged).toBe(true);
+  });
+
   it('reopens the plan a removed service performed (D2)', () => {
     const plan = planAmendment(visit(), {
       discount: noDiscount,
