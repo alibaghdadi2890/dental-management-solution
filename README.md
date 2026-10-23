@@ -38,7 +38,7 @@ run it (e.g. a hosted deploy), set `BOOTSTRAP_ADMIN_EMAIL` and `BOOTSTRAP_ADMIN_
 and it does the same at startup.
 
 Infrastructure listens on non-default host ports so it does not clash with locally installed
-services: Postgres `55432`, Redis `56379`, S3 (SeaweedFS) `58333`. Override with
+services: Postgres `45432`, Redis `46379`, S3 (SeaweedFS) `48333`. Override with
 `DCM_POSTGRES_PORT`, `DCM_REDIS_PORT` and `DCM_S3_PORT`, and update `apps/api/.env` to match.
 
 ## Everyday commands
