@@ -151,7 +151,9 @@ export class RolesService {
       const before = await this.roles.permissionsOfRole(id);
       const after = patch.permissions === undefined ? before : closeImplied(patch.permissions);
       const callerBefore = await this.callerPermissions();
-      assertCanGrant(await this.editor(), before, after);
+      const editor = await this.editor();
+      assertCanGrant(editor, before, after);
+      await this.assertCanNarrow(editor, role, before, after);
 
       const details = {
         ...(patch.name === undefined ? {} : { name: patch.name }),
@@ -217,7 +219,9 @@ export class RolesService {
       );
       const after = template?.permissions ?? [...systemRole(key).permissions];
       const callerBefore = await this.callerPermissions();
-      assertCanGrant(await this.editor(), before, after);
+      const editor = await this.editor();
+      assertCanGrant(editor, before, after);
+      await this.assertCanNarrow(editor, role, before, after);
       await this.roles.replacePermissions(id, after);
       await this.roles.update(id, { updatedBy: this.context.requireUserId() });
       await this.assertCallerKeepsAccess(callerBefore);
@@ -338,6 +342,30 @@ export class RolesService {
       owner: (await this.roles.holdersOf(OWNER)).includes(userId),
       permissions: await this.roles.permissionsOf(userId),
     });
+  }
+
+  /**
+   * Taking permissions from a role changes its holders' access: the editor must be able to
+   * manage each of them, as for a change to their own roles (ADR-0055). The caller's own access is
+   * the self-lockout rule's.
+   */
+  private async assertCanNarrow(
+    editor: Editor,
+    role: RoleRow,
+    before: readonly GrantablePermission[],
+    after: readonly GrantablePermission[],
+  ): Promise<void> {
+    if (editor.holdsAll) return;
+    const kept = new Set(after);
+    if (before.every((permission) => kept.has(permission))) return;
+    const owners = await this.roles.holdersOf(OWNER);
+    for (const holder of await this.roles.holdersOf(role.key)) {
+      if (holder === this.context.userId) continue;
+      assertCanManage(editor, {
+        owner: owners.includes(holder),
+        permissions: await this.roles.permissionsOf(holder),
+      });
+    }
   }
 
   /** Roles and grants: what `authorization` puts in the context (ADR-0010, ADR-0055). */

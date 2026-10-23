@@ -218,6 +218,22 @@ describe('roles: custom roles, per-user grants and their rules (ADR-0055)', () =
       .send({ roleKeys: [managers.key] });
     expect(demote.status).toBe(403);
 
+    // Nor by narrowing a role they hold: the dentist role's holder holds more than the manager.
+    const dentistRole = await role('dentist');
+    const narrow = await manager.agent
+      .patch(`/api/v1/roles/${dentistRole.id}`)
+      .send({ permissions: dentistRole.permissions.filter((key) => key !== 'file:archive') });
+    expect(narrow.status).toBe(403);
+    expect(narrow.body).toMatchObject({ code: 'role.cannot_manage' });
+    await ok(
+      clinic.owner
+        .patch(`/api/v1/roles/${dentistRole.id}`)
+        .send({ permissions: [...dentistRole.permissions, 'finance:read'] }),
+    );
+    const resetNarrows = await manager.agent.post(`/api/v1/roles/${dentistRole.id}/reset`);
+    expect(resetNarrows.body).toMatchObject({ code: 'role.cannot_manage' });
+    await ok(clinic.owner.post(`/api/v1/roles/${dentistRole.id}/reset`));
+
     // Someone who holds no more than the manager can be managed.
     const clerk = await clinic.staff([managers.key], 'Clerk', 'other');
     expect(
