@@ -120,6 +120,7 @@ modules/<name>/
 | `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`, each row with its chart mark: a palette colour, for services an icon (a service may have the icon alone, drawn inside the tooth, ADR-0054), a priority, ADR-0042; a service may name the visit type it is added on, ADR-0047), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, timer, services performed, notes, discount, status; a type, the step and view it is on, a reason, an emergency's complaint and the dentist's confirmation of the medical history, ADR-0044, ADR-0046; the planned work a visit took on at start, `visit_plan_items`, ADR-0048; amend and void, ADR-0025; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, each with what it was seen on, ADR-0049; `treatment_plans`, each with a priority — the phase of the plan — and the patient's acceptance, ADR-0045; recorded in a visit or on the patient record, ADR-0031; what is at each tooth position — missing, not erupted, implant — `tooth_presences`, ADR-0034; work over several visits, `treatment_plan_sessions`, charged when done, ADR-0032) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
 | `billing`       | patient ledger (`ledger_entries`: opening balances, adjustments, visit charges and their adjustments and reversals, payments, refunds, voids; `ledger_entry_lines`), payments (`payments`, `payment_counters`, `payment_allocations`: account-level payments with stored derived allocations, households, credit; ADR-0027 to ADR-0029; advances, held for the treatment plan or kept as credit: `payment_holds`, `visit_plan_shares`, ADR-0051), balances, receivables, the visit summary, the patient and visit views that need them, the printables' data; later stored invoices, price lists | patients, tenancy (currency, time zone), users (dentist names in the export); clinical from 4a (reacts to `VisitCompleted`, `VisitAmended` and `VisitVoided` in the transaction, ADR-0024 to ADR-0026; and, to end holds when the plan closes, to `TreatmentCancelled`, `TreatmentRemoved` and `VisitDiscarded`, ADR-0051); reacts to `PatientsMerged` in the merge transaction (ADR-0036) and vetoes a currency change once there is money (`TenantCurrencyChanged`, ADR-0035) |
 | `files`         | `files`: a patient's images and documents (feature 8) — always the patient's, optionally linked to a visit and a tooth; category and type, "taken on", note, stored orientation, soft archive; pending uploads; signed upload and download URLs. The bytes are in object storage: the original (never modified) and, for images, a display copy and a thumbnail the browser made (ADR-0038 to ADR-0041) | patients, clinical (a visit's patient, number and status), users (uploader names), tenancy (time zone); reacts to `PatientsMerged` in the merge transaction, and vetoes a diagnosis citing a file that is not its patient's (`DiagnosisEvidenceCited`, ADR-0049) |
+| `compensation`  | how the clinic pays each dentist (feature 13b): agreements (`compensation_agreements`: effective-dated component sets — fixed, share of billed or collected with rates by service and a threshold, per visit, per day; superseded or ended, never edited, ADR-0058), adjustments and payouts (`compensation_adjustments`, `compensation_payouts`, voided with a reason), closed months (`compensation_periods`: the frozen statement and the line ids it counted, ADR-0059); the statement computed from the ledger for open months, late entries, the report; clinic-managed only, a dentist reads their own (ADR-0060) | users, clinical, billing, patients, tenancy; reacts to `StaffDeactivated` in its transaction |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
 | `imports`       | the import APIs (ADR-0053: services, patients with opening balances, visits imported uncharged — rows of JSON, per row transaction, dry run); later import jobs: uploaded file, column mapping, staged rows + preview; writes only through `patients`, `billing` and `clinical` services | patients, clinical, billing |
 | `provisioning`  | platform back office: provisions a tenant end to end (tenant, first branch, owner, system roles), cross-tenant tenants list, suspension; owns no tables | tenancy, auth, users, roles |
@@ -171,8 +172,10 @@ tenant (display name, professional title, practitioner type, contact, active fla
 **`roles` — what roles exist and who holds them.** Permission catalog lives in
 `packages/contracts/permissions.ts` as a typed constant (`patient:read`, `appointment:write`,
 `invoice:void`, `assistant:use`, …). Roles are per tenant: system roles seeded on provisioning
-(`owner`, `dentist`, `assistant`, `frontdesk`, with the default matrix in
-`docs/modules/roles.md`) plus custom roles the clinic creates. A user may hold multiple roles in
+(`owner`, `admin`, `dentist`, `assistant`, `frontdesk`, with the default matrix in
+`docs/modules/roles.md`) plus custom roles the clinic creates. `admin` starts with every
+permission as data the clinic may narrow, and stays below the owner: an admin never manages an
+owner nor gives or takes `owner` (ADR-0061). A user may hold multiple roles in
 a tenant and per-user grants on top (additive only, no denies); they may do the union, and an
 `owner` holds every permission by rule (ADR-0055). The owner manages roles, grants and staff from
 the clinic's Settings: deny by default, and only the owner widens. Clinics that would rather not
@@ -191,7 +194,8 @@ can re-check without depending on it (ADR-0010). Resource-level rules (e.g. a de
 own appointments if the tenant enables that setting) live here, not scattered in repositories.
 A rule that needs only the caller and the row, and that the SPA must apply too, is a pure function
 in `packages/contracts` used by both (who may archive a file, `canArchiveFile`, ADR-0040; who
-reads a visit, `canReadVisit`, ADR-0055).
+reads a visit, `canReadVisit`, ADR-0055; who reads a dentist's statement, `canReadStatement`,
+ADR-0060).
 
 The decided meanings (ADR-0055):
 - **Visit scope.** `visit:read` is the caller's own visits (dentist by staff profile, or
@@ -217,7 +221,8 @@ Rules:
   became `catalog:read`/`catalog:write`, covering the service and diagnosis catalogs (feature 2).
 - System roles are edited by clinics, so a migration only ever **adds** a permission to them (as
   the default matrix says, `ON CONFLICT DO NOTHING`), never removes or rewrites their grants.
-  Migration `0050` was the last full rewrite (ADR-0055).
+  Migration `0050` was the last full rewrite (ADR-0055). A new permission is always added to the
+  `admin` role of every clinic and to its template (ADR-0061).
 - SPA and API sit under one domain (cookie sessions). If that changes, use the better-auth bearer
   plugin — never a hand-rolled JWT.
 

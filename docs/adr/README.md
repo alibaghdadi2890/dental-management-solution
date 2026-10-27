@@ -61,3 +61,7 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0055](0055-permissions-from-roles-and-grants.md)                      | Permissions from roles and grants; money tiers, visit scope, discounts       | Accepted (amends 0008, 0010, 0030)   |
 | [0056](0056-platform-default-roles.md)                                 | The platform manages default roles and, for a clinic, its roles              | Accepted (amends 0055)               |
 | [0057](0057-platform-activity-across-clinics.md)                       | Platform admins see the Activity of every clinic                             | Accepted                             |
+| [0058](0058-agreements-are-effective-dated-component-sets.md)          | A dentist's compensation agreement is an effective-dated set of components   | Accepted                             |
+| [0059](0059-statements-are-derived-and-frozen-on-close.md)             | A dentist's statement is derived for open months and frozen on close         | Accepted                             |
+| [0060](0060-compensation-is-clinic-managed-only.md)                    | Compensation is managed by the clinic only                                   | Accepted (amends 0055, 0057)         |
+| [0061](0061-admin-system-role.md)                                      | An Admin system role with every permission, below the owner                  | Accepted (amends 0055, 0056)         |

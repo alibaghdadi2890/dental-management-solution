@@ -406,10 +406,28 @@ the merge already required `patient:write`.
   - `asc`: the mirror image: credits, most negative first; the rest; debts, smallest first.
   - Equal amounts share a key, so the search orders them by name. `ids` holds only the patients
     with a non-zero balance.
-- `csvRow(cells, { numericColumns })` (`csv.ts`): one CSV line with the quoting and injection
+- `csvRow(cells, { numericColumns })` (`platform/kernel/csv.ts`, shared with `compensation`): one CSV line with the quoting and injection
   guard above.
 
-## HTTP
+## HTTP### Compensation feeds (feature 13b, ADR-0059)
+
+Building blocks like `paidOn`: not permission-gated and without a route. `compensation` checks
+its own permissions. They are served by `persistence/visit-money-feed.repository.ts` and the
+indexes `ledger_entries_visit_date_idx`, `ledger_entries_visit_created_idx` and
+`payment_allocations_created_idx` (migration 0053).
+
+- `visitChargesBetween({ from, to, createdSince })`: every visit-kind entry (charge, adjustment,
+  reversal) with `effective_date` in [from, to], or created since `createdSince` (a closed
+  month's late candidates). Each has `visitId`, `kind`, signed `amount`, `currency`,
+  `effectiveDate` and `createdAt`.
+- `chargeLinesFor(visitIds)`: each visit's `visit_charge` (net amount, its lines' codes and
+  amounts), for rates by service.
+- `visitCollectionsBetween({ from, to, createdSince })`: the allocation rows whose source is a
+  `payment` entry and whose target is a visit entry. They are signed (a release is negative),
+  created in [from, to) or since `createdSince`. Write-offs and credit entries are left out, as
+  in `paidOn`.
+- `unattributedCollectionsBetween({ from, to })`: per currency, payment money allocated to
+  opening balances and debit adjustments (the compensation report's Unattributed row).
 
 | Route                                        | Access           | Notes                                                                                                                                                                                                                                                                                                                                    |
 | -------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -701,6 +701,15 @@ audited like its in-visit twin and answers `{ chart }`.
 | `historyConfirmation(patientId)`  | `{ confirmation }`: `{ at, byName, visitId }`, or null when no visit confirmed the history.                             |
 | `fileCitations(patientId)`        | `FileCitation[]`: `{ fileId, diagnoses: { recordId, toothCode, name, status }[] }`.                                     |
 
+For `compensation` (feature 13b, ADR-0059), building blocks without a permission check:
+
+- `VisitFactsService.compensationFacts({ from, to, changedSince, visitIds, dentistIds? })`:
+  completed visits (voided and imported ones flagged) with a local date in [from, to], among
+  `visitIds`, or completed or voided since `changedSince`. It adds every completed visit of the
+  same dentist and day as such a late one, because a per-day count needs the whole day.
+- `CatalogService.categoriesByCodes(codes)`: the current category of each service code (rates by
+  category).
+
 ## HTTP
 
 | Route                                                                                                                                                                                                                                                                     | Access           |

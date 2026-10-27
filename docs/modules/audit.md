@@ -118,6 +118,10 @@ platform admin acting in the clinic). `apps/web/src/features/audit/`:
 - **Expanded row**: the changed fields only, as before → after pairs (`changes.ts`), never JSON;
   "No field changes recorded" when there is nothing to show.
 - Cursor paging behind "Load more".
+- **Compensation** (feature 13b, ADR-0060): the `compensation` area, and the rows whose resource
+  type is `compensation_*` or that are the raw events in `COMPENSATION_EVENTS`. They are left out
+  for anyone without `compensation:manage`, the dentist included, and always from
+  `GET /platform/audit`. The sentence names the dentist from the snapshot's `dentist`.
 
 ## HTTP
 

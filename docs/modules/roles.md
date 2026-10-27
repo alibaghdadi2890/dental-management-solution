@@ -1,43 +1,47 @@
 # `roles` module
 
 **Status:** implemented — system and custom roles, per-user grants, the rules of widening
-(feature 13a, ADR-0055).
+(feature 13a, ADR-0055), the Admin role (ADR-0061).
 
 ## Purpose
 
 What roles exist in a tenant, who holds them and which extra permissions a person has. Every
-tenant gets the four system roles `owner`, `dentist`, `assistant`, `frontdesk` (D4), seeded by
-`provisioning` inside the provisioning transaction (ADR-0009). The clinic edits them (all but
+tenant gets the five system roles `owner`, `admin`, `dentist`, `assistant`, `frontdesk` (D4,
+ADR-0061), seeded by `provisioning` inside the provisioning transaction (ADR-0009). The clinic edits them (all but
 `owner`) and resets them to their default, adds custom roles (`custom_<8 hex>` keys) and switches
 them off, never deletes them; it grants a person additional permissions (`user_permission_grants`,
 additive only). A user may do the union of their active roles and their grants; whoever holds
-`owner` holds every grantable permission by rule. Permissions come from the catalog in
+`owner` holds every grantable permission by rule. `admin` starts with every grantable permission as
+data, which the clinic may narrow, and stays below the owner (ADR-0061). Permissions come from the catalog in
 `@dcm/contracts`; the capability catalog (`capabilities.ts`) groups them for the editors, and
 `implies` closes every write (`visit:read_all ⇒ visit:read`, `finance:read ⇒ payment:read`, …).
 
 The default matrix (deny by default, the owner widens):
 
-| Permission                                                                                                           | owner | dentist | assistant | frontdesk |
-| -------------------------------------------------------------------------------------------------------------------- | ----- | ------- | --------- | --------- |
-| `tenant:read`, `user:read`, `catalog:read`, `patient:read`, `patient:write`, `visit:read`, `file:read`, `file:write` | ✓     | ✓       | ✓         | ✓         |
-| `visit:read_all`                                                                                                     | ✓     | –       | ✓         | ✓         |
-| `visit:write`                                                                                                        | ✓     | ✓       | ✓         | –         |
-| `visit:void`, `visit:amend`, `chart:write`, `file:archive`, `audit:read`, `compensation:read`                        | ✓     | ✓       | –         | –         |
-| `visit:discount`                                                                                                     | ✓     | –       | –         | –         |
-| `payment:read`, `payment:write`                                                                                      | ✓     | –       | –         | ✓         |
-| `payment:refund`, `finance:read`, `compensation:manage`                                                              | ✓     | –       | –         | –         |
-| `tenant:write`, `user:write`, `role:read`, `role:write`, `catalog:write`, `import:run`                               | ✓     | –       | –         | –         |
+| Permission                                                                                                           | owner | admin | dentist | assistant | frontdesk |
+| -------------------------------------------------------------------------------------------------------------------- | ----- | ----- | ------- | --------- | --------- |
+| `tenant:read`, `user:read`, `catalog:read`, `patient:read`, `patient:write`, `visit:read`, `file:read`, `file:write` | ✓     | ✓     | ✓       | ✓         | ✓         |
+| `visit:read_all`                                                                                                     | ✓     | ✓     | –       | ✓         | ✓         |
+| `visit:write`                                                                                                        | ✓     | ✓     | ✓       | ✓         | –         |
+| `visit:void`, `visit:amend`, `chart:write`, `file:archive`, `audit:read`, `compensation:read`                        | ✓     | ✓     | ✓       | –         | –         |
+| `visit:discount`                                                                                                     | ✓     | ✓     | –       | –         | –         |
+| `payment:read`, `payment:write`                                                                                      | ✓     | ✓     | –       | –         | ✓         |
+| `payment:refund`, `finance:read`, `compensation:manage`                                                              | ✓     | ✓     | –       | –         | –         |
+| `tenant:write`, `user:write`, `role:read`, `role:write`, `catalog:write`, `import:run`                               | ✓     | ✓     | –       | –         | –         |
 
 `visit:read` is the caller's own visits (dentist or starter), `visit:read_all` every visit;
 `payment:read` is one patient's account, `finance:read` money across patients; `visit:discount` is
 every change that lowers or sets a price (ADR-0055). `compensation:*` are reserved for feature 13b.
 Migration `0050_financial_access` brought every tenant to this matrix — the **last full rewrite**:
-from now on a migration only adds permissions to system roles, never removes one.
+from now on a migration only adds permissions to system roles, never removes one, and a
+permission new to the catalog is added to the `admin` role and template (`0054_admin_role` added
+the role to every clinic, ADR-0061).
 
 **Rules of widening** (`domain/role-rules.ts`, run in the service): every change needs
 `role:write`; an editor gives only what they hold, by role edit, grant or role assignment, and
 only an owner or a platform admin assigns `owner` (403 `role.cannot_grant`, `permission` names
-it); only an owner or a platform admin takes `owner` from someone; managing someone's account
+it); only an owner or a platform admin takes `owner` from someone (an admin holds every permission but
+is no owner, so these rules keep it below the owner, ADR-0061); managing someone's account
 (password, status, profile, roles, grants) needs everything they hold, and an owner's an owner
 (403 `role.cannot_manage`, `RolesService.assertCanManage`, called by `users`); no change may take the caller's own `role:write` or `user:write` (409 `role.self_lockout`,
 checked after the write); `owner` is not edited (409 `role.owner_locked`); a held role is not
