@@ -1,10 +1,12 @@
 import type { Session } from '@dcm/contracts';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitch } from '@/components/language-switch';
 import { IconButton } from '@/components/ui/button';
 import { Tooltip, TooltipProvider } from '@/components/ui/tooltip';
 import { useSignOut } from '@/features/auth/use-sign-out';
+import { myMonthsQuery } from '@/features/compensation/compensation-api';
 import { useRoleLabel } from '@/features/users/role-label';
 import { initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
@@ -186,7 +188,16 @@ export function Sidebar({ session }: { session: Session | undefined }) {
   const roleLabel = useRoleLabel();
   const signOut = useSignOut();
   const [collapsed, toggleCollapsed] = useSidebarCollapsed();
-  const nav = session ? visibleNav(session) : undefined;
+  const visible = session ? visibleNav(session) : undefined;
+  // My statement only once the dentist has a month the clinic lets them read (feature 13b).
+  const canReadOwn = visible?.main.some((item) => item.key === 'myStatement') ?? false;
+  const myMonths = useQuery({ ...myMonthsQuery(), enabled: canReadOwn });
+  const nav = visible && {
+    ...visible,
+    main: visible.main.filter(
+      (item) => item.key !== 'myStatement' || (myMonths.data?.length ?? 0) > 0,
+    ),
+  };
   let role = '';
   if (session) {
     if (session.platformAdmin) role = t('user.platformAdmin');

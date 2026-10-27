@@ -6,6 +6,7 @@ import { Page } from '@/components/page';
 import { InPanelSlot, PanelLayout } from '@/components/ui/panel-slot';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
+import { AgreementsTab } from '@/features/compensation/agreements-tab';
 import { ResetPasswordPanel } from '@/features/platform/tenant-detail/reset-password-panel';
 import { type PanelTab, UserPanel } from '@/features/platform/tenant-detail/user-panel';
 import { UsersTab } from '@/features/platform/tenant-detail/users-tab';
@@ -21,7 +22,8 @@ type StaffPanel =
 /**
  * The clinic's Settings (ADR-0055): **Dental chart** (`tenant:write`), **Staff** (`user:write`)
  * and **Roles** (`role:read`), in the tenant detail page's tabs. The owner manages staff and who
- * may do what here; the platform admin keeps provisioning. Staff reuses the admin portal's table
+ * may do what here — and, with `compensation:manage`, how each dentist is paid (a dentist's
+ * Compensation tab, feature 13b); the platform admin keeps provisioning. Staff reuses the admin portal's table
  * and panels on the clinic's own tenant (the API ignores the tenant header for clinic users).
  */
 export function SettingsPage({ tab: requested }: { tab: SettingsTab | undefined }) {
@@ -33,9 +35,11 @@ export function SettingsPage({ tab: requested }: { tab: SettingsTab | undefined 
   const canGiveAccess = usePermission('role:write');
   const canStaff = canManageStaff || canGiveAccess;
   const canRoles = usePermission('role:read');
+  const canCompensate = usePermission('compensation:manage');
   const [panel, setPanel] = useState<StaffPanel | null>(null);
-  const tenantId = session?.tenant?.id;
-  if (!tenantId) return null;
+  const tenant = session?.tenant;
+  const tenantId = tenant?.id;
+  if (!tenant || !tenantId) return null;
 
   const available = SETTINGS_TABS.filter(
     (key) =>
@@ -101,6 +105,11 @@ export function SettingsPage({ tab: requested }: { tab: SettingsTab | undefined 
             tenantId={tenantId}
             user={panel.user}
             initialTab={panel.tab}
+            compensation={
+              canCompensate && panel.user?.practitionerType === 'dentist' ? (
+                <AgreementsTab profileId={panel.user.profileId} tenant={tenant} />
+              ) : undefined
+            }
             onClose={closePanel}
           />
         )}

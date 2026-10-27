@@ -257,7 +257,8 @@
       "save": "Save changes",
       "created": "User created",
       "saved": "Changes saved",
-      "failed": "Couldn’t save the user. Check the form and try again."
+      "failed": "Couldn’t save the user. Check the form and try again.",
+      "compensationTab": "Compensation"
     },
     "reset": {
       "eyebrow": "Reset password",

@@ -297,6 +297,33 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
   }
   if (prefix === 'tenant') return done(PLAIN.has(action) ? action : 'fallback', null);
 
+  // --- Compensation (feature 13b): the dentist is named in the snapshot ---
+  if (prefix === 'compensation') {
+    const dentist = field(entry, 'dentist');
+    const amount = text(after.amount);
+    const currency = text(after.currency);
+    const known = [
+      'agreement_create',
+      'agreement_end',
+      'agreement_supersede',
+      'adjustment_record',
+      'adjustment_void',
+      'payout_record',
+      'payout_void',
+      'period_close',
+      'period_reopen',
+    ].map((verb) => `compensation.${verb}`);
+    return done(
+      known.includes(action) ? action : 'fallback',
+      dentist ? { kind: 'text', label: dentist } : null,
+      {
+        amount: amount && currency ? lookups.money(amount, currency) : '',
+        month: text(after.month) ?? '',
+        action: readableAction(action),
+      },
+    );
+  }
+
   // --- Visits and the clinical record ---
   if (action === 'visit.update') {
     const key =

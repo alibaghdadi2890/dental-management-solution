@@ -57,7 +57,8 @@
     "users": "Utilisateurs",
     "settings": "Paramètres",
     "contacts": "Contacts",
-    "files": "Fichiers"
+    "files": "Fichiers",
+    "compensation": "Rémunération"
   },
   "ranges": {
     "today": "Aujourd’hui",
@@ -207,6 +208,17 @@
       "update": "A modifié {{subject}} dans les listes d’antécédents",
       "delete": "A supprimé {{subject}} des listes d’antécédents",
       "deactivate": "A cessé de proposer {{subject}} dans les listes d’antécédents"
+    },
+    "compensation": {
+      "agreement_create": "A défini un accord pour {{subject}}",
+      "agreement_end": "A mis fin à l'accord de {{subject}}",
+      "agreement_supersede": "A remplacé l'accord de {{subject}}",
+      "adjustment_record": "A ajouté un ajustement de {{amount}} pour {{subject}}",
+      "adjustment_void": "A annulé un ajustement de {{amount}} pour {{subject}}",
+      "payout_record": "A enregistré un versement de {{amount}} à {{subject}}",
+      "payout_void": "A annulé un versement de {{amount}} à {{subject}}",
+      "period_close": "A clôturé le relevé de {{subject}} pour {{month}}",
+      "period_reopen": "A rouvert le relevé de {{subject}} pour {{month}}"
     }
   },
   "fields": {

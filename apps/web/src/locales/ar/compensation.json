@@ -1,0 +1,294 @@
+{
+  "exportCsv": "تصدير CSV",
+  "month": {
+    "previous": "الشهر السابق",
+    "next": "الشهر التالي"
+  },
+  "status": {
+    "provisional": "مؤقت",
+    "closed": "مغلق",
+    "none": "لا اتفاقية"
+  },
+  "agreementStatus": {
+    "active": "سارية",
+    "future": "تبدأ لاحقًا",
+    "ended": "منتهية",
+    "superseded": "مستبدلة"
+  },
+  "components": {
+    "monthlyFixed": "مبلغ ثابت",
+    "share": "نسبة",
+    "perVisit": "لكل زيارة",
+    "perDay": "لكل يوم"
+  },
+  "presets": {
+    "revenueShare": { "label": "نسبة من الإيراد", "hint": "نسبة من المحصّل أو المفوتر" },
+    "perVisit": { "label": "مبلغ ثابت لكل زيارة", "hint": "مبلغ عن كل زيارة مكتملة" },
+    "monthlySalary": { "label": "راتب شهري", "hint": "المبلغ نفسه كل شهر" },
+    "salaryCommission": { "label": "راتب + عمولة", "hint": "راتب ونسبة فوق أساس شهري" },
+    "perDay": { "label": "لكل يوم", "hint": "مبلغ عن كل يوم فيه زيارات" },
+    "chairRent": { "label": "إيجار كرسي", "hint": "يدفع الطبيب إيجارًا ويحتفظ بأتعابه" },
+    "custom": { "label": "مخصص", "hint": "أي تركيبة" }
+  },
+  "visitTypes": {
+    "examination": "فحص",
+    "emergency": "طوارئ",
+    "treatment": "علاج",
+    "hygiene": "تنظيف",
+    "consultation": "استشارة"
+  },
+  "adjustmentKinds": {
+    "bonus": "مكافأة",
+    "deduction": "خصم",
+    "lab_cost": "كلفة مختبر",
+    "materials": "مواد",
+    "advance": "سلفة",
+    "opening_balance": "رصيد افتتاحي",
+    "correction": "تصحيح",
+    "other": "أخرى"
+  },
+  "sources": {
+    "visit_charge": "فوترة",
+    "visit_charge_adjustment": "تعديل أو حسم",
+    "visit_charge_reversal": "إلغاء",
+    "allocation": "دفعة",
+    "credit_applied": "رصيد مستخدم",
+    "release": "استرداد أو تصحيح"
+  },
+  "words": {
+    "share": {
+      "collection": "{{percent}} % من المبالغ المحصّلة",
+      "production": "{{percent}} % من المبالغ المفوترة"
+    },
+    "override": "{{name}} {{percent}} %",
+    "threshold": "فوق {{amount}} شهريًا",
+    "fixed": "{{amount}} / شهر",
+    "rent": "إيجار {{amount}} / شهر",
+    "prorated": "، بالتناسب",
+    "perVisit": "{{amount}} لكل زيارة",
+    "byType": "{{type}} {{amount}}",
+    "chargedOnly": "الزيارات المفوترة فقط",
+    "perDay": "{{amount}} لكل يوم فيه زيارات"
+  },
+  "agreement": {
+    "loading": "جارٍ تحميل الاتفاقيات…",
+    "loadFailed": "تعذّر تحميل الاتفاقيات.",
+    "none": "لا اتفاقية بعد. من دونها لا يستحق هذا الطبيب شيئًا هنا.",
+    "new": "اتفاقية جديدة",
+    "changeTerms": "تغيير الشروط",
+    "changeHint": "تنتهي الاتفاقية الحالية في اليوم السابق لبدء الجديدة. البدء في يومها الأول يستبدلها.",
+    "end": "إنهاء الاتفاقية",
+    "lastDay": "آخر يوم سريان",
+    "reason": "السبب",
+    "save": "حفظ الاتفاقية",
+    "saveChange": "تغيير الشروط",
+    "created": "حُفظت الاتفاقية",
+    "changed": "تغيّرت الشروط",
+    "ended": "انتهت الاتفاقية",
+    "history": "اتفاقيات سابقة",
+    "from": "ابتداءً من {{from}}",
+    "between": "{{from}} – {{to}}",
+    "visible": "يرى الطبيب كشفه",
+    "hidden": "مخفي عن الطبيب"
+  },
+  "form": {
+    "preset": "نوع الاتفاقية",
+    "effectiveFrom": "تسري ابتداءً من",
+    "chooseDate": "اختر التاريخ",
+    "add": "إضافة {{name}}",
+    "amount": "المبلغ",
+    "optional": "اختياري",
+    "note": "ملاحظة",
+    "visible": "يمكن للطبيب رؤية كشفه",
+    "visibleHint": "ضمن «كشفي»، بسطوره فقط.",
+    "fixed": {
+      "direction": "من يدفع",
+      "pay": "العيادة تدفع",
+      "charge": "الطبيب يدفع إيجارًا",
+      "amount": "المبلغ الشهري",
+      "prorate": "احتساب الأشهر الجزئية بالتناسب",
+      "prorateHint": "بحسب الأيام التقويمية التي تغطيها الاتفاقية."
+    },
+    "share": {
+      "percent": "النسبة",
+      "basis": "من",
+      "collection": "المحصّل",
+      "production": "المفوتر",
+      "overrides": "نسب حسب الخدمة",
+      "overridesHint": "نسبة الخدمة نفسها تتقدّم على نسبة فئتها.",
+      "target": "خدمة أو فئة",
+      "service": "خدمة",
+      "category": "فئة",
+      "choose": "اختر…",
+      "remove": "إزالة النسبة",
+      "addOverride": "+ إضافة نسبة",
+      "threshold": "الحد الأدنى الشهري للأساس (اختياري)"
+    },
+    "perVisit": {
+      "amount": "المبلغ لكل زيارة",
+      "byType": "المبلغ حسب نوع الزيارة",
+      "same": "نفسه",
+      "chargedOnly": "الزيارات المفوترة فقط",
+      "chargedOnlyHint": "عند الإيقاف تُحتسب الزيارة حتى لو كان مجموعها 0."
+    },
+    "perDay": {
+      "amount": "المبلغ لكل يوم فيه زيارات"
+    },
+    "problems": {
+      "required": "مطلوب",
+      "amount": "أدخل مبلغًا أكبر من صفر",
+      "percent": "أدخل نسبة بين 0 و100",
+      "none": "أضف عنصرًا واحدًا على الأقل"
+    }
+  },
+  "kpi": {
+    "production": "المفوتر",
+    "collections": "المحصّل",
+    "earned": "المستحق",
+    "balanceOwed": "الرصيد المستحق للأطباء"
+  },
+  "report": {
+    "title": "أتعاب الأطباء",
+    "subtitle": "ما استحقه كل طبيب هذا الشهر، وما تدين به العيادة.",
+    "loading": "جارٍ تحميل الأتعاب…",
+    "errorTitle": "تعذّر تحميل الأتعاب",
+    "errorBody": "تحقق من اتصالك وحاول مجددًا.",
+    "emptyTitle": "لا أطباء بعد",
+    "emptyBody": "يظهر الأطباء هنا بعد إضافتهم في الإعدادات › الفريق.",
+    "inactive": "(غير نشط)",
+    "unattributed": "غير منسوب (أرصدة افتتاحية، تعديلات رصيد)",
+    "columns": {
+      "dentist": "الطبيب",
+      "visits": "الزيارات",
+      "production": "المفوتر",
+      "collections": "المحصّل",
+      "earned": "المستحق",
+      "adjustments": "التعديلات",
+      "payouts": "المدفوعات",
+      "balance": "الرصيد",
+      "status": "الحالة"
+    }
+  },
+  "statement": {
+    "title": "الكشف",
+    "subtitle": "كشف {{month}}",
+    "back": "← أتعاب الأطباء",
+    "loading": "جارٍ تحميل الكشف…",
+    "errorTitle": "تعذّر تحميل الكشف",
+    "errorBody": "تحقق من اتصالك وحاول مجددًا.",
+    "provisionalNote": "مؤقت — قد تتغير الأرقام إلى أن تغلق العيادة الشهر.",
+    "empty": "لا شيء هذا الشهر.",
+    "emptyFirst": "لا شيء هذا الشهر حتى الآن. الزيارات المستوردة من النظام السابق لم تُفوتر قط، لذا لا تستحق شيئًا.",
+    "addAdjustment": "إضافة تعديل",
+    "recordPayout": "تسجيل دفعة",
+    "cards": {
+      "opening": "الرصيد الافتتاحي",
+      "earned": "المستحق",
+      "paid": "المدفوع",
+      "closing": "الرصيد الختامي",
+      "owesClinic": "الطبيب مدين للعيادة"
+    },
+    "columns": {
+      "date": "التاريخ",
+      "visit": "الزيارة",
+      "patient": "المريض",
+      "base": "الأساس",
+      "rate": "النسبة",
+      "amount": "المبلغ"
+    },
+    "blended": "{{percent}} (مركّبة)",
+    "threshold": "دون الحد الأدنى ({{amount}})",
+    "days_zero": "{{count}} يوم من {{amount}}",
+    "days_one": "يوم واحد من {{amount}}",
+    "days_two": "يومان من {{amount}}",
+    "days_few": "{{count}} أيام من {{amount}}",
+    "days_many": "{{count}} يومًا من {{amount}}",
+    "days_other": "{{count}} يوم من {{amount}}",
+    "dayVisits_zero": "{{count}} زيارة",
+    "dayVisits_one": "زيارة واحدة",
+    "dayVisits_two": "زيارتان",
+    "dayVisits_few": "{{count}} زيارات",
+    "dayVisits_many": "{{count}} زيارة",
+    "dayVisits_other": "{{count}} زيارة",
+    "lateFrom": "قيود متأخرة من {{month}}",
+    "late": "قيود متأخرة",
+    "noAgreement": "دون اتفاقية",
+    "notComputed": "غير محتسب",
+    "notComputedHint": "بعملة غير عملة العيادة: مدرجة وغير محتسبة.",
+    "adjustments": "التعديلات",
+    "payouts": "المدفوعات",
+    "void": "إلغاء",
+    "voided": "ملغى: {{reason}}"
+  },
+  "panel": {
+    "eyebrow": "أتعاب الأطباء",
+    "date": "التاريخ",
+    "amount": "المبلغ",
+    "note": "ملاحظة",
+    "adjustment": {
+      "title": "إضافة تعديل",
+      "submit": "إضافة التعديل",
+      "saved": "أُضيف التعديل",
+      "direction": "الاتجاه",
+      "add": "يُضاف إلى ما تدين به العيادة",
+      "deduct": "يُخصم",
+      "kind": "النوع",
+      "chooseKind": "اختر النوع"
+    },
+    "payout": {
+      "title": "تسجيل دفعة",
+      "submit": "تسجيل الدفعة",
+      "saved": "سُجّلت الدفعة",
+      "method": "طريقة الدفع",
+      "reference": "المرجع"
+    },
+    "problems": {
+      "required": "مطلوب",
+      "amount": "أدخل مبلغًا أكبر من صفر",
+      "note": "اذكر الغرض منه"
+    }
+  },
+  "close": {
+    "close": "إغلاق الشهر",
+    "reopen": "إعادة الفتح",
+    "title": "إغلاق {{month}}؟",
+    "body": "يُجمَّد كشف {{name}} لهذا الشهر كما هو. تظهر التصحيحات اللاحقة في الشهر المفتوح التالي.",
+    "closed": "أُغلق الشهر",
+    "reopenTitle": "إعادة فتح {{month}}؟",
+    "reopenBody": "يُعاد احتساب الكشف إلى أن يُغلق الشهر مجددًا.",
+    "reason": "لماذا تعيد فتحه؟",
+    "reopened": "أُعيد فتح الشهر"
+  },
+  "void": {
+    "adjustmentTitle": "إلغاء هذا التعديل؟",
+    "payoutTitle": "إلغاء هذه الدفعة؟",
+    "body": "يبقى في الكشف مشطوبًا، مع سببك.",
+    "ok": "إلغاء",
+    "reason": "السبب",
+    "done": "أُلغي"
+  },
+  "mine": {
+    "title": "كشفي",
+    "subtitle": "ما استحققته، شهرًا بشهر.",
+    "emptyTitle": "لا كشف بعد",
+    "emptyBody": "تظهر كشوفك هنا بعد أن تحدد العيادة اتفاقيتك."
+  },
+  "errors": {
+    "compensation": {
+      "overlap": "اتفاقية أخرى سارية في هذه التواريخ.",
+      "period_closed": "هذا الشهر مغلق.",
+      "effective_date": "تحقق من التواريخ: لا تنتهي الاتفاقية قبل بدئها، ولا يمكن إلا تقصيرها.",
+      "month_not_ended": "لا يُغلق الشهر إلا بعد انتهائه.",
+      "previous_period_open": "أغلق الشهر السابق أولًا.",
+      "next_period_closed": "أعد فتح الشهر التالي أولًا.",
+      "already_closed": "هذا الشهر مغلق أصلًا.",
+      "not_closed": "هذا الشهر غير مغلق.",
+      "not_reversible": "أُلغي هذا من قبل.",
+      "not_found": "لا كشف لهذا الشهر.",
+      "idempotency_mismatch": "أُرسل هذا الطلب من قبل بتفاصيل أخرى. حاول مجددًا."
+    },
+    "agreement": {
+      "not_found": "لم تعد هذه الاتفاقية موجودة."
+    }
+  }
+}

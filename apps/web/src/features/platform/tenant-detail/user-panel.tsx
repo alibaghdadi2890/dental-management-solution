@@ -5,7 +5,7 @@ import {
   type StaffUser,
 } from '@dcm/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useId, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { ChipCheckboxGroup } from '@/components/ui/chip-checkbox';
@@ -43,7 +43,7 @@ import { useRoleLabel } from '@/features/users/role-label';
 
 type PanelError = UserFieldError | 'emailTaken' | 'lastOwner';
 type TextField = 'displayName' | 'email' | 'title' | 'phone';
-export type PanelTab = 'profile' | 'access';
+export type PanelTab = 'profile' | 'access' | 'compensation';
 
 const sameSet = (a: readonly string[], b: readonly string[]) =>
   [...a].sort().join() === [...b].sort().join();
@@ -51,12 +51,14 @@ const sameSet = (a: readonly string[], b: readonly string[]) =>
 /**
  * New / Edit user right panel (spec: platform admin portal, Users tab; Settings › Staff,
  * ADR-0055). Tabs **Profile · Access** for whoever sees access (`role:read`): Access holds the
- * roles and the person's additional permissions, saved with the profile by the one Save.
+ * roles and the person's additional permissions, saved with the profile by the one Save. Clinic
+ * Settings may add a **Compensation** tab for a dentist (feature 13b), which saves on its own.
  */
 export function UserPanel({
   tenantId,
   user,
   initialTab = 'profile',
+  compensation,
   onClose,
 }: {
   tenantId: string;
@@ -64,6 +66,8 @@ export function UserPanel({
   user?: StaffUser | undefined;
   /** The tab it opens on: **Access** from the row menu's Access & permissions. */
   initialTab?: PanelTab;
+  /** The Compensation tab's content: only clinic Settings passes it (`compensation:manage`). */
+  compensation?: ReactNode;
   onClose: () => void;
 }) {
   const { t } = useTranslation(['admin', 'common', 'roles']);
@@ -257,20 +261,27 @@ export function UserPanel({
           {failure}
         </div>
       )}
-      {access.read && (
+      {(access.read || compensation !== undefined) && (
         <Tabs
           idBase={tabsId}
           label={t('roles:access.tab')}
           tabs={[
-            { key: 'profile', label: t('roles:access.profileTab') },
-            { key: 'access', label: t('roles:access.tab') },
+            { key: 'profile' as const, label: t('roles:access.profileTab') },
+            ...(access.read ? [{ key: 'access' as const, label: t('roles:access.tab') }] : []),
+            ...(compensation === undefined
+              ? []
+              : [{ key: 'compensation' as const, label: t('admin:users.panel.compensationTab') }]),
           ]}
           active={tab}
           onChange={setTab}
           className="-mt-1 mb-1 border-b border-border"
         />
       )}
-      {tab === 'profile' || !access.read ? (
+      {tab === 'compensation' && compensation !== undefined ? (
+        <TabPanel idBase={tabsId} tabKey="compensation" className="outline-none">
+          {compensation}
+        </TabPanel>
+      ) : tab === 'profile' || !access.read ? (
         <TabPanel idBase={tabsId} tabKey="profile" className="flex flex-col gap-4 outline-none">
           {/* Profiles are staff management (`user:write`); access is on the next tab. */}
           <fieldset

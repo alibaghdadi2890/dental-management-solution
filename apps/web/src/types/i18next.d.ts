@@ -5,6 +5,7 @@ import type billing from '../locales/en/billing.json';
 import type files from '../locales/en/files.json';
 import type catalog from '../locales/en/catalog.json';
 import type clinical from '../locales/en/clinical.json';
+import type compensation from '../locales/en/compensation.json';
 import type common from '../locales/en/common.json';
 import type patients from '../locales/en/patients.json';
 import type payments from '../locales/en/payments.json';
@@ -37,6 +38,7 @@ declare module 'i18next' {
       activity: typeof activity;
       files: typeof files;
       roles: typeof roles;
+      compensation: typeof compensation;
     };
   }
 }

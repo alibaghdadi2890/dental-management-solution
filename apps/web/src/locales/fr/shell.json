@@ -27,7 +27,9 @@
     "collapse": "Réduire le menu",
     "expand": "Développer le menu",
     "defaultRoles": "Rôles par défaut",
-    "platformActivity": "Activité"
+    "platformActivity": "Activité",
+    "compensation": "Rémunération",
+    "myStatement": "Mon relevé"
   },
   "breadcrumb": "Fil d’Ariane",
   "platformCrumb": "Plateforme",

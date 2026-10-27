@@ -1,0 +1,292 @@
+{
+  "exportCsv": "Export CSV",
+  "month": {
+    "previous": "Previous month",
+    "next": "Next month"
+  },
+  "status": {
+    "provisional": "Provisional",
+    "closed": "Closed",
+    "none": "No agreement"
+  },
+  "agreementStatus": {
+    "active": "In force",
+    "future": "Starts later",
+    "ended": "Ended",
+    "superseded": "Replaced"
+  },
+  "components": {
+    "monthlyFixed": "Fixed amount",
+    "share": "Share",
+    "perVisit": "Per visit",
+    "perDay": "Per day"
+  },
+  "presets": {
+    "revenueShare": {
+      "label": "Revenue share",
+      "hint": "A percent of what is collected or billed"
+    },
+    "perVisit": { "label": "Fixed per visit", "hint": "An amount for each completed visit" },
+    "monthlySalary": { "label": "Monthly salary", "hint": "The same amount every month" },
+    "salaryCommission": {
+      "label": "Salary + commission",
+      "hint": "A salary and a share above a monthly base"
+    },
+    "perDay": { "label": "Per day", "hint": "An amount for each day with visits" },
+    "chairRent": { "label": "Chair rent", "hint": "The dentist pays rent and keeps their fees" },
+    "custom": { "label": "Custom", "hint": "Any combination" }
+  },
+  "visitTypes": {
+    "examination": "Examination",
+    "emergency": "Emergency",
+    "treatment": "Treatment",
+    "hygiene": "Hygiene",
+    "consultation": "Consultation"
+  },
+  "adjustmentKinds": {
+    "bonus": "Bonus",
+    "deduction": "Deduction",
+    "lab_cost": "Lab cost",
+    "materials": "Materials",
+    "advance": "Advance",
+    "opening_balance": "Opening balance",
+    "correction": "Correction",
+    "other": "Other"
+  },
+  "sources": {
+    "visit_charge": "Charge",
+    "visit_charge_adjustment": "Amendment or discount",
+    "visit_charge_reversal": "Void",
+    "allocation": "Payment",
+    "credit_applied": "Credit applied",
+    "release": "Refund or correction"
+  },
+  "words": {
+    "share": {
+      "collection": "{{percent}} % of collected amounts",
+      "production": "{{percent}} % of billed amounts"
+    },
+    "override": "{{name}} {{percent}} %",
+    "threshold": "above {{amount}} a month",
+    "fixed": "{{amount}} / month",
+    "rent": "Rent {{amount}} / month",
+    "prorated": ", pro-rated",
+    "perVisit": "{{amount}} per visit",
+    "byType": "{{type}} {{amount}}",
+    "chargedOnly": "charged visits only",
+    "perDay": "{{amount}} per day with visits"
+  },
+  "agreement": {
+    "loading": "Loading agreements…",
+    "loadFailed": "The agreements could not be loaded.",
+    "none": "No agreement yet. Until there is one, this dentist earns nothing here.",
+    "new": "New agreement",
+    "changeTerms": "Change terms",
+    "changeHint": "The current agreement ends the day before the new one starts. Starting on its first day replaces it.",
+    "end": "End agreement",
+    "lastDay": "Last day in force",
+    "reason": "Reason",
+    "save": "Save agreement",
+    "saveChange": "Change terms",
+    "created": "Agreement saved",
+    "changed": "Terms changed",
+    "ended": "Agreement ended",
+    "history": "Earlier agreements",
+    "from": "From {{from}}",
+    "between": "{{from}} – {{to}}",
+    "visible": "the dentist sees their statement",
+    "hidden": "hidden from the dentist"
+  },
+  "form": {
+    "preset": "Kind of agreement",
+    "effectiveFrom": "Effective from",
+    "chooseDate": "Choose date",
+    "add": "Add {{name}}",
+    "amount": "Amount",
+    "optional": "Optional",
+    "note": "Note",
+    "visible": "Dentist can see their statement",
+    "visibleHint": "Under My statement, with their own lines only.",
+    "fixed": {
+      "direction": "Who pays",
+      "pay": "The clinic pays",
+      "charge": "The dentist pays rent",
+      "amount": "Amount per month",
+      "prorate": "Pro-rate partial months",
+      "prorateHint": "By the calendar days the agreement covers."
+    },
+    "share": {
+      "percent": "Percent",
+      "basis": "Of",
+      "collection": "Collected",
+      "production": "Billed",
+      "overrides": "Rates by service",
+      "overridesHint": "A service's own rate beats its category's.",
+      "target": "Service or category",
+      "service": "Service",
+      "category": "Category",
+      "choose": "Choose…",
+      "remove": "Remove rate",
+      "addOverride": "+ Add a rate",
+      "threshold": "Minimum monthly base (optional)"
+    },
+    "perVisit": {
+      "amount": "Amount per visit",
+      "byType": "Amount by visit type",
+      "same": "Same",
+      "chargedOnly": "Only visits with a charge",
+      "chargedOnlyHint": "Off: a visit with a total of 0 still counts."
+    },
+    "perDay": {
+      "amount": "Amount per day with visits"
+    },
+    "problems": {
+      "required": "Required",
+      "amount": "Enter an amount above zero",
+      "percent": "Enter a percent between 0 and 100",
+      "none": "Add at least one component"
+    }
+  },
+  "kpi": {
+    "production": "Production",
+    "collections": "Collections",
+    "earned": "Earned",
+    "balanceOwed": "Balance owed to dentists"
+  },
+  "report": {
+    "title": "Compensation",
+    "subtitle": "What each dentist earned this month, and what the clinic owes them.",
+    "loading": "Loading compensation…",
+    "errorTitle": "Compensation could not be loaded",
+    "errorBody": "Check your connection and try again.",
+    "emptyTitle": "No dentists yet",
+    "emptyBody": "Dentists appear here once they are added under Settings › Staff.",
+    "inactive": "(inactive)",
+    "unattributed": "Unattributed (opening balances, balance adjustments)",
+    "columns": {
+      "dentist": "Dentist",
+      "visits": "Visits",
+      "production": "Production",
+      "collections": "Collections",
+      "earned": "Earned",
+      "adjustments": "Adjustments",
+      "payouts": "Payouts",
+      "balance": "Balance",
+      "status": "Status"
+    }
+  },
+  "statement": {
+    "title": "Statement",
+    "subtitle": "Statement for {{month}}",
+    "back": "← Compensation",
+    "loading": "Loading the statement…",
+    "errorTitle": "The statement could not be loaded",
+    "errorBody": "Check your connection and try again.",
+    "provisionalNote": "Provisional — figures may change until the clinic closes the month.",
+    "empty": "Nothing this month.",
+    "emptyFirst": "Nothing this month yet. Visits imported from the previous system were never charged, so they earn nothing.",
+    "addAdjustment": "Add adjustment",
+    "recordPayout": "Record payout",
+    "cards": {
+      "opening": "Opening balance",
+      "earned": "Earned",
+      "paid": "Paid",
+      "closing": "Closing balance",
+      "owesClinic": "Dentist owes the clinic"
+    },
+    "columns": {
+      "date": "Date",
+      "visit": "Visit",
+      "patient": "Patient",
+      "base": "Base",
+      "rate": "Rate",
+      "amount": "Amount"
+    },
+    "blended": "{{percent}} (blended)",
+    "threshold": "Below minimum base ({{amount}})",
+    "days_one": "{{count}} day of {{amount}}",
+    "days_other": "{{count}} days of {{amount}}",
+    "dayVisits_one": "{{count}} visit",
+    "dayVisits_other": "{{count}} visits",
+    "lateFrom": "Late entries from {{month}}",
+    "late": "Late entries",
+    "noAgreement": "Without an agreement",
+    "notComputed": "Not computed",
+    "notComputedHint": "In another currency than the clinic's: listed, not counted.",
+    "adjustments": "Adjustments",
+    "payouts": "Payouts",
+    "void": "Void",
+    "voided": "Voided: {{reason}}"
+  },
+  "panel": {
+    "eyebrow": "Compensation",
+    "date": "Date",
+    "amount": "Amount",
+    "note": "Note",
+    "adjustment": {
+      "title": "Add adjustment",
+      "submit": "Add adjustment",
+      "saved": "Adjustment added",
+      "direction": "Direction",
+      "add": "Adds to what the clinic owes",
+      "deduct": "Deducts",
+      "kind": "Kind",
+      "chooseKind": "Choose a kind"
+    },
+    "payout": {
+      "title": "Record payout",
+      "submit": "Record payout",
+      "saved": "Payout recorded",
+      "method": "Method",
+      "reference": "Reference"
+    },
+    "problems": {
+      "required": "Required",
+      "amount": "Enter an amount above zero",
+      "note": "Say what it is for"
+    }
+  },
+  "close": {
+    "close": "Close month",
+    "reopen": "Reopen",
+    "title": "Close {{month}}?",
+    "body": "{{name}}'s statement for this month is frozen as it stands. Later corrections appear in the next open month.",
+    "closed": "Month closed",
+    "reopenTitle": "Reopen {{month}}?",
+    "reopenBody": "The statement is computed again until the month is closed again.",
+    "reason": "Why reopen it?",
+    "reopened": "Month reopened"
+  },
+  "void": {
+    "adjustmentTitle": "Void this adjustment?",
+    "payoutTitle": "Void this payout?",
+    "body": "It stays on the statement, struck through, with your reason.",
+    "ok": "Void",
+    "reason": "Reason",
+    "done": "Voided"
+  },
+  "mine": {
+    "title": "My statement",
+    "subtitle": "What you earned, month by month.",
+    "emptyTitle": "No statement yet",
+    "emptyBody": "Your statements appear here once the clinic sets up your agreement."
+  },
+  "errors": {
+    "compensation": {
+      "overlap": "Another agreement is in force on these dates.",
+      "period_closed": "That month is closed.",
+      "effective_date": "Check the dates: an agreement only ends after it starts, and is only ever shortened.",
+      "month_not_ended": "A month can be closed once it has ended.",
+      "previous_period_open": "Close the previous month first.",
+      "next_period_closed": "Reopen the next month first.",
+      "already_closed": "That month is already closed.",
+      "not_closed": "That month is not closed.",
+      "not_reversible": "This is already voided.",
+      "not_found": "There is no statement for that month.",
+      "idempotency_mismatch": "This request was already sent with other details. Try again."
+    },
+    "agreement": {
+      "not_found": "That agreement no longer exists."
+    }
+  }
+}

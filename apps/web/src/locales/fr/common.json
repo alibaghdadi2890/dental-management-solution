@@ -34,6 +34,7 @@
   },
   "roles": {
     "owner": "Propriétaire",
+    "admin": "Administrateur",
     "dentist": "Dentiste",
     "assistant": "Assistant(e)",
     "frontdesk": "Accueil"

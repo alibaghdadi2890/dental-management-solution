@@ -98,6 +98,7 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
   const { notation } = useChartSettings();
   const { names: staff } = useStaffNames();
   const canFinance = usePermission('finance:read');
+  const canCompensate = usePermission('compensation:manage');
   const today = todayIn(tenant.timeZone);
 
   const term = search.q === undefined ? null : searchTerm(search.q);
@@ -191,31 +192,36 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
   return (
     <Page title={t('title')} subtitle={t('subtitle')}>
       <div role="group" aria-label={t('filters.area')} className="mb-3 flex flex-wrap gap-1.5">
-        {/* Money rows are the clinic's finances (ADR-0055): the API leaves them out without
-            finance:read, so neither is the chip offered. */}
-        {[undefined, ...ACTIVITY_AREAS.filter((area) => canFinance || area !== 'payments')].map(
-          (area) => {
-            const on = search.area === area;
-            return (
-              <button
-                key={area ?? 'all'}
-                type="button"
-                aria-pressed={on}
-                onClick={() => {
-                  set({ area });
-                }}
-                className={cn(
-                  'h-[30px] cursor-pointer rounded-[15px] border px-3 text-[12.5px] leading-none font-medium',
-                  on
-                    ? 'border-ink bg-ink text-white'
-                    : 'border-border-control bg-surface text-ink-secondary hover:border-ink hover:text-ink',
-                )}
-              >
-                {area === undefined ? t('areas.all') : t(`areas.${area}`)}
-              </button>
-            );
-          },
-        )}
+        {/* Money rows are the clinic's finances (ADR-0055) and compensation the owner's
+            (ADR-0060): the API leaves them out without the permission, so neither is the chip
+            offered. */}
+        {[
+          undefined,
+          ...ACTIVITY_AREAS.filter(
+            (area) =>
+              (canFinance || area !== 'payments') && (canCompensate || area !== 'compensation'),
+          ),
+        ].map((area) => {
+          const on = search.area === area;
+          return (
+            <button
+              key={area ?? 'all'}
+              type="button"
+              aria-pressed={on}
+              onClick={() => {
+                set({ area });
+              }}
+              className={cn(
+                'h-[30px] cursor-pointer rounded-[15px] border px-3 text-[12.5px] leading-none font-medium',
+                on
+                  ? 'border-ink bg-ink text-white'
+                  : 'border-border-control bg-surface text-ink-secondary hover:border-ink hover:text-ink',
+              )}
+            >
+              {area === undefined ? t('areas.all') : t(`areas.${area}`)}
+            </button>
+          );
+        })}
       </div>
       <div className="mb-3.5 flex flex-wrap items-center gap-2">
         <SearchBox

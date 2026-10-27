@@ -1,0 +1,297 @@
+{
+  "exportCsv": "Exporter en CSV",
+  "month": {
+    "previous": "Mois précédent",
+    "next": "Mois suivant"
+  },
+  "status": {
+    "provisional": "Provisoire",
+    "closed": "Clôturé",
+    "none": "Sans accord"
+  },
+  "agreementStatus": {
+    "active": "En vigueur",
+    "future": "Commence plus tard",
+    "ended": "Terminé",
+    "superseded": "Remplacé"
+  },
+  "components": {
+    "monthlyFixed": "Montant fixe",
+    "share": "Pourcentage",
+    "perVisit": "Par visite",
+    "perDay": "Par jour"
+  },
+  "presets": {
+    "revenueShare": {
+      "label": "Pourcentage du chiffre",
+      "hint": "Un pourcentage de l'encaissé ou du facturé"
+    },
+    "perVisit": { "label": "Fixe par visite", "hint": "Un montant par visite terminée" },
+    "monthlySalary": { "label": "Salaire mensuel", "hint": "Le même montant chaque mois" },
+    "salaryCommission": {
+      "label": "Salaire + commission",
+      "hint": "Un salaire et un pourcentage au-delà d'une base mensuelle"
+    },
+    "perDay": { "label": "Par jour", "hint": "Un montant par jour avec des visites" },
+    "chairRent": {
+      "label": "Location de fauteuil",
+      "hint": "Le dentiste paie un loyer et garde ses honoraires"
+    },
+    "custom": { "label": "Personnalisé", "hint": "Toute combinaison" }
+  },
+  "visitTypes": {
+    "examination": "Examen",
+    "emergency": "Urgence",
+    "treatment": "Traitement",
+    "hygiene": "Hygiène",
+    "consultation": "Consultation"
+  },
+  "adjustmentKinds": {
+    "bonus": "Prime",
+    "deduction": "Retenue",
+    "lab_cost": "Frais de laboratoire",
+    "materials": "Matériaux",
+    "advance": "Avance",
+    "opening_balance": "Solde d'ouverture",
+    "correction": "Correction",
+    "other": "Autre"
+  },
+  "sources": {
+    "visit_charge": "Facturation",
+    "visit_charge_adjustment": "Modification ou remise",
+    "visit_charge_reversal": "Annulation",
+    "allocation": "Paiement",
+    "credit_applied": "Crédit appliqué",
+    "release": "Remboursement ou correction"
+  },
+  "words": {
+    "share": {
+      "collection": "{{percent}} % de l'encaissé",
+      "production": "{{percent}} % du facturé"
+    },
+    "override": "{{name}} {{percent}} %",
+    "threshold": "au-delà de {{amount}} par mois",
+    "fixed": "{{amount}} / mois",
+    "rent": "Loyer {{amount}} / mois",
+    "prorated": ", au prorata",
+    "perVisit": "{{amount}} par visite",
+    "byType": "{{type}} {{amount}}",
+    "chargedOnly": "visites facturées uniquement",
+    "perDay": "{{amount}} par jour avec visites"
+  },
+  "agreement": {
+    "loading": "Chargement des accords…",
+    "loadFailed": "Les accords n'ont pas pu être chargés.",
+    "none": "Pas encore d'accord. Sans accord, ce dentiste ne gagne rien ici.",
+    "new": "Nouvel accord",
+    "changeTerms": "Modifier les conditions",
+    "changeHint": "L'accord actuel se termine la veille du début du nouveau. Commencer le jour même de son début le remplace.",
+    "end": "Mettre fin à l'accord",
+    "lastDay": "Dernier jour en vigueur",
+    "reason": "Motif",
+    "save": "Enregistrer l'accord",
+    "saveChange": "Modifier les conditions",
+    "created": "Accord enregistré",
+    "changed": "Conditions modifiées",
+    "ended": "Accord terminé",
+    "history": "Accords précédents",
+    "from": "À partir du {{from}}",
+    "between": "{{from}} – {{to}}",
+    "visible": "le dentiste voit son relevé",
+    "hidden": "masqué pour le dentiste"
+  },
+  "form": {
+    "preset": "Type d'accord",
+    "effectiveFrom": "En vigueur à partir du",
+    "chooseDate": "Choisir la date",
+    "add": "Ajouter {{name}}",
+    "amount": "Montant",
+    "optional": "Facultatif",
+    "note": "Note",
+    "visible": "Le dentiste peut voir son relevé",
+    "visibleHint": "Sous Mon relevé, avec ses seules lignes.",
+    "fixed": {
+      "direction": "Qui paie",
+      "pay": "La clinique paie",
+      "charge": "Le dentiste paie un loyer",
+      "amount": "Montant par mois",
+      "prorate": "Proratiser les mois partiels",
+      "prorateHint": "Selon les jours calendaires couverts par l'accord."
+    },
+    "share": {
+      "percent": "Pourcentage",
+      "basis": "De",
+      "collection": "Encaissé",
+      "production": "Facturé",
+      "overrides": "Taux par acte",
+      "overridesHint": "Le taux propre d'un acte prime sur celui de sa catégorie.",
+      "target": "Acte ou catégorie",
+      "service": "Acte",
+      "category": "Catégorie",
+      "choose": "Choisir…",
+      "remove": "Retirer le taux",
+      "addOverride": "+ Ajouter un taux",
+      "threshold": "Base mensuelle minimale (facultatif)"
+    },
+    "perVisit": {
+      "amount": "Montant par visite",
+      "byType": "Montant par type de visite",
+      "same": "Identique",
+      "chargedOnly": "Seulement les visites facturées",
+      "chargedOnlyHint": "Désactivé : une visite à 0 compte quand même."
+    },
+    "perDay": {
+      "amount": "Montant par jour avec visites"
+    },
+    "problems": {
+      "required": "Obligatoire",
+      "amount": "Saisissez un montant supérieur à zéro",
+      "percent": "Saisissez un pourcentage entre 0 et 100",
+      "none": "Ajoutez au moins un élément"
+    }
+  },
+  "kpi": {
+    "production": "Facturé",
+    "collections": "Encaissé",
+    "earned": "Gagné",
+    "balanceOwed": "Solde dû aux dentistes"
+  },
+  "report": {
+    "title": "Rémunération",
+    "subtitle": "Ce que chaque dentiste a gagné ce mois-ci, et ce que la clinique lui doit.",
+    "loading": "Chargement de la rémunération…",
+    "errorTitle": "La rémunération n'a pas pu être chargée",
+    "errorBody": "Vérifiez votre connexion et réessayez.",
+    "emptyTitle": "Pas encore de dentistes",
+    "emptyBody": "Les dentistes apparaissent ici une fois ajoutés dans Paramètres › Équipe.",
+    "inactive": "(inactif)",
+    "unattributed": "Non attribué (soldes d'ouverture, ajustements de solde)",
+    "columns": {
+      "dentist": "Dentiste",
+      "visits": "Visites",
+      "production": "Facturé",
+      "collections": "Encaissé",
+      "earned": "Gagné",
+      "adjustments": "Ajustements",
+      "payouts": "Versements",
+      "balance": "Solde",
+      "status": "Statut"
+    }
+  },
+  "statement": {
+    "title": "Relevé",
+    "subtitle": "Relevé de {{month}}",
+    "back": "← Rémunération",
+    "loading": "Chargement du relevé…",
+    "errorTitle": "Le relevé n'a pas pu être chargé",
+    "errorBody": "Vérifiez votre connexion et réessayez.",
+    "provisionalNote": "Provisoire — les montants peuvent changer jusqu'à la clôture du mois par la clinique.",
+    "empty": "Rien ce mois-ci.",
+    "emptyFirst": "Rien ce mois-ci pour l'instant. Les visites importées de l'ancien système n'ont jamais été facturées : elles ne rapportent rien.",
+    "addAdjustment": "Ajouter un ajustement",
+    "recordPayout": "Enregistrer un versement",
+    "cards": {
+      "opening": "Solde d'ouverture",
+      "earned": "Gagné",
+      "paid": "Versé",
+      "closing": "Solde de clôture",
+      "owesClinic": "Le dentiste doit à la clinique"
+    },
+    "columns": {
+      "date": "Date",
+      "visit": "Visite",
+      "patient": "Patient",
+      "base": "Base",
+      "rate": "Taux",
+      "amount": "Montant"
+    },
+    "blended": "{{percent}} (moyen)",
+    "threshold": "Sous la base minimale ({{amount}})",
+    "days_one": "{{count}} jour sur {{amount}}",
+    "days_many": "{{count}} jours sur {{amount}}",
+    "days_other": "{{count}} jours sur {{amount}}",
+    "dayVisits_one": "{{count}} visite",
+    "dayVisits_many": "{{count}} visites",
+    "dayVisits_other": "{{count}} visites",
+    "lateFrom": "Écritures tardives de {{month}}",
+    "late": "Écritures tardives",
+    "noAgreement": "Sans accord",
+    "notComputed": "Non calculé",
+    "notComputedHint": "Dans une autre devise que celle de la clinique : listé, non compté.",
+    "adjustments": "Ajustements",
+    "payouts": "Versements",
+    "void": "Annuler",
+    "voided": "Annulé : {{reason}}"
+  },
+  "panel": {
+    "eyebrow": "Rémunération",
+    "date": "Date",
+    "amount": "Montant",
+    "note": "Note",
+    "adjustment": {
+      "title": "Ajouter un ajustement",
+      "submit": "Ajouter l'ajustement",
+      "saved": "Ajustement ajouté",
+      "direction": "Sens",
+      "add": "S'ajoute à ce que doit la clinique",
+      "deduct": "Se déduit",
+      "kind": "Type",
+      "chooseKind": "Choisir un type"
+    },
+    "payout": {
+      "title": "Enregistrer un versement",
+      "submit": "Enregistrer le versement",
+      "saved": "Versement enregistré",
+      "method": "Moyen",
+      "reference": "Référence"
+    },
+    "problems": {
+      "required": "Obligatoire",
+      "amount": "Saisissez un montant supérieur à zéro",
+      "note": "Précisez à quoi il correspond"
+    }
+  },
+  "close": {
+    "close": "Clôturer le mois",
+    "reopen": "Rouvrir",
+    "title": "Clôturer {{month}} ?",
+    "body": "Le relevé de {{name}} pour ce mois est figé tel quel. Les corrections ultérieures apparaissent dans le mois ouvert suivant.",
+    "closed": "Mois clôturé",
+    "reopenTitle": "Rouvrir {{month}} ?",
+    "reopenBody": "Le relevé est recalculé jusqu'à la prochaine clôture du mois.",
+    "reason": "Pourquoi le rouvrir ?",
+    "reopened": "Mois rouvert"
+  },
+  "void": {
+    "adjustmentTitle": "Annuler cet ajustement ?",
+    "payoutTitle": "Annuler ce versement ?",
+    "body": "Il reste sur le relevé, barré, avec votre motif.",
+    "ok": "Annuler",
+    "reason": "Motif",
+    "done": "Annulé"
+  },
+  "mine": {
+    "title": "Mon relevé",
+    "subtitle": "Ce que vous avez gagné, mois par mois.",
+    "emptyTitle": "Pas encore de relevé",
+    "emptyBody": "Vos relevés apparaissent ici une fois votre accord défini par la clinique."
+  },
+  "errors": {
+    "compensation": {
+      "overlap": "Un autre accord est en vigueur à ces dates.",
+      "period_closed": "Ce mois est clôturé.",
+      "effective_date": "Vérifiez les dates : un accord ne se termine qu'après avoir commencé, et ne peut qu'être raccourci.",
+      "month_not_ended": "Un mois ne peut être clôturé qu'une fois terminé.",
+      "previous_period_open": "Clôturez d'abord le mois précédent.",
+      "next_period_closed": "Rouvrez d'abord le mois suivant.",
+      "already_closed": "Ce mois est déjà clôturé.",
+      "not_closed": "Ce mois n'est pas clôturé.",
+      "not_reversible": "C'est déjà annulé.",
+      "not_found": "Il n'y a pas de relevé pour ce mois.",
+      "idempotency_mismatch": "Cette demande a déjà été envoyée avec d'autres informations. Réessayez."
+    },
+    "agreement": {
+      "not_found": "Cet accord n'existe plus."
+    }
+  }
+}

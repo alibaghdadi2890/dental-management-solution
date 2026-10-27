@@ -57,7 +57,8 @@
     "users": "Users",
     "settings": "Settings",
     "contacts": "Contacts",
-    "files": "Files"
+    "files": "Files",
+    "compensation": "Compensation"
   },
   "ranges": {
     "today": "Today",
@@ -207,6 +208,17 @@
       "update": "Edited {{subject}} in the medical history lists",
       "delete": "Deleted {{subject}} from the medical history lists",
       "deactivate": "Stopped offering {{subject}} in the medical history lists"
+    },
+    "compensation": {
+      "agreement_create": "Set up an agreement for {{subject}}",
+      "agreement_end": "Ended {{subject}}'s agreement",
+      "agreement_supersede": "Replaced {{subject}}'s agreement",
+      "adjustment_record": "Added an adjustment of {{amount}} for {{subject}}",
+      "adjustment_void": "Voided an adjustment of {{amount}} for {{subject}}",
+      "payout_record": "Recorded a payout of {{amount}} to {{subject}}",
+      "payout_void": "Voided a payout of {{amount}} to {{subject}}",
+      "period_close": "Closed {{subject}}'s statement for {{month}}",
+      "period_reopen": "Reopened {{subject}}'s statement for {{month}}"
     }
   },
   "fields": {

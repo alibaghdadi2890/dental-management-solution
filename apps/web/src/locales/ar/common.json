@@ -34,6 +34,7 @@
   },
   "roles": {
     "owner": "المالك",
+    "admin": "المسؤول",
     "dentist": "طبيب أسنان",
     "assistant": "مساعد",
     "frontdesk": "الاستقبال"

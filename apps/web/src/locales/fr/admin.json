@@ -257,7 +257,8 @@
       "save": "Enregistrer",
       "created": "Utilisateur créé",
       "saved": "Modifications enregistrées",
-      "failed": "Impossible d’enregistrer l’utilisateur. Vérifiez le formulaire et réessayez."
+      "failed": "Impossible d’enregistrer l’utilisateur. Vérifiez le formulaire et réessayez.",
+      "compensationTab": "Rémunération"
     },
     "reset": {
       "eyebrow": "Réinitialiser le mot de passe",

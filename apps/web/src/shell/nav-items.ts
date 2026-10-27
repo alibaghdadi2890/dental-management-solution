@@ -10,12 +10,16 @@ interface NavEntry<TKey extends string, TPath extends string> {
 
 /** Sidebar entries (POC app shell). Schedule is not part of phase 1. Today is the chair lane for
  * whoever sees visits and the checkout lane for whoever sees a patient's money; Payments is the
- * clinic's finances (`finance:read`, ADR-0055). */
+ * clinic's finances (`finance:read`, ADR-0055). Compensation is how the clinic pays its dentists
+ * (`compensation:manage`, feature 13b); My statement is a dentist's own, shown by the sidebar only
+ * once they have a month to read. */
 export const MAIN_NAV = [
   { key: 'today', to: '/today', permission: 'visit:read' },
   { key: 'patients', to: '/patients', permission: 'patient:read' },
   { key: 'visits', to: '/visits', permission: 'visit:read' },
   { key: 'payments', to: '/payments', permission: 'finance:read' },
+  { key: 'compensation', to: '/compensation', permission: 'compensation:manage' },
+  { key: 'myStatement', to: '/my/statement', permission: 'compensation:read' },
 ] as const satisfies readonly NavEntry<string, string>[];
 
 /** Every clinic role reads the catalog; only `catalog:write` edits it (read-only screen otherwise).

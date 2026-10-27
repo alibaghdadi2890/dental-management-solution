@@ -27,7 +27,9 @@
     "collapse": "طي القائمة",
     "expand": "توسيع القائمة",
     "defaultRoles": "الأدوار الافتراضية",
-    "platformActivity": "النشاط"
+    "platformActivity": "النشاط",
+    "compensation": "أتعاب الأطباء",
+    "myStatement": "كشفي"
   },
   "breadcrumb": "مسار التنقل",
   "platformCrumb": "المنصة",

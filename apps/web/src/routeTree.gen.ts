@@ -20,6 +20,9 @@ import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
 import { Route as AppAdminActivityRouteImport } from './routes/_app/admin/activity'
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
+import { Route as AppCompensationIndexRouteImport } from './routes/_app/compensation/index'
+import { Route as AppCompensationProfileIdRouteImport } from './routes/_app/compensation/$profileId'
+import { Route as AppMyStatementRouteImport } from './routes/_app/my/statement'
 import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
 import { Route as AppPatientsPatientIdRouteImport } from './routes/_app/patients/$patientId'
 import { Route as AppPaymentsIndexRouteImport } from './routes/_app/payments/index'
@@ -85,6 +88,22 @@ const AppAdminActivityRoute = AppAdminActivityRouteImport.update({
 const AppAdminRolesRoute = AppAdminRolesRouteImport.update({
   id: '/admin/roles',
   path: '/admin/roles',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCompensationIndexRoute = AppCompensationIndexRouteImport.update({
+  id: '/compensation/',
+  path: '/compensation/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCompensationProfileIdRoute =
+  AppCompensationProfileIdRouteImport.update({
+    id: '/compensation/$profileId',
+    path: '/compensation/$profileId',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppMyStatementRoute = AppMyStatementRouteImport.update({
+  id: '/my/statement',
+  path: '/my/statement',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPatientsIndexRoute = AppPatientsIndexRouteImport.update({
@@ -159,6 +178,8 @@ export interface FileRoutesByFullPath {
   '/today': typeof AppTodayRoute
   '/admin/activity': typeof AppAdminActivityRoute
   '/admin/roles': typeof AppAdminRolesRoute
+  '/compensation/$profileId': typeof AppCompensationProfileIdRoute
+  '/my/statement': typeof AppMyStatementRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
@@ -167,6 +188,7 @@ export interface FileRoutesByFullPath {
   '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/admin/': typeof AppAdminIndexRoute
+  '/compensation/': typeof AppCompensationIndexRoute
   '/patients/': typeof AppPatientsIndexRoute
   '/payments/': typeof AppPaymentsIndexRoute
   '/visits/': typeof AppVisitsIndexRoute
@@ -183,6 +205,8 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/admin/activity': typeof AppAdminActivityRoute
   '/admin/roles': typeof AppAdminRolesRoute
+  '/compensation/$profileId': typeof AppCompensationProfileIdRoute
+  '/my/statement': typeof AppMyStatementRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
@@ -191,6 +215,7 @@ export interface FileRoutesByTo {
   '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/admin': typeof AppAdminIndexRoute
+  '/compensation': typeof AppCompensationIndexRoute
   '/patients': typeof AppPatientsIndexRoute
   '/payments': typeof AppPaymentsIndexRoute
   '/visits': typeof AppVisitsIndexRoute
@@ -209,6 +234,8 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/admin/activity': typeof AppAdminActivityRoute
   '/_app/admin/roles': typeof AppAdminRolesRoute
+  '/_app/compensation/$profileId': typeof AppCompensationProfileIdRoute
+  '/_app/my/statement': typeof AppMyStatementRoute
   '/_app/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/_app/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
@@ -217,6 +244,7 @@ export interface FileRoutesById {
   '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
+  '/_app/compensation/': typeof AppCompensationIndexRoute
   '/_app/patients/': typeof AppPatientsIndexRoute
   '/_app/payments/': typeof AppPaymentsIndexRoute
   '/_app/visits/': typeof AppVisitsIndexRoute
@@ -235,6 +263,8 @@ export interface FileRouteTypes {
     | '/today'
     | '/admin/activity'
     | '/admin/roles'
+    | '/compensation/$profileId'
+    | '/my/statement'
     | '/patients/$patientId'
     | '/visits/$visitId'
     | '/print/family-statement/$contactId'
@@ -243,6 +273,7 @@ export interface FileRouteTypes {
     | '/print/receipt/$paymentId'
     | '/print/statement/$patientId'
     | '/admin/'
+    | '/compensation/'
     | '/patients/'
     | '/payments/'
     | '/visits/'
@@ -259,6 +290,8 @@ export interface FileRouteTypes {
     | '/'
     | '/admin/activity'
     | '/admin/roles'
+    | '/compensation/$profileId'
+    | '/my/statement'
     | '/patients/$patientId'
     | '/visits/$visitId'
     | '/print/family-statement/$contactId'
@@ -267,6 +300,7 @@ export interface FileRouteTypes {
     | '/print/receipt/$paymentId'
     | '/print/statement/$patientId'
     | '/admin'
+    | '/compensation'
     | '/patients'
     | '/payments'
     | '/visits'
@@ -284,6 +318,8 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/admin/activity'
     | '/_app/admin/roles'
+    | '/_app/compensation/$profileId'
+    | '/_app/my/statement'
     | '/_app/patients/$patientId'
     | '/_app/visits/$visitId'
     | '/print/family-statement/$contactId'
@@ -292,6 +328,7 @@ export interface FileRouteTypes {
     | '/print/receipt/$paymentId'
     | '/print/statement/$patientId'
     | '/_app/admin/'
+    | '/_app/compensation/'
     | '/_app/patients/'
     | '/_app/payments/'
     | '/_app/visits/'
@@ -382,6 +419,27 @@ declare module '@tanstack/react-router' {
       path: '/admin/roles'
       fullPath: '/admin/roles'
       preLoaderRoute: typeof AppAdminRolesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/compensation/': {
+      id: '/_app/compensation/'
+      path: '/compensation'
+      fullPath: '/compensation/'
+      preLoaderRoute: typeof AppCompensationIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/compensation/$profileId': {
+      id: '/_app/compensation/$profileId'
+      path: '/compensation/$profileId'
+      fullPath: '/compensation/$profileId'
+      preLoaderRoute: typeof AppCompensationProfileIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/my/statement': {
+      id: '/_app/my/statement'
+      path: '/my/statement'
+      fullPath: '/my/statement'
+      preLoaderRoute: typeof AppMyStatementRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/patients/': {
@@ -479,9 +537,12 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppAdminActivityRoute: typeof AppAdminActivityRoute
   AppAdminRolesRoute: typeof AppAdminRolesRoute
+  AppCompensationProfileIdRoute: typeof AppCompensationProfileIdRoute
+  AppMyStatementRoute: typeof AppMyStatementRoute
   AppPatientsPatientIdRoute: typeof AppPatientsPatientIdRoute
   AppVisitsVisitIdRoute: typeof AppVisitsVisitIdRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
+  AppCompensationIndexRoute: typeof AppCompensationIndexRoute
   AppPatientsIndexRoute: typeof AppPatientsIndexRoute
   AppPaymentsIndexRoute: typeof AppPaymentsIndexRoute
   AppVisitsIndexRoute: typeof AppVisitsIndexRoute
@@ -497,9 +558,12 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppAdminActivityRoute: AppAdminActivityRoute,
   AppAdminRolesRoute: AppAdminRolesRoute,
+  AppCompensationProfileIdRoute: AppCompensationProfileIdRoute,
+  AppMyStatementRoute: AppMyStatementRoute,
   AppPatientsPatientIdRoute: AppPatientsPatientIdRoute,
   AppVisitsVisitIdRoute: AppVisitsVisitIdRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
+  AppCompensationIndexRoute: AppCompensationIndexRoute,
   AppPatientsIndexRoute: AppPatientsIndexRoute,
   AppPaymentsIndexRoute: AppPaymentsIndexRoute,
   AppVisitsIndexRoute: AppVisitsIndexRoute,

@@ -195,7 +195,8 @@ export function PlatformActivityPage({
   return (
     <Page title={t('platform.title')} subtitle={t('platform.subtitle')}>
       <div role="group" aria-label={t('filters.area')} className="mb-3 flex flex-wrap gap-1.5">
-        {[undefined, ...ACTIVITY_AREAS].map((area) => {
+        {/* A clinic's compensation is never shown across clinics (ADR-0060). */}
+        {[undefined, ...ACTIVITY_AREAS.filter((area) => area !== 'compensation')].map((area) => {
           const on = search.area === area;
           return (
             <button

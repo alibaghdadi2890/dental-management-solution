@@ -15,7 +15,9 @@ export function PanelLayout({ children }: { children: ReactNode }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <PanelSlot.Provider value={slot}>{children}</PanelSlot.Provider>
       </div>
-      <div ref={setSlot} className="flex min-h-0 flex-none" />
+      {/* `contents`: the panel portalled in is a flex item of this row, like on the list pages,
+          so its `max-w-[48%]` is of the screen, not of a wrapper only as wide as the panel. */}
+      <div ref={setSlot} className="contents" />
     </div>
   );
 }

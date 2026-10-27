@@ -51,6 +51,17 @@ describe('visibleNav', () => {
     expect(keys(owner.main)).toEqual(['today', 'patients', 'visits', 'payments']);
   });
 
+  it('shows Compensation to the owner and My statement to whoever reads their own (13b)', () => {
+    const owner = visibleNav({
+      ...base,
+      permissions: ['finance:read', 'compensation:manage', 'compensation:read'],
+    });
+    expect(keys(owner.main)).toEqual(['payments', 'compensation', 'myStatement']);
+    const dentist = visibleNav({ ...base, permissions: ['visit:read', 'compensation:read'] });
+    expect(keys(dentist.main)).toEqual(['today', 'visits', 'myStatement']);
+    expect(keys(visibleNav({ ...base, permissions: ['payment:write'] }).main)).toEqual([]);
+  });
+
   it('shows Settings with the chart, staff or roles', () => {
     for (const permission of ['tenant:write', 'user:write', 'role:read'] as const) {
       expect(keys(visibleNav({ ...base, permissions: [permission] }).admin)).toEqual(['settings']);

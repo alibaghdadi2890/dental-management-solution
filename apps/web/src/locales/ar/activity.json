@@ -57,7 +57,8 @@
     "users": "المستخدمون",
     "settings": "الإعدادات",
     "contacts": "جهات الاتصال",
-    "files": "الملفات"
+    "files": "الملفات",
+    "compensation": "أتعاب الأطباء"
   },
   "ranges": {
     "today": "اليوم",
@@ -207,6 +208,17 @@
       "update": "عدّل {{subject}} في قوائم التاريخ الطبي",
       "delete": "حذف {{subject}} من قوائم التاريخ الطبي",
       "deactivate": "أوقف عرض {{subject}} في قوائم التاريخ الطبي"
+    },
+    "compensation": {
+      "agreement_create": "حدّد اتفاقية لـ {{subject}}",
+      "agreement_end": "أنهى اتفاقية {{subject}}",
+      "agreement_supersede": "استبدل اتفاقية {{subject}}",
+      "adjustment_record": "أضاف تعديلًا بقيمة {{amount}} لـ {{subject}}",
+      "adjustment_void": "ألغى تعديلًا بقيمة {{amount}} لـ {{subject}}",
+      "payout_record": "سجّل دفعة بقيمة {{amount}} إلى {{subject}}",
+      "payout_void": "ألغى دفعة بقيمة {{amount}} إلى {{subject}}",
+      "period_close": "أغلق كشف {{subject}} لشهر {{month}}",
+      "period_reopen": "أعاد فتح كشف {{subject}} لشهر {{month}}"
     }
   },
   "fields": {

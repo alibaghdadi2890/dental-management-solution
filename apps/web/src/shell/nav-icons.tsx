@@ -26,6 +26,18 @@ const PATHS: Record<NavKey, ReactNode> = {
       <path d="M1.75 6.5h12.5M4.5 9.75h2.5" />
     </>
   ),
+  compensation: (
+    <>
+      <circle cx="8" cy="8" r="6.25" />
+      <path d="M10 5.9c-.4-.6-1.1-.9-2-.9-1.2 0-2 .6-2 1.5 0 2 4 1.1 4 3 0 .9-.8 1.5-2 1.5-.9 0-1.6-.3-2-.9M8 3.75V5M8 11v1.25" />
+    </>
+  ),
+  myStatement: (
+    <>
+      <path d="M4 1.75h5.5L12.5 4.75v9.5H4z" />
+      <path d="M9.25 1.75v3.25h3.25M6.25 8h4M6.25 10.75h4" />
+    </>
+  ),
   catalog: (
     <>
       <path d="M6 4h8M6 8h8M6 12h8" />
