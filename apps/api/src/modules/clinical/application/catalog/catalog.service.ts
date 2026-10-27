@@ -87,6 +87,24 @@ export class CatalogService {
   }
 
   /**
+   * For `compensation`'s rates by category (ADR-0059): the current category of each service code
+   * among `codes` (null when it has none); codes no longer in the catalog are absent. A building
+   * block like `VisitFactsService.compensationFacts`, so not permission-gated.
+   */
+  categoriesByCodes(codes: readonly string[]): Promise<Map<string, string | null>> {
+    const wanted = new Set(codes);
+    return this.tenantDb.run(async () => {
+      if (wanted.size === 0) return new Map<string, string | null>();
+      const services = await this.services.store.list();
+      return new Map(
+        services
+          .filter((service) => wanted.has(service.code))
+          .map((service) => [service.code, service.category]),
+      );
+    });
+  }
+
+  /**
    * The save bar's batch: new rows (no id) and whole changed rows, in one transaction. A price
    * takes the tenant's current currency when it is created or changed. Returns the catalog.
    *

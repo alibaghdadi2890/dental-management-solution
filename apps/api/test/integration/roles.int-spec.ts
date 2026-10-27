@@ -41,12 +41,12 @@ describe('roles: system roles, assignments and permission lookup', () => {
     await database.close();
   });
 
-  it('seeds the four system roles with the D5 matrix, once', async () => {
+  it('seeds the five system roles with the default matrix, once', async () => {
     const permissionRows = await rowCount(
       'select count(*) as n from role_permissions where tenant_id = $1',
     );
     await inTenant((service) => service.seedSystemRoles());
-    expect(await rowCount('select count(*) as n from roles where tenant_id = $1')).toBe(4);
+    expect(await rowCount('select count(*) as n from roles where tenant_id = $1')).toBe(5);
     expect(await rowCount('select count(*) as n from role_permissions where tenant_id = $1')).toBe(
       permissionRows,
     );
@@ -56,6 +56,7 @@ describe('roles: system roles, assignments and permission lookup', () => {
     const listed = response.body as Role[];
     expect(listed.map((role) => [role.key, role.name, role.system])).toEqual([
       ['owner', 'Owner', true],
+      ['admin', 'Admin', true],
       ['dentist', 'Dentist', true],
       ['assistant', 'Assistant', true],
       ['frontdesk', 'Front desk', true],
@@ -64,7 +65,7 @@ describe('roles: system roles, assignments and permission lookup', () => {
       'platform:admin',
     );
     // The default matrix of ADR-0055, as seeded.
-    for (const key of ['owner', 'dentist', 'assistant', 'frontdesk'] as const) {
+    for (const key of ['owner', 'admin', 'dentist', 'assistant', 'frontdesk'] as const) {
       expect([...(listed.find((role) => role.key === key)?.permissions ?? [])].sort()).toEqual(
         [...systemRole(key).permissions].sort(),
       );
@@ -72,7 +73,7 @@ describe('roles: system roles, assignments and permission lookup', () => {
 
     const audit = (await admin.get('/api/v1/audit?resourceType=role').set('X-Tenant-Id', tenant.id))
       .body as AuditPage;
-    expect(audit.items.filter((entry) => entry.action === 'role.create')).toHaveLength(4);
+    expect(audit.items.filter((entry) => entry.action === 'role.create')).toHaveLength(5);
   });
 
   it('replaces the role set of a user and unions their permissions', async () => {
@@ -225,6 +226,51 @@ describe('roles: system roles, assignments and permission lookup', () => {
       expect(
         (await client.query('select 1 from user_roles where user_id = $1', [holder])).rowCount,
       ).toBe(1);
+    } finally {
+      await client.query('rollback');
+      client.release();
+    }
+  });
+
+  it('gives an existing clinic the admin role with every permission, once (migration 0054)', async () => {
+    const client = await database.ownerPool.connect();
+    try {
+      await client.query('begin');
+      // A clinic as it was before 0054: no admin role.
+      await client.query(`delete from roles where tenant_id = $1 and key = 'admin'`, [tenant.id]);
+
+      const migration = readFileSync(
+        resolve(__dirname, '../../migrations/0054_admin_role.sql'),
+        'utf8',
+      );
+      const statements = migration
+        .split('--> statement-breakpoint')
+        .map((statement) => statement.trim());
+      expect(statements).toHaveLength(4);
+      // Twice: it is idempotent.
+      for (const statement of [...statements, ...statements]) await client.query(statement);
+
+      const added = await client.query<{ id: string; name: string; system: boolean }>(
+        `select id, name, system from roles where tenant_id = $1 and key = 'admin'`,
+        [tenant.id],
+      );
+      expect(added.rows).toEqual([expect.objectContaining({ name: 'Admin', system: true })]);
+      const granted = await client.query<{ permission: string }>(
+        'select permission from role_permissions where role_id = $1 order by permission',
+        [added.rows[0]?.id],
+      );
+      expect(granted.rows.map((row) => row.permission)).toEqual(
+        [...systemRole('admin').permissions].sort(),
+      );
+      const template = await client.query<{ permission: string }>(
+        `select permission from role_template_permissions
+         join role_templates on role_templates.id = template_id
+         where role_templates.key = 'admin' and role_templates.system
+         order by permission`,
+      );
+      expect(template.rows.map((row) => row.permission)).toEqual(
+        [...systemRole('admin').permissions].sort(),
+      );
     } finally {
       await client.query('rollback');
       client.release();

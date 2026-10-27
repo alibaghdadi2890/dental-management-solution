@@ -8,9 +8,13 @@ import type {
   SystemRoleKey,
   UserGrantsUpdate,
 } from '@dcm/contracts';
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { CLOCK } from '../../../platform/clock/clock.module';
 import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
+import { EventBus } from '../../../platform/events/event-bus';
+import type { Clock } from '../../../platform/kernel/clock';
+import { localDate } from '../../../platform/kernel/local-date';
 import { AuditService } from '../../audit';
 import { AuthService } from '../../auth';
 import { RolesService } from '../../roles';
@@ -24,6 +28,7 @@ import {
   StaffUserNotFoundError,
   UnknownBranchError,
 } from '../domain/staff-rules';
+import { STAFF_DEACTIVATED, type StaffDeactivated } from '../events/staff-events';
 import { type StaffProfile, StaffRepository } from '../persistence/staff.repository';
 
 const OWNER: SystemRoleKey = 'owner';
@@ -54,6 +59,8 @@ export class UsersService {
     private readonly tenancy: TenancyService,
     private readonly roles: RolesService,
     private readonly staff: StaffRepository,
+    private readonly events: EventBus,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   list(): Promise<StaffUser[]> {
@@ -230,7 +237,16 @@ export class UsersService {
       await this.staff.update(userId, { active: false });
       await this.auth.deactivate(userId, reason);
       await this.auth.removeMembership(userId);
-      return this.recordStatusChange(userId, 'user.deactivate', reason);
+      const after = await this.recordStatusChange(userId, 'user.deactivate', reason);
+      // In the transaction: `compensation` ends the dentist's agreement on this day (C11).
+      const { timeZone } = await this.tenancy.currentTenant();
+      const event: StaffDeactivated = this.events.create(STAFF_DEACTIVATED, {
+        userId,
+        profileId: after.profileId,
+        date: localDate(this.clock.now(), timeZone),
+      });
+      await this.events.publish(event);
+      return after;
     });
   }
 

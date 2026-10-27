@@ -34,6 +34,7 @@ describe('roles: custom roles, per-user grants and their rules (ADR-0055)', () =
     const listed = await roles();
     expect(listed.map((item) => [item.key, item.system, item.active])).toEqual([
       ['owner', true, true],
+      ['admin', true, true],
       ['dentist', true, true],
       ['assistant', true, true],
       ['frontdesk', true, true],

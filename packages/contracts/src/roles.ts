@@ -3,8 +3,9 @@ import { reasonSchema } from './audit.js';
 import { idSchema, nameSchema, optionalText } from './common.js';
 import { grantablePermissionSchema, permissionSchema } from './permissions.js';
 
-/** Roles seeded in every tenant (D4). Tenants add custom roles (`system: false`, ADR-0055). */
-export const SYSTEM_ROLE_KEYS = ['owner', 'dentist', 'assistant', 'frontdesk'] as const;
+/** Roles seeded in every tenant (D4, `admin` ADR-0061). Tenants add custom roles (`system: false`,
+ * ADR-0055). */
+export const SYSTEM_ROLE_KEYS = ['owner', 'admin', 'dentist', 'assistant', 'frontdesk'] as const;
 export type SystemRoleKey = (typeof SYSTEM_ROLE_KEYS)[number];
 
 /** Stable role handle within a tenant: lowercase letters, digits and underscores. */

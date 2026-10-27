@@ -84,7 +84,8 @@ export class AuditService {
 
   /**
    * The feed and a resource's trail. A caller sees rows about a visit only within their visit
-   * scope, and the money rows (payments, ledger entries) only with `finance:read` (ADR-0055).
+   * scope, the money rows (payments, ledger entries) only with `finance:read` (ADR-0055), and
+   * compensation rows only with `compensation:manage` (ADR-0060).
    */
   async list(query: AuditQuery): Promise<AuditPage> {
     this.context.requirePermission('audit:read');
@@ -93,6 +94,7 @@ export class AuditService {
     const items = await this.repository.list({
       visitIdsIn: visitIds === 'all' ? undefined : visitIds,
       withoutMoney: !this.context.hasPermission('finance:read'),
+      withoutCompensation: !this.context.hasPermission('compensation:manage'),
       resourceType: query.resourceType,
       resourceId: query.resourceId,
       feed: query.feed,
@@ -118,7 +120,7 @@ export class AuditService {
 
   /**
    * Every clinic's Activity feed for platform admins (ADR-0057), newest first, narrowed to one
-   * clinic when `tenantId` is given. Read through `withoutTenant()`: RLS does not apply, so it
+   * clinic when `tenantId` is given; never a clinic's compensation (ADR-0060). Read through `withoutTenant()`: RLS does not apply, so it
    * checks `platform:admin` itself and is logged as cross-tenant access.
    */
   async listAcrossTenants(query: PlatformAuditQuery): Promise<PlatformAuditPage> {
@@ -126,6 +128,7 @@ export class AuditService {
     const items = await this.adminDb.withoutTenant('platform activity', (tx) =>
       this.repository.listAcrossTenants(tx, {
         feed: true,
+        withoutCompensation: true,
         tenantId: query.tenantId,
         area: query.area,
         actorUserId: query.actorUserId,

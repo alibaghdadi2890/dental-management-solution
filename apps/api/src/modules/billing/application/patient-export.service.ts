@@ -15,7 +15,7 @@ import { VisitListService } from '../../clinical';
 import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
-import { csvRow, UTF8_BOM } from '../domain/csv';
+import { csvRow, UTF8_BOM } from '../../../platform/kernel/csv';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
 import { PatientViewsService } from './patient-views.service';
 

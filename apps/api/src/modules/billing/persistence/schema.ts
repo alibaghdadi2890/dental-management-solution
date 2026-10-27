@@ -102,6 +102,13 @@ export const ledgerEntries = pgTable(
     index('ledger_entries_visit_idx')
       .on(table.tenantId, table.visitId)
       .where(sql`${table.visitId} is not null`),
+    // Compensation's statements (ADR-0059): visit entries by date, and late ones by creation.
+    index('ledger_entries_visit_date_idx')
+      .on(table.tenantId, table.effectiveDate)
+      .where(sql`${table.visitId} is not null`),
+    index('ledger_entries_visit_created_idx')
+      .on(table.tenantId, table.createdAt)
+      .where(sql`${table.visitId} is not null`),
     check('ledger_entries_amount_non_zero', sql`${table.amount} <> 0`),
     // Compared as text: the migrations run in one transaction, and Postgres refuses a literal of an
     // enum value added in the same transaction (`0016_ledger_visit_charge_kind`).
@@ -296,6 +303,8 @@ export const paymentAllocations = pgTable(
     index('payment_allocations_tenant_idx').on(table.tenantId),
     index('payment_allocations_source_idx').on(table.tenantId, table.sourceEntryId),
     index('payment_allocations_target_idx').on(table.tenantId, table.targetEntryId),
+    // Compensation's collections (ADR-0059): allocations by creation.
+    index('payment_allocations_created_idx').on(table.tenantId, table.createdAt),
     foreignKey({
       name: 'payment_allocations_source_fk',
       columns: [table.tenantId, table.sourceEntryId],

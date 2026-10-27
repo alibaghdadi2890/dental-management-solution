@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { roleKeySchema, roleSchema, SYSTEM_ROLE_KEYS } from './roles.js';
 
 describe('SYSTEM_ROLE_KEYS', () => {
-  it('seeds the four D4 roles', () => {
-    expect(SYSTEM_ROLE_KEYS).toEqual(['owner', 'dentist', 'assistant', 'frontdesk']);
+  it('seeds the four D4 roles and admin', () => {
+    expect(SYSTEM_ROLE_KEYS).toEqual(['owner', 'admin', 'dentist', 'assistant', 'frontdesk']);
   });
 });
 

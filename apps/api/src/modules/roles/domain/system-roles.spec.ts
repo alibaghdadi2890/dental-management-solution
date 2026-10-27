@@ -8,6 +8,7 @@ const sorted = (values: readonly string[]) => [...values].sort();
  * diff. */
 const MATRIX = {
   owner: PERMISSIONS.filter((permission) => permission !== 'platform:admin'),
+  admin: PERMISSIONS.filter((permission) => permission !== 'platform:admin'),
   dentist: [
     'tenant:read',
     'user:read',
@@ -53,7 +54,7 @@ const MATRIX = {
 } as const;
 
 describe('system roles (ADR-0055)', () => {
-  it('are the four seeded roles, in order', () => {
+  it('are the seeded roles, in order', () => {
     expect(SYSTEM_ROLES.map((role) => role.key)).toEqual([...SYSTEM_ROLE_KEYS]);
   });
 
@@ -61,9 +62,9 @@ describe('system roles (ADR-0055)', () => {
     expect(sorted(systemRole(key).permissions)).toEqual(sorted(MATRIX[key]));
   });
 
-  it('gives the owner everything but platform:admin', () => {
+  it.each(['owner', 'admin'] as const)('gives the %s everything but platform:admin', (key) => {
     const missing = PERMISSIONS.filter(
-      (permission) => !(systemRole('owner').permissions as readonly string[]).includes(permission),
+      (permission) => !(systemRole(key).permissions as readonly string[]).includes(permission),
     );
     expect(missing).toEqual(['platform:admin']);
   });
@@ -89,6 +90,7 @@ describe('system roles (ADR-0055)', () => {
   it('has display names', () => {
     expect(SYSTEM_ROLES.map((role) => role.name)).toEqual([
       'Owner',
+      'Admin',
       'Dentist',
       'Assistant',
       'Front desk',

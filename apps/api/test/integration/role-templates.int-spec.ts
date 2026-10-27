@@ -45,9 +45,14 @@ describe('roles: the platform default roles (ADR-0056)', () => {
   it('lists the system templates, seeded with the default matrix; owner is none', async () => {
     const listed = await templates();
     const system = listed.filter((candidate) => candidate.system);
-    expect(system.map((candidate) => candidate.key)).toEqual(['dentist', 'assistant', 'frontdesk']);
+    expect(system.map((candidate) => candidate.key)).toEqual([
+      'admin',
+      'dentist',
+      'assistant',
+      'frontdesk',
+    ]);
     for (const candidate of system) {
-      const key = candidate.key as 'dentist' | 'assistant' | 'frontdesk';
+      const key = candidate.key as 'admin' | 'dentist' | 'assistant' | 'frontdesk';
       expect(sorted(candidate.permissions)).toEqual(sorted(systemRole(key).permissions));
     }
   });

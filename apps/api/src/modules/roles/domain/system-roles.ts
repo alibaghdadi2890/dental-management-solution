@@ -13,12 +13,14 @@ export interface SystemRole {
 /**
  * The roles seeded in every tenant and their default permissions (feature 13a, ADR-0055): deny by
  * default, and the owner widens. The owner holds every permission by rule (`permissionsOf`), and
- * its rows list them all. Permissions nothing enforces yet (`compensation:*`) are included so the
- * feature that does migrates no role data. From ADR-0055 on, a migration only adds to these
- * roles, never removes: clinics edit them.
+ * its rows list them all. The admin starts with every permission too, as data the clinic may
+ * narrow, and stays below the owner (ADR-0061): a migration that adds a permission adds it to the
+ * admin as well. From ADR-0055 on, a migration only adds to these roles, never removes: clinics
+ * edit them.
  */
 export const SYSTEM_ROLES: readonly SystemRole[] = [
   { key: 'owner', name: 'Owner', permissions: GRANTABLE_PERMISSIONS },
+  { key: 'admin', name: 'Admin', permissions: GRANTABLE_PERMISSIONS },
   {
     key: 'dentist',
     name: 'Dentist',

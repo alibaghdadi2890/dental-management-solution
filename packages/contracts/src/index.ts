@@ -7,6 +7,7 @@ export * from './cents.js';
 export * from './chart.js';
 export * from './clinical-records.js';
 export * from './common.js';
+export * from './compensation.js';
 export * from './contacts.js';
 export * from './digits.js';
 export * from './files.js';

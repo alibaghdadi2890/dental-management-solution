@@ -71,7 +71,8 @@ describe('areaOfAction', () => {
     expect(areaOfAction('user.roles_assign')).toBe('users');
     expect(areaOfAction('room.update')).toBe('settings');
     expect(areaOfAction('file.upload')).toBe('files');
-    expect(ACTIVITY_AREAS).toHaveLength(8);
+    expect(areaOfAction('compensation.payout_record')).toBe('compensation');
+    expect(ACTIVITY_AREAS).toHaveLength(9);
   });
 
   it('gives no area to a stored domain event or an action of no area', () => {

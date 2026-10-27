@@ -26,6 +26,7 @@ import { LedgerEntriesRepository } from './persistence/ledger-entries.repository
 import { HoldsRepository } from './persistence/holds.repository';
 import { PaymentsRepository } from './persistence/payments.repository';
 import { PlanSharesRepository } from './persistence/plan-shares.repository';
+import { VisitMoneyFeedRepository } from './persistence/visit-money-feed.repository';
 
 /**
  * See docs/modules/billing.md, ADR-0017 and ADR-0024. Depends on `patients` (existence, create
@@ -53,6 +54,7 @@ import { PlanSharesRepository } from './persistence/plan-shares.repository';
     PaymentsRepository,
     HoldsRepository,
     PlanSharesRepository,
+    VisitMoneyFeedRepository,
     Settlement,
     ChargeLabels,
     PaymentsService,

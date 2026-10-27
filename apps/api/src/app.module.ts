@@ -4,6 +4,7 @@ import { AuthModule } from './modules/auth';
 import { AuthorizationModule } from './modules/authorization';
 import { BillingModule } from './modules/billing';
 import { ClinicalModule } from './modules/clinical';
+import { CompensationModule } from './modules/compensation';
 import { FilesModule } from './modules/files';
 import { ImportsModule } from './modules/imports';
 import { PatientsModule } from './modules/patients';
@@ -51,6 +52,7 @@ export const DOMAIN_MODULES = [
   PatientsModule,
   BillingModule,
   ClinicalModule,
+  CompensationModule,
   FilesModule,
   ImportsModule,
   ProvisioningModule,

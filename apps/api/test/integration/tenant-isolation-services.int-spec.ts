@@ -1,12 +1,16 @@
 import type {
+  Agreement,
   AuditPage,
   Branch,
+  CompensationReport,
+  CompensationStatement,
   ContactLookupItem,
   DiagnosisItem,
   OpeningBalanceResult,
   Patient,
   PatientFiles,
   PatientPage,
+  Payout,
   Role,
   Room,
   ServiceItem,
@@ -152,8 +156,8 @@ describe('tenant isolation through the public services', () => {
         [b.tenant.id],
       );
       const foreign = new Set(bRoleIds.rows.map((row) => row.id));
-      expect(foreign.size).toBe(4);
-      expect(roles).toHaveLength(4);
+      expect(foreign.size).toBe(5);
+      expect(roles).toHaveLength(5);
       expect(roles.filter((role) => foreign.has(role.id))).toEqual([]);
     });
 
@@ -1118,6 +1122,57 @@ describe('tenant isolation through the public services', () => {
       const switchTo = await ownerA.post('/api/v1/session/branch').send({ branchId: b.branch.id });
       expect(switchTo.body).toMatchObject({ code: 'session.branch_not_assigned' });
     });
+
+    it("compensation (ADR-0058–0060): B's dentists, agreements, rows and months are not found for A, and unchanged", async () => {
+      const { profileId } = await bOwnerDentist();
+      const bBase = `/api/v1/compensation/dentists/${profileId}`;
+      const terms = {
+        preset: 'perDay',
+        components: [{ kind: 'perDay', amount: '100' }],
+        effectiveFrom: '2026-01-01',
+      };
+      const agreement = (await ownerB.post(`${bBase}/agreements`).send(terms)).body as Agreement;
+      const payout = (
+        await ownerB
+          .post(`${bBase}/payouts`)
+          .set('Idempotency-Key', newId())
+          .send({ amount: '10', date: '2026-01-15', method: 'cash' })
+      ).body as Payout;
+
+      const attempts = [
+        () => ownerA.get(`${bBase}/agreements`),
+        () => ownerA.post(`${bBase}/agreements`).send(terms),
+        () => ownerA.post(`${bBase}/agreements/change-terms`).send(terms),
+        () => ownerA.post(`${bBase}/agreements/${agreement.id}/end`).send({ date: '2026-02-01' }),
+        () => ownerA.get(`${bBase}/statement?month=2026-01`),
+        () => ownerA.get(`${bBase}/statement/export?month=2026-01`),
+        () =>
+          ownerA
+            .post(`${bBase}/adjustments`)
+            .set('Idempotency-Key', newId())
+            .send({ kind: 'bonus', amount: '5', date: '2026-01-10' }),
+        () => ownerA.post(`${bBase}/payouts/${payout.id}/void`).send({ reason: 'Not ours' }),
+        () => ownerA.post(`${bBase}/periods/2026-01/close`).set('Idempotency-Key', newId()),
+        () =>
+          ownerA
+            .post(`${bBase}/periods/2026-01/reopen`)
+            .set('Idempotency-Key', newId())
+            .send({ reason: 'Not ours' }),
+      ];
+      for (const [index, attempt] of attempts.entries()) {
+        const response = await attempt();
+        expect(response.status, `attempt ${index}: ${JSON.stringify(response.body)}`).toBe(404);
+      }
+      const report = (await ownerA.get('/api/v1/compensation/report?month=2026-01'))
+        .body as CompensationReport;
+      expect(report.rows.map((row) => row.profileId)).not.toContain(profileId);
+
+      const [stored] = (await ownerB.get(`${bBase}/agreements`)).body as Agreement[];
+      expect(stored).toMatchObject({ id: agreement.id, effectiveTo: null, supersededAt: null });
+      const statement = (await ownerB.get(`${bBase}/statement?month=2026-01`))
+        .body as CompensationStatement;
+      expect(statement.payouts.map((row) => [row.id, row.voidedAt])).toEqual([[payout.id, null]]);
+    });
   });
 
   describe('X-Tenant-Id', () => {
@@ -1175,6 +1230,10 @@ describe('tenant isolation through the public services', () => {
       'payment_allocations',
       'payment_holds',
       'visit_plan_shares',
+      'compensation_agreements',
+      'compensation_adjustments',
+      'compensation_payouts',
+      'compensation_periods',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

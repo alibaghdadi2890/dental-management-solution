@@ -24,6 +24,7 @@ export const ACTIVITY_AREAS = [
   'settings',
   'contacts',
   'files',
+  'compensation',
 ] as const;
 export const activityAreaSchema = z.enum(ACTIVITY_AREAS);
 export type ActivityArea = z.infer<typeof activityAreaSchema>;
@@ -49,6 +50,7 @@ const AREA_OF_PREFIX: Readonly<Record<string, ActivityArea>> = {
   tenant: 'settings',
   branch: 'settings',
   room: 'settings',
+  compensation: 'compensation',
 };
 
 /**

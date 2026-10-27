@@ -30,6 +30,12 @@ import type { LedgerEntry } from '../domain/ledger-entry';
 import { LedgerIdempotencyMismatchError } from '../domain/ledger-errors';
 import { AllocationsRepository } from '../persistence/allocations.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
+import {
+  type VisitChargeLines,
+  type VisitCollectionFact,
+  type VisitEntryFact,
+  VisitMoneyFeedRepository,
+} from '../persistence/visit-money-feed.repository';
 import { LedgerWriter } from './ledger-writer';
 import { Settlement } from './settlement';
 
@@ -64,6 +70,7 @@ export class BillingService {
     private readonly visits: VisitFactsService,
     private readonly settlement: Settlement,
     private readonly allocations: AllocationsRepository,
+    private readonly feed: VisitMoneyFeedRepository,
   ) {}
 
   /**
@@ -228,6 +235,46 @@ export class BillingService {
   async paidOn(visitId: string): Promise<string> {
     const allocated = await this.allocations.allocatedToVisits([visitId]);
     return fromCents(allocated.get(visitId)?.payments ?? 0n);
+  }
+
+  /**
+   * For `compensation`'s statements (ADR-0059), building blocks like `paidOn` — not
+   * permission-gated, no route; `compensation` checks its own permissions. Every visit-kind entry
+   * (charge, adjustment, reversal) dated in [from, to], or created since `createdSince`.
+   */
+  visitChargesBetween(window: {
+    from: string;
+    to: string;
+    createdSince: Date | null;
+  }): Promise<VisitEntryFact[]> {
+    return this.tenantDb.run(() => this.feed.entries(window));
+  }
+
+  /** The `visit_charge` of each visit among `visitIds`: net amount and lines (blended rates). */
+  chargeLinesFor(visitIds: readonly string[]): Promise<VisitChargeLines[]> {
+    return this.tenantDb.run(() => this.feed.chargeLines([...new Set(visitIds)]));
+  }
+
+  /**
+   * Collections: the allocation rows (signed — a release is negative) whose source is a `payment`
+   * entry and whose target is a visit entry, created in [from, to) or since `createdSince`.
+   * Write-offs and credit entries are not cash and are left out, as in `paidOn`.
+   */
+  visitCollectionsBetween(window: {
+    from: Date;
+    to: Date;
+    createdSince: Date | null;
+  }): Promise<VisitCollectionFact[]> {
+    return this.tenantDb.run(() => this.feed.collections(window));
+  }
+
+  /** Payment money allocated in [from, to) to opening balances and debit adjustments — charges
+   * of no visit — per currency (the compensation report's Unattributed row). */
+  unattributedCollectionsBetween(window: {
+    from: Date;
+    to: Date;
+  }): Promise<{ currency: string; amount: string }[]> {
+    return this.tenantDb.run(() => this.feed.unattributedCollections(window));
   }
 
   /**

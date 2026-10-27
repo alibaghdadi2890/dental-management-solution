@@ -99,7 +99,13 @@ describe('provisioning (platform admin)', () => {
     expect(audit.items.map((entry) => entry.action)).toContain('tenant.provision');
 
     const roles = (await admin.get('/api/v1/roles').set('X-Tenant-Id', tenant.id)).body as Role[];
-    expect(roles.map((role) => role.key)).toEqual(['owner', 'dentist', 'assistant', 'frontdesk']);
+    expect(roles.map((role) => role.key)).toEqual([
+      'owner',
+      'admin',
+      'dentist',
+      'assistant',
+      'frontdesk',
+    ]);
 
     const users = (await admin.get('/api/v1/users').set('X-Tenant-Id', tenant.id))
       .body as StaffUser[];

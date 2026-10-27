@@ -2,3 +2,8 @@
 export { BillingModule } from './billing.module';
 export { BillingService } from './application/billing.service';
 export { LEDGER_ENTRY_RECORDED, type LedgerEntryRecorded } from './events/ledger-events';
+export type {
+  VisitChargeLines,
+  VisitCollectionFact,
+  VisitEntryFact,
+} from './persistence/visit-money-feed.repository';

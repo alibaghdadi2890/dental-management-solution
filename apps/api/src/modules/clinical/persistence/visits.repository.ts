@@ -109,6 +109,28 @@ export type VisitPatch = Partial<
   >
 >;
 
+/** A completed visit as `compensation` counts it (ADR-0059); voided and imported ones flagged. */
+export interface CompensationVisitRow {
+  visitId: string;
+  displayNumber: number;
+  dentistId: string;
+  patientId: string;
+  localDate: string;
+  type: VisitType;
+  total: string | null;
+  voided: boolean;
+  imported: boolean;
+}
+
+/** Which completed visits `compensationFacts` returns: see there. */
+export interface CompensationVisitQuery {
+  from: string;
+  to: string;
+  changedSince: Date | null;
+  visitIds: readonly string[];
+  dentistIds?: readonly string[] | undefined;
+}
+
 /** `own` (W18 "mine", and the visit scope of ADR-0055): the caller is the visit's dentist (by
  * staff profile, when they have one) or started it (auth user id). */
 export interface LiveVisitFilter {
@@ -149,6 +171,59 @@ export class VisitsRepository {
         .from(visits)
         .where(inArray(visits.id, [...ids])),
     );
+  }
+
+  /**
+   * Completed visits (voided and imported ones included) with a local date in [from, to], among
+   * `visitIds`, or completed or voided since `changedSince`, with every completed visit of the
+   * same dentist and day as one of those — a per-day count needs the whole day (ADR-0059).
+   */
+  async compensationFacts(query: CompensationVisitQuery): Promise<CompensationVisitRow[]> {
+    const since = query.changedSince?.toISOString() ?? null;
+    const changed = (alias: string) =>
+      since === null
+        ? sql`false`
+        : sql`(${sql.raw(alias)}.completed_at >= ${since}::timestamptz or ${sql.raw(alias)}.voided_at >= ${since}::timestamptz)`;
+    const dentists =
+      query.dentistIds === undefined
+        ? sql``
+        : sql`and v.dentist_id = any(${sql.param([...query.dentistIds])}::uuid[])`;
+    const { rows } = await this.db.run((tx) =>
+      tx.execute<{
+        visit_id: string;
+        display_number: number;
+        dentist_id: string;
+        patient_id: string;
+        local_date: string;
+        type: VisitType;
+        total: string | null;
+        voided: boolean;
+        imported: boolean;
+      }>(sql`
+        select v.id as visit_id, v.display_number, v.dentist_id, v.patient_id,
+          v.local_date::text as local_date, v.type::text as type, v.total::text as total,
+          v.voided_at is not null as voided, v.imported_at is not null as imported
+        from visits v
+        where v.completed_at is not null and v.status::text <> 'discarded' ${dentists}
+          and (v.local_date between ${query.from}::date and ${query.to}::date
+            or v.id = any(${sql.param([...query.visitIds])}::uuid[])
+            or ${changed('v')}
+            or exists (
+              select 1 from visits c
+              where c.dentist_id = v.dentist_id and c.local_date = v.local_date
+                and c.completed_at is not null and c.status::text <> 'discarded' and ${changed('c')}))`),
+    );
+    return rows.map((row) => ({
+      visitId: row.visit_id,
+      displayNumber: row.display_number,
+      dentistId: row.dentist_id,
+      patientId: row.patient_id,
+      localDate: row.local_date,
+      type: row.type,
+      total: row.total,
+      voided: row.voided,
+      imported: row.imported,
+    }));
   }
 
   /** What another module names a visit by; discarded visits are left out (W4). */

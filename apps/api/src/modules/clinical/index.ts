@@ -16,7 +16,11 @@ export {
   VisitImportService,
 } from './application/visits/visit-import.service';
 export { VisitsService } from './application/visits/visits.service';
-export type { VisitRef } from './persistence/visits.repository';
+export type {
+  CompensationVisitQuery,
+  CompensationVisitRow,
+  VisitRef,
+} from './persistence/visits.repository';
 export {
   CatalogItemInactiveError,
   CatalogItemInUseError,

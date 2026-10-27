@@ -2,6 +2,7 @@ import {
   activityAreaSchema,
   type ActivityArea,
   type AuditEntry,
+  COMPENSATION_EVENTS,
   type PlatformAuditEntry,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
@@ -32,6 +33,9 @@ export interface AuditFilter {
   /** Without `finance:read` (ADR-0055): no payment or ledger rows, and no raw domain events
    * (they carry payment facts and are on no screen). */
   withoutMoney?: boolean | undefined;
+  /** Without `compensation:manage`, and always across clinics (ADR-0060): no compensation rows,
+   * nor their raw domain events. */
+  withoutCompensation?: boolean | undefined;
   after?: AuditCursorPosition | undefined;
   limit: number;
 }
@@ -111,6 +115,11 @@ export class AuditRepository {
     if (filter.withoutMoney) {
       conditions.push(
         sql`not (${auditLog.action} like 'payment.%' or ${auditLog.action} like 'ledger\_entry.%' or ${auditLog.resourceType} = 'event')`,
+      );
+    }
+    if (filter.withoutCompensation) {
+      conditions.push(
+        sql`not (${auditLog.resourceType} like 'compensation\_%' or (${auditLog.resourceType} = 'event' and ${auditLog.action} = any(${sql.param([...COMPENSATION_EVENTS])}::text[])))`,
       );
     }
     if (filter.after) {

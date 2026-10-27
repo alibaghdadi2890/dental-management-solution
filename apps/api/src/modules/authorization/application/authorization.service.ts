@@ -1,4 +1,9 @@
-import { canReadVisit, type Permission, type VisitOwnership } from '@dcm/contracts';
+import {
+  canReadStatement,
+  canReadVisit,
+  type Permission,
+  type VisitOwnership,
+} from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -8,9 +13,10 @@ import { UsersService } from '../../users';
 /**
  * May you do this (CLAUDE.md §6). Resolves the caller's permissions — roles and per-user grants —
  * and staff profile into the request context once per request (ADR-0010, ADR-0055) and evaluates
- * them. The plain permission check is `RequestContext.hasPermission`; the visit-scope rule is the
- * pure `canReadVisit` of `@dcm/contracts`, which modules apply through
- * `RequestContext.visitScope()` without depending on this module.
+ * them. The plain permission check is `RequestContext.hasPermission`; the resource rules are pure
+ * functions of `@dcm/contracts` that modules apply without depending on this module: the visit
+ * scope (`canReadVisit`, through `RequestContext.visitScope()`) and a dentist's own statement
+ * (`canReadStatement`, ADR-0060).
  */
 @Injectable()
 export class AuthorizationService {
@@ -42,16 +48,28 @@ export class AuthorizationService {
     });
   }
 
-  /** A permission, and for `visit:read` on a visit the visit scope (ADR-0055). */
-  can(permission: Permission, visit?: VisitOwnership): boolean {
-    if (permission === 'visit:read' && visit !== undefined) {
+  /**
+   * A permission; for `visit:read` on a visit the visit scope (ADR-0055), for
+   * `compensation:read` on a dentist's statement their own only (ADR-0060).
+   */
+  can(permission: Permission, resource?: VisitOwnership | { profileId: string }): boolean {
+    if (permission === 'compensation:read' && resource !== undefined && 'profileId' in resource) {
+      return canReadStatement(
+        {
+          permissions: this.context.grantedPermissions(),
+          profileId: this.context.staffProfileId,
+        },
+        resource.profileId,
+      );
+    }
+    if (permission === 'visit:read' && resource !== undefined && 'dentistId' in resource) {
       return canReadVisit(
         {
           permissions: this.context.grantedPermissions(),
           userId: this.context.userId ?? null,
           profileId: this.context.staffProfileId,
         },
-        visit,
+        resource,
       );
     }
     return this.context.hasPermission(permission);

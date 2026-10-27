@@ -10,6 +10,7 @@ import {
   assertNoSelfLockout,
   type Editor,
 } from './role-rules';
+import { systemRole } from './system-roles';
 
 const editor = (...permissions: Permission[]): Editor => ({
   holdsAll: false,
@@ -151,6 +152,38 @@ describe('assertCanRemove and assertCanManage', () => {
     }).toThrow(expect.objectContaining({ extensions: { permission: 'owner' } }));
     expect(() => {
       assertCanManage(owner, { owner: true, permissions: ['finance:read'] });
+    }).not.toThrow();
+  });
+});
+
+describe('the admin role (ADR-0061)', () => {
+  const admin = editor(...systemRole('admin').permissions);
+  const all = systemRole('owner').permissions;
+
+  it('manages and widens anyone but an owner, other admins included', () => {
+    expect(() => {
+      assertCanManage(admin, { owner: false, permissions: all });
+    }).not.toThrow();
+    expect(() => {
+      assertCanAssign(admin, [{ key: 'admin', permissions: all }]);
+    }).not.toThrow();
+  });
+
+  it('never manages an owner, nor gives or takes the owner role', () => {
+    expect(() => {
+      assertCanManage(admin, { owner: true, permissions: [] });
+    }).toThrow(expect.objectContaining({ code: 'role.cannot_manage' }));
+    expect(() => {
+      assertCanAssign(admin, [{ key: 'owner', permissions: all }]);
+    }).toThrow(expect.objectContaining({ code: 'role.cannot_grant' }));
+    expect(() => {
+      assertCanRemove(admin, ['owner']);
+    }).toThrow(expect.objectContaining({ code: 'role.cannot_grant' }));
+  });
+
+  it('is an editable system role', () => {
+    expect(() => {
+      assertEditable({ key: 'admin', system: true });
     }).not.toThrow();
   });
 });

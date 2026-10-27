@@ -49,7 +49,7 @@ import {
   planRemaining,
   unallocatedBySource,
 } from '../domain/allocate';
-import { csvRow, UTF8_BOM } from '../domain/csv';
+import { csvRow, UTF8_BOM } from '../../../platform/kernel/csv';
 import type { AccountTarget, Payment } from '../domain/payment';
 import { decodeDateIdCursor, encodeDateIdCursor } from '../domain/payment-cursor';
 import { PaymentNotFoundError } from '../domain/payment-errors';

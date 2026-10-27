@@ -5,7 +5,12 @@ import { TenantDb } from '../../../../platform/db/tenant-db';
 import { VisitNotFoundError } from '../../domain/visit-errors';
 import { TreatmentPlansRepository } from '../../persistence/treatment-plans.repository';
 import { VisitServicesRepository } from '../../persistence/visit-services.repository';
-import { type VisitRef, VisitsRepository } from '../../persistence/visits.repository';
+import {
+  type CompensationVisitQuery,
+  type CompensationVisitRow,
+  type VisitRef,
+  VisitsRepository,
+} from '../../persistence/visits.repository';
 import { moneyOf } from './visit-mapping';
 import { assertVisitInScope } from './visit-scope';
 
@@ -124,6 +129,16 @@ export class VisitFactsService {
   async numbersFor(visitIds: readonly string[]): Promise<VisitNumber[]> {
     this.context.requirePermission('visit:read');
     return this.tenantDb.run(() => this.visits.numbersFor([...new Set(visitIds)]));
+  }
+
+  /**
+   * For `compensation` (ADR-0059): the completed visits a statement counts — per visit, per day,
+   * and the visit of every ledger line — voided and imported ones flagged; see
+   * `VisitsRepository.compensationFacts`. Not permission-gated: a building block like `planWork`,
+   * read under `compensation`'s own checks.
+   */
+  compensationFacts(query: CompensationVisitQuery): Promise<CompensationVisitRow[]> {
+    return this.tenantDb.run(() => this.visits.compensationFacts(query));
   }
 
   /**

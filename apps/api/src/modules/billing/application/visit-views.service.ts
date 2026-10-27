@@ -20,7 +20,7 @@ import type { Clock } from '../../../platform/kernel/clock';
 import { localDate } from '../../../platform/kernel/local-date';
 import { VisitListService } from '../../clinical';
 import { TenancyService } from '../../tenancy';
-import { csvRow, UTF8_BOM } from '../domain/csv';
+import { csvRow, UTF8_BOM } from '../../../platform/kernel/csv';
 import { AllocationsRepository } from '../persistence/allocations.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
 

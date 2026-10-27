@@ -372,6 +372,20 @@
       "when": 1792741020833,
       "tag": "0052_platform_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792932902821,
+      "tag": "0053_compensation",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1793104134731,
+      "tag": "0054_admin_role",
+      "breakpoints": true
     }
   ]
 }

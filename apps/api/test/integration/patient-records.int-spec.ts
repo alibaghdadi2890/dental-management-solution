@@ -409,6 +409,6 @@ describe('clinical: records on the patient, outside a visit (ADR-0031)', () => {
         where p.tenant_id = $1 and p.permission = 'chart:write' order by r.key`,
       [tenant.id],
     );
-    expect(granted.rows.map((row) => row.key)).toEqual(['dentist', 'owner']);
+    expect(granted.rows.map((row) => row.key)).toEqual(['admin', 'dentist', 'owner']);
   });
 });

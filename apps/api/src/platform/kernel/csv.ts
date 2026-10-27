@@ -1,6 +1,6 @@
 /**
- * CSV writing for the patient export (design Q4): RFC 4180 fields and CRLF line ends, plus a
- * guard against CSV injection. Pure: strings in, strings out.
+ * CSV writing for the exports (billing design Q4, compensation): RFC 4180 fields and CRLF line
+ * ends, plus a guard against CSV injection. Pure: strings in, strings out.
  */
 
 /** RFC 4180 line end. */
