@@ -51,7 +51,10 @@ All tenant tables have RLS, and none is ever deleted from.
 - A visit with no agreement on its date earns nothing. Its billed lines are listed under
   "Without an agreement".
 - Lines in another currency are listed under "Not computed".
-- **Rates by service** blend over the charge's lines, pro-rated to the net amount. The
+- **Rates by service** blend over the visit's lines, pro-rated to the net amount: an entry at
+  the lines before it (a charge at its own), a collection at the visit's latest lines. A
+  correction that changed the lines and so the rate earns E(after) − E(before), the net so far at
+  each state's rate, and shows its effective rate (ADR-0062). The
   **threshold** applies per statement month and per agreement. When the base is zero or less,
   the corrections claw back in full. An unprorated fixed amount is paid once, by the month's last
   agreement that has one.

@@ -74,7 +74,8 @@ ADR-0017).
     stay. Enforced by grants (migration `0011_ledger_append_only`, like `audit_log`): the runtime
     roles have no `DELETE` or `TRUNCATE`, and only `dcm_app` may `UPDATE`, on those two columns.
 - `ledger_entry_lines` (tenant RLS, feature 4a): the lines of a `visit_charge` (spec V7), a
-  snapshot of the visit's services as charged: `id`, `tenant_id`, `entry_id` → `ledger_entries`
+  snapshot of the visit's services as charged — and, since ADR-0062, of a
+  `visit_charge_adjustment` posted by a correction, the visit's services as they stand after it: `id`, `tenant_id`, `entry_id` → `ledger_entries`
   (composite with `tenant_id`), `position` (1-based, the visit's service order; unique per
   entry), `code`, `name`, `tooth_code?`, `surfaces text[]`, `amount numeric(12,2) ≥ 0` (the final
   line price: base − line discount), `currency`, timestamps. The entry's amount is the visit
@@ -279,9 +280,10 @@ requires `patient:read`. In practice, reads and writes here need `patient:read` 
 
 The same subscriber also handles, in the amend or void transaction:
 
-- `VisitAmended` → a `visit_charge_adjustment` of the delta (negative for a credit), naming the
-  amendment, dated the tenant's today, with the amendment's reason and no lines; a zero delta
-  posts nothing. A checkout discount (ADR-0030) arrives as the same event, possibly without a
+- `VisitAmended` → the plan share stored again, then a `visit_charge_adjustment` of the delta
+  (negative for a credit), naming the amendment, dated the tenant's today, with the amendment's
+  reason and the visit's lines as they stand after it (ADR-0062: what `compensation` rates); a
+  zero delta posts nothing. A checkout discount (ADR-0030) arrives as the same event, possibly without a
   reason; on a paid visit the settle that follows leaves the difference as credit.
 - `VisitVoided` → if `paidOn(visitId) > 0`, `VisitHasPaymentsError` (409 `visit.has_payments`)
   rolls the void back; else a `visit_charge_reversal` of −Σ the visit's entries (nothing when they
@@ -420,8 +422,9 @@ indexes `ledger_entries_visit_date_idx`, `ledger_entries_visit_created_idx` and
   reversal) with `effective_date` in [from, to], or created since `createdSince` (a closed
   month's late candidates). Each has `visitId`, `kind`, signed `amount`, `currency`,
   `effectiveDate` and `createdAt`.
-- `chargeLinesFor(visitIds)`: each visit's `visit_charge` (net amount, its lines' codes and
-  amounts), for rates by service.
+- `entryHistoriesFor(visitIds)`: each visit's entries in the order they were made, each with its
+  amount and its lines' codes and amounts (a charge's and a correction's, ADR-0062), for rates
+  by service.
 - `visitCollectionsBetween({ from, to, createdSince })`: the allocation rows whose source is a
   `payment` entry and whose target is a visit entry. They are signed (a release is negative),
   created in [from, to) or since `createdSince`. Write-offs and credit entries are left out, as

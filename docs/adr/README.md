@@ -29,7 +29,7 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0022](0022-records-on-the-tooth-dated-by-visit.md)                    | Clinical records live on the tooth, dated by visit                           | Accepted (amended by 0031)           |
 | [0023](0023-live-visit-concurrency.md)                                 | Live-visit concurrency, rooms and discard                                    | Accepted                             |
 | [0024](0024-visit-charges-in-the-completion-transaction.md)            | Visit charges in the completion transaction                                  | Accepted                             |
-| [0025](0025-visit-amendments-are-append-only-snapshots.md)             | Visit amendments are append-only snapshots                                   | Accepted                             |
+| [0025](0025-visit-amendments-are-append-only-snapshots.md)             | Visit amendments are append-only snapshots                                   | Accepted (amended by 0062)           |
 | [0026](0026-billing-vetoes-a-void-in-the-transaction.md)               | Billing vetoes a void inside the transaction                                 | Accepted                             |
 | [0027](0027-payments-are-account-level-with-stored-allocations.md)     | Payments are account-level, with stored derived allocations                  | Accepted                             |
 | [0028](0028-household-payments.md)                                     | Household payments are one row per account under one receipt                 | Accepted                             |
@@ -62,6 +62,7 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0056](0056-platform-default-roles.md)                                 | The platform manages default roles and, for a clinic, its roles              | Accepted (amends 0055)               |
 | [0057](0057-platform-activity-across-clinics.md)                       | Platform admins see the Activity of every clinic                             | Accepted                             |
 | [0058](0058-agreements-are-effective-dated-component-sets.md)          | A dentist's compensation agreement is an effective-dated set of components   | Accepted                             |
-| [0059](0059-statements-are-derived-and-frozen-on-close.md)             | A dentist's statement is derived for open months and frozen on close         | Accepted                             |
+| [0059](0059-statements-are-derived-and-frozen-on-close.md)             | A dentist's statement is derived for open months and frozen on close         | Accepted (amended by 0062)           |
 | [0060](0060-compensation-is-clinic-managed-only.md)                    | Compensation is managed by the clinic only                                   | Accepted (amends 0055, 0057)         |
 | [0061](0061-admin-system-role.md)                                      | An Admin system role with every permission, below the owner                  | Accepted (amends 0055, 0056)         |
+| [0062](0062-correcting-a-finished-visit.md)                            | Correcting a finished visit: services, prices and times                      | Accepted                             |

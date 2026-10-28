@@ -48,7 +48,8 @@ checked after the write); `owner` is not edited (409 `role.owner_locked`); a hel
 switched off (409 `role.has_holders`, `holders`); only custom roles are renamed or switched off,
 only system ones reset (409 `role.not_allowed`).
 
-`visit:amend` and `visit:void` are enforced by `POST /visits/:id/amend` and `/void` and
+`visit:amend` ("Correct finished visits": services, prices with `visit:discount`, and times,
+ADR-0062) and `visit:void` are enforced by `POST /visits/:id/amend` and `/void` and
 re-checked in `VisitCorrectionsService` (feature 4b); the SPA shows front desk "Request a change"
 instead.
 `visit:discount` was first the visit discount at checkout (ADR-0030, migration `0026`); since

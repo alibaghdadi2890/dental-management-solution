@@ -165,12 +165,23 @@ root. `domain/`, `persistence/` and `http/` are flat.
 - **Counted visits** are `completed` or `amended`: Last visit, visit counts and billed sums
   count them. A `voided` visit counts nowhere but stays in the patient's history,
   and its records stay, marked through `voidedVisitIds` (D6, D18).
-- **Amend** (`visit:amend`, a completed or amended visit): the services that stay may change tooth
-  and surfaces (per-tooth only, under the recording rules), the others are soft-deleted, and the
-  visit discount may change; a service that performed a plan can be removed — its plan returns to
-  `planned` — but not moved; at least one service stays. Locks patient then visit (ADR-0023),
-  refuses a stale `expectedUpdatedAt` (409 `visit.stale`), appends `visit_amendments`, audits
-  `visit.amend` (before/after/reason) and publishes `VisitAmended` in the transaction (ADR-0025).
+- **Amend** — "Correct visit" to users (`visit:amend`, a completed or amended visit; ADR-0025,
+  ADR-0062): the services that stay may change tooth and surfaces (per-tooth only, under the
+  recording rules) and take a `price` (base = price, line discount 0); the others are
+  soft-deleted; active catalog services may be added (`procedureId`, at the catalog price unless a
+  `price` is given, placed under the recording rules, no plan link, tooth effect applied); the
+  visit discount may change; and `times` may set the start and end (`planVisitTimes`,
+  `domain/visit-times.ts`: the start on the visit's `local_date`, 422 `visit.times_off_day`; the
+  end after the start, within a day, not in the future, 422 `visit.times_invalid`; pauses dropped,
+  duration end − start). A service that performed a plan can be removed — its plan returns to
+  `planned` — or repriced, but not moved; at least one service stays. A typed price or a discount
+  change also needs `visit:discount` (ADR-0055). Locks patient then visit (ADR-0023), refuses a
+  stale `expectedUpdatedAt` (409 `visit.stale`). A change to the services or the money makes the
+  visit `amended`, appends `visit_amendments` (with the times when they changed too), audits
+  `visit.amend` (before/after/reason) and publishes `VisitAmended` in the transaction. The times
+  alone keep the status, write no amendment and publish nothing; audited `visit.times`. Nothing
+  changed → 422 `visit.amend_no_change`. An imported visit may only have its times corrected
+  (409 `visit.imported`); the list item says `imported`.
 - **Void** (`visit:void`, a completed or amended visit): sets `voided` with the reason, audits
   `visit.void`, publishes `VisitVoided` in the transaction; `billing` may veto it (409
   `visit.has_payments`, ADR-0026). Voided is final.
@@ -828,7 +839,8 @@ events; ADR-0024); `clinical` never imports `billing` or `files`.
   needs `finance:read`. `clinical` answers the audit feed's visit scope (`AuditVisitScope`).
 - `visit:write`. The visit flow writes (step, view, reason, complaint, worklist skip) and, in a
   visit, Seen on and the priority of a plan made in that visit need it. The start options too.
-- `visit:amend`, `visit:void`: owner and dentist (feature 4b).
+- `visit:amend` ("Correct finished visits"), `visit:void`: owner, admin and dentist (feature 4b,
+  ADR-0062).
 - `visit:discount`: owner (ADR-0055): every change that lowers or sets a price — the visit
   discount (`PATCH /visits/:id/discount`), a line's base or discount, an amendment that changes
   the discount, the checkout discount (ADR-0030).
