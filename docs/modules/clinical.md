@@ -171,15 +171,18 @@ root. `domain/`, `persistence/` and `http/` are flat.
   soft-deleted; active catalog services may be added (`procedureId`, at the catalog price unless a
   `price` is given, placed under the recording rules, no plan link, tooth effect applied); the
   visit discount may change; and `times` may set the start and end (`planVisitTimes`,
-  `domain/visit-times.ts`: the start on the visit's `local_date`, 422 `visit.times_off_day`; the
-  end after the start, within a day, not in the future, 422 `visit.times_invalid`; pauses dropped,
-  duration end − start). A service that performed a plan can be removed — its plan returns to
+  `domain/visit-times.ts`: the end after the start, within a day, not in the future, 422
+  `visit.times_invalid`; pauses dropped, duration end − start). A start on another day moves the
+  visit: `local_date` becomes that day, its `tooth_presences` follow (`occurred_on`), the ledger
+  keeps its dates, and `VisitRedated` is published in the transaction, which `compensation` vetoes
+  when either day is in a closed month of the dentist's pay (422 `compensation.period_closed`,
+  ADR-0063). A service that performed a plan can be removed — its plan returns to
   `planned` — or repriced, but not moved; at least one service stays. A typed price or a discount
   change also needs `visit:discount` (ADR-0055). Locks patient then visit (ADR-0023), refuses a
   stale `expectedUpdatedAt` (409 `visit.stale`). A change to the services or the money makes the
   visit `amended`, appends `visit_amendments` (with the times when they changed too), audits
   `visit.amend` (before/after/reason) and publishes `VisitAmended` in the transaction. The times
-  alone keep the status, write no amendment and publish nothing; audited `visit.times`. Nothing
+  alone keep the status and write no amendment; audited `visit.times`. Nothing
   changed → 422 `visit.amend_no_change`. An imported visit may only have its times corrected
   (409 `visit.imported`); the list item says `imported`.
 - **Void** (`visit:void`, a completed or amended visit): sets `voided` with the reason, audits
@@ -803,6 +806,9 @@ see `recordSession` above.
     `VisitVoided { visitId, patientId, currency, reason }`, published inside the amend or void
     transaction: `billing` posts the adjustment or reversal before commit, or vetoes the void
     (ADR-0025, ADR-0026).
+  - `VisitRedated { visitId, patientId, dentistId, from, to }`, published inside a correction that
+    moved a finished visit to another day: `compensation` vetoes it when either day is in a
+    closed month of the dentist's pay (ADR-0063).
 - Consumes: `TenantProvisioned` (provisioning, event only — ADR-0014). It seeds the default
   catalog.
 - Consumes: `PatientsMerged` (patients), in the merge transaction: the

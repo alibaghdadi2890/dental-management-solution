@@ -16,14 +16,16 @@ How the clinic pays each dentist, and what it owes them month by month.
 
 - `users` (dentists' names, `StaffDeactivated`)
 - `clinical` (`VisitFactsService.compensationFacts`, `CatalogService.categoriesByCodes`)
-- `billing` (`visitChargesBetween`, `chargeLinesFor`, `visitCollectionsBetween`,
+- `billing` (`visitChargesBetween`, `entryHistoriesFor`, `visitCollectionsBetween`,
   `unattributedCollectionsBetween`)
 - `patients` (names on lines)
 - `tenancy` (currency, time zone, locale)
 - `audit`
 
 No module imports `compensation`. It reacts to `StaffDeactivated` in the deactivation's
-transaction.
+transaction, and to `clinical`'s `VisitRedated` in the correction's: a visit can't move into or
+out of a closed month of its dentist's pay (`assertVisitMovable`, 422
+`compensation.period_closed`, ADR-0063).
 
 ## Tables (migration 0053)
 

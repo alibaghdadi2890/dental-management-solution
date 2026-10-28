@@ -65,4 +65,5 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0059](0059-statements-are-derived-and-frozen-on-close.md)             | A dentist's statement is derived for open months and frozen on close         | Accepted (amended by 0062)           |
 | [0060](0060-compensation-is-clinic-managed-only.md)                    | Compensation is managed by the clinic only                                   | Accepted (amends 0055, 0057)         |
 | [0061](0061-admin-system-role.md)                                      | An Admin system role with every permission, below the owner                  | Accepted (amends 0055, 0056)         |
-| [0062](0062-correcting-a-finished-visit.md)                            | Correcting a finished visit: services, prices and times                      | Accepted                             |
+| [0062](0062-correcting-a-finished-visit.md)                            | Correcting a finished visit: services, prices and times                      | Accepted (amended by 0063)           |
+| [0063](0063-a-correction-may-move-a-visit-to-another-day.md)           | A correction may move a visit to another day                                 | Accepted                             |
