@@ -443,7 +443,6 @@
       "jaw_required": "Choose the upper or the lower jaw.",
       "jaw_not_allowed": "This item isn’t recorded on a jaw.",
       "imported": "This visit was imported from the previous system: only its times can be corrected, and it can’t be voided.",
-      "times_off_day": "The visit must start on its own day.",
       "times_invalid": "The end must be after the start, within a day, and not in the future."
     },
     "record": {
@@ -460,6 +459,9 @@
       "not_found": "That catalog item no longer exists.",
       "in_use": "That catalog item is in use.",
       "inactive": "That catalog item is inactive."
+    },
+    "compensation": {
+      "period_closed": "This visit's day, or the day it would move to, is in a closed month of the dentist's pay. Reopen that month first."
     }
   },
   "level": {

@@ -233,7 +233,6 @@ export function AmendForm({
       visit={visit}
       draft={draft.times}
       timeZone={timeZone}
-      locale={locale}
       onChange={(next) => {
         onChange({ ...draft, times: next });
       }}

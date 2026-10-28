@@ -443,7 +443,6 @@
       "jaw_required": "Choisissez l’arcade supérieure ou inférieure.",
       "jaw_not_allowed": "Cet acte ne s’enregistre pas sur une arcade.",
       "imported": "Cette visite a été importée de l’ancien système : seules ses heures peuvent être corrigées, et elle ne peut pas être annulée.",
-      "times_off_day": "La visite doit commencer le jour même.",
       "times_invalid": "La fin doit suivre le début, dans la journée, et ne pas être dans le futur."
     },
     "record": {
@@ -460,6 +459,9 @@
       "not_found": "Cet élément du catalogue n’existe plus.",
       "in_use": "Cet élément du catalogue est utilisé.",
       "inactive": "Cet élément du catalogue est inactif."
+    },
+    "compensation": {
+      "period_closed": "Le jour de cette visite, ou celui où elle passerait, est dans un mois clôturé de la rémunération du dentiste. Rouvrez d’abord ce mois."
     }
   },
   "level": {

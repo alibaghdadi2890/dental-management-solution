@@ -82,7 +82,7 @@ const placed = (base: AmendDraft, change: Partial<AmendLine>): AmendDraft => {
 describe('correction draft', () => {
   it('starts clean, as the visit is, on its own times', () => {
     const clean = draft();
-    expect(clean.times).toEqual({ start: '10:00', end: '12:30' });
+    expect(clean.times).toEqual({ date: '2026-09-04', start: '10:00', end: '12:30' });
     expect(isDirty(clean, VISIT, ZONE)).toBe(false);
     expect(draftTotal(clean)).toBe('135.00');
     expect(problemOf(clean, VISIT, ZONE, NOW)).toBeNull();
@@ -104,7 +104,7 @@ describe('correction draft', () => {
     expect(isDirty(discount, VISIT, ZONE)).toBe(true);
     expect(draftTotal(discount)).toBe('140.00');
 
-    const times = { ...draft(), times: { start: '10:15', end: '11:00' } };
+    const times = { ...draft(), times: { date: '2026-09-04', start: '10:15', end: '11:00' } };
     expect(isDirty(times, VISIT, ZONE)).toBe(true);
     expect(isServicesDirty(times, VISIT)).toBe(false);
   });
@@ -129,9 +129,9 @@ describe('correction draft', () => {
     expect(problemOf(edit(draft(), 0, { price: 'ten' }), VISIT, ZONE, NOW)).toBe('price');
     const discount = { ...draft(), discount: { mode: 'amount' as const, value: '1,5' } };
     expect(problemOf(discount, VISIT, ZONE, NOW)).toBe('discount');
-    const future = { ...draft(), times: { start: '10:00', end: '12:01' } };
+    const future = { ...draft(), times: { date: '2026-09-04', start: '10:00', end: '12:01' } };
     expect(problemOf(future, VISIT, ZONE, new Date('2026-09-04T09:00:00Z'))).toBe('timesFuture');
-    const order = { ...draft(), times: { start: '10:00', end: '10:00' } };
+    const order = { ...draft(), times: { date: '2026-09-04', start: '10:00', end: '10:00' } };
     expect(problemOf(order, VISIT, ZONE, NOW)).toBe('timesOrder');
   });
 
@@ -150,10 +150,18 @@ describe('correction draft', () => {
       ],
     });
 
-    const times = { ...draft(), times: { start: '10:15', end: '11:00' } };
+    const times = { ...draft(), times: { date: '2026-09-04', start: '10:15', end: '11:00' } };
     expect(amendInput(times, VISIT, ZONE, 'Timer left running')).toMatchObject({
       services: [{ id: 'filling', toothCode: '36', surfaces: ['M', 'O'] }, { id: 'cleaning' }],
       times: { startedAt: '2026-09-04T07:15:00.000Z', completedAt: '2026-09-04T08:00:00.000Z' },
+    });
+
+    // Another day moves the visit (ADR-0063).
+    const moved = { ...draft(), times: { date: '2026-09-03', start: '10:00', end: '12:30' } };
+    expect(isServicesDirty(moved, VISIT)).toBe(false);
+    expect(amendInput(moved, VISIT, ZONE, 'Entered the next day').times).toEqual({
+      startedAt: '2026-09-03T07:00:00.000Z',
+      completedAt: '2026-09-03T09:30:00.000Z',
     });
   });
 });

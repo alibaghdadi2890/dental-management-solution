@@ -173,7 +173,7 @@ export function problemOf(
   const value = draft.discount.value.trim();
   if (value !== '' && !AMOUNT.test(value)) return 'discount';
   if (isTimesDirty(draft.times, visit, timeZone)) {
-    const times = timesProblem(draft.times, visit, timeZone, now);
+    const times = timesProblem(draft.times, timeZone, now);
     if (times) return TIMES_PROBLEMS[times];
   }
   return null;
@@ -213,9 +213,7 @@ export function amendInput(
       ...(!sameAmount(price, finalOf(visit, line.key)) && { price }),
     };
   });
-  const times = isTimesDirty(draft.times, visit, timeZone)
-    ? timesOf(draft.times, visit, timeZone)
-    : null;
+  const times = isTimesDirty(draft.times, visit, timeZone) ? timesOf(draft.times, timeZone) : null;
   return {
     expectedUpdatedAt: visit.updatedAt,
     reason,

@@ -6,7 +6,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { SHIMMER } from '@/components/ui/list';
-import { formatDateTime, formatMoney, formatTime } from '@/lib/format';
+import { formatDate, formatDateTime, formatMoney, formatTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { visitAuditQuery } from './visits-list-api';
 
@@ -33,19 +33,37 @@ function totalOf(side: unknown): string | null {
   return typeof total === 'string' ? total : null;
 }
 
-/** `10:00–10:45` from a time correction's side (`{ startedAt, completedAt }`), if it has both. */
-function spanOf(side: unknown, time: (iso: string) => string): string {
+/** How a trail entry writes an instant: its clock time, and its day. */
+interface Clock {
+  time: (iso: string) => string;
+  day: (iso: string) => string;
+}
+
+/** A side's `{ startedAt, completedAt }`, if it has both. */
+function timesOf(side: unknown): { startedAt: string; completedAt: string } | null {
   const { startedAt, completedAt } = (side ?? {}) as { startedAt?: unknown; completedAt?: unknown };
   return typeof startedAt === 'string' && typeof completedAt === 'string'
-    ? `${time(startedAt)}–${time(completedAt)}`
-    : '—';
+    ? { startedAt, completedAt }
+    : null;
+}
+
+/** `10:00–10:45` before and after a time correction, each with its day when the day changed
+ * (ADR-0063); null when the entry carries no times. */
+function spansOf(entry: AuditEntry, clock: Clock): { before: string; after: string } | null {
+  const before = timesOf(entry.before);
+  const after = timesOf(entry.after);
+  if (!before || !after) return null;
+  const moved = clock.day(before.startedAt) !== clock.day(after.startedAt);
+  const span = ({ startedAt, completedAt }: { startedAt: string; completedAt: string }) =>
+    `${moved ? `${clock.day(startedAt)} ` : ''}${clock.time(startedAt)}–${clock.time(completedAt)}`;
+  return { before: span(before), after: span(after) };
 }
 
 function labelOf(
   entry: AuditEntry,
   t: TFunction<'visits'>,
   money: (amount: string) => string,
-  time: (iso: string) => string,
+  clock: Clock,
 ): string {
   if (!isKnown(entry.action)) return t('trail.actions.other');
   const reason = entry.reason ?? '';
@@ -57,10 +75,8 @@ function labelOf(
         ? t('trail.actions.amendTotals', { reason, before: money(before), after: money(after) })
         : t('trail.actions.amend', { reason });
     // A correction that changed the times too (ADR-0062) says so.
-    const times = spanOf(entry.after, time);
-    return times === '—'
-      ? label
-      : `${label} · ${t('trail.actions.timesChange', { before: spanOf(entry.before, time), after: times })}`;
+    const spans = spansOf(entry, clock);
+    return spans ? `${label} · ${t('trail.actions.timesChange', spans)}` : label;
   }
   if (entry.action === 'visit.discount') {
     const totals = {
@@ -75,8 +91,7 @@ function labelOf(
   if (entry.action === 'visit.times') {
     return t('trail.actions.times', {
       reason,
-      before: spanOf(entry.before, time),
-      after: spanOf(entry.after, time),
+      ...(spansOf(entry, clock) ?? { before: '—', after: '—' }),
     });
   }
   if (entry.action === 'visit.complete') {
@@ -103,7 +118,7 @@ function actorOf(
  * The detail panel's audit trail (D13: `audit:read` only): the visit's entries newest first, a
  * page at a time behind "Show more"; the latest dot filled. Amend, void and a time correction read
  * with their reason (an amendment with its before → after total, a time correction with its
- * times); a checkout discount with its totals, and its
+ * times, and its days when it moved the visit); a checkout discount with its totals, and its
  * reason when one was given. It ends with "View all activity": the Activity screen narrowed to
  * this visit (H7).
  */
@@ -125,7 +140,10 @@ export function VisitAuditTrail({
   const audit = useInfiniteQuery(visitAuditQuery(visitId));
   const entries = audit.data?.pages.flatMap((page) => page.items) ?? [];
   const money = (amount: string) => formatMoney({ amount, currency }, locale);
-  const time = (iso: string) => formatTime(iso, { timeZone, locale });
+  const clock: Clock = {
+    time: (iso) => formatTime(iso, { timeZone, locale }),
+    day: (iso) => formatDate(iso, { timeZone, locale }),
+  };
 
   let body;
   if (audit.isPending) {
@@ -151,7 +169,7 @@ export function VisitAuditTrail({
                 )}
               />
               <div className="text-[12.5px] leading-[1.4] font-medium">
-                {labelOf(entry, t, money, time)}
+                {labelOf(entry, t, money, clock)}
               </div>
               <div className="font-mono text-[11.5px] leading-[1.4] text-ink-muted">
                 {t('trail.meta', {

@@ -167,7 +167,9 @@
     "importedNote": "Cette visite a été importée de l’ancien système : seules ses heures peuvent être corrigées."
   },
   "times": {
-    "intro": "La visite reste le {{date}}. Une fin avant le début tombe le lendemain.",
+    "intro": "Une fin avant le début tombe le lendemain. Une autre date déplace la visite ; son débit garde la date où il a été passé.",
+    "date": "Date",
+    "moved": "La visite passe à ce jour",
     "start": "Début",
     "end": "Fin",
     "nextDay": "Le lendemain",

@@ -167,7 +167,9 @@
     "importedNote": "This visit was imported from the previous system: only its times can be corrected."
   },
   "times": {
-    "intro": "The visit stays on {{date}}. An end before the start is on the next day.",
+    "intro": "An end before the start is on the next day. Another date moves the visit; its charge keeps the date it was posted.",
+    "date": "Date",
+    "moved": "The visit moves to this day",
     "start": "Start",
     "end": "End",
     "nextDay": "Next day",
