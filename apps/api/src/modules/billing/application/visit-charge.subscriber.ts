@@ -25,6 +25,16 @@ import { BillingService } from './billing.service';
 import { LedgerWriter } from './ledger-writer';
 import { Settlement } from './settlement';
 
+/** A visit entry's lines: the visit's services in order, in its currency (none without facts). */
+function linesOf(facts: VisitChargeFacts | null) {
+  if (!facts) return [];
+  return facts.lines.map((line, index) => ({
+    position: index + 1,
+    ...line,
+    currency: facts.currency,
+  }));
+}
+
 /**
  * The visit's side of the ledger, as in-transaction handlers of `clinical`'s visit events: they
  * run in the triggering request's context and transaction, before commit, so the visit change
@@ -34,8 +44,9 @@ import { Settlement } from './settlement';
  *   (W20: the ledger refuses 0). A second charge violates `ledger_entries_visit_kind_unique`;
  *   that can only be a bug, so it is raised, not ignored.
  * - `VisitAmended` posts the amendment's difference as a `visit_charge_adjustment` (4b, D7),
- *   negative for a credit, nothing for a zero delta. A discount set at checkout arrives the same
- *   way, possibly without a reason.
+ *   negative for a credit, nothing for a zero delta, with the visit's lines as they stand after
+ *   it (ADR-0062: what `compensation` rates). A discount set at checkout arrives the same way,
+ *   possibly without a reason.
  * - `VisitVoided` reverses what the visit charges now (charge plus adjustments) with a
  *   `visit_charge_reversal`, nothing when that nets to zero — or vetoes the void when payments
  *   sit on the visit (ADR-0026).
@@ -44,8 +55,8 @@ import { Settlement } from './settlement';
  * taken off a covered visit is released and re-applied. Before it, a completion or an amendment
  * stores the visit's plan share (ADR-0051 A4): what money held for the plan may cover of it.
  *
- * Adjustments and reversals are dated the tenant's today and carry the reason, but no lines: the
- * before/after is `clinical`'s `visit_amendments` row (D7). Not gated by `payment:write`: the
+ * Adjustments and reversals are dated the tenant's today and carry the reason; a reversal has no
+ * lines. The before/after is `clinical`'s `visit_amendments` row (D7). Not gated by `payment:write`: the
  * trigger already required `visit:write`, `visit:amend`, `visit:discount` or `visit:void`.
  */
 @Injectable()
@@ -74,17 +85,22 @@ export class VisitChargeSubscriber {
   @OnDomainEventInTransaction(VISIT_AMENDED)
   async onVisitAmended(event: VisitAmended): Promise<void> {
     const { visitId, patientId, amendmentId, currency, delta, reason } = event.payload;
+    // A correction may change which lines perform a plan without changing the total.
+    const facts = await this.visits.chargeFacts(visitId);
+    await this.storePlanShare(visitId, facts);
     if (toCents(delta) === 0n) return;
-    await this.storePlanShare(visitId, await this.visits.chargeFacts(visitId));
-    await this.appendCorrection({
-      kind: 'visit_charge_adjustment',
-      visitId,
-      patientId,
-      currency,
-      amount: delta,
-      reason,
-      amendmentId,
-    });
+    await this.appendCorrection(
+      {
+        kind: 'visit_charge_adjustment',
+        visitId,
+        patientId,
+        currency,
+        amount: delta,
+        reason,
+        amendmentId,
+      },
+      facts,
+    );
   }
 
   @OnDomainEventInTransaction(VISIT_VOIDED)
@@ -133,11 +149,7 @@ export class VisitChargeSubscriber {
         visitId,
         amendmentId: null,
       },
-      facts.lines.map((line, index) => ({
-        position: index + 1,
-        ...line,
-        currency: facts.currency,
-      })),
+      linesOf(facts),
     );
     // Existing credit covers the new charge at once (P4).
     await this.settlement.settle(facts.patientId);
@@ -151,21 +163,28 @@ export class VisitChargeSubscriber {
     await this.planShares.upsert(visitId, fromCents(share), facts.currency);
   }
 
-  /** An adjustment or reversal on the tenant's today; `amend`/`void` hold the patient lock. */
+  /**
+   * An adjustment or reversal on the tenant's today; `amend`/`void` hold the patient lock. An
+   * adjustment carries the visit's lines as they stand after it (`facts`).
+   */
   private async appendCorrection(
     entry: Pick<
       NewLedgerEntry,
       'kind' | 'visitId' | 'patientId' | 'currency' | 'amount' | 'reason' | 'amendmentId'
     >,
+    facts: VisitChargeFacts | null = null,
   ): Promise<void> {
     await this.patients.lockForDependentWrite(entry.patientId);
     const { timeZone } = await this.tenancy.currentTenant();
-    await this.writer.append({
-      ...entry,
-      effectiveDate: localDate(this.clock.now(), timeZone),
-      note: null,
-      createdBy: this.context.requireUserId(),
-    });
+    await this.writer.append(
+      {
+        ...entry,
+        effectiveDate: localDate(this.clock.now(), timeZone),
+        note: null,
+        createdBy: this.context.requireUserId(),
+      },
+      linesOf(facts),
+    );
     // An amendment down (or a void) releases what payments covered above the new charge; the
     // freed money covers other open charges or stays as credit (P4).
     await this.settlement.settle(entry.patientId);

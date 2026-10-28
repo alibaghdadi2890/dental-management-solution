@@ -31,7 +31,7 @@ import { LedgerIdempotencyMismatchError } from '../domain/ledger-errors';
 import { AllocationsRepository } from '../persistence/allocations.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
 import {
-  type VisitChargeLines,
+  type VisitEntryHistory,
   type VisitCollectionFact,
   type VisitEntryFact,
   VisitMoneyFeedRepository,
@@ -250,9 +250,10 @@ export class BillingService {
     return this.tenantDb.run(() => this.feed.entries(window));
   }
 
-  /** The `visit_charge` of each visit among `visitIds`: net amount and lines (blended rates). */
-  chargeLinesFor(visitIds: readonly string[]): Promise<VisitChargeLines[]> {
-    return this.tenantDb.run(() => this.feed.chargeLines([...new Set(visitIds)]));
+  /** Every visit entry of each visit among `visitIds`, in order, with its lines (blended rates,
+   * ADR-0059, ADR-0062). */
+  entryHistoriesFor(visitIds: readonly string[]): Promise<VisitEntryHistory[]> {
+    return this.tenantDb.run(() => this.feed.entryHistories([...new Set(visitIds)]));
   }
 
   /**

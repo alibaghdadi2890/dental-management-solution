@@ -30,6 +30,8 @@ import {
   VisitNotLiveError,
   VisitNotVoidableError,
   VisitStaleError,
+  VisitTimesInvalidError,
+  VisitTimesOffDayError,
 } from './visit-errors';
 
 /**
@@ -68,6 +70,8 @@ describe('visit domain errors', () => {
     [new AmendUnknownServiceError('x'), 'visit.amend_unknown_service', 'invalid'],
     [new AmendPlanLinkedError('x'), 'visit.amend_plan_linked', 'invalid'],
     [new VisitCheckoutClosedError('x'), 'visit.checkout_closed', 'conflict'],
+    [new VisitTimesOffDayError('x'), 'visit.times_off_day', 'invalid'],
+    [new VisitTimesInvalidError('x'), 'visit.times_invalid', 'invalid'],
     [new VisitNotCompletedError('x'), 'visit.not_completed', 'conflict'],
   ])('%s carries code %s and kind %s', (error, code, kind) => {
     expect(error.code).toBe(code);

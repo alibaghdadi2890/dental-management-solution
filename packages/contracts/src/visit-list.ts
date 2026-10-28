@@ -106,6 +106,8 @@ export const visitListItemSchema = z.object({
   discountAmount: aggregateAmountSchema.nullable(),
   total: aggregateAmountSchema.nullable(),
   amendmentCount: z.number().int().nonnegative(),
+  /** Imported from the previous system (ADR-0053): only its times may be corrected. */
+  imported: z.boolean(),
   /** When the checkout was closed without a payment (ADR-0033): it no longer waits at the desk. */
   checkedOutAt: isoDateTimeSchema.nullable(),
   voidedAt: isoDateTimeSchema.nullable(),
@@ -137,25 +139,39 @@ export const visitListSummarySchema = z.object({
 });
 export type VisitListSummary = z.infer<typeof visitListSummarySchema>;
 
+/** A service the visit keeps: a per-tooth one may change tooth and surfaces; `price` sets its
+ * base price and clears its line discount. */
+export const amendKeptServiceSchema = z.object({
+  id: idSchema,
+  toothCode: toothCodeSchema.optional(),
+  surfaces: surfacesSchema.optional(),
+  price: nonNegativeAmountSchema.optional(),
+});
+
+/** A catalog service the correction adds, at its catalog price unless `price` is given. */
+export const amendAddedServiceSchema = z.object({
+  procedureId: idSchema,
+  toothCode: toothCodeSchema.optional(),
+  jaw: jawSchema.optional(),
+  surfaces: surfacesSchema.default([]),
+  price: nonNegativeAmountSchema.optional(),
+});
+
 /**
- * The whole desired state of a completed or amended visit (D1–D4): the services that stay (a
- * per-tooth one may change tooth and surfaces; one left out is removed) and the visit discount.
+ * The whole desired state of a completed or amended visit (D1–D4, ADR-0062): the services that
+ * stay (one left out is removed) and those added, the visit discount, and optionally its start and
+ * end. Users see this as "Correct visit".
  */
 export const amendVisitSchema = z.object({
   expectedUpdatedAt: isoDateTimeSchema,
   reason: reasonSchema,
   discount: z.object({ mode: discountModeSchema, value: nonNegativeAmountSchema }),
-  services: z
-    .array(
-      z.object({
-        id: idSchema,
-        toothCode: toothCodeSchema.optional(),
-        surfaces: surfacesSchema.optional(),
-      }),
-    )
-    .min(1),
+  services: z.array(z.union([amendKeptServiceSchema, amendAddedServiceSchema])).min(1),
+  times: z.object({ startedAt: isoDateTimeSchema, completedAt: isoDateTimeSchema }).optional(),
 });
 export type AmendVisitInput = z.infer<typeof amendVisitSchema>;
+export type AmendKeptService = z.infer<typeof amendKeptServiceSchema>;
+export type AmendAddedService = z.infer<typeof amendAddedServiceSchema>;
 
 /**
  * The visit discount set at checkout, on the visit's day (checkout handoff, C3–C5): the services

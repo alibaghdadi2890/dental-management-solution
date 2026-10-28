@@ -13,12 +13,15 @@ export interface VisitEntryFact {
   createdAt: Date;
 }
 
-/** A visit's charge as charged: the net amount and its lines (code, final price), in order. */
-export interface VisitChargeLines {
+/**
+ * A visit's ledger entries in the order they were made, each with its lines (code, final price):
+ * a charge's are the visit as charged, a correction's the visit as it stands after it (ADR-0062);
+ * other entries have none.
+ */
+export interface VisitEntryHistory {
   visitId: string;
-  net: string;
   currency: string;
-  lines: { code: string; amount: string }[];
+  entries: { id: string; amount: string; lines: { code: string; amount: string }[] }[];
 }
 
 /** An allocation row whose source is a `payment` entry and whose target is a visit entry. */
@@ -79,34 +82,40 @@ export class VisitMoneyFeedRepository {
     }));
   }
 
-  async chargeLines(visitIds: readonly string[]): Promise<VisitChargeLines[]> {
+  async entryHistories(visitIds: readonly string[]): Promise<VisitEntryHistory[]> {
     if (visitIds.length === 0) return [];
     const { rows } = await this.db.run((tx) =>
       tx.execute<{
         visit_id: string;
-        net: string;
+        entry_id: string;
+        amount: string;
         currency: string;
         code: string | null;
         line_amount: string | null;
       }>(sql`
-        select e.visit_id, e.amount::text as net, e.currency, l.code, l.amount::text as line_amount
+        select e.visit_id, e.id as entry_id, e.amount::text as amount, e.currency, l.code,
+          l.amount::text as line_amount
         from ledger_entries e
         left join ledger_entry_lines l on l.entry_id = e.id
-        where e.kind::text = 'visit_charge' and e.visit_id = any(${uuids(visitIds)})
-        order by e.visit_id, l.position`),
+        where e.visit_id = any(${uuids(visitIds)})
+        order by e.visit_id, e.created_at, e.id, l.position`),
     );
-    const byVisit = new Map<string, VisitChargeLines>();
+    const byVisit = new Map<string, VisitEntryHistory>();
     for (const row of rows) {
-      const charge = byVisit.get(row.visit_id) ?? {
+      const history = byVisit.get(row.visit_id) ?? {
         visitId: row.visit_id,
-        net: row.net,
         currency: row.currency,
-        lines: [],
+        entries: [],
       };
-      if (row.code !== null && row.line_amount !== null) {
-        charge.lines.push({ code: row.code, amount: row.line_amount });
+      byVisit.set(row.visit_id, history);
+      let entry = history.entries.at(-1);
+      if (entry?.id !== row.entry_id) {
+        entry = { id: row.entry_id, amount: row.amount, lines: [] };
+        history.entries.push(entry);
       }
-      byVisit.set(row.visit_id, charge);
+      if (row.code !== null && row.line_amount !== null) {
+        entry.lines.push({ code: row.code, amount: row.line_amount });
+      }
     }
     return [...byVisit.values()];
   }

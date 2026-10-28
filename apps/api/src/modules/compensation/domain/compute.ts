@@ -16,8 +16,8 @@ import {
   type VisitType,
 } from '@dcm/contracts';
 import { type AgreementRecord, agreementOn, agreementsOverlapping } from './agreements';
-import { type ChargeLinesFact, visitRate } from './blend';
-import { applyRate, ratePercent, roundDiv } from './money';
+import { type ChargeHistory, collectionShare, entryShare } from './blend';
+import { roundDiv } from './money';
 import { daysBetween, daysInMonth, firstDay, lastDay, monthOf, monthsBetween } from './months';
 
 /**
@@ -78,7 +78,8 @@ export interface DentistData {
   visits: ReadonlyMap<string, VisitFact>;
   entries: readonly EntryFact[];
   collections: readonly CollectionFact[];
-  chargeLines: ReadonlyMap<string, ChargeLinesFact>;
+  /** The visits' entries with their lines, by visit: only loaded when rates differ by service. */
+  histories: ReadonlyMap<string, ChargeHistory>;
   categories: ReadonlyMap<string, string | null>;
   adjustments: readonly MoneyRow[];
   payouts: readonly MoneyRow[];
@@ -274,15 +275,18 @@ export function computeMonth(
     }
     const share: ShareComponent | undefined = componentOf(agreement, 'share');
     if (!share || share.basis !== fact.basis) continue;
-    const rate = visitRate(share, data.chargeLines.get(visit.visitId), data.categories);
-    const amount = applyRate(toCents(fact.amount), rate.rate);
+    const history = data.histories.get(visit.visitId);
+    const { amount, rate } =
+      fact.basis === 'production'
+        ? entryShare(share, fact, history, data.categories)
+        : collectionShare(share, fact.amount, history, data.categories);
     shares.push({ agreementId: agreement.id, base: toCents(fact.amount), amount });
     place(
       {
         ...base,
         agreementId: agreement.id,
         base: fact.amount,
-        rate: { percent: ratePercent(rate.rate), blended: rate.blended, lines: rate.lines },
+        rate,
         amount: fromCents(amount),
       },
       'share',

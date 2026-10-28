@@ -3,6 +3,8 @@ import {
   lineFinal,
   toCents,
   visitMoney,
+  type AmendAddedService,
+  type AmendKeptService,
   type AmendVisitInput,
   type ChargeUnit,
   type DiscountMode,
@@ -10,8 +12,9 @@ import {
   type SurfaceKey,
   type ToothCode,
 } from '@dcm/contracts';
-import { assertTarget } from './record-rules';
-import { AmendNoChangeError, AmendPlanLinkedError, AmendUnknownServiceError } from './visit-errors';
+import { CatalogItemInactiveError } from './catalog-errors';
+import { assertCurrency, assertTarget } from './record-rules';
+import { AmendPlanLinkedError, AmendUnknownServiceError } from './visit-errors';
 
 /** A service of the visit as amend sees it: what it may change and what prices it. */
 export interface AmendableService {
@@ -28,9 +31,35 @@ export interface AmendableService {
 }
 
 export interface AmendableVisit {
+  currency: string;
   discountMode: DiscountMode;
   discountValue: string;
   services: AmendableService[];
+}
+
+/** A catalog service as a correction may add it: the catalog's row now (ADR-0062). */
+export interface AddableService {
+  id: string;
+  code: string;
+  name: string;
+  category: string | null;
+  chargeUnit: ChargeUnit;
+  price: { amount: string; currency: string };
+  active: boolean;
+}
+
+/** A service the correction adds, with the id it will be stored under. */
+export interface AddedService {
+  id: string;
+  procedureId: string;
+  code: string;
+  name: string;
+  category: string | null;
+  chargeUnit: ChargeUnit;
+  toothCode: ToothCode | null;
+  jaw: Jaw | null;
+  surfaces: SurfaceKey[];
+  baseAmount: string;
 }
 
 /** One side of a `visit_amendments` row (spec §Data model): enough to show before → after. */
@@ -49,6 +78,9 @@ export interface AmendmentSnapshot {
   subtotal: string;
   discountAmount: string;
   total: string;
+  /** The visit's start and end, on a correction that changed them too (ADR-0062). */
+  startedAt?: string;
+  completedAt?: string;
 }
 
 export interface AmendmentPlan {
@@ -56,21 +88,41 @@ export interface AmendmentPlan {
   removed: AmendableService[];
   /** Kept services whose tooth or surfaces change. */
   edited: { id: string; toothCode: ToothCode | null; surfaces: SurfaceKey[] }[];
+  /** Kept services whose price is set: the base becomes the price, the line discount 0. */
+  priced: { id: string; baseAmount: string }[];
+  /** Catalog services to add, in the order given. */
+  added: AddedService[];
   /** Plans the removed services performed: they go back to `planned` (D2). */
   plansToReopen: string[];
   before: AmendmentSnapshot;
   after: AmendmentSnapshot;
   /** `after.total − before.total`: what `billing` posts (negative = a credit). */
   delta: string;
-  /** The visit discount changes: that needs `visit:discount` (ADR-0055). */
-  discountChanged: boolean;
+  /** A price typed or the visit discount changed: that needs `visit:discount` (ADR-0055). */
+  pricingChanged: boolean;
+  /** Anything about the services or the money changes. */
+  changed: boolean;
+}
+
+export interface AmendmentContext {
+  /** The catalog services the input adds, by id. */
+  catalog: ReadonlyMap<string, AddableService>;
+  newId: () => string;
 }
 
 const sameSurfaces = (a: readonly SurfaceKey[], b: readonly SurfaceKey[]) =>
   [...a].sort().join() === [...b].sort().join();
 
+const isKept = (entry: AmendKeptService | AmendAddedService): entry is AmendKeptService =>
+  'id' in entry;
+
+type Priced = Pick<
+  AmendableService,
+  'id' | 'code' | 'name' | 'toothCode' | 'jaw' | 'surfaces' | 'baseAmount' | 'discountAmount'
+>;
+
 function snapshot(
-  services: AmendableService[],
+  services: readonly Priced[],
   discount: { mode: DiscountMode; value: string },
 ): AmendmentSnapshot {
   const lines = services.map((service) => ({
@@ -96,26 +148,37 @@ function snapshot(
 }
 
 /**
- * What an amendment does to a completed visit (feature 4b, D1–D3). `input.services` is the whole
- * set that stays: a service left out is removed, and a per-tooth one may change tooth and surfaces
- * under the same rules as recording it (`assertTarget`). A service that performed a plan may be
- * removed — its plan returns to `planned` — but not re-toothed. Per-line prices are not
- * editable; the visit discount is, and the money is recomputed with `visitMoney` (a discount over
- * its cap is capped, as while the visit was live). At least one service stays (the schema's
- * `min(1)`; removing everything is a void).
+ * What a correction does to a completed visit's services and money (feature 4b, D1–D3;
+ * ADR-0062). `input.services` is the whole set: an existing service left out is removed; one kept
+ * may change tooth and surfaces under the recording rules (`assertTarget`) and take a `price`
+ * (base = price, line discount 0); an entry with a `procedureId` adds that catalog service at its
+ * catalog price unless a price is given, placed under the same rules. A service that performed a
+ * plan may be removed — its plan returns to `planned` — or repriced, but not re-toothed. The money
+ * is recomputed with `visitMoney` (a discount over its cap is capped, as while the visit was
+ * live). At least one service stays (the schema's `min(1)`; removing everything is a void).
+ * `changed` is false when nothing about the services or the money changes.
  *
- * @throws AmendUnknownServiceError for an id the visit doesn't have, or one given twice.
+ * @throws AmendUnknownServiceError for an id the visit doesn't have, one given twice, or a
+ *   catalog service the context doesn't hold.
  * @throws AmendPlanLinkedError when a plan-linked service's tooth or surfaces change.
- * @throws AmendNoChangeError when nothing changes.
- * @throws ToothRequiredError / ToothNotAllowedError / SurfacesInvalidError from `assertTarget`.
+ * @throws CatalogItemInactiveError when an added service is inactive.
+ * @throws CurrencyMismatchError when an added service is priced in another currency.
+ * @throws ToothRequiredError / ToothNotAllowedError / SurfacesInvalidError / Jaw…Error from
+ *   `assertTarget`.
  */
 export function planAmendment(
   visit: AmendableVisit,
   input: Pick<AmendVisitInput, 'discount' | 'services'>,
+  context: AmendmentContext = { catalog: new Map(), newId: () => '' },
 ): AmendmentPlan {
   const current = new Map(visit.services.map((service) => [service.id, service]));
-  const wanted = new Map<string, AmendVisitInput['services'][number]>();
+  const wanted = new Map<string, AmendKeptService>();
+  const additions: AmendAddedService[] = [];
   for (const entry of input.services) {
+    if (!isKept(entry)) {
+      additions.push(entry);
+      continue;
+    }
     if (!current.has(entry.id) || wanted.has(entry.id)) {
       throw new AmendUnknownServiceError('Each service must be one of this visit, listed once');
     }
@@ -125,6 +188,8 @@ export function planAmendment(
   const kept: AmendableService[] = [];
   const removed: AmendableService[] = [];
   const edited: AmendmentPlan['edited'] = [];
+  const priced: AmendmentPlan['priced'] = [];
+  let pricingChanged = false;
   for (const service of visit.services) {
     const entry = wanted.get(service.id);
     if (!entry) {
@@ -133,36 +198,78 @@ export function planAmendment(
     }
     const toothCode = entry.toothCode ?? service.toothCode;
     const surfaces = entry.surfaces ?? service.surfaces;
-    const changed = toothCode !== service.toothCode || !sameSurfaces(surfaces, service.surfaces);
-    if (changed && service.planId !== null) {
+    const moved = toothCode !== service.toothCode || !sameSurfaces(surfaces, service.surfaces);
+    if (moved && service.planId !== null) {
       throw new AmendPlanLinkedError(
         `${service.name} performed a treatment plan; remove it instead of moving it`,
       );
     }
     assertTarget(service.chargeUnit, toothCode, surfaces, service.jaw);
-    if (changed) edited.push({ id: service.id, toothCode, surfaces });
-    kept.push({ ...service, toothCode, surfaces });
+    if (moved) edited.push({ id: service.id, toothCode, surfaces });
+    const repriced =
+      entry.price !== undefined &&
+      (toCents(entry.price) !== toCents(service.baseAmount) ||
+        toCents(service.discountAmount) !== 0n);
+    if (repriced) {
+      const baseAmount = fromCents(toCents(entry.price ?? '0'));
+      priced.push({ id: service.id, baseAmount });
+      pricingChanged = true;
+      kept.push({ ...service, toothCode, surfaces, baseAmount, discountAmount: '0.00' });
+    } else {
+      kept.push({ ...service, toothCode, surfaces });
+    }
   }
+
+  const added = additions.map((entry): AddedService => {
+    const item = context.catalog.get(entry.procedureId);
+    if (!item) throw new AmendUnknownServiceError('This service is not in the catalog');
+    if (!item.active) throw new CatalogItemInactiveError(`${item.name} is inactive`);
+    assertCurrency(visit.currency, item.price.currency);
+    assertTarget(item.chargeUnit, entry.toothCode, entry.surfaces, entry.jaw);
+    if (entry.price !== undefined && toCents(entry.price) !== toCents(item.price.amount)) {
+      pricingChanged = true;
+    }
+    return {
+      id: context.newId(),
+      procedureId: item.id,
+      code: item.code,
+      name: item.name,
+      category: item.category,
+      chargeUnit: item.chargeUnit,
+      toothCode: entry.toothCode ?? null,
+      jaw: entry.jaw ?? null,
+      surfaces: entry.surfaces,
+      baseAmount: fromCents(toCents(entry.price ?? item.price.amount)),
+    };
+  });
 
   const discountChanged =
     input.discount.mode !== visit.discountMode ||
     toCents(input.discount.value) !== toCents(visit.discountValue);
-  if (removed.length === 0 && edited.length === 0 && !discountChanged) {
-    throw new AmendNoChangeError('The amendment changes nothing');
-  }
 
   const before = snapshot(visit.services, {
     mode: visit.discountMode,
     value: visit.discountValue,
   });
-  const after = snapshot(kept, { mode: input.discount.mode, value: input.discount.value });
+  const after = snapshot(
+    [...kept, ...added.map((service) => ({ ...service, discountAmount: '0.00' }))],
+    { mode: input.discount.mode, value: input.discount.value },
+  );
   return {
     removed,
     edited,
+    priced,
+    added,
     plansToReopen: removed.flatMap((service) => (service.planId === null ? [] : [service.planId])),
     before,
     after,
     delta: fromCents(toCents(after.total) - toCents(before.total)),
-    discountChanged,
+    pricingChanged: pricingChanged || discountChanged,
+    changed:
+      removed.length > 0 ||
+      edited.length > 0 ||
+      priced.length > 0 ||
+      added.length > 0 ||
+      discountChanged,
   };
 }

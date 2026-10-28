@@ -1,7 +1,7 @@
 import type { AgreementComponent } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
 import type { AgreementRecord } from './agreements';
-import type { ChargeLinesFact } from './blend';
+import type { ChargeHistory } from './blend';
 import {
   type CollectionFact,
   computeMonth,
@@ -78,7 +78,7 @@ function data(over: Partial<DentistData> & { visitList?: VisitFact[] }): Dentist
     visits: new Map(visitList.map((fact) => [fact.visitId, fact])),
     entries: [],
     collections: [],
-    chargeLines: new Map(),
+    histories: new Map(),
     categories: new Map(),
     adjustments: [],
     payouts: [],
@@ -134,13 +134,17 @@ describe('computeMonth: shares', () => {
 
   it('blends rates by service over the lines pro-rated to the net total', () => {
     const v3 = visit('v3', '2026-10-15', { total: '945.00' });
-    const charge: ChargeLinesFact = {
+    const charge: ChargeHistory = {
       visitId: 'v3',
-      net: '945.00',
-      currency: 'USD',
-      lines: [
-        { code: 'IMP', amount: '1000.00' },
-        { code: 'EXM', amount: '50.00' },
+      entries: [
+        {
+          id: 'c3',
+          amount: '945.00',
+          lines: [
+            { code: 'IMP', amount: '1000.00' },
+            { code: 'EXM', amount: '50.00' },
+          ],
+        },
       ],
     };
     const result = computeMonth(
@@ -154,7 +158,7 @@ describe('computeMonth: shares', () => {
           ]),
         ],
         collections: [paid('a3', 'v3', '500.00', '2026-10-15')],
-        chargeLines: new Map([['v3', charge]]),
+        histories: new Map([['v3', charge]]),
         categories: new Map([
           ['IMP', 'Implants'],
           ['EXM', 'Diagnostics'],
@@ -192,14 +196,18 @@ describe('computeMonth: shares', () => {
           ]),
         ],
         entries: [entry('v', '100.00', '2026-10-15')],
-        chargeLines: new Map([
+        histories: new Map([
           [
             'v',
             {
               visitId: 'v',
-              net: '100.00',
-              currency: 'USD',
-              lines: [{ code: 'IMP', amount: '100.00' }],
+              entries: [
+                {
+                  id: 'e-v-visit_charge-2026-10-15',
+                  amount: '100.00',
+                  lines: [{ code: 'IMP', amount: '100.00' }],
+                },
+              ],
             },
           ],
         ]),
@@ -210,6 +218,46 @@ describe('computeMonth: shares', () => {
       null,
     );
     expect(amounts(result, 'share')).toEqual(['50.00']);
+  });
+
+  it('pays a corrected service at its own rate: the correction earns the difference (ADR-0062)', () => {
+    const v = visit('v', '2026-10-15', { total: '70.00' });
+    const charge = entry('v', '50.00', '2026-10-15');
+    const correction = entry('v', '20.00', '2026-10-20', 'visit_charge_adjustment');
+    const reversal = entry('v', '-70.00', '2026-10-25', 'visit_charge_reversal');
+    const history: ChargeHistory = {
+      visitId: 'v',
+      entries: [
+        { id: charge.id, amount: '50.00', lines: [{ code: 'CLN', amount: '50.00' }] },
+        { id: correction.id, amount: '20.00', lines: [{ code: 'IMP', amount: '70.00' }] },
+        { id: reversal.id, amount: '-70.00', lines: [] },
+      ],
+    };
+    const result = computeMonth(
+      data({
+        visitList: [v],
+        agreements: [
+          agreement([
+            share('30', 'production', {
+              rateOverrides: [{ target: 'service', key: 'IMP', percent: '40' }],
+            }),
+          ]),
+        ],
+        entries: [charge, correction, reversal],
+        histories: new Map([['v', history]]),
+      }),
+      '2026-10',
+      0n,
+      null,
+    );
+    // 30 % of 50, then 40 % of 70 − 15, then all of it back.
+    expect(amounts(result, 'share')).toEqual(['15.00', '13.00', '-28.00']);
+    const lines = result.earned[0]?.lines ?? [];
+    expect(lines[1]?.rate).toEqual({
+      percent: '65.00',
+      blended: true,
+      lines: [{ code: 'IMP', amount: '70.00', percent: '40.00' }],
+    });
   });
 
   it('applies a threshold to the month: share of the base above it, one line for the difference', () => {

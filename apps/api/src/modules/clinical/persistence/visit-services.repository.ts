@@ -25,6 +25,8 @@ export type NewVisitService = Pick<
   | 'planId'
   | 'recordedBy'
 > & {
+  /** Given when the caller needs it first: a correction's after snapshot names it (ADR-0062). */
+  id?: string;
   /** Added at start because the catalog adds it on visits of this type (ADR-0047). */
   autoAdded?: boolean;
 };

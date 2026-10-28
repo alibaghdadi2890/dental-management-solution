@@ -267,3 +267,15 @@ export class VisitCheckoutClosedError extends DomainError {
   readonly code = 'visit.checkout_closed';
   readonly kind = 'conflict';
 }
+
+/** A time correction moves the visit's start to another day (ADR-0062). */
+export class VisitTimesOffDayError extends DomainError {
+  readonly code = 'visit.times_off_day';
+  readonly kind = 'invalid';
+}
+
+/** A time correction ends the visit before it starts, after a day, or in the future (ADR-0062). */
+export class VisitTimesInvalidError extends DomainError {
+  readonly code = 'visit.times_invalid';
+  readonly kind = 'invalid';
+}

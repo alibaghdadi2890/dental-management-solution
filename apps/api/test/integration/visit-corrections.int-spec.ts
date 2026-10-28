@@ -65,7 +65,7 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
   let dentist: Staff;
   let assistant: Staff;
   let frontdesk: Staff;
-  let service: Record<'fill' | 'crown', ServiceItem>;
+  let service: Record<'fill' | 'crown' | 'implant', ServiceItem>;
 
   const createStaff = async (role: 'dentist' | 'assistant' | 'frontdesk'): Promise<Staff> => {
     const email = uniqueEmail(role);
@@ -226,6 +226,7 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
         items: [
           { code: 'ZFILL', name: 'Test filling', chargeUnit: 'per_tooth', price: '50' },
           { code: 'ZCROWN', name: 'Test crown', chargeUnit: 'per_tooth', price: '80' },
+          { code: 'ZIMPL', name: 'Test implant', chargeUnit: 'per_tooth', price: '70' },
         ],
       }),
     );
@@ -234,7 +235,7 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
       if (!found) throw new Error(`no service ${code}`);
       return found;
     };
-    service = { fill: byCode('ZFILL'), crown: byCode('ZCROWN') };
+    service = { fill: byCode('ZFILL'), crown: byCode('ZCROWN'), implant: byCode('ZIMPL') };
 
     dentist = await createStaff('dentist');
     await grant(owner, dentist.user.id);
@@ -629,6 +630,216 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
       expect(notDone.status).toBe(409);
       expect(problem(notDone.body).code).toBe('visit.not_completed');
       expect(await listed(patient.id, visit.id)).toMatchObject({ checkedOutAt: null });
+    });
+  });
+
+  describe('correcting a finished visit: services, prices and times (ADR-0062)', () => {
+    /** 10:30 to 11:15 in Beirut, on the visit's day. */
+    const times = { startedAt: '2026-06-10T07:30:00Z', completedAt: '2026-06-10T08:15:00Z' };
+
+    const linesOf = async (visitId: string, kind: string) =>
+      (
+        await database.ownerPool.query<{ code: string; amount: string }>(
+          `select l.code, l.amount::text from ledger_entry_lines l
+           join ledger_entries e on e.id = l.entry_id
+           where e.visit_id = $1 and e.kind::text = $2 order by l.position`,
+          [visitId, kind],
+        )
+      ).rows;
+
+    it('replaces a service at its catalog price and corrects the times: the balance follows', async () => {
+      const patient = await patientOwing('Correct Replace', '40');
+      const { visit, crownId } = await completedVisit(patient);
+      expect(await balanceOf(patient.id)).toEqual([{ amount: '157.00', currency: 'USD' }]);
+
+      // The filling on 16 was an implant: 70 instead of 50, still 10 % off.
+      const { visit: corrected } = await ok<VisitResult>(
+        amend(dentist.agent, visit, {
+          reason: 'Wrong service picked',
+          discount: { mode: 'percent', value: '10' },
+          services: [{ id: crownId }, { procedureId: service.implant.id, toothCode: '16' }],
+          times,
+        }),
+      );
+
+      expect(corrected).toMatchObject({
+        status: 'amended',
+        startedAt: '2026-06-10T07:30:00.000Z',
+        completedAt: '2026-06-10T08:15:00.000Z',
+        durationMinutes: 45,
+        localDate: TODAY,
+      });
+      expect(corrected.money).toMatchObject({
+        subtotal: '150.00',
+        discount: '15.00',
+        total: '135.00',
+      });
+      expect(corrected.services.map((line) => [line.code, line.toothCode])).toEqual([
+        ['ZCROWN', '21'],
+        ['ZIMPL', '16'],
+      ]);
+      expect((await ledgerOf(visit.id)).map((row) => [row.kind, row.amount])).toEqual([
+        ['visit_charge', '117.00'],
+        ['visit_charge_adjustment', '18.00'],
+      ]);
+      expect(await balanceOf(patient.id)).toEqual([{ amount: '175.00', currency: 'USD' }]);
+      // The adjustment carries the visit as it stands now: what compensation rates.
+      expect(await linesOf(visit.id, 'visit_charge_adjustment')).toEqual([
+        { code: 'ZCROWN', amount: '80.00' },
+        { code: 'ZIMPL', amount: '70.00' },
+      ]);
+
+      const [amendment] = await amendmentsOf(visit.id);
+      expect(amendment).toMatchObject({
+        delta: '18.00',
+        before: { total: '117.00', startedAt: new Date(NOON).toISOString() },
+        after: { total: '135.00', startedAt: '2026-06-10T07:30:00.000Z' },
+      });
+      const [latest] = await auditOf(visit.id);
+      expect(latest).toMatchObject({
+        action: 'visit.amend',
+        reason: 'Wrong service picked',
+        after: { total: '135.00', completedAt: '2026-06-10T08:15:00.000Z' },
+      });
+    });
+
+    it('charges a typed price only with visit:discount', async () => {
+      const patient = await patientOwing('Correct Price', '1');
+      const { visit, fillingId, crownId } = await completedVisit(patient);
+      const typed = {
+        reason: 'Agreed price',
+        discount: { mode: 'percent', value: '10' },
+        services: [{ id: fillingId, price: '60' }, { id: crownId }],
+      };
+
+      await grant(owner, dentist.user.id, ['visit:read_all']);
+      try {
+        expect((await amend(dentist.agent, visit, typed)).status).toBe(403);
+      } finally {
+        await grant(owner, dentist.user.id);
+      }
+
+      const { visit: priced } = await ok<VisitResult>(amend(dentist.agent, visit, typed));
+      expect(priced.money).toMatchObject({ subtotal: '140.00', total: '126.00' });
+      expect((await ledgerOf(visit.id)).at(-1)).toMatchObject({ amount: '9.00' });
+    });
+
+    it('corrects the times alone: the status, money and day stay, and no amendment is written', async () => {
+      const patient = await patientOwing('Correct Times', '1');
+      const { visit, fillingId, crownId } = await completedVisit(patient);
+      const ledger = await ledgerOf(visit.id);
+      const unchanged = {
+        reason: 'Timer left running',
+        discount: { mode: 'percent', value: '10' },
+        services: [{ id: fillingId }, { id: crownId }],
+      };
+
+      const corrected = (
+        await ok<VisitResult>(amend(dentist.agent, visit, { ...unchanged, times }))
+      ).visit;
+      expect(corrected).toMatchObject({
+        status: 'completed',
+        startedAt: '2026-06-10T07:30:00.000Z',
+        durationMinutes: 45,
+        pausedSeconds: 0,
+        money: visit.money,
+        localDate: TODAY,
+      });
+      expect(await ledgerOf(visit.id)).toEqual(ledger);
+      expect(await amendmentsOf(visit.id)).toEqual([]);
+      const [latest] = await auditOf(visit.id);
+      expect(latest).toMatchObject({
+        action: 'visit.times',
+        actorUserId: dentist.user.id,
+        reason: 'Timer left running',
+        visitId: visit.id,
+        patientId: patient.id,
+        before: { startedAt: new Date(NOON).toISOString(), durationMinutes: 1 },
+        after: { startedAt: '2026-06-10T07:30:00.000Z', durationMinutes: 45 },
+      });
+
+      // The same times again change nothing; other times can be set, by the owner too.
+      const same = await amend(dentist.agent, corrected, { ...unchanged, times });
+      expect(same.status).toBe(422);
+      expect(problem(same.body).code).toBe('visit.amend_no_change');
+      const again = await ok<VisitResult>(
+        amend(owner, corrected, {
+          ...unchanged,
+          times: { ...times, completedAt: '2026-06-10T08:45:00Z' },
+        }),
+      );
+      expect(again.visit).toMatchObject({ status: 'completed', durationMinutes: 75 });
+    });
+
+    it('is refused out of scope, stale, off the day, out of order or in the future', async () => {
+      const patient = await patientOwing('Correct Refused', '1');
+      const { visit, fillingId, crownId } = await completedVisit(patient);
+      const correction = (body: Record<string, unknown> = {}, agent = dentist.agent) =>
+        amend(agent, visit, {
+          reason: 'Mistake',
+          discount: { mode: 'percent', value: '10' },
+          services: [{ id: fillingId }, { id: crownId }],
+          times,
+          ...body,
+        });
+      expect((await correction({}, assistant.agent)).status).toBe(403);
+      expect((await correction({}, frontdesk.agent)).status).toBe(403);
+      // A dentist without other dentists' visits doesn't find this one (ADR-0055).
+      const other = await createStaff('dentist');
+      const hidden = await correction({}, other.agent);
+      expect(hidden.status).toBe(404);
+      expect(problem(hidden.body).code).toBe('visit.not_found');
+
+      const at = (startedAt: string, completedAt: string) => ({
+        times: { startedAt, completedAt },
+      });
+      const refusals: [Record<string, unknown>, number, string][] = [
+        [{ expectedUpdatedAt: '2026-01-01T00:00:00Z' }, 409, 'visit.stale'],
+        [at(times.startedAt, times.startedAt), 422, 'visit.times_invalid'],
+        [at('2026-06-09T20:00:00Z', times.completedAt), 422, 'visit.times_off_day'],
+        [at(times.startedAt, '2026-06-10T09:01:00Z'), 422, 'visit.times_invalid'],
+        [at(times.startedAt, '2026-06-10T07:00:00Z'), 422, 'visit.times_invalid'],
+      ];
+      for (const [body, status, code] of refusals) {
+        const response = await correction(body);
+        expect(response.status, JSON.stringify(body)).toBe(status);
+        expect(problem(response.body).code).toBe(code);
+      }
+
+      expect((await auditOf(visit.id)).some((row) => row.action === 'visit.times')).toBe(false);
+      expect(await amendmentsOf(visit.id)).toEqual([]);
+    });
+
+    it('corrects only the times of an imported visit', async () => {
+      const patient = await patientOwing('Correct Imported', '1');
+      const { visit, fillingId, crownId } = await completedVisit(patient);
+      await database.ownerPool.query(
+        "update visits set imported_at = now(), external_id = 'OLD-1' where id = $1",
+        [visit.id],
+      );
+      const listed = await ok<{ items: { id: string; imported: boolean }[] }>(
+        owner.get(`/api/v1/visits?range=all&patientId=${patient.id}`),
+      );
+      expect(listed.items.find((item) => item.id === visit.id)?.imported).toBe(true);
+      const current = await ok<Visit>(owner.get(`/api/v1/visits/${visit.id}`));
+
+      const services = await amend(dentist.agent, current, {
+        reason: 'Mistake',
+        discount: { mode: 'percent', value: '10' },
+        services: [{ id: crownId }],
+      });
+      expect(services.status).toBe(409);
+      expect(problem(services.body).code).toBe('visit.imported');
+
+      const { visit: corrected } = await ok<VisitResult>(
+        amend(dentist.agent, current, {
+          reason: 'Times from the old system',
+          discount: { mode: 'percent', value: '10' },
+          services: [{ id: fillingId }, { id: crownId }],
+          times,
+        }),
+      );
+      expect(corrected).toMatchObject({ status: 'completed', durationMinutes: 45 });
     });
   });
 

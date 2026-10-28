@@ -238,6 +238,33 @@ describe('compensation (feature 13b)', () => {
       expect(line?.patientName).toBe('Pat Payer');
     });
 
+    it('pays a corrected service at its own rate: the correction earns the difference (ADR-0062)', async () => {
+      await changeTerms(drA, {
+        preset: 'revenueShare',
+        components: [
+          share('40', 'production', {
+            rateOverrides: [{ target: 'category', key: 'Implants', percent: '30' }],
+          }),
+        ],
+        effectiveFrom: FIRST,
+      });
+      const v4 = await visit(drA, [service.exm]);
+      // The exam was an implant: 40 % of 50, then 30 % of 1000 − 20.
+      await ok(
+        drA.agent.post(`/api/v1/visits/${v4.id}/amend`).send({
+          expectedUpdatedAt: v4.updatedAt,
+          reason: 'Wrong service picked',
+          discount: { mode: 'percent', value: '0' },
+          services: [{ procedureId: service.imp.id }],
+        }),
+      );
+      const lines = (await statement(drA)).earned[0]?.lines.filter((row) => row.visitId === v4.id);
+      expect(lines?.map((row) => [row.base, row.amount])).toEqual([
+        ['50.00', '20.00'],
+        ['950.00', '280.00'],
+      ]);
+    });
+
     it('lets the dentist read their own statement only, unless the clinic hides it', async () => {
       expect(await ok<string[]>(drA.agent.get('/api/v1/compensation/me/months'))).toEqual([
         NOW_MONTH,

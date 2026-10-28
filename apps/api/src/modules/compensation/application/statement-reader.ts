@@ -5,7 +5,7 @@ import { BillingService } from '../../billing';
 import { CatalogService, VisitFactsService } from '../../clinical';
 import { TenancyService } from '../../tenancy';
 import { isLive } from '../domain/agreements';
-import type { ChargeLinesFact } from '../domain/blend';
+import type { ChargeHistory } from '../domain/blend';
 import {
   type CollectionFact,
   computeMonths,
@@ -222,8 +222,8 @@ export class StatementReader {
       ),
     );
     const charged = [...new Set([...entryFacts, ...collectionFacts].map((row) => row.visitId))];
-    const chargeLines: ChargeLinesFact[] = overrides
-      ? await this.billing.chargeLinesFor(charged)
+    const histories: ChargeHistory[] = overrides
+      ? await this.billing.entryHistoriesFor(charged)
       : [];
     const byCategory = plans.some((plan) =>
       plan.agreements.some((agreement) =>
@@ -236,10 +236,14 @@ export class StatementReader {
     );
     const categories = byCategory
       ? await this.catalog.categoriesByCodes([
-          ...new Set(chargeLines.flatMap((charge) => charge.lines.map((line) => line.code))),
+          ...new Set(
+            histories.flatMap((history) =>
+              history.entries.flatMap((entry) => entry.lines.map((line) => line.code)),
+            ),
+          ),
         ])
       : new Map<string, string | null>();
-    const chargeLinesByVisit = new Map(chargeLines.map((charge) => [charge.visitId, charge]));
+    const historiesByVisit = new Map(histories.map((history) => [history.visitId, history]));
     const range = { from: firstDay(from), to: lastDay(month) };
     const adjustments = await this.adjustments.list(
       range,
@@ -287,7 +291,7 @@ export class StatementReader {
         visits: dentistVisits,
         entries: dentistEntries,
         collections: dentistCollections,
-        chargeLines: chargeLinesByVisit,
+        histories: historiesByVisit,
         categories,
         adjustments: byProfile(adjustments, plan.profileId).map((row) => ({
           amount: row.amount,

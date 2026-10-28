@@ -193,7 +193,8 @@ export class VisitsController {
     return this.visits.complete(params.id);
   }
 
-  /** `{ visit }` amended; `billing` has posted the difference in the same transaction (4b). */
+  /** `{ visit }` corrected ("Correct visit", ADR-0062); `billing` has posted the difference in the
+   * same transaction (4b). */
   @Post(':id/amend')
   @RequirePermission('visit:amend')
   @HttpCode(HttpStatus.OK)

@@ -273,6 +273,7 @@ export class VisitListService {
         discountAmount: showMoney ? money.discount : null,
         total: showMoney ? money.total : null,
         amendmentCount: amendmentCounts.get(visit.id) ?? 0,
+        imported: visit.importedAt !== null,
         checkedOutAt: visit.checkedOutAt?.toISOString() ?? null,
         voidedAt: visit.voidedAt?.toISOString() ?? null,
         voidReason: visit.voidReason,

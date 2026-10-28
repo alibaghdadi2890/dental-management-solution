@@ -88,6 +88,7 @@ export type VisitPatch = Partial<
     | 'painSince'
     | 'historyConfirmedAt'
     | 'historyConfirmedBy'
+    | 'startedAt'
     | 'pausedAt'
     | 'pausedSeconds'
     | 'notes'

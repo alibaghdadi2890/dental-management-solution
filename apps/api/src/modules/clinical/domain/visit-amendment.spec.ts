@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { planAmendment, type AmendableService, type AmendableVisit } from './visit-amendment';
+import { CatalogItemInactiveError } from './catalog-errors';
 import {
-  AmendNoChangeError,
+  planAmendment,
+  type AddableService,
+  type AmendableService,
+  type AmendableVisit,
+  type AmendmentContext,
+} from './visit-amendment';
+import {
   AmendPlanLinkedError,
+  CurrencyMismatchError,
   AmendUnknownServiceError,
   SurfacesInvalidError,
   ToothNotAllowedError,
+  ToothRequiredError,
 } from './visit-errors';
 
 const filling: AmendableService = {
@@ -46,6 +54,7 @@ const crown: AmendableService = {
 };
 
 const visit = (overrides: Partial<AmendableVisit> = {}): AmendableVisit => ({
+  currency: 'USD',
   discountMode: 'percent',
   discountValue: '0',
   services: [filling, cleaning, crown],
@@ -54,6 +63,23 @@ const visit = (overrides: Partial<AmendableVisit> = {}): AmendableVisit => ({
 
 const keepAll = [{ id: filling.id }, { id: cleaning.id }, { id: crown.id }];
 const noDiscount = { mode: 'percent' as const, value: '0' };
+
+const implant: AddableService = {
+  id: 'proc-implant',
+  code: 'IMP',
+  name: 'Implant',
+  category: 'surgery',
+  chargeUnit: 'per_tooth',
+  price: { amount: '70.00', currency: 'USD' },
+  active: true,
+};
+const catalog = (...items: AddableService[]): AmendmentContext => {
+  let next = 0;
+  return {
+    catalog: new Map(items.map((item) => [item.id, item])),
+    newId: () => `new-${String((next += 1))}`,
+  };
+};
 
 describe('planAmendment', () => {
   it('removes a service: the total drops by its final price and the delta is negative', () => {
@@ -69,17 +95,103 @@ describe('planAmendment', () => {
     expect(plan.after.services.map((service) => service.id)).toEqual([filling.id, crown.id]);
   });
 
-  it('says whether the discount changes: that needs visit:discount (ADR-0055)', () => {
+  it('says whether pricing changes — the discount or a typed price: that needs visit:discount (ADR-0055)', () => {
     const removal = planAmendment(visit(), {
       discount: { mode: 'percent', value: '0.00' },
       services: [{ id: filling.id }, { id: crown.id }],
     });
-    expect(removal.discountChanged).toBe(false);
+    expect(removal.pricingChanged).toBe(false);
     const discounted = planAmendment(visit(), {
       discount: { mode: 'percent', value: '10' },
       services: keepAll,
     });
-    expect(discounted.discountChanged).toBe(true);
+    expect(discounted.pricingChanged).toBe(true);
+  });
+
+  it("sets a kept line's price: base = price, line discount 0", () => {
+    const plan = planAmendment(visit(), {
+      discount: noDiscount,
+      services: [
+        { id: filling.id, price: '120' },
+        { id: cleaning.id, price: '60' },
+        { id: crown.id },
+      ],
+    });
+    expect(plan.priced).toEqual([
+      { id: filling.id, baseAmount: '120.00' },
+      { id: cleaning.id, baseAmount: '60.00' },
+    ]);
+    expect(plan.after.total).toBe('480.00');
+    expect(plan.delta).toBe('30.00');
+    expect(plan.pricingChanged).toBe(true);
+    const same = planAmendment(visit(), {
+      discount: noDiscount,
+      services: [{ id: filling.id, price: '100.00' }, { id: cleaning.id }, { id: crown.id }],
+    });
+    expect(same.changed).toBe(false);
+  });
+
+  it('replaces a service: the new one at its catalog price, unless a price is typed', () => {
+    const plan = planAmendment(
+      visit({ services: [cleaning] }),
+      {
+        discount: noDiscount,
+        services: [{ procedureId: implant.id, toothCode: '46', surfaces: [] }],
+      },
+      catalog(implant),
+    );
+    expect(plan.removed.map((service) => service.id)).toEqual([cleaning.id]);
+    expect(plan.added).toEqual([
+      expect.objectContaining({
+        id: 'new-1',
+        procedureId: implant.id,
+        code: 'IMP',
+        toothCode: '46',
+        jaw: null,
+        baseAmount: '70.00',
+      }),
+    ]);
+    expect(plan.after.services.map((service) => service.id)).toEqual(['new-1']);
+    expect(plan.delta).toBe('20.00');
+    expect(plan.pricingChanged).toBe(false);
+
+    const typed = planAmendment(
+      visit({ services: [cleaning] }),
+      {
+        discount: noDiscount,
+        services: [{ procedureId: implant.id, toothCode: '46', surfaces: [], price: '65' }],
+      },
+      catalog(implant),
+    );
+    expect(typed.added[0]?.baseAmount).toBe('65.00');
+    expect(typed.delta).toBe('15.00');
+    expect(typed.pricingChanged).toBe(true);
+  });
+
+  it("adds only an active catalog service in the visit's currency, where it may be recorded", () => {
+    const add = (item: AddableService, entry: { toothCode?: '46'; jaw?: 'upper' } = {}) =>
+      planAmendment(
+        visit(),
+        {
+          discount: noDiscount,
+          services: [...keepAll, { procedureId: item.id, surfaces: [], ...entry }],
+        },
+        catalog(item),
+      );
+    expect(() => add({ ...implant, active: false }, { toothCode: '46' })).toThrow(
+      CatalogItemInactiveError,
+    );
+    expect(() =>
+      add({ ...implant, price: { amount: '70.00', currency: 'EUR' } }, { toothCode: '46' }),
+    ).toThrow(CurrencyMismatchError);
+    expect(() => add(implant)).toThrow(ToothRequiredError);
+    expect(() => add(implant, { toothCode: '46', jaw: 'upper' })).toThrow();
+    expect(() =>
+      planAmendment(visit(), {
+        discount: noDiscount,
+        services: [...keepAll, { procedureId: 'proc-unknown', surfaces: [] }],
+      }),
+    ).toThrow(AmendUnknownServiceError);
   });
 
   it('reopens the plan a removed service performed (D2)', () => {
@@ -101,12 +213,11 @@ describe('planAmendment', () => {
   });
 
   it('treats the same surfaces in another order as unchanged', () => {
-    expect(() =>
-      planAmendment(visit(), {
-        discount: noDiscount,
-        services: [{ id: filling.id, surfaces: ['O', 'M'] }, { id: cleaning.id }, { id: crown.id }],
-      }),
-    ).toThrow(AmendNoChangeError);
+    const plan = planAmendment(visit(), {
+      discount: noDiscount,
+      services: [{ id: filling.id, surfaces: ['O', 'M'] }, { id: cleaning.id }, { id: crown.id }],
+    });
+    expect(plan.changed).toBe(false);
   });
 
   it('recomputes with a changed discount, percent and amount', () => {
@@ -173,12 +284,11 @@ describe('planAmendment', () => {
     ).toThrow(SurfacesInvalidError);
   });
 
-  it('refuses an amendment that changes nothing', () => {
-    expect(() => planAmendment(visit(), { discount: noDiscount, services: keepAll })).toThrow(
-      AmendNoChangeError,
-    );
-    expect(() =>
-      planAmendment(visit(), { discount: { mode: 'percent', value: '0.00' }, services: keepAll }),
-    ).toThrow(AmendNoChangeError);
+  it('says when nothing about the services or the money changes', () => {
+    expect(planAmendment(visit(), { discount: noDiscount, services: keepAll }).changed).toBe(false);
+    expect(
+      planAmendment(visit(), { discount: { mode: 'percent', value: '0.00' }, services: keepAll })
+        .changed,
+    ).toBe(false);
   });
 });
