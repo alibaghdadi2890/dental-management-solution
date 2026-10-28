@@ -72,6 +72,17 @@ export type VisitAmended = DomainEvent<
 >;
 
 /**
+ * A correction moved a finished visit to another day (ADR-0063), published inside the correction
+ * transaction: `compensation` vetoes it when either day is in a closed month of the dentist's pay.
+ * `dentistId` is the visit's dentist (staff profile id); `from` and `to` are local dates.
+ */
+export const VISIT_REDATED = 'VisitRedated';
+export type VisitRedated = DomainEvent<
+  typeof VISIT_REDATED,
+  { visitId: string; patientId: string; dentistId: string; from: string; to: string }
+>;
+
+/**
  * A completed or amended visit was voided (4b, D4), published inside the void transaction:
  * `billing` reverses what the visit charged — or vetoes the void when payments sit on it
  * (ADR-0026), which rolls the whole void back.

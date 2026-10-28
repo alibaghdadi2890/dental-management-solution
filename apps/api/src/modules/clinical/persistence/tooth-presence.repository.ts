@@ -157,6 +157,16 @@ export class ToothPresenceRepository {
     );
   }
 
+  /** A visit moved to another day (ADR-0063): what it recorded on the teeth moves with it. */
+  async redateVisit(visitId: string, occurredOn: string): Promise<void> {
+    await this.db.run((tx) =>
+      tx
+        .update(toothPresences)
+        .set({ occurredOn })
+        .where(eq(toothPresences.recordedInVisitId, visitId)),
+    );
+  }
+
   /** The merge re-point: every row of the dropped patient, removed ones too, follows the kept. */
   async repointPatient(fromPatientId: string, toPatientId: string): Promise<number> {
     const rows = await this.db.run((tx) =>

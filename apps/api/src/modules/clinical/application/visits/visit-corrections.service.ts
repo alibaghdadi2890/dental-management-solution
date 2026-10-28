@@ -33,10 +33,13 @@ import { correct } from '../../domain/visit-lifecycle';
 import { planVisitTimes, type VisitTimes } from '../../domain/visit-times';
 import {
   VISIT_AMENDED,
+  VISIT_REDATED,
   VISIT_VOIDED,
   type VisitAmended,
+  type VisitRedated,
   type VisitVoided,
 } from '../../events/visit-events';
+import { ToothPresenceRepository } from '../../persistence/tooth-presence.repository';
 import { VisitAmendmentsRepository } from '../../persistence/visit-amendments.repository';
 import {
   type StoredVisitService,
@@ -96,6 +99,7 @@ function withTimes(
 
 /** The times a time correction audits, before and after. */
 const timesOf = (visit: StoredVisit) => ({
+  localDate: visit.localDate,
   startedAt: visit.startedAt,
   completedAt: visit.completedAt,
   pausedSeconds: visit.pausedSeconds,
@@ -123,6 +127,7 @@ export class VisitCorrectionsService {
     private readonly amendments: VisitAmendmentsRepository,
     private readonly unperformer: PlanUnperformer,
     private readonly presence: PresenceWriter,
+    private readonly presences: ToothPresenceRepository,
     private readonly locks: VisitLocks,
     private readonly presenter: VisitPresenter,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -132,7 +137,8 @@ export class VisitCorrectionsService {
    * Corrects a completed (or already amended) visit (4b, D1–D4, ADR-0025, ADR-0062) with
    * `visit:amend`: the services that stay may change tooth, surfaces and price, the others are
    * soft-deleted (a plan one of them performed returns to `planned`, D2), catalog services may be
-   * added, the visit discount may change, and so may its start and end (`planVisitTimes`). Locks
+   * added, the visit discount may change, and so may its start and end (`planVisitTimes`) — on
+   * another day too, which moves the visit and its tooth records (ADR-0063, `redate`). Locks
    * the patient then the visit (ADR-0023, as `complete`) and refuses a stale `expectedUpdatedAt`
    * (409 `visit.stale`). A change to the services or the money makes the visit `amended`,
    * recomputes and freezes its money, appends a `visit_amendments` row with the before/after
@@ -221,7 +227,7 @@ export class VisitCorrectionsService {
       const presenceContext = {
         patientId: before.patientId,
         visitId: id,
-        occurredOn: before.localDate,
+        occurredOn: times?.localDate ?? before.localDate,
         dentistId: before.dentistId,
         userId: this.context.requireUserId(),
       };
@@ -259,6 +265,7 @@ export class VisitCorrectionsService {
         total: plan.after.total,
         ...times,
       });
+      await this.redate(before, times);
       const snapshots = {
         before: withTimes(plan.before, times && before),
         after: withTimes(plan.after, times),
@@ -404,9 +411,9 @@ export class VisitCorrectionsService {
 
   /**
    * A correction of the times alone (ADR-0062), imported visits included: the pauses are dropped
-   * and the duration recomputed. Nothing else changes — not the status, the money or the local
-   * date — so no amendment is written and no event is published; audited `visit.times` with the
-   * reason and both sets of times.
+   * and the duration recomputed; on another day the visit moves (`redate`, ADR-0063). The status
+   * and the money don't change, so no amendment is written and only a move publishes an event;
+   * audited `visit.times` with the reason and both sets of times and dates.
    */
   private async correctTimes(
     before: StoredVisit,
@@ -414,6 +421,7 @@ export class VisitCorrectionsService {
     reason: string,
   ): Promise<VisitResult> {
     const after = await this.visits.update(before.id, times);
+    await this.redate(before, times);
     await this.audit.record({
       action: 'visit.times',
       resourceType: 'visit',
@@ -424,6 +432,24 @@ export class VisitCorrectionsService {
       reason,
     });
     return { visit: await this.presenter.present(after) };
+  }
+
+  /**
+   * A correction that moved the visit to another day (ADR-0063): the tooth records it made move
+   * with it, and `VisitRedated` lets `compensation` veto a move into or out of a closed month.
+   * The ledger keeps its dates: entries are append-only.
+   */
+  private async redate(before: StoredVisit, times: VisitTimes | null): Promise<void> {
+    if (!times || times.localDate === before.localDate) return;
+    await this.presences.redateVisit(before.id, times.localDate);
+    const event: VisitRedated = this.events.create(VISIT_REDATED, {
+      visitId: before.id,
+      patientId: before.patientId,
+      dentistId: before.dentistId,
+      from: before.localDate,
+      to: times.localDate,
+    });
+    await this.events.publish(event);
   }
 
   private async today(): Promise<string> {

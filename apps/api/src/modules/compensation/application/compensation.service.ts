@@ -193,6 +193,22 @@ export class CompensationService {
   }
 
   /**
+   * A finished visit moving to another day (ADR-0063), in the correction's transaction: refused
+   * when either day is in a closed month of its dentist's pay, whose snapshot counted the visit
+   * where it was (422 `compensation.period_closed`). Under the dentist's lock, so a close can't
+   * slip between. A reaction of `clinical`'s correction, whose actor holds `visit:amend`: it
+   * checks no permission.
+   */
+  async assertVisitMovable(profileId: string, from: string, to: string): Promise<void> {
+    await this.tenantDb.run(async () => {
+      await this.lockDentist(profileId);
+      const lastClosed = await this.lastClosed(profileId);
+      assertDateOpen(from, lastClosed);
+      assertDateOpen(to, lastClosed);
+    });
+  }
+
+  /**
    * Deactivating a dentist (C11), in the deactivation's transaction: the agreement in force ends on
    * `date` and later ones are superseded. A reaction of `users.deactivate`, whose actor holds
    * `user:write`: it checks no permission and never refuses.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VisitTimesInvalidError, VisitTimesOffDayError } from './visit-errors';
+import { VisitTimesInvalidError } from './visit-errors';
 import { planVisitTimes } from './visit-times';
 
 /** Beirut is UTC+3 in June: 2026-06-10 runs from 2026-06-09T21:00Z to 2026-06-10T21:00Z. */
@@ -26,6 +26,7 @@ const plan = (startedAt: string, completedAt: string, base = visit) => {
 describe('planVisitTimes', () => {
   it('sets both times, drops the pauses and makes the duration end − start', () => {
     expect(plan('2026-06-10T07:15:00Z', '2026-06-10T08:00:00Z')).toEqual({
+      localDate: '2026-06-10',
       startedAt: at('2026-06-10T07:15:00Z'),
       completedAt: at('2026-06-10T08:00:00Z'),
       pausedSeconds: 0,
@@ -33,14 +34,13 @@ describe('planVisitTimes', () => {
     });
   });
 
-  it("keeps the start on the visit's local day, at either edge of it", () => {
-    expect(plan('2026-06-09T21:00:00Z', '2026-06-09T21:30:00Z').durationMinutes).toBe(30);
-    expect(() => plan('2026-06-09T20:59:00Z', '2026-06-09T21:30:00Z')).toThrow(
-      VisitTimesOffDayError,
-    );
-    expect(() => plan('2026-06-10T21:00:00Z', '2026-06-10T21:30:00Z')).toThrow(
-      VisitTimesOffDayError,
-    );
+  it("moves the visit to the start's day in the clinic's zone (ADR-0063)", () => {
+    expect(plan('2026-06-09T21:00:00Z', '2026-06-09T21:30:00Z').localDate).toBe('2026-06-10');
+    expect(plan('2026-06-09T20:59:00Z', '2026-06-09T21:30:00Z').localDate).toBe('2026-06-09');
+    expect(plan('2026-06-03T06:00:00Z', '2026-06-03T06:40:00Z')).toMatchObject({
+      localDate: '2026-06-03',
+      durationMinutes: 40,
+    });
   });
 
   it('lets the end cross midnight, up to a day after the start', () => {

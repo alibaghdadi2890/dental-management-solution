@@ -796,7 +796,6 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
       const refusals: [Record<string, unknown>, number, string][] = [
         [{ expectedUpdatedAt: '2026-01-01T00:00:00Z' }, 409, 'visit.stale'],
         [at(times.startedAt, times.startedAt), 422, 'visit.times_invalid'],
-        [at('2026-06-09T20:00:00Z', times.completedAt), 422, 'visit.times_off_day'],
         [at(times.startedAt, '2026-06-10T09:01:00Z'), 422, 'visit.times_invalid'],
         [at(times.startedAt, '2026-06-10T07:00:00Z'), 422, 'visit.times_invalid'],
       ];
@@ -808,6 +807,53 @@ describe('clinical + billing: amending and voiding a completed visit (4b)', () =
 
       expect((await auditOf(visit.id)).some((row) => row.action === 'visit.times')).toBe(false);
       expect(await amendmentsOf(visit.id)).toEqual([]);
+    });
+
+    it('moves the visit to another day with its tooth records; the ledger keeps its dates (ADR-0063)', async () => {
+      const patient = await patientOwing('Correct Date', '1');
+      const visit = await startVisit(patient);
+      const filling = await addService(visit.id, {
+        procedureId: service.fill.id,
+        toothCode: '16',
+        surfaces: ['O'],
+      });
+      await ok(
+        dentist.agent
+          .put(`/api/v1/visits/${visit.id}/teeth/36/presence`)
+          .send({ presence: 'missing' }),
+      );
+      const done = (
+        await ok<VisitResult>(dentist.agent.post(`/api/v1/visits/${visit.id}/complete`))
+      ).visit;
+
+      // It was the day before: 10:00 to 10:45 in Beirut on 2026-06-09.
+      const { visit: moved } = await ok<VisitResult>(
+        amend(dentist.agent, done, {
+          reason: 'Entered the next day',
+          discount: { mode: 'percent', value: '0' },
+          services: [{ id: filling.record.id }],
+          times: { startedAt: '2026-06-09T07:00:00Z', completedAt: '2026-06-09T07:45:00Z' },
+        }),
+      );
+      expect(moved).toMatchObject({
+        status: 'completed',
+        localDate: '2026-06-09',
+        durationMinutes: 45,
+      });
+      expect((await ledgerOf(visit.id)).map((row) => [row.kind, row.effective_date])).toEqual([
+        ['visit_charge', TODAY],
+      ]);
+      const presences = await database.ownerPool.query<{ occurred_on: string }>(
+        'select occurred_on::text from tooth_presences where recorded_in_visit_id = $1',
+        [visit.id],
+      );
+      expect(presences.rows).toEqual([{ occurred_on: '2026-06-09' }]);
+      const [latest] = await auditOf(visit.id);
+      expect(latest).toMatchObject({
+        action: 'visit.times',
+        before: { localDate: TODAY },
+        after: { localDate: '2026-06-09' },
+      });
     });
 
     it('corrects only the times of an imported visit', async () => {

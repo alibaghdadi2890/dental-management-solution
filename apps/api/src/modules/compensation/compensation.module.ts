@@ -7,6 +7,7 @@ import { TenancyModule } from '../tenancy';
 import { UsersModule } from '../users';
 import { CompensationService } from './application/compensation.service';
 import { DeactivationSubscriber } from './application/deactivation.subscriber';
+import { VisitRedateSubscriber } from './application/visit-redate.subscriber';
 import { StatementReader } from './application/statement-reader';
 import { CompensationController } from './http/compensation.controller';
 import { AgreementsRepository } from './persistence/agreements.repository';
@@ -27,6 +28,7 @@ import { PeriodsRepository } from './persistence/periods.repository';
     CompensationService,
     StatementReader,
     DeactivationSubscriber,
+    VisitRedateSubscriber,
     AgreementsRepository,
     AdjustmentsRepository,
     PayoutsRepository,

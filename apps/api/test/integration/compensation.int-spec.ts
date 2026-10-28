@@ -359,6 +359,24 @@ describe('compensation (feature 13b)', () => {
         visitId: late.id,
       });
 
+      // It can't move to another day while its month is closed (ADR-0063).
+      const completed = await ok<Visit>(owner.get(`/api/v1/visits/${late.id}`));
+      const moved = await drB.agent.post(`/api/v1/visits/${late.id}/amend`).send({
+        expectedUpdatedAt: completed.updatedAt,
+        reason: 'Wrong day',
+        discount: { mode: 'percent', value: '0' },
+        services: completed.services.map((line) => ({ id: line.id })),
+        times: {
+          startedAt: `${PREVIOUS}-10T07:00:00Z`,
+          completedAt: `${PREVIOUS}-10T07:30:00Z`,
+        },
+      });
+      expect(moved.status).toBe(422);
+      expect((moved.body as { code: string }).code).toBe('compensation.period_closed');
+      expect((await ok<Visit>(owner.get(`/api/v1/visits/${late.id}`))).localDate).toBe(
+        lastDay(PREVIOUS),
+      );
+
       await ok(
         owner
           .post(`${base(drB.user.profileId)}/periods/${PREVIOUS}/reopen`)

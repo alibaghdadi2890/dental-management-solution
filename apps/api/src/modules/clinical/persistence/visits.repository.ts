@@ -89,6 +89,7 @@ export type VisitPatch = Partial<
     | 'historyConfirmedAt'
     | 'historyConfirmedBy'
     | 'startedAt'
+    | 'localDate'
     | 'pausedAt'
     | 'pausedSeconds'
     | 'notes'
