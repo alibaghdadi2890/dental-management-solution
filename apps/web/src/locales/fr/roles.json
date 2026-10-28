@@ -33,8 +33,8 @@
       "description": "Commencer, saisir et terminer les visites."
     },
     "visit_amend": {
-      "label": "Rectifier les visites terminées",
-      "description": "Corriger les actes d’une visite terminée."
+      "label": "Corriger les visites terminées",
+      "description": "Corriger les actes, les prix et les heures d’une visite terminée."
     },
     "visit_void": {
       "label": "Annuler des visites",

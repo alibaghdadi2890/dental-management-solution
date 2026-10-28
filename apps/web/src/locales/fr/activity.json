@@ -96,6 +96,7 @@
       "discount": "A changé la remise de la visite {{subject}} à l’encaissement",
       "checkout": "A clôturé l’encaissement de la visite {{subject}}",
       "void": "A annulé la visite {{subject}}",
+      "times": "A corrigé les heures de la visite {{subject}}",
       "start_type": "A commencé la visite {{subject}} · {{type}}",
       "start_reason": "A commencé la visite {{subject}} · {{type}} · « {{reason}} »",
       "reason": "A modifié le motif de la visite {{subject}}",

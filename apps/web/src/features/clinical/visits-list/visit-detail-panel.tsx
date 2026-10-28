@@ -28,6 +28,7 @@ import {
   draftOf,
   draftTotal,
   isDirty,
+  isServicesDirty,
   problemOf,
 } from './amend-draft';
 import { AmendForm } from './amend-form';
@@ -67,8 +68,9 @@ function Row({
 /**
  * The visit detail panel (spec §Detail panel, 452px, pushes the list): header, a voided banner,
  * services with tooth labels, totals with paid and balance from `billing`, the audit trail
- * (`audit:read`), and the actions by role — Void and Amend, "Request a change", Open in record.
- * Amend turns the body into the amend form; Save asks for a reason and shows before → after.
+ * (`audit:read`), and the actions by role — Void and Correct visit, "Request a change", Open in
+ * record. Correct visit (amend, ADR-0062) turns the body into the correction form — times,
+ * services, prices, discount; Save asks for a reason and shows before → after.
  */
 export function VisitDetailPanel({
   visit,
@@ -107,14 +109,18 @@ export function VisitDetailPanel({
     amount === null ? '—' : formatMoney({ amount, currency: visit.currency }, locale);
   const correctable = visit.status === 'completed' || visit.status === 'amended';
   const voided = visit.status === 'voided';
-  const dirty = draft !== null && isDirty(draft, visit);
+  const editing = draft !== null;
+  const dirty = draft !== null && isDirty(draft, visit, timeZone);
   const paid = balance?.paid ?? '0.00';
   const outstanding = balance?.outstanding ?? (voided ? '0.00' : visit.total);
 
-  const leaveAmend = (then: () => void) => {
-    if (!dirty) {
+  const leaveEditing = (then: () => void) => {
+    const stop = () => {
       setDraft(null);
       then();
+    };
+    if (!dirty) {
+      stop();
       return;
     }
     confirm({
@@ -123,10 +129,7 @@ export function VisitDetailPanel({
       okLabel: t('common:discard'),
       cancelLabel: t('common:keepEditing'),
       tone: 'warn',
-      onConfirm: () => {
-        setDraft(null);
-        then();
-      },
+      onConfirm: stop,
     });
   };
 
@@ -137,7 +140,7 @@ export function VisitDetailPanel({
 
   const saveAmendment = () => {
     if (!draft) return;
-    const after = draftTotal(draft, visit);
+    const after = draftTotal(draft);
     const delta = toCents(after) - toCents(visit.total ?? '0');
     const effect =
       delta < 0n
@@ -147,12 +150,14 @@ export function VisitDetailPanel({
           : t('amend.sameTotal');
     confirm({
       title: t('amend.confirmTitle', { number }),
-      body: t('amend.confirmBody', { before: money(visit.total), after: money(after), effect }),
+      body: isServicesDirty(draft, visit)
+        ? t('amend.confirmBody', { before: money(visit.total), after: money(after), effect })
+        : t('amend.confirmTimesBody'),
       okLabel: t('amend.save'),
       reasonLabel: t('amend.reason'),
       onConfirm: async (reason) => {
         try {
-          await amendVisit(visit.id, amendInput(draft, visit, reason));
+          await amendVisit(visit.id, amendInput(draft, visit, timeZone, reason));
         } catch (error) {
           fail(error);
         }
@@ -199,9 +204,12 @@ export function VisitDetailPanel({
     });
   };
 
-  const problem = draft ? problemOf(draft) : null;
+  const problem = draft ? problemOf(draft, visit, timeZone, new Date()) : null;
   // A removed line's tooth no longer matters, whatever its field holds.
-  const badTooth = draft?.lines.some((line) => !line.removed && badTeeth.has(line.id)) ?? false;
+  const badTooth =
+    draft?.lines.some(
+      (line) => !(line.kind === 'kept' && line.removed) && badTeeth.has(line.key),
+    ) ?? false;
   const footer = draft ? (
     <>
       <span className="me-auto text-[12px] leading-snug text-danger">
@@ -210,7 +218,7 @@ export function VisitDetailPanel({
       <Button
         variant="secondary"
         onClick={() => {
-          leaveAmend(() => undefined);
+          leaveEditing(() => undefined);
         }}
       >
         {t('common:cancel')}
@@ -238,13 +246,13 @@ export function VisitDetailPanel({
           {t('panel.void')}
         </Button>
       )}
-      {/* Amending shows the money: only on a visit whose money the caller sees (ADR-0055). */}
+      {/* Correcting shows the money: only on a visit whose money the caller sees (ADR-0055). */}
       {correctable && access.amend && visit.total !== null && (
         <Button
           variant="primary"
           onClick={() => {
             setBadTeeth(new Set());
-            setDraft(draftOf(visit));
+            setDraft(draftOf(visit, timeZone));
           }}
         >
           {t('panel.amend')}
@@ -264,7 +272,7 @@ export function VisitDetailPanel({
               {number}
             </span>
             <VisitStatusPill status={visit.status} />
-            {draft && (
+            {editing && (
               <span className="rounded-[5px] border border-warning-border bg-warning-bg px-2 text-[11.5px] leading-5 font-medium text-warning">
                 {t('amend.badge')}
               </span>
@@ -289,7 +297,7 @@ export function VisitDetailPanel({
       }
       dirty={dirty}
       onClose={() => {
-        leaveAmend(onClose);
+        leaveEditing(onClose);
       }}
       className="w-[452px] max-w-[50%]"
       footer={footer}
@@ -303,7 +311,9 @@ export function VisitDetailPanel({
         <AmendForm
           visit={visit}
           draft={draft}
+          timeZone={timeZone}
           locale={locale}
+          canPrice={access.price}
           onChange={setDraft}
           onInvalidTeeth={setBadTeeth}
         />
@@ -340,14 +350,10 @@ export function VisitDetailPanel({
         )}
         <Row
           label={t('panel.total')}
-          value={
-            draft
-              ? `${money(visit.total)} → ${money(draftTotal(draft, visit))}`
-              : money(visit.total)
-          }
+          value={draft ? `${money(visit.total)} → ${money(draftTotal(draft))}` : money(visit.total)}
           strong
         />
-        {canPay && !draft && (
+        {canPay && !editing && (
           <>
             <Row label={t('panel.paid')} value={money(paid)} tone="success" />
             <Row
@@ -357,7 +363,7 @@ export function VisitDetailPanel({
             />
           </>
         )}
-        {!draft && (
+        {!editing && (
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {openPayment && correctable && Number(outstanding) > 0 && (
               <Button
@@ -393,7 +399,7 @@ export function VisitDetailPanel({
           </div>
         )}
       </section>
-      {!draft && correctable && access.request && (
+      {!editing && correctable && access.request && (
         <p className="text-[12.5px] leading-snug text-ink-secondary">
           {t('panel.requestNote')}{' '}
           <button
@@ -407,7 +413,7 @@ export function VisitDetailPanel({
           </button>
         </p>
       )}
-      {!draft && canAudit && (
+      {!editing && canAudit && (
         <VisitAuditTrail
           visitId={visit.id}
           currency={visit.currency}

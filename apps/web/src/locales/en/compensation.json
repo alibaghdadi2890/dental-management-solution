@@ -55,7 +55,7 @@
   },
   "sources": {
     "visit_charge": "Charge",
-    "visit_charge_adjustment": "Amendment or discount",
+    "visit_charge_adjustment": "Correction or discount",
     "visit_charge_reversal": "Void",
     "allocation": "Payment",
     "credit_applied": "Credit applied",

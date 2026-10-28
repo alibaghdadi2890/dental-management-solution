@@ -115,6 +115,7 @@ const PLAIN = new Set([
   'visit.discount',
   'visit.checkout',
   'visit.void',
+  'visit.times',
   'visit.history_confirm',
   'visit.history_unconfirm',
   'visit_service.update',

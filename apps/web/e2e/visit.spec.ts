@@ -370,25 +370,25 @@ test('a completed visit is amended with a reason, then voided, from the Visits s
   });
 
   let before = '';
-  await test.step('amend: remove one composite with a reason; the balance follows', async () => {
+  await test.step('correct: remove one composite with a reason; the balance follows', async () => {
     before = (await figure('Total').textContent()) ?? '';
-    await details.getByRole('button', { name: 'Amend' }).click();
+    await details.getByRole('button', { name: 'Correct visit' }).click();
     await details
       .getByRole('button', { name: /^Remove / })
       .last()
       .click();
-    await details.getByRole('button', { name: 'Save amendment' }).click();
+    await details.getByRole('button', { name: 'Save correction' }).click();
     const confirm = page.getByRole('alertdialog');
     await expect(confirm).toContainText(`Total changes ${before} →`);
-    await confirm.getByLabel('Reason for amendment').fill('Second filling not placed');
-    await confirm.getByRole('button', { name: 'Save amendment' }).click();
-    await expect(page.getByRole('status').filter({ hasText: /amended$/ })).toBeVisible();
-    await expect(row).toContainText('Amended');
+    await confirm.getByLabel('Reason for the correction').fill('Second filling not placed');
+    await confirm.getByRole('button', { name: 'Save correction' }).click();
+    await expect(page.getByRole('status').filter({ hasText: /corrected$/ })).toBeVisible();
+    await expect(row).toContainText('Corrected');
     await row.click();
     const after = (await figure('Total').textContent()) ?? '';
     expect(after).not.toBe(before);
     await expect(figure('Balance')).toHaveText(after);
-    await expect(details.getByText(/^Amended — Second filling not placed/)).toBeVisible();
+    await expect(details.getByText(/^Corrected — Second filling not placed/)).toBeVisible();
   });
 
   await test.step('void with a reason: struck through in the list and in the history', async () => {

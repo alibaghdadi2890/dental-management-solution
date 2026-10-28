@@ -45,6 +45,7 @@ export function listVisit(
     discountAmount: '0.00',
     total: '140.00',
     amendmentCount: 0,
+    imported: false,
     checkedOutAt: null,
     voidedAt: null,
     voidReason: null,

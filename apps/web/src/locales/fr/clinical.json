@@ -431,9 +431,9 @@
       "surfaces_invalid": "Cette dent n’a pas ces faces.",
       "currency_mismatch": "Ce prix est dans une autre devise que la visite.",
       "stale": "La visite a changé depuis son ouverture. Elle a été rechargée — vérifiez puis réessayez.",
-      "not_amendable": "Seule une visite terminée peut être modifiée.",
+      "not_amendable": "Seule une visite terminée peut être corrigée.",
       "not_voidable": "Seule une visite terminée peut être annulée.",
-      "amend_no_change": "La modification ne change rien.",
+      "amend_no_change": "La correction ne change rien.",
       "amend_unknown_service": "Un acte n’est plus sur cette visite ; rechargez et réessayez.",
       "amend_plan_linked": "Un acte ayant réalisé un plan peut être retiré, pas déplacé.",
       "has_payments": "Cette visite a des paiements : remboursez-les ou déplacez-les avant de l’annuler.",
@@ -442,7 +442,9 @@
       "not_completed": "Seule une visite terminée peut être encaissée.",
       "jaw_required": "Choisissez l’arcade supérieure ou inférieure.",
       "jaw_not_allowed": "Cet acte ne s’enregistre pas sur une arcade.",
-      "imported": "Cette visite a été importée de l’ancien système : elle ne peut être ni modifiée ni annulée."
+      "imported": "Cette visite a été importée de l’ancien système : seules ses heures peuvent être corrigées, et elle ne peut pas être annulée.",
+      "times_off_day": "La visite doit commencer le jour même.",
+      "times_invalid": "La fin doit suivre le début, dans la journée, et ne pas être dans le futur."
     },
     "record": {
       "not_removable": "Seuls les éléments saisis dans cette visite peuvent être retirés.",

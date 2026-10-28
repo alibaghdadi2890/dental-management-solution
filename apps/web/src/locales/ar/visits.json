@@ -22,7 +22,7 @@
     "all": "الكل",
     "in_progress": "قيد التنفيذ",
     "unpaid": "غير مدفوعة",
-    "voided_amended": "الملغاة والمعدّلة"
+    "voided_amended": "الملغاة والمصحّحة"
   },
   "search": {
     "label": "البحث في الزيارات",
@@ -60,7 +60,7 @@
     "in_progress": "قيد التنفيذ",
     "paused": "متوقفة مؤقتًا",
     "completed": "مكتملة",
-    "amended": "معدّلة",
+    "amended": "مصحّحة",
     "voided": "ملغاة",
     "discarded": "مستبعدة"
   },
@@ -97,11 +97,11 @@
     "paid": "المدفوع",
     "balance": "الرصيد",
     "void": "إلغاء",
-    "amend": "تعديل",
+    "amend": "تصحيح الزيارة",
     "openRecord": "فتح في الملف",
-    "requestNote": "يمكن للطبيب فقط إلغاء الزيارة المكتملة أو تعديلها.",
+    "requestNote": "يمكن للطبيب فقط إلغاء الزيارة المكتملة أو تصحيحها.",
     "requestChange": "طلب تغيير",
-    "requestToast": "اطلب من {{dentist}} تعديل هذه الزيارة أو إلغاءها",
+    "requestToast": "اطلب من {{dentist}} تصحيح هذه الزيارة أو إلغاءها",
     "invoice": "فاتورة",
     "planQuote": "عرض سعر الخطة",
     "reason": "السبب: {{reason}}"
@@ -123,16 +123,18 @@
       "update": "تغيّرت الملاحظات أو الخصم",
       "complete": "اكتملت الزيارة",
       "completeTotal": "اكتملت الزيارة · {{total}}",
-      "amend": "عُدّلت — {{reason}}",
-      "amendTotals": "عُدّلت — {{reason}} · {{before}} ← {{after}}",
+      "amend": "صُحّحت — {{reason}}",
+      "amendTotals": "صُحّحت — {{reason}} · {{before}} ← {{after}}",
       "void": "أُلغيت — {{reason}}",
+      "times": "صُحّحت الأوقات — {{reason}} · {{before}} ← {{after}}",
       "other": "تغيير",
       "discount": "خصم عند الدفع · {{before}} ← {{after}}",
-      "discountReason": "خصم عند الدفع — {{reason}} · {{before}} ← {{after}}"
+      "discountReason": "خصم عند الدفع — {{reason}} · {{before}} ← {{after}}",
+      "timesChange": "الأوقات {{before}} ← {{after}}"
     }
   },
   "amend": {
-    "badge": "قيد التعديل",
+    "badge": "قيد التصحيح",
     "tooth": "السن",
     "toothOf": "سن {{name}}",
     "surfaces": "الأسطح",
@@ -148,19 +150,41 @@
       "percent": "%",
       "amount": "مبلغ"
     },
-    "save": "حفظ التعديل",
+    "save": "حفظ التصحيح",
     "problem": {
       "noService": "أبقِ خدمة واحدة على الأقل — لإزالة كل شيء، ألغِ الزيارة.",
       "tooth": "أدخل سنًّا والأسطح الموجودة فيها فقط.",
-      "discount": "أدخل الخصم كرقم."
+      "discount": "أدخل الخصم كرقم.",
+      "jaw": "اختر الفك لكل خدمة تُحتسب لكل فك.",
+      "price": "أدخل كل سعر كرقم.",
+      "timesMissing": "أدخل وقت البدء ووقت الانتهاء.",
+      "timesOrder": "يجب أن يكون الانتهاء بعد البدء.",
+      "timesFuture": "لا يمكن أن يكون وقت الانتهاء في المستقبل."
     },
-    "confirmTitle": "تعديل {{number}}؟",
+    "confirmTitle": "تصحيح {{number}}؟",
     "confirmBody": "يتغيّر الإجمالي من {{before}} إلى {{after}}. {{effect}} يبقى الأصل في سجل التدقيق.",
     "credit": "يحصل المريض على رصيد دائن قدره {{amount}}.",
     "charge": "يدين المريض بمبلغ إضافي قدره {{amount}}.",
     "sameTotal": "لا يتغيّر الإجمالي.",
-    "reason": "سبب التعديل",
-    "done": "عُدّلت {{number}}"
+    "reason": "سبب التصحيح",
+    "done": "صُحّحت {{number}}",
+    "confirmTimesBody": "يتغيّر وقتا البدء والانتهاء، وتبقى الخدمات والمبالغ كما هي. تبقى الأوقات الأصلية في سجل التدقيق.",
+    "added": "جديدة",
+    "priceOf": "سعر {{name}}",
+    "addService": "إضافة خدمة",
+    "addSearch": "ابحث في الكتالوج عن خدمة لإضافتها",
+    "jaw": "الفك",
+    "jawOf": "فك {{name}}",
+    "chooseJaw": "اختر",
+    "importedNote": "استُوردت هذه الزيارة من النظام السابق: يمكن تصحيح أوقاتها فقط."
+  },
+  "times": {
+    "intro": "تبقى الزيارة في {{date}}. وقت الانتهاء الأسبق من وقت البدء يقع في اليوم التالي.",
+    "start": "البدء",
+    "end": "الانتهاء",
+    "nextDay": "اليوم التالي",
+    "minutes": "{{minutes, number}} دقيقة",
+    "duration": "المدة {{before}} ← {{after}}"
   },
   "void": {
     "title": "إلغاء {{number}}؟",
@@ -179,12 +203,12 @@
       "clinical": "السريري"
     },
     "chip": "{{name}} · {{tooth}}",
-    "amendedTimes_zero": "لم تُعدّل",
-    "amendedTimes_one": "عُدّلت مرة",
-    "amendedTimes_two": "عُدّلت مرتين",
-    "amendedTimes_few": "عُدّلت {{count}} مرات",
-    "amendedTimes_many": "عُدّلت {{count}} مرة",
-    "amendedTimes_other": "عُدّلت {{count}} مرة",
+    "amendedTimes_zero": "لم تُصحَّح",
+    "amendedTimes_one": "صُحّحت مرة",
+    "amendedTimes_two": "صُحّحت مرتين",
+    "amendedTimes_few": "صُحّحت {{count}} مرات",
+    "amendedTimes_many": "صُحّحت {{count}} مرة",
+    "amendedTimes_other": "صُحّحت {{count}} مرة",
     "unpaid": "غير مدفوعة",
     "performed": "الخدمات المنفّذة",
     "notes": "الملاحظات السريرية",

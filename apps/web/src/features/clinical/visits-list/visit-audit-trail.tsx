@@ -6,7 +6,7 @@ import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { SHIMMER } from '@/components/ui/list';
-import { formatDateTime, formatMoney } from '@/lib/format';
+import { formatDateTime, formatMoney, formatTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { visitAuditQuery } from './visits-list-api';
 
@@ -19,6 +19,7 @@ const KNOWN_ACTIONS = [
   'visit.amend',
   'visit.discount',
   'visit.void',
+  'visit.times',
 ] as const;
 
 type KnownAction = (typeof KNOWN_ACTIONS)[number];
@@ -32,19 +33,34 @@ function totalOf(side: unknown): string | null {
   return typeof total === 'string' ? total : null;
 }
 
+/** `10:00–10:45` from a time correction's side (`{ startedAt, completedAt }`), if it has both. */
+function spanOf(side: unknown, time: (iso: string) => string): string {
+  const { startedAt, completedAt } = (side ?? {}) as { startedAt?: unknown; completedAt?: unknown };
+  return typeof startedAt === 'string' && typeof completedAt === 'string'
+    ? `${time(startedAt)}–${time(completedAt)}`
+    : '—';
+}
+
 function labelOf(
   entry: AuditEntry,
   t: TFunction<'visits'>,
   money: (amount: string) => string,
+  time: (iso: string) => string,
 ): string {
   if (!isKnown(entry.action)) return t('trail.actions.other');
   const reason = entry.reason ?? '';
   if (entry.action === 'visit.amend') {
     const before = totalOf(entry.before);
     const after = totalOf(entry.after);
-    return before !== null && after !== null
-      ? t('trail.actions.amendTotals', { reason, before: money(before), after: money(after) })
-      : t('trail.actions.amend', { reason });
+    const label =
+      before !== null && after !== null
+        ? t('trail.actions.amendTotals', { reason, before: money(before), after: money(after) })
+        : t('trail.actions.amend', { reason });
+    // A correction that changed the times too (ADR-0062) says so.
+    const times = spanOf(entry.after, time);
+    return times === '—'
+      ? label
+      : `${label} · ${t('trail.actions.timesChange', { before: spanOf(entry.before, time), after: times })}`;
   }
   if (entry.action === 'visit.discount') {
     const totals = {
@@ -56,6 +72,13 @@ function labelOf(
       : t('trail.actions.discount', totals);
   }
   if (entry.action === 'visit.void') return t('trail.actions.void', { reason });
+  if (entry.action === 'visit.times') {
+    return t('trail.actions.times', {
+      reason,
+      before: spanOf(entry.before, time),
+      after: spanOf(entry.after, time),
+    });
+  }
   if (entry.action === 'visit.complete') {
     const total = totalOf(entry.after);
     return total === null
@@ -78,8 +101,9 @@ function actorOf(
 
 /**
  * The detail panel's audit trail (D13: `audit:read` only): the visit's entries newest first, a
- * page at a time behind "Show more"; the latest dot filled. Amend and void read with their reason
- * (and an amendment with its before → after total); a checkout discount with its totals, and its
+ * page at a time behind "Show more"; the latest dot filled. Amend, void and a time correction read
+ * with their reason (an amendment with its before → after total, a time correction with its
+ * times); a checkout discount with its totals, and its
  * reason when one was given. It ends with "View all activity": the Activity screen narrowed to
  * this visit (H7).
  */
@@ -101,6 +125,7 @@ export function VisitAuditTrail({
   const audit = useInfiniteQuery(visitAuditQuery(visitId));
   const entries = audit.data?.pages.flatMap((page) => page.items) ?? [];
   const money = (amount: string) => formatMoney({ amount, currency }, locale);
+  const time = (iso: string) => formatTime(iso, { timeZone, locale });
 
   let body;
   if (audit.isPending) {
@@ -126,7 +151,7 @@ export function VisitAuditTrail({
                 )}
               />
               <div className="text-[12.5px] leading-[1.4] font-medium">
-                {labelOf(entry, t, money)}
+                {labelOf(entry, t, money, time)}
               </div>
               <div className="font-mono text-[11.5px] leading-[1.4] text-ink-muted">
                 {t('trail.meta', {

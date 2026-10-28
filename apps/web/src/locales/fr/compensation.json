@@ -58,7 +58,7 @@
   },
   "sources": {
     "visit_charge": "Facturation",
-    "visit_charge_adjustment": "Modification ou remise",
+    "visit_charge_adjustment": "Correction ou remise",
     "visit_charge_reversal": "Annulation",
     "allocation": "Paiement",
     "credit_applied": "Crédit appliqué",

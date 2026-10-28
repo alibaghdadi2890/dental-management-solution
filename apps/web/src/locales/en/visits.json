@@ -14,7 +14,7 @@
     "all": "All",
     "in_progress": "In progress",
     "unpaid": "Unpaid",
-    "voided_amended": "Voided & amended"
+    "voided_amended": "Voided & corrected"
   },
   "search": {
     "label": "Search visits",
@@ -52,7 +52,7 @@
     "in_progress": "In progress",
     "paused": "Paused",
     "completed": "Completed",
-    "amended": "Amended",
+    "amended": "Corrected",
     "voided": "Voided",
     "discarded": "Discarded"
   },
@@ -85,11 +85,11 @@
     "paid": "Paid",
     "balance": "Balance",
     "void": "Void",
-    "amend": "Amend",
+    "amend": "Correct visit",
     "openRecord": "Open in record",
-    "requestNote": "Only a dentist can void or amend a completed visit.",
+    "requestNote": "Only a dentist can void or correct a completed visit.",
     "requestChange": "Request a change",
-    "requestToast": "Ask {{dentist}} to amend or void this visit",
+    "requestToast": "Ask {{dentist}} to correct or void this visit",
     "invoice": "Invoice",
     "planQuote": "Plan quote",
     "reason": "Reason: {{reason}}"
@@ -111,16 +111,18 @@
       "update": "Notes or discount changed",
       "complete": "Visit completed",
       "completeTotal": "Visit completed · {{total}}",
-      "amend": "Amended — {{reason}}",
-      "amendTotals": "Amended — {{reason}} · {{before}} → {{after}}",
+      "amend": "Corrected — {{reason}}",
+      "amendTotals": "Corrected — {{reason}} · {{before}} → {{after}}",
       "void": "Voided — {{reason}}",
+      "times": "Times corrected — {{reason}} · {{before}} → {{after}}",
       "other": "Changed",
       "discount": "Discount set at checkout · {{before}} → {{after}}",
-      "discountReason": "Discount set at checkout — {{reason}} · {{before}} → {{after}}"
+      "discountReason": "Discount set at checkout — {{reason}} · {{before}} → {{after}}",
+      "timesChange": "times {{before}} → {{after}}"
     }
   },
   "amend": {
-    "badge": "Amending",
+    "badge": "Correcting",
     "tooth": "Tooth",
     "toothOf": "Tooth of {{name}}",
     "surfaces": "Surfaces",
@@ -136,19 +138,41 @@
       "percent": "%",
       "amount": "Amount"
     },
-    "save": "Save amendment",
+    "save": "Save correction",
     "problem": {
       "noService": "Keep at least one service — to remove everything, void the visit.",
       "tooth": "Enter a tooth and only surfaces it has.",
-      "discount": "Enter the discount as a number."
+      "discount": "Enter the discount as a number.",
+      "jaw": "Choose the jaw for each service charged per jaw.",
+      "price": "Enter each price as a number.",
+      "timesMissing": "Enter a start and an end time.",
+      "timesOrder": "The end must be after the start.",
+      "timesFuture": "The end can't be in the future."
     },
-    "confirmTitle": "Amend {{number}}?",
+    "confirmTitle": "Correct {{number}}?",
     "confirmBody": "Total changes {{before}} → {{after}}. {{effect}} The original is kept in the audit trail.",
     "credit": "The patient gets {{amount}} credit.",
     "charge": "The patient owes {{amount}} more.",
     "sameTotal": "The total doesn't change.",
-    "reason": "Reason for amendment",
-    "done": "{{number}} amended"
+    "reason": "Reason for the correction",
+    "done": "{{number}} corrected",
+    "confirmTimesBody": "The start and end change; the services and money stay. The original times are kept in the audit trail.",
+    "added": "New",
+    "priceOf": "Price of {{name}}",
+    "addService": "Add service",
+    "addSearch": "Search the catalog for a service to add",
+    "jaw": "Jaw",
+    "jawOf": "Jaw of {{name}}",
+    "chooseJaw": "Choose",
+    "importedNote": "This visit was imported from the previous system: only its times can be corrected."
+  },
+  "times": {
+    "intro": "The visit stays on {{date}}. An end before the start is on the next day.",
+    "start": "Start",
+    "end": "End",
+    "nextDay": "Next day",
+    "minutes": "{{minutes, number}} min",
+    "duration": "Duration {{before}} → {{after}}"
   },
   "void": {
     "title": "Void {{number}}?",
@@ -167,8 +191,8 @@
       "clinical": "Clinical"
     },
     "chip": "{{name}} · {{tooth}}",
-    "amendedTimes_one": "Amended once",
-    "amendedTimes_other": "Amended {{count}}×",
+    "amendedTimes_one": "Corrected once",
+    "amendedTimes_other": "Corrected {{count}}×",
     "unpaid": "Unpaid",
     "performed": "Services performed",
     "notes": "Clinical notes",

@@ -96,6 +96,7 @@
       "discount": "غيّر خصم الزيارة {{subject}} عند الدفع",
       "checkout": "أغلق تحصيل الزيارة {{subject}}",
       "void": "ألغى الزيارة {{subject}}",
+      "times": "صحّح أوقات الزيارة {{subject}}",
       "start_type": "بدأ الزيارة {{subject}} · {{type}}",
       "start_reason": "بدأ الزيارة {{subject}} · {{type}} · «{{reason}}»",
       "reason": "غيّر سبب الزيارة {{subject}}",

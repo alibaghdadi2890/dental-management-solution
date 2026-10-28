@@ -14,7 +14,7 @@
     "all": "Toutes",
     "in_progress": "En cours",
     "unpaid": "Impayées",
-    "voided_amended": "Annulées et modifiées"
+    "voided_amended": "Annulées et corrigées"
   },
   "search": {
     "label": "Rechercher des visites",
@@ -52,7 +52,7 @@
     "in_progress": "En cours",
     "paused": "En pause",
     "completed": "Terminée",
-    "amended": "Modifiée",
+    "amended": "Corrigée",
     "voided": "Annulée",
     "discarded": "Abandonnée"
   },
@@ -85,11 +85,11 @@
     "paid": "Payé",
     "balance": "Solde",
     "void": "Annuler",
-    "amend": "Modifier",
+    "amend": "Corriger la visite",
     "openRecord": "Ouvrir le dossier",
-    "requestNote": "Seul un dentiste peut annuler ou modifier une visite terminée.",
+    "requestNote": "Seul un dentiste peut annuler ou corriger une visite terminée.",
     "requestChange": "Demander une modification",
-    "requestToast": "Demandez à {{dentist}} de modifier ou d'annuler cette visite",
+    "requestToast": "Demandez à {{dentist}} de corriger ou d’annuler cette visite",
     "invoice": "Facture",
     "planQuote": "Devis du plan",
     "reason": "Motif : {{reason}}"
@@ -111,16 +111,18 @@
       "update": "Notes ou remise modifiées",
       "complete": "Visite terminée",
       "completeTotal": "Visite terminée · {{total}}",
-      "amend": "Modifiée — {{reason}}",
-      "amendTotals": "Modifiée — {{reason}} · {{before}} → {{after}}",
+      "amend": "Corrigée — {{reason}}",
+      "amendTotals": "Corrigée — {{reason}} · {{before}} → {{after}}",
       "void": "Annulée — {{reason}}",
+      "times": "Heures corrigées — {{reason}} · {{before}} → {{after}}",
       "other": "Modifiée",
       "discount": "Remise à l’encaissement · {{before}} → {{after}}",
-      "discountReason": "Remise à l’encaissement — {{reason}} · {{before}} → {{after}}"
+      "discountReason": "Remise à l’encaissement — {{reason}} · {{before}} → {{after}}",
+      "timesChange": "heures {{before}} → {{after}}"
     }
   },
   "amend": {
-    "badge": "Modification",
+    "badge": "Correction",
     "tooth": "Dent",
     "toothOf": "Dent de {{name}}",
     "surfaces": "Faces",
@@ -136,19 +138,41 @@
       "percent": "%",
       "amount": "Montant"
     },
-    "save": "Enregistrer la modification",
+    "save": "Enregistrer la correction",
     "problem": {
       "noService": "Gardez au moins un acte — pour tout retirer, annulez la visite.",
       "tooth": "Saisissez une dent et seulement les faces qu'elle a.",
-      "discount": "Saisissez la remise sous forme de nombre."
+      "discount": "Saisissez la remise sous forme de nombre.",
+      "jaw": "Choisissez l’arcade de chaque acte facturé par arcade.",
+      "price": "Saisissez chaque prix sous forme de nombre.",
+      "timesMissing": "Saisissez une heure de début et une heure de fin.",
+      "timesOrder": "La fin doit suivre le début.",
+      "timesFuture": "La fin ne peut pas être dans le futur."
     },
-    "confirmTitle": "Modifier {{number}} ?",
+    "confirmTitle": "Corriger {{number}} ?",
     "confirmBody": "Le total passe de {{before}} à {{after}}. {{effect}} L'original reste dans le journal d'audit.",
     "credit": "Le patient reçoit un avoir de {{amount}}.",
     "charge": "Le patient doit {{amount}} de plus.",
     "sameTotal": "Le total ne change pas.",
-    "reason": "Motif de la modification",
-    "done": "{{number}} modifiée"
+    "reason": "Motif de la correction",
+    "done": "{{number}} corrigée",
+    "confirmTimesBody": "Le début et la fin changent ; les actes et les montants restent. Les heures d’origine restent dans le journal d’audit.",
+    "added": "Nouveau",
+    "priceOf": "Prix de {{name}}",
+    "addService": "Ajouter un acte",
+    "addSearch": "Rechercher dans le catalogue un acte à ajouter",
+    "jaw": "Arcade",
+    "jawOf": "Arcade de {{name}}",
+    "chooseJaw": "Choisir",
+    "importedNote": "Cette visite a été importée de l’ancien système : seules ses heures peuvent être corrigées."
+  },
+  "times": {
+    "intro": "La visite reste le {{date}}. Une fin avant le début tombe le lendemain.",
+    "start": "Début",
+    "end": "Fin",
+    "nextDay": "Le lendemain",
+    "minutes": "{{minutes, number}} min",
+    "duration": "Durée {{before}} → {{after}}"
   },
   "void": {
     "title": "Annuler {{number}} ?",
@@ -167,8 +191,8 @@
       "clinical": "Clinique"
     },
     "chip": "{{name}} · {{tooth}}",
-    "amendedTimes_one": "Modifiée une fois",
-    "amendedTimes_other": "Modifiée {{count}} fois",
+    "amendedTimes_one": "Corrigée une fois",
+    "amendedTimes_other": "Corrigée {{count}} fois",
     "unpaid": "Impayée",
     "performed": "Actes réalisés",
     "notes": "Notes cliniques",
