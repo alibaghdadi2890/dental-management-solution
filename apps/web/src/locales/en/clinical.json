@@ -369,18 +369,24 @@
     "session": "{{name}} · visit {{number}}",
     "unfinished": "Not finished · continues next visit",
     "resolve": {
-      "title": "Resolve these diagnoses?",
-      "subtitle": "Before the visit is recorded.",
       "warning_one": "This diagnosis is still open on a tooth you treated today. You may have forgotten to resolve it.",
       "warning_other": "{{count}} diagnoses are still open on the teeth you treated today. You may have forgotten to resolve them.",
       "tick": "Resolve {{name}} on {{tooth}}",
       "doneToday": "Done today: {{services}}",
       "resolve": "Resolve",
       "back": "Back to summary",
-      "resolveAndComplete_one": "Resolve 1 and complete",
-      "resolveAndComplete_other": "Resolve {{count}} and complete",
-      "failed": "Couldn’t resolve a diagnosis, so the visit wasn’t completed: {{reason}}",
-      "working": "Working…"
+      "failed": "Couldn’t save the answers, so the visit wasn’t completed: {{reason}}",
+      "working": "Working…",
+      "saveAndComplete": "Save and complete"
+    },
+    "check": {
+      "title": "Before you complete",
+      "subtitle": "Finished work is closed on the chart. What continues stays in progress for the next visit.",
+      "work": "Work done today",
+      "diagnoses": "Diagnoses still open",
+      "finished": "Finished",
+      "continues": "Continues",
+      "choiceFor": "{{target}} {{name}}: finished or continues"
     }
   },
   "postVisit": {
@@ -735,14 +741,9 @@
     },
     "work": {
       "completed": "Completed",
-      "unfinished": "Not finished"
+      "unfinished": "In progress"
     },
     "planned": {
-      "title": "Planned for today",
-      "count_one": "{{count}} item",
-      "count_other": "{{count}} items",
-      "notFinishedHint": "Not finished · continue next visit",
-      "notFinishedNamed": "Not finished: {{name}}",
       "beforePhoto": "Before photo",
       "afterPhoto": "After photo"
     },
@@ -792,9 +793,8 @@
     },
     "resolve": {
       "back": "Back to {{step}}",
-      "resolveAndContinue_one": "Resolve 1 and continue to {{step}}",
-      "resolveAndContinue_other": "Resolve {{count}} and continue to {{step}}",
-      "failed": "Couldn’t resolve a diagnosis: {{reason}}"
+      "failed": "Couldn’t save the answers: {{reason}}",
+      "saveAndContinue": "Save and continue to {{step}}"
     }
   },
   "planTab": {

@@ -18,6 +18,7 @@ import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useVisitMutations } from '../../visit-mutations';
+import { useChartingActions } from '../../workspace/charting-actions';
 import { plansTotal } from '../../workspace/tooth-panel/tooth-records';
 import { useSessionLabel } from '../flow-labels';
 import { EMPTY_LINE, STEP_BODY } from '../flow-styles';
@@ -40,8 +41,10 @@ const TONE: Record<PlanPriority, { rule: string; label: string }> = {
  * the dentist ticks and unticks the rest here, at any time. A row reads tooth, treatment, its
  * session when the work spans several, the diagnosis it treats and the image that was seen on,
  * and its price. A ticked row offers **Perform** (or **Continue**, for work in progress), which
- * goes to Perform with that tooth selected. The line at the top counts and totals what is
- * ticked. **Add unplanned work** opens the services drawer.
+ * goes to Perform with that tooth selected; entering Perform starts every ticked treatment
+ * (ADR-0065). Unticking one Perform started takes that start back; what this visit completed
+ * stays ticked. The line at the top counts and totals what is ticked. **Add unplanned work**
+ * opens the services drawer.
  */
 export function TodayStep({
   visit,
@@ -173,6 +176,7 @@ function TodayRow({
   const canReadFiles = usePermission('file:read');
   const files = useQuery({ ...patientFilesQuery(visit.patientId), enabled: canReadFiles });
   const tick = useMutation(useVisitMutations(visit.id).setWorkItem);
+  const actions = useChartingActions();
   const { plan, state, continuing, listed } = row;
   const diagnosis = chart.diagnoses.find((record) => record.id === plan.diagnosisRecordId);
   const evidence =
@@ -188,8 +192,13 @@ function TodayRow({
           estimatedSessions: plan.estimatedSessions,
         })
       : null;
-  // What this visit already worked on stays on its list.
   const worked = state !== 'open';
+  /** Unticking work Perform started undoes the start, which takes it off the list (ADR-0065). */
+  const takeBack = () => {
+    const line = visit.services.find((service) => service.planId === plan.id);
+    if (line) actions.removeService(line.id);
+    else actions.undoSession(plan);
+  };
 
   return (
     <li
@@ -205,8 +214,12 @@ function TodayRow({
         type="checkbox"
         aria-label={t('flow.today.forToday', { target: target(plan), name: plan.name })}
         checked={listed || worked}
-        disabled={!canWrite || worked || tick.isPending}
+        disabled={!canWrite || state === 'completed' || tick.isPending}
         onChange={(event) => {
+          if (state === 'unfinished') {
+            takeBack();
+            return;
+          }
           tick.mutate(
             { planId: plan.id, listed: event.target.checked },
             {

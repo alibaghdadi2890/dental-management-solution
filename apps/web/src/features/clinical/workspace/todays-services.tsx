@@ -1,5 +1,5 @@
-import type { PatientChart, Visit, VisitService } from '@dcm/contracts';
-import { useId } from 'react';
+import type { PatientChart, ToothCode, Visit, VisitService } from '@dcm/contracts';
+import { type ReactNode, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { formatMoney } from '@/lib/format';
@@ -11,6 +11,7 @@ import { useToothSelection } from './tooth-selection';
 import { finishedServices, unfinishedWork } from './unfinished';
 import { CompletedHereRow, UnfinishedRow } from './unfinished-row';
 import { ServiceMark } from '../chart/service-mark';
+import { PhotoButton } from '../flow/photo-button';
 
 const SUB_HEAD =
   'm-0 border-b border-warning-border bg-warning-bg px-4 py-2 text-[11.5px] leading-none font-semibold tracking-[.05em] text-warning uppercase [&:lang(ar)]:tracking-normal';
@@ -20,7 +21,8 @@ const SUB_HEAD =
  * mouth. First **To continue**, the patient's unfinished services (ADR-0032) this visit has not
  * worked on, so they are seen as the visit opens; then the visit's services in the order added,
  * the unfinished services it did work on (one that it charges shows its line's price, ADR-0064),
- * and the work it completed that an earlier visit charged. A row's target selects it on the chart; a service's
+ * and the work it completed that an earlier visit charged. Work Perform started from today's list
+ * (ADR-0065) is listed here, its row with the **Before photo** / **After photo** button. A row's target selects it on the chart; a service's
  * three-dot menu holds **Not finished** and **Remove**. A service the visit's type added by itself
  * (ADR-0047) says "added automatically", and is removed like any other. The header counts and totals what the
  * visit charges and, for who may chart, holds **Add service** (the catalog drawer, on whatever the
@@ -49,6 +51,12 @@ export function TodaysServices({
     toContinue.length + workedHere.length + completedHere.length === 0;
   if (empty && !canWrite) return null;
   const charged = formatMoney({ amount: visit.money.subtotal, currency: visit.currency }, locale);
+  const listed = new Set(visit.worklist.map((item) => item.planId));
+  /** The photo button of work on today's list. */
+  const photo = (planId: string | null, toothCode: ToothCode | null) =>
+    canWrite && planId !== null && listed.has(planId) ? (
+      <PhotoButton visit={visit} toothCode={toothCode} />
+    ) : undefined;
   return (
     <section
       aria-labelledby={titleId}
@@ -95,7 +103,12 @@ export function TodaysServices({
       )}
       <ul className="m-0 list-none p-0">
         {finishedServices(visit.services, plans).map((service) => (
-          <ServiceRow key={service.id} service={service} canWrite={canWrite} />
+          <ServiceRow
+            key={service.id}
+            service={service}
+            canWrite={canWrite}
+            extra={photo(service.planId, service.toothCode)}
+          />
         ))}
         {workedHere.map((plan) => (
           <li key={plan.id} className="border-b border-row-divider last:border-b-0">
@@ -104,13 +117,20 @@ export function TodaysServices({
               line={visit.services.find((service) => service.planId === plan.id)}
               canWrite={canWrite}
               target
+              extra={photo(plan.id, plan.toothCode)}
               className="px-4 py-3"
             />
           </li>
         ))}
         {completedHere.map((plan) => (
           <li key={plan.id} className="border-b border-row-divider last:border-b-0">
-            <CompletedHereRow plan={plan} canWrite={canWrite} target className="px-4 py-3" />
+            <CompletedHereRow
+              plan={plan}
+              canWrite={canWrite}
+              target
+              extra={photo(plan.id, plan.toothCode)}
+              className="px-4 py-3"
+            />
           </li>
         ))}
       </ul>
@@ -134,7 +154,15 @@ export function TodaysServices({
   );
 }
 
-function ServiceRow({ service, canWrite }: { service: VisitService; canWrite: boolean }) {
+function ServiceRow({
+  service,
+  canWrite,
+  extra,
+}: {
+  service: VisitService;
+  canWrite: boolean;
+  extra?: ReactNode;
+}) {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const { select, selectArea } = useToothSelection();
@@ -172,6 +200,7 @@ function ServiceRow({ service, canWrite }: { service: VisitService; canWrite: bo
       <span dir="ltr" className="font-mono text-[13px] leading-none font-semibold tabular-nums">
         {formatMoney(service.final, locale)}
       </span>
+      {extra}
       {canWrite && <ServiceMenu service={service} />}
     </li>
   );

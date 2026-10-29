@@ -1,6 +1,6 @@
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, openAllView } from './start-visit';
+import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
 
 /** The clinic every test of this file works in: provisioned once per worker, so the flows share
  * nothing with other files (their clinics, the dev tenant) and each registers its own patients. */
@@ -203,10 +203,16 @@ test('the owner charts a visit, completes it and sees its figures with the openi
     await expect(summary).toContainText(/Total due\s*\$360/);
     await summary.getByRole('button', { name: 'Complete visit' }).click();
 
-    // The crown treated #16, whose caries is still open: the check offers to resolve it.
-    const check = page.getByRole('dialog', { name: 'Resolve these diagnoses?' });
+    // The check asks about the composite added by hand (Finished), and the crown treated #16,
+    // whose caries is still open: it offers to resolve it.
+    const check = page.getByRole('dialog', { name: 'Before you complete' });
+    await expect(
+      check
+        .getByRole('radiogroup', { name: '#26 Composite: finished or continues' })
+        .getByRole('radio', { name: 'Finished' }),
+    ).toHaveAttribute('aria-checked', 'true');
     await check.getByRole('checkbox', { name: 'Resolve Dental caries on #16' }).check();
-    await check.getByRole('button', { name: 'Resolve 1 and complete' }).click();
+    await check.getByRole('button', { name: 'Save and complete' }).click();
 
     await expect(page).toHaveURL(/\/patients\/[0-9a-f-]{36}(\?.*)?$/);
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
@@ -344,10 +350,7 @@ test('a completed visit is amended with a reason, then voided, from the Visits s
       ).toBeVisible();
     }
     await page.getByRole('button', { name: 'Review & complete' }).click();
-    await page
-      .getByRole('dialog', { name: 'Complete visit' })
-      .getByRole('button', { name: 'Complete visit' })
-      .click();
+    await completeFromSummary(page);
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
     await recorded.getByRole('button', { name: 'Done' }).click();
     await expect(recorded).toBeHidden();
@@ -442,8 +445,9 @@ test('a service not finished in one visit is continued in the next and billed by
     const summary = page.getByRole('dialog', { name: 'Complete visit' });
     return summary;
   };
-  const record = async (summary: Locator, total: RegExp) => {
-    await summary.getByRole('button', { name: 'Complete visit' }).click();
+  /** Complete visit, through the check when it asks (ADR-0065), and the figures recorded. */
+  const record = async (total: RegExp) => {
+    await completeFromSummary(page);
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
     await expect(recorded.getByRole('region', { name: 'This visit' })).toContainText(total);
     return recorded;
@@ -476,7 +480,7 @@ test('a service not finished in one visit is continued in the next and billed by
     const summary = await complete();
     await expect(summary).toContainText('Zircon crown · visit 1');
     await expect(summary).toContainText(/Total due\s*\$410/);
-    const recorded = await record(summary, /Visit total\s*\$410/);
+    const recorded = await record(/Visit total\s*\$410/);
     await recorded.getByRole('button', { name: 'Done' }).click();
     await expect(recorded).toBeHidden();
   });
@@ -493,7 +497,7 @@ test('a service not finished in one visit is continued in the next and billed by
     const summary = await complete();
     await expect(summary).toContainText('Zircon crown · visit 2');
     await expect(summary).toContainText(/Total due\s*\$0/);
-    const recorded = await record(summary, /Visit total\s*\$0/);
+    const recorded = await record(/Visit total\s*\$0/);
     await recorded.getByRole('button', { name: 'Done' }).click();
     await expect(recorded).toBeHidden();
   });
@@ -510,7 +514,8 @@ test('a service not finished in one visit is continued in the next and billed by
     await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$0');
     await expect(today).toContainText('Charged on visit');
 
-    const recorded = await record(await complete(), /Visit total\s*\$0/);
+    await complete();
+    const recorded = await record(/Visit total\s*\$0/);
     await expect(recorded).toContainText(/Total outstanding[\s\S]*\$410/);
   });
 });

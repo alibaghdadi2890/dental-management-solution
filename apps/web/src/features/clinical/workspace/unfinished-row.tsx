@@ -1,4 +1,5 @@
 import { formatVisitNumber, type TreatmentPlan, type VisitService } from '@dcm/contracts';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MenuItem } from '@/components/ui/menu';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
@@ -20,14 +21,15 @@ type MenuAction = Exclude<UnfinishedAction, 'complete'>;
  * the price of `line` when this visit charges it, "Charged on visit #N" when an earlier one did
  * (ADR-0064), else the price it will be charged at when completed. **Complete** shows on the row in the visit that worked
  * on it; the three-dot menu holds the rest (`unfinishedActions`). `target` adds the tooth or
- * level, as a link that selects it, for lists that are not about one target. Read-only without
- * the scope's write permission.
+ * level, as a link that selects it, for lists that are not about one target; `extra` goes
+ * before the row's actions. Read-only without the scope's write permission.
  */
 export function UnfinishedRow({
   plan,
   line,
   canWrite,
   target = false,
+  extra,
   className,
 }: {
   plan: TreatmentPlan;
@@ -35,6 +37,7 @@ export function UnfinishedRow({
   line?: VisitService | undefined;
   canWrite: boolean;
   target?: boolean;
+  extra?: ReactNode;
   className?: string;
 }) {
   const { t, i18n } = useTranslation('clinical');
@@ -111,6 +114,7 @@ export function UnfinishedRow({
           {formatMoney(line?.final ?? plan.price, locale)}
         </span>
       )}
+      {extra}
       {offered.includes('complete') && (
         <button
           type="button"
@@ -143,17 +147,19 @@ export function UnfinishedRow({
 /**
  * Work over several visits completed in this visit and charged by an earlier one (ADR-0064): its
  * name, "Completed" and where it was charged, with **Not finished** in its menu to take the
- * completion back. `target` as for `UnfinishedRow`.
+ * completion back. `target` and `extra` as for `UnfinishedRow`.
  */
 export function CompletedHereRow({
   plan,
   canWrite,
   target = false,
+  extra,
   className,
 }: {
   plan: TreatmentPlan;
   canWrite: boolean;
   target?: boolean;
+  extra?: ReactNode;
   className?: string;
 }) {
   const { t } = useTranslation('clinical');
@@ -190,6 +196,7 @@ export function CompletedHereRow({
           {t('unfinished.chargedOn', { number: formatVisitNumber(plan.chargedIn.number) })}
         </span>
       )}
+      {extra}
       {canWrite && (
         <RowMenu name={plan.name}>
           <MenuItem

@@ -35,6 +35,13 @@ const CHARTED = visit({
   money: { subtotal: '180.00', discount: '0.00', total: '180.00', capped: false },
 });
 
+/** The same, its services all added by the visit's type: the check before Complete has nothing
+ * to ask (ADR-0065). */
+const NOTHING_TO_ASK = visit({
+  ...CHARTED,
+  services: SERVICES.map((service) => ({ ...service, autoAdded: true })),
+});
+
 /** The visit as the complete route answers it: frozen money, duration, `completed`. */
 const completed = (live: Visit): Visit => ({
   ...live,
@@ -71,15 +78,17 @@ function held() {
  * (after `holdComplete`, when given), and Perform now answers once `holdPerform` (when given) is
  * released. */
 function liveServer({
+  initial = CHARTED,
   failDiscount = false,
   holdComplete,
   holdPerform,
 }: {
+  initial?: Visit;
   failDiscount?: boolean;
   holdComplete?: Promise<unknown>;
   holdPerform?: Promise<unknown>;
 } = {}) {
-  let current: Visit = CHARTED;
+  let current: Visit = initial;
   const fetchMock = mockWorkspace({
     visit: () => current,
     chart: chart({ plans: [treatmentPlan(40, 'Zircon crown', '36')] }),
@@ -306,6 +315,9 @@ describe('VisitSummaryDialog', () => {
     // Well before the 700 ms debounce would have sent it.
     fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
     expect(within(dialog).getByRole('button', { name: 'Recording…' })).toBeTruthy();
+    // The check asks about the services added by hand; kept as suggested, it changes nothing.
+    expect(await within(dialog).findByText('Before you complete')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
@@ -340,7 +352,7 @@ describe('VisitSummaryDialog', () => {
 
   it('waits for a write still in flight (a Perform now) before completing', async () => {
     const perform = held();
-    const fetchMock = liveServer({ holdPerform: perform.gate });
+    const fetchMock = liveServer({ initial: NOTHING_TO_ASK, holdPerform: perform.gate });
     const { router } = renderWorkspace({ realRecord: true, permissions: WITH_PAYMENTS });
     await screen.findByRole('group', { name: 'Upper arch' });
     const board = screen.getByRole('region', { name: 'Treatment plan' });
@@ -371,7 +383,7 @@ describe('VisitSummaryDialog', () => {
     // Before the render, so the timer's own ticks run on the fake clock.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const complete = held();
-    liveServer({ holdComplete: complete.gate });
+    liveServer({ initial: NOTHING_TO_ASK, holdComplete: complete.gate });
     renderWorkspace({ realRecord: true, permissions: WITH_PAYMENTS });
 
     // Before Complete, Esc and the scrim close it.
@@ -431,7 +443,7 @@ describe('VisitSummaryDialog', () => {
 
   it('says why when the visit could not be completed, and stays open', async () => {
     mockWorkspace({
-      visit: CHARTED,
+      visit: NOTHING_TO_ASK,
       mutation: (method, path) =>
         method === 'POST' && path === `/visits/${VISIT_ID}/complete`
           ? json(
@@ -470,14 +482,21 @@ describe('VisitSummaryDialog: diagnoses still open on teeth treated today', () =
   /** The live visit's server: resolve answers (or fails for `failOn`), complete completes. */
   function diagnosedServer({ failOn }: { failOn?: string } = {}) {
     let current: Visit = CHARTED;
+    const resolvedIds = new Set<string>();
     return mockWorkspace({
       visit: () => current,
-      chart: chart({ diagnoses: [CARIES, PITS, UNTREATED] }),
+      chart: () =>
+        chart({
+          diagnoses: [CARIES, PITS, UNTREATED].map((record) =>
+            resolvedIds.has(record.id) ? { ...record, status: 'resolved' as const } : record,
+          ),
+        }),
       visitSummary: SUMMARY,
       mutation: (method, path) => {
         const resolved = /\/diagnoses\/([^/]+)\/resolve$/.exec(path)?.[1];
         if (method === 'POST' && resolved) {
           if (resolved === failOn) return problem(500, 'internal');
+          resolvedIds.add(resolved);
           const record = [CARIES, PITS].find((candidate) => candidate.id === resolved);
           return json({ visit: current, record: { ...record, status: 'resolved' } });
         }
@@ -498,7 +517,7 @@ describe('VisitSummaryDialog: diagnoses still open on teeth treated today', () =
   const reachCheck = async () => {
     const dialog = await openSummary();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
-    expect(await within(dialog).findByText('Resolve these diagnoses?')).toBeTruthy();
+    expect(await within(dialog).findByText('Before you complete')).toBeTruthy();
     return dialog;
   };
 
@@ -518,9 +537,15 @@ describe('VisitSummaryDialog: diagnoses still open on teeth treated today', () =
     ]);
     expect(boxes.every((box) => !(box as HTMLInputElement).checked)).toBe(true);
     expect(within(dialog).getByText('Done today: Composite filling')).toBeTruthy();
+    // Today's work comes first, each service added by hand on Finished.
+    expect(
+      within(dialog)
+        .getAllByRole('radio', { checked: true })
+        .map((radio) => radio.textContent),
+    ).toEqual(['Finished', 'Finished', 'Finished']);
 
     // The new body is announced: focus is on its title, then back on Complete visit.
-    expect(document.activeElement?.textContent).toBe('Resolve these diagnoses?');
+    expect(document.activeElement?.textContent).toBe('Before you complete');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Back to summary' }));
     expect(await within(dialog).findByText('Teeth treated')).toBeTruthy();
     await waitFor(() => {
@@ -538,7 +563,7 @@ describe('VisitSummaryDialog: diagnoses still open on teeth treated today', () =
     fireEvent.click(
       within(dialog).getByRole('checkbox', { name: 'Resolve Occlusal caries on #26' }),
     );
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Resolve 1 and complete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save and complete' }));
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });
@@ -564,11 +589,9 @@ describe('VisitSummaryDialog: diagnoses still open on teeth treated today', () =
     fireEvent.click(
       within(dialog).getByRole('checkbox', { name: 'Resolve Occlusal caries on #26' }),
     );
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Resolve 2 and complete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save and complete' }));
     expect(
-      await within(dialog).findByText(
-        /^Couldn’t resolve a diagnosis, so the visit wasn’t completed/,
-      ),
+      await within(dialog).findByText(/^Couldn’t save the answers, so the visit wasn’t completed/),
     ).toBeTruthy();
     // The one resolved first is no longer listed.
     expect(within(dialog).queryByRole('checkbox', { name: 'Resolve Deep pits on #16' })).toBeNull();

@@ -1,6 +1,6 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, openAllView } from './start-visit';
+import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
 
 interface Account {
   email: string;
@@ -150,10 +150,7 @@ test('a dentist completes a visit and hands it to front desk; the owner grants h
     await expect(page.getByText('Ask the owner').first()).toBeVisible();
 
     await page.getByRole('button', { name: 'Review & complete' }).click();
-    await page
-      .getByRole('dialog', { name: 'Complete visit' })
-      .getByRole('button', { name: 'Complete visit' })
-      .click();
+    await completeFromSummary(page);
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
     await expect(recorded).toContainText('Handed to front desk for payment');
     await expect(recorded).toContainText(/Outstanding for this visit\s*\$50/);

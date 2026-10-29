@@ -14,7 +14,7 @@ import {
   type VisitStep,
   type VisitType,
 } from '@dcm/contracts';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,12 +33,11 @@ import { cn } from '@/lib/utils';
 import { useChartMarks } from '../chart/use-chart-marks';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
-import { type DiagnosisToResolve, diagnosesToResolve } from '../dialogs/diagnoses-to-resolve';
-import { ResolveBeforeCompleteDialog } from '../dialogs/resolve-before-complete-dialog';
+import { BeforeCompleteDialog } from '../dialogs/before-complete-dialog';
+import { completeCheck, hasQuestions } from '../dialogs/complete-check';
 import { VisitSummaryDialog } from '../dialogs/visit-summary-dialog';
 import { FlowFooter } from '../flow/flow-footer';
 import { LastHygieneLine } from '../flow/last-hygiene-line';
-import { PlannedToday } from '../flow/planned-today';
 import { CompleteStep } from '../flow/steps/complete-step';
 import { ComplaintStep } from '../flow/steps/complaint-step';
 import { FindingsStep } from '../flow/steps/findings-step';
@@ -46,12 +45,15 @@ import { IntakeStep } from '../flow/steps/intake-step';
 import { PlanStep } from '../flow/steps/plan-step';
 import { TodayStep } from '../flow/steps/today-step';
 import { useCarriedDiagnoses } from '../flow/use-carried-diagnoses';
+import { useFinishVisit } from '../flow/use-finish-visit';
+import { useStartWorklist } from '../flow/use-start-worklist';
 import { useVisitFlow } from '../flow/use-visit-flow';
 import { VisitStepper } from '../flow/visit-stepper';
 import { useDropOrphanedGroups } from '../save-groups-context';
 import { SaveGroupsProvider } from '../save-groups-provider';
 import { useVisit } from '../use-visit';
-import { chartQuery } from '../visits-api';
+import { useVisitMutationsSettled } from '../visit-mutations';
+import { chartQuery, visitQuery } from '../visits-api';
 import { CatalogDrawer } from './catalog-drawer';
 import { ChartCard, ChartCardFrame } from './chart-card';
 import {
@@ -186,7 +188,10 @@ function VisitWorkspacePage({ visitId, tooth }: { visitId: string; tooth: ToothC
  * - **Steps** — only what the step is for. Examine and Perform keep the chart and the tooth
  *   panel (in findings mode for Examine) with their own cards on the left; Intake, Complaint,
  *   Findings, Plan, Today's work and Complete take the whole body. The footer moves between the
- *   steps and ends on **Complete visit**.
+ *   steps and ends on **Complete visit**, which completes at once — the Complete step is the
+ *   review, so it has no Visit Summary — and lands on the record's payment dialog. Entering
+ *   Perform starts the work ticked for today, and entering Complete first runs the check of what
+ *   is finished (ADR-0065).
  *
  * Read-only without `visit:write`
  * (W18). The tooth selection, the catalog drawer and the charting actions live here, shared with
@@ -233,32 +238,63 @@ function Workspace({
     setReviewing(false);
   }, []);
   const visitFlow = useVisitFlow(visit, chart.data);
-  // Entering the Complete step first asks about the diagnoses still open on teeth treated today
-  // (the stepper and the footer go through this `goTo`); those shown are not asked about again,
-  // here or in the Visit Summary.
-  const [checking, setChecking] = useState<{
-    from: VisitStep;
-    items: DiagnosisToResolve[];
-  } | null>(null);
+  // Entering the Complete step first asks what of today's work is finished and about the
+  // diagnoses still open on the teeth treated (ADR-0065; the stepper and the footer go through
+  // this `goTo`); what was shown is not asked about again, here or in the Visit Summary. It
+  // waits for the visit's writes in flight — the work Perform is still starting — and reads the
+  // cache they refreshed.
+  const queryClient = useQueryClient();
+  const settled = useVisitMutationsSettled(visit.id);
+  const [checkingFrom, setCheckingFrom] = useState<VisitStep | null>(null);
   const [acknowledged, setAcknowledged] = useState<ReadonlySet<string>>(new Set());
   const { goTo: flowGoTo, current: currentStep } = visitFlow;
   const onComplete = visitFlow.view === 'steps' && currentStep === 'complete';
   const guardedGoTo = useCallback(
     (next: VisitStep) => {
-      if (next === 'complete' && !onComplete && canWrite && chart.data) {
-        const open = diagnosesToResolve(visit, chart.data).filter(
-          (item) => !acknowledged.has(item.record.id),
-        );
-        if (open.length > 0) {
-          setChecking({ from: currentStep, items: open });
+      if (next !== 'complete' || onComplete || !canWrite) {
+        flowGoTo(next);
+        return;
+      }
+      void settled().then(() => {
+        const current = queryClient.getQueryData(visitQuery(visit.id).queryKey) ?? visit;
+        const charted =
+          queryClient.getQueryData(chartQuery(visit.patientId).queryKey) ?? chart.data;
+        if (charted && hasQuestions(completeCheck(current, charted, new Map(), acknowledged))) {
+          setCheckingFrom(currentStep);
           return;
         }
-      }
-      flowGoTo(next);
+        flowGoTo(next);
+      });
     },
-    [onComplete, canWrite, chart.data, visit, acknowledged, currentStep, flowGoTo],
+    [
+      onComplete,
+      canWrite,
+      settled,
+      queryClient,
+      chart.data,
+      visit,
+      acknowledged,
+      currentStep,
+      flowGoTo,
+    ],
   );
   const flow = useMemo(() => ({ ...visitFlow, goTo: guardedGoTo }), [visitFlow, guardedGoTo]);
+  // On the Complete step, Complete visit completes: the step is the review (ADR-0065). The check
+  // it may need is the one above, from Complete: `checkingFrom` 'complete' completes on confirm.
+  const checkFromComplete = useCallback(() => {
+    setCheckingFrom('complete');
+  }, []);
+  const finishVisit = useFinishVisit({
+    visit,
+    chart: chart.data,
+    shown: acknowledged,
+    onCheck: checkFromComplete,
+  });
+  useStartWorklist({
+    visit,
+    chart: chart.data,
+    active: canWrite && visitFlow.view === 'steps' && currentStep === 'perform',
+  });
   const { select, selectArea, area: selectedArea } = selection;
   /** Selects where a record is: its tooth, or its jaw or the whole mouth. */
   const focusTarget = useCallback(
@@ -513,9 +549,6 @@ function Workspace({
                     )}
                   </ChartCardFrame>
                 )}
-                {step === 'perform' && (
-                  <PlannedToday visit={visit} chart={chart.data} canWrite={canWrite} />
-                )}
                 {step !== 'examine' && (
                   <TodaysServices
                     visit={visit}
@@ -564,7 +597,12 @@ function Workspace({
           {step === null ? (
             <FinancialBar visit={visit} canWrite={canWrite} onReview={review} />
           ) : (
-            <FlowFooter flow={flow} canComplete={canWrite} onComplete={review} />
+            <FlowFooter
+              flow={flow}
+              canComplete={canWrite}
+              completing={finishVisit.finishing}
+              onComplete={finishVisit.finish}
+            />
           )}
           <FileDropSurface
             patientId={visit.patientId}
@@ -579,19 +617,21 @@ function Workspace({
             onClose={closeReview}
             acknowledged={acknowledged}
           />
-          {checking && (
-            <ResolveBeforeCompleteDialog
-              visitId={visit.id}
-              type={visit.type}
-              from={checking.from}
-              items={checking.items}
+          {checkingFrom !== null && chart.data && (
+            <BeforeCompleteDialog
+              visit={visit}
+              chart={chart.data}
+              from={checkingFrom}
+              shown={acknowledged}
+              completing={checkingFrom === 'complete'}
               onBack={() => {
-                setChecking(null);
+                setCheckingFrom(null);
               }}
-              onContinue={(shown) => {
-                setAcknowledged((current) => new Set([...current, ...shown]));
-                setChecking(null);
-                flowGoTo('complete');
+              onContinue={(listed) => {
+                setAcknowledged((current) => new Set([...current, ...listed]));
+                setCheckingFrom(null);
+                if (checkingFrom === 'complete') finishVisit.complete();
+                else flowGoTo('complete');
               }}
             />
           )}

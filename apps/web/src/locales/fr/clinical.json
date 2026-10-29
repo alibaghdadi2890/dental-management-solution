@@ -369,18 +369,24 @@
     "session": "{{name}} · visite {{number}}",
     "unfinished": "Non terminé · à poursuivre",
     "resolve": {
-      "title": "Résoudre ces diagnostics ?",
-      "subtitle": "Avant d’enregistrer la visite.",
       "warning_one": "Ce diagnostic est toujours ouvert sur une dent traitée aujourd’hui. Vous avez peut-être oublié de le résoudre.",
       "warning_other": "{{count}} diagnostics sont toujours ouverts sur les dents traitées aujourd’hui. Vous avez peut-être oublié de les résoudre.",
       "tick": "Résoudre {{name}} sur {{tooth}}",
       "doneToday": "Fait aujourd’hui : {{services}}",
       "resolve": "Résoudre",
       "back": "Retour au récapitulatif",
-      "resolveAndComplete_one": "Résoudre 1 et terminer",
-      "resolveAndComplete_other": "Résoudre {{count}} et terminer",
-      "failed": "Impossible de résoudre un diagnostic, la visite n’a donc pas été terminée : {{reason}}",
-      "working": "En cours…"
+      "failed": "Impossible d’enregistrer les réponses, la visite n’a donc pas été terminée : {{reason}}",
+      "working": "En cours…",
+      "saveAndComplete": "Enregistrer et terminer"
+    },
+    "check": {
+      "title": "Avant de terminer",
+      "subtitle": "Le travail terminé est clos sur le schéma. Ce qui continue reste en cours pour la prochaine visite.",
+      "work": "Travail fait aujourd’hui",
+      "diagnoses": "Diagnostics encore ouverts",
+      "finished": "Terminé",
+      "continues": "À poursuivre",
+      "choiceFor": "{{target}} {{name}} : terminé ou à poursuivre"
     }
   },
   "postVisit": {
@@ -735,14 +741,9 @@
     },
     "work": {
       "completed": "Terminé",
-      "unfinished": "Non terminé"
+      "unfinished": "En cours"
     },
     "planned": {
-      "title": "Prévu aujourd’hui",
-      "count_one": "{{count}} acte",
-      "count_other": "{{count}} actes",
-      "notFinishedHint": "Non terminé · à poursuivre à la prochaine visite",
-      "notFinishedNamed": "Non terminé : {{name}}",
       "beforePhoto": "Photo avant",
       "afterPhoto": "Photo après"
     },
@@ -792,9 +793,8 @@
     },
     "resolve": {
       "back": "Retour à {{step}}",
-      "resolveAndContinue_one": "Résoudre 1 et passer à {{step}}",
-      "resolveAndContinue_other": "Résoudre {{count}} et passer à {{step}}",
-      "failed": "Impossible de résoudre un diagnostic : {{reason}}"
+      "failed": "Impossible d’enregistrer les réponses : {{reason}}",
+      "saveAndContinue": "Enregistrer et passer à {{step}}"
     }
   },
   "planTab": {

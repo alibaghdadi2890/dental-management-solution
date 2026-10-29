@@ -24,8 +24,9 @@ import { plansTotal } from '../workspace/tooth-panel/tooth-records';
 import { chargedHere, unfinishedWork } from '../workspace/unfinished';
 import { type PriceDraft, priceDraftOf, priceOf } from '../workspace/tooth-panel/service-price';
 import { useLiveMoney, useVisitDiscount } from '../workspace/visit-discount';
-import { type DiagnosisToResolve, diagnosesToResolve } from './diagnoses-to-resolve';
-import { ResolveCheck } from './resolve-check';
+import { type CheckDecisions, completeCheck, hasQuestions } from './complete-check';
+import { CompleteCheckView } from './complete-check-view';
+import { useApplyCheck } from './use-apply-check';
 
 const MICRO =
   'm-0 text-[11.5px] leading-none font-medium tracking-[.05em] uppercase [&:lang(ar)]:tracking-normal';
@@ -38,7 +39,7 @@ export interface VisitSummaryDialogProps {
   open: boolean;
   /** Continue editing, `Esc` or the scrim; never while the visit is being recorded. */
   onClose: () => void;
-  /** Diagnoses the check on the way to the Complete step already showed: not asked again. */
+  /** What the check on the way to the Complete step already showed: not asked again. */
   acknowledged?: ReadonlySet<string>;
 }
 
@@ -52,9 +53,10 @@ export interface VisitSummaryDialogProps {
  *
  * **Complete visit** first sends every unsaved edit (V6); if any fails, the visit is not completed
  * on stale values and the dialog says so. It then waits for the visit's writes still in flight (a
- * Perform now, a removal), so the visit it freezes has them. If a tooth treated today still has
- * an active diagnosis (`diagnosesToResolve`), the dialog turns into `ResolveCheck`: the dentist
- * resolves the ones the treatment fixed, or none, before it completes. Then
+ * Perform now, a removal), so the visit it freezes has them. If the check before Complete has
+ * anything the page has not asked yet (`completeCheck`, ADR-0065) — work whose end is still to
+ * say, diagnoses still open on the teeth treated — the dialog turns into `CompleteCheckView`, and
+ * its answers are applied before the visit completes. Then
  * `POST /visits/:id/complete`
  * ("Recording…": the timer shown stops and the discount turns read-only): the
  * cached visit turns `completed` and the workspace page leaves for the record's Overview with the
@@ -132,15 +134,15 @@ function SummaryContent({
   const queryClient = useQueryClient();
   const mutations = useVisitMutations(visit.id);
   const complete = useMutation(mutations.complete);
-  const resolve = useMutation(mutations.resolveDiagnosis);
+  const apply = useApplyCheck(visit.id);
   const [error, setError] = useState<string | null>(null);
-  /** The diagnoses to check before completing; null while the summary shows. */
-  const [check, setCheck] = useState<DiagnosisToResolve[] | null>(null);
+  /** The check before completing (ADR-0065) shows in place of the summary. */
+  const [check, setCheck] = useState(false);
   /** Back from the check: focus returns to Complete visit, which the summary re-mounts. */
   const completeButton = useRef<HTMLButtonElement>(null);
   const backFromCheck = useRef(false);
   useEffect(() => {
-    if (!backFromCheck.current || check !== null) return;
+    if (!backFromCheck.current || check) return;
     backFromCheck.current = false;
     completeButton.current?.focus();
   }, [check]);
@@ -166,7 +168,7 @@ function SummaryContent({
     try {
       await complete.mutateAsync();
     } catch (failure) {
-      setCheck(null);
+      setCheck(false);
       stop(t('summary.failed', { reason: reason(failure) }));
     }
     // Completed: the page, which reads the cached visit, leaves for the record (W16).
@@ -182,53 +184,49 @@ function SummaryContent({
     // The writes just settled refreshed the cache; the props may not have re-rendered yet.
     const current = queryClient.getQueryData(visitQuery(visit.id).queryKey) ?? visit;
     const currentChart = queryClient.getQueryData(chartQuery(visit.patientId).queryKey) ?? chart;
-    const open = (currentChart ? diagnosesToResolve(current, currentChart) : []).filter(
-      (item) => acknowledged?.has(item.record.id) !== true,
-    );
-    if (open.length > 0) {
-      setCheck(open);
+    if (
+      currentChart &&
+      hasQuestions(completeCheck(current, currentChart, new Map(), acknowledged))
+    ) {
+      setCheck(true);
       stop(null);
       return;
     }
     await finish();
   };
 
-  /** Resolves the ticked diagnoses one by one, then completes; a failure completes nothing. */
-  const onConfirm = async (recordIds: string[]) => {
+  /** Applies the check's answers, then completes; a failure completes nothing. */
+  const onConfirm = async (decisions: CheckDecisions) => {
     start();
-    for (const [done, recordId] of recordIds.entries()) {
-      try {
-        await resolve.mutateAsync(recordId);
-      } catch (failure) {
-        // Those resolved before it stay resolved: the check no longer lists them.
-        const resolved = new Set(recordIds.slice(0, done));
-        setCheck((items) => items?.filter((item) => !resolved.has(item.record.id)) ?? null);
-        stop(t('summary.resolve.failed', { reason: reason(failure) }));
-        return;
-      }
+    try {
+      await apply(decisions);
+    } catch (failure) {
+      // What was applied before it stays: the check no longer lists it.
+      stop(t('summary.resolve.failed', { reason: reason(failure) }));
+      return;
     }
     await finish();
   };
 
-  if (check !== null) {
+  if (check && chart) {
     return (
-      <ResolveCheck
-        items={check}
+      <CompleteCheckView
+        visit={visit}
+        chart={chart}
+        shown={acknowledged}
         busy={recording}
         error={error}
         backLabel={t('summary.resolve.back')}
-        confirmLabel={(ticked) =>
-          ticked > 0
-            ? t('summary.resolve.resolveAndComplete', { count: ticked })
-            : t('summary.complete')
+        confirmLabel={(changes) =>
+          changes > 0 ? t('summary.resolve.saveAndComplete') : t('summary.complete')
         }
         onBack={() => {
-          setCheck(null);
+          setCheck(false);
           setError(null);
           backFromCheck.current = true;
         }}
-        onConfirm={(recordIds) => {
-          void onConfirm(recordIds);
+        onConfirm={(decisions) => {
+          void onConfirm(decisions);
         }}
       />
     );

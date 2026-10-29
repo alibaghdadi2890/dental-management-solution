@@ -1,6 +1,6 @@
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, openAllView } from './start-visit';
+import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
 
 /**
  * Feature 10, visit flows: the three stories of its acceptance — a new patient's examination end
@@ -114,11 +114,10 @@ async function pickFromDrawer(page: Page, title: string, row: string) {
   await expect(drawer).toBeHidden();
 }
 
-/** The footer's Complete visit, the summary's own, and the post-visit dialog's Done. */
+/** The Complete step's Complete visit, which completes at once, and the post-visit dialog. */
 async function completeVisit(page: Page) {
   await page.getByRole('button', { name: 'Complete visit' }).click();
-  const summary = page.getByRole('dialog', { name: 'Complete visit' });
-  await summary.getByRole('button', { name: 'Complete visit' }).click();
+  await expect(page.getByRole('dialog', { name: 'Complete visit' })).toHaveCount(0);
   const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
   await expect(recorded).toBeVisible();
   return recorded;
@@ -290,8 +289,8 @@ test('a treatment visit opens on today’s work and continues it', async ({ page
     ).toBeVisible();
 
     await page.getByRole('button', { name: 'Review & complete' }).click();
-    const summary = page.getByRole('dialog', { name: 'Complete visit' });
-    await summary.getByRole('button', { name: 'Complete visit' }).click();
+    // The check asks about the root canal: session 1, so it continues.
+    await completeFromSummary(page);
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
     await recorded.getByRole('button', { name: 'Done' }).click();
     await expect(recorded).toBeHidden();
@@ -337,7 +336,7 @@ test('a treatment visit opens on today’s work and continues it', async ({ page
   });
 
   const nav = steps(page, 'Treatment');
-  await test.step('Today’s work: the plan with today’s ticks, continued on Perform', async () => {
+  await test.step('Today’s work: the plan with today’s ticks, started by Perform', async () => {
     await expect(nav.getByRole('button', { name: /^Today’s work/ })).toHaveAttribute(
       'aria-current',
       'step',
@@ -362,15 +361,26 @@ test('a treatment visit opens on today’s work and continues it', async ({ page
     );
     const panel = page.getByRole('complementary', { name: 'Selected tooth' });
     await expect(panel.getByRole('heading', { name: '#26' })).toBeVisible();
-    const planned = page.getByRole('region', { name: 'Planned for today' });
-    await planned.getByRole('button', { name: 'Not finished: Root canal treatment' }).click();
-    await expect(planned.getByRole('listitem')).toContainText('Not finished');
-    // The session is logged with no charge.
-    await expect(page.getByRole('region', { name: "Today's services" })).toContainText('$0');
+    // Entering Perform logged this visit's session, with no charge: the first visit charged it.
+    const services = page.getByRole('region', { name: "Today's services" });
+    // Worked on here, it is no longer waiting "To continue".
+    await expect(services.getByText(/^To continue/)).toHaveCount(0);
+    await expect(services).toContainText('Root canal treatment');
+    await expect(services).toContainText('Charged on visit');
+    await expect(services).toContainText('$0');
   });
 
   await test.step('Complete: it continues next visit', async () => {
     await page.getByRole('button', { name: 'Continue to Complete' }).click();
+    // Session 2 of 3: the check suggests it continues.
+    const check = page.getByRole('dialog', { name: 'Before you complete' });
+    await expect(check.getByText('Session 2 of 3')).toBeVisible();
+    await expect(
+      check
+        .getByRole('radiogroup', { name: '#26 Root canal treatment: finished or continues' })
+        .getByRole('radio', { name: 'Continues' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    await check.getByRole('button', { name: 'Continue to Complete' }).click();
     const block = page.getByRole('region', { name: 'This visit' }).first();
     await expect(block).toContainText('Continues next visit');
     await expect(block).toContainText('#26 Root canal treatment');
@@ -428,6 +438,14 @@ test('an emergency: the complaint, the automatic examination, and an extraction'
 
   await test.step('Complete: both services are charged', async () => {
     await page.getByRole('button', { name: 'Continue to Complete' }).click();
+    // The extraction, added by hand, is suggested Finished.
+    const check = page.getByRole('dialog', { name: 'Before you complete' });
+    await expect(
+      check
+        .getByRole('radiogroup', { name: '#36 Extraction: finished or continues' })
+        .getByRole('radio', { name: 'Finished' }),
+    ).toHaveAttribute('aria-checked', 'true');
+    await check.getByRole('button', { name: 'Continue to Complete' }).click();
     await expect(page.getByRole('region', { name: 'This visit' }).first()).toContainText(
       '2 services · $60',
     );

@@ -62,6 +62,47 @@ function server(initial: Visit, charted: PatientChart = chart()) {
               : null,
         });
       }
+      const plan = /^\/visits\/[^/]+\/plans\/([^/]+)\/(session|perform)$/.exec(url);
+      if (plan) {
+        const [, planId, action] = plan;
+        const plans = state.chart.plans.map((candidate) =>
+          candidate.id !== planId
+            ? candidate
+            : action === 'session'
+              ? {
+                  ...candidate,
+                  status: 'in_progress' as const,
+                  sessions: [
+                    ...candidate.sessions,
+                    { visitId: VISIT_ID, date: '2026-09-04', note: null },
+                  ],
+                }
+              : { ...candidate, status: 'performed' as const, performedInVisitId: VISIT_ID },
+        );
+        state.chart = { ...state.chart, plans };
+        return json({ visit: state.visit, record: plans.find((one) => one.id === planId) });
+      }
+      const removed = /^\/visits\/[^/]+\/services\/([^/]+)$/.exec(url)?.[1];
+      if (method === 'DELETE' && removed) {
+        // The line that started the work takes its session, and the plan is planned again.
+        const line = state.visit.services.find((service) => service.id === removed);
+        state.chart = {
+          ...state.chart,
+          plans: state.chart.plans.map((candidate) =>
+            candidate.id === line?.planId
+              ? { ...candidate, status: 'planned' as const, sessions: [], chargedIn: null }
+              : candidate,
+          ),
+        };
+        state.visit = {
+          ...state.visit,
+          services: state.visit.services.filter((service) => service.id !== removed),
+        };
+        return json({
+          visit: state.visit,
+          record: { ...line, deletedAt: '2026-09-04T09:10:00.000Z' },
+        });
+      }
       const ticked = /^\/visits\/[^/]+\/worklist\/([^/]+)$/.exec(url)?.[1];
       if (ticked) {
         const others = state.visit.worklist.filter((item) => item.planId !== ticked);
@@ -82,7 +123,7 @@ describe('visit flows', () => {
     sessionStorage.clear();
   });
 
-  it('opens a treatment visit on Today’s work and takes the item on to Perform', async () => {
+  it('opens a treatment visit on Today’s work, starts the item on Perform, and asks at Complete', async () => {
     const rootCanal = treatmentPlan(32, 'Root canal treatment', '26', {
       ...OLD,
       status: 'in_progress',
@@ -127,23 +168,34 @@ describe('visit flows', () => {
       expect(stepButton(nav, /^Perform/).getAttribute('aria-current')).toBe('step');
     });
     expect(sent(fetchMock, 'PATCH', path('step'))).toEqual({ step: 'perform' });
-    const planned = screen.getByRole('region', { name: 'Planned for today' });
-    const row = within(planned).getByRole('listitem');
-    // The item's tooth is selected: its row is highlighted and the tooth panel is on it.
-    expect(row.getAttribute('aria-current')).toBe('true');
-    const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
-    expect(await within(aside).findByRole('heading', { name: '#26' })).toBeTruthy();
-
-    // Not finished logs this visit's session.
-    fireEvent.click(
-      within(row).getByRole('button', { name: 'Not finished: Root canal treatment' }),
-    );
+    // Entering Perform started it: this visit's session, and the row in Today's services.
     await waitFor(() => {
       expect(sent(fetchMock, 'PUT', path(`plans/${rootCanal.id}/session`))).toEqual({
         note: null,
       });
     });
-    expect(screen.getByRole('button', { name: 'Continue to Complete' })).toBeTruthy();
+    const services = screen.getByRole('region', { name: "Today's services" });
+    expect(await within(services).findByText('Root canal treatment')).toBeTruthy();
+    // The item's tooth is selected: the tooth panel is on it.
+    const aside = screen.getByRole('complementary', { name: 'Selected tooth' });
+    expect(await within(aside).findByRole('heading', { name: '#26' })).toBeTruthy();
+
+    // Complete asks whether it is finished: session 2 of 3 starts on Continues.
+    fireEvent.click(screen.getByRole('button', { name: 'Continue to Complete' }));
+    const check = await screen.findByRole('dialog', { name: 'Before you complete' });
+    expect(within(check).getByText('Session 2 of 3')).toBeTruthy();
+    const choice = within(check).getByRole('radiogroup', {
+      name: '#26 Root canal treatment: finished or continues',
+    });
+    expect(
+      within(choice).getByRole('radio', { name: 'Continues' }).getAttribute('aria-checked'),
+    ).toBe('true');
+    fireEvent.click(within(choice).getByRole('radio', { name: 'Finished' }));
+    fireEvent.click(within(check).getByRole('button', { name: 'Save and continue to Complete' }));
+    await waitFor(() => {
+      expect(stepButton(nav, /^3?\s*Complete/).getAttribute('aria-current')).toBe('step');
+    });
+    expect(sent(fetchMock, 'POST', path(`plans/${rootCanal.id}/perform`))).toBeDefined();
   });
 
   it('ticks a planned treatment onto today’s list, and off it', async () => {
@@ -171,6 +223,39 @@ describe('visit flows', () => {
     });
     expect(state.visit.worklist).toEqual([]);
     expect(screen.queryByRole('button', { name: 'Perform Crown' })).toBeNull();
+  });
+
+  it('unticking work Perform started takes the start back, then the item off the list', async () => {
+    const crown = treatmentPlan(30, 'Crown', '16', {
+      ...OLD,
+      status: 'in_progress',
+      sessions: [{ visitId: VISIT_ID, date: '2026-09-04', note: null }],
+      chargedIn: { visitId: VISIT_ID, number: 1 },
+    });
+    const line = visitService(50, 'Crown', '16', { planId: crown.id });
+    const { state, fetchMock } = server(
+      visit({ viewMode: 'steps', worklist: [{ planId: crown.id }], services: [line] }),
+      chart({ plans: [crown] }),
+    );
+    renderWorkspace({ permissions: DENTIST });
+    const box = await screen.findByRole<HTMLInputElement>('checkbox', {
+      name: 'For today: #16 Crown',
+    });
+    expect(box.checked).toBe(true);
+    expect(box.disabled).toBe(false);
+
+    fireEvent.click(box);
+    await waitFor(() => {
+      expect(state.visit.worklist).toEqual([]);
+    });
+    expect(
+      fetchMock.mock.calls
+        .filter(([, init]) => init?.method === 'DELETE')
+        .map(([url]) => url.replace(`/api/v1/visits/${VISIT_ID}/`, '')),
+    ).toEqual([`services/${line.id}`, `worklist/${crown.id}`]);
+    await waitFor(() => {
+      expect(box.checked).toBe(false);
+    });
   });
 
   it('shows the plan read-only to someone who cannot write the visit', async () => {
@@ -231,8 +316,12 @@ describe('visit flows', () => {
     expect(screen.getByRole('radio', { name: 'Steps' }).getAttribute('aria-checked')).toBe('true');
     expect(screen.queryByRole('button', { name: 'Review & complete' })).toBeNull();
 
+    // The step is the review: Complete visit completes, with no summary in between.
     fireEvent.click(screen.getByRole('button', { name: 'Complete visit' }));
-    expect(await screen.findByRole('dialog', { name: 'Complete visit' })).toBeTruthy();
+    await waitFor(() => {
+      expect(sent(fetchMock, 'POST', path('complete'))).toBeDefined();
+    });
+    expect(screen.queryByRole('dialog', { name: 'Complete visit' })).toBeNull();
   });
 
   it('confirms the medical history at Intake', async () => {
@@ -428,8 +517,8 @@ describe('visit flows', () => {
     });
 
     /** The flow server, with resolve marking the diagnosis resolved and complete completing. */
-    function treated() {
-      const { state, fetchMock } = server(filled, chart({ diagnoses: [caries] }));
+    function treated(initial: Visit = filled) {
+      const { state, fetchMock } = server(initial, chart({ diagnoses: [caries] }));
       const base = fetchMock.getMockImplementation();
       fetchMock.mockImplementation((url: string, init?: RequestInit) => {
         const bare = url.replace('/api/v1', '');
@@ -465,8 +554,16 @@ describe('visit flows', () => {
       renderWorkspace({ permissions: DENTIST });
       const nav = await steps('Treatment');
       fireEvent.click(await screen.findByRole('button', { name: 'Continue to Complete' }));
-      const check = await screen.findByRole('dialog', { name: 'Resolve these diagnoses?' });
+      const check = await screen.findByRole('dialog', { name: 'Before you complete' });
       expect(within(check).getByText('Done today: Composite filling')).toBeTruthy();
+      // A service added by hand is Finished unless said otherwise; continuing it would leave
+      // nothing done on the tooth, so nothing to resolve.
+      const choice = within(check).getByRole('radiogroup', {
+        name: '#16 Composite filling: finished or continues',
+      });
+      fireEvent.click(within(choice).getByRole('radio', { name: 'Continues' }));
+      expect(within(check).queryByText('Done today: Composite filling')).toBeNull();
+      fireEvent.click(within(choice).getByRole('radio', { name: 'Finished' }));
 
       fireEvent.click(within(check).getByRole('button', { name: /^Back to Perform/ }));
       await waitFor(() => {
@@ -476,38 +573,48 @@ describe('visit flows', () => {
 
       // The stepper asks too.
       fireEvent.click(stepButton(nav, /^3?\s*Complete/));
-      const again = await screen.findByRole('dialog', { name: 'Resolve these diagnoses?' });
+      const again = await screen.findByRole('dialog', { name: 'Before you complete' });
       fireEvent.click(
         within(again).getByRole('checkbox', { name: 'Resolve Occlusal caries on #16' }),
       );
-      fireEvent.click(
-        within(again).getByRole('button', { name: 'Resolve 1 and continue to Complete' }),
-      );
+      fireEvent.click(within(again).getByRole('button', { name: 'Save and continue to Complete' }));
       await waitFor(() => {
         expect(current(nav)).toMatch(/Complete/);
       });
-      expect(screen.queryByRole('dialog', { name: 'Resolve these diagnoses?' })).toBeNull();
+      expect(screen.queryByRole('dialog', { name: 'Before you complete' })).toBeNull();
       expect(writes(fetchMock)).toEqual([`diagnoses/${caries.id}/resolve`]);
     });
 
-    it('moves on without resolving, and Complete visit does not ask again', async () => {
+    it('asks on Complete visit what the page has not asked yet, then completes', async () => {
+      // Reopened on the Complete step: nothing has been asked on this page.
+      const { fetchMock } = treated({ ...filled, currentStep: 'complete' });
+      renderWorkspace({ permissions: DENTIST });
+      await steps('Treatment');
+      fireEvent.click(await screen.findByRole('button', { name: 'Complete visit' }));
+      const check = await screen.findByRole('dialog', { name: 'Before you complete' });
+      expect(within(check).getByRole('button', { name: 'Back to Complete' })).toBeTruthy();
+      fireEvent.click(within(check).getByRole('button', { name: 'Complete visit' }));
+      await waitFor(() => {
+        expect(writes(fetchMock)).toEqual(['complete']);
+      });
+    });
+
+    it('moves on without resolving, and Complete visit completes without asking again', async () => {
       const { fetchMock } = treated();
       renderWorkspace({ permissions: DENTIST });
       const nav = await steps('Treatment');
       fireEvent.click(await screen.findByRole('button', { name: 'Continue to Complete' }));
-      const check = await screen.findByRole('dialog', { name: 'Resolve these diagnoses?' });
+      const check = await screen.findByRole('dialog', { name: 'Before you complete' });
       fireEvent.click(within(check).getByRole('button', { name: 'Continue to Complete' }));
       await waitFor(() => {
         expect(current(nav)).toMatch(/Complete/);
       });
 
       fireEvent.click(await screen.findByRole('button', { name: 'Complete visit' }));
-      const summary = await screen.findByRole('dialog', { name: 'Complete visit' });
-      fireEvent.click(within(summary).getByRole('button', { name: 'Complete visit' }));
       await waitFor(() => {
         expect(writes(fetchMock)).toEqual(['complete']);
       });
-      expect(screen.queryByText('Resolve these diagnoses?')).toBeNull();
+      expect(screen.queryByText('Before you complete')).toBeNull();
     });
   });
 });

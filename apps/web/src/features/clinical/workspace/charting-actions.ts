@@ -189,12 +189,23 @@ export function useChartingActionsState({
     const withPresence = (body: string, change: ToothPresenceChange | null | undefined) =>
       change ? `${body} · ${t(`presence.suffix.${change.presence}`)}` : body;
 
+    /**
+     * Work taken back leaves today's list (ADR-0065), so entering Perform does not start it
+     * again. After the undo, when the plan is open again.
+     */
+    const offList = (planId: string | null): Promise<unknown> =>
+      planId !== null && visit.worklist.some((item) => item.planId === planId)
+        ? run(mutations.setWorkItem, { planId, listed: false })
+        : Promise.resolve();
+
     const removeService = (serviceId: string) => {
       if (removingRef.current.has(serviceId)) return;
       removingRef.current.add(serviceId);
       drop(servicePriceKey(serviceId));
       setRemoving((current) => new Set(current).add(serviceId));
+      const planId = visit.services.find((service) => service.id === serviceId)?.planId ?? null;
       run(mutations.removeService, serviceId)
+        .then(() => offList(planId))
         .catch((error: unknown) => {
           // Already gone (removed here a moment ago, or by someone else): the goal is met.
           if (!(error instanceof ApiError && error.status === 404)) failed(error);
@@ -302,6 +313,10 @@ export function useChartingActionsState({
           return;
         }
         run(mutations.removeSession, plan.id)
+          .then(async (result) => {
+            await offList(plan.id);
+            return result;
+          })
           // Work first added in this visit leaves no plan behind; a plan from before stays planned.
           .then(({ record }) =>
             record.recordedInVisitId === visit.id && record.status === 'planned'
@@ -330,7 +345,9 @@ export function useChartingActionsState({
           .catch(failed);
       },
       undoSession: (plan) => {
-        fire(mutations.removeSession, plan.id);
+        run(mutations.removeSession, plan.id)
+          .then(() => offList(plan.id))
+          .catch(failed);
       },
       performPlan: (plan) => {
         run(mutations.performPlan, plan.id)
@@ -403,6 +420,8 @@ export function useChartingActionsState({
     } satisfies ChartingActions;
   }, [
     visit.id,
+    visit.worklist,
+    visit.services,
     queryClient,
     mutations,
     drop,

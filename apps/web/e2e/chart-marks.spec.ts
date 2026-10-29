@@ -1,6 +1,6 @@
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, openAllView } from './start-visit';
+import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
 
 /**
  * Feature 9 (chart marks): colours and icons chosen in the Catalog show on the dental chart,
@@ -196,10 +196,7 @@ test('catalog colours and icons show on the chart, in each view, today told from
     await expect(column(chart, '16').locator('[data-crown-icon="crown/today"]')).toBeVisible();
 
     await page.getByRole('button', { name: 'Review & complete' }).click();
-    await page
-      .getByRole('dialog', { name: 'Complete visit' })
-      .getByRole('button', { name: 'Complete visit' })
-      .click();
+    await completeFromSummary(page);
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
     await recorded.getByRole('button', { name: 'Done' }).click();
     await expect(recorded).toBeHidden();

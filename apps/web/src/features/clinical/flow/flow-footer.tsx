@@ -5,17 +5,21 @@ import type { VisitFlow } from './use-visit-flow';
 
 /**
  * The step layout's footer (feature 10, V2): **← Previous**, "Step n of m", and one primary
- * button — **Continue to {next}**, or on the last step **Complete visit**, which opens the
- * visit summary as Review & complete does. Moving on is always allowed: nothing here is a gate.
+ * button — **Continue to {next}**, or on the last step **Complete visit**, which completes the
+ * visit ("Recording…" while it does; ADR-0065). Moving on is always allowed: nothing here is a
+ * gate.
  */
 export function FlowFooter({
   flow,
   canComplete,
+  completing = false,
   onComplete,
 }: {
   flow: VisitFlow;
   /** Completing needs `visit:write` on a live visit. */
   canComplete: boolean;
+  /** Completing is under way. */
+  completing?: boolean;
   onComplete: () => void;
 }) {
   const { t } = useTranslation('clinical');
@@ -51,11 +55,11 @@ export function FlowFooter({
         {next === null ? (
           <Button
             variant="primary"
-            disabled={!canComplete}
+            disabled={!canComplete || completing}
             onClick={onComplete}
-            className="h-[38px] px-[17px] text-[13px] font-semibold"
+            className="h-[38px] px-[17px] text-[13px] font-semibold disabled:cursor-wait"
           >
-            {t('flow.completeVisit')}
+            {completing ? t('summary.recording') : t('flow.completeVisit')}
           </Button>
         ) : (
           <Button

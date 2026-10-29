@@ -1,6 +1,6 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, openAllView } from './start-visit';
+import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
 
 interface Account {
   email: string;
@@ -170,10 +170,7 @@ test('the owner pays a dentist 40 % of collections: agreement, visit, payment, s
       .click();
     await expect(page.getByRole('status').filter({ hasText: 'Composite added' })).toBeVisible();
     await page.getByRole('button', { name: 'Review & complete' }).click();
-    await page
-      .getByRole('dialog', { name: 'Complete visit' })
-      .getByRole('button', { name: 'Complete visit' })
-      .click();
+    await completeFromSummary(page);
     await page
       .getByRole('dialog', { name: 'Visit recorded' })
       .getByRole('button', { name: 'Done' })

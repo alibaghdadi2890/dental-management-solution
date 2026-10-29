@@ -405,24 +405,27 @@
     "session": "{{name}} · الزيارة {{number}}",
     "unfinished": "غير منتهية · تُتابَع في الزيارة القادمة",
     "resolve": {
-      "title": "حلّ هذه التشخيصات؟",
-      "subtitle": "قبل تسجيل الزيارة.",
       "tick": "حلّ {{name}} على {{tooth}}",
       "doneToday": "أُنجز اليوم: {{services}}",
       "resolve": "حلّ",
       "back": "العودة إلى الملخص",
-      "failed": "تعذّر حلّ أحد التشخيصات، لذا لم تُنهَ الزيارة: {{reason}}",
+      "failed": "تعذّر حفظ الإجابات، لذا لم تُنهَ الزيارة: {{reason}}",
       "warning_one": "ما زال هذا التشخيص مفتوحًا على سن عالجته اليوم. ربما نسيت حلّه.",
       "warning_two": "ما زال تشخيصان مفتوحين على الأسنان التي عالجتها اليوم. ربما نسيت حلّهما.",
       "warning_few": "ما زالت {{count}} تشخيصات مفتوحة على الأسنان التي عالجتها اليوم. ربما نسيت حلّها.",
       "warning_many": "ما زال {{count}} تشخيصًا مفتوحًا على الأسنان التي عالجتها اليوم. ربما نسيت حلّها.",
       "warning_other": "ما زال {{count}} تشخيص مفتوحًا على الأسنان التي عالجتها اليوم. ربما نسيت حلّها.",
-      "resolveAndComplete_one": "حلّ 1 وإنهاء",
-      "resolveAndComplete_two": "حلّ 2 وإنهاء",
-      "resolveAndComplete_few": "حلّ {{count}} وإنهاء",
-      "resolveAndComplete_many": "حلّ {{count}} وإنهاء",
-      "resolveAndComplete_other": "حلّ {{count}} وإنهاء",
-      "working": "جارٍ التنفيذ…"
+      "working": "جارٍ التنفيذ…",
+      "saveAndComplete": "حفظ وإنهاء"
+    },
+    "check": {
+      "title": "قبل إنهاء الزيارة",
+      "subtitle": "يُغلق العمل المنتهي على المخطط، ويبقى ما يستمر قيد التنفيذ للزيارة القادمة.",
+      "work": "العمل المنجز اليوم",
+      "diagnoses": "تشخيصات ما زالت مفتوحة",
+      "finished": "انتهى",
+      "continues": "مستمر",
+      "choiceFor": "{{target}} {{name}}: انتهى أم مستمر"
     }
   },
   "postVisit": {
@@ -809,20 +812,11 @@
     },
     "work": {
       "completed": "مكتمل",
-      "unfinished": "غير منتهٍ"
+      "unfinished": "قيد التنفيذ"
     },
     "planned": {
-      "title": "مخطَّط لليوم",
-      "count_one": "عنصر واحد",
-      "count_other": "{{count}} عنصر",
-      "notFinishedHint": "غير منتهٍ · يُتابَع في الزيارة القادمة",
-      "notFinishedNamed": "غير منتهٍ: {{name}}",
       "beforePhoto": "صورة قبل",
-      "afterPhoto": "صورة بعد",
-      "count_zero": "لا عناصر",
-      "count_two": "عنصران",
-      "count_few": "{{count}} عناصر",
-      "count_many": "{{count}} عنصرًا"
+      "afterPhoto": "صورة بعد"
     },
     "lastHygiene": {
       "title": "آخر زيارة تنظيف",
@@ -874,12 +868,8 @@
     },
     "resolve": {
       "back": "العودة إلى {{step}}",
-      "resolveAndContinue_one": "حلّ 1 والمتابعة إلى {{step}}",
-      "resolveAndContinue_two": "حلّ 2 والمتابعة إلى {{step}}",
-      "resolveAndContinue_few": "حلّ {{count}} والمتابعة إلى {{step}}",
-      "resolveAndContinue_many": "حلّ {{count}} والمتابعة إلى {{step}}",
-      "resolveAndContinue_other": "حلّ {{count}} والمتابعة إلى {{step}}",
-      "failed": "تعذّر حلّ أحد التشخيصات: {{reason}}"
+      "failed": "تعذّر حفظ الإجابات: {{reason}}",
+      "saveAndContinue": "حفظ والمتابعة إلى {{step}}"
     }
   },
   "planTab": {
