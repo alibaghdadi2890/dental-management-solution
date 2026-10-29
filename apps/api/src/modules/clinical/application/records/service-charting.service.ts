@@ -119,13 +119,21 @@ export class ServiceChartingService {
    * Soft-deletes the service. One that performing a plan created puts the plan back (the Undo of
    * perform, W13), audited as `treatment_plan.unperform`: to `in_progress` when earlier visits
    * worked on it, else to `planned` — work that only this visit worked on goes with its service
-   * (`dropWorkStartedHere`), so a removed service never comes back as an unfinished one.
+   * (`dropWorkStartedHere`), so a removed service never comes back as an unfinished one. A line
+   * that charges work another visit completed is refused (422 `visit.amend_plan_linked`,
+   * ADR-0064), as in a correction. Starting a visit resumes the patient's open one, so no other
+   * visit can complete work while its starting visit is live; the check keeps that so if the
+   * rule ever changes.
    */
   async removeService(visitId: string, serviceId: string): Promise<ServiceResult> {
     let presenceChange: ToothPresenceChange | null = null;
     const result = await this.charting.run(visitId, async (change) => {
       const { visit, now } = change;
       const before = await this.services.lockInVisit(serviceId, visitId);
+      // A line that charges work another visit completed stays (ADR-0064): reopen it there first.
+      if (before.planId !== null) {
+        await this.unperformer.assertRemovable(before.planId, visit, before.name);
+      }
       const after = await this.services.update(serviceId, { deletedAt: now });
       await this.audit.record({
         action: `${SERVICE}.delete`,
