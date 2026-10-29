@@ -253,6 +253,18 @@ Spec `docs/superpowers/specs/2026-10-17-advance-payments-design.md` (A1–A13).
   `releasedAt`; allocation lines have `fromAdvance` (the source payment was held, now or before);
   the visit summary has `held`, leaves it out of `totalOutstanding` and `previous`, and marks each
   payment `fromAdvance`. The patient balance (`balances`) stays Σ ledger.
+- **Work over several visits** is charged in the visit that starts it (ADR-0064), so its line
+  carries the plan from that visit: held money covers it there, and `planWork` no longer counts
+  it as still to charge.
+
+### Refund from the patient record (ADR-0064)
+
+Cancelled work keeps its charge; the money goes back by a refund. The balance card (Balance &
+payments: a button; Overview: its ⋯ menu) offers **Refund a payment** with `payment:refund` while
+one of the patient's latest ten payments has something left. The dialog lists them from the
+account's history, a voided or fully refunded one disabled, and opens the refund form
+(`RefundDialog`, with **Back**) for the one picked. No API change: `POST
+/billing/payments/:id/refund`.
 
 ### Visit charge (`application/visit-charge.subscriber.ts`, ADR-0024)
 

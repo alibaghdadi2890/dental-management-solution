@@ -36,7 +36,7 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0029](0029-credit-is-applied-immediately.md)                          | Credit is applied immediately                                                | Accepted                             |
 | [0030](0030-checkout-discount-is-a-silent-same-day-amendment.md)       | A checkout discount is a silent, same-day amendment                          | Accepted                             |
 | [0031](0031-records-without-a-visit.md)                                | Diagnoses and plans may be recorded without a visit                          | Accepted (amends 0022)               |
-| [0032](0032-multi-visit-work-is-charged-when-done.md)                  | Work over several visits is charged when it is done                          | Accepted                             |
+| [0032](0032-multi-visit-work-is-charged-when-done.md)                  | Work over several visits is charged when it is done                          | Accepted (amended by 0064)           |
 | [0033](0033-closing-a-checkout-without-a-payment-is-stored.md)         | Closing a checkout without a payment is stored on the visit                  | Accepted (amends 0030)               |
 | [0034](0034-tooth-presence-is-a-history-on-the-tooth.md)               | Tooth presence is a history on the tooth                                     | Accepted                             |
 | [0035](0035-the-tenant-currency-locks-at-the-first-ledger-entry.md)    | The tenant currency locks at the first ledger entry                          | Accepted (amends 0015)               |
@@ -67,3 +67,4 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0061](0061-admin-system-role.md)                                      | An Admin system role with every permission, below the owner                  | Accepted (amends 0055, 0056)         |
 | [0062](0062-correcting-a-finished-visit.md)                            | Correcting a finished visit: services, prices and times                      | Accepted (amended by 0063)           |
 | [0063](0063-a-correction-may-move-a-visit-to-another-day.md)           | A correction may move a visit to another day                                 | Accepted                             |
+| [0064](0064-work-over-several-visits-is-charged-when-it-starts.md)     | Work over several visits is charged in the visit that starts it              | Accepted                             |

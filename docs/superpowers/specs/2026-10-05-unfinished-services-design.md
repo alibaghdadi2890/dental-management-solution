@@ -123,6 +123,12 @@ The stamp is not visit content: a visit with only an answer can still be discard
 - Known limit: **Not finished** and **Complete** have no in-flight guard; a double click answers
   404 or 409 with a failure toast, and charges nothing twice.
 
+## Later change
+
+2026-10-29, ADR-0064: the work is charged in the visit that starts it. Not finished keeps the
+service line (U2, U3 no longer hold); Complete adds a line only for work nothing charges yet. See
+`2026-10-29-charge-at-start-refunds-diagnosis-levels-design.md`.
+
 ## Docs
 
 `docs/modules/clinical.md` (routes, the removed start); a note at the foot of the 2026-10-04
