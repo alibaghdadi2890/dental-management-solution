@@ -194,7 +194,7 @@ function PatientRecord({
     const notFound = patient.error instanceof ApiError && patient.error.status === 404;
     return (
       <div className="h-full overflow-auto">
-        <div className="max-w-[1320px] px-[26px] pt-5 pb-11">
+        <div className="px-[26px] pt-5 pb-11">
           <BackToPatients />
           <section className="rounded-xl border border-border bg-surface">
             {notFound ? (
@@ -249,7 +249,7 @@ function PatientRecord({
             setStartRequest(null);
           }}
         />
-        <TabPanel idBase={tabsId} tabKey={tab} className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
+        <TabPanel idBase={tabsId} tabKey={tab} className="px-[26px] pt-[22px] pb-11">
           {tab === 'overview' ? (
             <OverviewTab
               patient={patient.data}
@@ -351,7 +351,7 @@ function RecordSkeleton({ tab }: { tab: RecordTab }) {
           </div>
         </div>
       </div>
-      <div className="max-w-[1320px] px-[26px] pt-[22px] pb-11">
+      <div className="px-[26px] pt-[22px] pb-11">
         {tab === 'overview' ? (
           <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr))]">
             <div className="flex min-w-0 flex-col gap-4">

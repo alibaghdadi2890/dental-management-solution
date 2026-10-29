@@ -90,12 +90,16 @@ function PlannedRow({
       : null;
 
   const undo = () => {
+    const service = visit.services.find((line) => line.planId === plan.id);
     if (state === 'unfinished') {
-      actions.undoSession(plan);
+      // Work started here is charged here (ADR-0064): taking it back removes that line.
+      if (service) actions.removeService(service.id);
+      else actions.undoSession(plan);
       return;
     }
-    const service = visit.services.find((line) => line.planId === plan.id);
+    // Completed here, charged by an earlier visit: the work is in progress again.
     if (service) actions.removeService(service.id);
+    else actions.reopenPlan(plan);
   };
 
   return (

@@ -449,7 +449,7 @@ test('a service not finished in one visit is continued in the next and billed by
     return recorded;
   };
 
-  await test.step('first visit: the crown is not finished, a whole-mouth scaling is charged', async () => {
+  await test.step('first visit: the crown is not finished and charged here, with a whole-mouth scaling', async () => {
     await startVisit(page, 'Room 3');
     await board.getByRole('button', { name: 'Perform now: Zircon crown' }).click();
     await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$350');
@@ -460,6 +460,8 @@ test('a service not finished in one visit is continued in the next and billed by
     ).toBeVisible();
     await expect(today.getByText('Not finished')).toBeVisible();
     await expect(tooth(chartCard(page), '#36')).toHaveAccessibleName(/not finished: Zircon crown/);
+    // Work over several visits is charged in the visit that starts it (ADR-0064).
+    await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$350');
 
     await chartCard(page)
       .getByRole('button', { name: /^Whole mouth/ })
@@ -469,12 +471,12 @@ test('a service not finished in one visit is continued in the next and billed by
     await area.getByRole('button', { name: 'Add completed service', exact: true }).click();
     await pickFromDrawer(page, 'Add completed service', 'Scaling & polishing');
     await expect(today).toContainText('Scaling & polishing');
-    await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$60');
+    await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$410');
 
     const summary = await complete();
     await expect(summary).toContainText('Zircon crown · visit 1');
-    await expect(summary).toContainText(/Total due\s*\$60/);
-    const recorded = await record(summary, /Visit total\s*\$60/);
+    await expect(summary).toContainText(/Total due\s*\$410/);
+    const recorded = await record(summary, /Visit total\s*\$410/);
     await recorded.getByRole('button', { name: 'Done' }).click();
     await expect(recorded).toBeHidden();
   });
@@ -496,7 +498,7 @@ test('a service not finished in one visit is continued in the next and billed by
     await expect(recorded).toBeHidden();
   });
 
-  await test.step('third visit: continued from the card and completed', async () => {
+  await test.step('third visit: continued from the card and completed, at no charge', async () => {
     await startVisit(page, 'Room 3');
     await expect(today.getByText('To continue · 1')).toBeVisible();
     await today.getByRole('button', { name: 'Actions: Zircon crown' }).click();
@@ -505,9 +507,10 @@ test('a service not finished in one visit is continued in the next and billed by
     await expect(
       page.getByRole('status').filter({ hasText: 'Zircon crown performed' }),
     ).toBeVisible();
-    await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$350');
+    await expect(page.getByRole('group', { name: 'Visit total' })).toContainText('$0');
+    await expect(today).toContainText('Charged on visit');
 
-    const recorded = await record(await complete(), /Visit total\s*\$350/);
+    const recorded = await record(await complete(), /Visit total\s*\$0/);
     await expect(recorded).toContainText(/Total outstanding[\s\S]*\$410/);
   });
 });

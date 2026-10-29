@@ -29,15 +29,18 @@ type Row = ServiceItem | DiagnosisItem;
 
 const isService = (row: Row): row is ServiceItem => 'chargeUnit' in row;
 
+/** Where a row goes: how a service is charged, or a diagnosis's level (ADR-0064). */
+const unitOf = (row: Row) => (isService(row) ? row.chargeUnit : row.level);
+
 /**
  * The Add service / Plan treatment / Diagnosis drawer (spec §Add Service / Plan Treatment /
  * Diagnosis Drawer): one drawer, three modes with their own title and placeholder. The
  * header names the target — the selected tooth and pending surfaces — over an autofocused search
  * and the category chips; the list shows the active catalog rows, grouped by `drawerGroups`. A
- * per-tooth row (and every diagnosis, W11) needs a tooth, so without one it is disabled; a
- * whole-mouth row never needs one, and a per-jaw row carries an **Upper** and a **Lower** button
- * instead of one click. With a jaw or the whole mouth selected on the chart, only that
- * level's services are listed and a per-jaw row commits on the selected jaw in one click. One
+ * per-tooth row needs a tooth, so without one it is disabled; a whole-mouth row never needs one,
+ * and a per-jaw row carries an **Upper** and a **Lower** button instead of one click — services
+ * and diagnoses alike (ADR-0064). With a jaw or the whole mouth selected on the chart, only that
+ * level's rows are listed and a per-jaw row commits on the selected jaw in one click. One
  * click commits and closes; the toast (with its Undo or Plan treatment) comes from
  * `ChartingActions`. It is modal (a `dialog` that keeps Tab inside it), so the chart's arrow keys
  * can't move the selection under a pending one-click commit.
@@ -68,10 +71,10 @@ export function CatalogDrawer({
   const diagnoses = useQuery({ ...diagnosesQuery(), enabled: mode === 'diagnosis' });
   const catalog = mode === 'diagnosis' ? diagnoses : services;
   const { tooth, area } = selection;
-  // With a jaw or the whole mouth selected, only the services of that level are listed.
+  // With a jaw or the whole mouth selected, only the rows of that level are listed.
   const unit = area === null ? null : area === 'mouth' ? 'per_mouth' : 'per_jaw';
   const rows: Row[] = (catalog.data ?? []).filter(
-    (row) => row.active && (unit === null || (isService(row) && row.chargeUnit === unit)),
+    (row) => row.active && (unit === null || unitOf(row) === unit),
   );
   /** The selected jaw: a per-jaw row then commits in one click. */
   const selectedJaw = area === 'upper' || area === 'lower' ? area : undefined;
@@ -91,19 +94,18 @@ export function CatalogDrawer({
       // The pending scope was used (spec invariant 9).
       if (tooth !== null) selection.select(tooth);
     } else {
-      actions.recordDiagnosis(row, target);
+      actions.recordDiagnosis(row, { ...target, jaw: jaw ?? selectedJaw });
     }
     onClose();
   };
 
   const meta = (row: Row): string => {
+    if (unitOf(row) === 'per_jaw') return t('drawer.perJaw');
+    if (unitOf(row) === 'per_mouth') return t('drawer.perMouth');
     if (!isService(row)) return row.category ?? '';
-    if (row.chargeUnit === 'per_jaw') return t('drawer.perJaw');
-    if (row.chargeUnit === 'per_mouth') return t('drawer.perMouth');
     return toothText === null ? t('drawer.perTooth') : t('drawer.appliesTo', { target: toothText });
   };
-  const disabled = (row: Row) =>
-    tooth === null && (!isService(row) || row.chargeUnit === 'per_tooth');
+  const disabled = (row: Row) => tooth === null && unitOf(row) === 'per_tooth';
   const areaText = area === null ? null : levelLabel(selectedJaw);
 
   const heading = (value: DrawerHeading) => {
@@ -220,7 +222,7 @@ export function CatalogDrawer({
               {heading(group.heading)}
             </h3>
             {group.items.map((row) =>
-              isService(row) && row.chargeUnit === 'per_jaw' && !selectedJaw ? (
+              unitOf(row) === 'per_jaw' && !selectedJaw ? (
                 <div key={row.id} className="flex w-full items-center gap-3 px-[18px] py-2.5">
                   <span className="min-w-0 flex-1">
                     <span className="block text-[13px] leading-[1.3] font-medium">{row.name}</span>
@@ -228,12 +230,14 @@ export function CatalogDrawer({
                       {meta(row)}
                     </span>
                   </span>
-                  <span
-                    dir="ltr"
-                    className="flex-none font-mono text-[13px] leading-none font-medium text-ink-secondary tabular-nums"
-                  >
-                    {formatMoney(row.price, locale)}
-                  </span>
+                  {isService(row) && (
+                    <span
+                      dir="ltr"
+                      className="flex-none font-mono text-[13px] leading-none font-medium text-ink-secondary tabular-nums"
+                    >
+                      {formatMoney(row.price, locale)}
+                    </span>
+                  )}
                   {JAWS.map((jaw) => (
                     <button
                       key={jaw}

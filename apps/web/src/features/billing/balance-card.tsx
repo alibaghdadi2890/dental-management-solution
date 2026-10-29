@@ -1,6 +1,6 @@
 import { type BalanceMoney, fromCents, toCents } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardSkeleton } from '@/components/ui/card';
@@ -13,6 +13,8 @@ import { balanceQuery, visitSummaryQuery } from './billing-api';
 import { owedBalances } from './owed-balances';
 import { accountQuery } from './payments-api';
 import { useRecordPayment } from './payments/payment-dialog-context';
+import { RefundPaymentDialog } from './refund-payment-dialog';
+import { latestPayments, refundableOf } from './refundable-payments';
 import { ApiError } from '@/lib/api';
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -71,6 +73,16 @@ export function BalanceCard({
   // What is held for the plan: the visit summary carries it; without a visit, the account does.
   const noVisit = !canVisits || (lastVisit.isSuccess && visitId === undefined) || outOfScope;
   const account = useQuery({ ...accountQuery(patientId), enabled: noVisit });
+  // Refund a payment (ADR-0064): offered with `payment:refund` while one has something left.
+  const canRefund = usePermission('payment:refund');
+  const history = useQuery({ ...accountQuery(patientId), enabled: canRefund });
+  const [refunding, setRefunding] = useState(false);
+  const refund =
+    canRefund && latestPayments(history.data?.history ?? []).some((item) => refundableOf(item) > 0n)
+      ? () => {
+          setRefunding(true);
+        }
+      : undefined;
 
   let body: ReactNode;
   if (balance.isPending || lastVisit.isLoading || summary.isLoading || account.isLoading) {
@@ -216,6 +228,11 @@ export function BalanceCard({
           </Button>
         )}
         {detailed && <AdjustBalanceButton patientId={patientId} className="mt-2" />}
+        {detailed && refund && (
+          <Button variant="secondary" size="lg" className="mt-2" onClick={refund}>
+            {t('refundPick.title')}
+          </Button>
+        )}
       </>
     );
   }
@@ -225,10 +242,21 @@ export function BalanceCard({
       title={t('balance.title')}
       // The tab's card has the button; the Overview's compact one keeps the action in a menu.
       action={
-        detailed ? undefined : <AdjustBalanceMenu patientId={patientId} label={t('adjust.menu')} />
+        detailed ? undefined : (
+          <AdjustBalanceMenu patientId={patientId} label={t('adjust.menu')} onRefund={refund} />
+        )
       }
     >
       {body}
+      {refunding && (
+        <RefundPaymentDialog
+          patientId={patientId}
+          locale={locale}
+          onClose={() => {
+            setRefunding(false);
+          }}
+        />
+      )}
     </Card>
   );
 }

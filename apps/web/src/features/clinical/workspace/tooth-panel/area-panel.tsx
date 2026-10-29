@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 import { useLevelLabel } from '../../chart/use-chart-settings';
 import { CHART_AREAS, type ChartArea, useToothSelection } from '../tooth-selection';
 import { CompletedSection } from './completed-section';
+import { DiagnosisSection } from './diagnosis-section';
 import { PlanSection } from './plan-section';
 import { QuickAdd } from './quick-add';
 import type { ToothPanelProps } from './tooth-panel';
@@ -16,10 +17,10 @@ const inArea = (record: { toothCode: unknown; jaw: 'upper' | 'lower' | null }, a
 
 /**
  * The panel of a selected jaw or of the whole mouth: the level's name, the three levels as tabs
- * (the same selection the chart's bars and pill make), in a visit the quick add, then its treatment plan and its treatment —
- * this visit's services with their prices, and what earlier visits did. The stages are the tooth
- * panel's own, so they act and gate the same way; a diagnosis is always on a tooth, so there is
- * none here.
+ * (the same selection the chart's bars and pill make), in a visit the quick add, then its
+ * diagnoses (ADR-0064), its treatment plan and its treatment — this visit's services with their
+ * prices, and what earlier visits did. The stages are the tooth panel's own, so they act and gate
+ * the same way.
  */
 export function AreaPanel({
   area,
@@ -37,6 +38,7 @@ export function AreaPanel({
   const levelLabel = useLevelLabel();
   const { selectArea } = useToothSelection();
   const labelOf = (level: ChartArea) => levelLabel(level === 'mouth' ? null : level);
+  const diagnoses = chart.diagnoses.filter((record) => inArea(record, area));
   const plans = chart.plans.filter((plan) => inArea(plan, area));
   const services = (visit?.services ?? []).filter((service) => inArea(service, area));
   const history = chart.history.filter((line) => inArea(line, area));
@@ -80,6 +82,15 @@ export function AreaPanel({
         />
       )}
       <div className="px-4 py-[15px]">
+        <DiagnosisSection
+          diagnoses={diagnoses}
+          canWrite={canWrite}
+          open={sections.isOpen('diagnosis')}
+          onToggle={sections.toggle('diagnosis')}
+          onAdd={() => {
+            onOpenDrawer('diagnosis');
+          }}
+        />
         <PlanSection
           plans={plans.filter((plan) => isOpenPlan(plan) || plan.status === 'performed')}
           diagnoses={chart.diagnoses}
@@ -94,7 +105,7 @@ export function AreaPanel({
         <CompletedSection
           code={null}
           services={services}
-          unfinished={plans.filter((plan) => plan.status === 'in_progress')}
+          plans={plans}
           history={history}
           canWrite={canWrite && visit !== null}
           canWriteUnfinished={canWrite}

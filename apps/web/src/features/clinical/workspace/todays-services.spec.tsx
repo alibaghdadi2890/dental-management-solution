@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { id } from '@/features/patients/patients.test-utils';
 import {
   chart,
+  diagnosisRecord,
   FRONT_DESK,
   mockWorkspace,
   OLDER_VISIT_ID,
@@ -211,6 +212,61 @@ describe('Today’s services and the chart’s jaw and whole-mouth areas', () =>
     });
   });
 
+  it('shows work charged at its start once, says where it was charged, and reopens work completed here (ADR-0064)', async () => {
+    const earlier = { visitId: OLDER_VISIT_ID, date: '2026-08-21', note: null };
+    const today = { visitId: VISIT_ID, date: '2026-09-04', note: null };
+    const fetchMock = mockWorkspace({
+      visit: () =>
+        visit({
+          services: [visitService(50, 'Inlay', '26', { planId: id(24) })],
+          money: { subtotal: '80.00', discount: '0.00', total: '80.00', capped: false },
+        }),
+      chart: () =>
+        chart({
+          plans: [
+            treatmentPlan(20, 'Root canal', '36', {
+              status: 'in_progress',
+              recordedInVisitId: OLDER_VISIT_ID,
+              sessions: [earlier],
+              chargedIn: { visitId: OLDER_VISIT_ID, number: 3 },
+            }),
+            treatmentPlan(24, 'Inlay', '26', {
+              status: 'in_progress',
+              sessions: [today],
+              chargedIn: { visitId: VISIT_ID, number: 7 },
+            }),
+            treatmentPlan(28, 'Zircon crown', '46', {
+              status: 'performed',
+              recordedInVisitId: OLDER_VISIT_ID,
+              sessions: [earlier],
+              performedInVisitId: VISIT_ID,
+              chargedIn: { visitId: OLDER_VISIT_ID, number: 3 },
+            }),
+          ],
+        }),
+    });
+    renderWorkspace();
+    await chartCard();
+    const card = within(screen.getByRole('region', { name: "Today's services" }));
+    const [waiting, inlay, crown, ...rest] = card.getAllByRole('listitem');
+    expect(rest).toEqual([]);
+    expect(waiting?.textContent).toContain('Charged on visit V-000003');
+    expect(waiting?.textContent).not.toContain('$');
+    // The line that charges the inlay is the unfinished row, at the line's price.
+    expect(inlay?.textContent).toContain('Not finished$80');
+    expect(crown?.textContent).toBe('#46Zircon crownCompletedCharged on visit V-000003');
+    expect(card.queryByText(/^Carried forward/)).toBeNull();
+
+    await pickRowAction(card, 'Inlay', 'Remove');
+    await waitFor(() => {
+      expect(sent(fetchMock, 'DELETE', `/visits/${VISIT_ID}/services/${id(50)}`)).toBeNull();
+    });
+    await pickRowAction(card, 'Zircon crown', 'Not finished');
+    await waitFor(() => {
+      expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/plans/${id(28)}/reopen`)).toBeNull();
+    });
+  });
+
   it('the chart selects a jaw or the whole mouth; the panel shows that level and its tabs', async () => {
     mockLevels();
     renderWorkspace();
@@ -239,6 +295,29 @@ describe('Today’s services and the chart’s jaw and whole-mouth areas', () =>
     fireEvent.click(card.getByRole('button', { name: /^Upper jaw/ }));
     fireEvent.keyDown(document.body, { key: 'Escape' });
     expect(panel().getByText('No tooth selected')).toBeTruthy();
+  });
+
+  it('a jaw or the whole mouth lists its own diagnoses (ADR-0064)', async () => {
+    mockWorkspace({
+      visit: () => visit(),
+      chart: () =>
+        chart({
+          diagnoses: [
+            diagnosisRecord(60, 'Bruxism', null),
+            diagnosisRecord(62, 'Periodontitis', null, { level: 'per_jaw', jaw: 'upper' }),
+            diagnosisRecord(64, 'Dental caries', '16'),
+          ],
+        }),
+      services: SERVICES,
+    });
+    renderWorkspace();
+    const card = await chartCard();
+    fireEvent.click(card.getByRole('button', { name: /^Whole mouth/ }));
+    expect(panel().getByText('Bruxism')).toBeTruthy();
+    expect(panel().queryByText('Periodontitis')).toBeNull();
+    fireEvent.click(panel().getByRole('button', { name: 'Upper jaw' }));
+    expect(panel().getByText('Periodontitis')).toBeTruthy();
+    expect(panel().queryByText('Dental caries')).toBeNull();
   });
 
   it('adds a service to the selected jaw in one click', async () => {

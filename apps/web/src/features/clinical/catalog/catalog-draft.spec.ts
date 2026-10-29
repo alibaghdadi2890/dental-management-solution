@@ -48,6 +48,7 @@ const diagnosis = (n: number, code: string, name: string, category: string): Dia
   category,
   frequent: false,
   active: true,
+  level: 'per_tooth',
   color: 'rose',
   markPriority: 5,
 });
@@ -119,12 +120,22 @@ describe('catalog draft', () => {
           code: 'DX-CAR',
           name: 'Dental caries',
           category: 'Caries',
+          level: 'per_tooth',
           frequent: false,
           active: true,
           color: 'purple',
           markPriority: 5,
         },
       ],
+    });
+  });
+
+  it('saves where a diagnosis is recorded (ADR-0064)', () => {
+    const dx = editRow(fresh(), 'diagnoses', id(11), { chargeUnit: 'per_mouth' });
+    expect(changeCount(dx)).toBe(1);
+    expect(batchOf('diagnoses', changedRows(dx, 'diagnoses')).items[0]).toMatchObject({
+      level: 'per_mouth',
+      color: 'rose',
     });
   });
 
@@ -308,6 +319,7 @@ describe('catalog draft', () => {
           code: 'DX-CAR',
           name: 'Dental caries',
           category: 'Caries',
+          level: 'per_tooth',
           frequent: false,
           active: false,
           color: 'rose',

@@ -1,4 +1,4 @@
-import type { TreatmentPlan } from '@dcm/contracts';
+import { formatVisitNumber, type TreatmentPlan, type VisitService } from '@dcm/contracts';
 import { useTranslation } from 'react-i18next';
 import { MenuItem } from '@/components/ui/menu';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
@@ -15,20 +15,24 @@ import { type UnfinishedAction, unfinishedActions } from './unfinished';
 type MenuAction = Exclude<UnfinishedAction, 'complete'>;
 
 /**
- * One unfinished service (ADR-0032): added in an earlier visit, or this one, and charged only by
- * the visit that completes it. Amber, with the "Not finished" badge, when it started, how many
- * visits have worked on it and its price. **Complete** shows on the row in the visit that worked
+ * One unfinished service (ADR-0032): added in an earlier visit, or this one. Amber, with the "Not
+ * finished" badge, when it started and how many visits have worked on it; then what it costs —
+ * the price of `line` when this visit charges it, "Charged on visit #N" when an earlier one did
+ * (ADR-0064), else the price it will be charged at when completed. **Complete** shows on the row in the visit that worked
  * on it; the three-dot menu holds the rest (`unfinishedActions`). `target` adds the tooth or
  * level, as a link that selects it, for lists that are not about one target. Read-only without
  * the scope's write permission.
  */
 export function UnfinishedRow({
   plan,
+  line,
   canWrite,
   target = false,
   className,
 }: {
   plan: TreatmentPlan;
+  /** This visit's line that charges it, if this visit does. */
+  line?: VisitService | undefined;
   canWrite: boolean;
   target?: boolean;
   className?: string;
@@ -52,7 +56,7 @@ export function UnfinishedRow({
       actions.undoSession(plan);
     },
     remove: () => {
-      actions.removeUnfinished(plan);
+      actions.removeUnfinished(plan, line);
     },
     cancel: () => {
       cancel(plan);
@@ -92,12 +96,21 @@ export function UnfinishedRow({
         </span>
       </span>
       <Badge tone="warning">{t('unfinished.badge')}</Badge>
-      <span
-        dir="ltr"
-        className="font-mono text-[13px] leading-none font-medium text-ink-muted tabular-nums"
-      >
-        {formatMoney(plan.price, locale)}
-      </span>
+      {plan.chargedIn !== null && line === undefined ? (
+        <span className="text-[12.5px] leading-none text-ink-muted">
+          {t('unfinished.chargedOn', { number: formatVisitNumber(plan.chargedIn.number) })}
+        </span>
+      ) : (
+        <span
+          dir="ltr"
+          className={cn(
+            'font-mono text-[13px] leading-none font-medium tabular-nums',
+            line ? 'text-ink' : 'text-ink-muted',
+          )}
+        >
+          {formatMoney(line?.final ?? plan.price, locale)}
+        </span>
+      )}
       {offered.includes('complete') && (
         <button
           type="button"
@@ -121,6 +134,71 @@ export function UnfinishedRow({
               {t(`unfinished.${action}`)}
             </MenuItem>
           ))}
+        </RowMenu>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Work over several visits completed in this visit and charged by an earlier one (ADR-0064): its
+ * name, "Completed" and where it was charged, with **Not finished** in its menu to take the
+ * completion back. `target` as for `UnfinishedRow`.
+ */
+export function CompletedHereRow({
+  plan,
+  canWrite,
+  target = false,
+  className,
+}: {
+  plan: TreatmentPlan;
+  canWrite: boolean;
+  target?: boolean;
+  className?: string;
+}) {
+  const { t } = useTranslation('clinical');
+  const actions = useChartingActions();
+  const { select, selectArea } = useToothSelection();
+  const toothLabel = useToothLabel();
+  const levelLabel = useLevelLabel();
+  const { toothCode } = plan;
+  return (
+    <div
+      data-completed-here={plan.id}
+      className={cn('flex flex-wrap items-center gap-x-3 gap-y-1.5', className)}
+    >
+      {target && (
+        <button
+          type="button"
+          dir={toothCode === null ? undefined : 'ltr'}
+          onClick={() => {
+            if (toothCode === null) selectArea(plan.jaw ?? 'mouth');
+            else select(toothCode);
+          }}
+          className="min-w-[72px] flex-none cursor-pointer border-0 bg-transparent p-0 text-start font-mono text-[13px] leading-none font-semibold text-primary hover:underline"
+        >
+          {toothCode === null ? levelLabel(plan.jaw) : toothLabel(toothCode)}
+        </button>
+      )}
+      <span className="min-w-0 flex-[1_1_140px] text-[13px] leading-[1.35] font-semibold">
+        {plan.name}
+        <SurfaceTag surfaces={plan.surfaces} className="ms-[7px] text-ink-muted" />
+      </span>
+      <Badge tone="success">{t('unfinished.completed')}</Badge>
+      {plan.chargedIn !== null && (
+        <span className="text-[12.5px] leading-none text-ink-muted">
+          {t('unfinished.chargedOn', { number: formatVisitNumber(plan.chargedIn.number) })}
+        </span>
+      )}
+      {canWrite && (
+        <RowMenu name={plan.name}>
+          <MenuItem
+            onSelect={() => {
+              actions.reopenPlan(plan);
+            }}
+          >
+            {t('unfinished.reopen')}
+          </MenuItem>
         </RowMenu>
       )}
     </div>

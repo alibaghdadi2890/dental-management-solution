@@ -30,6 +30,7 @@ import {
   markServiceUnfinished,
   pauseVisit,
   performPlan,
+  reopenPlan,
   planTreatment,
   recordDiagnosis,
   recordSession,
@@ -330,6 +331,11 @@ export function visitMutations(
     performPlan: mutationOptions({
       ...base,
       mutationFn: (planId: string) => performPlan(visitId, planId, tenant),
+      onSuccess: charting,
+    }),
+    reopenPlan: mutationOptions({
+      ...base,
+      mutationFn: (planId: string) => reopenPlan(visitId, planId, tenant),
       onSuccess: charting,
     }),
     /** Unfinished services (ADR-0032): marking one, continuing one and undoing that. */

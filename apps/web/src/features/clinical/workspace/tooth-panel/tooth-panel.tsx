@@ -288,7 +288,7 @@ function SelectedTooth({
             <CompletedSection
               code={code}
               services={records.services}
-              unfinished={records.plans.filter((plan) => plan.status === 'in_progress')}
+              plans={records.plans}
               history={records.history}
               canWrite={canChartVisit}
               canWriteUnfinished={canWrite}

@@ -72,6 +72,7 @@ export function usePatientChartingActions({
       addService: visitOnly,
       performPlan: visitOnly,
       markUnfinished: visitOnly,
+      reopenPlan: visitOnly,
       continuePlan: visitOnly,
       undoSession: visitOnly,
       removeUnfinished: visitOnly,
@@ -108,22 +109,21 @@ export function usePatientChartingActions({
           .catch(failed);
       },
       recordDiagnosis: (item, target) => {
-        const code = target.tooth;
-        if (code === null) return;
+        if (item.level === 'per_tooth' && target.tooth === null) return;
+        const scope = scopeOf(item.level, target);
         run(mutations.recordDiagnosis, {
           diagnosisId: item.id,
-          toothCode: code,
-          surfaces: [...target.surfaces],
+          ...scope,
           note: null,
           seenOn: null,
           ...forDentist,
         })
           .then(() => {
             toast(t('actions.diagnosed', { name: item.name }), {
-              body: t('actions.diagnosedBody', { tooth: tooth(code) }),
+              body: t('actions.diagnosedBody', { tooth: targetOf(scope) }),
               actionLabel: t('actions.planTreatment'),
               onAction: () => {
-                ensureSelected(code);
+                if (scope.toothCode !== undefined) ensureSelected(scope.toothCode);
                 openDrawer('plan');
               },
             });

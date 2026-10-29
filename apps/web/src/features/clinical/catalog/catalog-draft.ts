@@ -33,6 +33,7 @@ export interface DraftRow {
   name: string;
   /** '' = no category. */
   category: string;
+  /** How a service is charged; for a diagnosis, where it is recorded (its level, ADR-0064). */
   chargeUnit: ChargeUnit;
   /** Decimal amount as typed. */
   price: string;
@@ -95,7 +96,7 @@ function rowFrom(item: Item): DraftRow {
     code: item.code,
     name: item.name,
     category: item.category ?? '',
-    chargeUnit: service?.chargeUnit ?? 'per_tooth',
+    chargeUnit: service?.chargeUnit ?? ('level' in item ? item.level : 'per_tooth'),
     price: service ? plainAmount(service.price.amount) : '0',
     currency: service?.price.currency ?? null,
     frequent: item.frequent,
@@ -221,7 +222,7 @@ export function isRowChanged(draft: CatalogDraft, tab: CatalogTab, row: DraftRow
     saved.active !== row.active ||
     saved.color !== row.color ||
     saved.markPriority !== row.markPriority;
-  if (tab === 'diagnoses') return common;
+  if (tab === 'diagnoses') return common || saved.chargeUnit !== row.chargeUnit;
   return (
     common ||
     saved.icon !== row.icon ||
@@ -302,6 +303,7 @@ export function batchOf(tab: CatalogTab, rows: readonly DraftRow[]): ServiceBatc
     return {
       items: rows.map((row) => ({
         ...common(row),
+        level: row.chargeUnit,
         frequent: row.frequent,
         active: row.active,
         color: row.color,

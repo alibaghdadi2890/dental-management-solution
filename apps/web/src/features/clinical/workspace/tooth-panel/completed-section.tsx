@@ -7,6 +7,7 @@ import { sanitizeAmountInput } from '@/lib/amount';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { useChartingActions } from '../charting-actions';
 import { ServiceMenu } from '../row-menu';
+import { finishedServices } from '../unfinished';
 import { UnfinishedRow } from '../unfinished-row';
 import { Badge, EmptyBlock, LinkButton, PanelSection } from './panel-section';
 import { priceOf, useServicePrice } from './service-price';
@@ -28,9 +29,9 @@ const PRICE_INPUT =
  */
 export function CompletedSection({
   code,
-  services,
-  unfinished,
-  history,
+  services: allServices,
+  plans,
+  history: allHistory,
   canWrite,
   canWriteUnfinished,
   open,
@@ -41,8 +42,9 @@ export function CompletedSection({
   /** Null for a jaw or the whole mouth: no tooth history to link. */
   code: ToothCode | null;
   services: readonly VisitService[];
-  /** The target's plans in progress. */
-  unfinished: readonly TreatmentPlan[];
+  /** The target's plans: those in progress show as unfinished rows, with the line charging
+   * them (ADR-0064); a line that charged abandoned work says "Cancelled". */
+  plans: readonly TreatmentPlan[];
   history: readonly HistoryService[];
   /** Services are charted in a visit only. */
   canWrite: boolean;
@@ -55,6 +57,13 @@ export function CompletedSection({
 }) {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
+  const unfinished = plans.filter((plan) => plan.status === 'in_progress');
+  const services = finishedServices(allServices, plans);
+  const inProgress = new Set(unfinished.map((plan) => plan.id));
+  const cancelled = new Set(
+    plans.filter((plan) => plan.status === 'cancelled').map((plan) => plan.id),
+  );
+  const history = allHistory.filter((line) => line.planId === null || !inProgress.has(line.planId));
   const parts = [
     ...(unfinished.length > 0 ? [t('unfinished.count', { count: unfinished.length })] : []),
     ...(services.length > 0 ? [t('panel.completed.thisVisit', { count: services.length })] : []),
@@ -79,6 +88,7 @@ export function CompletedSection({
         <UnfinishedRow
           key={plan.id}
           plan={plan}
+          line={allServices.find((service) => service.planId === plan.id)}
           canWrite={canWriteUnfinished}
           className="mb-2 rounded-lg border border-warning-border px-3 py-[11px]"
         />
@@ -105,6 +115,11 @@ export function CompletedSection({
                       surfaces={line.surfaces}
                       className="ms-[7px] text-[11.5px] text-ink-muted"
                     />
+                    {line.planId !== null && cancelled.has(line.planId) && (
+                      <span className="ms-[7px] inline-block">
+                        <Badge tone="neutral">{t('history.cancelled')}</Badge>
+                      </span>
+                    )}
                   </td>
                   <td className="w-[78px] px-1.5 py-2 font-mono text-[12.5px] leading-[1.35] text-ink-tertiary">
                     {formatCalendarDate(line.visitDate, locale)}

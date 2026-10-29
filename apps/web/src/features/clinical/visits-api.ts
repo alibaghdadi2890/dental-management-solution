@@ -320,6 +320,9 @@ export const setPlanPriority = (
   });
 export const performPlan = (visitId: string, planId: string, tenantId?: string) =>
   visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/perform`, { tenantId });
+/** The Undo of a Complete that another visit charged (ADR-0064): the work is in progress again. */
+export const reopenPlan = (visitId: string, planId: string, tenantId?: string) =>
+  visitCall(planResultSchema, 'POST', visitId, `plans/${planId}/reopen`, { tenantId });
 export const recordSession = (
   visitId: string,
   planId: string,

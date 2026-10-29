@@ -43,9 +43,18 @@ export function AdjustBalanceButton({
 /**
  * The ⋯ menu that holds Adjust balance where there is no room for a button: the Overview's
  * balance card and a Payments › Outstanding row. Without `payment:refund` the item is there,
- * disabled, and says who to ask.
+ * disabled, and says who to ask. With `onRefund` (the balance card, when there is a payment to
+ * refund) it also holds Refund a payment.
  */
-export function AdjustBalanceMenu({ patientId, label }: { patientId: string; label: string }) {
+export function AdjustBalanceMenu({
+  patientId,
+  label,
+  onRefund,
+}: {
+  patientId: string;
+  label: string;
+  onRefund?: (() => void) | undefined;
+}) {
   const { t } = useTranslation('billing');
   const adjust = useAdjustBalance();
   if (!adjust) return null;
@@ -70,6 +79,7 @@ export function AdjustBalanceMenu({ patientId, label }: { patientId: string; lab
         >
           {open ? t('adjust.title') : t('adjust.askDentist')}
         </MenuItem>
+        {open && onRefund && <MenuItem onSelect={onRefund}>{t('refundPick.title')}</MenuItem>}
       </MenuContent>
     </Menu>
   );

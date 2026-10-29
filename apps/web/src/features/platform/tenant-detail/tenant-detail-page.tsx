@@ -98,7 +98,7 @@ export function TenantDetailPage({ tenantId, tab }: { tenantId: string; tab: Ten
   return (
     <PanelLayout>
       <div className="min-h-0 min-w-0 flex-1 overflow-auto">
-        <div className="flex min-h-full max-w-[1320px] flex-col px-[26px] pt-6">
+        <div className="flex min-h-full flex-col px-[26px] pt-6">
           {tenant.isPending && (
             <div
               aria-busy="true"

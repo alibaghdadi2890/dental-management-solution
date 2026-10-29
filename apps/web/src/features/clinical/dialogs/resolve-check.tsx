@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useToothLabel } from '../chart/use-chart-settings';
+import { useTargetLabel } from '../flow/use-target-label';
 import type { DiagnosisToResolve } from './diagnoses-to-resolve';
 
 /**
@@ -33,7 +33,7 @@ export function ResolveCheck({
   onConfirm: (recordIds: string[]) => void;
 }) {
   const { t } = useTranslation('clinical');
-  const toothLabel = useToothLabel();
+  const placeLabel = useTargetLabel();
   // The body changed under the user: say so by moving focus to the new title.
   const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -72,7 +72,7 @@ export function ResolveCheck({
           {t('summary.resolve.warning', { count: items.length })}
         </p>
         <ul className="m-0 flex list-none flex-col gap-2 p-0">
-          {items.map(({ record, services }) => {
+          {items.map(({ record, done }) => {
             const on = ticked.has(record.id);
             return (
               <li key={record.id}>
@@ -88,7 +88,7 @@ export function ResolveCheck({
                     disabled={busy}
                     aria-label={t('summary.resolve.tick', {
                       name: record.name,
-                      tooth: toothLabel(record.toothCode),
+                      tooth: placeLabel(record),
                     })}
                     onChange={(event) => {
                       toggle(record.id, event.target.checked);
@@ -98,14 +98,14 @@ export function ResolveCheck({
                   <span className="flex-1">
                     <span className="block text-[13px] leading-[1.35] font-semibold">
                       <span dir="ltr" className="font-mono">
-                        {toothLabel(record.toothCode)}
+                        {placeLabel(record)}
                       </span>
                       {' · '}
                       {record.name}
                     </span>
                     <span className="mt-0.5 block text-[12px] leading-snug text-ink-muted">
                       {t('summary.resolve.doneToday', {
-                        services: services.map((service) => service.name).join(', '),
+                        services: done.map((item) => item.name).join(', '),
                       })}
                     </span>
                   </span>

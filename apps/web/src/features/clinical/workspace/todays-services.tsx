@@ -8,8 +8,8 @@ import { useLevelLabel, useToothLabel } from '../chart/use-chart-settings';
 import { ServiceMenu } from './row-menu';
 import { ShortcutHint } from './tooth-panel/quick-add';
 import { useToothSelection } from './tooth-selection';
-import { unfinishedWork } from './unfinished';
-import { UnfinishedRow } from './unfinished-row';
+import { finishedServices, unfinishedWork } from './unfinished';
+import { CompletedHereRow, UnfinishedRow } from './unfinished-row';
 import { ServiceMark } from '../chart/service-mark';
 
 const SUB_HEAD =
@@ -19,7 +19,8 @@ const SUB_HEAD =
  * Today's services: what this visit works on, whatever its level — a tooth, a jaw or the whole
  * mouth. First **To continue**, the patient's unfinished services (ADR-0032) this visit has not
  * worked on, so they are seen as the visit opens; then the visit's services in the order added,
- * and the unfinished services it did work on. A row's target selects it on the chart; a service's
+ * the unfinished services it did work on (one that it charges shows its line's price, ADR-0064),
+ * and the work it completed that an earlier visit charged. A row's target selects it on the chart; a service's
  * three-dot menu holds **Not finished** and **Remove**. A service the visit's type added by itself
  * (ADR-0047) says "added automatically", and is removed like any other. The header counts and totals what the
  * visit charges and, for who may chart, holds **Add service** (the catalog drawer, on whatever the
@@ -41,8 +42,11 @@ export function TodaysServices({
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const titleId = useId();
-  const { toContinue, workedHere, carried } = unfinishedWork(chart?.plans ?? [], visit.id);
-  const empty = visit.services.length === 0 && carried === null;
+  const plans = chart?.plans ?? [];
+  const { toContinue, workedHere, completedHere, carried } = unfinishedWork(plans, visit.id);
+  const empty =
+    visit.services.length === 0 &&
+    toContinue.length + workedHere.length + completedHere.length === 0;
   if (empty && !canWrite) return null;
   const charged = formatMoney({ amount: visit.money.subtotal, currency: visit.currency }, locale);
   return (
@@ -90,12 +94,23 @@ export function TodaysServices({
         </>
       )}
       <ul className="m-0 list-none p-0">
-        {visit.services.map((service) => (
+        {finishedServices(visit.services, plans).map((service) => (
           <ServiceRow key={service.id} service={service} canWrite={canWrite} />
         ))}
         {workedHere.map((plan) => (
           <li key={plan.id} className="border-b border-row-divider last:border-b-0">
-            <UnfinishedRow plan={plan} canWrite={canWrite} target className="px-4 py-3" />
+            <UnfinishedRow
+              plan={plan}
+              line={visit.services.find((service) => service.planId === plan.id)}
+              canWrite={canWrite}
+              target
+              className="px-4 py-3"
+            />
+          </li>
+        ))}
+        {completedHere.map((plan) => (
+          <li key={plan.id} className="border-b border-row-divider last:border-b-0">
+            <CompletedHereRow plan={plan} canWrite={canWrite} target className="px-4 py-3" />
           </li>
         ))}
       </ul>

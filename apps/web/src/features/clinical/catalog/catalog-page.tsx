@@ -77,6 +77,7 @@ function TableFrame({ tab, children }: { tab: CatalogTab; children: ReactNode })
       : []),
     { label: t('columns.category') },
     { label: t('columns.mark') },
+    ...(tab === 'diagnoses' ? [{ label: t('columns.level') }] : []),
     ...(tab === 'services'
       ? [
           { label: t('columns.charged') },
@@ -110,7 +111,7 @@ function TableFrame({ tab, children }: { tab: CatalogTab; children: ReactNode })
         >
           <div
             role="row"
-            className="grid h-10 items-center gap-2.5 border-b border-border bg-faint px-3.5"
+            className="grid h-10 items-center gap-2 border-b border-border bg-faint px-3.5"
             style={{ gridTemplateColumns: CATALOG_GRID[tab] }}
           >
             {labels.map(({ label, end }, index) => (

@@ -53,8 +53,6 @@ export function PlanStep({
     );
   }
   const active = (services.data ?? []).filter((item) => item.active);
-  // A diagnosis is on a tooth, so its treatment is one charged per tooth.
-  const perTooth = active.filter((item) => item.chargeUnit === 'per_tooth');
 
   return (
     <div data-step="plan" className={STEP_BODY}>
@@ -63,7 +61,7 @@ export function PlanStep({
           <ProposalCard
             key={card.record.id}
             proposal={card}
-            services={perTooth}
+            services={active}
             canWrite={canWrite}
             focused={card.record.id === focusId}
             cardRef={card.record.id === focusId ? focusRef : undefined}

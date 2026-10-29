@@ -51,12 +51,35 @@ export function CatalogRow({
   const codeInvalid = !readOnly && (row.code.trim() === '' || error !== undefined);
   const errorId = `catalog-row-error-${row.key}`;
   const name = row.name.trim() || t('delete.unnamed');
+  /** How a service is charged, or where a diagnosis is recorded (ADR-0064): the same three. */
+  const unitSelect = (label: string) => (
+    <select
+      aria-label={label}
+      disabled={readOnly}
+      value={row.chargeUnit}
+      onChange={(event) => {
+        const unit = CHARGE_UNITS.find((candidate) => candidate === event.target.value);
+        if (unit) onChange({ chargeUnit: unit });
+      }}
+      className={cn(
+        cell(readOnly),
+        'text-[12.5px] leading-none disabled:opacity-100',
+        readOnly && 'appearance-none',
+      )}
+    >
+      {CHARGE_UNITS.map((unit) => (
+        <option key={unit} value={unit}>
+          {t(`chargeUnit.${unit}`)}
+        </option>
+      ))}
+    </select>
+  );
 
   return (
     <div
       role="row"
       className={cn(
-        'grid min-h-[50px] items-center gap-2.5 border-t border-row-divider px-3.5 py-1.5',
+        'grid min-h-[50px] items-center gap-2 border-t border-row-divider px-3.5 py-1.5',
         changed ? 'bg-dirty' : 'bg-surface',
         !row.active && 'opacity-60',
       )}
@@ -188,28 +211,10 @@ export function CatalogRow({
           )}
         </span>
       )}
+      {tab === 'diagnoses' && unitSelect(t('columns.level'))}
       {tab === 'services' && (
         <>
-          <select
-            aria-label={t('columns.charged')}
-            disabled={readOnly}
-            value={row.chargeUnit}
-            onChange={(event) => {
-              const unit = CHARGE_UNITS.find((candidate) => candidate === event.target.value);
-              if (unit) onChange({ chargeUnit: unit });
-            }}
-            className={cn(
-              cell(readOnly),
-              'text-[12.5px] leading-none disabled:opacity-100',
-              readOnly && 'appearance-none',
-            )}
-          >
-            {CHARGE_UNITS.map((unit) => (
-              <option key={unit} value={unit}>
-                {t(`chargeUnit.${unit}`)}
-              </option>
-            ))}
-          </select>
+          {unitSelect(t('columns.charged'))}
           <label
             className={cn(
               'flex h-8 items-center gap-[3px] rounded-md border px-2 font-mono text-[12.5px] leading-none font-medium',

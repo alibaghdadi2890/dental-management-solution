@@ -265,7 +265,7 @@ describe('thisVisitSummary', () => {
     expect(summary.planned.plans.map((plan) => plan.name)).toEqual(['Composite']);
     expect(summary.planned.total).toEqual({ amount: '50.00', currency: 'USD' });
     expect(summary.done).toEqual({ count: 1, total: { amount: '25.00', currency: 'USD' } });
-    expect(summary.continues).toEqual([{ plan: rootCanal, session: 2 }]);
+    expect(summary.continues).toEqual([{ plan: rootCanal, session: 2, part: 'session' }]);
     // Work in progress comes back before the urgent crown.
     expect(summary.next).toEqual({ kind: 'continue', plan: rootCanal });
     expect(summary.empty).toBe(false);

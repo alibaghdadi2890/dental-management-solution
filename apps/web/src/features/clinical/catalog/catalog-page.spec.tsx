@@ -54,6 +54,7 @@ const DIAGNOSES: DiagnosisItem[] = [
     name: 'Dental caries',
     category: 'Caries',
     frequent: true,
+    level: 'per_tooth',
     active: true,
     color: 'rose',
     markPriority: 5,

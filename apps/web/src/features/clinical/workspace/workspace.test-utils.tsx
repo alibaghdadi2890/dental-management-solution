@@ -103,6 +103,7 @@ export function diagnosisItem(
     category: 'Caries',
     frequent: false,
     active: true,
+    level: 'per_tooth',
     color: 'rose',
     markPriority: 5,
     ...extra,
@@ -113,13 +114,15 @@ export function diagnosisItem(
 export function diagnosisRecord(
   n: number,
   name: string,
-  toothCode: ToothCode,
+  toothCode: ToothCode | null,
   extra: Partial<DiagnosisRecord> = {},
 ): DiagnosisRecord {
   return {
     id: id(n),
     patientId: RANA.id,
+    level: toothCode === null ? 'per_mouth' : 'per_tooth',
     toothCode,
+    jaw: null,
     surfaces: [],
     diagnosisId: id(n + 1),
     code: 'DX',
@@ -173,6 +176,7 @@ export function treatmentPlan(
     startedInVisitId: null,
     startedAt: null,
     sessions: [],
+    chargedIn: null,
     performedInVisitId: null,
     performedAt: null,
     cancelledInVisitId: null,

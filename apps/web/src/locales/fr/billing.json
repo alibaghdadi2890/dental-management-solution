@@ -198,5 +198,15 @@
     "ok": "Libérer en crédit",
     "reason": "Motif",
     "done": "{{amount}} libérés en crédit"
+  },
+  "refundPick": {
+    "title": "Rembourser un paiement",
+    "body": "Choisissez le paiement à rembourser, en totalité ou en partie de ce qu’il en reste.",
+    "loading": "Chargement des paiements…",
+    "none": "Ce patient n’a aucun paiement à rembourser.",
+    "refunded": "Remboursé {{amount}}",
+    "fullyRefunded": "Remboursé en totalité",
+    "voided": "Annulé",
+    "back": "Retour"
   }
 }

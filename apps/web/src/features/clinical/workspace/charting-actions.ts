@@ -14,6 +14,7 @@ import type {
   Visit,
   VisitService,
 } from '@dcm/contracts';
+import { formatVisitNumber } from '@dcm/contracts';
 import {
   MutationObserver,
   type MutationOptions,
@@ -85,15 +86,18 @@ export interface ChartingActions {
   /** Perform now, or Complete for an unfinished service: the plan becomes a service of this
    * visit, with an Undo toast. */
   performPlan: (plan: TreatmentPlan) => void;
-  /** Not finished (ADR-0032): the service leaves the visit's charges and carries on to the
+  /** Not finished (ADR-0032, ADR-0064): the service stays charged here and carries on to the
    * visit that completes it. */
   markUnfinished: (service: VisitService) => void;
+  /** Not finished again, for work completed here that another visit charged (ADR-0064). */
+  reopenPlan: (plan: TreatmentPlan) => void;
   /** Continue: this visit works on an unfinished service. */
   continuePlan: (plan: TreatmentPlan) => void;
   /** Not today: undoes this visit's work on an unfinished service from an earlier visit. */
   undoSession: (plan: TreatmentPlan) => void;
   /** Removes an unfinished service first added in this visit. */
-  removeUnfinished: (plan: TreatmentPlan) => void;
+  /** Remove an unfinished row: with `line`, the line of this visit that charges it (ADR-0064). */
+  removeUnfinished: (plan: TreatmentPlan, line?: VisitService) => void;
   removeService: (serviceId: string) => void;
   /** The services whose DELETE is in flight: their price inputs are frozen. */
   removing: ReadonlySet<string>;
@@ -245,22 +249,20 @@ export function useChartingActionsState({
           .catch(failed);
       },
       recordDiagnosis: (item, target) => {
-        const code = target.tooth;
-        if (code === null) return;
+        if (item.level === 'per_tooth' && target.tooth === null) return;
         run(mutations.recordDiagnosis, {
           diagnosisId: item.id,
-          toothCode: code,
-          surfaces: [...target.surfaces],
+          ...scopeOf(item.level, target),
           note: null,
           seenOn: null,
         })
           .then(({ record }) => {
             toast(t('actions.diagnosed', { name: item.name }), {
-              body: t('actions.diagnosedBody', { tooth: tooth(code) }),
+              body: t('actions.diagnosedBody', { tooth: targetOf(record) }),
               actionLabel: t('actions.planTreatment'),
               onAction: () => {
                 if (onPlanDiagnosis?.(record)) return;
-                ensureSelected(code);
+                if (record.toothCode !== null) ensureSelected(record.toothCode);
                 openDrawer('plan');
               },
             });
@@ -292,7 +294,13 @@ export function useChartingActionsState({
           })
           .catch(failed);
       },
-      removeUnfinished: (plan) => {
+      removeUnfinished: (plan, line) => {
+        // Work charged here goes with its line: the API takes its session (and its plan, when
+        // this visit made it) with it (ADR-0064).
+        if (line) {
+          removeService(line.id);
+          return;
+        }
         run(mutations.removeSession, plan.id)
           // Work first added in this visit leaves no plan behind; a plan from before stays planned.
           .then(({ record }) =>
@@ -304,11 +312,18 @@ export function useChartingActionsState({
       },
       continuePlan: (plan) => {
         run(mutations.recordSession, plan.id)
-          .then(() => {
+          .then(({ visit: updated }) => {
+            // Planned work started here got the line that charges it (ADR-0064): the Undo
+            // removes that line, which takes the session with it.
+            const line =
+              plan.status === 'planned'
+                ? updated.services.find((service) => service.planId === plan.id)
+                : undefined;
             toast(t('actions.continued', { name: plan.name }), {
               actionLabel: t('actions.undo'),
               onAction: () => {
-                fire(mutations.removeSession, plan.id);
+                if (line) removeService(line.id);
+                else fire(mutations.removeSession, plan.id);
               },
             });
           })
@@ -321,20 +336,32 @@ export function useChartingActionsState({
         run(mutations.performPlan, plan.id)
           .then(({ visit: updated, presenceChange }) => {
             const service = updated.services.find((line) => line.planId === plan.id);
+            // Completing work a line already charged is undone by Not finished: its charge stays
+            // where it is (ADR-0064). A Complete that added the line is undone by removing it.
+            const undo =
+              plan.chargedIn !== null
+                ? () => {
+                    if (service) fire(mutations.markUnfinished, service.id);
+                    else fire(mutations.reopenPlan, plan.id);
+                  }
+                : service &&
+                  (() => {
+                    removeService(service.id);
+                  });
             toast(t('actions.performed', { name: plan.name }), {
               body: withPresence(
-                t('actions.performedBody', { price: formatMoney(plan.price, locale) }),
+                plan.chargedIn !== null && plan.chargedIn.visitId !== visit.id
+                  ? t('actions.completedBody', { number: formatVisitNumber(plan.chargedIn.number) })
+                  : t('actions.performedBody', { price: formatMoney(plan.price, locale) }),
                 presenceChange,
               ),
-              ...(service && {
-                actionLabel: t('actions.undo'),
-                onAction: () => {
-                  removeService(service.id);
-                },
-              }),
+              ...(undo && { actionLabel: t('actions.undo'), onAction: undo }),
             });
           })
           .catch(failed);
+      },
+      reopenPlan: (plan) => {
+        fire(mutations.reopenPlan, plan.id);
       },
       saveServicePrice: (serviceId, patch) => run(mutations.updateService, { serviceId, patch }),
       resolveDiagnosis: (recordId) => {

@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CardSkeleton } from '@/components/ui/card';
 import { formatCalendarDate } from '@/lib/format';
-import { useToothLabel } from '../../chart/use-chart-settings';
+import { useTargetLabel } from '../use-target-label';
 import { useChartingActions } from '../../workspace/charting-actions';
 import { SurfaceTag } from '../../workspace/tooth-panel/surface-tag';
 import { EMPTY_LINE, STEP_BODY } from '../flow-styles';
@@ -42,7 +42,7 @@ export function FindingsStep({
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const actions = useChartingActions();
-  const toothLabel = useToothLabel();
+  const placeLabel = useTargetLabel();
   if (chart === undefined) {
     return (
       <div data-step="findings" className={STEP_BODY}>
@@ -62,13 +62,13 @@ export function FindingsStep({
       <button
         type="button"
         dir="ltr"
-        aria-label={t('flow.findings.examine', { tooth: toothLabel(record.toothCode) })}
+        aria-label={t('flow.findings.examine', { tooth: placeLabel(record) })}
         onClick={() => {
           onTooth(record);
         }}
         className="cursor-pointer border-0 bg-transparent p-0 font-mono text-[14px] leading-none font-bold text-primary hover:underline"
       >
-        {toothLabel(record.toothCode)}
+        {placeLabel(record)}
       </button>
     </span>
   );

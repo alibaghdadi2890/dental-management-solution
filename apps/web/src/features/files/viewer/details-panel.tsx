@@ -4,7 +4,7 @@ import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/components/ui/button';
 import { usePermission } from '@/features/auth/use-permission';
-import { useToothLabel } from '@/features/clinical/chart/use-chart-settings';
+import { useTargetLabel } from '@/features/clinical/flow/use-target-label';
 import { fileCitationsQuery } from '@/features/clinical/visits-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -58,7 +58,7 @@ function eventOf(
  */
 function Citations({ file }: { file: PatientFile }) {
   const { t } = useTranslation('files');
-  const toothLabel = useToothLabel();
+  const placeLabel = useTargetLabel();
   const canRead = usePermission('visit:read');
   const citations = useQuery({ ...fileCitationsQuery(file.patientId), enabled: canRead });
   const diagnoses = citations.data?.find((entry) => entry.fileId === file.id)?.diagnoses ?? [];
@@ -73,7 +73,7 @@ function Citations({ file }: { file: PatientFile }) {
             className="flex items-baseline gap-2 text-[12.5px] leading-[1.4]"
           >
             <span dir="ltr" className="flex-none font-mono font-semibold text-primary">
-              {toothLabel(diagnosis.toothCode)}
+              {placeLabel(diagnosis)}
             </span>
             <span
               className={cn(

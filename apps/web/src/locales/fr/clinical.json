@@ -211,6 +211,7 @@
     "plannedBody": "{{target}} · {{price}}",
     "performed": "{{name}} réalisé",
     "performedBody": "{{price}}",
+    "completedBody": "Facturé à la visite {{number}}",
     "continued": "{{name}} poursuivi",
     "unfinished": "{{name}} marqué non terminé",
     "unsavedPrice": "le prix n’a pas pu être enregistré"
@@ -261,6 +262,7 @@
       "emptyTitle": "Aucun traitement planifié",
       "cancelTitle": "Annuler {{name}} ?",
       "cancelBody": "Le plan reste dans l’historique de la dent comme annulé.",
+      "cancelCharged": "Il a été facturé à la visite {{number}} et le reste. Pour rembourser le patient, utilisez Rembourser dans son solde.",
       "cancelOk": "Annuler le plan",
       "keep": "Garder le plan",
       "cancelled": "{{name}} annulé"
@@ -508,7 +510,11 @@
     "count_other": "{{count}} non terminés",
     "recordTitle": "Actes non terminés",
     "noCharge": "Non facturé",
-    "session": "Séance {{number}}"
+    "session": "Séance {{number}}",
+    "chargedOn": "Facturé à la visite {{number}}",
+    "chargedHere": "Facturé dans cette visite",
+    "completed": "Terminé",
+    "reopen": "Non terminé"
   },
   "rowMenu": {
     "label": "Actions : {{name}}"

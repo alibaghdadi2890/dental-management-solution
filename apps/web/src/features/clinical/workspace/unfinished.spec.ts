@@ -8,6 +8,7 @@ const plan = (id: string, status: TreatmentPlan['status'], visits: string[], amo
     status,
     price: { amount, currency: 'USD' },
     sessions: visits.map((visitId) => ({ visitId, date: '2026-09-01', note: null })),
+    chargedIn: null,
   }) as TreatmentPlan;
 
 describe('unfinished work', () => {
@@ -19,11 +20,30 @@ describe('unfinished work', () => {
     plan('done', 'performed', ['v1', 'v2']),
   ];
 
-  it('splits work in progress by whether this visit worked on it, and totals all of it', () => {
+  it('splits work in progress by whether this visit worked on it, and totals what nothing charges yet', () => {
     const work = unfinishedWork(plans, 'v2');
     expect(work.toContinue.map(({ id }) => id)).toEqual(['earlier']);
     expect(work.workedHere.map(({ id }) => id)).toEqual(['continued', 'new']);
     expect(work.carried).toEqual({ amount: '600.00', currency: 'USD' });
+    // Work charged at its start is carried by nobody (ADR-0064).
+    const charged = plans.map((item) =>
+      item.id === 'earlier' ? { ...item, chargedIn: { visitId: 'v1', number: 1 } } : item,
+    );
+    expect(unfinishedWork(charged, 'v2').carried).toEqual({ amount: '380.00', currency: 'USD' });
+  });
+
+  it('lists work completed here that an earlier visit charged', () => {
+    const completed = {
+      ...plan('crown', 'performed', ['v1']),
+      performedInVisitId: 'v2',
+      chargedIn: { visitId: 'v1', number: 1 },
+    };
+    const oneGo = {
+      ...plan('filling', 'performed', []),
+      performedInVisitId: 'v2',
+      chargedIn: { visitId: 'v2', number: 2 },
+    };
+    expect(unfinishedWork([completed, oneGo], 'v2').completedHere).toEqual([completed]);
   });
 
   it('on the patient record everything waits, and nothing means no total', () => {
@@ -37,11 +57,25 @@ describe('unfinished work', () => {
       performedInVisitId: 'v3',
     };
     const completedHere = { ...plan('here', 'performed', ['v1', 'v2']), performedInVisitId: 'v2' };
-    const lines = unfinishedInVisit([...plans.slice(0, 4), completedLater, completedHere], 'v2');
-    expect(lines.map(({ plan: { id }, session }) => [id, session])).toEqual([
-      ['continued', 2],
-      ['new', 1],
-      ['later', 2],
+    const chargedEarlier = {
+      ...plan('charged', 'performed', ['v1']),
+      performedInVisitId: 'v2',
+      chargedIn: { visitId: 'v1', number: 1 },
+    };
+    const startedHere = {
+      ...plan('started', 'in_progress', ['v2']),
+      chargedIn: { visitId: 'v2', number: 2 },
+    };
+    const lines = unfinishedInVisit(
+      [...plans.slice(0, 4), completedLater, completedHere, chargedEarlier, startedHere],
+      'v2',
+    );
+    expect(lines.map(({ plan: { id }, session, part }) => [id, session, part])).toEqual([
+      ['continued', 2, 'session'],
+      ['new', 1, 'session'],
+      ['later', 2, 'session'],
+      ['charged', 0, 'completed'],
+      ['started', 1, 'charged'],
     ]);
   });
 

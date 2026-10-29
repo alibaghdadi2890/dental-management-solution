@@ -1,4 +1,4 @@
-import { toCents, type PatientChart, type Visit } from '@dcm/contracts';
+import { formatVisitNumber, toCents, type PatientChart, type Visit } from '@dcm/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Dialog } from 'radix-ui';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
@@ -21,7 +21,7 @@ import { servicePriceKey } from '../workspace/charting-actions';
 import { DiscountControl } from '../workspace/discount-control';
 import { NOTES_KEY } from '../workspace/notes-card';
 import { plansTotal } from '../workspace/tooth-panel/tooth-records';
-import { unfinishedWork } from '../workspace/unfinished';
+import { chargedHere, unfinishedWork } from '../workspace/unfinished';
 import { type PriceDraft, priceDraftOf, priceOf } from '../workspace/tooth-panel/service-price';
 import { useLiveMoney, useVisitDiscount } from '../workspace/visit-discount';
 import { type DiagnosisToResolve, diagnosesToResolve } from './diagnoses-to-resolve';
@@ -468,7 +468,8 @@ function FinancialBlock({ visit, readOnly }: { visit: Visit; readOnly: boolean }
 }
 
 /** The services this visit worked on without finishing them (ADR-0032): they continue in a later
- * visit and are charged by the one that completes them. Nothing when there is none. */
+ * visit. Each says whether this visit charges it (its line is among the services above), an
+ * earlier visit did (ADR-0064), or it is still to charge. Nothing when there is none. */
 function UnfinishedToday({ visit, chart }: { visit: Visit; chart: PatientChart }) {
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
@@ -486,9 +487,6 @@ function UnfinishedToday({ visit, chart }: { visit: Visit; chart: PatientChart }
         <h3 id={titleId} className={cn(MICRO, 'text-warning')}>
           {t('summary.unfinished')}
         </h3>
-        <span className="ms-auto text-[12.5px] leading-none text-warning">
-          {t('summary.notBilled')}
-        </span>
       </div>
       <ul className="m-0 list-none p-0">
         {workedHere.map((plan) => (
@@ -502,9 +500,19 @@ function UnfinishedToday({ visit, chart }: { visit: Visit; chart: PatientChart }
             >
               {plan.toothCode === null ? levelLabel(plan.jaw) : label(plan.toothCode)}
             </span>
-            <span dir="ltr" className={cn(FIGURE, 'text-[12.5px] text-ink-muted')}>
-              {formatMoney(plan.price, locale)}
-            </span>
+            {plan.chargedIn === null ? (
+              <span dir="ltr" className={cn(FIGURE, 'text-[12.5px] text-ink-muted')}>
+                {formatMoney(plan.price, locale)}
+              </span>
+            ) : (
+              <span className="text-[12.5px] leading-none text-ink-muted">
+                {chargedHere(plan, visit.id)
+                  ? t('unfinished.chargedHere')
+                  : t('unfinished.chargedOn', {
+                      number: formatVisitNumber(plan.chargedIn.number),
+                    })}
+              </span>
+            )}
           </li>
         ))}
       </ul>
@@ -550,7 +558,7 @@ function RecordedForLater({ visit, chart }: { visit: Visit; chart: PatientChart 
               dir="ltr"
               className="font-mono text-[12.5px] leading-none font-medium text-ink-secondary"
             >
-              {label(record.toothCode)}
+              {record.toothCode === null ? levelLabel(record.jaw) : label(record.toothCode)}
             </span>
           </li>
         ))}

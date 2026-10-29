@@ -231,6 +231,7 @@
     "plannedBody": "{{target}} · {{price}}",
     "performed": "نُفّذ {{name}}",
     "performedBody": "{{price}}",
+    "completedBody": "احتُسب في الزيارة {{number}}",
     "continued": "تمت متابعة {{name}}",
     "unfinished": "تم تعليم {{name}} كغير منتهية",
     "unsavedPrice": "تعذّر حفظ السعر"
@@ -285,6 +286,7 @@
       "emptyTitle": "لا يوجد علاج مخطط",
       "cancelTitle": "إلغاء {{name}}؟",
       "cancelBody": "تبقى الخطة في سجل السن كملغاة.",
+      "cancelCharged": "احتُسب في الزيارة {{number}} ويبقى محتسبًا. لإعادة المبلغ إلى المريض، استخدم الاسترداد من رصيده.",
       "cancelOk": "إلغاء الخطة",
       "keep": "الإبقاء على الخطة",
       "cancelled": "أُلغيت {{name}}"
@@ -562,7 +564,11 @@
     "count_other": "{{count}} غير منتهية",
     "recordTitle": "خدمات غير منتهية",
     "noCharge": "بلا رسوم",
-    "session": "الجلسة {{number}}"
+    "session": "الجلسة {{number}}",
+    "chargedOn": "احتُسب في الزيارة {{number}}",
+    "chargedHere": "احتُسب في هذه الزيارة",
+    "completed": "مكتمل",
+    "reopen": "غير مكتمل"
   },
   "rowMenu": {
     "label": "إجراءات: {{name}}"

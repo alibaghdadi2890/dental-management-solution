@@ -211,6 +211,7 @@
     "plannedBody": "{{target}} · {{price}}",
     "performed": "{{name}} performed",
     "performedBody": "{{price}}",
+    "completedBody": "Charged on visit {{number}}",
     "continued": "{{name}} continued",
     "unfinished": "{{name}} marked not finished",
     "unsavedPrice": "the price couldn't be saved"
@@ -261,6 +262,7 @@
       "emptyTitle": "No planned treatment",
       "cancelTitle": "Cancel {{name}}?",
       "cancelBody": "The plan stays in the tooth’s history as cancelled.",
+      "cancelCharged": "It was charged on visit {{number}} and stays charged. To give money back, use Refund on the patient’s balance.",
       "cancelOk": "Cancel plan",
       "keep": "Keep plan",
       "cancelled": "{{name}} cancelled"
@@ -508,7 +510,11 @@
     "count_other": "{{count}} not finished",
     "recordTitle": "Unfinished services",
     "noCharge": "No charge",
-    "session": "Session {{number}}"
+    "session": "Session {{number}}",
+    "chargedOn": "Charged on visit {{number}}",
+    "chargedHere": "Charged in this visit",
+    "completed": "Completed",
+    "reopen": "Not finished"
   },
   "rowMenu": {
     "label": "Actions: {{name}}"

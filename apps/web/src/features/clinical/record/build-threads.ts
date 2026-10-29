@@ -1,6 +1,7 @@
 import {
   type DiagnosisRecord,
   type HistoryService,
+  type Jaw,
   type PatientChart,
   type SurfaceKey,
   type ToothCode,
@@ -32,6 +33,8 @@ export interface ThreadStep {
 export interface Thread {
   id: string;
   toothCode: ToothCode | null;
+  /** With no tooth: the jaw, or null for the whole mouth. */
+  jaw: Jaw | null;
   surfaces: SurfaceKey[];
   title: string;
   dentistName: string;
@@ -125,6 +128,7 @@ export function buildThreads(chart: PatientChart): Threads {
     threads.push({
       id: diagnosis.id,
       toothCode: diagnosis.toothCode,
+      jaw: diagnosis.jaw,
       surfaces: diagnosis.surfaces,
       title: diagnosis.name,
       dentistName: diagnosis.dentistName,
@@ -141,6 +145,7 @@ export function buildThreads(chart: PatientChart): Threads {
     threads.push({
       id: plan.id,
       toothCode: plan.toothCode,
+      jaw: plan.jaw,
       surfaces: plan.surfaces,
       title: plan.name,
       dentistName: plan.dentistName,

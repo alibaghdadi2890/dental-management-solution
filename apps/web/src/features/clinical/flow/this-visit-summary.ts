@@ -36,9 +36,11 @@ export function thisVisitSummary(visit: Visit, chart: PatientChart): ThisVisitSu
   const planned = chart.plans.filter(
     (plan) => here(plan.recordedInVisitId) && plan.status === 'planned',
   );
-  const continues = unfinishedInVisit(chart.plans, visit.id);
+  const continues = unfinishedInVisit(chart.plans, visit.id).filter(
+    (line) => line.part !== 'completed',
+  );
   const phases = planPhases(chart.plans);
-  // Work in progress comes back first: it is already started, and paid for only when done.
+  // Work in progress comes back first: it is already started.
   const inProgress = phases
     .flatMap((phase) => phase.open)
     .find((plan) => plan.status === 'in_progress');

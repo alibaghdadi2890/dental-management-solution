@@ -196,5 +196,15 @@
     "ok": "Release to credit",
     "reason": "Reason",
     "done": "{{amount}} released to credit"
+  },
+  "refundPick": {
+    "title": "Refund a payment",
+    "body": "Choose the payment to refund. You can refund all of what is left of it or part of it.",
+    "loading": "Loading the payments…",
+    "none": "This patient has no payment to refund.",
+    "refunded": "Refunded {{amount}}",
+    "fullyRefunded": "Fully refunded",
+    "voided": "Voided",
+    "back": "Back"
   }
 }

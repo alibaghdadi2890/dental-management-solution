@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest';
 import {
   chart,
   diagnosisRecord,
+  OLDER_VISIT_ID,
   treatmentPlan,
   visit,
+  VISIT_ID,
   visitService,
 } from '../workspace/workspace.test-utils';
 import { diagnosesToResolve } from './diagnoses-to-resolve';
 
 const listed = (...args: Parameters<typeof diagnosesToResolve>) =>
-  diagnosesToResolve(...args).map(({ record, services }) => [
+  diagnosesToResolve(...args).map(({ record, done }) => [
     record.name,
-    services.map((service) => service.name),
+    done.map((item) => item.name),
   ]);
 
 describe('diagnosesToResolve', () => {
@@ -39,6 +41,32 @@ describe('diagnosesToResolve', () => {
     expect(
       listed(visit({ services: [performed] }), chart({ diagnoses: [caries], plans: [crown] })),
     ).toEqual([['Deep caries', ['Crown']]]);
+  });
+
+  it('lists the diagnosis of work completed today that an earlier visit charged (ADR-0064)', () => {
+    const abscess = diagnosisRecord(10, 'Abscess', '36', { recordedInVisitId: OLDER_VISIT_ID });
+    const caries = diagnosisRecord(12, 'Deep caries', '37', { recordedInVisitId: OLDER_VISIT_ID });
+    const completed = {
+      status: 'performed' as const,
+      recordedInVisitId: OLDER_VISIT_ID,
+      performedInVisitId: VISIT_ID,
+      chargedIn: { visitId: OLDER_VISIT_ID, number: 3 },
+    };
+    // For the abscess; and one on the caries' tooth, made for no diagnosis.
+    const rootCanal = treatmentPlan(30, 'Root canal treatment', '46', {
+      ...completed,
+      diagnosisRecordId: abscess.id,
+    });
+    const inlay = treatmentPlan(32, 'Inlay', '37', completed);
+    expect(
+      listed(
+        visit({ services: [] }),
+        chart({ diagnoses: [abscess, caries], plans: [rootCanal, inlay] }),
+      ),
+    ).toEqual([
+      ['Abscess', ['Root canal treatment']],
+      ['Deep caries', ['Inlay']],
+    ]);
   });
 
   it('names every plan for the diagnosis performed today', () => {

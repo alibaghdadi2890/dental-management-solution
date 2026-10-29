@@ -194,6 +194,7 @@ function diagnosisRow(visitId: string) {
   return {
     id: id(64),
     patientId: RANA.id,
+    level: 'per_tooth' as const,
     toothCode: '16' as const,
     jaw: null,
     surfaces: [],
@@ -242,6 +243,7 @@ function planRow(extra: { performedInVisitId: string }) {
     startedInVisitId: null,
     startedAt: null,
     sessions: [],
+    chargedIn: null,
     performedAt: '2026-09-04T09:06:00.000Z',
     cancelledInVisitId: null,
     cancelledAt: null,

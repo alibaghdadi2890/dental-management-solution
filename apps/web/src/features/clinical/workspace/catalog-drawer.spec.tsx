@@ -32,6 +32,8 @@ const SERVICES: ServiceItem[] = [
 const DIAGNOSES: DiagnosisItem[] = [
   diagnosisItem(44, 'Dental caries', { frequent: true }),
   diagnosisItem(45, 'Pulpitis', { category: 'Pulpal' }),
+  diagnosisItem(48, 'Periodontitis', { category: 'Periodontal', level: 'per_jaw' }),
+  diagnosisItem(49, 'Bruxism', { category: 'Other', level: 'per_mouth' }),
 ];
 
 function actionsMock(): ChartingActions {
@@ -44,6 +46,7 @@ function actionsMock(): ChartingActions {
     setPlanPriority: vi.fn(),
     performPlan: vi.fn(),
     markUnfinished: vi.fn(),
+    reopenPlan: vi.fn(),
     continuePlan: vi.fn(),
     undoSession: vi.fn(),
     removeUnfinished: vi.fn(),
@@ -197,11 +200,29 @@ describe('CatalogDrawer', () => {
     expect(screen.queryByText('Composite filling')).toBeNull();
   });
 
-  it('a diagnosis needs a tooth', () => {
-    renderDrawer('diagnosis');
+  it('a per-tooth diagnosis needs a tooth; a jaw or mouth one does not (ADR-0064)', () => {
+    const { actions } = renderDrawer('diagnosis');
     expect(screen.getByText('No tooth selected')).toBeTruthy();
     expect(row(/^Dental caries/).disabled).toBe(true);
     expect(row(/^Pulpitis/).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Add Periodontitis to the Upper jaw' }));
+    expect(actions.recordDiagnosis).toHaveBeenCalledWith(DIAGNOSES[2], {
+      tooth: null,
+      surfaces: [],
+      jaw: 'upper',
+    });
+  });
+
+  it('with a jaw selected lists that level’s diagnoses and records on that jaw', () => {
+    const { actions } = renderDrawer('diagnosis', { area: 'lower' });
+    expect(screen.queryByText('Dental caries')).toBeNull();
+    expect(screen.queryByText('Bruxism')).toBeNull();
+    fireEvent.click(row(/^Periodontitis/));
+    expect(actions.recordDiagnosis).toHaveBeenCalledWith(DIAGNOSES[2], {
+      tooth: null,
+      surfaces: [],
+      jaw: 'lower',
+    });
   });
 
   it('one click commits with the target and closes; the pending scope clears', () => {
@@ -264,6 +285,8 @@ describe('CatalogDrawer — in the workspace', () => {
       resolvedInVisitId: null,
       resolvedAt: null,
       seenOn: null,
+      level: 'per_tooth' as const,
+      jaw: null,
     };
     const added = visitService(47, 'Scaling', null);
     const fetchMock = mockWorkspace({
@@ -353,6 +376,8 @@ describe('CatalogDrawer — in the workspace', () => {
       resolvedInVisitId: null,
       resolvedAt: null,
       seenOn: null,
+      level: 'per_tooth' as const,
+      jaw: null,
     };
     mockWorkspace({
       visit: current,

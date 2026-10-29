@@ -25,15 +25,18 @@ const REASON_MIN = 3;
 /**
  * Refund part or all of a payment (B6, P6): the amount (what is left of it by default), the
  * method (the payment's by default) and a required reason. It reopens what the payment covered.
+ * With `onBack` (the patient record's payment picker) a **Back** returns to the list.
  */
 export function RefundDialog({
   payment,
   locale,
   onClose,
+  onBack,
 }: {
   payment: Transaction;
   locale: string;
   onClose: () => void;
+  onBack?: () => void;
 }) {
   const { t, i18n } = useTranslation(['payments', 'billing', 'common']);
   const toast = useToast();
@@ -146,6 +149,11 @@ export function RefundDialog({
             )}
           </div>
           <div className="flex justify-end gap-2.5 border-t border-inner-divider bg-sunken px-[22px] py-3.5">
+            {onBack && (
+              <Button variant="ghost" className="me-auto" disabled={saving} onClick={onBack}>
+                {t('billing:refundPick.back')}
+              </Button>
+            )}
             <Dialog.Close asChild>
               <Button variant="secondary" disabled={saving}>
                 {t('common:cancel')}

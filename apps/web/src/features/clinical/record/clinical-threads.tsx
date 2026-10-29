@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { CardSkeleton } from '@/components/ui/card';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useSurfaceLabel, useToothLabel } from '../chart/use-chart-settings';
+import { useLevelLabel, useSurfaceLabel, useToothLabel } from '../chart/use-chart-settings';
 import { chartQuery } from '../visits-api';
 import {
   buildThreads,
@@ -78,13 +78,14 @@ function ThreadRow({
 }) {
   const { t } = useTranslation('visits');
   const toothLabel = useToothLabel();
+  const levelLabel = useLevelLabel();
   const surfaceLabel = useSurfaceLabel();
   const openPlan = thread.plans.find(isOpenPlan);
   return (
     <li className="border-t border-inner-divider px-4 py-3 first:border-t-0">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
         {thread.toothCode === null ? (
-          <span className="font-mono text-[12.5px] text-ink-muted">{t('panel.jaw')}</span>
+          <span className="font-mono text-[12.5px] text-ink-muted">{levelLabel(thread.jaw)}</span>
         ) : (
           <button
             type="button"

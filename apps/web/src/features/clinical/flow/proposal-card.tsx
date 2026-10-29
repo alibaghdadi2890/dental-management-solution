@@ -3,7 +3,8 @@ import { type Ref, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatCalendarDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { useSurfaceLabel, useToothLabel } from '../chart/use-chart-settings';
+import { useSurfaceLabel } from '../chart/use-chart-settings';
+import { useTargetLabel } from './use-target-label';
 import { DEFAULT_PLAN_PRIORITY, useChartingActions } from '../workspace/charting-actions';
 import { MICRO } from './flow-styles';
 import { PriorityControl } from './priority-control';
@@ -27,7 +28,7 @@ export function ProposalCard({
   cardRef,
 }: {
   proposal: Proposal;
-  /** The active catalog services that go on a tooth. */
+  /** The active catalog services; the card offers those charged where the diagnosis is. */
   services: readonly ServiceItem[];
   canWrite: boolean;
   /** The card the step was opened for (the diagnosis toast's Plan treatment). */
@@ -37,7 +38,7 @@ export function ProposalCard({
   const { t, i18n } = useTranslation('clinical');
   const locale = i18n.resolvedLanguage ?? 'en';
   const actions = useChartingActions();
-  const toothLabel = useToothLabel();
+  const placeLabel = useTargetLabel();
   const surfaceLabel = useSurfaceLabel();
   const { record, plans } = proposal;
   // The priority chosen before there is a treatment to carry it.
@@ -53,7 +54,7 @@ export function ProposalCard({
   const propose = (item: ServiceItem) => {
     actions.planTreatment(
       item,
-      { tooth: record.toothCode, surfaces: record.surfaces },
+      { tooth: record.toothCode, surfaces: record.surfaces, jaw: record.jaw ?? undefined },
       { priority, diagnosisRecordId: record.id },
     );
   };
@@ -73,7 +74,7 @@ export function ProposalCard({
       ref={cardRef}
       tabIndex={-1}
       aria-label={t('flow.proposal.named', {
-        tooth: toothLabel(record.toothCode),
+        tooth: placeLabel(record),
         name: record.name,
       })}
       data-proposal={record.id}
@@ -87,7 +88,7 @@ export function ProposalCard({
           dir="ltr"
           className="font-mono text-[18px] leading-none font-bold text-primary rtl:text-end"
         >
-          {toothLabel(record.toothCode)}
+          {placeLabel(record)}
         </div>
         <div className="mt-[7px] text-[13px] leading-[1.35] font-semibold text-danger">
           {record.name}
@@ -111,7 +112,7 @@ export function ProposalCard({
         )}
         {canWrite && (
           <ServicePicker
-            services={services}
+            services={services.filter((item) => item.chargeUnit === record.level)}
             searchLabel={t('flow.proposal.searchNamed', { name: record.name })}
             onPick={propose}
           />

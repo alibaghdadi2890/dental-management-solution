@@ -23,7 +23,7 @@ export function CatalogFrame({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="min-h-0 flex-1 overflow-auto">
-        <div className="max-w-[1080px] px-[26px] pt-6 pb-8">
+        <div className="px-[26px] pt-6 pb-8">
           <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="mb-1 text-[21px] leading-tight font-semibold tracking-[-0.02em]">

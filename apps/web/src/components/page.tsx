@@ -11,7 +11,7 @@ interface PageProps {
 export function Page({ title, subtitle, actions, children }: PageProps) {
   return (
     <div className="h-full overflow-auto">
-      <div className="max-w-[1320px] px-[26px] pt-6 pb-10">
+      <div className="px-[26px] pt-6 pb-10">
         <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="mb-1 text-[21px] leading-tight font-semibold tracking-[-0.02em]">
