@@ -67,4 +67,5 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0061](0061-admin-system-role.md)                                      | An Admin system role with every permission, below the owner                  | Accepted (amends 0055, 0056)         |
 | [0062](0062-correcting-a-finished-visit.md)                            | Correcting a finished visit: services, prices and times                      | Accepted (amended by 0063)           |
 | [0063](0063-a-correction-may-move-a-visit-to-another-day.md)           | A correction may move a visit to another day                                 | Accepted                             |
-| [0064](0064-work-over-several-visits-is-charged-when-it-starts.md)     | Work over several visits is charged in the visit that starts it              | Accepted                             |
+| [0064](0064-work-over-several-visits-is-charged-when-it-starts.md)     | Work over several visits is charged in the visit that starts it              | Accepted (amended by 0065)           |
+| [0065](0065-ticked-work-starts-on-perform.md)                          | Ticked work starts on Perform; finished or continues asked at Complete       | Accepted (amends 0048, 0064)         |

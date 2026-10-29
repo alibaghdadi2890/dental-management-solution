@@ -320,7 +320,9 @@ call works whatever the step.
   worklist says what the visit intends; what it did is the plan's status and sessions. During
   the visit, Today's work ticks a plan onto the list or off it (`setWorkItem`): only a
   treatment or hygiene visit keeps a list, and only an open plan of the patient goes on it.
-  Putting a plan in progress on the list logs no session.
+  Putting a plan in progress on the list logs no session; the SPA starts the listed work when
+  the visit enters Perform (`recordSession` per item) and asks at Complete whether each piece is
+  finished (ADR-0065). The API is the same for both.
 - **Medical history confirmation** (ADR-0046): `confirmHistory` stamps `history_confirmed_at`
   and `history_confirmed_by` on the live visit, with `chart:write`; a second confirmation keeps
   the first. `unconfirmHistory` clears both. The history itself is `patients`'
