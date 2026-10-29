@@ -167,6 +167,7 @@ export class CatalogService {
           category: row.category,
           frequent: row.frequent,
           active: row.active,
+          level: row.level,
           color: row.color ?? before?.color ?? pickColor(stored),
           markPriority: row.markPriority ?? before?.markPriority ?? MARK_PRIORITY_DEFAULT,
         }),

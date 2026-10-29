@@ -56,7 +56,12 @@ export const diagnosisStatusSchema = z.enum(DIAGNOSIS_STATUSES);
 export const diagnosisRecordSchema = z.object({
   id: idSchema,
   patientId: idSchema,
-  toothCode: toothCodeSchema,
+  /** Where it was recorded (ADR-0064): the catalog's level when it was recorded. */
+  level: chargeUnitSchema,
+  /** Set iff `level` is `per_tooth`. */
+  toothCode: toothCodeSchema.nullable(),
+  /** Set iff `level` is `per_jaw`. */
+  jaw: jawSchema.nullable(),
   surfaces: surfacesSchema,
   diagnosisId: idSchema,
   /** Snapshot of the catalog item at record-time (CLAUDE.md §7). */
@@ -82,8 +87,8 @@ export type DiagnosisRecord = z.infer<typeof diagnosisRecordSchema>;
 
 /**
  * `planned → in_progress → performed`, with `cancelled` from either open state (ADR-0032). Work
- * that takes several visits is `in_progress` from its first session until it is marked done, and
- * is charged only then.
+ * that takes several visits is `in_progress` from its first session until it is marked done; it
+ * is charged in the visit that starts it (ADR-0064).
  */
 export const PLAN_STATUSES = ['planned', 'in_progress', 'performed', 'cancelled'] as const;
 export type PlanStatus = (typeof PLAN_STATUSES)[number];
@@ -189,6 +194,11 @@ export const treatmentPlanSchema = z.object({
   startedAt: isoDateTimeSchema.nullable(),
   /** The visits that worked on it, oldest first; a voided visit's stay (`voidedVisitIds`). */
   sessions: z.array(planSessionSchema),
+  /**
+   * The visit whose service charges it (ADR-0064): the one that started the work, or the one that
+   * performed it; null while nothing charges it.
+   */
+  chargedIn: z.object({ visitId: idSchema, number: z.number().int().positive() }).nullable(),
   performedInVisitId: idSchema.nullable(),
   performedAt: isoDateTimeSchema.nullable(),
   cancelledInVisitId: idSchema.nullable(),
@@ -225,9 +235,11 @@ export type ToothPresenceRecord = z.infer<typeof toothPresenceRecordSchema>;
 
 const seenOnInput = diagnosisEvidenceSchema.nullish().transform((seenOn) => seenOn ?? null);
 
+/** The target follows the catalog item's level (ADR-0064): a tooth, a jaw, or neither. */
 export const recordDiagnosisSchema = z.object({
   diagnosisId: idSchema,
-  toothCode: toothCodeSchema,
+  toothCode: toothCodeSchema.optional(),
+  jaw: jawSchema.optional(),
   surfaces: surfacesSchema.default([]),
   note: optionalText(RECORD_NOTE_MAX),
   seenOn: seenOnInput,
@@ -245,8 +257,8 @@ export const planTreatmentSchema = z.object({
   surfaces: surfacesSchema.default([]),
   note: optionalText(RECORD_NOTE_MAX),
   priority: planPrioritySchema,
-  /** The diagnosis this treats: one of the patient's active diagnoses on the same tooth. Left
-   * out, the tooth's most recent active diagnosis is linked. */
+  /** The diagnosis this treats: one of the patient's active diagnoses at the same place (tooth,
+   * jaw or mouth, ADR-0064). Left out, the place's most recent active diagnosis is linked. */
   diagnosisRecordId: idSchema.optional(),
 });
 export type PlanTreatmentInput = z.infer<typeof planTreatmentSchema>;
@@ -552,7 +564,9 @@ export const fileCitationSchema = z.object({
   diagnoses: z.array(
     z.object({
       recordId: idSchema,
-      toothCode: toothCodeSchema,
+      /** Null with `jaw` for a diagnosis on a jaw, null with both for the whole mouth. */
+      toothCode: toothCodeSchema.nullable(),
+      jaw: jawSchema.nullable(),
       name: z.string(),
       status: diagnosisStatusSchema,
     }),

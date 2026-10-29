@@ -247,6 +247,8 @@ const CHART = {
       recordedAt: '2026-09-29T10:00:00Z',
       resolvedInVisitId: null,
       resolvedAt: null,
+      level: 'per_tooth',
+      jaw: null,
     },
   ],
   plans: [
@@ -276,6 +278,7 @@ const CHART = {
       startedInVisitId: null,
       startedAt: null,
       sessions: [],
+      chargedIn: null,
       performedInVisitId: null,
       performedAt: null,
       cancelledInVisitId: null,

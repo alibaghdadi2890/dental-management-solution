@@ -233,7 +233,8 @@ export class ChartService {
         citation.diagnoses.push({
           recordId: record.id,
           // The table's CHECK admits exactly the contract's tooth codes.
-          toothCode: toothCodeSchema.parse(record.toothCode),
+          toothCode: record.toothCode === null ? null : toothCodeSchema.parse(record.toothCode),
+          jaw: record.jaw,
           name: record.name,
           status: record.status,
         });
@@ -273,6 +274,12 @@ export class ChartService {
       sessions
         .filter((session) => session.planId === planId)
         .map(({ visitId, date, note }) => ({ visitId, date, note }));
+    const charges = new Map(
+      (await this.services.chargesFor(plans.map((plan) => plan.id))).map((charge) => [
+        charge.planId,
+        charge,
+      ]),
+    );
     return {
       presence: presence.map((line) => toPresenceRecord(line, nameOf(line.row.dentistId))),
       diagnoses: diagnoses.map(({ record, visitDate }) =>
@@ -283,7 +290,7 @@ export class ChartService {
         ),
       ),
       plans: plans.map((plan) =>
-        toTreatmentPlan(plan, nameOf(plan.dentistId), sessionsOf(plan.id)),
+        toTreatmentPlan(plan, nameOf(plan.dentistId), sessionsOf(plan.id), charges.get(plan.id)),
       ),
       history: history.map((line) => toHistoryService(line, nameOf(line.dentistId))),
       voidedVisitIds: await this.visits.voidedIdsForPatient(patientId),

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { RecordNotFoundError } from '../domain/visit-errors';
-import { treatmentPlans, visits } from './schema';
+import { treatmentPlans, visits, visitServices } from './schema';
 
 type PlanRow = typeof treatmentPlans.$inferSelect;
 
@@ -133,8 +133,9 @@ export class TreatmentPlansRepository {
   }
 
   /**
-   * The patient's plan work not charged yet (ADR-0051): planned or in progress, or performed in a
-   * visit still live (in progress or paused), so its charge is still to post.
+   * The patient's plan work not charged yet (ADR-0051, ADR-0064): planned or in progress with no
+   * line charging it, or charged by a line of a visit still live (in progress or paused), so the
+   * charge is still to post. Work charged at its start by a finished visit is not.
    */
   listUncharged(patientId: string): Promise<StoredTreatmentPlan[]> {
     return this.db.run(async (tx) =>
@@ -142,15 +143,22 @@ export class TreatmentPlansRepository {
         await tx
           .select({ plan: treatmentPlans })
           .from(treatmentPlans)
-          .leftJoin(visits, eq(visits.id, treatmentPlans.performedInVisitId))
+          .leftJoin(
+            visitServices,
+            and(eq(visitServices.planId, treatmentPlans.id), isNull(visitServices.deletedAt)),
+          )
+          .leftJoin(visits, eq(visits.id, visitServices.visitId))
           .where(
             and(
               eq(treatmentPlans.patientId, patientId),
               isNull(treatmentPlans.deletedAt),
               or(
-                inArray(treatmentPlans.status, ['planned', 'in_progress']),
                 and(
-                  eq(treatmentPlans.status, 'performed'),
+                  isNull(visitServices.id),
+                  inArray(treatmentPlans.status, ['planned', 'in_progress']),
+                ),
+                and(
+                  ne(treatmentPlans.status, 'cancelled'),
                   inArray(visits.status, ['in_progress', 'paused']),
                 ),
               ),

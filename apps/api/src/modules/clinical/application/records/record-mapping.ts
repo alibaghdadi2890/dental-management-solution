@@ -12,7 +12,7 @@ import {
 import type { StoredDiagnosisRecord } from '../../persistence/patient-diagnoses.repository';
 import type { ToothPresenceLine } from '../../persistence/tooth-presence.repository';
 import type { StoredTreatmentPlan } from '../../persistence/treatment-plans.repository';
-import type { FinishedService } from '../../persistence/visit-services.repository';
+import type { FinishedService, PlanCharge } from '../../persistence/visit-services.repository';
 
 // The tables' CHECKs admit exactly the contract's tooth codes and surface keys.
 
@@ -47,7 +47,9 @@ export function toDiagnosisRecord(
   return {
     id: record.id,
     patientId: record.patientId,
-    toothCode: toothCodeSchema.parse(record.toothCode),
+    level: record.level,
+    toothCode: record.toothCode === null ? null : toothCodeSchema.parse(record.toothCode),
+    jaw: record.jaw,
     surfaces: surfacesSchema.parse(record.surfaces),
     diagnosisId: record.diagnosisId,
     code: record.code,
@@ -67,12 +69,13 @@ export function toDiagnosisRecord(
   };
 }
 
-/** A treatment plan as the API answers it: the row plus the dentist's name and the visits that
- * worked on it. */
+/** A treatment plan as the API answers it: the row plus the dentist's name, the visits that
+ * worked on it and the visit whose line charges it (ADR-0064). */
 export function toTreatmentPlan(
   plan: StoredTreatmentPlan,
   dentistName: string,
   sessions: PlanSession[],
+  charge: PlanCharge | undefined,
 ): TreatmentPlan {
   return {
     id: plan.id,
@@ -100,6 +103,7 @@ export function toTreatmentPlan(
     startedInVisitId: plan.startedInVisitId,
     startedAt: plan.startedAt?.toISOString() ?? null,
     sessions,
+    chargedIn: charge ? { visitId: charge.visitId, number: charge.visitNumber } : null,
     performedInVisitId: plan.performedInVisitId,
     performedAt: plan.performedAt?.toISOString() ?? null,
     cancelledInVisitId: plan.cancelledInVisitId,

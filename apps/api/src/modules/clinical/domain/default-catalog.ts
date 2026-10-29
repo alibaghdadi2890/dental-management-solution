@@ -26,6 +26,8 @@ export interface DefaultDiagnosis {
   category: string;
   frequent: boolean;
   active: boolean;
+  /** Where it is recorded (ADR-0064): a tooth unless the template says otherwise. */
+  level: ChargeUnit;
   color: MarkColor;
 }
 
@@ -64,11 +66,12 @@ const diagnosis = (
   name: string,
   category: string,
   color: MarkColor,
-  flags: { frequent?: boolean; active?: boolean } = {},
+  flags: { frequent?: boolean; active?: boolean; level?: ChargeUnit } = {},
 ): DefaultDiagnosis => ({
   code,
   name,
   category,
+  level: flags.level ?? 'per_tooth',
   color,
   frequent: flags.frequent ?? false,
   active: flags.active ?? true,
@@ -163,5 +166,5 @@ export const DEFAULT_DIAGNOSES: readonly DefaultDiagnosis[] = [
   diagnosis('DX-PERIO', 'Chronic periodontitis', 'Periodontal', 'green'),
   diagnosis('DX-REC', 'Gingival recession', 'Periodontal', 'cyan'),
   diagnosis('DX-SENS', 'Dentine hypersensitivity', 'Other', 'sky', { frequent: true }),
-  diagnosis('DX-BRUX', 'Bruxism', 'Other', 'blue', { active: false }),
+  diagnosis('DX-BRUX', 'Bruxism', 'Other', 'blue', { active: false, level: 'per_mouth' }),
 ];

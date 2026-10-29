@@ -232,6 +232,11 @@ export class VisitCorrectionsService {
         userId: this.context.requireUserId(),
       };
       for (const service of plan.removed) {
+        if (service.planId !== null) {
+          await this.unperformer.assertRemovable(service.planId, before, service.name);
+        }
+      }
+      for (const service of plan.removed) {
         await this.services.update(service.id, { deletedAt: now });
         await this.presence.revertService(service.id, now);
       }

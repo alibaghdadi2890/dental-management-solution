@@ -16,7 +16,8 @@ export type DiagnosisRecorded = DomainEvent<
     recordId: string;
     visitId: string | null;
     patientId: string;
-    toothCode: string;
+    /** Null for a diagnosis on a jaw or the whole mouth (ADR-0064). */
+    toothCode: string | null;
     diagnosisId: string;
   }
 >;
@@ -35,13 +36,13 @@ export type DiagnosisEvidenceCited = DomainEvent<
 export const DIAGNOSIS_RESOLVED = 'DiagnosisResolved';
 export type DiagnosisResolved = DomainEvent<
   typeof DIAGNOSIS_RESOLVED,
-  { recordId: string; visitId: string; patientId: string; toothCode: string }
+  { recordId: string; visitId: string; patientId: string; toothCode: string | null }
 >;
 
 export const DIAGNOSIS_REOPENED = 'DiagnosisReopened';
 export type DiagnosisReopened = DomainEvent<
   typeof DIAGNOSIS_REOPENED,
-  { recordId: string; visitId: string; patientId: string; toothCode: string }
+  { recordId: string; visitId: string; patientId: string; toothCode: string | null }
 >;
 
 export const TREATMENT_PLANNED = 'TreatmentPlanned';

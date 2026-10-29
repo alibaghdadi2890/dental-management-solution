@@ -86,7 +86,9 @@ export const diagnosisItemSchema = z.object({
   category: z.string().nullable(),
   frequent: z.boolean(),
   active: z.boolean(),
-  /** The chart mark (feature 9): a diagnosis is always on a tooth, so it always has a colour. */
+  /** Where it is recorded (ADR-0064): a tooth, a jaw or the whole mouth, as services are charged. */
+  level: chargeUnitSchema,
+  /** The chart mark (feature 9). Every diagnosis has a colour; only a tooth's is painted. */
   color: markColorSchema,
   markPriority: markPrioritySchema,
 });
@@ -150,6 +152,7 @@ export const diagnosisItemInputSchema = z.object({
   code: catalogCodeSchema,
   name: nameSchema,
   category: catalogCategorySchema,
+  level: chargeUnitSchema.default('per_tooth'),
   frequent: z.boolean().default(false),
   active: z.boolean().default(true),
   ...markInput,

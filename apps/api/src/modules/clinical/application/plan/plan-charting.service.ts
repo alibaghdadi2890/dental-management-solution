@@ -3,7 +3,6 @@ import {
   type PlanResult,
   type PlanTreatmentInput,
   type RecordSessionInput,
-  toCents,
   type ToothPresenceChange,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
@@ -39,7 +38,10 @@ import {
   type StoredTreatmentPlan,
   TreatmentPlansRepository,
 } from '../../persistence/treatment-plans.repository';
-import { VisitServicesRepository } from '../../persistence/visit-services.repository';
+import {
+  type StoredVisitService,
+  VisitServicesRepository,
+} from '../../persistence/visit-services.repository';
 import { PresenceWriter } from '../records/presence-writer';
 import { RecordPresenter } from '../records/record-presenter';
 import { RecordWriter } from '../records/record-writer';
@@ -86,44 +88,38 @@ export class PlanChartingService {
   }
 
   /**
-   * Not finished (unfinished spec U2): a service of this visit becomes work in progress, charged
-   * by the visit that completes it (ADR-0032). The service is removed; its plan — the one it
-   * performed, put back, or a new one from the service's own snapshot — takes the service's base
-   * price (a line discount is not carried) and is `in_progress` with this visit's session.
-   * `TreatmentStarted` when the work starts here, after `TreatmentPlanned` for a new plan.
+   * Not finished (unfinished spec U2, ADR-0064): a service of this visit becomes work in progress.
+   * The line stays and charges the work in this visit, at its price and line discount; it no
+   * longer changes the tooth until the work is done (H2). Its plan — the one it performed here,
+   * or a new one from the line's snapshot — is `in_progress` with this visit's session.
+   * `TreatmentStarted` when the work starts here, after `TreatmentPlanned` for a new plan. A line
+   * whose work is already in progress answers the plan as it is.
    */
   markServiceUnfinished(visitId: string, serviceId: string): Promise<PlanResult> {
     return this.charting.run(visitId, async (change) => {
       const { visit, userId, now } = change;
       const service = await this.services.lockInVisit(serviceId, visitId);
-      const removed = await this.services.update(serviceId, { deletedAt: now });
+      let plan: StoredTreatmentPlan;
+      if (service.planId === null) {
+        plan = await this.writer.planFromService(recordContextOf(change), service, visit.currency);
+        await this.services.update(serviceId, { planId: plan.id });
+      } else {
+        plan = await this.plans.lockForPatient(service.planId, visit.patientId);
+        if (plan.status === 'in_progress') return this.presenter.plan(plan);
+        if (plan.status !== 'performed' || plan.performedInVisitId !== visitId) {
+          throw new PlanNotOpenError(`This plan is ${plan.status}`);
+        }
+      }
       await this.audit.record({
         action: `${SERVICE}.unfinished`,
         resourceType: SERVICE,
         resourceId: serviceId,
-        before: service,
-        after: { deletedAt: removed.deletedAt },
+        before: { planId: service.planId },
+        after: { planId: plan.id },
       });
       // The work is not done: the tooth is as it was (H2).
       await this.presence.revertService(serviceId, now);
-      let plan: StoredTreatmentPlan;
-      if (service.planId === null) {
-        plan = await this.writer.planFromService(recordContextOf(change), service, visit.currency);
-      } else {
-        await this.unperformer.unperform(service.planId, visit);
-        const reopened = await this.plans.lockForPatient(service.planId, visit.patientId);
-        plan = reopened;
-        if (toCents(reopened.priceAmount) !== toCents(service.baseAmount)) {
-          plan = await this.plans.update(reopened.id, { priceAmount: service.baseAmount });
-          await this.audit.record({
-            action: `${PLAN}.reprice`,
-            resourceType: PLAN,
-            resourceId: plan.id,
-            before: { priceAmount: reopened.priceAmount },
-            after: { priceAmount: plan.priceAmount },
-          });
-        }
-      }
+      if (plan.status === 'performed') plan = await this.reopen(plan);
       if (plan.status === 'planned') return this.presenter.plan(await this.start(plan, change));
       // Work continued from earlier visits, completed here and reopened: this visit worked on it.
       if (!(await this.sessions.find(plan.id, visitId))) {
@@ -143,8 +139,8 @@ export class PlanChartingService {
    * Continue today: this visit's session on a plan in progress, with an optional note. One per
    * visit: a repeat updates the note, and an unchanged one changes and audits nothing. On a plan
    * that is still only planned it is the visit's *Not finished* (feature 10, ADR-0048): the work
-   * starts here, with this session and no charge (`TreatmentStarted`). A performed or cancelled
-   * plan answers 409 `plan.not_in_progress`.
+   * starts here, with this session and the line that charges it (`TreatmentStarted`, ADR-0064).
+   * A performed or cancelled plan answers 409 `plan.not_in_progress`.
    */
   recordSession(visitId: string, planId: string, input: RecordSessionInput): Promise<PlanResult> {
     return this.charting.run(visitId, async (change) => {
@@ -172,8 +168,9 @@ export class PlanChartingService {
   }
 
   /**
-   * The Undo of Continue, and of Not finished: removes this visit's session (404 `record.not_found`
-   * without one) from a plan in progress. When it was the plan's only session the plan goes back
+   * The Undo of Continue: removes this visit's session (404 `record.not_found` without one) from a
+   * plan in progress. The visit that charges the work removes its service instead (409
+   * `record.not_removable`, ADR-0064). When it was the plan's only session the plan goes back
    * to `planned`, as if it had never been started; when it was the starting visit's, the start
    * moves to the oldest session left.
    */
@@ -183,6 +180,9 @@ export class PlanChartingService {
       assertInProgress(before);
       const session = await this.sessions.find(planId, visitId);
       if (!session) throw new RecordNotFoundError('This visit has no session on this plan');
+      if ((await this.services.lockCarrying(planId))?.visitId === visitId) {
+        throw new RecordNotRemovableError('This visit charges the work: remove its service');
+      }
       await this.sessions.update(session.id, { deletedAt: now });
       // The start follows the oldest session left; with none, the plan was never started.
       const oldest = await this.sessions.oldestForPlan(planId);
@@ -208,11 +208,12 @@ export class PlanChartingService {
   }
 
   /**
-   * Perform now, or Complete for an unfinished service: an open plan (else 409 `plan.not_open`)
-   * becomes a service of this visit at the plan's price, tooth and surfaces, and is marked
-   * performed here — the one charge of the work, however many visits it took (ADR-0032). The
-   * plan's currency must be the visit's (W12). `TreatmentPerformed`; the new service is in the
-   * answer's visit.
+   * Perform now, or Complete for an unfinished service: an open plan (else 409 `plan.not_open`) is
+   * marked performed here. The line that charges it is the one its start created (ADR-0064), in
+   * whichever visit — this one adds none; work that nothing charges yet (planned, or started
+   * before work was charged at its start) becomes a service of this visit at the plan's price,
+   * tooth and surfaces, whose currency must be the visit's (W12). Either way the line now changes
+   * the tooth (H2). `TreatmentPerformed` names that line; a new one is in the answer's visit.
    */
   async performPlan(visitId: string, planId: string): Promise<PlanResult> {
     let presenceChange: ToothPresenceChange | null = null;
@@ -220,33 +221,14 @@ export class PlanChartingService {
       const { visit, userId, now } = change;
       const before = await this.plans.lockForPatient(planId, visit.patientId);
       assertOpen(before);
-      assertCurrency(visit.currency, before.priceCurrency);
-      const service = await this.services.insert({
-        visitId,
-        procedureId: before.procedureId,
-        code: before.code,
-        name: before.name,
-        category: before.category,
-        chargeUnit: before.chargeUnit,
-        toothCode: before.toothCode,
-        jaw: before.jaw,
-        surfaces: before.surfaces,
-        baseAmount: before.priceAmount,
-        planId,
-        recordedBy: userId,
-      });
+      const service =
+        (await this.services.lockCarrying(planId)) ?? (await this.chargeHere(before, change));
       const after = await this.plans.update(planId, {
         status: 'performed',
         performedInVisitId: visitId,
         performedAt: now,
         // Work done was agreed to (ADR-0045).
         ...acceptedByWork(before, { userId, now }),
-      });
-      await this.audit.record({
-        action: `${SERVICE}.create`,
-        resourceType: SERVICE,
-        resourceId: service.id,
-        after: service,
       });
       await this.audit.record({
         action: `${PLAN}.perform`,
@@ -265,6 +247,31 @@ export class PlanChartingService {
       await this.events.publish(event);
       presenceChange = await this.presence.applyService(presenceContextOf(change), service);
       return this.presenter.plan(after);
+    });
+    return { ...result, presenceChange };
+  }
+
+  /**
+   * The Undo of a Complete that added no line (ADR-0064): work performed here and charged by
+   * another visit's line goes back to `in_progress`, and that line no longer changes the tooth.
+   * Anything else answers 409 `plan.not_open` (a line of this visit is put back by its own Not
+   * finished). Audited `treatment_plan.unperform`.
+   */
+  async reopenPlan(visitId: string, planId: string): Promise<PlanResult> {
+    let presenceChange: ToothPresenceChange | null = null;
+    const result = await this.charting.run(visitId, async ({ visit, now }) => {
+      const before = await this.plans.lockForPatient(planId, visit.patientId);
+      const service = await this.services.lockCarrying(planId);
+      if (
+        before.status !== 'performed' ||
+        before.performedInVisitId !== visitId ||
+        !service ||
+        service.visitId === visitId
+      ) {
+        throw new PlanNotOpenError('Only work completed here and charged by another visit');
+      }
+      presenceChange = await this.presence.revertService(service.id, now);
+      return this.presenter.plan(await this.reopen(before));
     });
     return { ...result, presenceChange };
   }
@@ -354,12 +361,70 @@ export class PlanChartingService {
     });
   }
 
-  /** `planned` → `in_progress` with this visit's first session; audited, `TreatmentStarted`. */
+  /** The plan as a service of this visit at its price, tooth and surfaces; audited. */
+  private async chargeHere(
+    plan: StoredTreatmentPlan,
+    { visit, userId }: VisitChange,
+  ): Promise<StoredVisitService> {
+    assertCurrency(visit.currency, plan.priceCurrency);
+    const service = await this.services.insert({
+      visitId: visit.id,
+      procedureId: plan.procedureId,
+      code: plan.code,
+      name: plan.name,
+      category: plan.category,
+      chargeUnit: plan.chargeUnit,
+      toothCode: plan.toothCode,
+      jaw: plan.jaw,
+      surfaces: plan.surfaces,
+      baseAmount: plan.priceAmount,
+      planId: plan.id,
+      recordedBy: userId,
+    });
+    await this.audit.record({
+      action: `${SERVICE}.create`,
+      resourceType: SERVICE,
+      resourceId: service.id,
+      after: service,
+    });
+    return service;
+  }
+
+  /**
+   * `performed` → back to `in_progress`, or to `planned` when no visit worked on it (performed in
+   * one go: its start is then this visit's); `performed_*` cleared, audited
+   * `treatment_plan.unperform`.
+   */
+  private async reopen(before: StoredTreatmentPlan): Promise<StoredTreatmentPlan> {
+    const status = statusWithSessions(await this.sessions.countForPlan(before.id));
+    const after = await this.plans.update(before.id, {
+      status,
+      performedInVisitId: null,
+      performedAt: null,
+      ...acceptanceAfterUndo(before, status, before.performedAt),
+    });
+    await this.audit.record({
+      action: `${PLAN}.unperform`,
+      resourceType: PLAN,
+      resourceId: before.id,
+      before: planStatusOf(before),
+      after: planStatusOf(after),
+    });
+    return after;
+  }
+
+  /**
+   * `planned` → `in_progress` with this visit's first session; audited, `TreatmentStarted`. The
+   * work is charged here (ADR-0064): without a line charging it, one is added at the plan's
+   * price, which does not change the tooth until the work is done.
+   */
   private async start(
     before: StoredTreatmentPlan,
-    { visit, userId, now }: VisitChange,
+    change: VisitChange,
     note: string | null = null,
   ): Promise<StoredTreatmentPlan> {
+    const { visit, userId, now } = change;
+    if (!(await this.services.lockCarrying(before.id))) await this.chargeHere(before, change);
     const after = await this.plans.update(before.id, {
       status: 'in_progress',
       startedInVisitId: visit.id,

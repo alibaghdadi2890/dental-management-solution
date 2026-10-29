@@ -5,6 +5,7 @@ import type {
   DiagnosisItem,
   DiagnosisResult,
   Patient,
+  PatientChart,
   PlanResult,
   ProblemDetails,
   ServiceItem,
@@ -50,7 +51,7 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
   let assistant: Staff;
   let frontdesk: Staff;
   let service: Record<'fill' | 'crown' | 'clean' | 'whiten' | 'retired' | 'foreign', ServiceItem>;
-  let diagnosis: Record<'caries' | 'fracture' | 'retired', DiagnosisItem>;
+  let diagnosis: Record<'caries' | 'fracture' | 'retired' | 'perio' | 'brux', DiagnosisItem>;
 
   const createStaff = async (role: 'dentist' | 'assistant' | 'frontdesk'): Promise<Staff> => {
     const email = uniqueEmail(role);
@@ -231,6 +232,8 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
         { code: 'ZCAR', name: 'Test caries' },
         { code: 'ZFRAC', name: 'Test fracture' },
         { code: 'ZOLDX', name: 'Retired finding', active: false },
+        { code: 'ZPERIO', name: 'Test periodontitis', level: 'per_jaw' },
+        { code: 'ZBRUX', name: 'Test bruxism', level: 'per_mouth' },
       ],
     });
     expect(diagnoses.status, JSON.stringify(diagnoses.body)).toBe(200);
@@ -243,6 +246,8 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
       caries: diagnosisByCode('ZCAR'),
       fracture: diagnosisByCode('ZFRAC'),
       retired: diagnosisByCode('ZOLDX'),
+      perio: diagnosisByCode('ZPERIO'),
+      brux: diagnosisByCode('ZBRUX'),
     };
 
     dentist = await createStaff('dentist');
@@ -498,6 +503,75 @@ describe('clinical: records in a live visit (services, diagnoses, plans, tooth p
   });
 
   describe('diagnoses', () => {
+    it('records a diagnosis on a jaw or the whole mouth, and links plans at the same place (ADR-0064)', async () => {
+      const patient = await createPatient('Diagnosis Levels');
+      const visit = await startVisit(patient);
+      const { record: upper } = await recorded(dentist.agent, visit.id, {
+        diagnosisId: diagnosis.perio.id,
+        jaw: 'upper',
+      });
+      expect(upper).toMatchObject({
+        level: 'per_jaw',
+        jaw: 'upper',
+        toothCode: null,
+        surfaces: [],
+      });
+      const { record: mouth } = await recorded(dentist.agent, visit.id, {
+        diagnosisId: diagnosis.brux.id,
+      });
+      expect(mouth).toMatchObject({ level: 'per_mouth', jaw: null, toothCode: null });
+
+      // A plan at the same place links the diagnosis; the other jaw links nothing.
+      const { record: upperPlan } = await planned(dentist.agent, visit.id, {
+        procedureId: service.whiten.id,
+        jaw: 'upper',
+      });
+      expect(upperPlan.diagnosisRecordId).toBe(upper.id);
+      const { record: lowerPlan } = await planned(dentist.agent, visit.id, {
+        procedureId: service.whiten.id,
+        jaw: 'lower',
+      });
+      expect(lowerPlan.diagnosisRecordId).toBeNull();
+      const { record: mouthPlan } = await planned(dentist.agent, visit.id, {
+        procedureId: service.clean.id,
+      });
+      expect(mouthPlan.diagnosisRecordId).toBe(mouth.id);
+      await expectProblem(
+        dentist.agent.post(path(visit.id, 'plans')).send({
+          priority: 'high',
+          procedureId: service.whiten.id,
+          jaw: 'lower',
+          diagnosisRecordId: upper.id,
+        }),
+        422,
+        'record.diagnosis_link_invalid',
+      );
+
+      // The target follows the catalog item's level.
+      const refused = [
+        [{ diagnosisId: diagnosis.perio.id }, 'visit.jaw_required'],
+        [
+          { diagnosisId: diagnosis.perio.id, jaw: 'upper', toothCode: '16' },
+          'visit.tooth_not_allowed',
+        ],
+        [{ diagnosisId: diagnosis.brux.id, jaw: 'upper' }, 'visit.jaw_not_allowed'],
+        [{ diagnosisId: diagnosis.caries.id }, 'visit.tooth_required'],
+        [{ diagnosisId: diagnosis.brux.id, surfaces: ['O'] }, 'visit.surfaces_invalid'],
+      ] as const;
+      for (const [body, code] of refused) {
+        await expectProblem(dentist.agent.post(path(visit.id, 'diagnoses')).send(body), 422, code);
+      }
+
+      // Neither paints a tooth; both are listed on the chart.
+      const chart = await ok<PatientChart>(
+        dentist.agent.get(`/api/v1/clinical/patients/${patient.id}/chart`),
+      );
+      expect(chart.teeth).toEqual([]);
+      expect(chart.diagnoses.map((record) => record.id).sort()).toEqual(
+        [upper.id, mouth.id].sort(),
+      );
+    });
+
     it('records, resolves and reopens a diagnosis, with events', async () => {
       const patient = await createPatient('Diagnosis Flow');
       const visit = await startVisit(patient);

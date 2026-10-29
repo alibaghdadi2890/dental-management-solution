@@ -19,7 +19,7 @@ const derive = (
 ) => deriveChart({ presence: [], marks: new Map(), liveVisit: null, ...input });
 
 function diagnosis(
-  overrides: Partial<DiagnosisRecord> & { toothCode: ToothCode },
+  overrides: Partial<DiagnosisRecord> & { toothCode: ToothCode | null },
 ): DiagnosisRecord {
   return {
     id: ID,
@@ -40,6 +40,8 @@ function diagnosis(
     recordedAt: '2026-09-30T10:00:00.000Z',
     resolvedInVisitId: null,
     resolvedAt: null,
+    level: 'per_tooth',
+    jaw: null,
     ...overrides,
   };
 }
@@ -70,6 +72,7 @@ function plan(overrides: Partial<TreatmentPlan> & { toothCode: ToothCode | null 
     startedInVisitId: null,
     startedAt: null,
     sessions: [],
+    chargedIn: null,
     performedInVisitId: null,
     performedAt: null,
     cancelledInVisitId: null,
@@ -300,6 +303,42 @@ describe('deriveChart', () => {
       liveServices: [liveService({ toothCode: null })],
     });
     expect(chart.size).toBe(0);
+  });
+
+  it('a jaw- or mouth-level diagnosis (toothCode null) touches no tooth', () => {
+    const chart = derive({
+      diagnoses: [
+        diagnosis({ toothCode: null, level: 'per_jaw', jaw: 'upper' }),
+        diagnosis({ toothCode: null, level: 'per_mouth' }),
+      ],
+      plans: [],
+      history: [],
+      liveServices: [],
+    });
+    expect(chart.size).toBe(0);
+  });
+
+  it('a service that charges unfinished work shows the plan in progress, not treatment', () => {
+    const chart = derive({
+      diagnoses: [],
+      plans: [plan({ id: ID_4, toothCode: '16', status: 'in_progress' })],
+      history: [],
+      liveServices: [liveService({ toothCode: '16', planId: ID_4 })],
+    });
+    const tooth = chart.get('16');
+    expect(tooth?.state).toBe('in_progress');
+    expect(tooth?.wholeTooth).toBeNull();
+    expect(tooth?.services).toEqual([]);
+  });
+
+  it('a service that charged abandoned work leaves the tooth as it was', () => {
+    const chart = derive({
+      diagnoses: [],
+      plans: [plan({ id: ID_4, toothCode: '16', status: 'cancelled' })],
+      history: [history({ toothCode: '16', planId: ID_4 })],
+      liveServices: [],
+    });
+    expect(chart.get('16')).toBeUndefined();
   });
 
   it('a jaw-level plan (toothCode null) touches no tooth', () => {

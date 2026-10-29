@@ -165,8 +165,8 @@ export function currentPresence(
  * rendering from one source of truth.
  *
  * Callers pre-filter only soft-deleted rows; `deriveChart` itself is what drops a resolved
- * diagnosis, a performed/cancelled plan, or a jaw- or mouth-level record (`toothCode: null`) — none of
- * those contribute to any tooth.
+ * diagnosis, a performed/cancelled plan, a jaw- or mouth-level record (`toothCode: null`), or a
+ * service that charges unfinished or abandoned work (ADR-0064) — none of those mark a tooth.
  *
  * Returns one entry per tooth that has *something* recorded — an active diagnosis, an open plan,
  * a completed service or a live one, or a presence other than `present` (feature 7) — never all
@@ -178,7 +178,7 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
   const builders = new Map<ToothCode, ToothBuilder>();
 
   for (const record of input.diagnoses) {
-    if (record.status !== 'active') continue;
+    if (record.status !== 'active' || record.toothCode === null) continue;
     const builder = builderFor(builders, record.toothCode);
     builder.hasActiveDiagnosis = true;
     builder.diagnosisNames.push(record.name);
@@ -205,8 +205,18 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
     builder.planNames.push(record.name);
   }
 
+  // A service that charges work still in progress, or work abandoned (ADR-0064), is a charge,
+  // not treatment: the plan shows the first, and the second left the tooth as it was.
+  const notTreatment = new Set(
+    input.plans
+      .filter((plan) => plan.status === 'in_progress' || plan.status === 'cancelled')
+      .map((plan) => plan.id),
+  );
+  const isTreatment = (record: { planId: string | null }) =>
+    record.planId === null || !notTreatment.has(record.planId);
+
   for (const record of input.history) {
-    if (record.toothCode === null) continue;
+    if (record.toothCode === null || !isTreatment(record)) continue;
     const builder = builderFor(builders, record.toothCode);
     builder.historyCount += 1;
     applyService(builder, record.surfaces, 'treated');
@@ -228,7 +238,7 @@ export function deriveChart(input: DeriveChartInput): Map<ToothCode, ToothState>
   }
 
   for (const record of input.liveServices) {
-    if (record.toothCode === null) continue;
+    if (record.toothCode === null || !isTreatment(record)) continue;
     const builder = builderFor(builders, record.toothCode);
     applyService(builder, record.surfaces, 'treated_today');
     const mark = input.marks.get(record.procedureId);

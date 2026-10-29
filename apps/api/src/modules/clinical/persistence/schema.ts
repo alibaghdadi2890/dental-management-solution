@@ -137,9 +137,11 @@ export const diagnoses = pgTable(
     code: text().notNull(),
     name: text().notNull(),
     category: text(),
+    /** Where it is recorded (ADR-0064): a tooth, a jaw or the whole mouth, as services are. */
+    level: chargeUnit().notNull().default('per_tooth'),
     frequent: boolean().notNull().default(false),
     active: boolean().notNull().default(true),
-    // The chart mark (feature 9): a diagnosis is always on a tooth, so it always has a colour.
+    // The chart mark (feature 9): every diagnosis has a colour; only a tooth's is painted.
     color: text().$type<MarkColor>().notNull(),
     markPriority: smallint().notNull().default(5),
     deletedAt: deletedAtColumn(),
@@ -410,7 +412,8 @@ export const visitAmendments = pgTable(
 );
 
 /**
- * A diagnosis recorded on a patient's tooth (W9: `diagnoses` is the catalog). It belongs to the
+ * A diagnosis recorded on a patient's tooth, jaw or whole mouth (W9: `diagnoses` is the catalog;
+ * ADR-0064: the target follows the catalog item's level, snapshot in `level`). It belongs to the
  * patient and is dated by `recorded_at`; the visit it was recorded in is null when it was recorded
  * on the patient record without one (ADR-0031). A visit may resolve it. The catalog
  * item's code, name and category are snapshots, so later catalog edits never change the record.
@@ -421,7 +424,11 @@ export const patientDiagnoses = pgTable(
     id: idColumn(),
     tenantId: tenantIdColumn(),
     patientId: uuid().notNull(),
-    toothCode: text().notNull(),
+    level: chargeUnit().notNull().default('per_tooth'),
+    /** Set iff `level` is `per_tooth`. */
+    toothCode: text(),
+    /** Set iff `level` is `per_jaw`. */
+    jaw: jaw(),
     surfaces: surfacesColumn(),
     diagnosisId: uuid().notNull(),
     code: text().notNull(),
@@ -481,6 +488,15 @@ export const patientDiagnoses = pgTable(
     ),
     toothCodeCheck('patient_diagnoses_tooth_code_format', table.toothCode),
     surfacesCheck('patient_diagnoses_surfaces_valid', table.surfaces),
+    check(
+      'patient_diagnoses_tooth_matches_level',
+      sql`(${table.toothCode} is not null) = (${table.level} = 'per_tooth')`,
+    ),
+    jawMatchesUnit('patient_diagnoses_jaw_matches_level', table.jaw, table.level),
+    check(
+      'patient_diagnoses_surfaces_on_tooth',
+      sql`${table.level} = 'per_tooth' or cardinality(${table.surfaces}) = 0`,
+    ),
     // Resolve stamps both fields; reopen clears both.
     check(
       'patient_diagnoses_resolved_fields',

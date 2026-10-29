@@ -329,6 +329,28 @@ describe('billing: advance payments held for the treatment plan (ADR-0051)', () 
     });
   });
 
+  it('covers work over several visits from the visit that starts it (ADR-0064)', async () => {
+    const patient = await newPatient('Started Patient');
+    const crownPlan = await plan(patient, crown, '16');
+    await paid(owner, { patientId: patient.id, amount: '400', advance: 'plan' });
+    // Work started is charged at once, so the held money pays it there.
+    const visit = await startVisit(patient);
+    await ok(dentist.agent.put(`/api/v1/visits/${visit.id}/plans/${crownPlan}/session`).send({}));
+    await complete(visit);
+    expect(await money(patient)).toEqual({
+      balance: '200.00',
+      held: '0.00',
+      credit: '0.00',
+      open: ['200.00'],
+    });
+    // Nothing is left to charge: a plan advance is refused now.
+    await expectProblem(
+      pay(owner, { patientId: patient.id, amount: '100', advance: 'plan' }),
+      422,
+      'payment.no_open_plan',
+    );
+  });
+
   it('ends the hold when the last plan item is cancelled or removed', async () => {
     const cancelled = await newPatient('Cancelled Plan');
     const cancelledPlan = await plan(cancelled, filling, '26');

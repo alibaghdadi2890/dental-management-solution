@@ -816,6 +816,7 @@ describe('clinical: visit flows (feature 10)', () => {
             {
               recordId: recorded.record.id,
               toothCode: '24',
+              jaw: null,
               name: 'Deep caries',
               status: 'active',
             },

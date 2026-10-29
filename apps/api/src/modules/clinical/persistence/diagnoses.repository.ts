@@ -20,6 +20,7 @@ function toDiagnosis(row: DiagnosisRow): DiagnosisItem {
     category: row.category,
     frequent: row.frequent,
     active: row.active,
+    level: row.level,
     color: row.color,
     markPriority: row.markPriority,
   };
@@ -32,6 +33,7 @@ function toRow(item: DiagnosisItem) {
     category: item.category,
     frequent: item.frequent,
     active: item.active,
+    level: item.level,
     color: item.color,
     markPriority: item.markPriority,
   };

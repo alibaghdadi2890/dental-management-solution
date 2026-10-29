@@ -22,6 +22,7 @@ import {
   type TreatmentPrioritised,
 } from '../../events/record-events';
 import {
+  type DiagnosisPlace,
   PatientDiagnosesRepository,
   type StoredDiagnosisRecord,
 } from '../../persistence/patient-diagnoses.repository';
@@ -67,7 +68,8 @@ export class RecordWriter {
   ) {}
 
   /**
-   * On a tooth always (W11); `DiagnosisRecorded`. An image it was seen on must be one of the
+   * On the place its catalog item's level says (ADR-0064): a tooth with its surfaces, a jaw, or
+   * the whole mouth (`assertTarget`, the services' 422s); `DiagnosisRecorded`. An image it was seen on must be one of the
    * patient's files: `files` checks it in this transaction (`DiagnosisEvidenceCited`, ADR-0049).
    */
   async recordDiagnosis(
@@ -76,10 +78,12 @@ export class RecordWriter {
   ): Promise<StoredDiagnosisRecord> {
     const item = await this.catalog.getDiagnosisForRecord(input.diagnosisId);
     if (!item.active) throw new CatalogItemInactiveError(`${item.name} is inactive`);
-    assertTarget('per_tooth', input.toothCode, input.surfaces);
+    assertTarget(item.level, input.toothCode, input.surfaces, input.jaw);
     const record = await this.diagnoses.insert({
       patientId: context.patientId,
-      toothCode: input.toothCode,
+      level: item.level,
+      toothCode: input.toothCode ?? null,
+      jaw: input.jaw ?? null,
       surfaces: input.surfaces,
       diagnosisId: item.id,
       code: item.code,
@@ -128,7 +132,11 @@ export class RecordWriter {
     const diagnosisRecordId =
       input.diagnosisRecordId === undefined
         ? undefined
-        : await this.linkedDiagnosis(context.patientId, input.diagnosisRecordId, toothCode);
+        : await this.linkedDiagnosis(context.patientId, input.diagnosisRecordId, {
+            level: item.chargeUnit,
+            toothCode,
+            jaw: input.jaw ?? null,
+          });
     return this.insertPlan(context, diagnosisRecordId, {
       toothCode: input.toothCode ?? null,
       jaw: input.jaw ?? null,
@@ -238,17 +246,27 @@ export class RecordWriter {
     await this.events.publish(event);
   }
 
-  /** The diagnosis a plan is said to be for: the patient's, active, and on the plan's tooth. */
+  /**
+   * The diagnosis a plan is said to be for: the patient's, active, and at the plan's place — its
+   * tooth, its jaw, or the whole mouth (ADR-0064).
+   */
   private async linkedDiagnosis(
     patientId: string,
     recordId: string,
-    toothCode: string | null,
+    place: DiagnosisPlace,
   ): Promise<string> {
     const invalid = () =>
-      new DiagnosisLinkInvalidError("Choose one of this tooth's active diagnoses");
+      new DiagnosisLinkInvalidError("Choose one of this place's active diagnoses");
     try {
       const { record } = await this.diagnoses.lockForPatient(recordId, patientId);
-      if (record.status !== 'active' || record.toothCode !== toothCode) throw invalid();
+      if (
+        record.status !== 'active' ||
+        record.level !== place.level ||
+        record.toothCode !== place.toothCode ||
+        record.jaw !== place.jaw
+      ) {
+        throw invalid();
+      }
       return record.id;
     } catch (error) {
       throw error instanceof RecordNotFoundError ? invalid() : error;
@@ -274,9 +292,11 @@ export class RecordWriter {
       patientId: context.patientId,
       diagnosisRecordId:
         diagnosisRecordId ??
-        (snapshot.toothCode === null
-          ? null
-          : await this.diagnoses.latestActiveOnTooth(context.patientId, snapshot.toothCode)),
+        (await this.diagnoses.latestActiveAt(context.patientId, {
+          level: snapshot.chargeUnit,
+          toothCode: snapshot.toothCode ?? null,
+          jaw: snapshot.jaw ?? null,
+        })),
       dentistId: context.dentistId,
       recordedBy: context.userId,
       recordedInVisitId: context.visitId,

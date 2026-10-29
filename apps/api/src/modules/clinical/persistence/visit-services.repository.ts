@@ -31,10 +31,22 @@ export type NewVisitService = Pick<
   autoAdded?: boolean;
 };
 
-/** A price edit (W6), an amendment's new tooth and surfaces (4b), or the soft delete. */
+/** A price edit (W6), an amendment's new tooth and surfaces (4b), the plan a line starts
+ * charging (Not finished, ADR-0064), or the soft delete. */
 export type VisitServicePatch = Partial<
-  Pick<StoredVisitService, 'baseAmount' | 'discountAmount' | 'toothCode' | 'surfaces' | 'deletedAt'>
+  Pick<
+    StoredVisitService,
+    'baseAmount' | 'discountAmount' | 'toothCode' | 'surfaces' | 'planId' | 'deletedAt'
+  >
 >;
+
+/** The visit of the line that charges a plan (ADR-0064), with its display number. */
+export interface PlanCharge {
+  planId: string;
+  serviceId: string;
+  visitId: string;
+  visitNumber: number;
+}
 
 /** A service of a finished visit, with the visit facts a history line shows. */
 export interface FinishedService {
@@ -147,6 +159,41 @@ export class VisitServicesRepository {
       if (!row) throw new RecordNotFoundError('Service not found in this visit');
       return toStored(row);
     });
+  }
+
+  /**
+   * The live line that charges this plan, in any visit — a voided one's included (ADR-0064:
+   * a voided start is never rewound) — `FOR UPDATE`; null when nothing charges it.
+   */
+  lockCarrying(planId: string): Promise<StoredVisitService | null> {
+    return this.db.run(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(visitServices)
+        .where(and(eq(visitServices.planId, planId), isNull(visitServices.deletedAt)))
+        .for('update');
+      return row ? toStored(row) : null;
+    });
+  }
+
+  /** The visit whose live line charges each of these plans; a plan nothing charges is absent. */
+  chargesFor(planIds: readonly string[]): Promise<PlanCharge[]> {
+    if (planIds.length === 0) return Promise.resolve([]);
+    return this.db.run((tx) =>
+      tx
+        .select({
+          planId: visitServices.planId,
+          serviceId: visitServices.id,
+          visitId: visits.id,
+          visitNumber: visits.displayNumber,
+        })
+        .from(visitServices)
+        .innerJoin(visits, eq(visits.id, visitServices.visitId))
+        .where(and(inArray(visitServices.planId, [...planIds]), isNull(visitServices.deletedAt)))
+        .then((rows) =>
+          rows.flatMap((row) => (row.planId === null ? [] : [{ ...row, planId: row.planId }])),
+        ),
+    );
   }
 
   /**

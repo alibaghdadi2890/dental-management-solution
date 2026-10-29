@@ -6,6 +6,7 @@ import type { StoredDiagnosisRecord } from '../../persistence/patient-diagnoses.
 import { PlanSessionsRepository } from '../../persistence/plan-sessions.repository';
 import type { StoredToothPresence } from '../../persistence/tooth-presence.repository';
 import type { StoredTreatmentPlan } from '../../persistence/treatment-plans.repository';
+import { VisitServicesRepository } from '../../persistence/visit-services.repository';
 import type { StoredVisit } from '../../persistence/visits.repository';
 import { toDiagnosisRecord, toPresenceRecord, toTreatmentPlan } from './record-mapping';
 
@@ -16,6 +17,7 @@ export class RecordPresenter {
     private readonly users: UsersService,
     private readonly tenancy: TenancyService,
     private readonly sessions: PlanSessionsRepository,
+    private readonly services: VisitServicesRepository,
   ) {}
 
   /** `visitDate` is the recording visit's local date; a record made without a visit (ADR-0031) is
@@ -30,7 +32,8 @@ export class RecordPresenter {
     const sessions = (await this.sessions.listForPlans([plan.id])).map(
       ({ visitId, date, note }) => ({ visitId, date, note }),
     );
-    return toTreatmentPlan(plan, await this.dentistName(plan.dentistId), sessions);
+    const [charge] = await this.services.chargesFor([plan.id]);
+    return toTreatmentPlan(plan, await this.dentistName(plan.dentistId), sessions, charge);
   }
 
   /** A presence row of this visit (no service: it was set by hand). */

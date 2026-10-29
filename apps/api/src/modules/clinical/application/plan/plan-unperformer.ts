@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AuditService } from '../../../audit';
 import { acceptanceAfterUndo, statusWithSessions } from '../../domain/plan-lifecycle';
+import { AmendPlanLinkedError } from '../../domain/visit-errors';
 import { PlanSessionsRepository } from '../../persistence/plan-sessions.repository';
 import {
   type StoredTreatmentPlan,
@@ -33,13 +34,13 @@ export const planStatusOf = ({
 
 /**
  * The undo of perform, shared by removing a service from a live visit (W13) and by amending a
- * completed one (4b, D2): the plan the removed service came from goes back to `in_progress` when
- * visits worked on it before it was done (ADR-0032), else to `planned`, and its `performed_*` pair
- * is cleared, audited as `treatment_plan.unperform` (with the amendment's
- * reason, if any). The partial unique index no longer counts the removed service, so the plan can
- * be performed again. A service with a `plan_id` exists only while its plan is performed in the
- * service's visit (perform writes both, and only this undo reverts them), so anything else is a
- * broken invariant, not a user error. Runs in the caller's transaction.
+ * completed one (4b, D2): the plan the removed service performed here goes back to `in_progress`
+ * when visits worked on it before it was done (ADR-0032), else to `planned`, and its `performed_*`
+ * pair is cleared, audited as `treatment_plan.unperform` (with the amendment's reason, if any).
+ * The partial unique index no longer counts the removed service, so the plan can be performed
+ * again. A service that only charges its plan — work started in its visit and still in progress,
+ * finished in a later visit, or abandoned (ADR-0064) — leaves the plan as it is: the work is then
+ * charged by the visit that completes it. Runs in the caller's transaction.
  */
 @Injectable()
 export class PlanUnperformer {
@@ -49,15 +50,31 @@ export class PlanUnperformer {
     private readonly audit: AuditService,
   ) {}
 
+  /**
+   * A correction may take off a service that charges work only while no later visit completed
+   * that work (ADR-0064): its completion is reopened there first, else 422
+   * `visit.amend_plan_linked`. Otherwise the work would be done and charged nowhere.
+   */
+  async assertRemovable(
+    planId: string,
+    visit: { id: string; patientId: string },
+    name: string,
+  ): Promise<void> {
+    const plan = await this.plans.lockForPatient(planId, visit.patientId);
+    if (plan.status === 'performed' && plan.performedInVisitId !== visit.id) {
+      throw new AmendPlanLinkedError(
+        `${name} was completed in a later visit; mark it not finished there first`,
+      );
+    }
+  }
+
   async unperform(
     planId: string,
     visit: { id: string; patientId: string },
     reason?: string,
   ): Promise<void> {
     const before = await this.plans.lockForPatient(planId, visit.patientId);
-    if (before.status !== 'performed' || before.performedInVisitId !== visit.id) {
-      throw new Error(`plan ${planId} of a removed service is not performed in visit ${visit.id}`);
-    }
+    if (before.status !== 'performed' || before.performedInVisitId !== visit.id) return;
     const status = statusWithSessions(await this.sessions.countForPlan(planId));
     const after = await this.plans.update(planId, {
       status,

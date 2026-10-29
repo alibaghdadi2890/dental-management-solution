@@ -165,6 +165,15 @@ export class VisitRecordsController {
     return this.plans.performPlan(params.id, params.planId);
   }
 
+  /** Undo of a Complete charged by another visit (ADR-0064): the work is in progress again. */
+  @Post(':id/plans/:planId/reopen')
+  @RequirePermission('visit:write')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: PlanResultDto })
+  reopenPlan(@Param() params: PlanParamsDto) {
+    return this.plans.reopenPlan(params.id, params.planId);
+  }
+
   /** Continue today: this visit's session on a plan in progress. */
   @Put(':id/plans/:planId/session')
   @RequirePermission('visit:write')

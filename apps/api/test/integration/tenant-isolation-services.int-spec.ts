@@ -678,8 +678,9 @@ describe('tenant isolation through the public services', () => {
         );
       const before = await snapshot();
       // B's completed visit from the test before, and its service, are in there too.
-      // The service marked not finished stays as a removed row. Tooth presence: the two set by
-      // hand, and the two the extractions caused (one taken back with its unfinished service).
+      // The service marked not finished stays and charges its work (ADR-0064). Tooth presence:
+      // the two set by hand, and the two the extractions caused (one taken back when its service
+      // was marked not finished).
       expect(before.map((rows) => rows.length)).toEqual([2, 3, 1, 2, 4, 1]);
 
       const visit = `/api/v1/visits/${visitId}`;
@@ -694,12 +695,14 @@ describe('tenant isolation through the public services', () => {
         ownerA.patch(`${visit}/services/${serviceId}`).send({ baseAmount: '0.00' }),
         ownerA.delete(`${visit}/services/${serviceId}`),
         ownerA.post(`${visit}/diagnoses`).send({ diagnosisId: bDiagnosis.id, toothCode: '36' }),
+        ownerA.post(`${visit}/diagnoses`).send({ diagnosisId: bDiagnosis.id, jaw: 'upper' }),
         ownerA.post(`${visit}/diagnoses/${diagnosisRecordId}/resolve`),
         ownerA.delete(`${visit}/diagnoses/${diagnosisRecordId}`),
         ownerA
           .post(`${visit}/plans`)
           .send({ procedureId: perTooth.id, toothCode: '36', priority: 'high' }),
         ownerA.post(`${visit}/plans/${planId}/perform`),
+        ownerA.post(`${visit}/plans/${startedPlanId}/reopen`),
         ownerA.post(`${visit}/services/${serviceId}/unfinished`),
         ownerA.put(`${visit}/plans/${startedPlanId}/session`).send({}),
         ownerA.delete(`${visit}/plans/${startedPlanId}/session`),

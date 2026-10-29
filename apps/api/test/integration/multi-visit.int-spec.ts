@@ -35,7 +35,7 @@ const at = (day: string) => new Date(`${day}T09:00:00Z`);
 
 const problem = (body: unknown) => body as ProblemDetails;
 
-describe('clinical: work over several visits, charged when done (ADR-0032)', () => {
+describe('clinical: work over several visits, charged when it starts (ADR-0032, ADR-0064)', () => {
   let database: TestDatabase;
   let testApp: TestApp;
   let owner: TestAgent;
@@ -185,7 +185,7 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
     await database.close();
   });
 
-  it('a service not finished in one visit is continued in the next and charged only by the visit that completes it', async () => {
+  it('a service not finished in one visit is charged there, continued in the next and completed in a third at no charge', async () => {
     const patient = await createPatient('Three Visits');
 
     const first = await startVisit(patient, DAY_1);
@@ -194,22 +194,22 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
       dentist.agent.patch(path(first, `services/${service.id}`)).send({ baseAmount: '250.00' }),
     );
     const { record: plan, visit: afterStart } = await markUnfinished(first, service.id);
-    // The plan behind it keeps the service's edited price.
     expect(plan).toMatchObject({
       status: 'in_progress',
       toothCode: '36',
-      price: { amount: '250.00', currency: 'USD' },
       recordedInVisitId: first.id,
       startedInVisitId: first.id,
       sessions: [{ visitId: first.id, date: DAY_1, note: null }],
+      chargedIn: { visitId: first.id, number: first.displayNumber },
     });
-    expect(afterStart.services).toEqual([]);
+    // The line stays, at its edited price, and charges the work here (ADR-0064).
+    expect(afterStart.services).toMatchObject([
+      { id: service.id, planId: plan.id, final: { amount: '250.00', currency: 'USD' } },
+    ]);
     expect((await chartOf(patient)).teeth).toMatchObject([{ code: '36', state: 'in_progress' }]);
-    // A session is visit content: the visit can't be discarded, and completes at nothing.
-    await expectProblem(dentist.agent.post(path(first, 'discard')), 409, 'visit.not_empty');
-    expect((await complete(first)).money.total).toBe('0.00');
-    // A visit that charges nothing posts no ledger entry.
-    expect(await charges(patient)).toEqual([]);
+    const firstDone = await complete(first);
+    expect(firstDone.money.total).toBe('250.00');
+    expect(await charges(patient)).toEqual([[first.id, '250.00']]);
 
     const second = await startVisit(patient, DAY_2);
     await continueToday(second, plan.id);
@@ -226,24 +226,52 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
     // Continuing twice is still one session.
     await continueToday(second, plan.id);
     expect((await chartOf(patient)).plans[0]?.sessions).toHaveLength(2);
+    // Only work completed here can be reopened here.
+    await expectProblem(
+      dentist.agent.post(path(second, `plans/${plan.id}/reopen`)),
+      409,
+      'plan.not_open',
+    );
     // The middle visit worked on it and charges nothing.
     expect((await complete(second)).money.total).toBe('0.00');
 
     const third = await startVisit(patient, DAY_3);
     const done = await ok<PlanResult>(dentist.agent.post(path(third, `plans/${plan.id}/perform`)));
-    expect(done.record).toMatchObject({ status: 'performed', performedInVisitId: third.id });
-    expect(done.visit.services).toMatchObject([
-      { planId: plan.id, toothCode: '36', final: { amount: '250.00', currency: 'USD' } },
-    ]);
-    expect((await complete(third)).money.total).toBe('250.00');
-    expect(await charges(patient)).toEqual([[third.id, '250.00']]);
+    expect(done.record).toMatchObject({
+      status: 'performed',
+      performedInVisitId: third.id,
+      chargedIn: { visitId: first.id },
+    });
+    // Completing adds no line: the first visit charged it.
+    expect(done.visit.services).toEqual([]);
+    // Its Undo puts the work back in progress; done again.
+    const reopened = await ok<PlanResult>(
+      dentist.agent.post(path(third, `plans/${plan.id}/reopen`)),
+    );
+    expect(reopened.record).toMatchObject({ status: 'in_progress', performedInVisitId: null });
+    await ok<PlanResult>(dentist.agent.post(path(third, `plans/${plan.id}/perform`)));
+    expect((await complete(third)).money.total).toBe('0.00');
+    expect(await charges(patient)).toEqual([[first.id, '250.00']]);
+    // The charge of work a later visit completed can't be corrected away.
+    await expectProblem(
+      dentist.agent.post(path(first, 'amend')).send({
+        expectedUpdatedAt: firstDone.updatedAt,
+        reason: 'Charged by mistake',
+        discount: { mode: firstDone.discountMode, value: firstDone.discountValue },
+        services: [{ procedureId: rootCanal.id, toothCode: '37' }],
+      }),
+      422,
+      'visit.amend_plan_linked',
+    );
     expect(await actionsOn(plan.id)).toEqual([
       'treatment_plan.create',
       'treatment_plan.perform',
+      'treatment_plan.perform',
       'treatment_plan.session',
       'treatment_plan.start',
+      'treatment_plan.unperform',
     ]);
-    // Nothing is left open on the plan.
+    // Nothing is left open on the plan, and nothing is left to charge.
     const open = (await chartOf(patient)).plans.filter(
       ({ status }) => status === 'planned' || status === 'in_progress',
     );
@@ -271,13 +299,14 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
     expect(discarded.status, JSON.stringify(discarded.body)).toBeLessThan(300);
   });
 
-  it('removing the service that completed work first added in the same visit leaves nothing', async () => {
+  it('removing the service of work first added in the same visit leaves nothing', async () => {
     const patient = await createPatient('Changed Mind');
     const visit = await startVisit(patient, DAY_1);
     const { record: plan } = await started(visit, '47');
     const done = await ok<PlanResult>(dentist.agent.post(path(visit, `plans/${plan.id}/perform`)));
     const [line] = done.visit.services;
-    if (!line) throw new Error('completing added no service');
+    if (!line) throw new Error('the work has no line');
+    expect(line.planId).toBe(plan.id);
     await ok(dentist.agent.delete(path(visit, `services/${line.id}`)));
     expect((await chartOf(patient)).plans).toEqual([]);
     const discarded = await dentist.agent.post(path(visit, 'discard'));
@@ -286,26 +315,17 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
 
   it('undoes a start, a continue and a done', async () => {
     const patient = await createPatient('Undo Steps');
+    const { chart: planned } = await ok<PatientChartResult>(
+      dentist.agent
+        .post(`/api/v1/clinical/patients/${patient.id}/plans`)
+        .send({ procedureId: rootCanal.id, toothCode: '46', priority: 'high' }),
+      201,
+    );
+    const [plan] = planned.plans;
+    if (!plan) throw new Error('no plan');
     const first = await startVisit(patient, DAY_1);
-    const { record: plan } = await started(first, '46');
 
-    // The only session removed: the plan was never started.
-    const unstarted = await ok<PlanResult>(
-      dentist.agent.delete(path(first, `plans/${plan.id}/session`)),
-    );
-    expect(unstarted.record).toMatchObject({
-      status: 'planned',
-      startedInVisitId: null,
-      startedAt: null,
-      sessions: [],
-    });
-    await expectProblem(
-      dentist.agent.delete(path(first, `plans/${plan.id}/session`)),
-      409,
-      'plan.not_in_progress',
-    );
-    // A session on a plan that is only planned starts the work here (feature 10), and its undo
-    // takes that back.
+    // A session on a plan that is only planned starts the work here (feature 10) and charges it.
     const restarted = await ok<PlanResult>(
       dentist.agent.put(path(first, `plans/${plan.id}/session`)).send({}),
     );
@@ -313,15 +333,25 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
       status: 'in_progress',
       startedInVisitId: first.id,
       sessions: [{ visitId: first.id }],
+      chargedIn: { visitId: first.id },
     });
     expect(restarted.record.acceptedAt).not.toBeNull();
-    // The acceptance that start recorded goes with it: the patient never gave one.
-    const takenBack = await ok<PlanResult>(
+    const [charge] = restarted.visit.services;
+    if (!charge) throw new Error('starting added no line');
+    expect(charge).toMatchObject({ planId: plan.id, final: { amount: '200.00' } });
+    // The visit that charges the work takes it back by removing its line, not its session.
+    await expectProblem(
       dentist.agent.delete(path(first, `plans/${plan.id}/session`)),
+      409,
+      'record.not_removable',
     );
-    expect(takenBack.record).toMatchObject({ status: 'planned', acceptedAt: null });
+    await ok(dentist.agent.delete(path(first, `services/${charge.id}`)));
+    // The acceptance that start recorded goes with it: the patient never gave one.
+    expect((await chartOf(patient)).plans).toMatchObject([
+      { id: plan.id, status: 'planned', acceptedAt: null, sessions: [], chargedIn: null },
+    ]);
 
-    // Performed, then marked not finished: the same plan is in progress again.
+    // Performed, then marked not finished: the same plan is in progress again, its line kept.
     const performed = await ok<PlanResult>(
       dentist.agent.post(path(first, `plans/${plan.id}/perform`)),
     );
@@ -333,9 +363,10 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
       status: 'in_progress',
       performedInVisitId: null,
       startedInVisitId: first.id,
+      chargedIn: { visitId: first.id },
     });
-    expect(reopened.visit.services).toEqual([]);
-    await complete(first);
+    expect(reopened.visit.services).toMatchObject([{ id: line.id, planId: plan.id }]);
+    expect((await complete(first)).money.total).toBe('200.00');
 
     const second = await startVisit(patient, DAY_2);
     await expectProblem(
@@ -351,64 +382,65 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
       status: 'in_progress',
       sessions: [{ visitId: first.id }],
     });
-
-    // Mark done, then remove the service: back in progress, not back to planned.
-    const done = await ok<PlanResult>(dentist.agent.post(path(second, `plans/${plan.id}/perform`)));
-    const service = done.visit.services[0];
-    if (!service) throw new Error('marking done added no service');
-    await ok(dentist.agent.delete(path(second, `services/${service.id}`)));
-    const chart = await chartOf(patient);
-    expect(chart.plans).toMatchObject([
-      { id: plan.id, status: 'in_progress', performedInVisitId: null, startedInVisitId: first.id },
-    ]);
+    expect(await charges(patient)).toEqual([[first.id, '200.00']]);
   });
 
-  it('an amendment that removes the done service puts the plan back in progress', async () => {
-    const patient = await createPatient('Amend Done');
+  it('a correction that takes the starting charge off leaves the work in progress, charged when it is completed', async () => {
+    const patient = await createPatient('Amend Start');
     const first = await startVisit(patient, DAY_1);
     const { record: plan } = await started(first, '16');
-    await complete(first);
-    const second = await startVisit(patient, DAY_2);
-    await ok<PlanResult>(dentist.agent.post(path(second, `plans/${plan.id}/perform`)));
-    const other = await ok<{ record: { id: string } }>(
-      dentist.agent
-        .post(path(second, 'services'))
-        .send({ procedureId: rootCanal.id, toothCode: '17' }),
-      201,
-    );
-    const completed = await complete(second);
+    const other = await addService(first, '17');
+    const completed = await complete(first);
+    expect(completed.money.total).toBe('400.00');
 
     const amended = await ok<VisitResult>(
-      dentist.agent.post(path(second, 'amend')).send({
+      dentist.agent.post(path(first, 'amend')).send({
         expectedUpdatedAt: completed.updatedAt,
-        reason: 'Not finished after all',
+        reason: 'Charge it when it is done',
         discount: { mode: completed.discountMode, value: completed.discountValue },
-        services: [{ id: other.record.id }],
+        services: [{ id: other.id }],
       }),
     );
     expect(amended.visit.money.total).toBe('200.00');
     expect((await chartOf(patient)).plans).toMatchObject([
-      { id: plan.id, status: 'in_progress', performedInVisitId: null },
+      { id: plan.id, status: 'in_progress', chargedIn: null },
+    ]);
+
+    const second = await startVisit(patient, DAY_2);
+    const done = await ok<PlanResult>(dentist.agent.post(path(second, `plans/${plan.id}/perform`)));
+    expect(done.visit.services).toMatchObject([{ planId: plan.id, final: { amount: '200.00' } }]);
+    expect((await complete(second)).money.total).toBe('200.00');
+    expect(await charges(patient)).toEqual([
+      [first.id, '400.00'],
+      [second.id, '200.00'],
     ]);
   });
 
-  it('cancels abandoned work at no charge, in a visit and from the record; a void leaves it in progress', async () => {
+  it('cancelled work keeps its charge; a voided start is never charged again', async () => {
     const patient = await createPatient('Abandoned');
     const first = await startVisit(patient, DAY_1);
     const { record: inVisit } = await started(first, '26');
-    const { record: fromRecord } = await started(first, '27');
+    const { record: afterVoid } = await started(first, '27');
+    const { record: fromRecord } = await started(first, '28');
     const completed = await complete(first);
+    expect(await charges(patient)).toEqual([[first.id, '600.00']]);
 
     const second = await startVisit(patient, DAY_2);
     const cancelled = await ok<PlanResult>(
       dentist.agent.post(path(second, `plans/${inVisit.id}/cancel`)),
     );
-    expect(cancelled.record).toMatchObject({ status: 'cancelled', cancelledInVisitId: second.id });
+    expect(cancelled.record).toMatchObject({
+      status: 'cancelled',
+      cancelledInVisitId: second.id,
+      chargedIn: { visitId: first.id },
+    });
     await expectProblem(
       dentist.agent.put(path(second, `plans/${inVisit.id}/session`)).send({}),
       409,
       'plan.not_in_progress',
     );
+    // The cancelled work's line is a charge, not treatment.
+    expect((await chartOf(patient)).teeth.find((tooth) => tooth.code === '26')).toBeUndefined();
 
     // Voiding the visit that started it leaves the work in progress, the session marked voided.
     await ok(
@@ -418,10 +450,16 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
     );
     const chart = await chartOf(patient);
     expect(chart.voidedVisitIds).toEqual([first.id]);
-    expect(chart.plans.find((plan) => plan.id === fromRecord.id)).toMatchObject({
+    expect(chart.plans.find((plan) => plan.id === afterVoid.id)).toMatchObject({
       status: 'in_progress',
       sessions: [{ visitId: first.id }],
     });
+    // Completing it charges nothing: the voided line still stands for it.
+    const done = await ok<PlanResult>(
+      dentist.agent.post(path(second, `plans/${afterVoid.id}/perform`)),
+    );
+    expect(done.visit.services).toEqual([]);
+    expect((await complete(second)).money.total).toBe('0.00');
 
     const { chart: after } = await ok<PatientChartResult>(
       dentist.agent.post(`/api/v1/clinical/patients/${patient.id}/plans/${fromRecord.id}/cancel`),
@@ -430,6 +468,6 @@ describe('clinical: work over several visits, charged when done (ADR-0032)', () 
       status: 'cancelled',
       cancelledInVisitId: null,
     });
-    expect(await charges(patient)).toEqual([]);
+    expect(await charges(patient)).toEqual([[first.id, '600.00']]);
   });
 });

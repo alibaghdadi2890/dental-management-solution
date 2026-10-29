@@ -1,3 +1,4 @@
+import type { ChargeUnit, Jaw } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, getTableColumns, isNotNull, isNull } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -12,7 +13,9 @@ export type StoredDiagnosisRecord = Omit<DiagnosisRow, 'tenantId'>;
 export type NewDiagnosisRecord = Pick<
   StoredDiagnosisRecord,
   | 'patientId'
+  | 'level'
   | 'toothCode'
+  | 'jaw'
   | 'surfaces'
   | 'diagnosisId'
   | 'code'
@@ -54,6 +57,13 @@ const { tenantId: _tenantId, ...diagnosisColumns } = getTableColumns(patientDiag
  * patient too: a visit reaches only its own patient's records, and the queries use the
  * `(tenant_id, patient_id, tooth_code)` index.
  */
+/** Where a diagnosis is: a tooth (`per_tooth`), a jaw (`per_jaw`) or the whole mouth. */
+export interface DiagnosisPlace {
+  level: ChargeUnit;
+  toothCode: string | null;
+  jaw: Jaw | null;
+}
+
 @Injectable()
 export class PatientDiagnosesRepository {
   constructor(private readonly db: TenantDb) {}
@@ -156,8 +166,11 @@ export class PatientDiagnosesRepository {
     );
   }
 
-  /** The id of the tooth's most recently recorded active diagnosis, or null (spec §drawer). */
-  async latestActiveOnTooth(patientId: string, toothCode: string): Promise<string | null> {
+  /**
+   * The id of the most recently recorded active diagnosis at this place — the tooth, the jaw, or
+   * the whole mouth (spec §drawer, ADR-0064) — or null.
+   */
+  async latestActiveAt(patientId: string, place: DiagnosisPlace): Promise<string | null> {
     const [row] = await this.db.run((tx) =>
       tx
         .select({ id: patientDiagnoses.id })
@@ -165,7 +178,9 @@ export class PatientDiagnosesRepository {
         .where(
           and(
             eq(patientDiagnoses.patientId, patientId),
-            eq(patientDiagnoses.toothCode, toothCode),
+            eq(patientDiagnoses.level, place.level),
+            place.toothCode === null ? undefined : eq(patientDiagnoses.toothCode, place.toothCode),
+            place.jaw === null ? undefined : eq(patientDiagnoses.jaw, place.jaw),
             eq(patientDiagnoses.status, 'active'),
             isNull(patientDiagnoses.deletedAt),
           ),
