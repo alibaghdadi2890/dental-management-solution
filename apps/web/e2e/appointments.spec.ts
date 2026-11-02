@@ -6,6 +6,7 @@ const TEMPORARY = 'temporary-pw-1';
 const ORIGIN = 'http://localhost:5173';
 
 interface Clinic {
+  timeZone: string;
   owner: string;
   desk: string;
   deskId: string;
@@ -32,6 +33,15 @@ const apiFor =
 const signInApi = (api: Api, email: string, password: string) =>
   api('POST', '/auth/sign-in/email', { email, password, rememberMe: true });
 
+/**
+ * A zone where it is mid-morning now, so the flows below, which book later today, pass at any hour:
+ * late in the evening "later today" would be past the end of the day.
+ */
+function morningZone(): string {
+  const offset = ((10 - new Date().getUTCHours() + 36) % 24) - 12;
+  return offset >= 0 ? `Etc/GMT-${String(offset)}` : `Etc/GMT+${String(-offset)}`;
+}
+
 /** A clinic set up through the API: the flows under test are the calendar's, not provisioning's. */
 async function provision(browser: Browser): Promise<Clinic> {
   const run = Date.now().toString(36);
@@ -49,6 +59,16 @@ async function provision(browser: Browser): Promise<Clinic> {
   await api('POST', '/session/password', { currentPassword: TEMPORARY, newPassword: PASSWORD });
   const [branch] = (await api('GET', '/branches')) as { id: string }[];
   if (!branch) throw new Error('no branch');
+  const timeZone = morningZone();
+  await api('PATCH', '/tenant', { timeZone });
+  await api('PUT', `/scheduling/branches/${branch.id}/opening-hours`, {
+    days: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
+      weekday,
+      isOpen: true,
+      from: '08:00',
+      to: '18:00',
+    })),
+  });
   const rooms = (await api('POST', '/rooms/batch', {
     items: ['1', '2'].map((n) => ({
       branchId: branch.id,
@@ -74,6 +94,7 @@ async function provision(browser: Browser): Promise<Clinic> {
   await api('POST', '/session/password', { currentPassword: TEMPORARY, newPassword: PASSWORD });
   await context.close();
   return {
+    timeZone,
     owner,
     desk,
     deskId: staff.id,
@@ -145,9 +166,11 @@ test('a phone booking with a quick patient, through check-in, a visit and the ch
     await panel.getByRole('button', { name: 'Add patient' }).click();
     await panel.getByRole('button', { name: 'Check-up' }).click();
     await panel.getByRole('button', { name: 'Dr. Ana Reyes' }).click();
-    const later = new Date(Date.now() + 2 * 3_600_000);
-    const time = `${String(later.getHours()).padStart(2, '0')}:00`;
-    await panel.getByLabel('Start time').selectOption(time);
+    const hour = new Intl.DateTimeFormat('en-GB', {
+      timeZone: clinic.timeZone,
+      hour: '2-digit',
+    }).format(Date.now() + 2 * 3_600_000);
+    await panel.getByLabel('Start time').selectOption(`${hour}:00`);
     await expect(panel.getByRole('button', { name: 'Confirm booking' })).toBeEnabled();
     await panel.getByRole('button', { name: 'Confirm booking' }).click();
     await expect(desk.getByRole('status').filter({ hasText: 'Appointment booked' })).toBeVisible();

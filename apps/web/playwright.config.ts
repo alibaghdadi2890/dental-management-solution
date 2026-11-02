@@ -7,6 +7,8 @@ export default defineConfig({
   retries: process.env['CI'] ? 2 : 0,
   use: {
     baseURL: 'http://localhost:5173',
+    // As on the CI runner: the app works in the clinic's zone, never the browser's.
+    timezoneId: 'UTC',
     trace: 'on-first-retry',
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
