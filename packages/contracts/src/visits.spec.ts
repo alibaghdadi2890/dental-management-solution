@@ -107,6 +107,7 @@ const VISIT = {
   branchId: ID,
   roomId: ID_2,
   dentistId: ID,
+  appointmentId: null,
   startedBy: ID,
   type: 'treatment',
   currentStep: 'today',

@@ -25,6 +25,8 @@ const MATRIX = {
     'file:archive',
     'audit:read',
     'compensation:read',
+    'appointment:read',
+    'appointment:write',
   ],
   assistant: [
     'tenant:read',
@@ -37,6 +39,9 @@ const MATRIX = {
     'visit:write',
     'file:read',
     'file:write',
+    'appointment:read',
+    'appointment:write',
+    'appointment:write_all',
   ],
   frontdesk: [
     'tenant:read',
@@ -50,6 +55,10 @@ const MATRIX = {
     'payment:write',
     'file:read',
     'file:write',
+    'appointment:read',
+    'appointment:write',
+    'appointment:write_all',
+    'appointment:override',
   ],
 } as const;
 

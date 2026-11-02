@@ -29,6 +29,10 @@ const FRONTDESK = [
   'file:read',
   'file:write',
   'payment:write',
+  'appointment:read',
+  'appointment:write',
+  'appointment:write_all',
+  'appointment:override',
 ];
 
 describe('session: role-based permissions, branch switch and password change', () => {

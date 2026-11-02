@@ -10,6 +10,7 @@ import {
   startVisitResultSchema,
   startVisitSchema,
   visitComplaintInputSchema,
+  completeVisitSchema,
   visitDiscountSchema,
   visitFiltersSchema,
   visitListQuerySchema,
@@ -58,6 +59,7 @@ class LiveVisitQueryDto extends createZodDto(liveVisitQuerySchema) {}
 class LiveVisitRefDto extends createZodDto(liveVisitRefSchema) {}
 class VisitDto extends createZodDto(visitSchema) {}
 class VisitResultDto extends createZodDto(visitResultSchema) {}
+class CompleteVisitDto extends createZodDto(completeVisitSchema) {}
 class VisitNotesDto extends createZodDto(visitNotesSchema) {}
 class VisitDiscountDto extends createZodDto(visitDiscountSchema) {}
 class VisitParamsDto extends createZodDto(z.object({ id: idSchema })) {}
@@ -189,8 +191,8 @@ export class VisitsController {
   @RequirePermission('visit:write')
   @HttpCode(HttpStatus.OK)
   @ZodResponse({ type: VisitResultDto })
-  complete(@Param() params: VisitParamsDto) {
-    return this.visits.complete(params.id);
+  complete(@Param() params: VisitParamsDto, @Body() body: CompleteVisitDto) {
+    return this.visits.complete(params.id, body);
   }
 
   /** `{ visit }` corrected ("Correct visit", ADR-0062); `billing` has posted the difference in the

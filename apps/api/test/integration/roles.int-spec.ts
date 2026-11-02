@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { AuditPage, Role, Tenant } from '@dcm/contracts';
+import type { AuditPage, Role, SystemRoleKey, Tenant } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RolesService } from '../../src/modules/roles';
@@ -11,6 +11,10 @@ import { connectTestDatabase, type TestDatabase } from '../support/postgres';
 import { createPlatformAdmin, signIn } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
 import { asPlatformAdminIn, createBareTenant } from '../support/tenants';
+
+/** A role as the older migrations left it: 0056 adds the appointment permissions. */
+const beforeAppointments = (key: SystemRoleKey) =>
+  systemRole(key).permissions.filter((permission) => !permission.startsWith('appointment:'));
 
 describe('roles: system roles, assignments and permission lookup', () => {
   let database: TestDatabase;
@@ -220,7 +224,7 @@ describe('roles: system roles, assignments and permission lookup', () => {
         ).rows.map((row) => row.permission);
       const sorted = (values: readonly string[]) => [...values].sort();
       for (const key of ['owner', 'dentist', 'assistant', 'frontdesk'] as const) {
-        expect(await grantsOf(idOf(key))).toEqual(sorted(systemRole(key).permissions));
+        expect(await grantsOf(idOf(key))).toEqual(sorted(beforeAppointments(key)));
       }
       expect(await grantsOf(customId)).toEqual(['payment:refund']);
       expect(
@@ -260,7 +264,7 @@ describe('roles: system roles, assignments and permission lookup', () => {
         [added.rows[0]?.id],
       );
       expect(granted.rows.map((row) => row.permission)).toEqual(
-        [...systemRole('admin').permissions].sort(),
+        [...beforeAppointments('admin')].sort(),
       );
       const template = await client.query<{ permission: string }>(
         `select permission from role_template_permissions

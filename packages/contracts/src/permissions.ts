@@ -34,6 +34,10 @@ export const PERMISSIONS = [
   'audit:read',
   'compensation:read',
   'compensation:manage',
+  'appointment:read',
+  'appointment:write',
+  'appointment:write_all',
+  'appointment:override',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

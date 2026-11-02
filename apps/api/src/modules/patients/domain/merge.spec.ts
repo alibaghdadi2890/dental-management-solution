@@ -7,6 +7,7 @@ const LATEX = { id: 'latex', name: 'Latex' };
 
 function patient(overrides: Partial<DomainPatient> = {}): DomainPatient {
   return {
+    registrationIncomplete: false,
     id: 'kept-id',
     displayNumber: 'P-000001',
     fullName: 'Kept Name',

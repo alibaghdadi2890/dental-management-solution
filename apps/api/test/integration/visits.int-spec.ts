@@ -615,13 +615,15 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
             .filter((entry) => entry.action === 'VisitCompleted')
             .map((entry) => entry.after),
         )
-        .toContainEqual({
-          visitId: visit.id,
-          patientId: patient.id,
-          currency: 'USD',
-          total: '0.00',
-          localDate: TODAY,
-        });
+        .toContainEqual(
+          expect.objectContaining({
+            visitId: visit.id,
+            patientId: patient.id,
+            currency: 'USD',
+            total: '0.00',
+            localDate: TODAY,
+          }),
+        );
 
       const other = await createPatient(main, 'Complete Room Reuse');
       const reused = await started(main.owner, {

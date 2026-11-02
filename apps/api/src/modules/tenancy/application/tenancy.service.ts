@@ -25,7 +25,12 @@ import {
   TenantNotFoundError,
   TenantSlugTakenError,
 } from '../domain/tenancy-errors';
-import { TENANT_CURRENCY_CHANGED, type TenantCurrencyChanged } from '../events/tenant-events';
+import {
+  BRANCH_CREATED,
+  type BranchCreated,
+  TENANT_CURRENCY_CHANGED,
+  type TenantCurrencyChanged,
+} from '../events/tenant-events';
 import { BranchesRepository } from '../persistence/branches.repository';
 import { RoomsRepository } from '../persistence/rooms.repository';
 import { type NewTenant, TenantsRepository } from '../persistence/tenants.repository';
@@ -177,6 +182,8 @@ export class TenancyService {
         resourceId: branch.id,
         after: branch,
       });
+      const event: BranchCreated = this.events.create(BRANCH_CREATED, { branchId: branch.id });
+      await this.events.publish(event);
       return branch;
     });
   }
@@ -205,6 +212,11 @@ export class TenancyService {
 
   listRooms(branchId?: string): Promise<Room[]> {
     this.context.requirePermission('tenant:read');
+    return this.rooms.list(branchId);
+  }
+
+  /** `listRooms` without the gate: a building block for `scheduling`'s room rule and names. */
+  roomsOf(branchId?: string): Promise<Room[]> {
     return this.rooms.list(branchId);
   }
 

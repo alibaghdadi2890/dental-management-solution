@@ -19,6 +19,7 @@ const history = (allergyIds: string[], medication: string | null = null) => ({
 
 function patient(overrides: Partial<DomainPatient> = {}): DomainPatient {
   return {
+    registrationIncomplete: false,
     id: '01a0e36d-9db3-7113-8250-342f0c095a91',
     displayNumber: 'P-000001',
     fullName: 'Lina Aoun',

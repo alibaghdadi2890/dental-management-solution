@@ -1126,6 +1126,78 @@ describe('tenant isolation through the public services', () => {
       expect(switchTo.body).toMatchObject({ code: 'session.branch_not_assigned' });
     });
 
+    it("scheduling (feature 14): B's appointments, follow-ups and hours are not found for A, and unchanged", async () => {
+      const { profileId } = await bOwnerDentist();
+      const branchId = b.branch.id;
+      const startsAt = '2099-03-02T08:00:00.000Z';
+      const patient = (
+        await ownerB
+          .post('/api/v1/patients')
+          .set('Idempotency-Key', newId())
+          .send({ fullName: 'Bo Isolated' })
+      ).body as { id: string };
+      const booked = await ownerB
+        .post('/api/v1/scheduling/appointments')
+        .set('Idempotency-Key', newId())
+        .send({
+          branchId,
+          patientId: patient.id,
+          dentistId: profileId,
+          startsAt,
+          durationMin: 30,
+          reason: 'Check-up',
+        });
+      expect(booked.status, JSON.stringify(booked.body)).toBe(201);
+      const id = (booked.body as { id: string }).id;
+      const paths = ['confirm', 'check-in', 'undo-check-in', 'room', 'cancel', 'no-show', 'resize'];
+      for (const path of paths) {
+        const response = await ownerA
+          .post(`/api/v1/scheduling/appointments/${id}/${path}`)
+          .send(path === 'resize' ? { durationMin: 45 } : path === 'room' ? { roomId: null } : {});
+        expect(response.status, path).toBe(404);
+      }
+      const moved = await ownerA
+        .post(`/api/v1/scheduling/appointments/${id}/reschedule`)
+        .set('Idempotency-Key', newId())
+        .send({ startsAt });
+      expect(moved.status).toBe(404);
+      expect((await ownerA.get(`/api/v1/scheduling/appointments/${id}`)).status).toBe(404);
+      expect(
+        (
+          await ownerA.post('/api/v1/scheduling/appointments/check').send({
+            branchId,
+            dentistId: profileId,
+            startsAt,
+            durationMin: 30,
+          })
+        ).status,
+      ).toBe(422);
+      expect(
+        (await ownerA.get(`/api/v1/scheduling/branches/${branchId}/opening-hours`)).status,
+      ).toBe(404);
+      const hours = await ownerB.get(`/api/v1/scheduling/branches/${branchId}/opening-hours`);
+      expect(
+        (await ownerA.put(`/api/v1/scheduling/branches/${branchId}/opening-hours`).send(hours.body))
+          .status,
+      ).toBe(404);
+      const lists = await Promise.all([
+        ownerA.get('/api/v1/scheduling/appointments').query({
+          branchId,
+          from: '2099-03-01T00:00:00Z',
+          to: '2099-03-03T00:00:00Z',
+        }),
+        ownerA.get(`/api/v1/scheduling/patients/${patient.id}/appointments`),
+        ownerA.get(`/api/v1/scheduling/patients/${patient.id}/follow-ups`),
+        ownerA.get(`/api/v1/scheduling/follow-ups?branchId=${branchId}`),
+      ]);
+      for (const list of lists) {
+        expect(list.status).toBe(200);
+        expect(list.body).toEqual([]);
+      }
+      const after = await ownerB.get(`/api/v1/scheduling/appointments/${id}`);
+      expect(after.body).toMatchObject({ status: 'booked', startsAt });
+    });
+
     it("compensation (ADR-0058–0060): B's dentists, agreements, rows and months are not found for A, and unchanged", async () => {
       const { profileId } = await bOwnerDentist();
       const bBase = `/api/v1/compensation/dentists/${profileId}`;
@@ -1237,6 +1309,10 @@ describe('tenant isolation through the public services', () => {
       'compensation_adjustments',
       'compensation_payouts',
       'compensation_periods',
+      'appointments',
+      'follow_ups',
+      'branch_opening_hours',
+      'scheduling_settings',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

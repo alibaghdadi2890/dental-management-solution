@@ -229,6 +229,8 @@ export const visits = pgTable(
     /** Null when the branch has no active rooms (W7). */
     roomId: uuid(),
     dentistId: uuid().notNull(),
+    /** The appointment it was started from (feature 14); no foreign key across modules. */
+    appointmentId: uuid(),
     startedBy: uuid().notNull(),
     /** Why the patient is here; it decides the steps (feature 10, ADR-0044). Set at start. */
     type: visitType().notNull(),

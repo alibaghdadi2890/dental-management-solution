@@ -192,6 +192,19 @@ export const problemDetailsSchema = z.object({
   permission: z.string().optional(),
   /** `role.has_holders`: how many people hold the role. */
   holders: z.number().int().nonnegative().optional(),
+  /** `appointment.conflict`: what the save met (`appointmentConflictSchema`). */
+  conflicts: z
+    .array(
+      z.object({
+        kind: z.string(),
+        hard: z.boolean(),
+        roomName: z.string().nullable(),
+        dentistName: z.string().nullable(),
+      }),
+    )
+    .optional(),
+  /** `patient.has_upcoming_appointments`: who the refused archive is about. */
+  patientName: z.string().optional(),
 });
 export type ProblemDetails = z.infer<typeof problemDetailsSchema>;
 

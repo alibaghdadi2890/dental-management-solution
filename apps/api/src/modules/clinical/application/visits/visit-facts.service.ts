@@ -1,4 +1,11 @@
-import { fromCents, lineFinal, toCents, type VisitNumber, type VisitStatus } from '@dcm/contracts';
+import {
+  fromCents,
+  lineFinal,
+  type PlanStatus,
+  toCents,
+  type VisitNumber,
+  type VisitStatus,
+} from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { RequestContext } from '../../../../platform/cls/request-context';
 import { TenantDb } from '../../../../platform/db/tenant-db';
@@ -129,6 +136,29 @@ export class VisitFactsService {
   async numbersFor(visitIds: readonly string[]): Promise<VisitNumber[]> {
     this.context.requirePermission('visit:read');
     return this.tenantDb.run(() => this.visits.numbersFor([...new Set(visitIds)]));
+  }
+
+  /**
+   * For `scheduling`'s Auto room (A1): the room of most of the dentist's visits in the branch since
+   * `since`. Not permission-gated: a building block read under the booking's own checks.
+   */
+  usualRoom(dentistId: string, branchId: string, since: Date): Promise<string | null> {
+    return this.tenantDb.run(() => this.visits.usualRoom(dentistId, branchId, since));
+  }
+
+  /** For `scheduling` (G20): the status of each plan among `planIds`; unknown ids are absent. */
+  planStatuses(planIds: readonly string[]): Promise<Map<string, PlanStatus>> {
+    return this.tenantDb.run(() => this.plans.statusesOf([...new Set(planIds)]));
+  }
+
+  /** For `scheduling` (A15): a live visit's patient, or null when the visit is not live. */
+  liveVisit(visitId: string): Promise<{ patientId: string } | null> {
+    return this.tenantDb.run(async () => {
+      const visit = await this.visits.findById(visitId);
+      return visit && (visit.status === 'in_progress' || visit.status === 'paused')
+        ? { patientId: visit.patientId }
+        : null;
+    });
   }
 
   /**

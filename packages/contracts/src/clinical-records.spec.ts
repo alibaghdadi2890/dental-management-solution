@@ -374,6 +374,7 @@ describe('charting route results', () => {
     branchId: ID,
     roomId: null,
     dentistId: ID,
+    appointmentId: null,
     startedBy: ID,
     type: 'treatment',
     currentStep: 'today',

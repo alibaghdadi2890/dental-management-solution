@@ -117,6 +117,7 @@ export class ImportsService {
         email: row.email,
         address: row.address,
         insurance: null,
+        registrationIncomplete: false,
         medicalHistory: {
           noKnownAllergies: false,
           allergyIds: [...allergyIds],

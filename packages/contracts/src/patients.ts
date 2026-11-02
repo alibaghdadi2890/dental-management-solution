@@ -93,8 +93,17 @@ export const patientCreateSchema = patientInputSchema
   .extend({
     contacts: z.array(contactLinkInputSchema).max(PATIENT_CREATE_CONTACTS_MAX).default([]),
     linkContactId: idSchema.optional(),
+    /** A phone booking's quick patient (feature 14): needs a phone, finished later. */
+    registrationIncomplete: z.boolean().default(false),
   })
   .superRefine((input, context) => {
+    if (input.registrationIncomplete && input.phone === null) {
+      context.addIssue({
+        code: 'custom',
+        message: 'A quick patient needs a phone',
+        path: ['phone'],
+      });
+    }
     const seen = new Set<string>();
     input.contacts.forEach((link, index) => {
       const target = link.target;
@@ -155,6 +164,8 @@ export const patientSchema = z.object({
   dentitionOverride: dentitionStageSchema.nullable(),
   /** The import key (feature 6); read-only here, null for records not imported. */
   externalId: z.string().nullable(),
+  /** Created by a phone booking and not finished yet (feature 14, ADR-0070). */
+  registrationIncomplete: z.boolean(),
   archivedAt: isoDateTimeSchema.nullable(),
   mergedIntoId: idSchema.nullable(),
   createdAt: isoDateTimeSchema,
@@ -185,6 +196,7 @@ export const patientListItemSchema = patientSchema
     sex: true,
     primaryDentistId: true,
     email: true,
+    registrationIncomplete: true,
     archivedAt: true,
     updatedAt: true,
   })
@@ -256,10 +268,14 @@ export type DuplicateGroup = z.infer<typeof duplicateGroupSchema>;
 
 export const duplicateGroupsSchema = z.array(duplicateGroupSchema);
 
-/** The create/edit panel's debounced duplicate warning. */
+/**
+ * The create/edit panel's debounced duplicate warning. Without a date of birth (a phone booking's
+ * quick patient) it matches the same name or the same phone (feature 14, G2).
+ */
 export const duplicateCheckQuerySchema = z.object({
   fullName: nameSchema,
-  dateOfBirth: isoDateSchema,
+  dateOfBirth: blankToUndefined(isoDateSchema.optional()),
+  phone: blankToUndefined(z.string().trim().max(40).optional()),
   excludeId: blankToUndefined(idSchema.optional()),
 });
 export type DuplicateCheckQuery = z.infer<typeof duplicateCheckQuerySchema>;
@@ -350,3 +366,9 @@ export const patientNameSchema = z.object({
   displayNumber: z.string(),
 });
 export type PatientName = z.infer<typeof patientNameSchema>;
+
+/** Who a calendar card is about (feature 14): a name, never the record. */
+export const appointmentPatientSchema = patientNameSchema.extend({
+  registrationIncomplete: z.boolean(),
+});
+export type AppointmentPatient = z.infer<typeof appointmentPatientSchema>;

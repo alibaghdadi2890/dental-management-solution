@@ -14,6 +14,15 @@ export const CAPABILITY_GROUPS = [
   },
   { key: 'clinical', permissions: ['chart:write'] },
   {
+    key: 'schedule',
+    permissions: [
+      'appointment:read',
+      'appointment:write',
+      'appointment:write_all',
+      'appointment:override',
+    ],
+  },
+  {
     key: 'money',
     permissions: [
       'payment:read',
@@ -50,6 +59,9 @@ export const CAPABILITY_IMPLIES: Readonly<
   'visit:void': ['visit:read'],
   'visit:discount': ['visit:read'],
   'chart:write': ['visit:read'],
+  'appointment:write': ['appointment:read'],
+  'appointment:write_all': ['appointment:write'],
+  'appointment:override': ['appointment:write'],
   'payment:write': ['payment:read'],
   'payment:refund': ['payment:read'],
   'finance:read': ['payment:read'],

@@ -116,6 +116,7 @@ export class VisitImportService {
         branchId: input.branchId,
         roomId: input.roomId,
         dentistId: input.dentistId,
+        appointmentId: null,
         startedBy: userId,
         type: 'treatment',
         currentStep: 'complete',

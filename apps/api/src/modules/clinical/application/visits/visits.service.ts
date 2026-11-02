@@ -3,6 +3,7 @@ import {
   defaultWorklist,
   firstStep,
   inVisitScope,
+  type CompleteVisit,
   type LiveVisitQuery,
   type LiveVisitRef,
   type StartDefaults,
@@ -42,11 +43,13 @@ import { elapsedSeconds, resumePausedSeconds } from '../../domain/visit-timer';
 import {
   VISIT_COMPLETED,
   VISIT_DISCARDED,
+  VISIT_LINKED_TO_APPOINTMENT,
   VISIT_PAUSED,
   VISIT_RESUMED,
   VISIT_STARTED,
   type VisitCompleted,
   type VisitDiscarded,
+  type VisitLinkedToAppointment,
   type VisitPaused,
   type VisitResumed,
   type VisitStarted,
@@ -126,6 +129,17 @@ export class VisitsService {
         if (!inVisitScope(this.context.visitScope(), existing)) {
           throw new VisitLiveElsewhereError('The patient is in another visit already');
         }
+        const appointmentId = input.appointmentId;
+        if (appointmentId !== undefined && existing.appointmentId === null) {
+          const linked = await this.visits.update(existing.id, { appointmentId });
+          const event: VisitLinkedToAppointment = this.events.create(VISIT_LINKED_TO_APPOINTMENT, {
+            visitId: linked.id,
+            patientId: linked.patientId,
+            appointmentId,
+          });
+          await this.events.publish(event);
+          return { visit: await this.presenter.present(linked), resumed: true };
+        }
         return { visit: await this.presenter.present(existing), resumed: true };
       }
       const planIds = await this.worklistFor(patient.id, input);
@@ -148,6 +162,7 @@ export class VisitsService {
         branchId,
         roomId,
         dentistId: input.dentistId,
+        appointmentId: input.appointmentId ?? null,
         startedBy: userId,
         type: input.type,
         currentStep: firstStep(input.type),
@@ -172,6 +187,7 @@ export class VisitsService {
         dentistId: visit.dentistId,
         roomId: visit.roomId,
         type: visit.type,
+        appointmentId: visit.appointmentId,
       });
       await this.events.publish(event);
       return { visit: await this.presenter.present(visit), resumed: false };
@@ -343,6 +359,7 @@ export class VisitsService {
         visitId: id,
         patientId: after.patientId,
         roomId: after.roomId,
+        appointmentId: after.appointmentId,
       });
       await this.events.publish(event);
       return after;
@@ -358,7 +375,7 @@ export class VisitsService {
    * → 409 `visit.not_live`, so a retry can't charge twice. An archived patient's live visit still
    * completes; only a new visit is refused.
    */
-  async complete(id: string): Promise<VisitResult> {
+  async complete(id: string, input: CompleteVisit = {}): Promise<VisitResult> {
     this.context.requirePermission('visit:write');
     return this.tenantDb.run(async () => {
       const before = await this.locks.patientThenVisit(id);
@@ -408,6 +425,11 @@ export class VisitsService {
         currency: after.currency,
         total: money.total,
         localDate: after.localDate,
+        branchId: after.branchId,
+        dentistId: after.dentistId,
+        displayNumber: after.displayNumber,
+        appointmentId: after.appointmentId,
+        nextAppointment: input.nextAppointment ?? null,
       });
       await this.events.publish(event);
       return { visit: await this.presenter.present(after) };

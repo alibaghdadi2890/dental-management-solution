@@ -31,6 +31,7 @@ function nextDisplayNumber(): string {
 
 function newPatient(overrides: Partial<NewPatient> = {}): NewPatient {
   return {
+    registrationIncomplete: false,
     displayNumber: nextDisplayNumber(),
     fullName: 'Test Patient',
     phone: PHONE('+96100000000', '00000000'),
@@ -614,17 +615,19 @@ describe('patients: repositories', () => {
       const a = await create(twinTenant, { fullName: 'Same Name', dateOfBirth: '1985-03-03' });
       const b = await create(twinTenant, { fullName: 'same name', dateOfBirth: '1985-03-03' });
 
-      const twins = await inTenant(twinTenant, () => repo.findTwins('Same Name', '1985-03-03'));
+      const twins = await inTenant(twinTenant, () =>
+        repo.findTwins('Same Name', { dateOfBirth: '1985-03-03' }),
+      );
       expect(twins.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
 
       // Case-insensitive: a differently-cased full name still finds the same twins.
       const twinsOtherCase = await inTenant(twinTenant, () =>
-        repo.findTwins('SAME NAME', '1985-03-03'),
+        repo.findTwins('SAME NAME', { dateOfBirth: '1985-03-03' }),
       );
       expect(twinsOtherCase.map((t) => t.id).sort()).toEqual([a.id, b.id].sort());
 
       const excluding = await inTenant(twinTenant, () =>
-        repo.findTwins('Same Name', '1985-03-03', a.id),
+        repo.findTwins('Same Name', { dateOfBirth: '1985-03-03' }, a.id),
       );
       expect(excluding.map((t) => t.id)).toEqual([b.id]);
     });
@@ -899,7 +902,9 @@ describe('patients: repositories', () => {
       expect(duplicates.find((row) => row.id === first.id)?.primaryGuardian?.fullName).toBe(
         'Twin Parent',
       );
-      const twins = await inTenant(twinTenant, () => repo.findTwins('twin kid', '2018-01-01'));
+      const twins = await inTenant(twinTenant, () =>
+        repo.findTwins('twin kid', { dateOfBirth: '2018-01-01' }),
+      );
       expect(twins.map((row) => row.primaryGuardian?.contactId ?? 'none').sort()).toEqual(
         [guardian.id, 'none'].sort(),
       );

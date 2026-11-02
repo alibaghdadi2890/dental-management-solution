@@ -92,6 +92,8 @@ export const visitListItemSchema = z.object({
   pausedAt: isoDateTimeSchema.nullable(),
   pausedSeconds: z.number().int().nonnegative(),
   branchId: idSchema,
+  /** The appointment it was started from (feature 14). */
+  appointmentId: idSchema.nullable(),
   room: z.object({ id: idSchema, name: z.string() }).nullable(),
   patient: z.object({ id: idSchema, displayNumber: displayNumberSchema, fullName: z.string() }),
   dentist: z.object({ id: idSchema, name: z.string() }),

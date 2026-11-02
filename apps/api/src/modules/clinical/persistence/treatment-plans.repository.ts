@@ -1,3 +1,4 @@
+import type { PlanStatus } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
 import { and, asc, eq, inArray, isNull, ne, or } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
@@ -167,6 +168,18 @@ export class TreatmentPlansRepository {
           .orderBy(asc(treatmentPlans.recordedAt), asc(treatmentPlans.id))
       ).map((row) => toStored(row.plan)),
     );
+  }
+
+  /** The status of each plan among `ids`; unknown ids are absent. */
+  async statusesOf(ids: readonly string[]): Promise<Map<string, PlanStatus>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({ id: treatmentPlans.id, status: treatmentPlans.status })
+        .from(treatmentPlans)
+        .where(inArray(treatmentPlans.id, [...ids])),
+    );
+    return new Map(rows.map((row) => [row.id, row.status]));
   }
 
   async update(id: string, patch: TreatmentPlanPatch): Promise<StoredTreatmentPlan> {

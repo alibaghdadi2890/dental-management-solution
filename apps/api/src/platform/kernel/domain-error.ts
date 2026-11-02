@@ -16,7 +16,7 @@ export abstract class DomainError extends Error {
    * Safe, client-facing extension members of the problem response (e.g. `attemptsLeft`).
    * Unlike `details`, which stays server-side, these are rendered to the caller.
    */
-  readonly extensions?: Readonly<Record<string, string | number | boolean>>;
+  readonly extensions?: Readonly<Record<string, string | number | boolean | readonly unknown[]>>;
 
   constructor(
     message: string,

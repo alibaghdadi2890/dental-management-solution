@@ -37,6 +37,8 @@ export interface DomainPatient extends StoredMedicalHistory {
   /** Null means "auto": the chart derives the stage from age (spec W14). */
   dentitionOverride: DentitionStage | null;
   externalId: string | null;
+  /** A phone booking's quick patient, not finished yet (ADR-0070). */
+  registrationIncomplete: boolean;
   mergedIntoId: string | null;
   deletedAt: Date | null;
   createdAt: Date;

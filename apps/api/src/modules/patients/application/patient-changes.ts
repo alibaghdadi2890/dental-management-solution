@@ -1,4 +1,10 @@
-import { type PatientPatch, type StoredPhone, storedPhone, type Tenant } from '@dcm/contracts';
+import {
+  missingInformation,
+  type PatientPatch,
+  type StoredPhone,
+  storedPhone,
+  type Tenant,
+} from '@dcm/contracts';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { historyChanged } from '../domain/medical-history';
 import type { MergePatch } from '../domain/merge';
@@ -47,6 +53,22 @@ export function normalizeFields(
     ]);
   }
   return normalized;
+}
+
+/**
+ * Whether a quick patient's record is finished once `set` is saved (G3): nothing important is
+ * missing. The patient's own phone is what counts here, so a guardian's does not finish it.
+ */
+export function completesRegistration(before: DomainPatient, set: PatientRecordPatch): boolean {
+  const phone = set.phone === undefined ? before.phone : (set.phone?.value ?? null);
+  return (
+    missingInformation({
+      dateOfBirth: set.dateOfBirth === undefined ? before.dateOfBirth : set.dateOfBirth,
+      sex: set.sex ?? before.sex,
+      phone,
+      hasReachableContact: false,
+    }).length === 0
+  );
 }
 
 /** Patch fields stored as given (no normalisation, plain equality). */

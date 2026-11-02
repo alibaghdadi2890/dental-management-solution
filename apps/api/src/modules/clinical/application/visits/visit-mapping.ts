@@ -77,6 +77,7 @@ export function toVisit(
     branchId: visit.branchId,
     roomId: visit.roomId,
     dentistId: visit.dentistId,
+    appointmentId: visit.appointmentId,
     startedBy: visit.startedBy,
     type: visit.type,
     currentStep: visit.currentStep,

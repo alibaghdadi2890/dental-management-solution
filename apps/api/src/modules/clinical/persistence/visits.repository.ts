@@ -4,11 +4,13 @@ import {
   and,
   asc,
   desc,
+  count,
   eq,
   gte,
   inArray,
   isNotNull,
   isNull,
+  max,
   ne,
   sql,
   type SQL,
@@ -47,6 +49,7 @@ export type NewVisit = Pick<
   | 'branchId'
   | 'roomId'
   | 'dentistId'
+  | 'appointmentId'
   | 'startedBy'
   | 'type'
   | 'currentStep'
@@ -81,6 +84,7 @@ export type VisitPatch = Partial<
   Pick<
     StoredVisit,
     | 'status'
+    | 'appointmentId'
     | 'currentStep'
     | 'viewMode'
     | 'reason'
@@ -394,6 +398,31 @@ export class VisitsRepository {
    * visit discarded because it was opened on the wrong patient was still in the right room), or
    * null. The start popover's default room (V3).
    */
+  /**
+   * The room of most of the dentist's visits in the branch since `since`; a tie goes to the room
+   * used last. Null without any (`scheduling`'s Auto room).
+   */
+  async usualRoom(dentistId: string, branchId: string, since: Date): Promise<string | null> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select({ roomId: visits.roomId })
+        .from(visits)
+        .where(
+          and(
+            eq(visits.dentistId, dentistId),
+            eq(visits.branchId, branchId),
+            gte(visits.startedAt, since),
+            isNotNull(visits.roomId),
+            isNull(visits.discardedAt),
+          ),
+        )
+        .groupBy(visits.roomId)
+        .orderBy(desc(count()), desc(max(visits.startedAt)))
+        .limit(1),
+    );
+    return row?.roomId ?? null;
+  }
+
   async lastRoomToday(userId: string, localDate: string): Promise<string | null> {
     const [row] = await this.db.run((tx) =>
       tx

@@ -116,6 +116,8 @@ export const visitSchema = z.object({
   roomId: idSchema.nullable(),
   /** A staff profile id (ADR-0020), never the auth user id. */
   dentistId: idSchema,
+  /** The appointment it was started from (feature 14); null for a walk-in or an import. */
+  appointmentId: idSchema.nullable(),
   /** The auth user id who started the visit. */
   startedBy: idSchema,
   /** Why the patient is here: it decides the steps (feature 10, ADR-0044). Set at start. */
@@ -179,6 +181,8 @@ export const startVisitSchema = z.object({
     .max(WORKLIST_MAX)
     .refine((ids) => new Set(ids).size === ids.length, 'The same plan is picked twice')
     .optional(),
+  /** The appointment this visit is for; `scheduling` takes it to In treatment (feature 14). */
+  appointmentId: idSchema.optional(),
 });
 export type StartVisitInput = z.infer<typeof startVisitSchema>;
 /** What a client sends (`reason` and `planIds` may be left out). */

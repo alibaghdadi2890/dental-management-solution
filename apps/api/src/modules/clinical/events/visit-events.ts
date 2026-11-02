@@ -1,4 +1,4 @@
-import type { VisitType } from '@dcm/contracts';
+import type { NextAppointmentPayload, VisitType } from '@dcm/contracts';
 import type { DomainEvent } from '../../../platform/events/domain-event';
 
 /**
@@ -16,7 +16,15 @@ export type VisitStarted = DomainEvent<
     dentistId: string;
     roomId: string | null;
     type: VisitType;
+    appointmentId: string | null;
   }
+>;
+
+/** A resumed visit took on an appointment it did not have (G9): `scheduling` reacts as to a start. */
+export const VISIT_LINKED_TO_APPOINTMENT = 'VisitLinkedToAppointment';
+export type VisitLinkedToAppointment = DomainEvent<
+  typeof VISIT_LINKED_TO_APPOINTMENT,
+  { visitId: string; patientId: string; appointmentId: string }
 >;
 
 /** A dentist confirmed the patient's medical history with the patient, in a visit (ADR-0046). */
@@ -39,7 +47,7 @@ export type VisitResumed = DomainEvent<
 export const VISIT_DISCARDED = 'VisitDiscarded';
 export type VisitDiscarded = DomainEvent<
   typeof VISIT_DISCARDED,
-  { visitId: string; patientId: string; roomId: string | null }
+  { visitId: string; patientId: string; roomId: string | null; appointmentId: string | null }
 >;
 
 /**
@@ -49,7 +57,19 @@ export type VisitDiscarded = DomainEvent<
 export const VISIT_COMPLETED = 'VisitCompleted';
 export type VisitCompleted = DomainEvent<
   typeof VISIT_COMPLETED,
-  { visitId: string; patientId: string; currency: string; total: string; localDate: string }
+  {
+    visitId: string;
+    patientId: string;
+    currency: string;
+    total: string;
+    localDate: string;
+    branchId: string;
+    dentistId: string;
+    displayNumber: number;
+    appointmentId: string | null;
+    /** What the dentist recommends next; opaque here, `scheduling` reads it (ADR-0072). */
+    nextAppointment: NextAppointmentPayload | null;
+  }
 >;
 
 /**

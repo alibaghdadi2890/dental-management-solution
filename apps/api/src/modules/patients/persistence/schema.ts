@@ -95,6 +95,8 @@ export const patients = pgTable(
      * or change an archived record's `externalId` before reusing it, never reassign it silently.
      */
     externalId: text(),
+    /** A phone booking's quick patient, not finished yet (feature 14, ADR-0070). */
+    registrationIncomplete: boolean().notNull().default(false),
     /**
      * The `Idempotency-Key` of the create request and the fingerprint of its body (feature 7,
      * H5): a retry finds this row instead of creating a second patient.

@@ -6,7 +6,18 @@ import type {
   StoredPhone,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { and, eq, getTableColumns, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 import type { Transaction } from '../../../platform/db/database';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { newId } from '../../../platform/kernel/id';
@@ -74,6 +85,7 @@ function toDomain(row: PatientRow, items: PatientMedicalItems = NO_ITEMS): Domai
     primaryDentistId: row.primaryDentistId,
     dentitionOverride: row.dentitionOverride,
     externalId: row.externalId,
+    registrationIncomplete: row.registrationIncomplete,
     mergedIntoId: row.mergedIntoId,
     deletedAt: row.deletedAt,
     createdAt: row.createdAt,
@@ -177,6 +189,7 @@ export interface NewPatient {
   firstVisitType: EntryVisitType | null;
   primaryDentistId: string | null;
   externalId: string | null;
+  registrationIncomplete: boolean;
   /** The create request's `Idempotency-Key` and body fingerprint, when it sent a key (H5). */
   idempotency: { key: string; hash: string } | null;
 }
@@ -199,6 +212,7 @@ export interface PatientPatch {
   medicalHistory?: MedicalHistoryInput;
   firstVisitType?: EntryVisitType | null;
   primaryDentistId?: string | null;
+  registrationIncomplete?: boolean;
   dentitionOverride?: DentitionStage | null;
 }
 
@@ -267,6 +281,7 @@ export class PatientsRepository {
           firstVisitType: input.firstVisitType,
           primaryDentistId: input.primaryDentistId,
           externalId: input.externalId,
+          registrationIncomplete: input.registrationIncomplete,
           idempotencyKey: input.idempotency?.key ?? null,
           idempotencyHash: input.idempotency?.hash ?? null,
         })
@@ -317,6 +332,9 @@ export class PatientsRepository {
     if (patch.firstVisitType !== undefined) set.firstVisitType = patch.firstVisitType;
     if (patch.primaryDentistId !== undefined) set.primaryDentistId = patch.primaryDentistId;
     if (patch.dentitionOverride !== undefined) set.dentitionOverride = patch.dentitionOverride;
+    if (patch.registrationIncomplete !== undefined) {
+      set.registrationIncomplete = patch.registrationIncomplete;
+    }
 
     return this.db.run(async (tx) => {
       const [row] = await tx
@@ -655,13 +673,17 @@ export class PatientsRepository {
   /** Active rows sharing a name (matched via `nameKey`) and date of birth — the duplicate check. */
   async findTwins(
     fullName: string,
-    dateOfBirth: string,
+    match: { dateOfBirth?: string | undefined; phone?: string | undefined },
     excludeId?: string,
   ): Promise<DomainPatientListRow[]> {
-    const conditions = [
+    const sameName = eq(patients.nameKey, nameKey(fullName));
+    const conditions: (SQL | undefined)[] = [
       isNull(patients.deletedAt),
-      eq(patients.nameKey, nameKey(fullName)),
-      eq(patients.dateOfBirth, dateOfBirth),
+      match.dateOfBirth !== undefined
+        ? and(sameName, eq(patients.dateOfBirth, match.dateOfBirth))
+        : match.phone !== undefined
+          ? or(sameName, eq(patients.phone, match.phone))
+          : sameName,
     ];
     if (excludeId) conditions.push(ne(patients.id, excludeId));
     const rows = await this.db.run((tx) => {

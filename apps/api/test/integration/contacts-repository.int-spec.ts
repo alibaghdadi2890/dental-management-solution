@@ -41,6 +41,7 @@ function nextDisplayNumber(): string {
 
 function newPatient(overrides: Partial<NewPatient> = {}): NewPatient {
   return {
+    registrationIncomplete: false,
     displayNumber: nextDisplayNumber(),
     fullName: 'Test Patient',
     phone: null,

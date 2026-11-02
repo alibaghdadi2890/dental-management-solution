@@ -1,4 +1,5 @@
 const UNIQUE_VIOLATION = '23505';
+const EXCLUSION_VIOLATION = '23P01';
 
 interface PgErrorLike {
   code?: unknown;
@@ -20,4 +21,17 @@ export function isUniqueViolation(error: unknown, constraint?: string): boolean 
     current = candidate.cause;
   }
   return false;
+}
+
+/** The constraint an exclusion violation names, or null for any other error. */
+export function exclusionViolationOf(error: unknown): string | null {
+  let current: unknown = error;
+  for (let depth = 0; depth < 3 && current && typeof current === 'object'; depth++) {
+    const candidate = current as PgErrorLike;
+    if (candidate.code === EXCLUSION_VIOLATION) {
+      return typeof candidate.constraint === 'string' ? candidate.constraint : '';
+    }
+    current = candidate.cause;
+  }
+  return null;
 }

@@ -14,7 +14,9 @@ import {
   type PatientName,
   type PatientPage,
   type PatientPatch,
+  type AppointmentPatient,
   type PatientRestore,
+  storedPhone,
   type Tenant,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -64,7 +66,7 @@ import {
   PatientsRepository,
 } from '../persistence/patients.repository';
 import { ContactLinks, type LinkRequest } from './contact-links';
-import { changesOf, mergeSet, normalizeFields } from './patient-changes';
+import { changesOf, completesRegistration, mergeSet, normalizeFields } from './patient-changes';
 import { toListItem, toPatient } from './patient-mapping';
 
 /**
@@ -185,6 +187,7 @@ export class PatientsService {
           primaryDentistId: input.primaryDentistId,
           // The import key is set only by the import (feature 6).
           externalId: options.externalId ?? null,
+          registrationIncomplete: input.registrationIncomplete,
           idempotency,
         }),
       );
@@ -226,9 +229,13 @@ export class PatientsService {
         await this.assertHistory(patch.medicalHistory, before);
 
       const { set, fields } = changesOf(before, patch, normalized);
-      if (fields.length === 0) return toPatient(before);
+      const registered = before.registrationIncomplete && completesRegistration(before, set);
+      if (fields.length === 0 && !registered) return toPatient(before);
 
-      const updated = await this.patients.update(id, set);
+      const updated = await this.patients.update(id, {
+        ...set,
+        ...(registered ? { registrationIncomplete: false } : {}),
+      });
       if (!updated) throw new PatientNotFoundError(NOT_FOUND);
       const after = toPatient(updated);
       await this.audit.record({
@@ -319,6 +326,19 @@ export class PatientsService {
   }
 
   /**
+   * For `scheduling`'s calendar: who these ids are, for anyone who may see it (A4), so not gated by
+   * `patient:read`. No clinical or contact data; archived and merged-away ones included.
+   */
+  async refs(ids: readonly string[]): Promise<AppointmentPatient[]> {
+    return (await this.patients.findByIds(ids)).map((patient) => ({
+      id: patient.id,
+      fullName: patient.fullName,
+      displayNumber: patient.displayNumber,
+      registrationIncomplete: patient.registrationIncomplete,
+    }));
+  }
+
+  /**
    * For other modules' services (e.g. `billing`'s export rows, design addendum C14): the list
    * items — with the resolved primary guardian, C14 (resolved per C7) — among `ids`, archived
    * ones included, in no particular order (one `listRowsByIds` query; a caller that needs a
@@ -349,6 +369,25 @@ export class PatientsService {
       throw new PatientMergedError('This record was merged into another one; use the kept record');
     }
     return toPatient(patient);
+  }
+
+  /**
+   * For a booking: reads the patient `FOR SHARE`, like `lockForDependentWrite`, so an archive or a
+   * merge waits for it and then sees the appointment. An archived patient is not booked. Gated by
+   * the booking's own permission.
+   */
+  async lockForBooking(id: string): Promise<void> {
+    if (!this.tenantDb.currentTransaction()) {
+      throw new Error('lockForBooking must run inside a transaction');
+    }
+    const patient = await this.patients.findForShare(id);
+    if (!patient) throw new PatientNotFoundError(NOT_FOUND);
+    if (patient.mergedIntoId !== null) {
+      throw new PatientMergedError('This record was merged into another one; use the kept record');
+    }
+    if (patient.deletedAt !== null) {
+      throw new PatientArchivedError('Archived patients cannot be booked; restore them first');
+    }
   }
 
   // --- The Patients list ---
@@ -419,7 +458,13 @@ export class PatientsService {
   /** The create/edit panel's warning: active patients with this name and date of birth. */
   async checkDuplicates(query: DuplicateCheckQuery): Promise<PatientListItem[]> {
     this.context.requirePermission('patient:read');
-    const twins = await this.patients.findTwins(query.fullName, query.dateOfBirth, query.excludeId);
+    const { country } = await this.tenancy.currentTenant();
+    const phone = query.phone === undefined ? null : storedPhone(query.phone, country);
+    const twins = await this.patients.findTwins(
+      query.fullName,
+      { dateOfBirth: query.dateOfBirth, phone: phone?.value },
+      query.excludeId,
+    );
     return twins.map(toListItem);
   }
 
