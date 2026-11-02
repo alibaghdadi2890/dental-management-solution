@@ -1,6 +1,11 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
+import {
+  chooseTreatment,
+  completeFromSummary,
+  openAllView,
+  toCheckoutPayment,
+} from './start-visit';
 
 interface Account {
   email: string;
@@ -182,6 +187,7 @@ test('the owner pays a dentist 40 % of collections: agreement, visit, payment, s
     const waiting = page.getByRole('region', { name: 'Ready for checkout · 1' });
     await waiting.getByRole('button', { name: 'Check out Cora Collect' }).click();
     const checkout = page.getByRole('dialog', { name: 'Checkout · Cora Collect' });
+    await toCheckoutPayment(checkout);
     await checkout.getByRole('button', { name: 'Record payment' }).click();
     await checkout.getByLabel('Amount taken now').fill('50');
     await checkout.getByRole('button', { name: 'Record full payment' }).click();

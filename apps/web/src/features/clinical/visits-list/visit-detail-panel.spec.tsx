@@ -33,6 +33,7 @@ const VISIT: VisitListItem = {
   pausedAt: null,
   pausedSeconds: 0,
   branchId: id(2),
+  appointmentId: null,
   room: { id: id(3), name: 'Room 1' },
   patient: { id: id(4), displayNumber: 'P-000004', fullName: 'Rana Haddad' },
   dentist: { id: id(5), name: 'Dr. Ana Reyes' },

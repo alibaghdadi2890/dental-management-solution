@@ -3,6 +3,7 @@
     "patients": "Patients",
     "visits": "Visites",
     "clinical": "Clinique",
+    "schedule": "Agenda",
     "money": "Argent",
     "catalog": "Catalogue",
     "files": "Fichiers",
@@ -107,6 +108,22 @@
     "compensation_manage": {
       "label": "Gérer les rémunérations",
       "description": "Réservé aux accords de rémunération et aux versements, bientôt."
+    },
+    "appointment_read": {
+      "label": "Voir l'agenda",
+      "description": "Les rendez-vous de tous les dentistes, en lecture seule."
+    },
+    "appointment_write": {
+      "label": "Gérer ses rendez-vous",
+      "description": "Réserver, confirmer, enregistrer l'arrivée, déplacer et annuler ses propres rendez-vous."
+    },
+    "appointment_write_all": {
+      "label": "Gérer les rendez-vous de tous les dentistes",
+      "description": "Agir sur les rendez-vous de tous les dentistes et la liste des suivis."
+    },
+    "appointment_override": {
+      "label": "Réserver malgré les avertissements",
+      "description": "Réserver sur un autre rendez-vous du dentiste ou hors des heures d'ouverture."
     },
     "audit_read": {
       "label": "Voir l’activité",

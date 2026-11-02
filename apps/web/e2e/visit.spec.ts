@@ -1,6 +1,11 @@
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
+import {
+  chooseTreatment,
+  completeFromSummary,
+  openAllView,
+  skipNextAppointment,
+} from './start-visit';
 
 /** The clinic every test of this file works in: provisioned once per worker, so the flows share
  * nothing with other files (their clinics, the dev tenant) and each registers its own patients. */
@@ -213,6 +218,7 @@ test('the owner charts a visit, completes it and sees its figures with the openi
     ).toHaveAttribute('aria-checked', 'true');
     await check.getByRole('checkbox', { name: 'Resolve Dental caries on #16' }).check();
     await check.getByRole('button', { name: 'Save and complete' }).click();
+    await skipNextAppointment(page);
 
     await expect(page).toHaveURL(/\/patients\/[0-9a-f-]{36}(\?.*)?$/);
     const recorded = page.getByRole('dialog', { name: 'Visit recorded' });

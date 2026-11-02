@@ -1,6 +1,11 @@
 import { type Browser, expect, type Locator, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
+import {
+  chooseTreatment,
+  completeFromSummary,
+  openAllView,
+  skipNextAppointment,
+} from './start-visit';
 
 /**
  * Feature 10, visit flows: the three stories of its acceptance — a new patient's examination end
@@ -114,10 +119,11 @@ async function pickFromDrawer(page: Page, title: string, row: string) {
   await expect(drawer).toBeHidden();
 }
 
-/** The Complete step's Complete visit, which completes at once, and the post-visit dialog. */
+/** The Complete step's Complete visit, Next appointment's Skip, and the post-visit dialog. */
 async function completeVisit(page: Page) {
   await page.getByRole('button', { name: 'Complete visit' }).click();
   await expect(page.getByRole('dialog', { name: 'Complete visit' })).toHaveCount(0);
+  await skipNextAppointment(page);
   const recorded = page.getByRole('dialog', { name: 'Visit recorded' });
   await expect(recorded).toBeVisible();
   return recorded;

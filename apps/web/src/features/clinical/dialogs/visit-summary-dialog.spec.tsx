@@ -10,6 +10,7 @@ import {
   OLDER_VISIT_ID,
   RANA,
   renderWorkspace,
+  skipNextAppointment,
   sent,
   treatmentPlan,
   visit,
@@ -318,6 +319,7 @@ describe('VisitSummaryDialog', () => {
     // The check asks about the services added by hand; kept as suggested, it changes nothing.
     expect(await within(dialog).findByText('Before you complete')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
+    await skipNextAppointment();
 
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
@@ -367,6 +369,7 @@ describe('VisitSummaryDialog', () => {
     expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/complete`)).toBeUndefined();
 
     perform.release();
+    await skipNextAppointment();
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });
@@ -379,7 +382,7 @@ describe('VisitSummaryDialog', () => {
     ]);
   });
 
-  it('while recording: the timer stops, the discount is read-only, Esc and the scrim do nothing', async () => {
+  it('Esc and the scrim close it before Complete, and nothing closes the step while it records', async () => {
     // Before the render, so the timer's own ticks run on the fake clock.
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const complete = held();
@@ -402,23 +405,15 @@ describe('VisitSummaryDialog', () => {
     const dialog = await openSummary();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
     expect(within(dialog).getByRole('button', { name: 'Recording…' })).toBeTruthy();
-    const duration = figureOf(dialog, 'Duration');
-    expect(duration).toMatch(/^12:\d\d$/);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(3000);
-    });
-    expect(figureOf(dialog, 'Duration')).toBe(duration);
-    expect(within(dialog).getByText(`Timer stops at ${duration ?? ''}`)).toBeTruthy();
-    const input = within(dialog).getByRole('textbox', { name: 'Visit discount value' });
-    expect(input.hasAttribute('readonly')).toBe(true);
-    expect(within(dialog).getByRole('radio', { name: 'Amount' })).toHaveProperty('disabled', true);
+    await skipNextAppointment();
+    const next = screen.getByRole('dialog', { name: 'Next appointment' });
 
-    fireEvent.keyDown(dialog, { key: 'Escape' });
+    fireEvent.keyDown(next, { key: 'Escape' });
     pressScrim();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(50);
     });
-    expect(screen.getByRole('dialog', { name: 'Complete visit' })).toBe(dialog);
+    expect(screen.getByRole('dialog', { name: 'Next appointment' })).toBe(next);
 
     complete.release();
     expect(await screen.findByRole('dialog', { name: 'Visit recorded' })).toBeTruthy();
@@ -461,9 +456,11 @@ describe('VisitSummaryDialog', () => {
     const { router } = renderWorkspace();
     const dialog = await openSummary();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
-    expect((await within(dialog).findByRole('alert')).textContent).toBe(
-      "Couldn't complete the visit: The ledger is unavailable",
-    );
+    await skipNextAppointment();
+    expect(
+      await screen.findByText("Couldn't complete the visit: The ledger is unavailable"),
+    ).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Next appointment' })).toBeTruthy();
     expect(router.state.location.pathname).toBe(`/visits/${VISIT_ID}`);
   });
 });
@@ -564,6 +561,7 @@ describe('VisitSummaryDialog: diagnoses still open on teeth treated today', () =
       within(dialog).getByRole('checkbox', { name: 'Resolve Occlusal caries on #26' }),
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save and complete' }));
+    await skipNextAppointment();
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });
@@ -575,6 +573,7 @@ describe('VisitSummaryDialog: diagnoses still open on teeth treated today', () =
     const { router } = renderWorkspace({ realRecord: true, permissions: WITH_PAYMENTS });
     const dialog = await reachCheck();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
+    await skipNextAppointment();
     await waitFor(() => {
       expect(router.state.location.pathname).toBe(`/patients/${RANA.id}`);
     });

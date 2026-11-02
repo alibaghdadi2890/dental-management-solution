@@ -14,6 +14,7 @@ import { clinicRoles } from '@/features/roles/roles-source';
 import { RolesTab } from '@/features/roles/roles-tab';
 import { cn } from '@/lib/utils';
 import { ChartSettingsSection } from './chart-settings-section';
+import { ScheduleSettings } from '@/features/scheduling/schedule-settings';
 import { SETTINGS_TABS, type SettingsTab } from './settings-tabs';
 
 type StaffPanel =
@@ -44,6 +45,7 @@ export function SettingsPage({ tab: requested }: { tab: SettingsTab | undefined 
   const available = SETTINGS_TABS.filter(
     (key) =>
       (key === 'chart' && canChart) ||
+      (key === 'schedule' && canChart) ||
       (key === 'staff' && canStaff) ||
       (key === 'roles' && canRoles),
   );
@@ -97,6 +99,7 @@ export function SettingsPage({ tab: requested }: { tab: SettingsTab | undefined 
           />
         )}
         {tab === 'roles' && <RolesTab source={clinicRoles(tenantId)} />}
+        {tab === 'schedule' && <ScheduleSettings />}
       </Page>
       <InPanelSlot>
         {panel?.kind === 'user' && (

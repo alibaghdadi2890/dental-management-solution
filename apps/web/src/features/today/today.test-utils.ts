@@ -22,6 +22,7 @@ export function listVisit(
     pausedAt: null,
     pausedSeconds: 0,
     branchId: id(2),
+    appointmentId: null,
     room: { id: id(3), name: 'Room 1' },
     patient: { id: id(n + 40), displayNumber: `P-0000${String(n)}`, fullName },
     dentist: { id: id(5), name: 'Dr. Ana Reyes' },

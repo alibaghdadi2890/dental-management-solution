@@ -1,4 +1,4 @@
-import { ENTRY_VISIT_TYPES, type Patient, type Session } from '@dcm/contracts';
+import { ENTRY_VISIT_TYPES, missingInformation, type Patient, type Session } from '@dcm/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { type GuardLocation, UnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 import { usePermission } from '@/features/auth/use-permission';
 import { createWithOpeningBalance } from '@/features/billing/billing-api';
-import { formatCalendarDate, todayIn } from '@/lib/format';
+import { formatCalendarDate, formatList, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useIdempotencyKeys } from '@/lib/idempotency';
 import { ContactDraftContext, useContactDrafts } from '../contact-drafts';
@@ -294,9 +294,23 @@ function PatientForm({
     <PatientField form={form} name={name} variant="panel" className={className} />
   );
   const pending = mutation.isPending;
+  // A quick patient (G3): what a save still needs before the record counts as finished.
+  const stillMissing = patient?.registrationIncomplete
+    ? missingInformation({ ...patient, hasReachableContact: false })
+    : null;
 
   return (
     <RightPanel
+      {...(stillMissing && stillMissing.length > 0
+        ? {
+            subtitle: t('form.stillMissing', {
+              fields: formatList(
+                stillMissing.map((field) => t(`missingInformation.${field}`)),
+                i18n.language,
+              ),
+            }),
+          }
+        : {})}
       eyebrow={t(editing ? 'form.editEyebrow' : 'form.newEyebrow')}
       title={patient ? patient.fullName : t('form.newTitle')}
       dirty={unsaved}

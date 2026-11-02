@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { useChartMarks } from '../chart/use-chart-marks';
 import { useChartSettings } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
+import { NextAppointmentDialog } from '@/features/scheduling/next-appointment-dialog';
 import { BeforeCompleteDialog } from '../dialogs/before-complete-dialog';
 import { completeCheck, hasQuestions } from '../dialogs/complete-check';
 import { VisitSummaryDialog } from '../dialogs/visit-summary-dialog';
@@ -284,11 +285,16 @@ function Workspace({
   const checkFromComplete = useCallback(() => {
     setCheckingFrom('complete');
   }, []);
+  const [choosingNext, setChoosingNext] = useState(false);
+  const openNext = useCallback(() => {
+    setChoosingNext(true);
+  }, []);
   const finishVisit = useFinishVisit({
     visit,
     chart: chart.data,
     shown: acknowledged,
     onCheck: checkFromComplete,
+    onNext: openNext,
   });
   useStartWorklist({
     visit,
@@ -615,8 +621,24 @@ function Workspace({
             chart={chart.data}
             open={reviewing && canWrite}
             onClose={closeReview}
+            onReady={() => {
+              closeReview();
+              openNext();
+            }}
             acknowledged={acknowledged}
           />
+          {choosingNext && canWrite && (
+            <NextAppointmentDialog
+              visit={visit}
+              chart={chart.data}
+              patientName={patient.data?.fullName ?? ''}
+              completing={finishVisit.finishing}
+              onBack={() => {
+                setChoosingNext(false);
+              }}
+              onComplete={finishVisit.complete}
+            />
+          )}
           {checkingFrom !== null && chart.data && (
             <BeforeCompleteDialog
               visit={visit}
@@ -630,7 +652,7 @@ function Workspace({
               onContinue={(listed) => {
                 setAcknowledged((current) => new Set([...current, ...listed]));
                 setCheckingFrom(null);
-                if (checkingFrom === 'complete') finishVisit.complete();
+                if (checkingFrom === 'complete') openNext();
                 else flowGoTo('complete');
               }}
             />

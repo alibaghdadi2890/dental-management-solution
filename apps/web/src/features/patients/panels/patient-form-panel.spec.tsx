@@ -71,6 +71,7 @@ describe('PatientFormPanel — create', () => {
       fullName: 'Rana Haddad',
       phone: '03 123 456',
       dateOfBirth: null,
+      registrationIncomplete: false,
       sex: 'unknown',
       email: null,
       address: null,

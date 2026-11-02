@@ -1,6 +1,11 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
+import {
+  chooseTreatment,
+  completeFromSummary,
+  openAllView,
+  toCheckoutPayment,
+} from './start-visit';
 
 interface Account {
   email: string;
@@ -183,6 +188,7 @@ test('the dentist completes a visit; the owner lets front desk discount; it disc
 
   await test.step('records the payment: the popup closes and the lane is empty', async () => {
     const checkout = page.getByRole('dialog', { name: 'Checkout · Lina Checkout' });
+    await toCheckoutPayment(checkout);
     // The payment is the dialog's next step, not a second popup, and the dialog keeps its size.
     const before = await checkout.boundingBox();
     await checkout.getByRole('button', { name: 'Record payment' }).click();

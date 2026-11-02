@@ -76,6 +76,7 @@
     "label": "Settings sections",
     "chart": "Dental chart",
     "staff": "Staff",
-    "roles": "Roles"
+    "roles": "Roles",
+    "schedule": "Schedule"
   }
 }

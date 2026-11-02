@@ -15,6 +15,7 @@ import { Route as PrintRouteImport } from './routes/print'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppActivityRouteImport } from './routes/_app/activity'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
+import { Route as AppScheduleRouteImport } from './routes/_app/schedule'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
 import { Route as AppAdminIndexRouteImport } from './routes/_app/admin/index'
@@ -63,6 +64,11 @@ const AppActivityRoute = AppActivityRouteImport.update({
 const AppCatalogRoute = AppCatalogRouteImport.update({
   id: '/catalog',
   path: '/catalog',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppScheduleRoute = AppScheduleRouteImport.update({
+  id: '/schedule',
+  path: '/schedule',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/print': typeof PrintRouteWithChildren
   '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
+  '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
   '/today': typeof AppTodayRoute
   '/admin/activity': typeof AppAdminActivityRoute
@@ -200,6 +207,7 @@ export interface FileRoutesByTo {
   '/print': typeof PrintRouteWithChildren
   '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
+  '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
   '/today': typeof AppTodayRoute
   '/': typeof AppIndexRoute
@@ -229,6 +237,7 @@ export interface FileRoutesById {
   '/print': typeof PrintRouteWithChildren
   '/_app/activity': typeof AppActivityRoute
   '/_app/catalog': typeof AppCatalogRoute
+  '/_app/schedule': typeof AppScheduleRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/today': typeof AppTodayRoute
   '/_app/': typeof AppIndexRoute
@@ -259,6 +268,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/activity'
     | '/catalog'
+    | '/schedule'
     | '/settings'
     | '/today'
     | '/admin/activity'
@@ -285,6 +295,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/activity'
     | '/catalog'
+    | '/schedule'
     | '/settings'
     | '/today'
     | '/'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/_app/activity'
     | '/_app/catalog'
+    | '/_app/schedule'
     | '/_app/settings'
     | '/_app/today'
     | '/_app/'
@@ -384,6 +396,13 @@ declare module '@tanstack/react-router' {
       path: '/catalog'
       fullPath: '/catalog'
       preLoaderRoute: typeof AppCatalogRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/schedule': {
+      id: '/_app/schedule'
+      path: '/schedule'
+      fullPath: '/schedule'
+      preLoaderRoute: typeof AppScheduleRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/settings': {
@@ -532,6 +551,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppActivityRoute: typeof AppActivityRoute
   AppCatalogRoute: typeof AppCatalogRoute
+  AppScheduleRoute: typeof AppScheduleRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTodayRoute: typeof AppTodayRoute
   AppIndexRoute: typeof AppIndexRoute
@@ -553,6 +573,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppActivityRoute: AppActivityRoute,
   AppCatalogRoute: AppCatalogRoute,
+  AppScheduleRoute: AppScheduleRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTodayRoute: AppTodayRoute,
   AppIndexRoute: AppIndexRoute,

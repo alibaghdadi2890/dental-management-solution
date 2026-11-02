@@ -64,6 +64,7 @@ const item = (n: number, fullName: string, extra: Partial<PatientListItem> = {})
     conditionNames: [],
     primaryDentistId: null,
     email: null,
+    registrationIncomplete: false,
     archivedAt: null,
     updatedAt: '2026-09-01T10:00:00.000Z',
     primaryGuardian: null,

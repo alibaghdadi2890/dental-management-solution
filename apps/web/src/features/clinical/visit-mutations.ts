@@ -1,6 +1,7 @@
 import { visitListKeys } from './visits-list/visits-list-api';
 import type {
   AddServiceInput,
+  CompleteVisitRequest,
   DiagnosisEvidence,
   PlanPriority,
   PlanTreatmentInput,
@@ -210,7 +211,7 @@ export function visitMutations(
     /** The charge is posted in the same transaction (W2): the balances are stale too. */
     complete: mutationOptions({
       ...base,
-      mutationFn: () => completeVisit(visitId, tenant),
+      mutationFn: (input?: CompleteVisitRequest) => completeVisit(visitId, input, tenant),
       onSuccess: async ({ visit }) => {
         await writeVisit(queryClient, tenantId, visit);
         await Promise.all([

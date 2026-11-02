@@ -34,6 +34,7 @@ import {
   type VisitType,
   type VisitViewInput,
 } from '@dcm/contracts';
+import type { CompleteVisitRequest } from '@dcm/contracts';
 import { queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
 import { actingTenantId } from '@/features/platform/acting-tenant';
@@ -237,8 +238,11 @@ export const resumeVisit = (visitId: string, tenantId?: string) =>
   visitCall(visitResultSchema, 'POST', visitId, 'resume', { tenantId });
 export const discardVisit = (visitId: string, tenantId?: string) =>
   visitCall(visitResultSchema, 'POST', visitId, 'discard', { tenantId });
-export const completeVisit = (visitId: string, tenantId?: string) =>
-  visitCall(visitResultSchema, 'POST', visitId, 'complete', { tenantId });
+export const completeVisit = (
+  visitId: string,
+  input: CompleteVisitRequest = {},
+  tenantId?: string,
+) => visitCall(visitResultSchema, 'POST', visitId, 'complete', { json: input, tenantId });
 
 export const updateVisitNotes = (visitId: string, input: VisitNotesInput, tenantId?: string) =>
   visitCall(visitResultSchema, 'PATCH', visitId, 'notes', { json: input, tenantId });

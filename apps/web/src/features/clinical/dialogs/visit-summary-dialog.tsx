@@ -1,5 +1,5 @@
 import { formatVisitNumber, toCents, type PatientChart, type Visit } from '@dcm/contracts';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { Dialog } from 'radix-ui';
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,7 @@ import {
 } from '../chart/use-chart-settings';
 import { useFlushSaveGroups, useLocalValues } from '../save-groups-context';
 import { useVisitTimer } from '../use-visit-timer';
-import { useVisitMutations, useVisitMutationsSettled } from '../visit-mutations';
+import { useVisitMutationsSettled } from '../visit-mutations';
 import { chartQuery, visitQuery } from '../visits-api';
 import { servicePriceKey } from '../workspace/charting-actions';
 import { DiscountControl } from '../workspace/discount-control';
@@ -39,6 +39,8 @@ export interface VisitSummaryDialogProps {
   open: boolean;
   /** Continue editing, `Esc` or the scrim; never while the visit is being recorded. */
   onClose: () => void;
+  /** Everything is saved and asked: on to the Next appointment step, which completes it. */
+  onReady: () => void;
   /** What the check on the way to the Complete step already showed: not asked again. */
   acknowledged?: ReadonlySet<string>;
 }
@@ -68,6 +70,7 @@ export function VisitSummaryDialog({
   chart,
   open,
   onClose,
+  onReady,
   acknowledged,
 }: VisitSummaryDialogProps) {
   const [recording, setRecording] = useState(false);
@@ -107,6 +110,7 @@ export function VisitSummaryDialog({
             recording={recording}
             onRecording={setRecording}
             onClose={onClose}
+            onReady={onReady}
           />
         </Dialog.Content>
       </Dialog.Portal>
@@ -121,6 +125,7 @@ function SummaryContent({
   recording,
   onRecording,
   onClose,
+  onReady,
 }: Omit<VisitSummaryDialogProps, 'open'> & {
   recording: boolean;
   onRecording: (recording: boolean) => void;
@@ -132,8 +137,6 @@ function SummaryContent({
   const flush = useFlushSaveGroups();
   const settled = useVisitMutationsSettled(visit.id);
   const queryClient = useQueryClient();
-  const mutations = useVisitMutations(visit.id);
-  const complete = useMutation(mutations.complete);
   const apply = useApplyCheck(visit.id);
   const [error, setError] = useState<string | null>(null);
   /** The check before completing (ADR-0065) shows in place of the summary. */
@@ -164,14 +167,11 @@ function SummaryContent({
   };
   const reason = (failure: unknown) => (failure instanceof Error ? failure.message : '');
 
-  const finish = async () => {
-    try {
-      await complete.mutateAsync();
-    } catch (failure) {
-      setCheck(false);
-      stop(t('summary.failed', { reason: reason(failure) }));
-    }
-    // Completed: the page, which reads the cached visit, leaves for the record (W16).
+  /** Saved and asked: the Next appointment step completes it (ADR-0072). */
+  const finish = () => {
+    setCheck(false);
+    stop(null);
+    onReady();
   };
 
   const onComplete = async () => {
@@ -192,7 +192,7 @@ function SummaryContent({
       stop(null);
       return;
     }
-    await finish();
+    finish();
   };
 
   /** Applies the check's answers, then completes; a failure completes nothing. */
@@ -205,7 +205,7 @@ function SummaryContent({
       stop(t('summary.resolve.failed', { reason: reason(failure) }));
       return;
     }
-    await finish();
+    finish();
   };
 
   if (check && chart) {

@@ -3,6 +3,7 @@
     "patients": "المرضى",
     "visits": "الزيارات",
     "clinical": "السريري",
+    "schedule": "المواعيد",
     "money": "المال",
     "catalog": "الكتالوج",
     "files": "الملفات",
@@ -107,6 +108,22 @@
     "compensation_manage": {
       "label": "إدارة التعويضات",
       "description": "محجوز لاتفاقيات التعويض والمدفوعات، قريبًا."
+    },
+    "appointment_read": {
+      "label": "عرض التقويم",
+      "description": "مواعيد جميع الأطباء، للقراءة فقط."
+    },
+    "appointment_write": {
+      "label": "إدارة مواعيده الخاصة",
+      "description": "حجز مواعيده وتأكيدها وتسجيل الوصول ونقلها وإلغاؤها."
+    },
+    "appointment_write_all": {
+      "label": "إدارة مواعيد جميع الأطباء",
+      "description": "العمل على مواعيد جميع الأطباء وقائمة المتابعات."
+    },
+    "appointment_override": {
+      "label": "الحجز رغم التحذيرات",
+      "description": "الحجز فوق موعد آخر للطبيب أو خارج ساعات العمل."
     },
     "audit_read": {
       "label": "عرض النشاط",

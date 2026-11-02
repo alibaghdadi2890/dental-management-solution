@@ -13,6 +13,7 @@ import {
   pickRowAction,
   presenceRecord,
   renderWorkspace,
+  skipNextAppointment,
   sent,
   serviceItem,
   treatmentPlan,
@@ -393,8 +394,9 @@ describe('ToothPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review & complete' }));
     const dialog = await screen.findByRole('dialog', { name: 'Complete visit' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Complete visit' }));
+    await skipNextAppointment();
     await waitFor(() => {
-      expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/complete`)).toBeNull();
+      expect(sent(fetchMock, 'POST', `/visits/${VISIT_ID}/complete`)).toEqual({});
     });
     const patches = fetchMock.mock.calls.filter(([, init]) => init?.method === 'PATCH');
     expect(patches).toHaveLength(1);

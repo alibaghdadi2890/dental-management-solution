@@ -3,6 +3,7 @@
     "patients": "Patients",
     "visits": "Visits",
     "clinical": "Clinical",
+    "schedule": "Schedule",
     "money": "Money",
     "catalog": "Catalog",
     "files": "Files",
@@ -107,6 +108,22 @@
     "compensation_manage": {
       "label": "Manage compensation",
       "description": "Reserved for compensation agreements and payouts, coming soon."
+    },
+    "appointment_read": {
+      "label": "See the calendar",
+      "description": "Every dentist's appointments, read-only."
+    },
+    "appointment_write": {
+      "label": "Manage own appointments",
+      "description": "Book, confirm, check in, move and cancel their own appointments."
+    },
+    "appointment_write_all": {
+      "label": "Manage every dentist's appointments",
+      "description": "Act on every dentist's appointments and the follow-up list."
+    },
+    "appointment_override": {
+      "label": "Book through warnings",
+      "description": "Book over a dentist's other appointment or outside opening hours."
     },
     "audit_read": {
       "label": "See activity",

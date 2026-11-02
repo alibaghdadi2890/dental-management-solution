@@ -24,7 +24,7 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { vi } from 'vitest';
 import '@/lib/i18n';
 import { ConfirmProvider } from '@/components/ui/confirm-dialog';
@@ -245,6 +245,7 @@ export function visit(extra: Partial<Visit> = {}): Visit {
     branchId: id(70),
     roomId: null,
     dentistId: profileId(DENTIST_ID),
+    appointmentId: null,
     startedBy: DENTIST_ID,
     type: 'treatment',
     currentStep: 'today',
@@ -506,4 +507,10 @@ export function presenceRecord(
     recordedAt: '2026-09-29T09:10:00.000Z',
     ...extra,
   };
+}
+
+/** The Next appointment step's **Skip**: no follow-up, and the visit completes (ADR-0072). */
+export async function skipNextAppointment(): Promise<void> {
+  const next = await screen.findByRole('dialog', { name: 'Next appointment' });
+  fireEvent.click(within(next).getByRole('button', { name: 'Skip (no follow-up)' }));
 }

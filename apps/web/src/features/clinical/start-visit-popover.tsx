@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Field, Select, TextInput } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
 import { useSession } from '@/features/auth/session';
+import { usePermission } from '@/features/auth/use-permission';
 import { useActingTenantId } from '@/features/platform/acting-tenant';
 import { branchRoomsQuery, tenancyKeys } from '@/features/tenancy/tenancy-api';
 import { branchPractitionersQuery, userKeys } from '@/features/users/users-api';
@@ -16,13 +17,21 @@ import { VisitTypeTiles } from './flow/visit-type-tiles';
 import { startVisitKey, useStartingVisit } from './use-starting-visit';
 import { startVisitMutation } from './visit-mutations';
 import { startDefaultsQuery, startOptionsQuery } from './visits-api';
+import { patientAppointmentsQuery } from '@/features/scheduling/scheduling-api';
 import { apiErrorMessage } from '@/lib/api-error-message';
+import { formatTime, todayIn } from '@/lib/format';
 
 /** What the popover opens with when its opener already knows why (the Overview's Needs
  * attention): the type, and the plans the visit starts with on its list for today. */
 export interface StartPreset {
-  type: VisitType;
+  /** Left out: the record's suggestion. */
+  type?: VisitType | undefined;
   planIds?: readonly string[] | undefined;
+  /** Started from an appointment (A7): its dentist, room and reason fill the form. */
+  appointmentId?: string | undefined;
+  dentistId?: string | undefined;
+  roomId?: string | null | undefined;
+  reason?: string | undefined;
 }
 
 type FieldName = 'dentist' | 'room';
@@ -157,10 +166,11 @@ function StartVisitForm({
   onCancel: () => void;
   onStarted: () => void;
 }) {
-  const { t, i18n } = useTranslation(['clinical', 'common']);
+  const { t, i18n } = useTranslation(['clinical', 'common', 'scheduling']);
   const queryClient = useQueryClient();
   const tenantId = useActingTenantId();
   const navigate = useNavigate();
+  const { data: session } = useSession();
   const practitioners = useQuery(branchPractitionersQuery(branch.id));
   const rooms = useQuery(branchRoomsQuery(branch.id));
   const defaults = useQuery(startDefaultsQuery());
@@ -173,14 +183,32 @@ function StartVisitForm({
 
   // `null` = not picked yet: the default applies once it has loaded.
   const [picked, setPicked] = useState<Record<FieldName, string | null>>({
-    dentist: null,
-    room: null,
+    dentist: preset?.dentistId ?? null,
+    room: preset?.roomId ?? null,
   });
   const [errors, setErrors] = useState<Errors>({});
   // `null` = not chosen yet: the suggestion applies.
   const [pickedType, setPickedType] = useState<VisitType | null>(preset?.type ?? null);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(preset?.reason ?? '');
   const type = pickedType ?? options.data?.suggestedType ?? 'examination';
+  // A walk-in for a patient with an appointment today: linked unless unticked (A7).
+  const canSchedule = usePermission('appointment:read');
+  const appointments = useQuery(
+    patientAppointmentsQuery(patientId, canSchedule && !preset?.appointmentId),
+  );
+  const today = session?.tenant ? todayIn(session.tenant.timeZone) : '';
+  const todays = appointments.data
+    ?.filter(
+      (item) =>
+        item.localDate === today && ['booked', 'confirmed', 'checked_in'].includes(item.status),
+    )
+    .sort(
+      (a, b) =>
+        Number(b.status === 'checked_in') - Number(a.status === 'checked_in') ||
+        Date.parse(a.startsAt) - Date.parse(b.startsAt),
+    )[0];
+  const [linkToday, setLinkToday] = useState(true);
+  const linkedId = preset?.appointmentId ?? (linkToday ? todays?.id : undefined);
 
   const activeRooms = rooms.data?.filter((room) => room.active) ?? [];
   // A choice or default that is no longer listed (a dentist moved, a room deactivated — the
@@ -246,7 +274,8 @@ function StartVisitForm({
       reason: reason.trim() || null,
       // A treatment visit asked for from a plan starts with that plan on its list; otherwise
       // the server takes the work in progress and what is urgent, and Today's work has the rest.
-      ...(type === 'treatment' && preset?.planIds ? { planIds: [...preset.planIds] } : {}),
+      ...(type === 'treatment' && preset?.planIds?.length ? { planIds: [...preset.planIds] } : {}),
+      ...(linkedId ? { appointmentId: linkedId } : {}),
     };
     start.mutateAsync(visit).then(
       ({ visit }) => {
@@ -299,6 +328,23 @@ function StartVisitForm({
 
   return (
     <form ref={formRef} noValidate onSubmit={submit} className="flex flex-col gap-3.5">
+      {todays && !preset?.appointmentId && session?.tenant ? (
+        <label className="flex cursor-pointer items-center gap-2 text-[12.5px]">
+          <input
+            type="checkbox"
+            checked={linkToday}
+            onChange={(event) => {
+              setLinkToday(event.target.checked);
+            }}
+          />
+          {t('scheduling:startVisit.link', {
+            time: formatTime(todays.startsAt, {
+              timeZone: session.tenant.timeZone,
+              locale: i18n.language,
+            }),
+          })}
+        </label>
+      ) : null}
       <Field label={t('startVisit.dentist')} error={errors.dentist}>
         {(field) => (
           <Select

@@ -8,13 +8,14 @@ interface NavEntry<TKey extends string, TPath extends string> {
   permission: Permission | readonly Permission[];
 }
 
-/** Sidebar entries (POC app shell). Schedule is not part of phase 1. Today is the chair lane for
+/** Sidebar entries (POC app shell). Schedule is the calendar (feature 14). Today is the chair lane for
  * whoever sees visits and the checkout lane for whoever sees a patient's money; Payments is the
  * clinic's finances (`finance:read`, ADR-0055). Compensation is how the clinic pays its dentists
  * (`compensation:manage`, feature 13b); My statement is a dentist's own, shown by the sidebar only
  * once they have a month to read. */
 export const MAIN_NAV = [
   { key: 'today', to: '/today', permission: 'visit:read' },
+  { key: 'schedule', to: '/schedule', permission: 'appointment:read' },
   { key: 'patients', to: '/patients', permission: 'patient:read' },
   { key: 'visits', to: '/visits', permission: 'visit:read' },
   { key: 'payments', to: '/payments', permission: 'finance:read' },

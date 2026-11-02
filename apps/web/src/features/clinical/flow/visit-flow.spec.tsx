@@ -11,6 +11,7 @@ import {
   OLDER_VISIT_ID,
   RANA,
   renderWorkspace,
+  skipNextAppointment,
   sent,
   serviceItem,
   treatmentPlan,
@@ -316,8 +317,9 @@ describe('visit flows', () => {
     expect(screen.getByRole('radio', { name: 'Steps' }).getAttribute('aria-checked')).toBe('true');
     expect(screen.queryByRole('button', { name: 'Review & complete' })).toBeNull();
 
-    // The step is the review: Complete visit completes, with no summary in between.
+    // The step is the review: Complete visit asks what comes next, with no summary in between.
     fireEvent.click(screen.getByRole('button', { name: 'Complete visit' }));
+    await skipNextAppointment();
     await waitFor(() => {
       expect(sent(fetchMock, 'POST', path('complete'))).toBeDefined();
     });
@@ -594,6 +596,7 @@ describe('visit flows', () => {
       const check = await screen.findByRole('dialog', { name: 'Before you complete' });
       expect(within(check).getByRole('button', { name: 'Back to Complete' })).toBeTruthy();
       fireEvent.click(within(check).getByRole('button', { name: 'Complete visit' }));
+      await skipNextAppointment();
       await waitFor(() => {
         expect(writes(fetchMock)).toEqual(['complete']);
       });
@@ -611,6 +614,7 @@ describe('visit flows', () => {
       });
 
       fireEvent.click(await screen.findByRole('button', { name: 'Complete visit' }));
+      await skipNextAppointment();
       await waitFor(() => {
         expect(writes(fetchMock)).toEqual(['complete']);
       });

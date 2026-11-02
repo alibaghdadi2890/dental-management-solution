@@ -14,6 +14,7 @@ import { chartQuery, lastVisitQuery } from '@/features/clinical/visits-api';
 import { LatestImagesCard } from '@/features/files/file-rows';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { NextAppointmentCard } from '@/features/scheduling/patient-schedule';
 import { NeedsAttentionCard } from './needs-attention-card';
 
 type Tenant = NonNullable<Session['tenant']>;
@@ -213,6 +214,7 @@ export function OverviewTab({
   return (
     <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr))]">
       <div className="flex min-w-0 flex-col gap-4">
+        <NextAppointmentCard patient={patient} />
         <NeedsAttentionCard
           patient={patient}
           tenant={tenant}

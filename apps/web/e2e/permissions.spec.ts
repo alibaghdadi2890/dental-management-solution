@@ -1,6 +1,11 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
 import { E2E_ADMIN } from './global-setup';
-import { chooseTreatment, completeFromSummary, openAllView } from './start-visit';
+import {
+  chooseTreatment,
+  completeFromSummary,
+  openAllView,
+  toCheckoutPayment,
+} from './start-visit';
 
 interface Account {
   email: string;
@@ -170,6 +175,7 @@ test('a dentist completes a visit and hands it to front desk; the owner grants h
     await waiting.getByRole('button', { name: 'Check out Hana Handoff' }).click();
     const checkout = page.getByRole('dialog', { name: 'Checkout · Hana Handoff' });
     await expect(checkout.getByRole('button', { name: 'Edit the visit discount' })).toHaveCount(0);
+    await toCheckoutPayment(checkout);
     await checkout.getByRole('button', { name: 'Record payment' }).click();
     await checkout.getByLabel('Amount taken now').fill('50');
     await checkout.getByRole('button', { name: 'Record full payment' }).click();

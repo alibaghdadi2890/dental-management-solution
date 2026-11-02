@@ -281,7 +281,8 @@
         "consultation": "Consultation"
       }
     },
-    "createAndStart": "Create and start {{type}}"
+    "createAndStart": "Create and start {{type}}",
+    "stillMissing": "Still missing: {{fields}}"
   },
   "merge": {
     "eyebrow": "Merge duplicates",

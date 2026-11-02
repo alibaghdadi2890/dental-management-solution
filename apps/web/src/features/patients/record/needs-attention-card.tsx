@@ -1,6 +1,6 @@
-import { missingInformation, type Patient, type Session } from '@dcm/contracts';
+import { type FollowUp, missingInformation, type Patient, type Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
-import { type ReactNode, useId } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/features/auth/use-permission';
 import { balanceQuery } from '@/features/billing/billing-api';
@@ -11,6 +11,8 @@ import { PriorityChip, SessionChip } from '@/features/clinical/flow/priority-chi
 import { useTargetLabel } from '@/features/clinical/flow/use-target-label';
 import type { StartPreset } from '@/features/clinical/start-visit-popover';
 import { chartQuery, lastVisitQuery } from '@/features/clinical/visits-api';
+import { FollowUpScheduleDialog } from '@/features/scheduling/patient-schedule';
+import { isOpenFollowUp, patientFollowUpsQuery } from '@/features/scheduling/scheduling-api';
 import { formatCalendarDate, formatDate, formatList, formatMoney } from '@/lib/format';
 import { contactsQuery } from '../contacts-api';
 import { cn } from '@/lib/utils';
@@ -51,7 +53,7 @@ export function NeedsAttentionCard({
   /** Opens the Patient information tab; left out when the caller may not edit the record. */
   onCompleteDetails: (() => void) | undefined;
 }) {
-  const { t, i18n } = useTranslation(['patients', 'clinical']);
+  const { t, i18n } = useTranslation(['patients', 'clinical', 'scheduling']);
   const locale = i18n.resolvedLanguage ?? 'en';
   const titleId = useId();
   const target = useTargetLabel();
@@ -64,9 +66,14 @@ export function NeedsAttentionCard({
   const balance = useQuery({ ...balanceQuery(patient.id), enabled: canPay });
   const contacts = useQuery({ ...contactsQuery(patient.id), enabled: patient.phone === null });
   const reachable = contacts.data?.some((link) => link.isGuardian || link.isBillingContact);
+  const canReadSchedule = usePermission('appointment:read');
+  const canSchedule = usePermission('appointment:write');
+  const followUps = useQuery(patientFollowUpsQuery(patient.id, canReadSchedule));
+  const [scheduling, setScheduling] = useState<FollowUp | null>(null);
   const [lead] = owedBalances(balance.data?.balances ?? [], tenant.currency);
 
   const items = needsAttention({
+    followUps: followUps.data?.filter(isOpenFollowUp),
     chart: chart.data,
     owed: lead && Number(lead.amount) > 0 ? lead : null,
     hasVisits: lastVisit.data === undefined ? undefined : lastVisit.data !== null,
@@ -89,6 +96,30 @@ export function NeedsAttentionCard({
 
   const rowOf = (item: AttentionItem): Row => {
     switch (item.kind) {
+      case 'followUp': {
+        const { followUp } = item;
+        const overdue = followUp.overdueDays > 0;
+        return {
+          key: followUp.id,
+          chip: '—',
+          muted: true,
+          title: followUp.dueOn
+            ? t('scheduling:record.followUpDue', {
+                date: formatCalendarDate(followUp.dueOn, locale),
+              })
+            : t('scheduling:record.followUpOpen'),
+          reason: followUp.title,
+          tag: overdue ? <PriorityChip priority="high" /> : null,
+          action: canSchedule
+            ? {
+                label: t('scheduling:followUp.schedule'),
+                run: () => {
+                  setScheduling(followUp);
+                },
+              }
+            : null,
+        };
+      }
       case 'continue': {
         const { plan } = item;
         const [first] = plan.sessions;
@@ -230,6 +261,14 @@ export function NeedsAttentionCard({
           {loading ? t('record.attention.loading') : t('record.attention.none')}
         </p>
       )}
+      {scheduling ? (
+        <FollowUpScheduleDialog
+          followUp={scheduling}
+          onClose={() => {
+            setScheduling(null);
+          }}
+        />
+      ) : null}
     </section>
   );
 }

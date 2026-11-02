@@ -26,6 +26,7 @@ export function CheckoutCard({
   timeZone,
   locale,
   canCheckOut,
+  followUpWaiting,
   onCheckout,
 }: {
   visit: VisitListItem;
@@ -36,9 +37,11 @@ export function CheckoutCard({
   locale: string;
   /** `payment:write`; without it the card says front desk collects (F4). */
   canCheckOut: boolean;
+  /** Its follow-up is still to book (A17). */
+  followUpWaiting: boolean;
   onCheckout: () => void;
 }) {
-  const { t } = useTranslation(['today', 'clinical']);
+  const { t } = useTranslation(['today', 'clinical', 'scheduling']);
   const facts = [
     formatVisitNumber(visit.displayNumber),
     t(`clinical:flow.types.${visit.type}`),
@@ -66,6 +69,11 @@ export function CheckoutCard({
         <span className="truncate text-[13px] leading-snug text-ink-secondary">
           {visit.services.map((service) => service.name).join(', ')}
         </span>
+        {followUpWaiting ? (
+          <span className="text-[12.5px] leading-snug font-medium text-primary">
+            {t('scheduling:followUp.toSchedule')}
+          </span>
+        ) : null}
       </div>
       <span
         dir="ltr"

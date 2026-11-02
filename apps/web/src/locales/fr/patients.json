@@ -281,7 +281,8 @@
         "consultation": "Consultation"
       }
     },
-    "createAndStart": "Créer et démarrer : {{type}}"
+    "createAndStart": "Créer et démarrer : {{type}}",
+    "stillMissing": "Il manque encore : {{fields}}"
   },
   "merge": {
     "eyebrow": "Fusionner les doublons",

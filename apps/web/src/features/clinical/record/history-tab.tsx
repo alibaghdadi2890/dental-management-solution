@@ -1,14 +1,17 @@
-import type { Patient, ToothCode, VisitBalance, VisitListItem } from '@dcm/contracts';
+import type { Appointment, Patient, ToothCode, VisitBalance, VisitListItem } from '@dcm/contracts';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { CardSkeleton } from '@/components/ui/card';
 import { ErrorState, Pill } from '@/components/ui/list';
+import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { useRecordPayment } from '@/features/billing/payments/payment-dialog-context';
 import type { HistoryView } from '@/features/patients/record/record-search';
-import { formatCalendarDate, formatMoney } from '@/lib/format';
+import { ScheduleEntryRow, UpcomingAppointments } from '@/features/scheduling/patient-schedule';
+import { useScheduleTimeline } from '@/features/scheduling/use-schedule-timeline';
+import { formatCalendarDate, formatMoney, formatTime } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useLevelLabel, useSurfaceLabel, useToothLabel } from '../chart/use-chart-settings';
 import { ToothHistoryDialog } from '../dialogs/tooth-history-dialog';
@@ -23,6 +26,7 @@ import { ClinicalThreads } from './clinical-threads';
  * it is owed. Voided visits are struck through at 70 %. */
 function HistoryRow({
   visit,
+  booked,
   balance,
   canPay,
   locale,
@@ -38,8 +42,11 @@ function HistoryRow({
   expanded: boolean;
   onToggle: () => void;
   onTooth: (code: ToothCode) => void;
+  /** The appointment it came from, folded into this row (A18). */
+  booked?: Appointment | undefined;
 }) {
-  const { t } = useTranslation(['clinical', 'visits', 'billing']);
+  const { t } = useTranslation(['clinical', 'visits', 'billing', 'scheduling']);
+  const { data: session } = useSession();
   const openPayment = useRecordPayment();
   const toothLabel = useToothLabel();
   const levelLabel = useLevelLabel();
@@ -72,6 +79,16 @@ function HistoryRow({
             {formatCalendarDate(visit.localDate, locale)}
           </span>
           <span className="block truncate text-[12px] text-ink-muted">{visit.dentist.name}</span>
+          {booked && session?.tenant ? (
+            <span className="block truncate text-[11.5px] text-ink-muted">
+              {t('scheduling:record.bookedAppointment', {
+                time: formatTime(booked.startsAt, {
+                  timeZone: session.tenant.timeZone,
+                  locale,
+                }),
+              })}
+            </span>
+          ) : null}
         </span>
         <span className="flex min-w-0 flex-wrap gap-1.5">
           {visit.services.map((service) => (
@@ -235,6 +252,7 @@ function VisitsView({
   const canPay = usePermission('payment:read');
   const canStart = usePermission('visit:write') && patient.archivedAt === null;
   const visits = useInfiniteQuery(patientVisitsQuery(patient.id));
+  const schedule = useScheduleTimeline(patient.id);
   const items = visits.data?.pages.flatMap((page) => page.items) ?? [];
   const balances = useQuery(
     visitBalancesQuery(
@@ -261,36 +279,61 @@ function VisitsView({
   }
   if (items.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center">
-        <p className="m-0 mb-1.5 text-[15px] font-semibold">{t('states.emptyTitle')}</p>
-        <p className="m-0 mb-4 text-[13px] text-ink-tertiary">{t('history.emptyBody')}</p>
-        {canStart && (
-          <StartVisitPopover patientId={patient.id}>
-            <Button variant="primary">{t('history.startFirst')}</Button>
-          </StartVisitPopover>
+      <div className="flex flex-col gap-2.5">
+        <UpcomingAppointments appointments={schedule.upcoming} />
+        {schedule.entries.length > 0 && (
+          <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+            {schedule.entries.map((entry) => (
+              <ScheduleEntryRow key={entry.key} entry={entry} />
+            ))}
+          </ul>
         )}
+        <div className="rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center">
+          <p className="m-0 mb-1.5 text-[15px] font-semibold">{t('states.emptyTitle')}</p>
+          <p className="m-0 mb-4 text-[13px] text-ink-tertiary">{t('history.emptyBody')}</p>
+          {canStart && (
+            <StartVisitPopover patientId={patient.id}>
+              <Button variant="primary">{t('history.startFirst')}</Button>
+            </StartVisitPopover>
+          )}
+        </div>
       </div>
     );
   }
+  const timeline = [
+    ...items.map((visit) => ({ date: visit.localDate, key: visit.id, visit, entry: null })),
+    ...schedule.entries.map((entry) => ({
+      date: entry.date,
+      key: entry.key,
+      visit: null,
+      entry,
+    })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
   return (
     <div className="flex flex-col gap-2.5">
+      <UpcomingAppointments appointments={schedule.upcoming} />
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-        {items.map((visit) => (
-          <HistoryRow
-            key={visit.id}
-            visit={visit}
-            balance={balanceOf(visit.id)}
-            canPay={canPay}
-            locale={locale}
-            expanded={open.has(visit.id)}
-            onToggle={() => {
-              const next = new Set(open);
-              if (!next.delete(visit.id)) next.add(visit.id);
-              setOpen(next);
-            }}
-            onTooth={onTooth}
-          />
-        ))}
+        {timeline.map(({ key, visit, entry }) =>
+          visit ? (
+            <HistoryRow
+              key={key}
+              visit={visit}
+              booked={visit.appointmentId ? schedule.completed.get(visit.appointmentId) : undefined}
+              balance={balanceOf(visit.id)}
+              canPay={canPay}
+              locale={locale}
+              expanded={open.has(visit.id)}
+              onToggle={() => {
+                const next = new Set(open);
+                if (!next.delete(visit.id)) next.add(visit.id);
+                setOpen(next);
+              }}
+              onTooth={onTooth}
+            />
+          ) : (
+            <ScheduleEntryRow key={key} entry={entry} />
+          ),
+        )}
       </ul>
       {visits.hasNextPage && (
         <Button

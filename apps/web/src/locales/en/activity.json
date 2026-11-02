@@ -58,7 +58,8 @@
     "settings": "Settings",
     "contacts": "Contacts",
     "files": "Files",
-    "compensation": "Compensation"
+    "compensation": "Compensation",
+    "schedule": "Schedule"
   },
   "ranges": {
     "today": "Today",
@@ -220,6 +221,33 @@
       "payout_void": "Voided a payout of {{amount}} to {{subject}}",
       "period_close": "Closed {{subject}}'s statement for {{month}}",
       "period_reopen": "Reopened {{subject}}'s statement for {{month}}"
+    },
+    "appointment": {
+      "book": "Booked an appointment for {{subject}}",
+      "reschedule": "Moved {{subject}}'s appointment",
+      "resize": "Changed the length of {{subject}}'s appointment",
+      "confirm": "Confirmed {{subject}}'s appointment",
+      "check_in": "Checked in {{subject}}",
+      "undo_check_in": "Undid {{subject}}'s check-in",
+      "room": "Changed the room of {{subject}}'s appointment",
+      "cancel": "Cancelled {{subject}}'s appointment",
+      "no_show": "Marked {{subject}} as a no-show",
+      "start": "Started the visit of {{subject}}'s appointment",
+      "undo_start": "Sent {{subject}} back to waiting, the visit was discarded",
+      "complete": "Completed {{subject}}'s appointment"
+    },
+    "follow_up": {
+      "recommend": "Recommended a follow-up for {{subject}}: {{title}}",
+      "book": "Booked {{subject}}'s follow-up: {{title}}",
+      "reopen": "Put {{subject}}'s follow-up back on the list: {{title}}",
+      "will_call": "Noted that {{subject}} will call to book: {{title}}",
+      "decline": "Recorded that {{subject}} declined the follow-up: {{title}}"
+    },
+    "opening_hours": {
+      "update": "Changed a branch's opening hours"
+    },
+    "scheduling_settings": {
+      "update": "Changed the follow-up window"
     }
   },
   "fields": {

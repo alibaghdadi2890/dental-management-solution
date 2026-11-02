@@ -58,7 +58,8 @@
     "settings": "الإعدادات",
     "contacts": "جهات الاتصال",
     "files": "الملفات",
-    "compensation": "أتعاب الأطباء"
+    "compensation": "أتعاب الأطباء",
+    "schedule": "المواعيد"
   },
   "ranges": {
     "today": "اليوم",
@@ -220,6 +221,33 @@
       "payout_void": "ألغى دفعة بقيمة {{amount}} إلى {{subject}}",
       "period_close": "أغلق كشف {{subject}} لشهر {{month}}",
       "period_reopen": "أعاد فتح كشف {{subject}} لشهر {{month}}"
+    },
+    "appointment": {
+      "book": "حجز موعدًا لـ{{subject}}",
+      "reschedule": "نقل موعد {{subject}}",
+      "resize": "غيّر مدة موعد {{subject}}",
+      "confirm": "أكّد موعد {{subject}}",
+      "check_in": "سجّل وصول {{subject}}",
+      "undo_check_in": "ألغى تسجيل وصول {{subject}}",
+      "room": "غيّر غرفة موعد {{subject}}",
+      "cancel": "ألغى موعد {{subject}}",
+      "no_show": "سجّل عدم حضور {{subject}}",
+      "start": "بدأ زيارة موعد {{subject}}",
+      "undo_start": "أعاد {{subject}} إلى الانتظار بعد تجاهل الزيارة",
+      "complete": "أكمل موعد {{subject}}"
+    },
+    "follow_up": {
+      "recommend": "أوصى بمتابعة لـ{{subject}}: {{title}}",
+      "book": "حجز متابعة {{subject}}: {{title}}",
+      "reopen": "أعاد متابعة {{subject}} إلى القائمة: {{title}}",
+      "will_call": "سجّل أن {{subject}} سيتصل للحجز: {{title}}",
+      "decline": "سجّل رفض {{subject}} للمتابعة: {{title}}"
+    },
+    "opening_hours": {
+      "update": "غيّر ساعات عمل فرع"
+    },
+    "scheduling_settings": {
+      "update": "غيّر مدة قائمة المتابعات"
     }
   },
   "fields": {

@@ -3,8 +3,11 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/features/auth/session';
+import { usePermission } from '@/features/auth/use-permission';
 import { RecordPaymentForm } from '@/features/billing/payments/record-payment-dialog';
 import { VisitFilesLine } from '@/features/files/file-rows';
+import { CheckoutNextStep } from '@/features/scheduling/checkout-next-step';
+import { DialogSteps } from '@/features/scheduling/dialog-steps';
 import { formatCalendarDate } from '@/lib/format';
 import { useVisitCheckout } from './use-visit-checkout';
 import { CheckoutActions, CheckoutBody, CheckoutStatusPill } from './visit-checkout';
@@ -88,14 +91,19 @@ function PostVisitContent({
   /** Closes the dialog: a recorded payment ends the checkout, like Done. */
   onPaid: () => void;
 }) {
-  const { t, i18n } = useTranslation(['clinical', 'billing']);
+  const { t, i18n } = useTranslation(['clinical', 'billing', 'scheduling']);
   const locale = i18n.resolvedLanguage ?? 'en';
   const { data: session } = useSession();
+  const canSchedule = usePermission('appointment:read');
   const checkout = useVisitCheckout(visitId);
   const { visit } = checkout;
   const [paying, setPaying] = useState(false);
-  // The payment step keeps the size the figures had: the form scrolls inside it, never resizing
-  // the dialog under the pointer.
+  // The Today board's checkout is three steps (A14); after a completion the next step is done.
+  const stepped = onDone !== undefined && canSchedule;
+  const [nextStep, setNextStep] = useState(false);
+  const stepIndex = paying ? 2 : nextStep ? 1 : 0;
+  // The steps after the figures keep the size the figures had: their content scrolls inside it,
+  // never resizing the dialog under the pointer.
   const frameRef = useRef<HTMLDivElement>(null);
   const [frameHeight, setFrameHeight] = useState<number>();
   const paymentStep = paying && visit !== undefined && session?.tenant ? session.tenant : null;
@@ -104,10 +112,27 @@ function PostVisitContent({
     <div
       ref={frameRef}
       className="flex min-h-0 flex-col"
-      style={paymentStep && frameHeight ? { height: frameHeight } : undefined}
+      style={(paymentStep || nextStep) && frameHeight ? { height: frameHeight } : undefined}
     >
       <div className="flex flex-none items-start gap-3 border-b border-inner-divider px-[22px] pt-[18px] pb-[15px]">
         <div className="min-w-0 flex-1">
+          {stepped ? (
+            <DialogSteps
+              steps={[
+                t('scheduling:steps.summary'),
+                t('scheduling:steps.nextAppointment'),
+                t('scheduling:steps.payment'),
+              ]}
+              current={stepIndex}
+              className="mb-2"
+            />
+          ) : canSchedule ? (
+            <DialogSteps
+              steps={[t('scheduling:steps.nextAppointment'), t('scheduling:steps.payment')]}
+              current={1}
+              className="mb-2"
+            />
+          ) : null}
           <div className="mb-1 flex items-center gap-[9px]">
             <span
               aria-hidden
@@ -142,9 +167,15 @@ function PostVisitContent({
         />
       ) : (
         <>
-          <div className="min-h-0 overflow-auto px-[22px] py-[18px]">
-            <CheckoutBody checkout={checkout} />
-            {visit && <VisitFilesLine visit={visit} />}
+          <div className="min-h-0 flex-1 overflow-auto px-[22px] py-[18px]">
+            {nextStep && visit ? (
+              <CheckoutNextStep visit={visit} />
+            ) : (
+              <>
+                <CheckoutBody checkout={checkout} />
+                {visit && <VisitFilesLine visit={visit} />}
+              </>
+            )}
           </div>
           <div className="flex flex-none items-center gap-2.5 border-t border-inner-divider bg-sunken px-[22px] py-3.5">
             {checkout.settled ? (
@@ -160,13 +191,28 @@ function PostVisitContent({
             ) : (
               <span aria-hidden className="h-10" />
             )}
-            <CheckoutActions
-              checkout={checkout}
-              onPay={() => {
-                setFrameHeight(frameRef.current?.getBoundingClientRect().height);
-                setPaying(true);
-              }}
-            />
+            {stepped && !nextStep ? (
+              <Button
+                variant="primary"
+                className="ms-auto h-10 px-[15px] text-[13px]"
+                onClick={() => {
+                  setFrameHeight(frameRef.current?.getBoundingClientRect().height);
+                  setNextStep(true);
+                }}
+              >
+                {t('scheduling:steps.next')}
+              </Button>
+            ) : (
+              <CheckoutActions
+                checkout={checkout}
+                onPay={() => {
+                  setFrameHeight(
+                    (height) => height ?? frameRef.current?.getBoundingClientRect().height,
+                  );
+                  setPaying(true);
+                }}
+              />
+            )}
           </div>
         </>
       )}

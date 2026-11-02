@@ -35,6 +35,7 @@ export function startedVisit(n: number, extra: Partial<Visit> = {}): Visit {
     branchId: BRANCH.id,
     roomId: null,
     dentistId: profileId(DENTIST_ID),
+    appointmentId: null,
     startedBy: DENTIST_ID,
     type: 'treatment',
     currentStep: 'today',

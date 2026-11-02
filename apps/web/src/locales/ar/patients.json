@@ -313,7 +313,8 @@
         "consultation": "استشارة"
       }
     },
-    "createAndStart": "إنشاء وبدء {{type}}"
+    "createAndStart": "إنشاء وبدء {{type}}",
+    "stillMissing": "ما زال ناقصًا: {{fields}}"
   },
   "merge": {
     "eyebrow": "دمج الملفات المكررة",

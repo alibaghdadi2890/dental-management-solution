@@ -1,5 +1,6 @@
 import {
   type DiagnosisRecord,
+  type FollowUp,
   type MissingInformation,
   type Money,
   type PatientChart,
@@ -18,7 +19,8 @@ export type AttentionItem =
   | { kind: 'treat'; plan: TreatmentPlan; diagnosis: DiagnosisRecord | undefined }
   | { kind: 'balance'; owed: Money }
   | { kind: 'examination' }
-  | { kind: 'details'; missing: MissingInformation[] };
+  | { kind: 'details'; missing: MissingInformation[] }
+  | { kind: 'followUp'; followUp: FollowUp };
 
 export interface AttentionFacts {
   /** Undefined until the chart is in (or without `visit:read`): no plan rows. */
@@ -29,6 +31,8 @@ export interface AttentionFacts {
   hasVisits: boolean | undefined;
   /** The important fields the record lacks (`missingInformation`); undefined while unknown. */
   missing: MissingInformation[] | undefined;
+  /** What is left to book: awaiting and not expired (feature 14). */
+  followUps?: readonly FollowUp[] | undefined;
 }
 
 /**
@@ -40,11 +44,13 @@ export function needsAttention({
   owed,
   hasVisits,
   missing,
+  followUps = [],
 }: AttentionFacts): AttentionItem[] {
   const phases = planPhases(chart?.plans ?? []);
   const open = phases.flatMap((phase) => phase.open);
   const urgent = phases.find((phase) => phase.priority === 'urgent')?.open ?? [];
   return [
+    ...followUps.map((followUp): AttentionItem => ({ kind: 'followUp', followUp })),
     ...open
       .filter((plan) => plan.status === 'in_progress')
       .map((plan): AttentionItem => ({ kind: 'continue', plan })),

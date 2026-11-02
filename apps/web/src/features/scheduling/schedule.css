@@ -1,0 +1,403 @@
+/* The calendar's look (ADR-0071): react-big-calendar's classes in the design's tokens, one file so
+   the library stays behind `schedule-calendar.tsx`. Logical properties throughout: RTL mirrors. */
+
+.schedule-grid {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: 12.5px;
+}
+
+.schedule-grid .rbc-calendar {
+  height: 100%;
+}
+
+.schedule-grid .rbc-time-view {
+  border: none;
+}
+
+/* Nothing here lasts all day. */
+.schedule-grid .rbc-allday-cell,
+.schedule-grid .rbc-time-header-cell-single-day {
+  display: none;
+}
+
+.schedule-grid .rbc-time-header {
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-faint);
+}
+
+.schedule-grid .rbc-time-header-content {
+  border-inline-start: none;
+}
+
+.schedule-grid .rbc-time-content {
+  border-top: none;
+}
+
+/* A line an hour, a fainter one for the slots between. */
+.schedule-grid .rbc-timeslot-group {
+  min-height: var(--schedule-group);
+  border-color: var(--color-border);
+}
+
+.schedule-grid .rbc-day-slot .rbc-time-slot {
+  border-color: color-mix(in srgb, var(--color-border) 40%, transparent);
+}
+
+.schedule-grid .rbc-time-content > * + * > * {
+  border-inline-start: 1px solid var(--color-border);
+}
+
+.schedule-grid .rbc-time-gutter .rbc-label {
+  color: var(--color-ink-muted);
+  font-size: 11px;
+}
+
+.schedule-grid .rbc-header {
+  padding: 0;
+  overflow: visible;
+  border-color: var(--color-border);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.schedule-grid .rbc-today {
+  background: color-mix(in srgb, var(--color-primary-tint) 18%, white);
+}
+
+.schedule-grid .rbc-header.rbc-today {
+  background: var(--color-primary-tint);
+}
+
+.schedule-grid .rbc-current-time-indicator {
+  height: 1px;
+  background: color-mix(in srgb, var(--color-danger) 75%, transparent);
+}
+
+/* Cards fill the column: the library keeps a gutter on one side for clicking. */
+.schedule-grid .rbc-day-slot .rbc-events-container {
+  margin: 0 2px;
+}
+
+.schedule-grid .rbc-time-view-resources .rbc-day-slot {
+  min-width: 140px;
+}
+
+.schedule-grid .rbc-time-view-resources .rbc-header {
+  padding: 8px 12px;
+}
+
+/* The week's header: the day, and what kind of day it is. It opens the day. */
+.schedule-grid .rbc-button-link {
+  display: block;
+  width: 100%;
+}
+
+.schedule-grid .rbc-button-link:hover .schedule-day-name {
+  text-decoration: underline;
+}
+
+.schedule-day-head {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  flex-direction: column;
+  justify-content: center;
+  padding: 6px 10px;
+  border-bottom: 2px solid transparent;
+  color: var(--color-ink);
+  text-align: start;
+}
+
+.schedule-day-head[data-today] {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.schedule-day-head[data-selected] {
+  border-bottom-color: var(--color-ink);
+}
+
+.schedule-day-name {
+  font-size: 12.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.schedule-day-sub {
+  color: var(--color-ink-muted);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.schedule-column-head {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+}
+
+.schedule-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--dentist) 16%, white);
+  color: color-mix(in srgb, var(--dentist) 70%, black);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* Time gone by, and closed days and hours. */
+.schedule-grid .schedule-past {
+  background: color-mix(in srgb, var(--color-faint) 60%, transparent);
+}
+
+.schedule-grid .schedule-closed {
+  background: color-mix(in srgb, var(--color-border) 55%, var(--color-sunken));
+}
+
+.schedule-grid .schedule-closed-first {
+  position: relative;
+}
+
+.schedule-grid .schedule-closed-first::after {
+  position: absolute;
+  inset-inline-start: 8px;
+  top: 5px;
+  color: var(--color-ink-muted);
+  content: var(--schedule-closed-label);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Move mode: where the card can go, and where only an override can. */
+.schedule-grid .schedule-offer {
+  background: color-mix(in srgb, var(--color-primary) 12%, white);
+  cursor: pointer;
+}
+
+.schedule-grid .schedule-offer-warn {
+  background: var(--color-warning-bg);
+  cursor: pointer;
+}
+
+/* The cards. */
+.schedule-grid .rbc-event.schedule-event {
+  padding: 4px 8px 3px 9px;
+  border: none;
+  border-inline-start: 3px solid var(--dentist);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--dentist) 7%, white);
+  color: var(--color-ink);
+  box-shadow: none;
+}
+
+.schedule-grid .rbc-event.schedule-event:hover {
+  background: color-mix(in srgb, var(--dentist) 12%, white);
+}
+
+.schedule-grid .rbc-event.schedule-event.rbc-selected {
+  background: var(--color-surface);
+  box-shadow:
+    0 0 0 2px var(--color-ink),
+    0 6px 16px rgba(27, 26, 31, 0.12);
+}
+
+.schedule-grid .rbc-event-label {
+  display: none;
+}
+
+.schedule-grid .rbc-event.schedule-event-muted,
+.schedule-grid .rbc-event.schedule-event-cancelled {
+  border-inline-start-color: color-mix(in srgb, var(--dentist) 35%, white);
+  background: var(--color-faint);
+  color: var(--color-ink-muted);
+}
+
+.schedule-grid .rbc-event.schedule-event-cluster {
+  border-inline-start-color: var(--color-ink-muted);
+  background: color-mix(in srgb, var(--color-border) 35%, white);
+}
+
+.schedule-grid .schedule-event-cancelled .schedule-card-name {
+  text-decoration: line-through;
+}
+
+.schedule-grid .schedule-event-pending {
+  outline: 2px dashed var(--dentist);
+  opacity: 0.85;
+}
+
+.schedule-card {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+.schedule-card-line,
+.schedule-card-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+}
+
+.schedule-card-narrow {
+  font-size: 11.5px;
+}
+
+.schedule-grid .rbc-event.schedule-event:has(.schedule-card-narrow) {
+  padding: 3px 5px 2px 6px;
+}
+
+/* The name always keeps half the line: a status pill gives way first. */
+.schedule-card-name {
+  min-width: min(50%, 100px);
+  flex: 0 1 auto;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-card-time,
+.schedule-card-meta {
+  overflow: hidden;
+  color: var(--color-ink-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.schedule-card-time {
+  flex: none;
+}
+
+.schedule-card-dentist {
+  flex: none;
+  color: color-mix(in srgb, var(--dentist) 75%, black);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.schedule-card-clinic {
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--color-warning);
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.schedule-card-reason {
+  overflow: hidden;
+  color: var(--color-ink-secondary);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-card-flag {
+  flex: none;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+/* A card's status: pushed to the far edge, and only as loud as it needs to be. */
+.schedule-status,
+.schedule-status-ring,
+.schedule-status-symbol {
+  flex: none;
+  margin-inline-start: auto;
+}
+
+.schedule-status {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+.schedule-status > span {
+  height: 16px;
+  padding-inline: 5px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.schedule-status-ring {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--color-warning-dot);
+  border-radius: 50%;
+}
+
+.schedule-status-symbol {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.schedule-status-checked_in {
+  background: var(--color-success);
+  color: var(--color-surface);
+}
+
+.schedule-status-in_room {
+  border: 1px solid var(--color-warning-dot);
+  border-radius: 3px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.schedule-status-no_show,
+.schedule-status-cancelled {
+  color: var(--color-danger);
+}
+
+.schedule-status-unresolved {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+/* Only the bottom edge changes the length (A8), and it is wide enough to catch. */
+.schedule-grid
+  .rbc-addons-dnd
+  .rbc-addons-dnd-resizable
+  .rbc-addons-dnd-resize-ns-anchor:first-child {
+  display: none;
+}
+
+.schedule-grid
+  .rbc-addons-dnd
+  .rbc-addons-dnd-resizable
+  .rbc-addons-dnd-resize-ns-anchor:last-child {
+  bottom: -3px;
+  z-index: 2;
+  height: 8px;
+  cursor: ns-resize;
+}

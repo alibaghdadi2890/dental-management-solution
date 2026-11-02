@@ -235,7 +235,7 @@ export function RecordHeader({
   /** The patient's name, focusable by code (after the post-visit summary closes). */
   headingRef?: Ref<HTMLHeadingElement> | undefined;
 }) {
-  const { t } = useTranslation('patients');
+  const { t } = useTranslation(['patients', 'scheduling']);
   const canWrite = usePermission('patient:write');
   const canVisit = usePermission('visit:write');
   const recordTabs = useRecordTabs();
@@ -300,6 +300,20 @@ export function RecordHeader({
               {patient.fullName}
             </h1>
             {archived && <Pill tone="neutral">{t('record.archived')}</Pill>}
+            {patient.registrationIncomplete && (
+              <Pill tone="warning">{t('scheduling:status.incomplete')}</Pill>
+            )}
+            {patient.registrationIncomplete && canWrite && !archived && (
+              <button
+                type="button"
+                className="cursor-pointer border-none bg-transparent p-0 text-[12.5px] font-medium text-primary hover:underline"
+                onClick={() => {
+                  editPatient(patient.id);
+                }}
+              >
+                {t('scheduling:record.completeRegistration')}
+              </button>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-3.5 text-[12.5px] leading-none text-ink-tertiary">
             <span dir="ltr" className="font-mono">

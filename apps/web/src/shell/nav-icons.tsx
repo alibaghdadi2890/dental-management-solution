@@ -11,6 +11,12 @@ const PATHS: Record<NavKey, ReactNode> = {
       <circle cx="8" cy="10.1" r="1.2" fill="currentColor" stroke="none" />
     </>
   ),
+  schedule: (
+    <>
+      <rect x="2.25" y="3" width="11.5" height="10.75" rx="2" />
+      <path d="M2.25 6.5h11.5M5.5 1.75v2.5M10.5 1.75v2.5M5 9.25h2M9 9.25h2M5 11.5h2" />
+    </>
+  ),
   patients: (
     <>
       <circle cx="6" cy="5.25" r="2.5" />

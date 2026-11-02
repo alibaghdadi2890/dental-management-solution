@@ -84,6 +84,7 @@ describe('Settings (ADR-0055)', () => {
       'Dental chart',
       'Staff',
       'Roles',
+      'Schedule',
     ]);
     cleanup();
 

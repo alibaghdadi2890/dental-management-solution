@@ -128,7 +128,7 @@ describe('writes', () => {
     ['pause', () => api.pauseVisit(VISIT_ID), 'POST', `/visits/${VISIT_ID}/pause`],
     ['resume', () => api.resumeVisit(VISIT_ID), 'POST', `/visits/${VISIT_ID}/resume`],
     ['discard', () => api.discardVisit(VISIT_ID), 'POST', `/visits/${VISIT_ID}/discard`],
-    ['complete', () => api.completeVisit(VISIT_ID), 'POST', `/visits/${VISIT_ID}/complete`],
+    ['complete', () => api.completeVisit(VISIT_ID), 'POST', `/visits/${VISIT_ID}/complete`, {}],
     [
       'notes',
       () => api.updateVisitNotes(VISIT_ID, { notes: 'x' }),

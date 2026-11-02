@@ -58,7 +58,8 @@
     "settings": "Paramètres",
     "contacts": "Contacts",
     "files": "Fichiers",
-    "compensation": "Rémunération"
+    "compensation": "Rémunération",
+    "schedule": "Agenda"
   },
   "ranges": {
     "today": "Aujourd’hui",
@@ -220,6 +221,33 @@
       "payout_void": "A annulé un versement de {{amount}} à {{subject}}",
       "period_close": "A clôturé le relevé de {{subject}} pour {{month}}",
       "period_reopen": "A rouvert le relevé de {{subject}} pour {{month}}"
+    },
+    "appointment": {
+      "book": "A réservé un rendez-vous pour {{subject}}",
+      "reschedule": "A déplacé le rendez-vous de {{subject}}",
+      "resize": "A changé la durée du rendez-vous de {{subject}}",
+      "confirm": "A confirmé le rendez-vous de {{subject}}",
+      "check_in": "A enregistré l'arrivée de {{subject}}",
+      "undo_check_in": "A annulé l'arrivée de {{subject}}",
+      "room": "A changé la salle du rendez-vous de {{subject}}",
+      "cancel": "A annulé le rendez-vous de {{subject}}",
+      "no_show": "A noté l'absence de {{subject}}",
+      "start": "A commencé la visite du rendez-vous de {{subject}}",
+      "undo_start": "A remis {{subject}} en attente, la visite ayant été abandonnée",
+      "complete": "A terminé le rendez-vous de {{subject}}"
+    },
+    "follow_up": {
+      "recommend": "A recommandé un suivi pour {{subject}} : {{title}}",
+      "book": "A réservé le suivi de {{subject}} : {{title}}",
+      "reopen": "A remis le suivi de {{subject}} sur la liste : {{title}}",
+      "will_call": "A noté que {{subject}} rappellera : {{title}}",
+      "decline": "A noté que {{subject}} a refusé le suivi : {{title}}"
+    },
+    "opening_hours": {
+      "update": "A modifié les heures d'ouverture d'un site"
+    },
+    "scheduling_settings": {
+      "update": "A modifié la durée de la liste des suivis"
     }
   },
   "fields": {

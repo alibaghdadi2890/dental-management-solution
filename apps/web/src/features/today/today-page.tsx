@@ -18,6 +18,8 @@ import {
   invalidateVisitData,
   visitPageQuery,
 } from '@/features/clinical/visits-list/visits-list-api';
+import { worklistQuery } from '@/features/scheduling/scheduling-api';
+import { FollowUpWorklist, TodaySchedule } from '@/features/scheduling/today-schedule';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, todayIn } from '@/lib/format';
 import { ChairRow } from './chair-lane';
@@ -89,6 +91,7 @@ export function TodayPage({
   // patient's money (`payment:read`), and checking out needs `payment:write`.
   const canSeeVisits = usePermission('visit:read');
   const canCheckOut = usePermission('payment:write');
+  const canSeeSchedule = usePermission('appointment:read');
   const queue = useCheckoutQueue();
   // The patient of the open dialog, kept once their visit has left the queue (paid in full).
   const [opened, setOpened] = useState<{ id: string; name: string }>();
@@ -98,6 +101,8 @@ export function TodayPage({
     refetchInterval: CHECKOUT_REFETCH_MS,
     refetchOnWindowFocus: 'always',
   });
+  const canWork = usePermission('appointment:write_all');
+  const worklist = useQuery(worklistQuery(session?.branch?.id ?? '', canWork));
   // Pending until the lists are back, so the card goes at once and doesn't flash in again.
   const checkOut = useMutation({
     mutationFn: checkOutVisit,
@@ -112,7 +117,7 @@ export function TodayPage({
     .filter(Boolean)
     .join(' · ');
 
-  if (!queue.enabled && !canSeeVisits) {
+  if (!queue.enabled && !canSeeVisits && !canSeeSchedule) {
     return (
       <Page title={t('title')} subtitle={subtitle}>
         <p className="text-[13px] leading-snug text-ink-secondary">
@@ -135,6 +140,7 @@ export function TodayPage({
       ? opened
       : undefined;
   const inChair = [...(chair.data?.items ?? [])].reverse();
+  const awaitingVisits = new Set(worklist.data?.map((followUp) => followUp.sourceVisitId));
 
   let waiting: ReactNode;
   if (queue.loading) {
@@ -159,6 +165,7 @@ export function TodayPage({
             timeZone={timeZone}
             locale={locale}
             canCheckOut={canCheckOut}
+            followUpWaiting={awaitingVisits.has(visit.id)}
             onCheckout={() => {
               setOpened({ id: visit.id, name: visit.patient.fullName });
               onOpen(visit.id);
@@ -198,6 +205,8 @@ export function TodayPage({
   return (
     <>
       <Page title={t('title')} subtitle={subtitle}>
+        {session.branch ? <TodaySchedule branchId={session.branch.id} /> : null}
+        {session.branch ? <FollowUpWorklist branchId={session.branch.id} /> : null}
         {queue.enabled && (
           <Lane
             title={t('checkout.title')}

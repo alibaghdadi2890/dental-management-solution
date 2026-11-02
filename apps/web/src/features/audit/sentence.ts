@@ -97,6 +97,27 @@ export function readableAction(action: string): string {
   return verb.length > 0 ? `${sentence} · ${words(verb.join(' '))}` : sentence;
 }
 
+/** The schedule's actions with a sentence under `activity:actions.<action>`. */
+const SCHEDULE: ReadonlySet<string> = new Set([
+  'appointment.book',
+  'appointment.reschedule',
+  'appointment.resize',
+  'appointment.confirm',
+  'appointment.check_in',
+  'appointment.undo_check_in',
+  'appointment.room',
+  'appointment.cancel',
+  'appointment.no_show',
+  'appointment.start',
+  'appointment.undo_start',
+  'appointment.complete',
+  'follow_up.recommend',
+  'follow_up.book',
+  'follow_up.reopen',
+  'follow_up.will_call',
+  'follow_up.decline',
+]);
+
 /** The actions with a sentence under `activity:actions.<action>` and no special case below. */
 const PLAIN = new Set([
   'patient.create',
@@ -323,6 +344,17 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
         action: readableAction(action),
       },
     );
+  }
+
+  // --- Schedule (feature 14): about the patient; a follow-up also says what it is ---
+  if (prefix === 'appointment' || prefix === 'follow_up') {
+    return done(SCHEDULE.has(action) ? action : 'fallback', patient, {
+      title: field(entry, 'title') ?? '',
+      action: readableAction(action),
+    });
+  }
+  if (action === 'opening_hours.update' || action === 'scheduling_settings.update') {
+    return done(action, null);
   }
 
   // --- Visits and the clinical record ---
