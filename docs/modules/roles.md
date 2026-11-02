@@ -28,6 +28,9 @@ The default matrix (deny by default, the owner widens):
 | `payment:read`, `payment:write`                                                                                      | ✓     | ✓     | –       | –         | ✓         |
 | `payment:refund`, `finance:read`, `compensation:manage`                                                              | ✓     | ✓     | –       | –         | –         |
 | `tenant:write`, `user:write`, `role:read`, `role:write`, `catalog:write`, `import:run`                               | ✓     | ✓     | –       | –         | –         |
+| `appointment:read`, `appointment:write`                                                                              | ✓     | ✓     | ✓       | ✓         | ✓         |
+| `appointment:write_all`                                                                                              | ✓     | ✓     | –       | ✓         | ✓         |
+| `appointment:override`                                                                                               | ✓     | ✓     | –       | –         | ✓         |
 
 `visit:read` is the caller's own visits (dentist or starter), `visit:read_all` every visit;
 `payment:read` is one patient's account, `finance:read` money across patients; `visit:discount` is

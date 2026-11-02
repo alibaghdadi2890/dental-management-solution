@@ -81,6 +81,8 @@ The tenant always comes from the session, or `X-Tenant-Id` for platform admins (
 - Emits: `TenantCurrencyChanged { from, to }`, inside the settings transaction (`billing` may
   veto it); stored by the audit subscriber once committed. (`TenantProvisioned` is emitted by
   `provisioning`.)
+- Emits: `BranchCreated { branchId }`, inside `createBranch`'s transaction, provisioning's first
+  branch included: `scheduling` seeds the branch's opening hours (ADR-0068).
 - Consumes: —
 
 ## Depends on

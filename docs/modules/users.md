@@ -96,7 +96,8 @@ tenant's user is `404 user.not_found` (RLS).
 ## Events
 
 - Emits: `StaffDeactivated` (`userId`, `profileId`, the tenant-local `date`), published inside
-  `deactivate`'s transaction. `compensation` ends the dentist's agreement on that day in the same
+  `deactivate`'s transaction. `scheduling` refuses it while the dentist has an open appointment
+  (`409 staff.has_open_appointments`, ADR-0066). `compensation` ends the dentist's agreement on that day in the same
   transaction (feature 13b, ADR-0058). `MemberJoined` / `MemberRemoved` come from `auth`.
 - Consumes: —
 

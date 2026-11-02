@@ -69,3 +69,10 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0063](0063-a-correction-may-move-a-visit-to-another-day.md)           | A correction may move a visit to another day                                 | Accepted                             |
 | [0064](0064-work-over-several-visits-is-charged-when-it-starts.md)     | Work over several visits is charged in the visit that starts it              | Accepted (amended by 0065)           |
 | [0065](0065-ticked-work-starts-on-perform.md)                          | Ticked work starts on Perform; finished or continues asked at Complete       | Accepted (amends 0048, 0064)         |
+| [0066](0066-scheduling-module-and-appointment-lifecycle.md)            | The `scheduling` module and the appointment lifecycle                        | Accepted                             |
+| [0067](0067-room-and-patient-conflicts-are-hard.md)                    | Room and patient conflicts are hard, dentist and hours are soft              | Accepted                             |
+| [0068](0068-opening-hours-are-the-only-availability.md)                | Opening hours are the only availability; materialisation deferred            | Accepted                             |
+| [0069](0069-follow-ups.md)                                             | Follow-ups: due date, window, derived expiry, reopening                      | Accepted                             |
+| [0070](0070-quick-patients.md)                                         | Quick patients and incomplete registration                                   | Accepted                             |
+| [0071](0071-the-scheduler-component.md)                                | The scheduler component                                                      | Accepted                             |
+| [0072](0072-completion-carries-the-next-appointment.md)                | Completion carries the next-appointment payload                              | Accepted (amends 0065)               |

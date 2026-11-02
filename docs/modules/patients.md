@@ -464,7 +464,8 @@ an unknown id inside a body is a 422 at its path.
 - Emits (after commit; the generic audit subscriber records each one):
   - `PatientCreated { patientId }`
   - `PatientUpdated { patientId, fields }`: the names of the changed patch fields.
-  - `PatientArchived { patientId }`
+  - `PatientArchived { patientId }`, inside the archive's transaction: `scheduling` refuses it while
+    the patient has an upcoming appointment (`409 patient.has_upcoming_appointments`).
   - `PatientRestored { patientId }`
   - `PatientsMerged { keptId, droppedId }`, published inside the merge transaction. Consumed by
     `clinical`, whose in-transaction handler re-points the dropped patient's visits, diagnoses,

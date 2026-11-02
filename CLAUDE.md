@@ -109,15 +109,15 @@ modules/<name>/
 
 | Module          | Owns                                                                 | Depends on            |
 |-----------------|----------------------------------------------------------------------|-----------------------|
-| `tenancy`       | tenants (clinics), branches, rooms (the physical unit a visit happens in; the future bookable resource), tenant settings (timezone, currency, locale, country; the chart display settings: detail, tooth notation, orientation — ADR-0021) | audit |
+| `tenancy`       | tenants (clinics), branches, rooms (the physical unit a visit happens in; the future bookable resource), tenant settings (timezone, currency, locale, country; the chart display settings: detail, tooth notation, orientation — ADR-0021); publishes `BranchCreated` | audit |
 | `auth`          | better-auth integration (identity-plane `auth_*` tables), sessions, sign-in/out, lockout, idle timeout, org/team membership mirror, tenant + branch resolution into request context | tenancy |
 | `users`         | app-level user/staff profile (name, title, practitioner type, a dentist's specialties with the primary one — ADR-0050, contact), branch assignments, staff user creation, `GET /session` | auth, tenancy, roles |
 | `roles`         | role definitions per tenant (system roles, the clinic's custom roles), role → permission assignments, user → role assignments and per-user permission grants (`user_permission_grants`), keyed by auth user id; the rules of widening (ADR-0055); the platform's default roles (`role_templates`, global, written only through `withoutTenant()`, ADR-0056) | tenancy |
 | `authorization` | resolves the caller's permissions (roles ∪ grants) and staff profile into CLS, `can(actor, permission, resource)` (the visit scope, ADR-0055), global session + permission guards, agent tool guard | auth, roles, users |
 | `audit`         | append-only audit log (who/what/when/tenant/before/after, and the patient, visit and area a row is about — ADR-0037), query API, the Activity feed; the feed keeps to the caller's visit scope through a port `clinical` answers (`AuditVisitScope`, ADR-0055) | — (consumes events from all) |
-| `patients`      | `patients` (records: demographics, phone (optional, any format — ADR-0052), insurance text, primary dentist by staff profile id, notes, the chart's dentition override, what a new patient comes for; archive = soft delete; merge), `patient_counters` (the per-tenant display-number sequence), `contacts` and `patient_contacts` (guardians, billing and emergency contacts, who may themselves be patients; ADR-0019), the structured medical history (`medical_history_options`: the tenant's allergy and condition lists; `patient_medical_items`; the "none" answers and the medication line on the patient; ADR-0046) | tenancy (country, time zone), users (practitioners, ADR-0016, ADR-0020); reacts to `TenantProvisioned` (the default lists) |
-| `scheduling`    | resources (practitioners, rooms, equipment), availability templates + exceptions, slot search, appointments + state machine, waitlist | users, patients, clinical, tenancy (reacts to clinical events) |
-| `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`, each row with its chart mark: a palette colour, for services an icon (a service may have the icon alone, drawn inside the tooth, ADR-0054), a priority, ADR-0042; a service may name the visit type it is added on, ADR-0047), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, timer, services performed, notes, discount, status; a type, the step and view it is on, a reason, an emergency's complaint and the dentist's confirmation of the medical history, ADR-0044, ADR-0046; the planned work a visit took on at start, `visit_plan_items`, ADR-0048; amend and void, ADR-0025; a correction may also add or reprice services and set the start and end, ADR-0062, on another day too, ADR-0063; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, each with what it was seen on, ADR-0049, on a tooth, a jaw or the whole mouth as its catalog item's level says, ADR-0064; `treatment_plans`, each with a priority — the phase of the plan — and the patient's acceptance, ADR-0045; recorded in a visit or on the patient record, ADR-0031; what is at each tooth position — missing, not erupted, implant — `tooth_presences`, ADR-0034; work over several visits, `treatment_plan_sessions`, charged in the visit that starts it, ADR-0032, ADR-0064) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
+| `patients`      | `patients` (records: demographics, phone (optional, any format — ADR-0052), insurance text, primary dentist by staff profile id, notes, the chart's dentition override, what a new patient comes for; a phone booking's quick patient, `registration_incomplete`, ADR-0070; archive = soft delete; merge), `patient_counters` (the per-tenant display-number sequence), `contacts` and `patient_contacts` (guardians, billing and emergency contacts, who may themselves be patients; ADR-0019), the structured medical history (`medical_history_options`: the tenant's allergy and condition lists; `patient_medical_items`; the "none" answers and the medication line on the patient; ADR-0046) | tenancy (country, time zone), users (practitioners, ADR-0016, ADR-0020); reacts to `TenantProvisioned` (the default lists) |
+| `scheduling`    | appointments (a dentist and optionally a room of a branch; state machine, lineage, ADR-0066), `follow_ups` (the dentist's next step, ADR-0069), `branch_opening_hours` and `scheduling_settings` (the only availability so far, ADR-0068); slot search. Later: dentist schedules, equipment, a waitlist | users, patients, clinical, tenancy; reacts in the transaction to the visit events, `BranchCreated`, `PatientsMerged`, and vetoes archiving a patient with upcoming appointments (`PatientArchived`) and deactivating a dentist with open ones (`StaffDeactivated`) |
+| `clinical`      | service and diagnosis catalogs (`procedures`, `diagnoses`, each row with its chart mark: a palette colour, for services an icon (a service may have the icon alone, drawn inside the tooth, ADR-0054), a priority, ADR-0042; a service may name the visit type it is added on, ADR-0047), visits (`visits`, `visit_services`, `visit_counters`, `visit_amendments`: encounters with patient, dentist, room, the appointment they came from, timer, services performed, notes, discount, status; a type, the step and view it is on, a reason, an emergency's complaint and the dentist's confirmation of the medical history, ADR-0044, ADR-0046; the planned work a visit took on at start, `visit_plan_items`, ADR-0048; amend and void, ADR-0025; a correction may also add or reprice services and set the start and end, ADR-0062, on another day too, ADR-0063; the discount at checkout, ADR-0030), the clinical record on the teeth, jaws and mouth (`patient_diagnoses`, each with what it was seen on, ADR-0049, on a tooth, a jaw or the whole mouth as its catalog item's level says, ADR-0064; `treatment_plans`, each with a priority — the phase of the plan — and the patient's acceptance, ADR-0045; recorded in a visit or on the patient record, ADR-0031; what is at each tooth position — missing, not erupted, implant — `tooth_presences`, ADR-0034; work over several visits, `treatment_plan_sessions`, charged in the visit that starts it, ADR-0032, ADR-0064) | patients, users, tenancy (tenant currency, ADR-0015; time zone, rooms); reacts to `PatientsMerged` in the merge transaction (spec W24) and to `TenantProvisioned` (ADR-0014) |
 | `billing`       | patient ledger (`ledger_entries`: opening balances, adjustments, visit charges and their adjustments and reversals, payments, refunds, voids; `ledger_entry_lines`), payments (`payments`, `payment_counters`, `payment_allocations`: account-level payments with stored derived allocations, households, credit; ADR-0027 to ADR-0029; advances, held for the treatment plan or kept as credit: `payment_holds`, `visit_plan_shares`, ADR-0051), balances, receivables, the visit summary, the patient and visit views that need them, the printables' data; later stored invoices, price lists | patients, tenancy (currency, time zone), users (dentist names in the export); clinical from 4a (reacts to `VisitCompleted`, `VisitAmended` and `VisitVoided` in the transaction, ADR-0024 to ADR-0026; and, to end holds when the plan closes, to `TreatmentCancelled`, `TreatmentRemoved` and `VisitDiscarded`, ADR-0051); reacts to `PatientsMerged` in the merge transaction (ADR-0036) and vetoes a currency change once there is money (`TenantCurrencyChanged`, ADR-0035) |
 | `files`         | `files`: a patient's images and documents (feature 8) — always the patient's, optionally linked to a visit and a tooth; category and type, "taken on", note, stored orientation, soft archive; pending uploads; signed upload and download URLs. The bytes are in object storage: the original (never modified) and, for images, a display copy and a thumbnail the browser made (ADR-0038 to ADR-0041) | patients, clinical (a visit's patient, number and status), users (uploader names), tenancy (time zone); reacts to `PatientsMerged` in the merge transaction, and vetoes a diagnosis citing a file that is not its patient's (`DiagnosisEvidenceCited`, ADR-0049) |
 | `compensation`  | how the clinic pays each dentist (feature 13b): agreements (`compensation_agreements`: effective-dated component sets — fixed, share of billed or collected with rates by service and a threshold, per visit, per day; superseded or ended, never edited, ADR-0058), adjustments and payouts (`compensation_adjustments`, `compensation_payouts`, voided with a reason), closed months (`compensation_periods`: the frozen statement and the line ids it counted, ADR-0059); the statement computed from the ledger for open months, late entries, the report; clinic-managed only, a dentist reads their own (ADR-0060) | users, clinical, billing, patients, tenancy; reacts to `StaffDeactivated` in its transaction, and vetoes a visit moving into or out of a closed month (`VisitRedated`, ADR-0063) |
@@ -248,23 +248,23 @@ Rules:
 
 ## 8. Scheduling module — specific invariants
 
-- Resource-based: an appointment reserves one or more resources (practitioner, room, equipment).
-  Rooms are owned by `tenancy` (ADR-0007); there is no chair concept.
-  A slot is free only if every required resource is free.
-- Availability is materialized: weekly templates + exceptions are expanded into concrete
-  availability windows per resource per day (rolling horizon, refreshed by a job). Slot search
-  queries the materialized table; it never evaluates recurrence rules on the request path.
+- An appointment reserves a dentist and optionally a room (ADR-0066). Rooms are owned by `tenancy`
+  (ADR-0007); there is no chair concept. A resource table comes with dentist schedules or equipment.
+- Availability is each branch's weekly opening hours, read directly (ADR-0068). Materialised
+  availability is deferred to the enhancement that adds dentist schedules.
 - Slot search and interval arithmetic live in `scheduling/domain/` as pure functions with
   exhaustive tests (adjacent intervals, overlaps, DST transitions, midnight crossings).
-- Double booking is prevented by a Postgres exclusion constraint on
-  `(resource_id, tstzrange(starts_at, ends_at)) WHERE status NOT IN ('cancelled','no_show')`.
+- The same room or the same patient overlapping is refused by Postgres exclusion constraints on
+  `tstzrange` over the active statuses. The same dentist overlapping and outside opening hours are
+  warnings that need `appointment:override` (ADR-0067).
 - Appointment lifecycle is an explicit state machine in `domain/`:
   `booked → confirmed → checked_in → in_room → completed`, with `cancelled`, `no_show`,
-  `rescheduled` as terminal branches. Illegal transitions throw. Every transition emits an event.
+  `rescheduled` as terminal branches, plus Undo check-in and a discarded visit going back (ADR-0066).
+  Illegal transitions throw. Every transition emits an event. `unresolved` is derived, never stored.
 - Rescheduling creates a new appointment linked by `lineage_id`; history is never rewritten.
-- Recurring series generate concrete occurrences; a rule is stored for regeneration only.
-- Durations come from the procedure catalog (owned by `clinical`); overrides are stored on the
-  appointment.
+- Recurring series generate concrete occurrences; a rule is stored for regeneration only (not built).
+- Durations are chosen at booking; a follow-up carries the dentist's expected duration. Per-service
+  durations in the catalog are not built.
 
 ## 9. Events, jobs, and side effects
 
@@ -330,7 +330,8 @@ Even in phase 1, write application services so they can be exposed as tools late
   and patients per tenant are bounded — thousands, not millions).
 - Idempotency: mutations that clients may retry (booking, payment) accept an `Idempotency-Key`.
   Today: `POST /billing/payments`, `POST /billing/opening-balances`,
-  `POST /billing/patients/:id/adjustments` and `POST /patients` require one (a uuid). The key and
+  `POST /billing/patients/:id/adjustments`, `POST /patients`, `POST /scheduling/appointments` and
+  `POST /scheduling/appointments/:id/reschedule` require one (a uuid). The key and
   a hash of the request are stored on the row it creates; the same key with the same request
   returns the first result, with another request 409 `…idempotency_mismatch` (ADR-0037).
 
@@ -343,6 +344,7 @@ Even in phase 1, write application services so they can be exposed as tools late
   remains the enforcement point.
 - All dates handled with the tenant timezone from session; display via one shared formatter.
 - Calendar views use a scheduler component with resource support; do not build the grid by hand.
+  It is `react-big-calendar`, behind one file, `features/scheduling/schedule-calendar.tsx` (ADR-0071).
 - A tooth is drawn from a `ToothRender` (`features/clinical/chart/tooth-render.ts`): `toToothRender`
   decides what is painted, in which colour and tone, and words the tooltip; `ToothGlyph` only
   renders it and derives nothing. A new way to draw a tooth is a second renderer of that object.

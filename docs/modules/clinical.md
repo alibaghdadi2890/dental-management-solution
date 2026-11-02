@@ -789,12 +789,17 @@ see `recordSession` above.
 
 - Emits (after commit; the generic subscriber audits each):
   - `CatalogChanged { kind: 'service' | 'diagnosis', ids }`.
-  - `VisitStarted { visitId, patientId, dentistId, roomId, type }`.
+  - `VisitStarted { visitId, patientId, dentistId, roomId, type, appointmentId }`.
+  - `VisitLinkedToAppointment { visitId, patientId, appointmentId }`: a resumed visit took on an
+    appointment it did not have. `scheduling` reacts as to a start.
   - `VisitPaused { visitId, patientId }`, `VisitResumed { visitId, patientId }`.
-  - `VisitDiscarded { visitId, patientId, roomId }`.
-  - `VisitCompleted { visitId, patientId, currency, total, localDate }`, published by
+  - `VisitDiscarded { visitId, patientId, roomId, appointmentId }`.
+  - `VisitCompleted { visitId, patientId, currency, total, localDate, branchId, dentistId,
+displayNumber, appointmentId, nextAppointment }`, published by
     `complete` inside its transaction: `billing`'s in-transaction handler posts the visit charge
-    before commit (ADR-0024); after-commit subscribers (the audit) hear it once committed.
+    before commit (ADR-0024); `scheduling`'s takes the appointment to `completed` and creates the
+    follow-up from `nextAppointment`, which `clinical` never reads (ADR-0072); after-commit
+    subscribers (the audit) hear it once committed.
   - `MedicalHistoryConfirmed { visitId, patientId }` (ADR-0046). Taking the confirmation back
     emits nothing.
   - `DiagnosisRecorded { recordId, visitId, patientId, toothCode, diagnosisId }`,
