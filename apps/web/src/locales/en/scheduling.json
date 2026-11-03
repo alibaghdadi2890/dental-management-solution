@@ -198,6 +198,7 @@
     "within_1_week": "Within 1 week",
     "within_2_weeks": "Within 2 weeks",
     "within_1_month": "Within 1 month",
+    "after_6_months": "After 6 months",
     "custom": "Custom date",
     "no_preference": "No preference"
   },

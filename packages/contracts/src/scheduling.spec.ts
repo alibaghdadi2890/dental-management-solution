@@ -93,8 +93,14 @@ describe('follow-up dates', () => {
     expect(followUpDueOn('within_1_week', '2026-09-04', null)).toBe('2026-09-11');
     expect(followUpDueOn('within_2_weeks', '2026-09-04', null)).toBe('2026-09-18');
     expect(followUpDueOn('within_1_month', '2026-09-04', null)).toBe('2026-10-04');
+    expect(followUpDueOn('after_6_months', '2026-09-04', null)).toBe('2027-03-04');
     expect(followUpDueOn('custom', '2026-09-04', '2026-12-01')).toBe('2026-12-01');
     expect(followUpDueOn('no_preference', '2026-09-04', null)).toBeNull();
+  });
+
+  it('keeps six months later in a shorter month', () => {
+    expect(followUpDueOn('after_6_months', '2026-08-31', null)).toBe('2027-02-28');
+    expect(followUpDueOn('after_6_months', '2027-08-31', null)).toBe('2028-02-29');
   });
 
   it('adds the window across a month end', () => {
@@ -120,6 +126,16 @@ describe('follow-up dates', () => {
         today,
       ),
     ).toEqual({ from: '2026-12-01', to: '2026-12-08' });
+  });
+
+  it('opens the slot finder on the week six months later, or today once it has passed', () => {
+    const of = (today: string) =>
+      followUpSearchWindow(
+        { dueOn: '2027-03-04', timing: 'after_6_months', customDate: null },
+        today,
+      );
+    expect(of('2026-09-04')).toEqual({ from: '2027-03-04', to: '2027-03-11' });
+    expect(of('2027-03-20')).toEqual({ from: '2027-03-20', to: '2027-03-27' });
   });
 });
 

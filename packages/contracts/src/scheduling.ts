@@ -76,6 +76,7 @@ export const FOLLOW_UP_TIMINGS = [
   'within_1_week',
   'within_2_weeks',
   'within_1_month',
+  'after_6_months',
   'custom',
   'no_preference',
 ] as const;
@@ -539,6 +540,15 @@ const addDays = (date: string, days: number): string => {
   return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 };
 
+/** The same day some months later, or that month's last day when it is shorter (31 Aug → 28 Feb). */
+const addMonths = (date: string, months: number): string => {
+  const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(year, month - 1 + months + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month - 1 + months, Math.min(day, lastDay)))
+    .toISOString()
+    .slice(0, 10);
+};
+
 const daysBetween = (from: string, to: string): number =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
@@ -557,6 +567,8 @@ export function followUpDueOn(
       return addDays(visitDate, 14);
     case 'within_1_month':
       return addDays(visitDate, 30);
+    case 'after_6_months':
+      return addMonths(visitDate, 6);
     case 'custom':
       return customDate;
     case 'no_preference':
@@ -580,13 +592,20 @@ export function followUpOverdueDays(dueOn: string | null, today: string): number
   return dueOn === null ? 0 : Math.max(0, daysBetween(dueOn, today));
 }
 
-/** The slot finder's opening range (A10): today to the due date, at least a week; a month without one. */
+/**
+ * The slot finder's opening range (A10): today to the due date, at least a week; a month without one.
+ * A custom date and *After 6 months* open on their date, for a week (from today once it has passed).
+ */
 export function followUpSearchWindow(
   followUp: { dueOn: string | null; timing: FollowUpTiming; customDate: string | null },
   today: string,
 ): { from: string; to: string } {
   if (followUp.timing === 'custom' && followUp.customDate && followUp.customDate >= today) {
     return { from: followUp.customDate, to: addDays(followUp.customDate, 7) };
+  }
+  if (followUp.timing === 'after_6_months' && followUp.dueOn) {
+    const from = followUp.dueOn > today ? followUp.dueOn : today;
+    return { from, to: addDays(from, 7) };
   }
   if (followUp.dueOn === null) return { from: today, to: addDays(today, 31) };
   const week = addDays(today, 7);
@@ -683,6 +702,7 @@ const TIMING_ORDER: readonly FollowUpTiming[] = [
   'within_1_week',
   'within_2_weeks',
   'within_1_month',
+  'after_6_months',
   'custom',
   'no_preference',
 ];
