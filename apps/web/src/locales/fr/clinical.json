@@ -175,6 +175,8 @@
   },
   "startVisit": {
     "title": "Démarrer une visite",
+    "startedFor": "Visite démarrée · {{dentist}}",
+    "startedForInRoom": "Visite démarrée · {{dentist}} · {{room}}",
     "dentist": "Dentiste",
     "room": "Salle",
     "choose": "Choisir…",

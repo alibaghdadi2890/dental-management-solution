@@ -162,7 +162,7 @@ function PatientForm({
   const queryClient = useQueryClient();
   const { openPatient } = usePatientNavigation();
   const canRecordBalance = usePermission('payment:write');
-  const canStartVisit = usePermission('visit:write');
+  const canStartVisit = usePermission('visit:start');
   const formId = useId();
   const formRef = useRef<HTMLFormElement>(null);
 

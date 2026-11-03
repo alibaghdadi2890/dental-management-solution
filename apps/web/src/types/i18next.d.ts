@@ -1,5 +1,6 @@
 import 'i18next';
 import type admin from '../locales/en/admin.json';
+import type alerts from '../locales/en/alerts.json';
 import type auth from '../locales/en/auth.json';
 import type billing from '../locales/en/billing.json';
 import type files from '../locales/en/files.json';
@@ -38,6 +39,7 @@ declare module 'i18next' {
       today: typeof today;
       activity: typeof activity;
       files: typeof files;
+      alerts: typeof alerts;
       roles: typeof roles;
       compensation: typeof compensation;
       scheduling: typeof scheduling;

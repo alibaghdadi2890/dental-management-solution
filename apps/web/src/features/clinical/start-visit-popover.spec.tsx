@@ -17,6 +17,7 @@ import {
   useParams,
 } from '@tanstack/react-router';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import '@/lib/i18n';
 import { Button } from '@/components/ui/button';
@@ -31,7 +32,7 @@ import {
   sessionWith,
 } from '@/features/patients/patients.test-utils';
 import { BRANCH, startedVisit } from './start-visit.test-utils';
-import { StartVisitPopover } from './start-visit-popover';
+import { StartVisitPanel, StartVisitPopover } from './start-visit-popover';
 
 const PATIENT_ID = id(1);
 const ANA = profileId(DENTIST_ID);
@@ -100,8 +101,16 @@ const posted = (fetchMock: FetchMock): unknown => {
   return typeof body === 'string' ? JSON.parse(body) : undefined;
 };
 
-/** The popover behind a Start visit trigger, with a stand-in workspace to land on. */
-function renderPopover(session: Session = { ...sessionWith(WRITE), branch: BRANCH }) {
+/** The popover behind a Start visit trigger (or `ui` in its place), with a stand-in workspace
+ * to land on. */
+function renderPopover(
+  session: Session = { ...sessionWith(WRITE), branch: BRANCH },
+  ui: ReactNode = (
+    <StartVisitPopover patientId={PATIENT_ID}>
+      <Button variant="primary">{'Start visit'}</Button>
+    </StartVisitPopover>
+  ),
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { staleTime: Infinity, retry: false } },
   });
@@ -120,11 +129,7 @@ function renderPopover(session: Session = { ...sessionWith(WRITE), branch: BRANC
     createRoute({
       getParentRoute: () => rootRoute,
       path: '/',
-      component: () => (
-        <StartVisitPopover patientId={PATIENT_ID}>
-          <Button variant="primary">{'Start visit'}</Button>
-        </StartVisitPopover>
-      ),
+      component: () => ui,
     }),
     visitRoute,
   ]);
@@ -440,5 +445,75 @@ describe('StartVisitPopover', () => {
     expect(within(dialog).queryByRole('combobox')).toBeNull();
     expect(within(dialog).queryByRole('button', { name: 'Start visit' })).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('StartVisitPanel', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it("starts the appointment's visit from a side panel, and closes", async () => {
+    const fetchMock = mockStart();
+    const onClose = vi.fn();
+    renderPopover(
+      { ...sessionWith(WRITE), branch: BRANCH },
+      <StartVisitPanel
+        patientId={PATIENT_ID}
+        patientName="Sofia Mendes"
+        preset={{ appointmentId: id(90), dentistId: MARCUS, roomId: id(71), reason: 'Check-up' }}
+        onClose={onClose}
+      />,
+    );
+    const panel = await screen.findByRole('complementary', { name: 'Start visit' });
+    expect(within(panel).getByText('Sofia Mendes')).toBeTruthy();
+    await waitFor(() => {
+      expect(select(panel, 'Dentist').value).toBe(MARCUS);
+    });
+    expect(select(panel, 'Room').value).toBe(id(71));
+
+    // The footer's button submits the form above it.
+    submit(panel);
+    await screen.findByText(`Workspace ${id(60)}`);
+    expect(posted(fetchMock)).toEqual({
+      patientId: PATIENT_ID,
+      dentistId: MARCUS,
+      roomId: id(71),
+      type: 'examination',
+      reason: 'Check-up',
+      appointmentId: id(90),
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('starts it for the dentist and stays, for the front desk (ADR-0074)', async () => {
+    const fetchMock = mockStart({
+      defaults: { dentistId: null, roomId: null },
+      start: () =>
+        json(
+          { visit: startedVisit(60, { dentistId: MARCUS, roomId: id(71) }), resumed: false },
+          201,
+        ),
+    });
+    const onClose = vi.fn();
+    const router = renderPopover(
+      { ...sessionWith(['patient:read', 'visit:read', 'visit:start']), branch: BRANCH },
+      <StartVisitPanel
+        patientId={PATIENT_ID}
+        patientName="Sofia Mendes"
+        preset={{ appointmentId: id(90), dentistId: MARCUS, roomId: id(71) }}
+        onClose={onClose}
+      />,
+    );
+    const panel = await screen.findByRole('complementary', { name: 'Start visit' });
+    await waitFor(() => {
+      expect(select(panel, 'Dentist').value).toBe(MARCUS);
+    });
+    submit(panel);
+    expect(await screen.findByText('Visit started · Dr. Marcus Lee · Room 1')).toBeTruthy();
+    expect(posted(fetchMock)).toMatchObject({ dentistId: MARCUS, appointmentId: id(90) });
+    expect(onClose).toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe('/');
   });
 });

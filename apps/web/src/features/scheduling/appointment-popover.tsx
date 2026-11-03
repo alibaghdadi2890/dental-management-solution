@@ -122,7 +122,7 @@ export function AppointmentDetails({
   rooms,
   onReschedule,
   onOpenPatient,
-  startVisit,
+  onStartVisit,
   onCompleteRegistration,
   onClose,
 }: {
@@ -130,8 +130,8 @@ export function AppointmentDetails({
   rooms: ScheduleResources['rooms'];
   onReschedule: () => void;
   onOpenPatient: () => void;
-  /** The Start visit button, which brings its own popover. */
-  startVisit: ReactNode;
+  /** The page opens the Start visit panel. */
+  onStartVisit: () => void;
   onCompleteRegistration: () => void;
   onClose: () => void;
 }) {
@@ -250,7 +250,11 @@ export function AppointmentDetails({
               {t('actions.checkIn')}
             </Button>
           ) : null}
-          {abilities.startVisit && appointment.status === 'checked_in' ? startVisit : null}
+          {abilities.startVisit && appointment.status === 'checked_in' ? (
+            <Button size="sm" variant="primary" onClick={onStartVisit}>
+              {t('actions.startVisit')}
+            </Button>
+          ) : null}
           {abilities.confirm ? (
             <Button
               size="sm"

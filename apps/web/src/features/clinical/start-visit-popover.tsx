@@ -6,7 +6,9 @@ import { type ReactNode, type SubmitEvent, useEffect, useId, useRef, useState } 
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Field, Select, TextInput } from '@/components/ui/field';
+import { RightPanel } from '@/components/ui/right-panel';
 import { Spinner } from '@/components/ui/spinner';
+import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { useActingTenantId } from '@/features/platform/acting-tenant';
@@ -70,7 +72,9 @@ const isFormError = (code: string): code is keyof typeof FORM_ERRORS =>
  * feature 10 (V1), why the patient is here: the visit type tiles with their steps and the one
  * the record suggests, and an optional reason — then
  * `POST /visits` and on to the workspace. A patient who already has a live visit gets that one
- * back (`resumed`), which is where they were going anyway: no toast either way. It can't be
+ * back (`resumed`), which is where they were going anyway: no toast either way. Someone who may
+ * start visits but not work in them (`visit:start` alone: the front desk, ADR-0074) stays where
+ * they are, with a toast naming the dentist and the room. It can't be
  * dismissed while the start is in flight. Without a branch in the session, it only says why a
  * visit can't start.
  */
@@ -139,6 +143,14 @@ export function StartVisitPopover({
                 setOpen(false);
                 onClose?.();
               }}
+              frame={({ content, actions }) => (
+                <div className="flex flex-col gap-3.5">
+                  {content}
+                  {actions ? (
+                    <div className="flex justify-end gap-2 pt-0.5">{actions('sm')}</div>
+                  ) : null}
+                </div>
+              )}
             />
           ) : (
             <p className="m-0 text-[12.5px] leading-[1.45] text-ink-secondary">
@@ -151,6 +163,63 @@ export function StartVisitPopover({
   );
 }
 
+/**
+ * The same form as a right panel, for the Schedule: an appointment's popover sits in the middle
+ * of the calendar, where a popover of its own has no room. The panel closes when the visit starts.
+ */
+export function StartVisitPanel({
+  patientId,
+  patientName,
+  preset,
+  onClose,
+}: {
+  patientId: string;
+  patientName: string;
+  preset?: StartPreset | undefined;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation('clinical');
+  const branch = useSession().data?.branch ?? null;
+  const starting = useStartingVisit(patientId);
+  const panel = (content: ReactNode, footer?: ReactNode) => (
+    <RightPanel
+      title={t('startVisit.title')}
+      subtitle={<p className="m-0 mt-1 truncate text-[12.5px] text-ink-secondary">{patientName}</p>}
+      dirty={false}
+      onClose={onClose}
+      closeDisabled={starting}
+      footer={footer}
+    >
+      {content}
+    </RightPanel>
+  );
+
+  if (!branch) {
+    return panel(
+      <p className="m-0 text-[12.5px] leading-[1.45] text-ink-secondary">
+        {t('startVisit.noBranch')}
+      </p>,
+    );
+  }
+  return (
+    <StartVisitForm
+      patientId={patientId}
+      branch={branch}
+      preset={preset}
+      onCancel={onClose}
+      onStarted={onClose}
+      frame={({ content, actions }) => panel(content, actions?.('md'))}
+    />
+  );
+}
+
+/** What the form hands its frame: the fields, and its buttons (none while loading), which
+ * submit through the form's id so the frame may put them outside it (a panel's footer). */
+type FormFrame = (parts: {
+  content: ReactNode;
+  actions: ((size: 'sm' | 'md') => ReactNode) | null;
+}) => ReactNode;
+
 /** Mounted only while the popover is open, so every opening reads fresh defaults (the room it
  * suggests must still be free) and starts from them. */
 function StartVisitForm({
@@ -159,18 +228,23 @@ function StartVisitForm({
   preset,
   onCancel,
   onStarted,
+  frame,
 }: {
   patientId: string;
   branch: BranchRef;
   preset: StartPreset | undefined;
   onCancel: () => void;
   onStarted: () => void;
+  frame: FormFrame;
 }) {
   const { t, i18n } = useTranslation(['clinical', 'common', 'scheduling']);
   const queryClient = useQueryClient();
   const tenantId = useActingTenantId();
   const navigate = useNavigate();
   const { data: session } = useSession();
+  const toast = useToast();
+  // Without it, the visit is started for the dentist, who works in it (ADR-0074).
+  const canWork = usePermission('visit:write');
   const practitioners = useQuery(branchPractitionersQuery(branch.id));
   const rooms = useQuery(branchRoomsQuery(branch.id));
   const defaults = useQuery(startDefaultsQuery());
@@ -180,6 +254,7 @@ function StartVisitForm({
     mutationKey: startVisitKey(tenantId, patientId),
   });
   const formRef = useRef<HTMLFormElement>(null);
+  const formId = useId();
 
   // `null` = not picked yet: the default applies once it has loaded.
   const [picked, setPicked] = useState<Record<FieldName, string | null>>({
@@ -280,7 +355,22 @@ function StartVisitForm({
     start.mutateAsync(visit).then(
       ({ visit }) => {
         onStarted();
-        void navigate({ to: '/visits/$visitId', params: { visitId: visit.id } });
+        if (canWork) {
+          void navigate({ to: '/visits/$visitId', params: { visitId: visit.id } });
+          return;
+        }
+        // The front desk starts it for the dentist and stays (ADR-0074). Named from the visit: a
+        // resumed one keeps its own dentist and room.
+        const named = (id: string) =>
+          practitioners.data?.find((item) => item.id === id)?.displayName;
+        const dentist = named(visit.dentistId) ?? named(dentistId);
+        const room = activeRooms.find((item) => item.id === visit.roomId)?.name;
+        toast(
+          room
+            ? t('startVisit.startedForInRoom', { dentist, room })
+            : t('startVisit.startedFor', { dentist }),
+          { tone: 'success' },
+        );
       },
       (error: unknown) => {
         const code = error instanceof ApiError ? error.code : undefined;
@@ -311,23 +401,49 @@ function StartVisitForm({
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center gap-2 text-[12.5px] leading-none text-ink-muted">
-        <Spinner tone="dark" />
-        {t('startVisit.loading')}
-      </div>
-    );
+    return frame({
+      content: (
+        <div className="flex items-center gap-2 text-[12.5px] leading-none text-ink-muted">
+          <Spinner tone="dark" />
+          {t('startVisit.loading')}
+        </div>
+      ),
+      actions: null,
+    });
   }
   if (loadFailed) {
-    return (
-      <p role="alert" className="m-0 text-[12.5px] leading-[1.45] text-danger">
-        {t('startVisit.loadFailed')}
-      </p>
-    );
+    return frame({
+      content: (
+        <p role="alert" className="m-0 text-[12.5px] leading-[1.45] text-danger">
+          {t('startVisit.loadFailed')}
+        </p>
+      ),
+      actions: null,
+    });
   }
 
-  return (
-    <form ref={formRef} noValidate onSubmit={submit} className="flex flex-col gap-3.5">
+  const actions = (size: 'sm' | 'md') => (
+    <>
+      <Button size={size} disabled={start.isPending} onClick={onCancel}>
+        {t('common:cancel')}
+      </Button>
+      <Button
+        type="submit"
+        form={formId}
+        name="start"
+        variant="primary"
+        size={size}
+        busy={start.isPending}
+        disabled={noDentist}
+        className="font-semibold"
+      >
+        {t('startVisit.submit')}
+      </Button>
+    </>
+  );
+
+  const content = (
+    <form ref={formRef} id={formId} noValidate onSubmit={submit} className="flex flex-col gap-3.5">
       {todays && !preset?.appointmentId && session?.tenant ? (
         <label className="flex cursor-pointer items-center gap-2 text-[12.5px]">
           <input
@@ -420,22 +536,7 @@ function StartVisitForm({
           {errors.form}
         </p>
       )}
-      <div className="flex justify-end gap-2 pt-0.5">
-        <Button size="sm" disabled={start.isPending} onClick={onCancel}>
-          {t('common:cancel')}
-        </Button>
-        <Button
-          type="submit"
-          name="start"
-          variant="primary"
-          size="sm"
-          busy={start.isPending}
-          disabled={noDentist}
-          className="font-semibold"
-        >
-          {t('startVisit.submit')}
-        </Button>
-      </div>
     </form>
   );
+  return frame({ content, actions });
 }

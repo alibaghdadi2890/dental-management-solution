@@ -195,6 +195,8 @@
   },
   "startVisit": {
     "title": "بدء زيارة",
+    "startedFor": "بدأت الزيارة · {{dentist}}",
+    "startedForInRoom": "بدأت الزيارة · {{dentist}} · {{room}}",
     "dentist": "طبيب الأسنان",
     "room": "الغرفة",
     "choose": "اختر…",

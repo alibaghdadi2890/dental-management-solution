@@ -29,6 +29,10 @@
       "label": "See all clinic visits",
       "description": "Every visit in the clinic, other dentists' included."
     },
+    "visit_start": {
+      "label": "Start visits",
+      "description": "Start a visit for a dentist when the patient is in the room, without working in it."
+    },
     "visit_write": {
       "label": "Run visits",
       "description": "Start, chart and complete visits."

@@ -57,15 +57,6 @@
     "signOut": "Se déconnecter",
     "stay": "Rester connecté"
   },
-  "livePill": {
-    "inProgress": "Visite en cours · {{name}}",
-    "paused": "Visite en pause · {{name}}",
-    "several_one": "{{count, number}} visite en cours",
-    "several_many": "{{count, number}} visites en cours",
-    "several_other": "{{count, number}} visites en cours",
-    "running": "En cours",
-    "pausedShort": "En pause"
-  },
   "checkoutPill": {
     "label": "Encaissement · {{n, number}}"
   }

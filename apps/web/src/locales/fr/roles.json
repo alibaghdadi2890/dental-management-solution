@@ -29,6 +29,10 @@
       "label": "Voir toutes les visites du cabinet",
       "description": "Chaque visite du cabinet, y compris celles des autres dentistes."
     },
+    "visit_start": {
+      "label": "Commencer les visites",
+      "description": "Commencer une visite pour un dentiste quand le patient est en salle, sans y travailler."
+    },
     "visit_write": {
       "label": "Mener les visites",
       "description": "Commencer, saisir et terminer les visites."

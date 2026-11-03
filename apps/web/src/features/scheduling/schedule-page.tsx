@@ -15,7 +15,7 @@ import { InPanelSlot, PanelLayout } from '@/components/ui/panel-slot';
 import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
-import { StartVisitPopover } from '@/features/clinical/start-visit-popover';
+import { StartVisitPanel } from '@/features/clinical/start-visit-popover';
 import { usePatientNavigation } from '@/features/patients/patient-navigation';
 import { patientQuery } from '@/features/patients/patients-api';
 import { apiErrorMessage } from '@/lib/api-error-message';
@@ -144,6 +144,8 @@ function ScheduleScreen({
   const [slotLength, setSlotLength] = useScheduleDisplay(userId);
   const [selected, setSelected] = useState<{ id: string; rect: DOMRect } | null>(null);
   const [panel, setPanel] = useState<NewAppointmentDraft | null>(null);
+  // The checked-in appointment whose visit the Start visit panel is starting.
+  const [starting, setStarting] = useState<Appointment | null>(null);
   const [moving, setMoving] = useState<Appointment | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const pointer = useRef({ x: 0, y: 0 });
@@ -424,6 +426,7 @@ function ScheduleScreen({
 
   const openPanel = (draft: NewAppointmentDraft) => {
     setSelected(null);
+    setStarting(null);
     setPanel(draft);
   };
 
@@ -546,23 +549,11 @@ function ScheduleScreen({
             onCompleteRegistration={() => {
               patientNavigation.editPatient(selectedAppointment.patient.id);
             }}
-            startVisit={
-              <StartVisitPopover
-                patientId={selectedAppointment.patient.id}
-                preset={{
-                  ...(selectedAppointment.visitType ? { type: selectedAppointment.visitType } : {}),
-                  planIds: selectedAppointment.planIds,
-                  appointmentId: selectedAppointment.id,
-                  dentistId: selectedAppointment.dentistId,
-                  roomId: selectedAppointment.roomId,
-                  reason: selectedAppointment.reason,
-                }}
-              >
-                <Button size="sm" variant="primary">
-                  {t('actions.startVisit')}
-                </Button>
-              </StartVisitPopover>
-            }
+            onStartVisit={() => {
+              setPanel(null);
+              setStarting(selectedAppointment);
+              closeSelected();
+            }}
           />
         </AnchoredPopover>
       ) : null}
@@ -628,7 +619,24 @@ function ScheduleScreen({
         </AnchoredPopover>
       ) : null}
       <InPanelSlot>
-        {openDraft ? (
+        {starting ? (
+          <StartVisitPanel
+            key={starting.id}
+            patientId={starting.patient.id}
+            patientName={starting.patient.fullName}
+            preset={{
+              ...(starting.visitType ? { type: starting.visitType } : {}),
+              planIds: starting.planIds,
+              appointmentId: starting.id,
+              dentistId: starting.dentistId,
+              roomId: starting.roomId,
+              reason: starting.reason,
+            }}
+            onClose={() => {
+              setStarting(null);
+            }}
+          />
+        ) : openDraft ? (
           <NewAppointmentPanel
             key={JSON.stringify(openDraft)}
             branchId={branchId}

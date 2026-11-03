@@ -18,9 +18,23 @@ const DOT: Record<ToastTone, string> = {
 
 let nextId = 1;
 
-/** POC toasts: bottom-end of the screen, at most 3, 5 s auto-dismiss, optional action. Above the
- * dialogs' layer: an action taken in the full-screen file viewer shows its toast (and its Undo)
- * over it. */
+/** At most `MAX_TOASTS`, the newest always among them: the oldest go first, sticky ones (alerts)
+ * after every other. */
+function keepNewest(toasts: Toast[]): Toast[] {
+  const extra = toasts.length - MAX_TOASTS;
+  if (extra <= 0) return toasts;
+  const older = toasts.slice(0, -1);
+  const dropped = new Set(
+    [...older.filter((toast) => !toast.sticky), ...older.filter((toast) => toast.sticky)]
+      .slice(0, extra)
+      .map((toast) => toast.id),
+  );
+  return toasts.filter((toast) => !dropped.has(toast.id));
+}
+
+/** POC toasts: bottom-end of the screen, at most 3, 5 s auto-dismiss unless `sticky`, optional
+ * action. Above the dialogs' layer: an action taken in the full-screen file viewer shows its
+ * toast (and its Undo) over it. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation('common');
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -32,7 +46,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const show = useCallback(
     (text: string, options: ToastOptions = {}) => {
       const id = nextId++;
-      setToasts((current) => [...current, { id, text, ...options }].slice(-MAX_TOASTS));
+      setToasts((current) => keepNewest([...current, { id, text, ...options }]));
+      if (options.sticky) return;
       setTimeout(() => {
         dismiss(id);
       }, TOAST_MS);

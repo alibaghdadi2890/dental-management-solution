@@ -337,3 +337,54 @@ test('the worklist lists a follow-up, books it away, and a cancellation brings i
   });
   await desk.close();
 });
+
+test('the front desk checks in and starts the visit; the dentist is alerted and opens it', async ({
+  browser,
+}) => {
+  test.slow();
+  const name = `Lina Haddad ${Date.now().toString(36)}`;
+  const dentist = await browser.newPage();
+  await signIn(dentist, clinic.owner);
+  await dentist.goto('/today');
+  await expect(dentist.getByRole('button', { name: /^Your patients/ })).toBeVisible();
+
+  const desk = await browser.newPage();
+  await signIn(desk, clinic.desk);
+  await bookToday(desk, name, 30, 30);
+  await desk.goto('/schedule');
+  const card = desk.locator('.rbc-event').filter({ hasText: name });
+
+  await test.step('checking in alerts the dentist', async () => {
+    await card.click();
+    await desk
+      .getByRole('dialog', { name: 'Appointment' })
+      .getByRole('button', { name: 'Check in' })
+      .click();
+    await expect(desk.getByRole('status').filter({ hasText: 'Checked in' })).toBeVisible();
+    await expect(dentist.getByRole('status').filter({ hasText: `${name} arrived` })).toBeVisible();
+  });
+
+  await test.step('the front desk starts the visit from the side panel and stays', async () => {
+    await card.click();
+    await desk
+      .getByRole('dialog', { name: 'Appointment' })
+      .getByRole('button', { name: 'Start visit' })
+      .click();
+    const panel = desk.getByRole('complementary', { name: 'Start visit' });
+    await panel.getByLabel('Room').selectOption({ label: 'Room 1' });
+    await panel.getByRole('button', { name: 'Start visit' }).click();
+    await expect(
+      desk.getByRole('status').filter({ hasText: 'Visit started · Dr. Ana Reyes · Room 1' }),
+    ).toBeVisible();
+    await expect(desk).toHaveURL(/\/schedule/);
+  });
+
+  await test.step('the dentist opens the visit from the alert', async () => {
+    const alert = dentist.getByRole('status').filter({ hasText: `${name} is in Room 1` });
+    await expect(alert).toContainText('started by Jamie Ortiz');
+    await alert.getByRole('button', { name: 'Open' }).click();
+    await expect(dentist).toHaveURL(/\/visits\//);
+  });
+  await desk.close();
+  await dentist.close();
+});

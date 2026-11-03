@@ -175,6 +175,8 @@
   },
   "startVisit": {
     "title": "Start visit",
+    "startedFor": "Visit started · {{dentist}}",
+    "startedForInRoom": "Visit started · {{dentist}} · {{room}}",
     "dentist": "Dentist",
     "room": "Room",
     "choose": "Choose…",

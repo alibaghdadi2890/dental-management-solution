@@ -1,0 +1,49 @@
+{
+  "tray": {
+    "title": "مرضاك",
+    "label_zero": "مرضاك: {{count, number}}",
+    "label_one": "مرضاك: {{count, number}}",
+    "label_two": "مرضاك: {{count, number}}",
+    "label_few": "مرضاك: {{count, number}}",
+    "label_many": "مرضاك: {{count, number}}",
+    "label_other": "مرضاك: {{count, number}}",
+    "oneInRoom": "{{name}} في الغرفة",
+    "oneWaiting": "{{name}} ينتظر",
+    "several_zero": "{{count, number}} مريض",
+    "several_one": "مريض واحد",
+    "several_two": "مريضان",
+    "several_few": "{{count, number}} مرضى",
+    "several_many": "{{count, number}} مريضًا",
+    "several_other": "{{count, number}} مريض",
+    "inRoom": "في الغرفة",
+    "waiting": "في الانتظار",
+    "new": "جديد",
+    "startedBy": "بدأها {{name}}",
+    "paused": "متوقفة",
+    "waitingFor_zero": "{{count, number}} د",
+    "waitingFor_one": "{{count, number}} د",
+    "waitingFor_two": "{{count, number}} د",
+    "waitingFor_few": "{{count, number}} د",
+    "waitingFor_many": "{{count, number}} د",
+    "waitingFor_other": "{{count, number}} د",
+    "empty": "لا أحد ينتظر ولا زيارة جارية.",
+    "emptyNoFollows": "لا أحد ينتظرك. يظهر هنا أيضًا مرضى الأطباء الذين تتابعهم.",
+    "loading": "جارٍ التحميل…",
+    "failed": "تعذّر تحميل مرضاك. سيظهرون عند عودة الاتصال."
+  },
+  "alert": {
+    "arrived": "وصل {{patient}}",
+    "arrivedBody": "{{dentist}} · {{time}}",
+    "started": "بدأت زيارة {{patient}}",
+    "startedInRoom": "{{patient}} في {{room}}",
+    "startedBody": "{{dentist}} · بدأها {{starter}}",
+    "open": "فتح"
+  },
+  "settings": {
+    "sound": "الصوت على هذا الجهاز",
+    "soundBlocked": "انقر في أي مكان من الصفحة لتشغيل الصوت.",
+    "desktop": "إشعارات Windows",
+    "desktopDenied": "محظورة في إعدادات الموقع في المتصفح.",
+    "follow": "نبّهني أيضًا لمرضى"
+  }
+}

@@ -104,7 +104,8 @@ function MergedNotice({ keptId }: { keptId: string }) {
 /**
  * **Resume visit** — the patient's most recently started live visit (a merge can leave two, W1) —
  * or **Start visit**, which opens the start popover (spec §Record). An archived patient can't start
- * one but can still resume theirs. Both need `visit:write`: the front desk sees neither (W18).
+ * one but can still resume theirs. Start needs `visit:start` (the front desk too, ADR-0074), Resume
+ * `visit:write`: with a live visit, the front desk sees neither.
  * While a start is in flight, Start stays (with its popover) even once the reloaded list has the
  * new visit: the popover goes to the workspace when the start is done. `?startVisit=1` (the
  * patient-created toast's Start visit) opens the popover once, then leaves the URL. A `request`
@@ -123,6 +124,7 @@ function VisitAction({
 }) {
   const { t } = useTranslation('patients');
   const navigate = useNavigate();
+  const canResume = usePermission('visit:write');
   const live = useQuery(liveVisitsQuery({ patientId }));
   const starting = useStartingVisit(patientId);
   const requested = useSearch({
@@ -146,6 +148,7 @@ function VisitAction({
     undefined,
   );
   if (latest && !starting) {
+    if (!canResume) return null;
     return (
       <Button
         variant="primary"
@@ -237,7 +240,7 @@ export function RecordHeader({
 }) {
   const { t } = useTranslation(['patients', 'scheduling']);
   const canWrite = usePermission('patient:write');
-  const canVisit = usePermission('visit:write');
+  const canVisit = usePermission('visit:start');
   const recordTabs = useRecordTabs();
   // The Files tab says how many files there are, archived ones aside (feature 8).
   const files = useQuery({

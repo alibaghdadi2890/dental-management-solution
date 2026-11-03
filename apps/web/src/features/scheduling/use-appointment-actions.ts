@@ -56,7 +56,7 @@ export function useAppointmentAbilities(): (appointment: Appointment) => Appoint
       { permissions: session.permissions, profileId: session.profile?.id ?? null },
       appointment,
     );
-    const canVisit = session.permissions.includes('visit:write');
+    const canVisit = session.permissions.includes('visit:start');
     const waiting = appointment.status === 'booked' || appointment.status === 'confirmed';
     return {
       write,
@@ -66,7 +66,7 @@ export function useAppointmentAbilities(): (appointment: Appointment) => Appoint
       noShow: write && canMarkNoShow(moment, new Date()),
       cancel: write && canCancel(moment),
       undoCheckIn: write && appointment.status === 'checked_in',
-      // A dentist or an assistant starts it; the front desk checks in (G10).
+      // Whoever may start visits: since ADR-0074, the front desk too, once the patient is in the room.
       startVisit:
         canVisit &&
         (appointment.status === 'checked_in' || (waiting && appointment.localDate === today)),

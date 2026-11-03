@@ -1,0 +1,37 @@
+{
+  "tray": {
+    "title": "Your patients",
+    "label_one": "Your patients: {{count, number}}",
+    "label_other": "Your patients: {{count, number}}",
+    "oneInRoom": "{{name}} in room",
+    "oneWaiting": "{{name}} waiting",
+    "several_one": "{{count, number}} patient",
+    "several_other": "{{count, number}} patients",
+    "inRoom": "In room",
+    "waiting": "Waiting",
+    "new": "New",
+    "startedBy": "started by {{name}}",
+    "paused": "Paused",
+    "waitingFor_one": "{{count, number}} min",
+    "waitingFor_other": "{{count, number}} min",
+    "empty": "Nobody is waiting and no visit is running.",
+    "emptyNoFollows": "Nobody is waiting for you. Patients of the dentists you follow show here too.",
+    "loading": "Loading…",
+    "failed": "Your patients couldn’t load. They will show once the connection is back."
+  },
+  "alert": {
+    "arrived": "{{patient}} arrived",
+    "arrivedBody": "{{dentist}} · {{time}}",
+    "started": "{{patient}}’s visit started",
+    "startedInRoom": "{{patient}} is in {{room}}",
+    "startedBody": "{{dentist}} · started by {{starter}}",
+    "open": "Open"
+  },
+  "settings": {
+    "sound": "Sound on this computer",
+    "soundBlocked": "Click anywhere on the page to turn the sound on.",
+    "desktop": "Windows notifications",
+    "desktopDenied": "Blocked in the browser’s site settings.",
+    "follow": "Also alert me for"
+  }
+}

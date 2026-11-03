@@ -1,0 +1,37 @@
+{
+  "tray": {
+    "title": "Vos patients",
+    "label_one": "Vos patients : {{count, number}}",
+    "label_other": "Vos patients : {{count, number}}",
+    "oneInRoom": "{{name}} en salle",
+    "oneWaiting": "{{name}} attend",
+    "several_one": "{{count, number}} patient",
+    "several_other": "{{count, number}} patients",
+    "inRoom": "En salle",
+    "waiting": "En attente",
+    "new": "Nouveau",
+    "startedBy": "démarrée par {{name}}",
+    "paused": "En pause",
+    "waitingFor_one": "{{count, number}} min",
+    "waitingFor_other": "{{count, number}} min",
+    "empty": "Personne n’attend et aucune visite n’est en cours.",
+    "emptyNoFollows": "Personne ne vous attend. Les patients des dentistes que vous suivez s’affichent aussi ici.",
+    "loading": "Chargement…",
+    "failed": "Vos patients n’ont pas pu être chargés. Ils s’afficheront au retour de la connexion."
+  },
+  "alert": {
+    "arrived": "{{patient}} est arrivé",
+    "arrivedBody": "{{dentist}} · {{time}}",
+    "started": "La visite de {{patient}} a démarré",
+    "startedInRoom": "{{patient}} est en {{room}}",
+    "startedBody": "{{dentist}} · démarrée par {{starter}}",
+    "open": "Ouvrir"
+  },
+  "settings": {
+    "sound": "Son sur cet ordinateur",
+    "soundBlocked": "Cliquez n’importe où sur la page pour activer le son.",
+    "desktop": "Notifications Windows",
+    "desktopDenied": "Bloquées dans les paramètres du site du navigateur.",
+    "follow": "M’alerter aussi pour"
+  }
+}

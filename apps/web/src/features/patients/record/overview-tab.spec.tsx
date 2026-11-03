@@ -305,7 +305,7 @@ describe('OverviewTab', () => {
 
     it('lists work in progress, an accepted urgent plan and the balance, in that order', async () => {
       mockApi(RETURNING);
-      renderRecord({ url: URL_, permissions: [...CLINICAL, 'visit:write'] });
+      renderRecord({ url: URL_, permissions: [...CLINICAL, 'visit:start', 'visit:write'] });
       const items = await rows();
       expect(items.map((item) => item.textContent)).toEqual([
         '#26Root canal treatmentSession 2 of 3 not finished · started 12 Mar 2026In progressContinue',
@@ -331,7 +331,7 @@ describe('OverviewTab', () => {
 
     it('opens Start visit on a treatment visit for the item', async () => {
       mockApi(RETURNING);
-      renderRecord({ url: URL_, permissions: [...CLINICAL, 'visit:write'] });
+      renderRecord({ url: URL_, permissions: [...CLINICAL, 'visit:start', 'visit:write'] });
       const [continued] = await rows();
       fireEvent.click(within(continued!).getByRole('button', { name: 'Continue' }));
       expect(await screen.findByRole('dialog', { name: 'Start visit' })).toBeTruthy();
@@ -347,7 +347,7 @@ describe('OverviewTab', () => {
 
     it('says a patient who was never seen has no examination yet', async () => {
       mockApi({ patients: [RANA] });
-      renderRecord({ url: URL_, permissions: [...CLINICAL, 'visit:write'] });
+      renderRecord({ url: URL_, permissions: [...CLINICAL, 'visit:start', 'visit:write'] });
       const attention = await card('Needs attention');
       expect(await within(attention).findByText('No examination yet')).toBeTruthy();
       expect(within(attention).getByRole('button', { name: 'Start examination' })).toBeTruthy();

@@ -170,7 +170,7 @@ export function TodaySchedule({ branchId }: { branchId: string }) {
   const { t, i18n } = useTranslation('scheduling');
   const { data: session } = useSession();
   const canRead = usePermission('appointment:read');
-  const canVisit = usePermission('visit:write');
+  const canVisit = usePermission('visit:start');
   const canBook = usePermission('appointment:write');
   const board = useQuery(todayBoardQuery(branchId, canRead));
   const [showAll, setShowAll] = useState(false);

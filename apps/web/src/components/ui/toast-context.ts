@@ -8,6 +8,8 @@ export interface ToastOptions {
   body?: string;
   actionLabel?: string;
   onAction?: () => void;
+  /** Stays until its action or its close button: an alert that must not be missed (feature 15). */
+  sticky?: boolean;
 }
 
 export type ShowToast = (text: string, options?: ToastOptions) => void;
