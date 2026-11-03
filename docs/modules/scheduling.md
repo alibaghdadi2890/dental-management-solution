@@ -16,7 +16,9 @@ without the next step being either booked or on someone's list.**
 - `clinical` (`VisitFactsService.usualRoom`, `planStatuses`, `liveVisit`; the visit events)
 - `audit`
 
-Nothing imports `scheduling`. Its events have no consumer yet; `notifications` will.
+`alerts` reads `AppointmentsService.todayBoard` and pings on `AppointmentCheckedIn`,
+`AppointmentCheckInUndone` and `AppointmentCancelled` (feature 15); `notifications` will consume
+the events too.
 
 ## Tables (migration 0056)
 

@@ -81,6 +81,7 @@ permissions, and nothing a clinic has recorded is touched. No queue or job (no n
 - **G10. Start visit follows `visit:write`.** No matrix change. Front desk checks in; a dentist or
   assistant starts. The start reaction never applies `canWriteAppointment`: a colleague may start
   the visit. Its veto is the state machine and the patient match.
+  _Since feature 15 (ADR-0074) Start visit follows `visit:start`, which the front desk holds._
 - **G11. Undo check-in** is in the design and missing from the prompt. A mistaken check-in would
   otherwise be stuck, because `checked_in` cannot be cancelled. `checked_in → confirmed` clears the
   check-in. Audited, event `AppointmentCheckInUndone`.

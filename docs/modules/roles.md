@@ -22,6 +22,7 @@ The default matrix (deny by default, the owner widens):
 | -------------------------------------------------------------------------------------------------------------------- | ----- | ----- | ------- | --------- | --------- |
 | `tenant:read`, `user:read`, `catalog:read`, `patient:read`, `patient:write`, `visit:read`, `file:read`, `file:write` | ✓     | ✓     | ✓       | ✓         | ✓         |
 | `visit:read_all`                                                                                                     | ✓     | ✓     | –       | ✓         | ✓         |
+| `visit:start`                                                                                                        | ✓     | ✓     | ✓       | ✓         | ✓         |
 | `visit:write`                                                                                                        | ✓     | ✓     | ✓       | ✓         | –         |
 | `visit:void`, `visit:amend`, `chart:write`, `file:archive`, `audit:read`, `compensation:read`                        | ✓     | ✓     | ✓       | –         | –         |
 | `visit:discount`                                                                                                     | ✓     | ✓     | –       | –         | –         |
@@ -75,7 +76,10 @@ Visit flows (feature 10) added no permission. What each existing one covers:
 | Read the history confirmation and the file citations of a patient                                                             | `visit:read`    |
 
 So an assistant, who holds `visit:write` and not `chart:write`, runs the visit flow and cannot
-confirm the medical history; front desk, without `visit:write`, starts no visit.
+confirm the medical history. Front desk, without `visit:write`, starts a visit for a dentist
+(`visit:start`, ADR-0074: `POST /visits`, the start defaults and options) and works in none;
+`visit:write` implies `visit:start`, and migration `0057` gave it to every role and grant that
+runs visits.
 
 `file:read`, `file:write` and `file:archive` are patient files (feature 8): everyone reads and
 uploads, and archiving is the owner's and the dentist's — plus, by rule and not by permission, the
