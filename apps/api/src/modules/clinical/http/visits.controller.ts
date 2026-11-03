@@ -98,7 +98,7 @@ export class VisitsController {
 
   /** 201 for a new visit; 200 with `resumed: true` when the patient already had a live one. */
   @Post()
-  @RequirePermission('visit:write')
+  @RequirePermission('visit:start')
   @ZodResponse({ status: 201, description: 'A new visit', type: StartVisitResultDto })
   @ApiOkResponse({
     description: "The patient's live visit, resumed",
@@ -111,7 +111,7 @@ export class VisitsController {
   }
 
   @Get('start-defaults')
-  @RequirePermission('visit:write')
+  @RequirePermission('visit:start')
   @ZodResponse({ type: StartDefaultsDto })
   startDefaults() {
     return this.visits.startDefaults();
@@ -119,7 +119,7 @@ export class VisitsController {
 
   /** What the Start visit popover offers for a patient: the suggested type and the open plans. */
   @Get('start-options')
-  @RequirePermission('visit:write')
+  @RequirePermission('visit:start')
   @ZodResponse({ type: StartOptionsDto })
   startOptions(@Query() query: StartOptionsQueryDto) {
     return this.startOptionsFor.forPatient(query.patientId);

@@ -10,7 +10,14 @@ export const CAPABILITY_GROUPS = [
   { key: 'patients', permissions: ['patient:read', 'patient:write'] },
   {
     key: 'visits',
-    permissions: ['visit:read', 'visit:read_all', 'visit:write', 'visit:amend', 'visit:void'],
+    permissions: [
+      'visit:read',
+      'visit:read_all',
+      'visit:start',
+      'visit:write',
+      'visit:amend',
+      'visit:void',
+    ],
   },
   { key: 'clinical', permissions: ['chart:write'] },
   {
@@ -53,7 +60,8 @@ export const CAPABILITY_IMPLIES: Readonly<
   Partial<Record<GrantablePermission, readonly GrantablePermission[]>>
 > = {
   'visit:read_all': ['visit:read'],
-  'visit:write': ['visit:read'],
+  // Running visits includes starting them; `visit:start` alone is the front desk's (ADR-0074).
+  'visit:write': ['visit:read', 'visit:start'],
   // Each acts on a visit it must first be able to load.
   'visit:amend': ['visit:read'],
   'visit:void': ['visit:read'],

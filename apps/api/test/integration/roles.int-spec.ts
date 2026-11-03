@@ -12,9 +12,12 @@ import { createPlatformAdmin, signIn } from '../support/session';
 import { createTestApp, type TestApp } from '../support/test-app';
 import { asPlatformAdminIn, createBareTenant } from '../support/tenants';
 
-/** A role as the older migrations left it: 0056 adds the appointment permissions. */
-const beforeAppointments = (key: SystemRoleKey) =>
-  systemRole(key).permissions.filter((permission) => !permission.startsWith('appointment:'));
+/** A role as the older migrations left it: 0056 adds the appointment permissions, 0057
+ * `visit:start`. */
+const before0056 = (key: SystemRoleKey) =>
+  systemRole(key).permissions.filter(
+    (permission) => !permission.startsWith('appointment:') && permission !== 'visit:start',
+  );
 
 describe('roles: system roles, assignments and permission lookup', () => {
   let database: TestDatabase;
@@ -224,7 +227,7 @@ describe('roles: system roles, assignments and permission lookup', () => {
         ).rows.map((row) => row.permission);
       const sorted = (values: readonly string[]) => [...values].sort();
       for (const key of ['owner', 'dentist', 'assistant', 'frontdesk'] as const) {
-        expect(await grantsOf(idOf(key))).toEqual(sorted(beforeAppointments(key)));
+        expect(await grantsOf(idOf(key))).toEqual(sorted(before0056(key)));
       }
       expect(await grantsOf(customId)).toEqual(['payment:refund']);
       expect(
@@ -263,9 +266,7 @@ describe('roles: system roles, assignments and permission lookup', () => {
         'select permission from role_permissions where role_id = $1 order by permission',
         [added.rows[0]?.id],
       );
-      expect(granted.rows.map((row) => row.permission)).toEqual(
-        [...beforeAppointments('admin')].sort(),
-      );
+      expect(granted.rows.map((row) => row.permission)).toEqual([...before0056('admin')].sort());
       const template = await client.query<{ permission: string }>(
         `select permission from role_template_permissions
          join role_templates on role_templates.id = template_id
@@ -275,6 +276,80 @@ describe('roles: system roles, assignments and permission lookup', () => {
       expect(template.rows.map((row) => row.permission)).toEqual(
         [...systemRole('admin').permissions].sort(),
       );
+    } finally {
+      await client.query('rollback');
+      client.release();
+    }
+  });
+
+  it('gives visit:start to whoever holds visit:write, and to the front desk, once (migration 0057)', async () => {
+    const listed = await inTenant((service) => service.listRoles());
+    const idOf = (key: string) => {
+      const found = listed.find((candidate) => candidate.key === key);
+      if (!found) throw new Error(`no role ${key}`);
+      return found.id;
+    };
+    const customId = newId();
+    const granted = newId();
+    const client = await database.ownerPool.connect();
+    try {
+      await client.query('begin');
+      // A clinic as it was before 0057: no visit:start anywhere, a custom role and a personal
+      // grant that run visits.
+      await client.query(`delete from role_permissions where permission = 'visit:start'`);
+      await client.query(`delete from role_template_permissions where permission = 'visit:start'`);
+      await client.query(
+        `insert into roles (id, tenant_id, key, name, system) values ($1, $2, 'hygienist', 'Hygienist', false)`,
+        [customId, tenant.id],
+      );
+      await client.query(
+        `insert into role_permissions (tenant_id, role_id, permission) values ($1, $2, 'visit:write')`,
+        [tenant.id, customId],
+      );
+      await client.query(
+        `insert into user_permission_grants (tenant_id, user_id, permission, granted_by)
+         values ($1, $2, 'visit:write', $2)`,
+        [tenant.id, granted],
+      );
+
+      const migration = readFileSync(
+        resolve(__dirname, '../../migrations/0057_arrival_alerts.sql'),
+        'utf8',
+      );
+      const grants = migration
+        .split('--> statement-breakpoint')
+        .map((statement) => statement.trim())
+        .filter((statement) => /^(--[^\n]*\n)*INSERT/.test(statement));
+      expect(grants).toHaveLength(5);
+      // Twice: it is idempotent.
+      for (const statement of [...grants, ...grants]) await client.query(statement);
+
+      const holds = async (roleId: string) =>
+        (
+          await client.query(
+            `select 1 from role_permissions where role_id = $1 and permission = 'visit:start'`,
+            [roleId],
+          )
+        ).rowCount;
+      for (const key of ['owner', 'admin', 'dentist', 'assistant', 'frontdesk', 'hygienist']) {
+        expect(await holds(key === 'hygienist' ? customId : idOf(key)), key).toBe(1);
+      }
+      const grant = await client.query(
+        `select 1 from user_permission_grants where user_id = $1 and permission = 'visit:start'`,
+        [granted],
+      );
+      expect(grant.rowCount).toBe(1);
+      const templates = await client.query<{ key: string }>(
+        `select role_templates.key from role_template_permissions
+         join role_templates on role_templates.id = template_id
+         where permission = 'visit:start' order by role_templates.key`,
+      );
+      expect(templates.rows.map((row) => row.key)).toEqual([
+        'admin',
+        'assistant',
+        'dentist',
+        'frontdesk',
+      ]);
     } finally {
       await client.query('rollback');
       client.release();

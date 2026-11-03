@@ -10,6 +10,7 @@ import { ImportsModule } from './modules/imports';
 import { PatientsModule } from './modules/patients';
 import { ProvisioningModule } from './modules/provisioning';
 import { SchedulingModule } from './modules/scheduling';
+import { AlertsModule } from './modules/alerts';
 import { RolesModule } from './modules/roles';
 import { TenancyModule } from './modules/tenancy';
 import { UsersModule } from './modules/users';
@@ -54,6 +55,7 @@ export const DOMAIN_MODULES = [
   BillingModule,
   ClinicalModule,
   SchedulingModule,
+  AlertsModule,
   CompensationModule,
   FilesModule,
   ImportsModule,

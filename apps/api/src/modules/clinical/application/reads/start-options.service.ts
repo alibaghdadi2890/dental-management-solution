@@ -22,11 +22,11 @@ export class StartOptionsService {
 
   /**
    * `suggestedType` (`suggestVisitType`): Treatment while the patient has open plans, else what
-   * a patient without a visit yet was registered for, else an examination. Needs `visit:write`;
+   * a patient without a visit yet was registered for, else an examination. Needs `visit:start`;
    * unknown patient → 404.
    */
   async forPatient(patientId: string): Promise<StartOptions> {
-    this.context.requirePermission('visit:write');
+    this.context.requirePermission('visit:start');
     return this.tenantDb.run(async () => {
       const patient = await this.patients.get(patientId);
       const open = await this.plans.listOpenForPatient(patient.id);

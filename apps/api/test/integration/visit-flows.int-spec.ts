@@ -372,11 +372,12 @@ describe('clinical: visit flows (feature 10)', () => {
         assistant.agent.get(`/api/v1/visits/start-options?patientId=${patient.id}`),
       );
       expect(options).toEqual({ suggestedType: 'treatment' });
-      await expectProblem(
-        frontdesk.agent.get(`/api/v1/visits/start-options?patientId=${patient.id}`),
-        403,
-        'forbidden',
-      );
+      // The front desk starts visits too (ADR-0074), so it reads what the start offers.
+      expect(
+        await ok<StartOptions>(
+          frontdesk.agent.get(`/api/v1/visits/start-options?patientId=${patient.id}`),
+        ),
+      ).toEqual({ suggestedType: 'treatment' });
 
       // Nobody chose: the work in progress and the urgent crown; the elective filling waits.
       const visit = await started(patient, { type: 'treatment' });

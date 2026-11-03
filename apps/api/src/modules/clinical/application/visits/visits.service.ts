@@ -1,4 +1,5 @@
 import {
+  type AlertInRoom,
   durationMinutes,
   defaultWorklist,
   firstStep,
@@ -118,7 +119,7 @@ export class VisitsService {
    * takes none (422 `visit.plans_not_allowed`). A resumed visit ignores the type, the reason and the plans.
    */
   async start(input: StartVisitInput): Promise<StartVisitResult> {
-    this.context.requirePermission('visit:write');
+    this.context.requirePermission('visit:start');
     const branchId = this.context.branchId;
     if (!branchId) throw new BranchRequiredError('A visit starts in a branch; choose one first');
     return this.tenantDb.run(async () => {
@@ -200,7 +201,7 @@ export class VisitsService {
    * active room of the branch and no live visit holds it. Nulls without a branch.
    */
   async startDefaults(): Promise<StartDefaults> {
-    this.context.requirePermission('visit:write');
+    this.context.requirePermission('visit:start');
     const branchId = this.context.branchId;
     if (!branchId) return { dentistId: null, roomId: null };
     const userId = this.context.requireUserId();
@@ -486,6 +487,52 @@ export class VisitsService {
         pausedAt: visit.pausedAt?.toISOString() ?? null,
         pausedSeconds: visit.pausedSeconds,
         serverNow,
+      }));
+    });
+  }
+
+  /**
+   * The live visits of these dentists (staff profile ids) or started by the caller, oldest first,
+   * within the caller's visit scope (ADR-0055), with the room and who started them: the "in room"
+   * half of the arrival alerts' tray (feature 15), which is also how a visit is got back to.
+   */
+  async liveOfDentists(dentistIds: readonly string[]): Promise<AlertInRoom[]> {
+    this.context.requirePermission('visit:read');
+    const userId = this.context.requireUserId();
+    const scoped = ownedFilter(this.context);
+    if (scoped === null) return [];
+    const wanted = new Set(dentistIds);
+    return this.tenantDb.run(async () => {
+      const visits = (await this.visits.liveRefs({ own: scoped })).filter(
+        (visit) => wanted.has(visit.dentistId) || visit.startedBy === userId,
+      );
+      if (visits.length === 0) return [];
+      const patientNames = new Map(
+        (await this.patients.getMany(visits.map((visit) => visit.patientId))).map((patient) => [
+          patient.id,
+          patient.fullName,
+        ]),
+      );
+      const dentistNames = new Map(
+        (await this.users.practitionersByProfileIds(visits.map((visit) => visit.dentistId))).map(
+          (practitioner) => [practitioner.id, practitioner.displayName],
+        ),
+      );
+      const starterNames = await this.users.namesByUserIds(visits.map((visit) => visit.startedBy));
+      const rooms = new Map((await this.tenancy.roomsOf()).map((room) => [room.id, room.name]));
+      return visits.map((visit) => ({
+        visitId: visit.id,
+        patientId: visit.patientId,
+        patientName: patientNames.get(visit.patientId) ?? '',
+        dentistId: visit.dentistId,
+        dentistName: dentistNames.get(visit.dentistId) ?? '',
+        roomName: visit.roomId ? (rooms.get(visit.roomId) ?? null) : null,
+        status: visit.status,
+        startedAt: visit.startedAt.toISOString(),
+        pausedAt: visit.pausedAt?.toISOString() ?? null,
+        pausedSeconds: visit.pausedSeconds,
+        startedBy: visit.startedBy,
+        startedByName: starterNames.get(visit.startedBy) ?? '',
       }));
     });
   }

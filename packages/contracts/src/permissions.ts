@@ -16,6 +16,7 @@ export const PERMISSIONS = [
   'patient:write',
   'visit:read',
   'visit:read_all',
+  'visit:start',
   'visit:write',
   'visit:void',
   'visit:amend',

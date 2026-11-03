@@ -1313,6 +1313,7 @@ describe('tenant isolation through the public services', () => {
       'follow_ups',
       'branch_opening_hours',
       'scheduling_settings',
+      'alert_follows',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

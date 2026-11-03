@@ -17,7 +17,7 @@ import { OpeningHoursRepository } from './persistence/opening-hours.repository';
 /**
  * See docs/modules/scheduling.md and ADR-0066–0072. Depends on `tenancy` (branches, rooms, time
  * zone), `users` (dentists), `patients` (names, the booking lock), `clinical` (the visit events, the
- * usual room) and `audit`. Nothing imports it.
+ * usual room) and `audit`. `alerts` reads who is waiting through `AppointmentsService`.
  */
 @Module({
   imports: [AuditModule, ClinicalModule, PatientsModule, TenancyModule, UsersModule],
@@ -32,5 +32,6 @@ import { OpeningHoursRepository } from './persistence/opening-hours.repository';
     FollowUpsRepository,
     OpeningHoursRepository,
   ],
+  exports: [AppointmentsService],
 })
 export class SchedulingModule {}

@@ -455,21 +455,20 @@ describe('clinical: visit lifecycle (start, resume, pause, discard, live)', () =
       expect(unknown.status).toBe(404);
     });
 
-    it('lets front desk read a visit but not start one', async () => {
+    it('lets front desk start a visit for a dentist and read it, not work in it (ADR-0074)', async () => {
       const patient = await createPatient(main, 'Front Desk');
-      const refused = await start(frontdesk.agent, {
-        patientId: patient.id,
-        dentistId: main.ownerProfileId,
-        roomId: room(3),
-      });
-      expect(refused.status).toBe(403);
-      expect((await frontdesk.agent.get('/api/v1/visits/start-defaults')).status).toBe(403);
+      expect((await frontdesk.agent.get('/api/v1/visits/start-defaults')).status).toBe(200);
+      const options = await frontdesk.agent.get(
+        `/api/v1/visits/start-options?patientId=${patient.id}`,
+      );
+      expect(options.status).toBe(200);
 
-      const visit = await started(main.owner, {
+      const visit = await started(frontdesk.agent, {
         patientId: patient.id,
         dentistId: main.ownerProfileId,
         roomId: room(3),
       });
+      expect(visit.dentistId).toBe(main.ownerProfileId);
       const read = await frontdesk.agent.get(`/api/v1/visits/${visit.id}`);
       expect(read.status, JSON.stringify(read.body)).toBe(200);
       expect((read.body as Visit).id).toBe(visit.id);

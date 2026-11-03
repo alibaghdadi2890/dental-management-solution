@@ -24,6 +24,7 @@ const FRONTDESK = [
   'patient:write',
   'visit:read',
   'visit:read_all',
+  'visit:start',
   'catalog:read',
   'payment:read',
   'file:read',
