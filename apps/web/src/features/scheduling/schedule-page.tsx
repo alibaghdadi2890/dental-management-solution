@@ -142,7 +142,11 @@ function ScheduleScreen({
   const canOverride = usePermission('appointment:override');
   const keyFor = useIdempotencyKeys();
   const [slotLength, setSlotLength] = useScheduleDisplay(userId);
-  const [selected, setSelected] = useState<{ id: string; rect: DOMRect } | null>(null);
+  const [selected, setSelected] = useState<{
+    id: string;
+    rect: DOMRect;
+    point?: { x: number; y: number };
+  } | null>(null);
   const [panel, setPanel] = useState<NewAppointmentDraft | null>(null);
   // The checked-in appointment whose visit the Start visit panel is starting.
   const [starting, setStarting] = useState<Appointment | null>(null);
@@ -313,6 +317,8 @@ function ScheduleScreen({
     if (!search.appointment || selected?.id === search.appointment) return;
     const card = document.querySelector(`[data-appointment="${search.appointment}"]`);
     if (card) {
+      // The popover hides with its card scrolled out of view: bring it in first.
+      card.scrollIntoView({ block: 'nearest' });
       // eslint-disable-next-line react-hooks/set-state-in-effect -- measures the card once it is drawn
       setSelected({ id: search.appointment, rect: card.getBoundingClientRect() });
     }
@@ -498,8 +504,8 @@ function ScheduleScreen({
             }}
             onDay={onDay}
             onEmptySlot={onEmptySlot}
-            onOpen={(appointment, rect) => {
-              setSelected({ id: appointment.id, rect });
+            onOpen={(appointment, rect, point) => {
+              setSelected({ id: appointment.id, rect, ...(point ? { point } : {}) });
             }}
             onMove={(appointment, start, dentistId) => {
               if (dentistId !== appointment.dentistId && !canBookFor(dentistId)) return;
@@ -531,7 +537,12 @@ function ScheduleScreen({
         ) : null}
       </div>
       {selected && selectedAppointment ? (
-        <AnchoredPopover rect={selected.rect} label={t('popover.label')} onClose={closeSelected}>
+        <AnchoredPopover
+          rect={selected.rect}
+          card={{ id: selected.id, ...(selected.point ? { point: selected.point } : {}) }}
+          label={t('popover.label')}
+          onClose={closeSelected}
+        >
           <AppointmentDetails
             appointment={selectedAppointment}
             rooms={resources.data?.rooms ?? []}

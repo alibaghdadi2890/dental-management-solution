@@ -1,7 +1,7 @@
 import type { Appointment, ScheduleResources } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Popover } from 'radix-ui';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Select, TextInput } from '@/components/ui/field';
@@ -11,12 +11,8 @@ import { balanceQuery } from '@/features/billing/billing-api';
 import { formatCalendarDate, formatTime } from '@/lib/format';
 import { AppointmentStatusPill } from './appointment-status';
 import { clinicClock } from './schedule-time';
+import { POPOVER_EDGE, POPOVER_GAP, placePopover } from './popover-placement';
 import { useAppointmentAbilities, useAppointmentActions } from './use-appointment-actions';
-
-/** Radix anchors to anything with a rect: here, the card that was clicked. */
-function rectAnchor(rect: DOMRect) {
-  return { current: { getBoundingClientRect: () => rect } };
-}
 
 function OwesLine({ patientId }: { patientId: string }) {
   const { t } = useTranslation('scheduling');
@@ -321,20 +317,62 @@ export function AppointmentDetails({
 }
 
 const POPOVER =
-  'z-40 w-[340px] max-w-[calc(100vw-24px)] animate-fadein rounded-[10px] border border-border bg-surface p-4 shadow-[0_10px_28px_rgba(27,26,31,.14)]';
+  'z-40 max-h-(--radix-popover-content-available-height) w-[340px] max-w-[calc(100vw-24px)] animate-fadein overflow-y-auto rounded-[10px] border border-border bg-surface p-4 shadow-[0_10px_28px_rgba(27,26,31,.14)]';
 
-/** Anchored at a rect (the clicked card, the drop), never covering it. */
+/** Where the clicked card is drawn now, so the popover follows a scroll and a redraw. */
+function liveCard(id: string): Element | null {
+  return document.querySelector(`[data-appointment="${CSS.escape(id)}"]`);
+}
+
+/**
+ * What the popover's clipping is measured from: the scroller's child that holds the card, so it hides
+ * when the scroller hides the card, not when the card's own clipped box crops a point inside it.
+ */
+function clipContext(card: Element): Element {
+  let element = card;
+  for (let parent = card.parentElement; parent; parent = parent.parentElement) {
+    if (/auto|scroll/.test(getComputedStyle(parent).overflowY)) return element;
+    element = parent;
+  }
+  return card;
+}
+
+/**
+ * Anchored at a rect (the clicked card, the drop): beside it, or under or over it when it is too wide
+ * (`placePopover`). With `card`, it follows that card as the calendar scrolls and hides once the card
+ * is scrolled out of view.
+ */
 export function AnchoredPopover({
   rect,
+  card,
   label,
   onClose,
   children,
 }: {
   rect: DOMRect;
+  card?: { id: string; point?: { x: number; y: number } };
   label: string;
   onClose: () => void;
   children: ReactNode;
 }) {
+  const { i18n } = useTranslation();
+  const rtl = i18n.dir() === 'rtl';
+  const cardId = card?.id;
+  const point = card?.point;
+  const placement = useMemo(
+    () =>
+      placePopover(rect, { width: window.innerWidth, height: window.innerHeight }, { point, rtl }),
+    [rect, point, rtl],
+  );
+  const anchor = useMemo(() => {
+    const element = cardId ? liveCard(cardId) : null;
+    const measurable = {
+      getBoundingClientRect: () =>
+        placement.anchor((cardId ? liveCard(cardId) : null)?.getBoundingClientRect() ?? rect),
+      ...(element ? { contextElement: clipContext(element) } : {}),
+    };
+    return { current: measurable };
+  }, [cardId, placement, rect]);
   return (
     <Popover.Root
       open
@@ -342,14 +380,15 @@ export function AnchoredPopover({
         if (!open) onClose();
       }}
     >
-      <Popover.Anchor virtualRef={rectAnchor(rect)} />
+      <Popover.Anchor virtualRef={anchor} />
       <Popover.Portal>
         <Popover.Content
           aria-label={label}
-          side="right"
+          side={placement.side}
           align="start"
-          sideOffset={8}
-          collisionPadding={12}
+          sideOffset={POPOVER_GAP}
+          collisionPadding={POPOVER_EDGE}
+          hideWhenDetached={cardId !== undefined}
           className={POPOVER}
         >
           {children}

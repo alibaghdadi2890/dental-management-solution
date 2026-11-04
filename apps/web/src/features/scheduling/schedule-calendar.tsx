@@ -73,7 +73,8 @@ export interface ScheduleCalendarProps {
   onDay: (date: string) => void;
   /** No dentist in the week view, where a column is a day. */
   onEmptySlot: (dentistId: string | null, start: Date) => void;
-  onOpen: (appointment: Appointment, anchor: DOMRect) => void;
+  /** `point`: where the click landed, from the card's top-left corner. */
+  onOpen: (appointment: Appointment, anchor: DOMRect, point?: { x: number; y: number }) => void;
   onMove: (appointment: Appointment, start: Date, dentistId: string) => void;
   onResize: (appointment: Appointment, end: Date) => void;
 }
@@ -240,7 +241,19 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
             return;
           }
           const target = domEvent.currentTarget as HTMLElement | null;
-          if (target) props.onOpen(event.appointment, target.getBoundingClientRect());
+          if (!target) return;
+          // The card the popover then follows (`data-appointment`), not the event box around it.
+          const rect = (
+            target.querySelector('[data-appointment]') ?? target
+          ).getBoundingClientRect();
+          // A click says where it landed; Enter on a focused card does not (`detail` 0).
+          const native = domEvent.nativeEvent;
+          const clicked = native instanceof MouseEvent && native.detail > 0;
+          props.onOpen(
+            event.appointment,
+            rect,
+            clicked ? { x: native.clientX - rect.left, y: native.clientY - rect.top } : undefined,
+          );
         }}
         onEventDrop={({ event, start, resourceId }) => {
           props.onMove(
