@@ -5,6 +5,7 @@ import {
   canConfirm,
   canMarkNoShow,
   canMove,
+  canRestore,
   canWriteAppointment,
 } from '@dcm/contracts';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +21,7 @@ import {
   confirmAppointment,
   invalidateSchedule,
   markNoShow,
+  restoreAppointment,
   undoCheckIn,
 } from './scheduling-api';
 
@@ -29,8 +31,11 @@ export interface AppointmentAbilities {
   checkIn: boolean;
   confirm: boolean;
   move: boolean;
+  /** The Edit appointment panel: what may move may be edited (ADR-0075). */
+  edit: boolean;
   noShow: boolean;
   cancel: boolean;
+  restore: boolean;
   undoCheckIn: boolean;
   startVisit: boolean;
 }
@@ -40,8 +45,10 @@ const NONE: AppointmentAbilities = {
   checkIn: false,
   confirm: false,
   move: false,
+  edit: false,
   noShow: false,
   cancel: false,
+  restore: false,
   undoCheckIn: false,
   startVisit: false,
 };
@@ -58,13 +65,16 @@ export function useAppointmentAbilities(): (appointment: Appointment) => Appoint
     );
     const canVisit = session.permissions.includes('visit:start');
     const waiting = appointment.status === 'booked' || appointment.status === 'confirmed';
+    const move = write && canMove(moment, today);
     return {
       write,
       checkIn: write && canCheckIn(moment, today),
       confirm: write && canConfirm(moment, today),
-      move: write && canMove(moment, today),
+      move,
+      edit: move,
       noShow: write && canMarkNoShow(moment, new Date()),
       cancel: write && canCancel(moment),
+      restore: write && canRestore(moment, new Date()),
       undoCheckIn: write && appointment.status === 'checked_in',
       // Whoever may start visits: since ADR-0074, the front desk too, once the patient is in the room.
       startVisit:
@@ -106,6 +116,10 @@ export function useAppointmentActions() {
     cancel: useAction(
       ({ id, reason }: { id: string; reason: string }) => cancelAppointment(id, reason),
       t('toast.cancelled'),
+    ),
+    restore: useAction(
+      ({ id, override }: { id: string; override: boolean }) => restoreAppointment(id, override),
+      t('toast.restored'),
     ),
     room: useAction(
       ({ id, roomId }: { id: string; roomId: string | null }) => changeAppointmentRoom(id, roomId),

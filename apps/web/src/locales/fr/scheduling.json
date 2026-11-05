@@ -40,7 +40,9 @@
     "incomplete": "Incomplet"
   },
   "card": {
-    "overridden": "Réservé malgré un avertissement"
+    "overridden": "Réservé malgré un avertissement",
+    "edit": "Modifier le rendez-vous",
+    "cancelled": "Annulé · {{name}} · {{time}}"
   },
   "actions": {
     "checkIn": "Enregistrer l'arrivée",
@@ -50,7 +52,8 @@
     "noShow": "Marquer absent",
     "cancel": "Annuler",
     "startVisit": "Commencer la visite",
-    "patientRecord": "Dossier du patient"
+    "patientRecord": "Dossier du patient",
+    "restore": "Rétablir"
   },
   "popover": {
     "label": "Rendez-vous",
@@ -68,7 +71,10 @@
     "moved_one": "Déplacé {{count}} fois · réservé au départ pour le {{date}}",
     "moved_other": "Déplacé {{count}} fois · réservé au départ pour le {{date}}",
     "registrationIncomplete": "Inscription incomplète ·",
-    "completeNow": "Compléter"
+    "completeNow": "Compléter",
+    "restoreTitle": "Rétablir ce rendez-vous ?",
+    "restoreAnyway": "Rétablir quand même",
+    "keepCancelled": "Laisser annulé"
   },
   "conflicts": {
     "room": "{{room}} est occupée à ce moment",
@@ -126,7 +132,9 @@
     "cancelled": "Rendez-vous annulé",
     "roomChanged": "Salle modifiée",
     "willCall": "Noté : le patient rappellera",
-    "declined": "Refus enregistré"
+    "declined": "Refus enregistré",
+    "restored": "Rendez-vous rétabli",
+    "edited": "Rendez-vous modifié"
   },
   "reasons": {
     "check_up": "Contrôle",
@@ -167,7 +175,9 @@
     "confirm": "Confirmer la réservation",
     "cancel": "Annuler",
     "followUpWaiting": "Recommandé par {{dentist}}, pas encore réservé",
-    "bookFollowUp": "Réserver ce suivi"
+    "bookFollowUp": "Réserver ce suivi",
+    "editTitle": "Modifier le rendez-vous",
+    "save": "Enregistrer"
   },
   "quick": {
     "firstName": "Prénom",

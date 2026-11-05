@@ -4,6 +4,7 @@ import {
   type AppointmentCheckRequest,
   appointmentSchema,
   type BookAppointmentRequest,
+  type EditAppointmentRequest,
   type FollowUp,
   followUpSchema,
   openingHoursSchema,
@@ -182,6 +183,19 @@ export function rescheduleAppointment(
   });
 }
 
+/** The Edit appointment panel: a move there makes a new row, hence the key (ADR-0075). */
+export function editAppointment(
+  id: string,
+  input: EditAppointmentRequest,
+  key: string,
+): Promise<Appointment> {
+  return apiFetch(appointmentPath(id), appointmentSchema, {
+    method: 'PATCH',
+    json: input,
+    headers: { [IDEMPOTENCY_HEADER]: key },
+  });
+}
+
 const act = (id: string, path: string, json: object = {}) =>
   apiFetch(`${appointmentPath(id)}/${path}`, appointmentSchema, { method: 'POST', json });
 
@@ -195,6 +209,8 @@ export const changeAppointmentRoom = (id: string, roomId: string | null) =>
   act(id, 'room', { roomId });
 export const cancelAppointment = (id: string, reason: string) => act(id, 'cancel', { reason });
 export const markNoShow = (id: string) => act(id, 'no-show');
+export const restoreAppointment = (id: string, override: boolean) =>
+  act(id, 'restore', { override });
 
 export const markFollowUpWillCall = (id: string) =>
   apiFetch(`${base}/follow-ups/${id}/will-call`, followUpSchema, { method: 'POST', json: {} });

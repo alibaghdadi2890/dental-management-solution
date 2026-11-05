@@ -436,6 +436,14 @@ function ScheduleScreen({
     setPanel(draft);
   };
 
+  /** The Edit appointment panel (ADR-0075), from the card's button or the popover. */
+  const openEdit = (appointment: Appointment) => {
+    closeSelected();
+    setMoving(null);
+    setPending(null);
+    openPanel({ date: appointment.localDate, editing: appointment });
+  };
+
   const onDay = useCallback(
     (day: string) => {
       onSearch({ ...search, date: day, view: undefined });
@@ -497,6 +505,8 @@ function ScheduleScreen({
             slotLength={slotLength}
             bounds={bounds}
             canDrag={canDrag}
+            canEdit={(appointment) => !moving && !pending && abilities(appointment).edit}
+            onEdit={openEdit}
             moveSlots={moveSlots}
             now={() => new Date()}
             onDate={(next) => {

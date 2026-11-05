@@ -40,7 +40,9 @@
     "incomplete": "Incomplete"
   },
   "card": {
-    "overridden": "Booked through a warning"
+    "overridden": "Booked through a warning",
+    "edit": "Edit appointment",
+    "cancelled": "Cancelled · {{name}} · {{time}}"
   },
   "actions": {
     "checkIn": "Check in",
@@ -50,7 +52,8 @@
     "noShow": "Mark no-show",
     "cancel": "Cancel",
     "startVisit": "Start visit",
-    "patientRecord": "Patient record"
+    "patientRecord": "Patient record",
+    "restore": "Restore"
   },
   "popover": {
     "label": "Appointment",
@@ -68,7 +71,10 @@
     "moved_one": "Rescheduled {{count}}× · first booked for {{date}}",
     "moved_other": "Rescheduled {{count}}× · first booked for {{date}}",
     "registrationIncomplete": "Registration incomplete ·",
-    "completeNow": "Complete now"
+    "completeNow": "Complete now",
+    "restoreTitle": "Restore this appointment?",
+    "restoreAnyway": "Restore anyway",
+    "keepCancelled": "Keep cancelled"
   },
   "conflicts": {
     "room": "{{room}} is in use then",
@@ -126,7 +132,9 @@
     "cancelled": "Appointment cancelled",
     "roomChanged": "Room changed",
     "willCall": "Marked: patient will call",
-    "declined": "Recorded as declined"
+    "declined": "Recorded as declined",
+    "restored": "Appointment restored",
+    "edited": "Appointment updated"
   },
   "reasons": {
     "check_up": "Check-up",
@@ -167,7 +175,9 @@
     "confirm": "Confirm booking",
     "cancel": "Cancel",
     "followUpWaiting": "Recommended by {{dentist}}, not booked yet",
-    "bookFollowUp": "Book this follow-up"
+    "bookFollowUp": "Book this follow-up",
+    "editTitle": "Edit appointment",
+    "save": "Save changes"
   },
   "quick": {
     "firstName": "First name",

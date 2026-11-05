@@ -276,6 +276,50 @@ test('dragging a card asks first, and the bottom edge changes the duration', asy
   });
 });
 
+test('a cancelled card is a strip that restores, and the card’s button edits it', async ({
+  page,
+}) => {
+  await signIn(page, clinic.desk);
+  const name = `Lina Haddad ${Date.now().toString(36)}`;
+  await bookToday(page, name, 30, 240);
+  await page.goto('/schedule');
+  const card = page.locator('.rbc-event').filter({ hasText: name });
+  const popover = page.getByRole('dialog', { name: 'Appointment' });
+
+  await test.step('cancelling leaves a slim strip, the slot beside it free', async () => {
+    await card.click();
+    await popover.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await popover.getByRole('button', { name: 'Cancel appointment' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Appointment cancelled' }),
+    ).toBeVisible();
+    const strip = page.getByLabel(`Cancelled · ${name}`, { exact: false });
+    await expect(strip).toBeVisible();
+    expect((await strip.boundingBox())?.width).toBeLessThanOrEqual(40);
+  });
+
+  await test.step('Restore brings the card back', async () => {
+    await page.getByLabel(`Cancelled · ${name}`, { exact: false }).click();
+    await popover.getByRole('button', { name: 'Restore' }).click();
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Appointment restored' }),
+    ).toBeVisible();
+    await expect(card).toBeVisible();
+  });
+
+  await test.step('the card’s Edit button opens the form, and a new reason saves in place', async () => {
+    await card.hover();
+    await card.getByRole('button', { name: 'Edit appointment' }).click();
+    const panel = page.getByRole('complementary', { name: 'Edit appointment' });
+    await expect(panel.getByLabel('Reason')).toHaveValue('Check-up');
+    await panel.getByLabel('Reason').fill('Crown fitting');
+    await panel.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Appointment updated' })).toBeVisible();
+    await card.click();
+    await expect(popover).toContainText('Crown fitting');
+  });
+});
+
 test('the worklist lists a follow-up, books it away, and a cancellation brings it back', async ({
   browser,
 }) => {

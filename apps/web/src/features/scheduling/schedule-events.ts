@@ -27,16 +27,30 @@ export interface CalendarEvent {
   lanes?: number;
   /** Week view: this card stands for several; `appointment` is only the first of them. */
   cluster?: EventCluster;
+  /** A cancelled card: a strip at the column's end, outside the lanes, so the slot stays bookable. */
+  strip?: boolean;
 }
 
 interface Laid {
   lanes: number;
   group: number;
+  lane: number;
 }
 
+/** Where a card sits across its column: its lane of `lanes`, and whether a strip shares the run. */
+export interface DayBox {
+  strip: boolean;
+  lane: number;
+  lanes: number;
+  /** A card in a run that overlaps a strip leaves the strip's room. */
+  besideStrip: boolean;
+}
+
+const overlapping = (a: CalendarEvent, b: CalendarEvent) => a.start < b.end && b.start < a.end;
+
 /**
- * Side-by-side lanes for one column: overlapping runs of cards form a group, and each card learns how
- * many lanes its group needs. Adjacent cards do not overlap.
+ * Side-by-side lanes for one column: overlapping runs of cards form a group, each card takes the
+ * first free lane and learns how many lanes its group needs. Adjacent cards do not overlap.
  */
 export function layOutLanes(events: readonly CalendarEvent[]): Map<string, Laid> {
   const laid = new Map<string, Laid>();
@@ -48,12 +62,20 @@ export function layOutLanes(events: readonly CalendarEvent[]): Map<string, Laid>
   let groupNumber = 0;
   const flush = () => {
     const laneEnds: number[] = [];
+    const laneOf = new Map<string, number>();
     for (const event of group) {
       const free = laneEnds.findIndex((end) => end <= event.start.getTime());
       if (free >= 0) laneEnds[free] = event.end.getTime();
       else laneEnds.push(event.end.getTime());
+      laneOf.set(event.id, free >= 0 ? free : laneEnds.length - 1);
     }
-    for (const event of group) laid.set(event.id, { lanes: laneEnds.length, group: groupNumber });
+    for (const event of group) {
+      laid.set(event.id, {
+        lanes: laneEnds.length,
+        group: groupNumber,
+        lane: laneOf.get(event.id) ?? 0,
+      });
+    }
     groupNumber += 1;
     group = [];
   };
@@ -67,6 +89,32 @@ export function layOutLanes(events: readonly CalendarEvent[]): Map<string, Laid>
   }
   if (group.length > 0) flush();
   return laid;
+}
+
+/**
+ * One column's boxes (ADR-0075): the cards in their lanes, the strips in lanes of their own at the
+ * column's end. A run of cards overlapping a strip narrows as a whole, so its lanes stay aligned.
+ */
+export function layOutDay(events: readonly CalendarEvent[]): Map<string, DayBox> {
+  const strips = events.filter((event) => event.strip);
+  const cards = events.filter((event) => !event.strip);
+  const cardLanes = layOutLanes(cards);
+  const stripLanes = layOutLanes(strips);
+  const narrowed = new Set(
+    cards
+      .filter((card) => strips.some((strip) => overlapping(card, strip)))
+      .map((card) => cardLanes.get(card.id)?.group),
+  );
+  const boxes = new Map<string, DayBox>();
+  for (const [laid, strip] of [
+    [cardLanes, false],
+    [stripLanes, true],
+  ] as const) {
+    for (const [id, { lane, lanes, group }] of laid) {
+      boxes.set(id, { strip, lane, lanes, besideStrip: !strip && narrowed.has(group) });
+    }
+  }
+  return boxes;
 }
 
 const firstName = (fullName: string) => fullName.split(/\s+/)[0] ?? fullName;
@@ -105,7 +153,8 @@ function groupBy(
 /**
  * What the grid draws. Day: each dentist's column, its cards told their lanes. Week: each day's
  * column, every dentist in it, and a crowded run collapsed into one card that opens the day. A card
- * mid-move is never collapsed: it is the one being looked at.
+ * mid-move is never collapsed: it is the one being looked at. Cancelled cards are strips: no lane,
+ * no cluster (ADR-0075).
  */
 export function arrangeEvents(
   events: readonly CalendarEvent[],
@@ -116,12 +165,16 @@ export function arrangeEvents(
   const keyOf = (event: CalendarEvent) =>
     view === 'week' ? dayOf(event) : `${dayOf(event)}|${event.dentistId}`;
   return groupBy(events, keyOf).flatMap((column) => {
-    const laid = layOutLanes(column);
-    const withLanes = column.map((event) => ({
+    const strips = column
+      .filter((event) => event.appointment.status === 'cancelled' && !event.pending)
+      .map((event) => ({ ...event, strip: true, lanes: 1 }));
+    const cards = column.filter((event) => !strips.some((strip) => strip.id === event.id));
+    const laid = layOutLanes(cards);
+    const withLanes = cards.map((event) => ({
       ...event,
       lanes: laid.get(event.id)?.lanes ?? 1,
     }));
-    if (view === 'day') return withLanes;
+    if (view === 'day') return [...withLanes, ...strips];
     const crowded = new Map<number, CalendarEvent[]>();
     const rest: CalendarEvent[] = [];
     for (const event of withLanes) {
@@ -138,6 +191,6 @@ export function arrangeEvents(
       const cluster = first ? clusterOf(sorted, dayOf(first)) : null;
       return cluster ? [cluster] : [];
     });
-    return [...rest, ...clusters];
+    return [...rest, ...clusters, ...strips];
   });
 }

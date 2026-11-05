@@ -40,7 +40,9 @@
     "incomplete": "غير مكتمل"
   },
   "card": {
-    "overridden": "حُجز رغم تحذير"
+    "overridden": "حُجز رغم تحذير",
+    "edit": "تعديل الموعد",
+    "cancelled": "ملغى · {{name}} · {{time}}"
   },
   "actions": {
     "checkIn": "تسجيل الوصول",
@@ -50,7 +52,8 @@
     "noShow": "تسجيل عدم الحضور",
     "cancel": "إلغاء",
     "startVisit": "بدء الزيارة",
-    "patientRecord": "ملف المريض"
+    "patientRecord": "ملف المريض",
+    "restore": "استعادة"
   },
   "popover": {
     "label": "موعد",
@@ -72,7 +75,10 @@
     "moved_many": "نُقل {{count}} مرة · حُجز أولًا ليوم {{date}}",
     "moved_other": "نُقل {{count}} مرة · حُجز أولًا ليوم {{date}}",
     "registrationIncomplete": "التسجيل غير مكتمل ·",
-    "completeNow": "أكمله الآن"
+    "completeNow": "أكمله الآن",
+    "restoreTitle": "استعادة هذا الموعد؟",
+    "restoreAnyway": "استعادة على أي حال",
+    "keepCancelled": "إبقاؤه ملغى"
   },
   "conflicts": {
     "room": "{{room}} مشغولة في ذلك الوقت",
@@ -130,7 +136,9 @@
     "cancelled": "أُلغي الموعد",
     "roomChanged": "تغيرت الغرفة",
     "willCall": "سُجل: سيتصل المريض",
-    "declined": "سُجل الرفض"
+    "declined": "سُجل الرفض",
+    "restored": "استُعيد الموعد",
+    "edited": "عُدّل الموعد"
   },
   "reasons": {
     "check_up": "فحص دوري",
@@ -175,7 +183,9 @@
     "confirm": "تأكيد الحجز",
     "cancel": "إلغاء",
     "followUpWaiting": "أوصى بها {{dentist}}، ولم تُحجز بعد",
-    "bookFollowUp": "حجز هذه المتابعة"
+    "bookFollowUp": "حجز هذه المتابعة",
+    "editTitle": "تعديل الموعد",
+    "save": "حفظ التغييرات"
   },
   "quick": {
     "firstName": "الاسم الأول",

@@ -1,6 +1,6 @@
 import type { Appointment } from '@dcm/contracts';
 import { describe, expect, it } from 'vitest';
-import { arrangeEvents, type CalendarEvent, layOutLanes } from './schedule-events';
+import { arrangeEvents, type CalendarEvent, layOutDay, layOutLanes } from './schedule-events';
 import { instantOf } from './schedule-time';
 
 const BEIRUT = 'Asia/Beirut';
@@ -44,6 +44,29 @@ describe('layOutLanes', () => {
       event('c', '09:30', '10:00'),
     ]);
     expect(laid.get('c')?.lanes).toBe(2);
+    expect(laid.get('c')?.lane).toBe(1);
+  });
+});
+
+describe('layOutDay', () => {
+  const strip = (id: string, from: string, to: string) => ({
+    ...event(id, from, to, { status: 'cancelled' }),
+    strip: true,
+  });
+
+  it('puts strips outside the lanes, and narrows only the runs they overlap', () => {
+    const boxes = layOutDay([
+      event('a', '09:00', '10:00'),
+      event('b', '09:30', '10:30'),
+      event('c', '11:00', '11:30'),
+      strip('x', '10:15', '10:45'),
+      strip('y', '10:30', '11:00'),
+    ]);
+    expect(boxes.get('a')).toEqual({ strip: false, lane: 0, lanes: 2, besideStrip: true });
+    expect(boxes.get('b')).toEqual({ strip: false, lane: 1, lanes: 2, besideStrip: true });
+    expect(boxes.get('c')).toEqual({ strip: false, lane: 0, lanes: 1, besideStrip: false });
+    expect(boxes.get('x')).toEqual({ strip: true, lane: 0, lanes: 2, besideStrip: false });
+    expect(boxes.get('y')).toEqual({ strip: true, lane: 1, lanes: 2, besideStrip: false });
   });
 });
 
@@ -96,5 +119,15 @@ describe('arrangeEvents', () => {
       BEIRUT,
     );
     expect(arranged.find((item) => item.id === 'm')?.cluster).toBeUndefined();
+  });
+
+  it('draws a cancelled card as a strip: no lane taken, never in a cluster', () => {
+    const cancelled = event('x', '09:00', '10:00', { status: 'cancelled' });
+    const week = arrangeEvents([...crowd.slice(0, 2), cancelled], 'week', BEIRUT);
+    expect(week.some((item) => item.cluster)).toBe(false);
+    expect(week.filter((item) => !item.strip).map((item) => item.lanes)).toEqual([2, 2]);
+    expect(week.find((item) => item.id === 'x')).toMatchObject({ strip: true, lanes: 1 });
+    const day = arrangeEvents([crowd[0] as CalendarEvent, cancelled], 'day', BEIRUT);
+    expect(day.find((item) => item.id === 'a')?.lanes).toBe(1);
   });
 });

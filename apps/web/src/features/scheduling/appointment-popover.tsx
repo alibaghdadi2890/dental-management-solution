@@ -1,15 +1,20 @@
-import type { Appointment, ScheduleResources } from '@dcm/contracts';
+import type { Appointment, AppointmentConflict, ScheduleResources } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Popover } from 'radix-ui';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Select, TextInput } from '@/components/ui/field';
+import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { balanceQuery } from '@/features/billing/billing-api';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, formatTime } from '@/lib/format';
 import { AppointmentStatusPill } from './appointment-status';
+import { ConflictLines } from './conflict-lines';
+import { useConflictWords } from './conflict-words';
+import { checkAppointment } from './scheduling-api';
 import { clinicClock } from './schedule-time';
 import { POPOVER_EDGE, POPOVER_GAP, placePopover } from './popover-placement';
 import { useAppointmentAbilities, useAppointmentActions } from './use-appointment-actions';
@@ -23,8 +28,19 @@ function OwesLine({ patientId }: { patientId: string }) {
   return <span className="text-warning">{t('popover.owes')}</span>;
 }
 
-/** Inline, in the popover, per the design (A12). */
-function CancelConfirm({ appointment, onDone }: { appointment: Appointment; onDone: () => void }) {
+/**
+ * Inline, in the popover, per the design (A12). A cancel closes the popover: its card becomes a strip
+ * (ADR-0075), which the next click opens afresh.
+ */
+function CancelConfirm({
+  appointment,
+  onKeep,
+  onCancelled,
+}: {
+  appointment: Appointment;
+  onKeep: () => void;
+  onCancelled: () => void;
+}) {
   const { t } = useTranslation('scheduling');
   const [reason, setReason] = useState('');
   const { cancel } = useAppointmentActions();
@@ -45,7 +61,7 @@ function CancelConfirm({ appointment, onDone }: { appointment: Appointment; onDo
         }}
       />
       <div className="mt-2 flex justify-end gap-2">
-        <Button size="sm" variant="secondary" onClick={onDone}>
+        <Button size="sm" variant="secondary" onClick={onKeep}>
           {t('popover.keep')}
         </Button>
         <Button
@@ -53,13 +69,96 @@ function CancelConfirm({ appointment, onDone }: { appointment: Appointment; onDo
           variant="danger"
           disabled={cancel.isPending}
           onClick={() => {
-            cancel.mutate({ id: appointment.id, reason }, { onSuccess: onDone });
+            cancel.mutate({ id: appointment.id, reason }, { onSuccess: onCancelled });
           }}
         >
           {t('popover.cancelConfirm')}
         </Button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Restore (ADR-0075): the dry run first, as a move. A refusal is a toast; warnings are listed for
+ * *Restore anyway*; without either it restores at once.
+ */
+function RestoreButton({ appointment, onDone }: { appointment: Appointment; onDone: () => void }) {
+  const { t, i18n } = useTranslation('scheduling');
+  const toast = useToast();
+  const words = useConflictWords();
+  const canOverride = usePermission('appointment:override');
+  const { restore } = useAppointmentActions();
+  const [checking, setChecking] = useState(false);
+  const [warnings, setWarnings] = useState<AppointmentConflict[] | null>(null);
+  const run = (override: boolean) => {
+    restore.mutate({ id: appointment.id, override }, { onSuccess: onDone });
+  };
+  const start = async () => {
+    setChecking(true);
+    try {
+      const check = await checkAppointment({
+        branchId: appointment.branchId,
+        dentistId: appointment.dentistId,
+        patientId: appointment.patient.id,
+        startsAt: appointment.startsAt,
+        durationMin: (Date.parse(appointment.endsAt) - Date.parse(appointment.startsAt)) / 60_000,
+        roomId: appointment.roomAuto ? 'auto' : (appointment.roomId ?? 'none'),
+        ignoreAppointmentId: appointment.id,
+      });
+      const refusal = check.conflicts.find((conflict) => conflict.hard);
+      if (refusal) toast(words.of(refusal), { tone: 'danger' });
+      else if (check.conflicts.length > 0) setWarnings(check.conflicts);
+      else run(false);
+    } catch (error) {
+      toast(apiErrorMessage(error, i18n), { tone: 'danger' });
+    } finally {
+      setChecking(false);
+    }
+  };
+  if (warnings) {
+    return (
+      <div className="mt-3 w-full border-t border-border pt-3">
+        <p className="m-0 mb-1.5 text-[13px] font-semibold">{t('popover.restoreTitle')}</p>
+        <ConflictLines conflicts={warnings} />
+        {canOverride ? null : (
+          <p className="m-0 mt-1.5 text-[12px] text-warning">{words.needsOverride}</p>
+        )}
+        <div className="mt-2 flex justify-end gap-2">
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              setWarnings(null);
+            }}
+          >
+            {t('popover.keepCancelled')}
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={!canOverride || restore.isPending}
+            onClick={() => {
+              run(true);
+            }}
+          >
+            {t('popover.restoreAnyway')}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <Button
+      size="sm"
+      variant="primary"
+      disabled={checking || restore.isPending}
+      onClick={() => {
+        void start();
+      }}
+    >
+      {t('actions.restore')}
+    </Button>
   );
 }
 
@@ -225,9 +324,10 @@ export function AppointmentDetails({
       {cancelling ? (
         <CancelConfirm
           appointment={appointment}
-          onDone={() => {
+          onKeep={() => {
             setCancelling(false);
           }}
+          onCancelled={onClose}
         />
       ) : (
         <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
@@ -275,6 +375,7 @@ export function AppointmentDetails({
               {t('actions.undoCheckIn')}
             </Button>
           ) : null}
+          {abilities.restore ? <RestoreButton appointment={appointment} onDone={onClose} /> : null}
           {abilities.move ? (
             <Button size="sm" variant="secondary" onClick={onReschedule}>
               {t('actions.reschedule')}

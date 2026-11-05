@@ -1,4 +1,5 @@
 import {
+  type Appointment,
   canWriteAppointment,
   type AppointmentConflict,
   type FollowUp,
@@ -34,10 +35,11 @@ import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { cn } from '@/lib/utils';
 import { ConflictLines } from './conflict-lines';
 import { useConflictWords } from './conflict-words';
-import { instantOf } from './schedule-time';
+import { clinicClock, instantOf } from './schedule-time';
 import {
   bookAppointment,
   checkAppointment,
+  editAppointment,
   invalidateSchedule,
   patientFollowUpsQuery,
   schedulingKeys,
@@ -56,6 +58,62 @@ export interface NewAppointmentDraft {
   date: string;
   time?: string | undefined;
   durationMin?: number | undefined;
+  /** Edit mode (ADR-0075): the appointment whose fields the panel starts from. */
+  editing?: Appointment | undefined;
+}
+
+const minutesLong = (appointment: Appointment) =>
+  (Date.parse(appointment.endsAt) - Date.parse(appointment.startsAt)) / 60_000;
+
+interface PanelFields {
+  reason: string;
+  visitType: VisitType | '';
+  durationMin: number;
+  dentistId: string | undefined;
+  date: string;
+  time: string;
+  roomId: string;
+  confirmed: boolean;
+}
+
+/** The panel's fields, from the draft or from the appointment it edits. */
+function initialFields(
+  draft: NewAppointmentDraft,
+  timeZone: string,
+  rooms: ScheduleResources['rooms'],
+): PanelFields {
+  const { editing } = draft;
+  if (!editing) {
+    return {
+      reason: '',
+      visitType: '',
+      durationMin: draft.durationMin ?? 30,
+      dentistId: draft.dentistId,
+      date: draft.date,
+      time: draft.time ?? '09:00',
+      roomId: 'auto',
+      confirmed: true,
+    };
+  }
+  const start = clinicClock(editing.startsAt, timeZone);
+  return {
+    reason: editing.reason,
+    visitType: editing.visitType ?? '',
+    durationMin: minutesLong(editing),
+    dentistId: editing.dentistId,
+    date: start.date,
+    time: start.time,
+    // A room since closed reads as Auto; one left for check-in stays so.
+    roomId: editing.roomAuto
+      ? 'auto'
+      : editing.roomId === null
+        ? 'none'
+        : rooms.some((room) => room.id === editing.roomId)
+          ? editing.roomId
+          : 'auto',
+    // A moved appointment starts unconfirmed: the box is ticked again on the phone (feature 14).
+    confirmed: false,
+  };
 }
 
 const TIMES = Array.from({ length: 24 * 4 }, (_, index) => {
@@ -295,7 +353,10 @@ function PatientPicker({ onPick }: { onPick: (patient: PanelPatient) => void }) 
   );
 }
 
-/** The design's right panel (A11). `Idempotency-Key` on booking. */
+/**
+ * The design's right panel (A11). `Idempotency-Key` on booking. With `draft.editing` it is the Edit
+ * appointment panel (ADR-0075): the patient is fixed, and a new start or dentist is a move.
+ */
 export function NewAppointmentPanel({
   branchId,
   draft,
@@ -320,27 +381,67 @@ export function NewAppointmentPanel({
   const writable = resources.dentists.filter((dentist) =>
     canWriteAppointment(actor, { dentistId: dentist.id }),
   );
-  const [patient, setPatient] = useState(draft.patient ?? null);
-  const [reason, setReason] = useState('');
-  const [visitType, setVisitType] = useState<VisitType | ''>('');
-  const [durationMin, setDurationMin] = useState(draft.durationMin ?? 30);
-  const [dentistId, setDentistId] = useState(
-    draft.dentistId ?? (writable.length === 1 ? writable[0]?.id : undefined) ?? '',
+  const { editing } = draft;
+  const [initial] = useState(() => initialFields(draft, timeZone, resources.rooms));
+  const [patient, setPatient] = useState(
+    draft.patient ??
+      (editing
+        ? {
+            id: editing.patient.id,
+            fullName: editing.patient.fullName,
+            meta: editing.patient.displayNumber,
+          }
+        : null),
   );
-  const [date, setDate] = useState(draft.date);
-  const [time, setTime] = useState(draft.time ?? '09:00');
-  const [roomId, setRoomId] = useState('auto');
-  const [confirmed, setConfirmed] = useState(true);
+  const [reason, setReason] = useState(initial.reason);
+  const [visitType, setVisitType] = useState<VisitType | ''>(initial.visitType);
+  const [durationMin, setDurationMin] = useState(initial.durationMin);
+  const [dentistId, setDentistId] = useState(
+    initial.dentistId ?? (writable.length === 1 ? writable[0]?.id : undefined) ?? '',
+  );
+  const [date, setDate] = useState(initial.date);
+  const [time, setTime] = useState(initial.time);
+  const [roomId, setRoomId] = useState(initial.roomId);
+  const [ticked, setConfirmed] = useState(initial.confirmed);
   const [followUp, setFollowUp] = useState<FollowUp | null>(null);
   const canOverride = session?.permissions.includes('appointment:override') ?? false;
   const words = useConflictWords();
 
   const startsAt = instantOf(date, time, timeZone).toISOString();
+  const moved =
+    editing !== undefined &&
+    (dentistId !== editing.dentistId || Date.parse(startsAt) !== Date.parse(editing.startsAt));
+  // Confirmed and staying put: it stays confirmed, there is no unconfirming.
+  const keepsConfirmed = editing?.status === 'confirmed' && !moved;
+  const confirmed = keepsConfirmed || ticked;
+  const unchanged =
+    editing !== undefined &&
+    !moved &&
+    reason.trim() === initial.reason &&
+    visitType === initial.visitType &&
+    durationMin === initial.durationMin &&
+    roomId === initial.roomId &&
+    confirmed === (editing.status === 'confirmed');
+  const durations = [...new Set([...SLOT_LENGTHS, initial.durationMin])].sort((a, b) => a - b);
+  const times = TIMES.includes(initial.time) ? TIMES : [...TIMES, initial.time].sort();
+  /** A new date, time or dentist is a move: unconfirmed until the box is ticked again. */
+  const move = (change: () => void) => {
+    change();
+    if (editing) setConfirmed(false);
+  };
   const check = useQuery({
     queryKey: [
       ...schedulingKeys.all(session?.tenant?.id ?? null),
       'check',
-      { branchId, dentistId, patientId: patient?.id, startsAt, durationMin, roomId },
+      {
+        branchId,
+        dentistId,
+        patientId: patient?.id,
+        startsAt,
+        durationMin,
+        roomId,
+        editing: editing?.id,
+      },
     ],
     queryFn: () =>
       checkAppointment({
@@ -350,21 +451,39 @@ export function NewAppointmentPanel({
         startsAt,
         durationMin,
         roomId,
+        ...(editing ? { ignoreAppointmentId: editing.id } : {}),
       }),
     enabled: dentistId !== '',
     staleTime: 0,
   });
-  const conflicts: AppointmentConflict[] = check.data?.conflicts ?? [];
+  // An edit that keeps its time keeps the warnings it was booked through: only a clash is new.
+  const sameSpan = editing !== undefined && !moved && durationMin === initial.durationMin;
+  const conflicts: AppointmentConflict[] = (check.data?.conflicts ?? []).filter(
+    (conflict) => conflict.hard || !sameSpan,
+  );
   const hard = conflicts.some((conflict) => conflict.hard);
   const soft = conflicts.some((conflict) => !conflict.hard);
   const awaiting = useQuery({
     ...patientFollowUpsQuery(patient?.id ?? ''),
-    enabled: patient !== null,
+    enabled: patient !== null && !editing,
     select: (rows) => rows.find((row) => row.status === 'awaiting' && !row.expired) ?? null,
   });
 
   const book = useMutation({
     mutationFn: () => {
+      if (editing) {
+        const changes = {
+          dentistId,
+          startsAt,
+          durationMin,
+          reason: reason.trim(),
+          visitType: visitType || null,
+          roomId,
+          confirmed,
+          override: soft && canOverride,
+        };
+        return editAppointment(editing.id, changes, keyFor({ id: editing.id, ...changes }));
+      }
       const input = {
         branchId,
         patientId: patient?.id ?? '',
@@ -382,7 +501,7 @@ export function NewAppointmentPanel({
       return bookAppointment(input, keyFor(input));
     },
     onSuccess: async () => {
-      toast(t('toast.booked'));
+      toast(editing ? t('toast.edited') : t('toast.booked'));
       await invalidateSchedule(queryClient);
       onBooked(date);
     },
@@ -397,7 +516,8 @@ export function NewAppointmentPanel({
     hard ||
     blockedByOverride ||
     check.isFetching ||
-    book.isPending;
+    book.isPending ||
+    unchanged;
 
   const pickChip = (key: ReasonChipKey, visit: VisitType | null) => {
     setReason(t(`reasons.${key}`));
@@ -421,7 +541,7 @@ export function NewAppointmentPanel({
 
   return (
     <RightPanel
-      title={t('panel.title')}
+      title={editing ? t('panel.editTitle') : t('panel.title')}
       dirty={false}
       onClose={onClose}
       closeDisabled={book.isPending}
@@ -434,7 +554,7 @@ export function NewAppointmentPanel({
               book.mutate();
             }}
           >
-            {t('panel.confirm')}
+            {editing ? t('panel.save') : t('panel.confirm')}
           </Button>
           <Button variant="secondary" onClick={onClose}>
             {t('panel.cancel')}
@@ -450,16 +570,18 @@ export function NewAppointmentPanel({
                 <span className="block truncate text-[13px] font-medium">{patient.fullName}</span>
                 <span className="block truncate text-[11.5px] text-ink-muted">{patient.meta}</span>
               </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setPatient(null);
-                  setFollowUp(null);
-                }}
-              >
-                {t('panel.change')}
-              </Button>
+              {editing ? null : (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setPatient(null);
+                    setFollowUp(null);
+                  }}
+                >
+                  {t('panel.change')}
+                </Button>
+              )}
             </div>
           ) : (
             <PatientPicker onPick={setPatient} />
@@ -486,6 +608,7 @@ export function NewAppointmentPanel({
         <PanelGroup label={t('panel.reason')}>
           <TextInput
             value={reason}
+            aria-label={t('panel.reason')}
             maxLength={200}
             onChange={(event) => {
               setReason(event.target.value);
@@ -526,7 +649,7 @@ export function NewAppointmentPanel({
         </Field>
         <PanelGroup label={t('panel.duration')}>
           <div role="group" className="flex flex-wrap gap-1">
-            {SLOT_LENGTHS.map((minutes) => (
+            {durations.map((minutes) => (
               <button
                 key={minutes}
                 type="button"
@@ -560,7 +683,9 @@ export function NewAppointmentPanel({
                     : 'border-border-control bg-surface',
                 )}
                 onClick={() => {
-                  setDentistId(dentist.id);
+                  move(() => {
+                    setDentistId(dentist.id);
+                  });
                 }}
               >
                 {dentist.name}
@@ -576,7 +701,12 @@ export function NewAppointmentPanel({
                 type="date"
                 value={date}
                 onChange={(event) => {
-                  if (event.target.value) setDate(event.target.value);
+                  const next = event.target.value;
+                  if (next) {
+                    move(() => {
+                      setDate(next);
+                    });
+                  }
                 }}
               />
             )}
@@ -587,10 +717,13 @@ export function NewAppointmentPanel({
                 {...field}
                 value={time}
                 onChange={(event) => {
-                  setTime(event.target.value);
+                  const next = event.target.value;
+                  move(() => {
+                    setTime(next);
+                  });
                 }}
               >
-                {TIMES.map((value) => (
+                {times.map((value) => (
                   <option key={value} value={value}>
                     {formatTime(instantOf(date, value, timeZone), {
                       timeZone,
@@ -612,6 +745,7 @@ export function NewAppointmentPanel({
               }}
             >
               <option value="auto">{t('panel.roomAuto')}</option>
+              {editing ? <option value="none">{t('panel.roomAtCheckIn')}</option> : null}
               {resources.rooms.map((room) => (
                 <option key={room.id} value={room.id}>
                   {room.name}
@@ -628,6 +762,7 @@ export function NewAppointmentPanel({
           <input
             type="checkbox"
             checked={confirmed}
+            disabled={keepsConfirmed}
             onChange={(event) => {
               setConfirmed(event.target.checked);
             }}

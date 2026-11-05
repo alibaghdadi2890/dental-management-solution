@@ -1,17 +1,25 @@
 import type { Appointment, OpeningDay, ScheduleDentist, Slot } from '@dcm/contracts';
 import { DateTime, Settings } from 'luxon';
 import { type CSSProperties, useMemo } from 'react';
-import { Calendar, type Components, luxonLocalizer, Views } from 'react-big-calendar';
+import {
+  Calendar,
+  type Components,
+  type DayLayoutFunction,
+  luxonLocalizer,
+  Views,
+} from 'react-big-calendar';
 import withDragAndDropModule from 'react-big-calendar/lib/addons/dragAndDrop';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css';
 import './schedule.css';
 import { useTranslation } from 'react-i18next';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { formatTime } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
-import { ScheduleCard, ScheduleClusterCard } from './schedule-card';
-import { arrangeEvents, type CalendarEvent, type ScheduleView } from './schedule-events';
+import { ScheduleCard, ScheduleClusterCard, ScheduleStripCard } from './schedule-card';
+import { ScheduleCardEdit } from './schedule-card-edit';
+import { arrangeEvents, type CalendarEvent, layOutDay, type ScheduleView } from './schedule-events';
 import {
   clinicClock,
   clockOf,
@@ -49,6 +57,38 @@ function dayName(value: Date, timeZone: string, locale: string): string {
   return `${format({ weekday: 'short' })} ${format({ day: 'numeric' })}`;
 }
 
+/** A cancelled card's strip: a fifth of the column, never wider than its initials need. */
+const STRIP = 'min(20%, 40px)';
+
+interface SlotMetrics {
+  getRange: (start: Date, end: Date) => { top: number; height: number };
+}
+
+/**
+ * The columns' layout (ADR-0075): the cards side by side in their lanes, as `no-overlap` drew them,
+ * and a cancelled card as a strip at the column's end that leaves the rest of its slot bookable.
+ */
+const dayLayout: DayLayoutFunction<CalendarEvent> = ({ events, slotMetrics }) => {
+  const boxes = layOutDay(events);
+  const metrics = slotMetrics as SlotMetrics;
+  return events.map((event) => {
+    const { top, height } = metrics.getRange(event.start, event.end);
+    const box = boxes.get(event.id) ?? { strip: false, lane: 0, lanes: 1, besideStrip: false };
+    const room = box.strip ? STRIP : box.besideStrip ? `(100% - ${STRIP})` : '100%';
+    const from = box.strip ? `100% - ${STRIP} + ` : '';
+    const gap = box.strip || box.lane > 0 ? 3 : 0;
+    return {
+      event,
+      style: {
+        top,
+        height: `calc(${String(height)}% - 2px)`,
+        width: `calc(${room} / ${String(box.lanes)} - ${String(gap)}px)`,
+        xOffset: `calc(${from}${room} * ${String(box.lane)} / ${String(box.lanes)} + ${String(gap)}px)`,
+      },
+    };
+  });
+};
+
 const timeslotsOf = (slotLength: number) => (slotLength === 15 ? 4 : slotLength === 30 ? 2 : 1);
 
 export type { CalendarEvent, ScheduleView } from './schedule-events';
@@ -65,6 +105,9 @@ export interface ScheduleCalendarProps {
   slotLength: number;
   bounds: { from: number; to: number };
   canDrag: (appointment: Appointment) => boolean;
+  /** The card's Edit button (ADR-0075). */
+  canEdit: (appointment: Appointment) => boolean;
+  onEdit: (appointment: Appointment) => void;
   /** Move mode: the starts on offer, by dentist and instant. */
   moveSlots: ReadonlyMap<string, ReadonlyMap<number, Slot>> | null;
   now: () => Date;
@@ -87,7 +130,7 @@ export interface ScheduleCalendarProps {
 export function ScheduleCalendar(props: ScheduleCalendarProps) {
   const { t } = useTranslation('scheduling');
   const { view, date, timeZone, locale, rtl, dentists, events, hours } = props;
-  const { slotLength, bounds, canDrag, moveSlots, now } = props;
+  const { slotLength, bounds, canDrag, canEdit, onEdit, moveSlots, now } = props;
   const localizer = useMemo(() => clinicLocalizer(timeZone), [timeZone]);
   const anchor = useMemo(() => instantOf(date, '12:00', timeZone), [date, timeZone]);
   const min = useMemo(
@@ -124,7 +167,9 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
     () => ({
       toolbar: () => null,
       event: ({ event }) =>
-        event.cluster ? (
+        event.strip ? (
+          <ScheduleStripCard appointment={event.appointment} timeZone={timeZone} locale={locale} />
+        ) : event.cluster ? (
           <ScheduleClusterCard
             cluster={event.cluster}
             start={event.start}
@@ -177,6 +222,7 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
     }),
     [timeZone, locale, week, multiDentist, colorOf, today, selectedDay, hours, t],
   );
+  const edit = useMemo(() => ({ canEdit, onEdit }), [canEdit, onEdit]);
 
   return (
     <div
@@ -188,121 +234,137 @@ export function ScheduleCalendar(props: ScheduleCalendarProps) {
         } as CSSProperties
       }
     >
-      <DragAndDropCalendar
-        localizer={localizer}
-        culture={locale}
-        rtl={rtl}
-        events={arranged}
-        {...(week
-          ? {}
-          : {
-              resources: columns,
-              resourceAccessor: 'dentistId',
-              resourceIdAccessor: 'id',
-              resourceTitleAccessor: 'title',
-            })}
-        date={anchor}
-        onNavigate={(next) => {
-          props.onDate(clinicClock(next, timeZone).date);
-        }}
-        onDrillDown={(day) => {
-          props.onDay(clinicClock(day, timeZone).date);
-        }}
-        view={week ? Views.WEEK : Views.DAY}
-        onView={() => undefined}
-        views={[Views.DAY, Views.WEEK]}
-        step={slotLength}
-        timeslots={timeslotsOf(slotLength)}
-        min={min}
-        max={max}
-        getNow={now}
-        scrollToTime={scrollTo}
-        dayLayoutAlgorithm="no-overlap"
-        components={components}
-        messages={{ noEventsInRange: t('calendar.empty') }}
-        formats={{
-          timeGutterFormat: (value: Date) => formatTime(value, { timeZone, locale }),
-        }}
-        selectable={moveSlots ? true : 'ignoreEvents'}
-        resizable
-        draggableAccessor={(event) =>
-          !event.pending && !event.cluster && canDrag(event.appointment)
-        }
-        resizableAccessor={(event) =>
-          !event.pending && !event.cluster && canDrag(event.appointment)
-        }
-        onSelectSlot={({ start, resourceId }) => {
-          props.onEmptySlot(typeof resourceId === 'string' ? resourceId : null, new Date(start));
-        }}
-        onSelectEvent={(event, domEvent) => {
-          if (event.pending) return;
-          if (event.cluster) {
-            props.onDay(event.cluster.date);
-            return;
-          }
-          const target = domEvent.currentTarget as HTMLElement | null;
-          if (!target) return;
-          // The card the popover then follows (`data-appointment`), not the event box around it.
-          const rect = (
-            target.querySelector('[data-appointment]') ?? target
-          ).getBoundingClientRect();
-          // A click says where it landed; Enter on a focused card does not (`detail` 0).
-          const native = domEvent.nativeEvent;
-          const clicked = native instanceof MouseEvent && native.detail > 0;
-          props.onOpen(
-            event.appointment,
-            rect,
-            clicked ? { x: native.clientX - rect.left, y: native.clientY - rect.top } : undefined,
-          );
-        }}
-        onEventDrop={({ event, start, resourceId }) => {
-          props.onMove(
-            event.appointment,
-            new Date(start),
-            typeof resourceId === 'string' ? resourceId : event.dentistId,
-          );
-        }}
-        onEventResize={({ event, end }) => {
-          props.onResize(event.appointment, new Date(end));
-        }}
-        eventPropGetter={(event) => {
-          const color = colorOf.get(event.dentistId) ?? 'blue';
-          return {
-            className: cn(
-              'schedule-event',
-              !event.cluster &&
-                event.appointment.status === 'cancelled' &&
-                'schedule-event-cancelled',
-              !event.cluster && event.appointment.status === 'no_show' && 'schedule-event-muted',
-              !event.cluster && event.appointment.status === 'completed' && 'schedule-event-muted',
-              event.cluster && 'schedule-event-cluster',
-              event.pending && 'schedule-event-pending',
-            ),
-            style: { '--dentist': `var(--color-mark-${color})` } as CSSProperties,
-          };
-        }}
-        slotPropGetter={(slot, resourceId) => {
-          const { date: day, time } = clinicClock(slot, timeZone);
-          // The week's columns are days: the only offers are the moved card's own dentist's.
-          const offers =
-            typeof resourceId === 'string'
-              ? moveSlots?.get(resourceId)
-              : moveSlots?.values().next().value;
-          const offer = offers?.get(slot.getTime());
-          const minutes = minutesOf(time);
-          const closed = isClosedAt(day, minutes, hours);
-          const opensHere =
-            closed && (minutes === bounds.from || !isClosedAt(day, minutes - slotLength, hours));
-          return {
-            className: cn(
-              closed && 'schedule-closed',
-              opensHere && 'schedule-closed-first',
-              !closed && slot.getTime() < now().getTime() && 'schedule-past',
-              offer && (offer.warnings.length > 0 ? 'schedule-offer-warn' : 'schedule-offer'),
-            ),
-          };
-        }}
-      />
+      <TooltipProvider>
+        <ScheduleCardEdit value={edit}>
+          <DragAndDropCalendar
+            localizer={localizer}
+            culture={locale}
+            rtl={rtl}
+            events={arranged}
+            {...(week
+              ? {}
+              : {
+                  resources: columns,
+                  resourceAccessor: 'dentistId',
+                  resourceIdAccessor: 'id',
+                  resourceTitleAccessor: 'title',
+                })}
+            date={anchor}
+            onNavigate={(next) => {
+              props.onDate(clinicClock(next, timeZone).date);
+            }}
+            onDrillDown={(day) => {
+              props.onDay(clinicClock(day, timeZone).date);
+            }}
+            view={week ? Views.WEEK : Views.DAY}
+            onView={() => undefined}
+            views={[Views.DAY, Views.WEEK]}
+            step={slotLength}
+            timeslots={timeslotsOf(slotLength)}
+            min={min}
+            max={max}
+            getNow={now}
+            scrollToTime={scrollTo}
+            dayLayoutAlgorithm={dayLayout}
+            tooltipAccessor={(event) => (event.strip ? '' : event.title)}
+            components={components}
+            messages={{ noEventsInRange: t('calendar.empty') }}
+            formats={{
+              timeGutterFormat: (value: Date) => formatTime(value, { timeZone, locale }),
+            }}
+            selectable={moveSlots ? true : 'ignoreEvents'}
+            resizable
+            draggableAccessor={(event) =>
+              !event.pending && !event.cluster && canDrag(event.appointment)
+            }
+            resizableAccessor={(event) =>
+              !event.pending && !event.cluster && canDrag(event.appointment)
+            }
+            onSelectSlot={({ start, resourceId }) => {
+              props.onEmptySlot(
+                typeof resourceId === 'string' ? resourceId : null,
+                new Date(start),
+              );
+            }}
+            onSelectEvent={(event, domEvent) => {
+              if (event.pending) return;
+              if (event.cluster) {
+                props.onDay(event.cluster.date);
+                return;
+              }
+              const target = domEvent.currentTarget as HTMLElement | null;
+              if (!target) return;
+              // The card the popover then follows (`data-appointment`), not the event box around it.
+              const rect = (
+                target.querySelector('[data-appointment]') ?? target
+              ).getBoundingClientRect();
+              // A click says where it landed; Enter on a focused card does not (`detail` 0).
+              const native = domEvent.nativeEvent;
+              const clicked = native instanceof MouseEvent && native.detail > 0;
+              props.onOpen(
+                event.appointment,
+                rect,
+                clicked
+                  ? { x: native.clientX - rect.left, y: native.clientY - rect.top }
+                  : undefined,
+              );
+            }}
+            onEventDrop={({ event, start, resourceId }) => {
+              props.onMove(
+                event.appointment,
+                new Date(start),
+                typeof resourceId === 'string' ? resourceId : event.dentistId,
+              );
+            }}
+            onEventResize={({ event, end }) => {
+              props.onResize(event.appointment, new Date(end));
+            }}
+            eventPropGetter={(event) => {
+              const color = colorOf.get(event.dentistId) ?? 'blue';
+              return {
+                className: cn(
+                  'schedule-event',
+                  !event.cluster &&
+                    event.appointment.status === 'cancelled' &&
+                    'schedule-event-cancelled',
+                  !event.cluster &&
+                    event.appointment.status === 'no_show' &&
+                    'schedule-event-muted',
+                  !event.cluster &&
+                    event.appointment.status === 'completed' &&
+                    'schedule-event-muted',
+                  event.cluster && 'schedule-event-cluster',
+                  event.strip && 'schedule-event-strip',
+                  event.pending && 'schedule-event-pending',
+                ),
+                style: { '--dentist': `var(--color-mark-${color})` } as CSSProperties,
+              };
+            }}
+            slotPropGetter={(slot, resourceId) => {
+              const { date: day, time } = clinicClock(slot, timeZone);
+              // The week's columns are days: the only offers are the moved card's own dentist's.
+              const offers =
+                typeof resourceId === 'string'
+                  ? moveSlots?.get(resourceId)
+                  : moveSlots?.values().next().value;
+              const offer = offers?.get(slot.getTime());
+              const minutes = minutesOf(time);
+              const closed = isClosedAt(day, minutes, hours);
+              const opensHere =
+                closed &&
+                (minutes === bounds.from || !isClosedAt(day, minutes - slotLength, hours));
+              return {
+                className: cn(
+                  closed && 'schedule-closed',
+                  opensHere && 'schedule-closed-first',
+                  !closed && slot.getTime() < now().getTime() && 'schedule-past',
+                  offer && (offer.warnings.length > 0 ? 'schedule-offer-warn' : 'schedule-offer'),
+                ),
+              };
+            }}
+          />
+        </ScheduleCardEdit>
+      </TooltipProvider>
     </div>
   );
 }

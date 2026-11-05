@@ -1,12 +1,80 @@
 import type { Appointment } from '@dcm/contracts';
+import { type SyntheticEvent, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Tooltip } from '@/components/ui/tooltip';
 import { formatTime } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { AppointmentStatusMark } from './appointment-status';
+import { ScheduleCardEdit } from './schedule-card-edit';
 import type { EventCluster } from './schedule-events';
 
 const minutesLong = (appointment: Appointment) =>
   (Date.parse(appointment.endsAt) - Date.parse(appointment.startsAt)) / 60_000;
+
+/** The card's own click, drag and keys open the popover or move it: the button keeps its own. */
+const keepToButton = (event: SyntheticEvent) => {
+  event.stopPropagation();
+};
+
+function EditButton({ appointment }: { appointment: Appointment }) {
+  const { t } = useTranslation('scheduling');
+  const edit = useContext(ScheduleCardEdit);
+  if (!edit?.canEdit(appointment)) return null;
+  return (
+    <Tooltip label={t('card.edit')} side="top">
+      <button
+        type="button"
+        className="schedule-card-edit"
+        aria-label={t('card.edit')}
+        onMouseDown={keepToButton}
+        onPointerDown={keepToButton}
+        onTouchStart={keepToButton}
+        onKeyDown={keepToButton}
+        onClick={(event) => {
+          event.stopPropagation();
+          edit.onEdit(appointment);
+        }}
+      >
+        <svg
+          aria-hidden
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinejoin="round"
+        >
+          <path d="M11.2 2.6a1.6 1.6 0 0 1 2.2 2.2L5.6 12.6 2.6 13.4l.8-3z" />
+        </svg>
+      </button>
+    </Tooltip>
+  );
+}
+
+/** A cancelled card (ADR-0075): a strip at the column's end, so the slot beside it stays bookable. */
+export function ScheduleStripCard({
+  appointment,
+  timeZone,
+  locale,
+}: {
+  appointment: Appointment;
+  timeZone: string;
+  locale: string;
+}) {
+  const { t } = useTranslation('scheduling');
+  const label = t('card.cancelled', {
+    name: appointment.patient.fullName,
+    time: formatTime(appointment.startsAt, { timeZone, locale }),
+  });
+  return (
+    <Tooltip label={label} side="top">
+      <span className="schedule-strip" data-appointment={appointment.id} aria-label={label}>
+        <span className="schedule-strip-initials">{initials(appointment.patient.fullName)}</span>
+      </span>
+    </Tooltip>
+  );
+}
 
 /**
  * A calendar card (the design's): the dentist is its edge and tint, the status stays quiet unless it
@@ -65,6 +133,7 @@ export function ScheduleCard({
       {(week ? minutes >= 60 && lanes === 1 : minutes >= 45) ? (
         <span className="schedule-card-reason">{appointment.reason}</span>
       ) : null}
+      <EditButton appointment={appointment} />
     </span>
   );
 }
