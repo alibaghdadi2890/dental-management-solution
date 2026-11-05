@@ -466,6 +466,196 @@ describe('scheduling: appointments and follow-ups (feature 14)', () => {
     });
   });
 
+  describe('restore and edit (ADR-0075)', () => {
+    const cancel = (id: string) =>
+      post<Appointment>(desk.agent, `appointments/${id}/cancel`, { reason: 'Travelling' });
+    const restore = (id: string, body: object = {}) =>
+      desk.agent.post(`/api/v1/scheduling/appointments/${id}/restore`).send(body);
+    const edit = (agent: TestAgent, id: string, body: object, key = newId()) =>
+      agent.patch(`/api/v1/scheduling/appointments/${id}`).set('Idempotency-Key', key).send(body);
+    const formOf = (row: Appointment) => ({
+      dentistId: row.dentistId,
+      startsAt: row.startsAt,
+      durationMin: (Date.parse(row.endsAt) - Date.parse(row.startsAt)) / 60_000,
+      reason: row.reason,
+      visitType: row.visitType,
+      roomId: row.roomAuto ? 'auto' : row.roomId,
+      confirmed: row.status === 'confirmed',
+      override: true,
+    });
+
+    it('restores the same row to the status it had, and audits it', async () => {
+      const patient = await newPatient();
+      const day = freshDay();
+      const confirmed = await book(patient.id, at('10:00', day), { confirmed: true });
+      const unconfirmed = await book((await newPatient()).id, at('11:00', day));
+      await cancel(confirmed.id);
+      await cancel(unconfirmed.id);
+      const back = await ok<Appointment>(restore(confirmed.id));
+      expect(back).toMatchObject({ id: confirmed.id, status: 'confirmed', cancelReason: null });
+      expect((await ok<Appointment>(restore(unconfirmed.id))).status).toBe('booked');
+      const page = await ok<AuditPage>(
+        owner.get(`/api/v1/audit?area=schedule&patientId=${patient.id}`),
+      );
+      expect(page.items.map((item) => item.action)).toContain('appointment.restore');
+      expect(await problem(restore(confirmed.id))).toMatchObject({
+        status: 409,
+        code: 'appointment.action_unavailable',
+      });
+    });
+
+    it('refuses once the start has passed', async () => {
+      const booked = await book((await newPatient()).id, at('15:00'));
+      await cancel(booked.id);
+      testApp.clock.set(new Date('2026-06-15T12:30:00Z'));
+      expect(await problem(restore(booked.id))).toMatchObject({
+        status: 409,
+        code: 'appointment.action_unavailable',
+      });
+    });
+
+    it('chooses an Auto room again and refuses a room picked by hand that is taken', async () => {
+      const day = freshDay();
+      const auto = await book((await newPatient()).id, at('10:00', day));
+      const fixed = await book((await newPatient()).id, at('12:00', day), {
+        roomId: clinic.room.id,
+      });
+      await cancel(auto.id);
+      await cancel(fixed.id);
+      const taken = { roomId: clinic.room.id, dentistId: leeId };
+      await book((await newPatient()).id, at('10:00', day), taken);
+      await book((await newPatient()).id, at('12:00', day), taken);
+      expect((await ok<Appointment>(restore(auto.id))).roomId).toBe(clinic.spareRoom.id);
+      expect(await problem(restore(fixed.id))).toMatchObject({
+        status: 409,
+        code: 'appointment.conflict',
+      });
+      expect((await appointment(fixed.id)).status).toBe('cancelled');
+    });
+
+    it('needs the override for a warning, and keeps a colleague to their column', async () => {
+      const day = freshDay();
+      const booked = await book((await newPatient()).id, at('10:00', day));
+      await cancel(booked.id);
+      await book((await newPatient()).id, at('10:00', day), { roomId: clinic.spareRoom.id });
+      expect(await problem(restore(booked.id))).toMatchObject({
+        status: 409,
+        code: 'appointment.conflict',
+      });
+      const denied = await lee.agent
+        .post(`/api/v1/scheduling/appointments/${booked.id}/restore`)
+        .send({ override: true });
+      expect(denied.status).toBe(403);
+      const back = await ok<Appointment>(restore(booked.id, { override: true }));
+      expect(back.overridden).toContain('dentist');
+    });
+
+    it('edits in place: reason, type, duration, room, and confirming', async () => {
+      const booked = await book((await newPatient()).id, at('10:00', freshDay()));
+      const edited = await ok<Appointment>(
+        edit(desk.agent, booked.id, {
+          ...formOf(booked),
+          reason: 'Crown fitting',
+          visitType: 'treatment',
+          durationMin: 45,
+          roomId: clinic.spareRoom.id,
+          confirmed: true,
+        }),
+      );
+      expect(edited).toMatchObject({
+        id: booked.id,
+        status: 'confirmed',
+        reason: 'Crown fitting',
+        visitType: 'treatment',
+        roomId: clinic.spareRoom.id,
+        roomAuto: false,
+      });
+      expect(Date.parse(edited.endsAt) - Date.parse(edited.startsAt)).toBe(45 * 60_000);
+      const again = await ok<Appointment>(edit(desk.agent, booked.id, formOf(edited)));
+      expect(again.updatedAt).toBe(edited.updatedAt);
+    });
+
+    it('keeps an Auto room in place while it is free', async () => {
+      const day = freshDay();
+      const other = await book((await newPatient()).id, at('10:00', day), {
+        roomId: clinic.room.id,
+        dentistId: leeId,
+      });
+      const auto = await book((await newPatient()).id, at('10:00', day));
+      expect(auto.roomId).toBe(clinic.spareRoom.id);
+      await cancel(other.id);
+      const edited = await ok<Appointment>(
+        edit(desk.agent, auto.id, { ...formOf(auto), reason: 'Review' }),
+      );
+      expect(edited).toMatchObject({ roomId: clinic.spareRoom.id, roomAuto: true });
+    });
+
+    it('edits in place without the override it was booked through, and keeps no room', async () => {
+      const day = freshDay();
+      await book((await newPatient()).id, at('10:00', day), { roomId: clinic.room.id });
+      const overlap = await book((await newPatient()).id, at('10:00', day), {
+        roomId: clinic.spareRoom.id,
+      });
+      expect(overlap.overridden).toContain('dentist');
+      const reason = { ...formOf(overlap), reason: 'Review', override: false };
+      expect((await ok<Appointment>(edit(reyes.agent, overlap.id, reason))).reason).toBe('Review');
+      expect(
+        await problem(edit(reyes.agent, overlap.id, { ...reason, durationMin: 45 })),
+      ).toMatchObject({ status: 409, code: 'appointment.conflict' });
+
+      await post(desk.agent, `appointments/${overlap.id}/room`, { roomId: null });
+      const kept = await ok<Appointment>(
+        edit(desk.agent, overlap.id, { ...reason, roomId: 'none', reason: 'Filling' }),
+      );
+      expect(kept).toMatchObject({ roomId: null, roomAuto: false, reason: 'Filling' });
+    });
+
+    it('moves on a new start or dentist: a new row in the lineage, with the form', async () => {
+      const first = await book((await newPatient()).id, at('10:00', freshDay()), {
+        confirmed: true,
+      });
+      const body = {
+        ...formOf(first),
+        startsAt: at('11:00', freshDay()),
+        dentistId: leeId,
+        reason: 'Extraction',
+        confirmed: false,
+      };
+      const key = newId();
+      const moved = await ok<Appointment>(edit(desk.agent, first.id, body, key));
+      expect(moved).toMatchObject({
+        status: 'booked',
+        dentistName: 'Dr. Lee',
+        reason: 'Extraction',
+      });
+      expect(moved.id).not.toBe(first.id);
+      expect(moved.lineage.moves).toBe(1);
+      expect((await appointment(first.id)).status).toBe('rescheduled');
+      expect((await ok<Appointment>(edit(desk.agent, first.id, body, key))).id).toBe(moved.id);
+      expect(
+        await problem(edit(desk.agent, first.id, { ...body, reason: 'Other' }, key)),
+      ).toMatchObject({ status: 409, code: 'appointment.idempotency_mismatch' });
+    });
+
+    it('refuses what has arrived, the past, and a column the caller cannot write', async () => {
+      const arrived = await book((await newPatient()).id, at('15:00'));
+      await post(desk.agent, `appointments/${arrived.id}/check-in`);
+      expect(
+        await problem(edit(desk.agent, arrived.id, { ...formOf(arrived), reason: 'Other' })),
+      ).toMatchObject({ status: 409, code: 'appointment.action_unavailable' });
+      const later = await book((await newPatient()).id, at('15:30'));
+      expect(
+        await problem(edit(desk.agent, later.id, { ...formOf(later), startsAt: at('08:00') })),
+      ).toMatchObject({ code: 'appointment.in_past' });
+      const theirs = await book((await newPatient()).id, at('10:00', freshDay()), {
+        dentistId: leeId,
+      });
+      const edited = { ...formOf(theirs), reason: 'Review' };
+      expect((await edit(reyes.agent, theirs.id, edited)).status).toBe(403);
+      expect((await edit(desk.agent, theirs.id, edited)).status).toBe(200);
+    });
+  });
+
   describe('slots', () => {
     const slotsOf = (days: SlotDay[]): Slot[] => days.flatMap((day) => day.slots);
     const clock = (slot: Slot) =>
@@ -783,6 +973,25 @@ describe('scheduling: appointments and follow-ups (feature 14)', () => {
       expect(reopened.expiresOn).toBe('2026-09-19');
       expect((await worklist()).map((item) => item.id)).toContain(reopened.id);
       expect((await appointment(booked.id)).cancelReason).toBe('Travelling');
+    });
+
+    it('takes it back on restore while it is on the list, else drops the link (ADR-0075)', async () => {
+      const patient = await newPatient();
+      await finishVisit(patient.id, NEXT);
+      const { followUp, booked } = await bookFollowUp(patient.id);
+      await post(desk.agent, `appointments/${booked.id}/cancel`);
+      const back = await post<Appointment>(desk.agent, `appointments/${booked.id}/restore`);
+      expect(back.followUp?.id).toBe(followUp.id);
+      expect(await followUpOf(patient.id)).toMatchObject({
+        status: 'booked',
+        appointmentId: booked.id,
+      });
+
+      await post(desk.agent, `appointments/${booked.id}/cancel`);
+      const other = await book(patient.id, at('12:00', freshDay()), { followUpId: followUp.id });
+      const restored = await post<Appointment>(desk.agent, `appointments/${booked.id}/restore`);
+      expect(restored.followUp).toBeNull();
+      expect((await followUpOf(patient.id)).appointmentId).toBe(other.id);
     });
 
     it('marks it done when its appointment completes', async () => {

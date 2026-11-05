@@ -13,6 +13,7 @@ describe('AlertsSubscriber', () => {
       'AppointmentCancelled',
       'AppointmentCheckInUndone',
       'AppointmentCheckedIn',
+      'AppointmentRestored',
       'VisitCompleted',
       'VisitDiscarded',
       'VisitLinkedToAppointment',

@@ -8,12 +8,14 @@ import {
   changeAppointmentRoomSchema,
   checkInAppointmentSchema,
   declineFollowUpSchema,
+  editAppointmentSchema,
   followUpListQuerySchema,
   followUpSchema,
   idSchema,
   openingHoursSchema,
   rescheduleAppointmentSchema,
   resizeAppointmentSchema,
+  restoreAppointmentSchema,
   scheduleBranchQuerySchema,
   scheduleResourcesSchema,
   schedulingSettingsSchema,
@@ -21,7 +23,18 @@ import {
   slotQuerySchema,
   todayBoardSchema,
 } from '@dcm/contracts';
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ApiHeader } from '@nestjs/swagger';
 import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
@@ -38,6 +51,8 @@ class BookDto extends createZodDto(bookAppointmentSchema) {}
 class RescheduleDto extends createZodDto(rescheduleAppointmentSchema) {}
 class ResizeDto extends createZodDto(resizeAppointmentSchema) {}
 class CancelDto extends createZodDto(cancelAppointmentSchema) {}
+class RestoreDto extends createZodDto(restoreAppointmentSchema) {}
+class EditDto extends createZodDto(editAppointmentSchema) {}
 class CheckInDto extends createZodDto(checkInAppointmentSchema) {}
 class ChangeRoomDto extends createZodDto(changeAppointmentRoomSchema) {}
 class CheckDto extends createZodDto(appointmentCheckSchema) {}
@@ -96,6 +111,19 @@ export class SchedulingController {
   @ZodResponse({ type: AppointmentDto })
   get(@Param() params: IdParamsDto) {
     return this.appointments.get(params.id);
+  }
+
+  /** The Edit appointment panel (ADR-0075): a move makes a new row, hence the key. */
+  @Patch('appointments/:id')
+  @RequirePermission('appointment:write')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ZodResponse({ type: AppointmentDto })
+  edit(
+    @Param() params: IdParamsDto,
+    @Body() body: EditDto,
+    @Headers('idempotency-key') key: string | undefined,
+  ) {
+    return this.appointments.edit(params.id, body, idempotencyKey(key));
   }
 
   @Post('appointments/:id/reschedule')
@@ -157,6 +185,14 @@ export class SchedulingController {
   @ZodResponse({ type: AppointmentDto })
   cancel(@Param() params: IdParamsDto, @Body() body: CancelDto) {
     return this.appointments.cancel(params.id, body);
+  }
+
+  @Post('appointments/:id/restore')
+  @RequirePermission('appointment:write')
+  @HttpCode(200)
+  @ZodResponse({ type: AppointmentDto })
+  restore(@Param() params: IdParamsDto, @Body() body: RestoreDto) {
+    return this.appointments.restore(params.id, body);
   }
 
   @Post('appointments/:id/no-show')

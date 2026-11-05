@@ -6,6 +6,7 @@ import {
   canConfirm,
   canMarkNoShow,
   canMove,
+  canRestore,
   canWriteAppointment,
   combineProposals,
   followUpDueOn,
@@ -53,7 +54,7 @@ describe('canWriteAppointment', () => {
 });
 
 describe('what the status and time allow', () => {
-  const at = (status: 'booked' | 'confirmed' | 'checked_in', localDate: string) => ({
+  const at = (status: 'booked' | 'confirmed' | 'checked_in' | 'cancelled', localDate: string) => ({
     status,
     localDate,
     startsAt: `${localDate}T08:00:00.000Z`,
@@ -84,6 +85,12 @@ describe('what the status and time allow', () => {
     expect(canCancel(at('booked', '2026-10-01'))).toBe(true);
     expect(canCancel(at('confirmed', '2027-01-01'))).toBe(true);
     expect(canCancel(at('checked_in', today))).toBe(false);
+  });
+
+  it('restores a cancelled appointment while its start is ahead', () => {
+    expect(canRestore(at('cancelled', today), new Date('2026-10-30T07:59:00Z'))).toBe(true);
+    expect(canRestore(at('cancelled', today), new Date('2026-10-30T08:00:00Z'))).toBe(false);
+    expect(canRestore(at('booked', today), new Date('2026-10-30T07:00:00Z'))).toBe(false);
   });
 });
 

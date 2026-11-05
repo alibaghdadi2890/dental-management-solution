@@ -203,6 +203,17 @@ export class FollowUpsService {
     await this.events.publish(event);
   }
 
+  /**
+   * A restored appointment takes its follow-up back when it is still on the list (ADR-0075).
+   * Returns false when someone booked, declined or finished it since: the link is dropped.
+   */
+  async relink(id: string, appointmentId: string): Promise<boolean> {
+    const followUp = await this.followUps.lock(id);
+    if (followUp.status !== 'awaiting') return false;
+    await this.markBooked(id, appointmentId);
+    return true;
+  }
+
   /** Cancel and no-show put it back on the list, with a fresh window (G6, G7). */
   async reopen(id: string): Promise<void> {
     const before = await this.followUps.lock(id);

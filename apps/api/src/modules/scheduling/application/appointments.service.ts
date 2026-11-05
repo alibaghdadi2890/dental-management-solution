@@ -10,16 +10,19 @@ import {
   canConfirm,
   canMarkNoShow,
   canMove,
+  canRestore,
   canWriteAppointment,
   isActiveAppointment,
   type CancelAppointment,
   type ChangeAppointmentRoom,
   type CheckInAppointment,
   type ConflictKind,
+  type EditAppointment,
   type NextAppointmentPayload,
   type OpeningDay,
   type RescheduleAppointment,
   type ResizeAppointment,
+  type RestoreAppointment,
   type ScheduleResources,
   SLOT_SEARCH_MAX_DAYS,
   type SlotDay,
@@ -73,9 +76,11 @@ import {
   APPOINTMENT_CHECKED_IN,
   APPOINTMENT_COMPLETED,
   APPOINTMENT_CONFIRMED,
+  APPOINTMENT_EDITED,
   APPOINTMENT_MARKED_NO_SHOW,
   APPOINTMENT_RESCHEDULED,
   APPOINTMENT_RESIZED,
+  APPOINTMENT_RESTORED,
   APPOINTMENT_ROOM_CHANGED,
   APPOINTMENT_STARTED,
   type AppointmentBooked,
@@ -84,9 +89,12 @@ import {
   type AppointmentCheckInUndone,
   type AppointmentCompleted,
   type AppointmentConfirmed,
+  type AppointmentEdited,
+  type AppointmentEditedField,
   type AppointmentMarkedNoShow,
   type AppointmentRescheduled,
   type AppointmentResized,
+  type AppointmentRestored,
   type AppointmentRoomChanged,
   type AppointmentStarted,
 } from '../events/scheduling-events';
@@ -114,6 +122,18 @@ interface PlacementRequest {
   span: Interval;
   roomChoice: string;
   ignoreAppointmentId?: string | undefined;
+}
+
+/** What a move writes on the new row: from `reschedule`, the old row's; from `edit`, the panel's. */
+interface MoveValues {
+  dentistId: string;
+  span: Interval;
+  placement: Placement;
+  reason: string;
+  visitType: StoredAppointment['visitType'];
+  confirmed: boolean;
+  overridden: ConflictKind[];
+  idempotency: { key: string; hash: string } | null;
 }
 
 const isWaiting = (row: StoredAppointment) => row.status === 'booked' || row.status === 'confirmed';
@@ -436,43 +456,81 @@ export class AppointmentsService {
           ignoreAppointmentId: before.id,
         });
         const overridden = this.assertAllowed(placement.conflicts, input.override);
-        const userId = this.context.requireUserId();
-        await this.appointments.update(before.id, {
-          status: 'rescheduled',
-          closedBy: userId,
-          closedAt: this.clock.now(),
-        });
-        const row = await this.appointments.insert({
-          branchId: before.branchId,
-          patientId: before.patientId,
+        const row = await this.moveRow(before, {
           dentistId,
-          roomId: placement.pick.room?.id ?? null,
-          roomAuto: placement.roomAuto,
-          startsAt: span.start,
-          endsAt: span.end,
-          status: 'booked',
+          span,
+          placement,
           reason: before.reason,
           visitType: before.visitType,
-          planIds: before.planIds,
-          followUpId: before.followUpId,
-          sourceVisitId: before.sourceVisitId,
-          lineageId: before.lineageId,
+          confirmed: false,
           overridden,
-          bookedBy: userId,
-          idempotencyKey: idempotency?.key ?? null,
-          idempotencyHash: idempotency?.hash ?? null,
+          idempotency,
         });
-        await this.record('appointment.reschedule', row, {
-          before: this.snapshot(before),
-          after: this.snapshot(row),
-        });
-        const event: AppointmentRescheduled = this.events.create(APPOINTMENT_RESCHEDULED, {
-          appointmentId: row.id,
-          fromAppointmentId: before.id,
-          patientId: row.patientId,
-          overridden,
-        });
-        await this.events.publish(event);
+        return this.presenter.present(row);
+      }),
+    );
+  }
+
+  /**
+   * The Edit appointment panel (ADR-0075). The same start and dentist change the row in place; another
+   * start or dentist is a move, a new row in the lineage, as `reschedule`. Only the move creates a row,
+   * so only the move keeps the key: an edit in place repeated sets the same values again.
+   */
+  edit(id: string, input: EditAppointment, key?: string): Promise<Appointment> {
+    this.context.requirePermission('appointment:write');
+    const idempotency = idempotent(key, { id, ...input });
+    return this.translatingRaces(input.roomId === 'auto', () =>
+      this.tenantDb.run(async () => {
+        const first = await this.replay(idempotency);
+        if (first) return first;
+        const current = await this.appointments.byId(id);
+        if (!current) throw new AppointmentNotFoundError(id);
+        await this.patients.lockForBooking(current.patientId);
+        const before = await this.appointments.lock(id);
+        this.assertColumn(before.dentistId);
+        this.assertColumn(input.dentistId);
+        const today = await this.today();
+        if (!canMove(this.momentOf(before, today.timeZone), today.date)) {
+          throw new AppointmentActionUnavailableError('edit');
+        }
+        const start = new Date(input.startsAt);
+        const moved =
+          start.getTime() !== before.startsAt.getTime() || input.dentistId !== before.dentistId;
+        if (moved && start < this.clock.now()) throw new AppointmentInPastError();
+        const dentist = await this.dentistOf(before.branchId, input.dentistId);
+        const span = { start, end: plusMinutes(start, input.durationMin) };
+        const request = {
+          branchId: before.branchId,
+          dentist,
+          patientId: before.patientId,
+          span,
+          roomChoice: input.roomId,
+          ignoreAppointmentId: before.id,
+        };
+        // Left on Auto in place, it keeps the room it was given while that room is active and free.
+        const keepsRoom =
+          !moved &&
+          input.roomId === 'auto' &&
+          before.roomAuto &&
+          before.roomId !== null &&
+          (await this.activeRooms(before.branchId)).some((room) => room.id === before.roomId);
+        let placement = await this.place(
+          keepsRoom ? { ...request, roomChoice: before.roomId ?? 'auto' } : request,
+        );
+        if (keepsRoom) {
+          placement = placement.conflicts.some((conflict) => conflict.kind === 'room')
+            ? await this.place(request)
+            : { ...placement, roomAuto: true };
+        }
+        // The same time: its warnings were passed when it was booked, only a room clash is new.
+        const sameSpan = !moved && span.end.getTime() === before.endsAt.getTime();
+        const overridden = sameSpan
+          ? this.assertAllowed(hardConflicts(placement.conflicts), false)
+          : this.assertAllowed(placement.conflicts, input.override);
+        const values = { ...input, span, placement, overridden };
+        const row = moved
+          ? await this.moveRow(before, { ...values, idempotency })
+          : await this.editInPlace(before, values);
         return this.presenter.present(row);
       }),
     );
@@ -631,6 +689,62 @@ export class AppointmentsService {
       }
       return this.cancelRow(before, input.reason);
     });
+  }
+
+  /**
+   * ADR-0075: a cancel undone on the same row, while its start is ahead. It is placed as a move to the
+   * same time would be: an Auto room is chosen again, a room picked by hand must still be free. Its
+   * follow-up comes back when it is still on the list; otherwise the link is dropped.
+   */
+  restore(id: string, input: RestoreAppointment): Promise<Appointment> {
+    this.context.requirePermission('appointment:write');
+    // A race on the room runs it again: Auto chooses anew, a room picked by hand then refuses.
+    return this.translatingRaces(true, () =>
+      this.tenantDb.run(async () => {
+        const current = await this.appointments.byId(id);
+        if (!current) throw new AppointmentNotFoundError(id);
+        await this.patients.lockForBooking(current.patientId);
+        const before = await this.appointments.lock(id);
+        this.assertColumn(before.dentistId);
+        if (!canRestore(this.momentOf(before, 'UTC'), this.clock.now())) {
+          throw new AppointmentActionUnavailableError('restore');
+        }
+        const status = before.confirmedAt ? 'confirmed' : 'booked';
+        assertTransition(before.status, status);
+        const placement = await this.place({
+          branchId: before.branchId,
+          dentist: await this.dentistOf(before.branchId, before.dentistId),
+          patientId: before.patientId,
+          span: { start: before.startsAt, end: before.endsAt },
+          roomChoice: before.roomAuto ? 'auto' : (before.roomId ?? 'none'),
+          ignoreAppointmentId: before.id,
+        });
+        const overridden = this.assertAllowed(placement.conflicts, input.override);
+        const keepsFollowUp = before.followUpId
+          ? await this.followUps.relink(before.followUpId, before.id)
+          : false;
+        const row = await this.appointments.update(id, {
+          status,
+          roomId: placement.pick.room?.id ?? null,
+          cancelReason: null,
+          closedBy: null,
+          closedAt: null,
+          overridden: [...new Set([...before.overridden, ...overridden])],
+          ...(before.followUpId && !keepsFollowUp ? { followUpId: null } : {}),
+        });
+        await this.record('appointment.restore', row, {
+          before: { status: before.status, cancelReason: before.cancelReason },
+          after: { status: row.status, roomId: row.roomId },
+        });
+        const event: AppointmentRestored = this.events.create(APPOINTMENT_RESTORED, {
+          appointmentId: id,
+          patientId: row.patientId,
+          overridden,
+        });
+        await this.events.publish(event);
+        return this.presenter.present(row);
+      }),
+    );
   }
 
   markNoShow(id: string): Promise<Appointment> {
@@ -826,6 +940,98 @@ export class AppointmentsService {
     return row;
   }
 
+  /** A move (CLAUDE.md §8): the row closes as `rescheduled`, a new one in its lineage takes over. */
+  private async moveRow(before: StoredAppointment, values: MoveValues): Promise<StoredAppointment> {
+    const { placement, span, overridden, idempotency } = values;
+    const userId = this.context.requireUserId();
+    await this.appointments.update(before.id, {
+      status: 'rescheduled',
+      closedBy: userId,
+      closedAt: this.clock.now(),
+    });
+    const row = await this.appointments.insert({
+      branchId: before.branchId,
+      patientId: before.patientId,
+      dentistId: values.dentistId,
+      roomId: placement.pick.room?.id ?? null,
+      roomAuto: placement.roomAuto,
+      startsAt: span.start,
+      endsAt: span.end,
+      status: values.confirmed ? 'confirmed' : 'booked',
+      reason: values.reason,
+      visitType: values.visitType,
+      planIds: before.planIds,
+      followUpId: before.followUpId,
+      sourceVisitId: before.sourceVisitId,
+      lineageId: before.lineageId,
+      overridden,
+      bookedBy: userId,
+      confirmedBy: values.confirmed ? userId : null,
+      confirmedAt: values.confirmed ? this.clock.now() : null,
+      idempotencyKey: idempotency?.key ?? null,
+      idempotencyHash: idempotency?.hash ?? null,
+    });
+    await this.record('appointment.reschedule', row, {
+      before: this.snapshot(before),
+      after: this.snapshot(row),
+    });
+    const event: AppointmentRescheduled = this.events.create(APPOINTMENT_RESCHEDULED, {
+      appointmentId: row.id,
+      fromAppointmentId: before.id,
+      patientId: row.patientId,
+      overridden,
+    });
+    await this.events.publish(event);
+    return row;
+  }
+
+  /** The panel's fields on the same row; nothing changed, nothing is written. */
+  private async editInPlace(
+    before: StoredAppointment,
+    values: Omit<MoveValues, 'idempotency' | 'dentistId'>,
+  ): Promise<StoredAppointment> {
+    const { placement, span, overridden } = values;
+    const roomId = placement.pick.room?.id ?? null;
+    const confirming = values.confirmed && before.status === 'booked';
+    const changed: AppointmentEditedField[] = [
+      ...(values.reason !== before.reason ? (['reason'] as const) : []),
+      ...(values.visitType !== before.visitType ? (['visitType'] as const) : []),
+      ...(span.end.getTime() !== before.endsAt.getTime() ? (['duration'] as const) : []),
+      ...(roomId !== before.roomId || placement.roomAuto !== before.roomAuto
+        ? (['room'] as const)
+        : []),
+      ...(confirming ? (['confirmed'] as const) : []),
+    ];
+    if (changed.length === 0) return before;
+    const row = await this.appointments.update(before.id, {
+      reason: values.reason,
+      visitType: values.visitType,
+      endsAt: span.end,
+      roomId,
+      roomAuto: placement.roomAuto,
+      overridden: [...new Set([...before.overridden, ...overridden])],
+      ...(confirming
+        ? {
+            status: 'confirmed' as const,
+            confirmedBy: this.context.requireUserId(),
+            confirmedAt: this.clock.now(),
+          }
+        : {}),
+    });
+    await this.record('appointment.edit', row, {
+      before: this.snapshot(before),
+      after: this.snapshot(row),
+    });
+    const event: AppointmentEdited = this.events.create(APPOINTMENT_EDITED, {
+      appointmentId: row.id,
+      patientId: row.patientId,
+      changed,
+      overridden,
+    });
+    await this.events.publish(event);
+    return row;
+  }
+
   /** Where a span would go: the room, and every conflict a save would meet. */
   private async place(request: PlacementRequest): Promise<Placement> {
     const { branchId, dentist, patientId, span, roomChoice, ignoreAppointmentId } = request;
@@ -1001,6 +1207,7 @@ export class AppointmentsService {
       roomId: row.roomId,
       status: row.status,
       reason: row.reason,
+      visitType: row.visitType,
       overridden: row.overridden,
     };
   }

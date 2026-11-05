@@ -33,6 +33,8 @@ export type AppointmentPatch = Partial<
     | 'closedBy'
     | 'closedAt'
     | 'cancelReason'
+    | 'reason'
+    | 'visitType'
   >
 >;
 

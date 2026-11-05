@@ -5,7 +5,9 @@ export {
   APPOINTMENT_CANCELLED,
   APPOINTMENT_CHECK_IN_UNDONE,
   APPOINTMENT_CHECKED_IN,
+  APPOINTMENT_RESTORED,
   type AppointmentCancelled,
   type AppointmentCheckInUndone,
   type AppointmentCheckedIn,
+  type AppointmentRestored,
 } from './events/scheduling-events';

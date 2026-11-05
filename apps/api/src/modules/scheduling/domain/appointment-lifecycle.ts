@@ -4,7 +4,8 @@ import { InvalidAppointmentTransitionError } from './scheduling-errors';
 /**
  * The appointment state machine (CLAUDE.md §8, ADR-0066). `in_room` from `booked` or `confirmed` is
  * the implicit check-in of a visit started from the appointment; `checked_in → confirmed` is Undo
- * check-in; `in_room → checked_in` is a discarded visit.
+ * check-in; `in_room → checked_in` is a discarded visit; `cancelled → booked | confirmed` is Restore
+ * (ADR-0075).
  */
 const TRANSITIONS: Readonly<Record<AppointmentStatus, readonly AppointmentStatus[]>> = {
   booked: ['confirmed', 'checked_in', 'in_room', 'cancelled', 'no_show', 'rescheduled'],
@@ -12,7 +13,7 @@ const TRANSITIONS: Readonly<Record<AppointmentStatus, readonly AppointmentStatus
   checked_in: ['confirmed', 'in_room'],
   in_room: ['checked_in', 'completed'],
   completed: [],
-  cancelled: [],
+  cancelled: ['booked', 'confirmed'],
   no_show: [],
   rescheduled: [],
 };

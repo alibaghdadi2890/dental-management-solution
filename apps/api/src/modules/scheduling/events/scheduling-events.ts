@@ -50,6 +50,22 @@ export type AppointmentRoomChanged = DomainEvent<
 export const APPOINTMENT_CANCELLED = 'AppointmentCancelled';
 export type AppointmentCancelled = DomainEvent<typeof APPOINTMENT_CANCELLED, AppointmentFacts>;
 
+/** A cancel undone: the same row waits again (ADR-0075). */
+export const APPOINTMENT_RESTORED = 'AppointmentRestored';
+export type AppointmentRestored = DomainEvent<
+  typeof APPOINTMENT_RESTORED,
+  AppointmentFacts & { overridden: ConflictKind[] }
+>;
+
+/** Edited in place from the Edit appointment panel; a move there is `AppointmentRescheduled`. */
+export const APPOINTMENT_EDITED = 'AppointmentEdited';
+export type AppointmentEdited = DomainEvent<
+  typeof APPOINTMENT_EDITED,
+  AppointmentFacts & { changed: AppointmentEditedField[]; overridden: ConflictKind[] }
+>;
+
+export type AppointmentEditedField = 'reason' | 'visitType' | 'duration' | 'room' | 'confirmed';
+
 export const APPOINTMENT_MARKED_NO_SHOW = 'AppointmentMarkedNoShow';
 export type AppointmentMarkedNoShow = DomainEvent<
   typeof APPOINTMENT_MARKED_NO_SHOW,

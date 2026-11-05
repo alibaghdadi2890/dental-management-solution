@@ -19,6 +19,8 @@ const LEGAL: readonly (readonly [AppointmentStatus, AppointmentStatus])[] = [
   ['checked_in', 'in_room'],
   ['in_room', 'checked_in'],
   ['in_room', 'completed'],
+  ['cancelled', 'booked'],
+  ['cancelled', 'confirmed'],
 ];
 
 describe('appointment lifecycle', () => {

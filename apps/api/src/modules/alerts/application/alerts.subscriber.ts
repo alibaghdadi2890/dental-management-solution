@@ -13,6 +13,7 @@ import {
   APPOINTMENT_CANCELLED,
   APPOINTMENT_CHECK_IN_UNDONE,
   APPOINTMENT_CHECKED_IN,
+  APPOINTMENT_RESTORED,
 } from '../../scheduling';
 import { AlertHub } from './alert-hub';
 
@@ -27,6 +28,7 @@ export class AlertsSubscriber {
   @OnDomainEvent(APPOINTMENT_CHECKED_IN)
   @OnDomainEvent(APPOINTMENT_CHECK_IN_UNDONE)
   @OnDomainEvent(APPOINTMENT_CANCELLED)
+  @OnDomainEvent(APPOINTMENT_RESTORED)
   @OnDomainEvent(VISIT_STARTED)
   @OnDomainEvent(VISIT_LINKED_TO_APPOINTMENT)
   @OnDomainEvent(VISIT_PAUSED)

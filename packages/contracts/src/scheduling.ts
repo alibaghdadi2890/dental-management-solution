@@ -207,6 +207,8 @@ export const appointmentRangeQuerySchema = z.object({
 export type AppointmentRangeQuery = z.infer<typeof appointmentRangeQuerySchema>;
 
 const roomChoiceSchema = z.union([idSchema, z.literal('auto')]);
+/** Also `none`: an appointment left without a room keeps none (ADR-0075). */
+const keptRoomChoiceSchema = z.union([idSchema, z.literal('auto'), z.literal('none')]);
 
 export const bookAppointmentSchema = z.object({
   branchId: idSchema,
@@ -250,6 +252,30 @@ export type ResizeAppointmentRequest = z.input<typeof resizeAppointmentSchema>;
 export const cancelAppointmentSchema = z.object({ reason: optionalText(500) });
 export type CancelAppointment = z.infer<typeof cancelAppointmentSchema>;
 
+/** Undoes a cancel (ADR-0075): the warnings a move would meet need the override. */
+export const restoreAppointmentSchema = z.object({ override: z.boolean().default(false) });
+export type RestoreAppointment = z.infer<typeof restoreAppointmentSchema>;
+export type RestoreAppointmentRequest = z.input<typeof restoreAppointmentSchema>;
+
+/**
+ * The Edit appointment panel (ADR-0075): the whole form. The same start and dentist change the row in
+ * place; another start or dentist is a reschedule, a new row in the lineage.
+ */
+export const editAppointmentSchema = z.object({
+  dentistId: idSchema,
+  startsAt: isoDateTimeSchema,
+  durationMin: durationSchema,
+  reason: reasonTextSchema,
+  visitType: visitTypeSchema.nullish().transform((value) => value ?? null),
+  /** `none` keeps it without a room, to be given one at check-in. */
+  roomId: keptRoomChoiceSchema.default('auto'),
+  /** *Confirmed with patient*: confirms in place; a moved appointment is unconfirmed without it. */
+  confirmed: z.boolean().default(false),
+  override: z.boolean().default(false),
+});
+export type EditAppointment = z.infer<typeof editAppointmentSchema>;
+export type EditAppointmentRequest = z.input<typeof editAppointmentSchema>;
+
 export const checkInAppointmentSchema = z.object({ roomId: idSchema.optional() });
 export type CheckInAppointment = z.infer<typeof checkInAppointmentSchema>;
 
@@ -263,7 +289,7 @@ export const appointmentCheckSchema = z.object({
   patientId: idSchema.optional(),
   startsAt: isoDateTimeSchema,
   durationMin: durationSchema,
-  roomId: roomChoiceSchema.default('auto'),
+  roomId: keptRoomChoiceSchema.default('auto'),
   /** The appointment being moved does not conflict with itself. */
   ignoreAppointmentId: idSchema.optional(),
 });
@@ -533,6 +559,11 @@ export function canMarkNoShow(appointment: AppointmentMoment, now: Date): boolea
 
 export function canCancel(appointment: AppointmentMoment): boolean {
   return isWaitingFor(appointment.status);
+}
+
+/** A cancel is undone while the appointment is still ahead (ADR-0075). */
+export function canRestore(appointment: AppointmentMoment, now: Date): boolean {
+  return appointment.status === 'cancelled' && new Date(appointment.startsAt) > now;
 }
 
 const addDays = (date: string, days: number): string => {
