@@ -262,9 +262,11 @@ Rules:
   warnings that need `appointment:override` (ADR-0067).
 - Appointment lifecycle is an explicit state machine in `domain/`:
   `booked → confirmed → checked_in → in_room → completed`, with `cancelled`, `no_show`,
-  `rescheduled` as terminal branches, plus Undo check-in and a discarded visit going back (ADR-0066).
+  `rescheduled` as terminal branches, plus Undo check-in and a discarded visit going back (ADR-0066),
+  and Restore taking a cancelled one back to `booked` or `confirmed` while it is ahead (ADR-0075).
   Illegal transitions throw. Every transition emits an event. `unresolved` is derived, never stored.
-- Rescheduling creates a new appointment linked by `lineage_id`; history is never rewritten.
+- Rescheduling creates a new appointment linked by `lineage_id`; history is never rewritten. Editing
+  an appointment's start or dentist is a reschedule; its other fields change in place (ADR-0075).
 - Recurring series generate concrete occurrences; a rule is stored for regeneration only (not built).
 - Durations are chosen at booking; a follow-up carries the dentist's expected duration. Per-service
   durations in the catalog are not built.
@@ -333,8 +335,9 @@ Even in phase 1, write application services so they can be exposed as tools late
   and patients per tenant are bounded — thousands, not millions).
 - Idempotency: mutations that clients may retry (booking, payment) accept an `Idempotency-Key`.
   Today: `POST /billing/payments`, `POST /billing/opening-balances`,
-  `POST /billing/patients/:id/adjustments`, `POST /patients`, `POST /scheduling/appointments` and
-  `POST /scheduling/appointments/:id/reschedule` require one (a uuid). The key and
+  `POST /billing/patients/:id/adjustments`, `POST /patients`, `POST /scheduling/appointments`,
+  `PATCH /scheduling/appointments/:id` and `POST /scheduling/appointments/:id/reschedule` require
+  one (a uuid). The key and
   a hash of the request are stored on the row it creates; the same key with the same request
   returns the first result, with another request 409 `…idempotency_mismatch` (ADR-0037).
 

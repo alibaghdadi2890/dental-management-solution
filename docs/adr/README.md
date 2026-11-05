@@ -78,3 +78,4 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0072](0072-completion-carries-the-next-appointment.md)                | Completion carries the next-appointment payload                              | Accepted (amends 0065)               |
 | [0073](0073-arrival-alerts-are-a-tenant-ping-over-sse.md)              | Arrival alerts are a per-tenant ping over in-process SSE                     | Accepted                             |
 | [0074](0074-visit-start.md)                                            | `visit:start`, starting a visit without working in it                        | Accepted (amends feature 14 G10)     |
+| [0075](0075-edit-and-restore-appointments.md)                          | Editing an appointment, and restoring a cancelled one                        | Accepted (amends 0066)               |
