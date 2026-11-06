@@ -84,8 +84,9 @@ export class AuditService {
 
   /**
    * The feed and a resource's trail. A caller sees rows about a visit only within their visit
-   * scope, the money rows (payments, ledger entries) only with `finance:read` (ADR-0055), and
-   * compensation rows only with `compensation:manage` (ADR-0060).
+   * scope, the money rows (payments, ledger entries) only with `finance:read` (ADR-0055),
+   * compensation rows only with `compensation:manage` (ADR-0060), expense rows only with
+   * `expense:read` and payroll rows only with `payroll:read` (ADR-0080).
    */
   async list(query: AuditQuery): Promise<AuditPage> {
     this.context.requirePermission('audit:read');
@@ -95,6 +96,8 @@ export class AuditService {
       visitIdsIn: visitIds === 'all' ? undefined : visitIds,
       withoutMoney: !this.context.hasPermission('finance:read'),
       withoutCompensation: !this.context.hasPermission('compensation:manage'),
+      withoutExpenses: !this.context.hasPermission('expense:read'),
+      withoutPayroll: !this.context.hasPermission('payroll:read'),
       resourceType: query.resourceType,
       resourceId: query.resourceId,
       feed: query.feed,
@@ -120,7 +123,8 @@ export class AuditService {
 
   /**
    * Every clinic's Activity feed for platform admins (ADR-0057), newest first, narrowed to one
-   * clinic when `tenantId` is given; never a clinic's compensation (ADR-0060). Read through `withoutTenant()`: RLS does not apply, so it
+   * clinic when `tenantId` is given; never a clinic's compensation (ADR-0060) or payroll
+   * (ADR-0080). Read through `withoutTenant()`: RLS does not apply, so it
    * checks `platform:admin` itself and is logged as cross-tenant access.
    */
   async listAcrossTenants(query: PlatformAuditQuery): Promise<PlatformAuditPage> {
@@ -129,6 +133,7 @@ export class AuditService {
       this.repository.listAcrossTenants(tx, {
         feed: true,
         withoutCompensation: true,
+        withoutPayroll: true,
         tenantId: query.tenantId,
         area: query.area,
         actorUserId: query.actorUserId,

@@ -28,7 +28,9 @@ import { visitTypeSchema } from './visit-flow.js';
 /** `YYYY-MM`: a calendar month in the tenant time zone. */
 export const monthSchema = z
   .string()
-  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Expected a month as YYYY-MM');
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Expected a month as YYYY-MM')
+  // A floor keeps derived month ranges (fixed expenses, payroll) bounded.
+  .refine((month) => month >= '2000-01', 'Expected a month from 2000 on');
 export type Month = z.infer<typeof monthSchema>;
 
 /** A percentage 0–100 with at most 2 decimals, as a decimal string (never a float). */
@@ -38,11 +40,11 @@ export const percentSchema = z
   .refine((value) => Number(value) <= 100, 'At most 100 %');
 
 const isZero = (amount: string) => /^-?0+(\.0+)?$/.test(amount);
-const nonZeroAmountSchema = decimalAmountSchema.refine(
+export const nonZeroAmountSchema = decimalAmountSchema.refine(
   (amount) => !isZero(amount),
   'Must not be zero',
 );
-const positiveAmountSchema = decimalAmountSchema.refine(
+export const positiveAmountSchema = decimalAmountSchema.refine(
   (amount) => !amount.startsWith('-') && !isZero(amount),
   'Must be greater than zero',
 );

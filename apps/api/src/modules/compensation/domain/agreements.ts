@@ -1,6 +1,6 @@
 import type { AgreementComponent, AgreementPreset, AgreementStatus } from '@dcm/contracts';
 import { EffectiveDateError, NotReversibleError, PeriodClosedError } from './compensation-errors';
-import { dayAfter, dayBefore, monthOf } from './months';
+import { dayAfter, dayBefore, monthOf } from '../../../platform/kernel/months';
 
 /** An agreement as the domain reads it (ADR-0058). */
 export interface AgreementRecord {

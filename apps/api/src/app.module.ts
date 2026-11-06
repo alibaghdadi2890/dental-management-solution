@@ -5,9 +5,11 @@ import { AuthorizationModule } from './modules/authorization';
 import { BillingModule } from './modules/billing';
 import { ClinicalModule } from './modules/clinical';
 import { CompensationModule } from './modules/compensation';
+import { ExpensesModule } from './modules/expenses';
 import { FilesModule } from './modules/files';
 import { ImportsModule } from './modules/imports';
 import { PatientsModule } from './modules/patients';
+import { PayrollModule } from './modules/payroll';
 import { ProvisioningModule } from './modules/provisioning';
 import { SchedulingModule } from './modules/scheduling';
 import { AlertsModule } from './modules/alerts';
@@ -57,6 +59,8 @@ export const DOMAIN_MODULES = [
   SchedulingModule,
   AlertsModule,
   CompensationModule,
+  PayrollModule,
+  ExpensesModule,
   FilesModule,
   ImportsModule,
   ProvisioningModule,

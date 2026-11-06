@@ -6,7 +6,7 @@ import type {
   StatementLine,
 } from '@dcm/contracts';
 import { agreementsOverlapping, statusOf } from '../domain/agreements';
-import { firstDay, lastDay } from '../domain/months';
+import { firstDay, lastDay } from '../../../platform/kernel/months';
 import type { StoredAgreement } from '../persistence/agreements.repository';
 import type { StoredAdjustment, StoredPayout } from '../persistence/money-rows.repository';
 import type { DentistMonth } from './statement-reader';

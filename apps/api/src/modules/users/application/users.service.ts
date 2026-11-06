@@ -2,6 +2,7 @@ import type {
   Permission,
   Practitioner,
   PractitionerQuery,
+  PractitionerType,
   StaffUser,
   StaffUserCreate,
   StaffUserPatch,
@@ -32,6 +33,14 @@ import { STAFF_DEACTIVATED, type StaffDeactivated } from '../events/staff-events
 import { type StaffProfile, StaffRepository } from '../persistence/staff.repository';
 
 const OWNER: SystemRoleKey = 'owner';
+
+/** A staff profile as other modules see it (`staffSummaries`). */
+export interface StaffSummary {
+  profileId: string;
+  displayName: string;
+  practitionerType: PractitionerType;
+  active: boolean;
+}
 
 const distinct = (ids: readonly string[]) => [...new Set(ids)];
 
@@ -100,6 +109,28 @@ export class UsersService {
       const profiles = await this.staff.byProfileIds(distinct(profileIds));
       const { locale } = await this.tenancy.currentTenant();
       return sortByDisplayName(profiles, locale).map(toPractitioner);
+    });
+  }
+
+  /**
+   * Every staff profile of the clinic (or those among `profileIds`), deactivated ones included,
+   * with what `payroll` needs to link one to an employee: the type (a dentist is never linked,
+   * ADR-0077) and the active flag (a notice when a linked user leaves). Not permission-gated: a
+   * building block like `practitionersByProfileIds`; `payroll` gates its own routes.
+   */
+  staffSummaries(profileIds?: readonly string[]): Promise<StaffSummary[]> {
+    return this.tenantDb.run(async () => {
+      const profiles =
+        profileIds === undefined
+          ? await this.staff.list()
+          : await this.staff.byProfileIds(distinct(profileIds));
+      const { locale } = await this.tenancy.currentTenant();
+      return sortByDisplayName(profiles, locale).map((profile) => ({
+        profileId: profile.id,
+        displayName: profile.displayName,
+        practitionerType: profile.practitionerType,
+        active: profile.active,
+      }));
     });
   }
 

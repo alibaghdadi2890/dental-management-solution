@@ -50,7 +50,13 @@ import {
   CompensationNotFoundError,
   NotReversibleError,
 } from '../domain/compensation-errors';
-import { firstDay, lastDay, monthOf, monthsBetween, nextMonth } from '../domain/months';
+import {
+  firstDay,
+  lastDay,
+  monthOf,
+  monthsBetween,
+  nextMonth,
+} from '../../../platform/kernel/months';
 import { assertClosable, assertReopenable } from '../domain/periods';
 import {
   ADJUSTMENT_RECORDED,
@@ -64,6 +70,8 @@ import {
   type MoneyRowEvent,
   PAYOUT_RECORDED,
   PAYOUT_VOIDED,
+  type PayoutRecorded,
+  type PayoutVoided,
   PERIOD_CLOSED,
   PERIOD_REOPENED,
   type PeriodEvent,
@@ -350,7 +358,17 @@ export class CompensationService {
           method: created.method,
         },
       });
-      await this.publishMoneyRow(PAYOUT_RECORDED, created.id, profileId, created.date);
+      const recorded: PayoutRecorded = this.events.create(PAYOUT_RECORDED, {
+        id: created.id,
+        profileId,
+        date: created.date,
+        amount: created.amount,
+        currency: created.currency,
+        method: created.method,
+        reference: created.reference,
+        note: created.note,
+      });
+      await this.events.publish(recorded);
       return toPayout(created);
     });
   }
@@ -389,7 +407,13 @@ export class CompensationService {
         },
         reason: input.reason,
       });
-      await this.publishMoneyRow(PAYOUT_VOIDED, row.id, profileId, row.date);
+      const voided: PayoutVoided = this.events.create(PAYOUT_VOIDED, {
+        id: row.id,
+        profileId,
+        date: row.date,
+        reason: input.reason,
+      });
+      await this.events.publish(voided);
       return toPayout({ ...row, voidedAt: at, voidReason: input.reason });
     });
   }

@@ -116,8 +116,8 @@ export class RequestContext {
   /**
    * The single permission evaluation every layer uses (ADR-0010). System tasks pass; a platform
    * admin in their own request (`actsAsPlatformAdmin`) holds every permission inside a tenant but
-   * the clinic's compensation (`compensation:*`, ADR-0055), and only `platform:admin` outside one
-   * (ADR-0008); everyone else — jobs included, whatever flag they carry — is decided by the set
+   * the clinic's compensation (`compensation:*`, ADR-0055) and payroll (`payroll:*`, ADR-0080),
+   * and only `platform:admin` outside one (ADR-0008); everyone else — jobs included, whatever flag they carry — is decided by the set
    * `authorization` resolved. Deny by default.
    */
   hasPermission(permission: Permission): boolean {
@@ -129,7 +129,7 @@ export class RequestContext {
     }
     if (this.actsAsPlatformAdmin) {
       return this.tenantId !== undefined
-        ? !permission.startsWith('compensation:')
+        ? !permission.startsWith('compensation:') && !permission.startsWith('payroll:')
         : permission === 'platform:admin';
     }
     return this.cls.get('permissions')?.has(permission) ?? false;

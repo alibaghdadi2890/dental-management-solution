@@ -43,6 +43,8 @@ export const CAPABILITY_GROUPS = [
   { key: 'files', permissions: ['file:read', 'file:write', 'file:archive'] },
   { key: 'staff', permissions: ['user:read', 'user:write', 'role:read', 'role:write'] },
   { key: 'compensation', permissions: ['compensation:read', 'compensation:manage'] },
+  { key: 'expenses', permissions: ['expense:read', 'expense:manage'] },
+  { key: 'payroll', permissions: ['payroll:read', 'payroll:manage'] },
   { key: 'activity', permissions: ['audit:read'] },
   { key: 'clinic', permissions: ['tenant:read', 'tenant:write', 'import:run'] },
 ] as const satisfies readonly {
@@ -74,6 +76,8 @@ export const CAPABILITY_IMPLIES: Readonly<
   'payment:refund': ['payment:read'],
   'finance:read': ['payment:read'],
   'compensation:manage': ['compensation:read'],
+  'expense:manage': ['expense:read'],
+  'payroll:manage': ['payroll:read'],
   'user:write': ['user:read'],
   // Giving people access means seeing who they are.
   'role:write': ['role:read', 'user:read'],

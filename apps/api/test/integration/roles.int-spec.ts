@@ -13,10 +13,14 @@ import { createTestApp, type TestApp } from '../support/test-app';
 import { asPlatformAdminIn, createBareTenant } from '../support/tenants';
 
 /** A role as the older migrations left it: 0056 adds the appointment permissions, 0057
- * `visit:start`. */
+ * `visit:start`, 0058 the expense and payroll ones. */
 const before0056 = (key: SystemRoleKey) =>
   systemRole(key).permissions.filter(
-    (permission) => !permission.startsWith('appointment:') && permission !== 'visit:start',
+    (permission) =>
+      !permission.startsWith('appointment:') &&
+      permission !== 'visit:start' &&
+      !permission.startsWith('expense:') &&
+      !permission.startsWith('payroll:'),
   );
 
 describe('roles: system roles, assignments and permission lookup', () => {

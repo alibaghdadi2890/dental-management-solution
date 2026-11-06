@@ -14,7 +14,7 @@ import type {
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { lastDay, monthOf, previousMonth } from '../../src/modules/compensation/domain/months';
+import { lastDay, monthOf, previousMonth } from '../../src/platform/kernel/months';
 import { newId } from '../../src/platform/kernel/id';
 import { localDate } from '../../src/platform/kernel/local-date';
 import { grant, ok, provisionClinic, type StaffMember, type TestClinic } from '../support/clinic';

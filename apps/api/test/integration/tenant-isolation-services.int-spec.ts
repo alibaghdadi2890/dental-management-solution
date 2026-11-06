@@ -6,11 +6,19 @@ import type {
   CompensationStatement,
   ContactLookupItem,
   DiagnosisItem,
+  Employee,
+  EmployeeDetail,
+  Expense,
+  ExpenseCategory,
+  ExpensePage,
+  FixedExpenseDetail,
+  FixedItem,
   OpeningBalanceResult,
   Patient,
   PatientFiles,
   PatientPage,
   Payout,
+  PayrollRun,
   Role,
   Room,
   ServiceItem,
@@ -1248,6 +1256,151 @@ describe('tenant isolation through the public services', () => {
         .body as CompensationStatement;
       expect(statement.payouts.map((row) => [row.id, row.voidedAt])).toEqual([[payout.id, null]]);
     });
+
+    it("expenses (ADR-0076, ADR-0078): B's categories, expenses, fixed expenses and items are not found for A, and unchanged", async () => {
+      const categoriesB = (await ownerB.get('/api/v1/expenses/categories'))
+        .body as ExpenseCategory[];
+      const rent = categoriesB.find((row) => row.key === 'rent');
+      if (!rent) throw new Error('B has no Rent category');
+      const expense = (
+        await ownerB
+          .post('/api/v1/expenses')
+          .set('Idempotency-Key', newId())
+          .send({ spentOn: '2026-01-15', categoryId: rent.id, amount: '300', method: 'cash' })
+      ).body as Expense;
+      const fixed = (
+        await ownerB.post('/api/v1/expenses/fixed').send({
+          name: 'Water',
+          categoryId: rent.id,
+          amount: '20',
+          firstMonth: '2026-01',
+        })
+      ).body as FixedExpenseDetail;
+      const item = fixed.items.at(-1);
+      if (!item) throw new Error('B has no pending item');
+
+      const attempts = [
+        () => ownerA.patch(`/api/v1/expenses/${expense.id}`).send({ amount: '1' }),
+        () => ownerA.post(`/api/v1/expenses/${expense.id}/void`).send({ reason: 'Not ours' }),
+        () => ownerA.patch(`/api/v1/expenses/categories/${rent.id}`).send({ active: false }),
+        () => ownerA.delete(`/api/v1/expenses/categories/${rent.id}`),
+        () =>
+          ownerA
+            .post('/api/v1/expenses')
+            .set('Idempotency-Key', newId())
+            .send({ spentOn: '2026-01-15', categoryId: rent.id, amount: '1', method: 'cash' }),
+        () => ownerA.get(`/api/v1/expenses/fixed/${fixed.id}`),
+        () => ownerA.patch(`/api/v1/expenses/fixed/${fixed.id}`).send({ amount: '1' }),
+        () => ownerA.post(`/api/v1/expenses/fixed/${fixed.id}/pause`),
+        () => ownerA.post(`/api/v1/expenses/pending/${item.id}/skip`).send({}),
+        () => ownerA.post(`/api/v1/expenses/pending/${item.id}/unskip`),
+        () =>
+          ownerA
+            .post('/api/v1/expenses/pending/confirm')
+            .set('Idempotency-Key', newId())
+            .send({
+              items: [
+                {
+                  itemId: item.id,
+                  spentOn: '2026-01-15',
+                  amount: '20',
+                  method: 'cash',
+                  categoryId: rent.id,
+                },
+              ],
+            }),
+      ];
+      for (const [index, attempt] of attempts.entries()) {
+        const response = await attempt();
+        expect(response.status, `attempt ${index}: ${JSON.stringify(response.body)}`).toBe(404);
+      }
+      const listA = (await ownerA.get('/api/v1/expenses?from=2026-01-01&to=2026-12-31'))
+        .body as ExpensePage;
+      expect(listA.items.map((row) => row.id)).not.toContain(expense.id);
+      const pendingA = (await ownerA.get('/api/v1/expenses/pending')).body as FixedItem[];
+      expect(pendingA.map((row) => row.id)).not.toContain(item.id);
+      const categoriesA = (await ownerA.get('/api/v1/expenses/categories'))
+        .body as ExpenseCategory[];
+      expect(categoriesA.map((row) => row.id)).not.toContain(rent.id);
+
+      const listB = (await ownerB.get('/api/v1/expenses?from=2026-01-01&to=2026-12-31'))
+        .body as ExpensePage;
+      expect(listB.items.find((row) => row.id === expense.id)).toMatchObject({
+        amount: '300.00',
+        voidedAt: null,
+      });
+      const pendingB = (await ownerB.get('/api/v1/expenses/pending')).body as FixedItem[];
+      expect(pendingB.find((row) => row.id === item.id)?.status).toBe('pending');
+    });
+
+    it("payroll (ADR-0077–0079): B's employees and their lines are not found for A, and unchanged", async () => {
+      const created = (
+        await ownerB.post('/api/v1/payroll/employees').send({
+          fullName: 'Hidden employee',
+          hireDate: '2026-01-01',
+          payrollFrom: '2026-01',
+          salary: { amount: '700', effectiveMonth: '2026-01' },
+        })
+      ).body as EmployeeDetail;
+      const id = created.employee.id;
+      const line = `/api/v1/payroll/runs/2026-01/lines/${id}`;
+      const attempts = [
+        () => ownerA.get(`/api/v1/payroll/employees/${id}`),
+        () => ownerA.patch(`/api/v1/payroll/employees/${id}`).send({ fullName: 'Renamed' }),
+        () => ownerA.delete(`/api/v1/payroll/employees/${id}`),
+        () =>
+          ownerA
+            .post(`/api/v1/payroll/employees/${id}/salaries`)
+            .send({ amount: '1', effectiveMonth: '2026-02' }),
+        () => ownerA.get(`/api/v1/payroll/employees/${id}/export`),
+        () =>
+          ownerA
+            .put(`${line}/adjustments`)
+            .send({ adjustments: [{ kind: 'bonus', label: 'x', amount: '1' }] }),
+        () => ownerA.post(`${line}/skip`).send({ reason: 'Not ours' }),
+        () => ownerA.post(`${line}/unskip`),
+        () => ownerA.post(`${line}/void`).send({ reason: 'Not ours' }),
+        () =>
+          ownerA
+            .post('/api/v1/payroll/confirm')
+            .set('Idempotency-Key', newId())
+            .send({
+              lines: [
+                {
+                  employeeId: id,
+                  month: '2026-01',
+                  paidOn: '2026-01-31',
+                  method: 'cash',
+                  net: '700',
+                },
+              ],
+            }),
+        () =>
+          ownerA.post('/api/v1/payroll/employees').send({
+            fullName: 'Planted',
+            hireDate: '2026-01-01',
+            payrollFrom: '2026-01',
+            staffProfileId: b.staff.profileId,
+            salary: { amount: '1', effectiveMonth: '2026-01' },
+          }),
+      ];
+      for (const [index, attempt] of attempts.entries()) {
+        const response = await attempt();
+        expect(response.status, `attempt ${index}: ${JSON.stringify(response.body)}`).toBe(404);
+      }
+      const employeesA = (await ownerA.get('/api/v1/payroll/employees')).body as Employee[];
+      expect(employeesA.map((row) => row.id)).not.toContain(id);
+      const runA = (await ownerA.get('/api/v1/payroll/runs/2026-01')).body as PayrollRun;
+      expect(runA.lines.map((row) => row.employeeId)).not.toContain(id);
+
+      const detailB = (await ownerB.get(`/api/v1/payroll/employees/${id}`)).body as EmployeeDetail;
+      expect(detailB.employee.fullName).toBe('Hidden employee');
+      expect(detailB.salaries).toHaveLength(1);
+      expect(detailB.history.find((row) => row.month === '2026-01')).toMatchObject({
+        status: 'pending',
+        adjustments: [],
+      });
+    });
   });
 
   describe('X-Tenant-Id', () => {
@@ -1314,6 +1467,15 @@ describe('tenant isolation through the public services', () => {
       'branch_opening_hours',
       'scheduling_settings',
       'alert_follows',
+      'expense_categories',
+      'expenses',
+      'fixed_expenses',
+      'fixed_expense_items',
+      'employees',
+      'employee_salaries',
+      'payroll_lines',
+      'payroll_adjustments',
+      'payroll_payments',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

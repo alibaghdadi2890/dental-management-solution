@@ -6,7 +6,7 @@ import {
   NotClosedError,
   PreviousPeriodOpenError,
 } from './compensation-errors';
-import { monthOf, nextMonth, previousMonth } from './months';
+import { monthOf, nextMonth, previousMonth } from '../../../platform/kernel/months';
 
 /**
  * Closing and reopening a dentist's months (ADR-0059). Closed months are a prefix of their months:

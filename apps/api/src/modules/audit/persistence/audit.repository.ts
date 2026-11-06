@@ -3,6 +3,7 @@ import {
   type ActivityArea,
   type AuditEntry,
   COMPENSATION_EVENTS,
+  PAYROLL_EVENTS,
   type PlatformAuditEntry,
 } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
@@ -36,6 +37,11 @@ export interface AuditFilter {
   /** Without `compensation:manage`, and always across clinics (ADR-0060): no compensation rows,
    * nor their raw domain events. */
   withoutCompensation?: boolean | undefined;
+  /** Without `expense:read` (ADR-0080): no expense, category or fixed expense rows. */
+  withoutExpenses?: boolean | undefined;
+  /** Without `payroll:read`, and always across clinics (ADR-0080): no employee, salary or
+   * payroll rows, nor their raw domain events. */
+  withoutPayroll?: boolean | undefined;
   after?: AuditCursorPosition | undefined;
   limit: number;
 }
@@ -120,6 +126,16 @@ export class AuditRepository {
     if (filter.withoutCompensation) {
       conditions.push(
         sql`not (${auditLog.resourceType} like 'compensation\_%' or (${auditLog.resourceType} = 'event' and ${auditLog.action} = any(${sql.param([...COMPENSATION_EVENTS])}::text[])))`,
+      );
+    }
+    if (filter.withoutExpenses) {
+      conditions.push(
+        sql`${auditLog.resourceType} not in ('expense', 'expense_category', 'fixed_expense', 'fixed_expense_item')`,
+      );
+    }
+    if (filter.withoutPayroll) {
+      conditions.push(
+        sql`not (${auditLog.resourceType} in ('employee', 'employee_salary', 'payroll_line') or (${auditLog.resourceType} = 'event' and ${auditLog.action} = any(${sql.param([...PAYROLL_EVENTS])}::text[])))`,
       );
     }
     if (filter.after) {

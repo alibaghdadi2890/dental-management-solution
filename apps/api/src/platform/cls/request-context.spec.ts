@@ -78,10 +78,12 @@ describe('permissions carried in the context (ADR-0010)', () => {
     });
   });
 
-  it("keeps the clinic's compensation from a platform admin (ADR-0055)", async () => {
+  it("keeps the clinic's compensation and payroll from a platform admin (ADR-0055, ADR-0080)", async () => {
     await context.run({ ...user, platformAdmin: true, tenantId: 't1' }, () => {
       expect(context.hasPermission('compensation:read')).toBe(false);
       expect(context.hasPermission('compensation:manage')).toBe(false);
+      expect(context.hasPermission('payroll:read')).toBe(false);
+      expect(context.hasPermission('expense:manage')).toBe(true);
       expect(context.hasPermission('finance:read')).toBe(true);
       expect(context.visitScope()).toEqual({ kind: 'all' });
       return Promise.resolve();

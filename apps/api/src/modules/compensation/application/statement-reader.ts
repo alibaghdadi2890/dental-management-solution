@@ -15,7 +15,7 @@ import {
   type LateContext,
   type VisitFact,
 } from '../domain/compute';
-import { firstDay, lastDay, monthOf, nextMonth } from '../domain/months';
+import { firstDay, lastDay, monthOf, nextMonth } from '../../../platform/kernel/months';
 import { firstMonthOf } from '../domain/periods';
 import { type PeriodSnapshot, snapshotOf } from '../domain/snapshot';
 import { AgreementsRepository, type StoredAgreement } from '../persistence/agreements.repository';

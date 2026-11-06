@@ -18,7 +18,14 @@ import {
 import { type AgreementRecord, agreementOn, agreementsOverlapping } from './agreements';
 import { type ChargeHistory, collectionShare, entryShare } from './blend';
 import { roundDiv } from './money';
-import { daysBetween, daysInMonth, firstDay, lastDay, monthOf, monthsBetween } from './months';
+import {
+  daysBetween,
+  daysInMonth,
+  firstDay,
+  lastDay,
+  monthOf,
+  monthsBetween,
+} from '../../../platform/kernel/months';
 
 /**
  * The monthly statement of one dentist (ADR-0059), pure: no I/O, no clock. Open months are
