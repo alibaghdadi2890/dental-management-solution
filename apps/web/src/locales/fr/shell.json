@@ -30,7 +30,9 @@
     "defaultRoles": "Rôles par défaut",
     "platformActivity": "Activité",
     "compensation": "Rémunération",
-    "myStatement": "Mon relevé"
+    "myStatement": "Mon relevé",
+    "expenses": "Dépenses",
+    "payroll": "Paie"
   },
   "breadcrumb": "Fil d’Ariane",
   "platformCrumb": "Plateforme",

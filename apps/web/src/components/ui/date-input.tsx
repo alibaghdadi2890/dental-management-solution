@@ -148,7 +148,8 @@ export function DateInput({
             event.preventDefault();
             if (!interactedOutside.current) inputRef.current?.focus();
           }}
-          className="z-30 animate-fadein rounded-[10px] border border-border bg-surface p-3 shadow-[0_10px_28px_rgba(27,26,31,.14)]"
+          // Above a modal side panel (z-40) and its backdrop, which forms often sit in.
+          className="z-50 animate-fadein rounded-[10px] border border-border bg-surface p-3 shadow-[0_10px_28px_rgba(27,26,31,.14)]"
         >
           <Calendar
             mode="single"

@@ -59,7 +59,9 @@
     "contacts": "Contacts",
     "files": "Files",
     "compensation": "Compensation",
-    "schedule": "Schedule"
+    "schedule": "Schedule",
+    "expenses": "Expenses",
+    "payroll": "Payroll"
   },
   "ranges": {
     "today": "Today",
@@ -221,6 +223,51 @@
       "payout_void": "Voided a payout of {{amount}} to {{subject}}",
       "period_close": "Closed {{subject}}'s statement for {{month}}",
       "period_reopen": "Reopened {{subject}}'s statement for {{month}}"
+    },
+    "expense": {
+      "record": "Recorded {{amount}} for {{subject}}",
+      "update": "Edited the {{subject}} expense",
+      "update_amount": "Changed the {{subject}} expense from {{from}} to {{to}}",
+      "void": "Voided {{amount}} for {{subject}}"
+    },
+    "expense_category": {
+      "create": "Added the expense category {{subject}}",
+      "rename": "Renamed the expense category {{from}} to {{subject}}",
+      "deactivate": "Deactivated the expense category {{subject}}",
+      "reactivate": "Reactivated the expense category {{subject}}",
+      "delete": "Deleted the expense category {{subject}}"
+    },
+    "fixed_expense": {
+      "create": "Added the fixed expense {{subject}} at {{amount}} a month",
+      "update": "Changed the fixed expense {{subject}}",
+      "pause": "Paused the fixed expense {{subject}}",
+      "resume": "Resumed the fixed expense {{subject}}",
+      "end": "Ended the fixed expense {{subject}}"
+    },
+    "fixed_expense_item": {
+      "confirm": "Confirmed {{subject}} for {{month}} at {{amount}}",
+      "skip": "Skipped {{subject}} for {{month}}",
+      "unskip": "Put {{subject}} for {{month}} back to waiting"
+    },
+    "employee": {
+      "create": "Added the employee {{subject}}",
+      "update": "Edited the employee {{subject}}",
+      "link": "Linked {{subject}} to a staff user",
+      "unlink": "Unlinked {{subject}} from their staff user",
+      "leave": "Marked {{subject}} as left",
+      "rejoin": "Marked {{subject}} as active again",
+      "remove": "Removed the employee {{subject}}"
+    },
+    "employee_salary": {
+      "change": "Changed {{subject}}'s salary from {{from}} to {{to}} as of {{month}}",
+      "set": "Set {{subject}}'s salary to {{to}} as of {{month}}"
+    },
+    "payroll_line": {
+      "adjust": "Adjusted {{subject}}'s pay for {{month}}: net {{amount}}",
+      "confirm": "Paid {{subject}}'s salary for {{month}}: {{amount}}",
+      "skip": "Skipped {{subject}}'s salary for {{month}}",
+      "unskip": "Put {{subject}}'s salary for {{month}} back to pending",
+      "void": "Voided {{subject}}'s salary payment for {{month}}: {{amount}}"
     },
     "appointment": {
       "book": "Booked an appointment for {{subject}}",

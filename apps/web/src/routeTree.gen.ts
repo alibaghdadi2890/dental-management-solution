@@ -15,6 +15,8 @@ import { Route as PrintRouteImport } from './routes/print'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppActivityRouteImport } from './routes/_app/activity'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
+import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
+import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
 import { Route as AppScheduleRouteImport } from './routes/_app/schedule'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTodayRouteImport } from './routes/_app/today'
@@ -64,6 +66,16 @@ const AppActivityRoute = AppActivityRouteImport.update({
 const AppCatalogRoute = AppCatalogRouteImport.update({
   id: '/catalog',
   path: '/catalog',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppExpensesRoute = AppExpensesRouteImport.update({
+  id: '/expenses',
+  path: '/expenses',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPayrollRoute = AppPayrollRouteImport.update({
+  id: '/payroll',
+  path: '/payroll',
   getParentRoute: () => AppRoute,
 } as any)
 const AppScheduleRoute = AppScheduleRouteImport.update({
@@ -180,6 +192,8 @@ export interface FileRoutesByFullPath {
   '/print': typeof PrintRouteWithChildren
   '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
+  '/expenses': typeof AppExpensesRoute
+  '/payroll': typeof AppPayrollRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
   '/today': typeof AppTodayRoute
@@ -207,6 +221,8 @@ export interface FileRoutesByTo {
   '/print': typeof PrintRouteWithChildren
   '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
+  '/expenses': typeof AppExpensesRoute
+  '/payroll': typeof AppPayrollRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
   '/today': typeof AppTodayRoute
@@ -237,6 +253,8 @@ export interface FileRoutesById {
   '/print': typeof PrintRouteWithChildren
   '/_app/activity': typeof AppActivityRoute
   '/_app/catalog': typeof AppCatalogRoute
+  '/_app/expenses': typeof AppExpensesRoute
+  '/_app/payroll': typeof AppPayrollRoute
   '/_app/schedule': typeof AppScheduleRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/today': typeof AppTodayRoute
@@ -268,6 +286,8 @@ export interface FileRouteTypes {
     | '/print'
     | '/activity'
     | '/catalog'
+    | '/expenses'
+    | '/payroll'
     | '/schedule'
     | '/settings'
     | '/today'
@@ -295,6 +315,8 @@ export interface FileRouteTypes {
     | '/print'
     | '/activity'
     | '/catalog'
+    | '/expenses'
+    | '/payroll'
     | '/schedule'
     | '/settings'
     | '/today'
@@ -324,6 +346,8 @@ export interface FileRouteTypes {
     | '/print'
     | '/_app/activity'
     | '/_app/catalog'
+    | '/_app/expenses'
+    | '/_app/payroll'
     | '/_app/schedule'
     | '/_app/settings'
     | '/_app/today'
@@ -396,6 +420,20 @@ declare module '@tanstack/react-router' {
       path: '/catalog'
       fullPath: '/catalog'
       preLoaderRoute: typeof AppCatalogRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/expenses': {
+      id: '/_app/expenses'
+      path: '/expenses'
+      fullPath: '/expenses'
+      preLoaderRoute: typeof AppExpensesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/payroll': {
+      id: '/_app/payroll'
+      path: '/payroll'
+      fullPath: '/payroll'
+      preLoaderRoute: typeof AppPayrollRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/schedule': {
@@ -551,6 +589,8 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppActivityRoute: typeof AppActivityRoute
   AppCatalogRoute: typeof AppCatalogRoute
+  AppExpensesRoute: typeof AppExpensesRoute
+  AppPayrollRoute: typeof AppPayrollRoute
   AppScheduleRoute: typeof AppScheduleRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppTodayRoute: typeof AppTodayRoute
@@ -573,6 +613,8 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppActivityRoute: AppActivityRoute,
   AppCatalogRoute: AppCatalogRoute,
+  AppExpensesRoute: AppExpensesRoute,
+  AppPayrollRoute: AppPayrollRoute,
   AppScheduleRoute: AppScheduleRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppTodayRoute: AppTodayRoute,

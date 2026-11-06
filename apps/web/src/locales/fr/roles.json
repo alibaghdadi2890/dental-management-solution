@@ -9,6 +9,8 @@
     "files": "Fichiers",
     "staff": "Équipe et rôles",
     "compensation": "Rémunération",
+    "expenses": "Dépenses",
+    "payroll": "Paie",
     "activity": "Activité",
     "clinic": "Cabinet"
   },
@@ -112,6 +114,22 @@
     "compensation_manage": {
       "label": "Gérer les rémunérations",
       "description": "Réservé aux accords de rémunération et aux versements, bientôt."
+    },
+    "expense_read": {
+      "label": "Voir les dépenses",
+      "description": "L'historique des dépenses, ses totaux et l'export, la carte du jour et les dépenses fixes en attente de confirmation."
+    },
+    "expense_manage": {
+      "label": "Gérer les dépenses",
+      "description": "Enregistrer, modifier et annuler des dépenses ; gérer les catégories et les dépenses fixes ; confirmer et ignorer ce qui attend."
+    },
+    "payroll_read": {
+      "label": "Voir la paie",
+      "description": "Les employés et leurs salaires, les paies mensuelles et leur historique, et les salaires dans les dépenses."
+    },
+    "payroll_manage": {
+      "label": "Gérer la paie",
+      "description": "Ajouter et modifier des employés, changer les salaires, ajuster, confirmer, ignorer et annuler les lignes de paie."
     },
     "appointment_read": {
       "label": "Voir l'agenda",

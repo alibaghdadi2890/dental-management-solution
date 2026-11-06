@@ -59,7 +59,9 @@
     "contacts": "جهات الاتصال",
     "files": "الملفات",
     "compensation": "أتعاب الأطباء",
-    "schedule": "المواعيد"
+    "schedule": "المواعيد",
+    "expenses": "المصاريف",
+    "payroll": "الرواتب"
   },
   "ranges": {
     "today": "اليوم",
@@ -221,6 +223,51 @@
       "payout_void": "ألغى دفعة بقيمة {{amount}} إلى {{subject}}",
       "period_close": "أغلق كشف {{subject}} لشهر {{month}}",
       "period_reopen": "أعاد فتح كشف {{subject}} لشهر {{month}}"
+    },
+    "expense": {
+      "record": "سجّل {{amount}} في {{subject}}",
+      "update": "عدّل مصروف {{subject}}",
+      "update_amount": "غيّر مصروف {{subject}} من {{from}} إلى {{to}}",
+      "void": "ألغى {{amount}} في {{subject}}"
+    },
+    "expense_category": {
+      "create": "أضاف فئة المصاريف {{subject}}",
+      "rename": "غيّر اسم فئة المصاريف {{from}} إلى {{subject}}",
+      "deactivate": "أوقف فئة المصاريف {{subject}}",
+      "reactivate": "أعاد تفعيل فئة المصاريف {{subject}}",
+      "delete": "حذف فئة المصاريف {{subject}}"
+    },
+    "fixed_expense": {
+      "create": "أضاف المصروف الثابت {{subject}} بقيمة {{amount}} شهريًا",
+      "update": "عدّل المصروف الثابت {{subject}}",
+      "pause": "أوقف مؤقتًا المصروف الثابت {{subject}}",
+      "resume": "استأنف المصروف الثابت {{subject}}",
+      "end": "أنهى المصروف الثابت {{subject}}"
+    },
+    "fixed_expense_item": {
+      "confirm": "أكّد {{subject}} عن {{month}} بقيمة {{amount}}",
+      "skip": "تخطّى {{subject}} عن {{month}}",
+      "unskip": "أعاد {{subject}} عن {{month}} إلى الانتظار"
+    },
+    "employee": {
+      "create": "أضاف الموظف {{subject}}",
+      "update": "عدّل بيانات الموظف {{subject}}",
+      "link": "ربط {{subject}} بمستخدم من الطاقم",
+      "unlink": "فكّ ربط {{subject}} بمستخدم الطاقم",
+      "leave": "سجّل مغادرة {{subject}}",
+      "rejoin": "أعاد {{subject}} إلى العمل",
+      "remove": "أزال الموظف {{subject}}"
+    },
+    "employee_salary": {
+      "change": "غيّر راتب {{subject}} من {{from}} إلى {{to}} اعتبارًا من {{month}}",
+      "set": "حدّد راتب {{subject}} بـ {{to}} اعتبارًا من {{month}}"
+    },
+    "payroll_line": {
+      "adjust": "عدّل أجر {{subject}} عن {{month}}: الصافي {{amount}}",
+      "confirm": "دفع راتب {{subject}} عن {{month}}: {{amount}}",
+      "skip": "تخطّى راتب {{subject}} عن {{month}}",
+      "unskip": "أعاد راتب {{subject}} عن {{month}} إلى الانتظار",
+      "void": "ألغى دفعة راتب {{subject}} عن {{month}}: {{amount}}"
     },
     "appointment": {
       "book": "حجز موعدًا لـ{{subject}}",

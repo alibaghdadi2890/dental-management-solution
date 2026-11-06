@@ -8,6 +8,7 @@ import {
 import type { i18n as I18n } from 'i18next';
 import { formatMoney } from '@/lib/format';
 import type { Lookups } from './sentence';
+import { formatMonth } from '@/features/compensation/months';
 
 /**
  * What the Activity sentences need to name a row's records in one clinic: its patients, visits
@@ -36,6 +37,7 @@ export function buildLookups({
     visits: new Map(visits.map((visit) => [visit.visitId, visit])),
     staff,
     money: (amount, currency) => formatMoney({ amount, currency }, locale),
+    month: (month) => (/^\d{4}-\d{2}$/.test(month) ? formatMonth(month, locale) : month),
     tooth: (code) => {
       const known = toothCodeSchema.safeParse(code);
       return known.success ? toothLabel(known.data, notation) : code;
@@ -48,6 +50,7 @@ export function buildLookups({
         fileType: `files:subCategory.${value}`,
         visitType: `clinical:flow.types.${value}`,
         priority: `clinical:flow.priority.${value}`,
+        expenseCategory: `expenses:category.${value}`,
       }[group];
       return i18n.exists(key) ? translate(key) : value;
     },

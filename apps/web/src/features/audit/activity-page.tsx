@@ -99,6 +99,8 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
   const { names: staff } = useStaffNames();
   const canFinance = usePermission('finance:read');
   const canCompensate = usePermission('compensation:manage');
+  const canSeeExpenses = usePermission('expense:read');
+  const canSeePayroll = usePermission('payroll:read');
   const today = todayIn(tenant.timeZone);
 
   const term = search.q === undefined ? null : searchTerm(search.q);
@@ -192,14 +194,17 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
   return (
     <Page title={t('title')} subtitle={t('subtitle')}>
       <div role="group" aria-label={t('filters.area')} className="mb-3 flex flex-wrap gap-1.5">
-        {/* Money rows are the clinic's finances (ADR-0055) and compensation the owner's
-            (ADR-0060): the API leaves them out without the permission, so neither is the chip
-            offered. */}
+        {/* Money rows are the clinic's finances (ADR-0055), compensation the owner's (ADR-0060),
+            and expenses and payroll their own (ADR-0080): the API leaves them out without the
+            permission, so the chip is not offered either. */}
         {[
           undefined,
           ...ACTIVITY_AREAS.filter(
             (area) =>
-              (canFinance || area !== 'payments') && (canCompensate || area !== 'compensation'),
+              (canFinance || area !== 'payments') &&
+              (canCompensate || area !== 'compensation') &&
+              (canSeeExpenses || area !== 'expenses') &&
+              (canSeePayroll || area !== 'payroll'),
           ),
         ].map((area) => {
           const on = search.area === area;

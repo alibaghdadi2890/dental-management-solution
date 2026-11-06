@@ -30,7 +30,9 @@
     "defaultRoles": "Default roles",
     "platformActivity": "Activity",
     "compensation": "Compensation",
-    "myStatement": "My statement"
+    "myStatement": "My statement",
+    "expenses": "Expenses",
+    "payroll": "Payroll"
   },
   "breadcrumb": "Breadcrumb",
   "platformCrumb": "Platform",

@@ -13,6 +13,7 @@ import {
   useCheckoutQueue,
 } from '@/features/clinical/checkout-queue';
 import { PostVisitSummaryDialog } from '@/features/clinical/dialogs/post-visit-summary-dialog';
+import { TodayExpensesCard } from '@/features/expenses/today-expenses-card';
 import {
   checkOutVisit,
   invalidateVisitData,
@@ -72,7 +73,8 @@ const Note = ({ children, alert = false }: { children: ReactNode; alert?: boolea
  * URL) — and **In the chair**, the branch's live visits with their running time. Both poll every
  * 30 s. A visit paid in full leaves the lane; its dialog stays, showing it paid, until Done.
  * **Done** on a visit still waiting closes its checkout without a payment (ADR-0033): the card
- * leaves the lane and the amount stays a receivable. `Esc` only closes the dialog.
+ * leaves the lane and the amount stays a receivable. `Esc` only closes the dialog. Whoever sees
+ * expenses also has this month's expenses card (feature 17).
  */
 export function TodayPage({
   openVisitId,
@@ -92,6 +94,8 @@ export function TodayPage({
   const canSeeVisits = usePermission('visit:read');
   const canCheckOut = usePermission('payment:write');
   const canSeeSchedule = usePermission('appointment:read');
+  // This month's expenses (feature 17, A5): its own permission, never salaries or payouts.
+  const canSeeExpenses = usePermission('expense:read');
   const queue = useCheckoutQueue();
   // The patient of the open dialog, kept once their visit has left the queue (paid in full).
   const [opened, setOpened] = useState<{ id: string; name: string }>();
@@ -117,7 +121,7 @@ export function TodayPage({
     .filter(Boolean)
     .join(' · ');
 
-  if (!queue.enabled && !canSeeVisits && !canSeeSchedule) {
+  if (!queue.enabled && !canSeeVisits && !canSeeSchedule && !canSeeExpenses) {
     return (
       <Page title={t('title')} subtitle={subtitle}>
         <p className="text-[13px] leading-snug text-ink-secondary">
@@ -221,6 +225,7 @@ export function TodayPage({
             {seated}
           </Lane>
         )}
+        {canSeeExpenses && <TodayExpensesCard session={session} />}
       </Page>
       {open && (
         <PostVisitSummaryDialog

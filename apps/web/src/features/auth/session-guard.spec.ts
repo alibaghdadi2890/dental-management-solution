@@ -16,6 +16,11 @@ describe('landingPath', () => {
     expect(landingPath(sessionWith(['patient:read', 'visit:write']))).toBe('/patients');
   });
 
+  it('starts someone who sees expenses but not patients on the Today board', () => {
+    expect(landingPath(sessionWith(['expense:read']))).toBe('/today');
+    expect(landingPath(sessionWith(['patient:read', 'expense:read']))).toBe('/patients');
+  });
+
   it('starts a platform admin outside a clinic on the tenants list', () => {
     const admin = { ...sessionWith(['platform:admin']), platformAdmin: true, tenant: null };
     expect(landingPath(admin)).toBe('/admin/tenants');

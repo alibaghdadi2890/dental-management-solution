@@ -3,7 +3,16 @@ import { ApiError } from './api';
 
 /** Where a problem code's translation may live, most specific first (`<namespace>:errors.<code>`,
  * the code's dots nesting the keys: `visit.stale` → `errors.visit.stale`). */
-const NAMESPACES = ['clinical', 'patients', 'billing', 'files', 'scheduling', 'common'] as const;
+const NAMESPACES = [
+  'clinical',
+  'patients',
+  'billing',
+  'files',
+  'scheduling',
+  'expenses',
+  'payroll',
+  'common',
+] as const;
 
 /**
  * The message to show for a failed call: the translation of its stable problem `code` when the

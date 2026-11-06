@@ -39,12 +39,21 @@ export interface Lookups {
   visits: ReadonlyMap<string, VisitNumber>;
   staff: ReadonlyMap<string, string>;
   money: (amount: string, currency: string) => string;
+  /** "November 2026" for `2026-11`, in the UI language. */
+  month: (month: string) => string;
   /** A tooth code in the clinic's notation. */
   tooth: (code: string) => string;
   /** The label of a payment method, an adjustment reason, a file's category or type, a visit's
-   * type or a plan's priority; the raw text when it has none. */
+   * type, a plan's priority or an expense category's key; the raw text when it has none. */
   label: (
-    group: 'method' | 'reason' | 'fileCategory' | 'fileType' | 'visitType' | 'priority',
+    group:
+      | 'method'
+      | 'reason'
+      | 'fileCategory'
+      | 'fileType'
+      | 'visitType'
+      | 'priority'
+      | 'expenseCategory',
     value: string,
   ) => string;
 }
@@ -116,6 +125,41 @@ const SCHEDULE: ReadonlySet<string> = new Set([
   'follow_up.reopen',
   'follow_up.will_call',
   'follow_up.decline',
+]);
+
+/** Expenses and payroll (feature 17): the actions with a sentence of their own. */
+const EXPENSES: ReadonlySet<string> = new Set([
+  'expense.record',
+  'expense.update',
+  'expense.void',
+  'expense_category.create',
+  'expense_category.rename',
+  'expense_category.deactivate',
+  'expense_category.reactivate',
+  'expense_category.delete',
+  'fixed_expense.create',
+  'fixed_expense.update',
+  'fixed_expense.pause',
+  'fixed_expense.resume',
+  'fixed_expense.end',
+  'fixed_expense_item.confirm',
+  'fixed_expense_item.skip',
+  'fixed_expense_item.unskip',
+]);
+const PAYROLL: ReadonlySet<string> = new Set([
+  'employee.create',
+  'employee.update',
+  'employee.link',
+  'employee.unlink',
+  'employee.leave',
+  'employee.rejoin',
+  'employee.remove',
+  'employee_salary.change',
+  'payroll_line.adjust',
+  'payroll_line.confirm',
+  'payroll_line.skip',
+  'payroll_line.unskip',
+  'payroll_line.void',
 ]);
 
 /** The actions with a sentence under `activity:actions.<action>` and no special case below. */
@@ -340,7 +384,62 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
       dentist ? { kind: 'text', label: dentist } : null,
       {
         amount: amount && currency ? lookups.money(amount, currency) : '',
-        month: text(after.month) ?? '',
+        month: lookups.month(text(after.month) ?? ''),
+        action: readableAction(action),
+      },
+    );
+  }
+
+  // --- Expenses (feature 17): the category, or the fixed expense, is named in the snapshot ---
+  if (
+    prefix === 'expense' ||
+    prefix === 'expense_category' ||
+    prefix === 'fixed_expense' ||
+    prefix === 'fixed_expense_item'
+  ) {
+    const key = field(entry, 'categoryKey');
+    const category = key
+      ? lookups.label('expenseCategory', key)
+      : (text(after.name) ?? field(entry, 'categoryName'));
+    const name = prefix.startsWith('fixed_expense') ? field(entry, 'name') : category;
+    const currency = field(entry, 'currency');
+    const money = (value: unknown) => {
+      const amount = text(value);
+      return amount && currency ? lookups.money(amount, currency) : '';
+    };
+    const before = snapshot(entry.before);
+    const repriced = action === 'expense.update' && 'amount' in after;
+    return done(
+      repriced ? 'expense.update_amount' : EXPENSES.has(action) ? action : 'fallback',
+      name ? { kind: 'text', label: name } : null,
+      {
+        amount: money(after.amount ?? before.amount),
+        from:
+          action === 'expense_category.rename' ? (text(before.name) ?? '') : money(before.amount),
+        to: money(after.amount),
+        month: lookups.month(field(entry, 'month') ?? ''),
+        action: readableAction(action),
+      },
+    );
+  }
+
+  // --- Payroll (feature 17): the employee is named in the snapshot ---
+  if (prefix === 'employee' || prefix === 'employee_salary' || prefix === 'payroll_line') {
+    const employee = field(entry, 'employee');
+    const currency = field(entry, 'currency');
+    const money = (value: unknown) => {
+      const amount = text(value);
+      return amount && currency ? lookups.money(amount, currency) : '';
+    };
+    const salarySet = action === 'employee_salary.change' && text(after.from) === null;
+    return done(
+      salarySet ? 'employee_salary.set' : PAYROLL.has(action) ? action : 'fallback',
+      employee ? { kind: 'text', label: employee } : null,
+      {
+        amount: money(after.amount),
+        from: money(after.from),
+        to: money(after.to),
+        month: lookups.month(field(entry, 'month') ?? field(entry, 'effectiveMonth') ?? ''),
         action: readableAction(action),
       },
     );

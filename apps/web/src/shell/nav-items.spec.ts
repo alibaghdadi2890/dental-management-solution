@@ -28,6 +28,13 @@ const base: Session = {
 const keys = (items: { key: string }[]) => items.map((item) => item.key);
 
 describe('visibleNav', () => {
+  it('shows Today and Expenses to a role that may only see expenses, never Payroll', () => {
+    const nav = visibleNav({ ...base, permissions: ['expense:read'] });
+    expect(keys(nav.main)).toEqual(['today', 'expenses']);
+    const payroll = visibleNav({ ...base, permissions: ['expense:read', 'payroll:read'] });
+    expect(keys(payroll.main)).toEqual(['today', 'expenses', 'payroll']);
+  });
+
   it('shows Today, Patients, Visits and the read-only Catalog to whoever sees visits', () => {
     const nav = visibleNav({
       ...base,

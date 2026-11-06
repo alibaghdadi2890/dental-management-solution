@@ -9,6 +9,8 @@
     "files": "Files",
     "staff": "Staff & roles",
     "compensation": "Compensation",
+    "expenses": "Expenses",
+    "payroll": "Payroll",
     "activity": "Activity",
     "clinic": "Clinic"
   },
@@ -112,6 +114,22 @@
     "compensation_manage": {
       "label": "Manage compensation",
       "description": "Reserved for compensation agreements and payouts, coming soon."
+    },
+    "expense_read": {
+      "label": "See expenses",
+      "description": "The expense history, its totals and export, the Today card and the fixed expenses waiting for confirmation."
+    },
+    "expense_manage": {
+      "label": "Manage expenses",
+      "description": "Record, edit and void expenses; manage categories and fixed expenses; confirm and skip what is waiting."
+    },
+    "payroll_read": {
+      "label": "See payroll",
+      "description": "Employees and their salaries, the payroll runs and history, and salary rows in Expenses."
+    },
+    "payroll_manage": {
+      "label": "Manage payroll",
+      "description": "Add and edit employees, change salaries, adjust, confirm, skip and void payroll lines."
     },
     "appointment_read": {
       "label": "See the calendar",

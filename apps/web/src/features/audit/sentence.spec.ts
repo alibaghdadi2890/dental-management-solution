@@ -19,6 +19,7 @@ const lookups: Lookups = {
   money: (amount, currency) => `${currency} ${amount}`,
   tooth: (code) => `#${code}`,
   label: (group, value) => (group === 'method' && value === 'cash' ? 'cash' : value),
+  month: (month) => `month ${month}`,
 };
 
 const entry = (patch: Partial<AuditEntry>): AuditEntry => ({
@@ -220,6 +221,59 @@ describe('sentenceOf (H7)', () => {
     expect(adjustment('35.00')).toBe('Added USD 35.00 to the balance of [Rami Khoury]');
   });
 
+  it('names the category of an expense, and the change of its amount (feature 17)', () => {
+    expect(
+      read({
+        action: 'expense.record',
+        resourceType: 'expense',
+        after: { categoryKey: 'rent', categoryName: null, amount: '450.00', currency: 'USD' },
+      }),
+    ).toBe('Recorded USD 450.00 for [rent]');
+    expect(
+      read({
+        action: 'expense.update',
+        resourceType: 'expense',
+        before: { amount: '450.00' },
+        after: {
+          amount: '460.00',
+          categoryKey: null,
+          categoryName: 'Lab shipping',
+          currency: 'USD',
+        },
+      }),
+    ).toBe('Changed the [Lab shipping] expense from USD 450.00 to USD 460.00');
+    expect(
+      read({
+        action: 'fixed_expense_item.skip',
+        resourceType: 'fixed_expense_item',
+        after: { name: 'Electricity', month: '2026-11', amount: '120.00', currency: 'USD' },
+      }),
+    ).toBe('Skipped [Electricity] for month 2026-11');
+  });
+
+  it('names the employee of a salary change and a payroll line (feature 17)', () => {
+    expect(
+      read({
+        action: 'employee_salary.change',
+        resourceType: 'employee_salary',
+        after: {
+          employee: 'Rima',
+          from: '800.00',
+          to: '900.00',
+          currency: 'USD',
+          effectiveMonth: '2026-11',
+        },
+      }),
+    ).toBe("Changed [Rima]'s salary from USD 800.00 to USD 900.00 as of month 2026-11");
+    expect(
+      read({
+        action: 'payroll_line.confirm',
+        resourceType: 'payroll_line',
+        after: { employee: 'Rima', month: '2026-11', amount: '930.00', currency: 'USD' },
+      }),
+    ).toBe("Paid [Rima]'s salary for month 2026-11: USD 930.00");
+  });
+
   it('falls back to a readable version of an action nobody wrote a sentence for', () => {
     expect(readableAction('treatment_plan.some_new_thing')).toBe('Treatment plan · some new thing');
     expect(read({ action: 'widget.rotate', resourceType: 'widget', patientId: PATIENT })).toBe(
@@ -317,6 +371,35 @@ describe('every action the API emits has a sentence (H7)', () => {
     'branch.update',
     'room.create',
     'room.update',
+    'expense.record',
+    'expense.update',
+    'expense.void',
+    'expense_category.create',
+    'expense_category.rename',
+    'expense_category.deactivate',
+    'expense_category.reactivate',
+    'expense_category.delete',
+    'fixed_expense.create',
+    'fixed_expense.update',
+    'fixed_expense.pause',
+    'fixed_expense.resume',
+    'fixed_expense.end',
+    'fixed_expense_item.confirm',
+    'fixed_expense_item.skip',
+    'fixed_expense_item.unskip',
+    'employee.create',
+    'employee.update',
+    'employee.link',
+    'employee.unlink',
+    'employee.leave',
+    'employee.rejoin',
+    'employee.remove',
+    'employee_salary.change',
+    'payroll_line.adjust',
+    'payroll_line.confirm',
+    'payroll_line.skip',
+    'payroll_line.unskip',
+    'payroll_line.void',
   ];
 
   it.each(EMITTED)('%s', (action) => {

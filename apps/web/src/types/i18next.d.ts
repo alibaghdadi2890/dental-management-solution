@@ -7,10 +7,12 @@ import type files from '../locales/en/files.json';
 import type catalog from '../locales/en/catalog.json';
 import type clinical from '../locales/en/clinical.json';
 import type compensation from '../locales/en/compensation.json';
+import type expenses from '../locales/en/expenses.json';
 import type scheduling from '../locales/en/scheduling.json';
 import type common from '../locales/en/common.json';
 import type patients from '../locales/en/patients.json';
 import type payments from '../locales/en/payments.json';
+import type payroll from '../locales/en/payroll.json';
 import type printables from '../locales/en/printables.json';
 import type roles from '../locales/en/roles.json';
 import type settings from '../locales/en/settings.json';
@@ -43,6 +45,8 @@ declare module 'i18next' {
       roles: typeof roles;
       compensation: typeof compensation;
       scheduling: typeof scheduling;
+      expenses: typeof expenses;
+      payroll: typeof payroll;
     };
   }
 }

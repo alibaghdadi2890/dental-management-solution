@@ -30,7 +30,9 @@
     "defaultRoles": "الأدوار الافتراضية",
     "platformActivity": "النشاط",
     "compensation": "أتعاب الأطباء",
-    "myStatement": "كشفي"
+    "myStatement": "كشفي",
+    "expenses": "المصاريف",
+    "payroll": "الرواتب"
   },
   "breadcrumb": "مسار التنقل",
   "platformCrumb": "المنصة",
