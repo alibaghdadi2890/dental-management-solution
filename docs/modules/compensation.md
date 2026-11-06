@@ -105,6 +105,10 @@ Every route needs `compensation:manage` unless stated.
 `AgreementCreated`, `AgreementEnded`, `AgreementSuperseded`, `AdjustmentRecorded`,
 `AdjustmentVoided`, `PayoutRecorded`, `PayoutVoided`, `PeriodClosed`, `PeriodReopened`.
 
+- `PayoutRecorded` carries the amount, currency, method and reference, and `PayoutVoided` the
+  reason: `expenses` consumes both in the transaction to keep a read-only *Dentist compensation*
+  row per payout (feature 17, ADR-0076). It is the only consumer.
+
 - Each event is ids and minimal facts.
 - Each action is also audited as `compensation.*`, with resource type `compensation_*` and the
   dentist's name in `after`. Activity shows it in the **Compensation** area, only to whoever has

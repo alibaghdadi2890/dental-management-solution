@@ -79,3 +79,8 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0073](0073-arrival-alerts-are-a-tenant-ping-over-sse.md)              | Arrival alerts are a per-tenant ping over in-process SSE                     | Accepted                             |
 | [0074](0074-visit-start.md)                                            | `visit:start`, starting a visit without working in it                        | Accepted (amends feature 14 G10)     |
 | [0075](0075-edit-and-restore-appointments.md)                          | Editing an appointment, and restoring a cancelled one                        | Accepted (amends 0066)               |
+| [0076](0076-salaries-and-payouts-are-mirrored-into-expenses.md)        | Expenses and payroll are two modules; salaries and payouts mirrored in       | Accepted                             |
+| [0077](0077-dentists-are-not-on-payroll.md)                            | Dentists are not on payroll                                                  | Accepted                             |
+| [0078](0078-pending-items-and-derived-payroll-lines.md)                | Fixed expenses wait as items made on the next look; payroll lines derived    | Accepted                             |
+| [0079](0079-salaries-are-an-effective-dated-history.md)                | A salary is an effective-dated history                                       | Accepted                             |
+| [0080](0080-expense-and-payroll-permissions.md)                        | Expense and payroll permissions, and who sees which rows                     | Accepted (amends 0055)               |

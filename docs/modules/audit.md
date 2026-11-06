@@ -122,6 +122,12 @@ platform admin acting in the clinic). `apps/web/src/features/audit/`:
   type is `compensation_*` or that are the raw events in `COMPENSATION_EVENTS`. They are left out
   for anyone without `compensation:manage`, the dentist included, and always from
   `GET /platform/audit`. The sentence names the dentist from the snapshot's `dentist`.
+- **Expenses and payroll** (feature 17, ADR-0080): the `expenses` area (`expense.*`,
+  `expense_category.*`, `fixed_expense.*`, `fixed_expense_item.*`) is left out without
+  `expense:read`; the `payroll` area (`employee.*`, `employee_salary.*`, `payroll_line.*`) and the
+  raw events in `PAYROLL_EVENTS` are left out without `payroll:read`, and always from
+  `GET /platform/audit`. The sentences name the category (translated by `categoryKey`), the fixed
+  expense or the employee from the snapshot. A mirrored salary or payout row is not audited again.
 
 ## HTTP
 
