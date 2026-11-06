@@ -1,7 +1,6 @@
 import type { CompensationStatement, StatementLine } from '@dcm/contracts';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import '@/lib/i18n';
 import { StatementView } from './statement-view';
 
@@ -85,12 +84,9 @@ const statement = (over: Partial<CompensationStatement> = {}): CompensationState
   ...over,
 });
 
+// As the app renders it: no tooltip provider around it (a voided row's tooltip needs its own).
 const renderView = (props: Parameters<typeof StatementView>[0]) =>
-  render(
-    <TooltipProvider>
-      <StatementView {...props} />
-    </TooltipProvider>,
-  );
+  render(<StatementView {...props} />);
 
 describe('StatementView', () => {
   afterEach(cleanup);
@@ -126,6 +122,18 @@ describe('StatementView', () => {
     const card = screen.getByText('Dentist owes the clinic').closest('section');
     expect(card?.textContent).toMatch(/200/);
     expect(card?.textContent).not.toContain('-');
+  });
+
+  it('shows a voided payout struck through, without a void, and does not crash', () => {
+    const [payout] = statement().payouts;
+    if (!payout) throw new Error('payout');
+    renderView({
+      statement: statement({
+        payouts: [{ ...payout, voidedAt: '2026-10-21T09:00:00Z', voidReason: 'Recorded twice' }],
+      }),
+      onVoidPayout: vi.fn(),
+    });
+    expect(screen.queryByRole('button', { name: 'Void' })).toBeNull();
   });
 
   it('explains that imported history earns nothing on an empty first month', () => {

@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Eyebrow } from '@/components/ui/field';
 import { Pill } from '@/components/ui/list';
-import { Tooltip } from '@/components/ui/tooltip';
+import { Tooltip, TooltipProvider } from '@/components/ui/tooltip';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { agreementWords } from './agreement-words';
@@ -272,117 +272,120 @@ export function StatementView({
     statement.payouts.length === 0;
 
   return (
-    <div>
-      <header className="mb-3.5 flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="m-0 text-[17px] font-semibold">{statement.dentistName}</h2>
-          <p className="m-0 mt-1 text-[12.5px] text-ink-muted">
-            {formatMonth(statement.month, locale)}
-          </p>
-          {statement.agreements.map((agreement) => (
-            <p key={agreement.id} className="m-0 mt-1 text-[12.5px] text-ink-secondary">
-              {agreementWords(agreement, {
-                t: i18n.getFixedT(i18n.resolvedLanguage ?? 'en', 'compensation'),
-                currency: statement.currency,
-                locale,
-              }).join(' · ')}
+    // Its own provider, like the other screens with tooltips: the app has no root one.
+    <TooltipProvider>
+      <div>
+        <header className="mb-3.5 flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="m-0 text-[17px] font-semibold">{statement.dentistName}</h2>
+            <p className="m-0 mt-1 text-[12.5px] text-ink-muted">
+              {formatMonth(statement.month, locale)}
             </p>
-          ))}
-        </div>
-        <Pill tone={closed ? 'success' : 'warning'}>
-          {t(`compensation:status.${statement.status}`)}
-        </Pill>
-      </header>
-      {provisionalNote && !closed && (
-        <p className="m-0 mb-3.5 rounded-lg border border-warning-border bg-warning-bg px-3 py-2 text-[12.5px] text-warning">
-          {t('compensation:statement.provisionalNote')}
-        </p>
-      )}
-
-      <div className="mb-3.5 grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
-        <Card label={t('compensation:statement.cards.opening')} value={money(totals.opening)} />
-        <Card label={t('compensation:statement.cards.earned')} value={money(fromCents(earned))} />
-        <Card label={t('compensation:statement.cards.paid')} value={money(totals.payouts)} />
-        <Card
-          label={
-            closing < 0n
-              ? t('compensation:statement.cards.owesClinic')
-              : t('compensation:statement.cards.closing')
-          }
-          value={money(fromCents(closing < 0n ? -closing : closing))}
-          tone={closing < 0n ? 'text-danger' : undefined}
-        />
-      </div>
-
-      {empty && (
-        <p className="m-0 mb-3 rounded-lg border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-ink-muted">
-          {statement.firstMonth === statement.month
-            ? t('compensation:statement.emptyFirst')
-            : t('compensation:statement.empty')}
-        </p>
-      )}
-
-      {statement.earned.map((group) => (
-        <Block
-          key={group.component}
-          title={t(`compensation:components.${group.component}`)}
-          total={money(group.total)}
-        >
-          <Lines lines={group.lines} money={money} />
-        </Block>
-      ))}
-      {statement.late.map((group) => (
-        <Block
-          key={group.month}
-          eyebrow={t('compensation:statement.lateFrom', {
-            month: formatMonth(group.month, locale),
-          })}
-          title={t('compensation:statement.late')}
-          total={money(group.total)}
-        >
-          <Lines lines={group.lines} money={money} />
-        </Block>
-      ))}
-      {statement.noAgreement.length > 0 && (
-        <Block title={t('compensation:statement.noAgreement')}>
-          <Lines lines={statement.noAgreement} money={money} />
-        </Block>
-      )}
-      {statement.adjustments.length > 0 && (
-        <Block title={t('compensation:statement.adjustments')} total={money(totals.adjustments)}>
-          <MoneyRows
-            rows={statement.adjustments}
-            label={(row) => t(`compensation:adjustmentKinds.${row.kind}`)}
-            detail={(row) => row.note}
-            sign={1}
-            money={money}
-            onVoid={closed ? undefined : onVoidAdjustment}
-          />
-        </Block>
-      )}
-      {statement.payouts.length > 0 && (
-        <Block
-          title={t('compensation:statement.payouts')}
-          total={money(fromCents(-toCents(totals.payouts)))}
-        >
-          <MoneyRows
-            rows={statement.payouts}
-            label={(row) => t(`billing:methods.${row.method}`)}
-            detail={(row) => row.reference ?? row.note}
-            sign={-1}
-            money={money}
-            onVoid={closed ? undefined : onVoidPayout}
-          />
-        </Block>
-      )}
-      {statement.notComputed.length > 0 && (
-        <Block title={t('compensation:statement.notComputed')}>
-          <p className="m-0 mb-2 text-[12px] text-ink-muted">
-            {t('compensation:statement.notComputedHint')}
+            {statement.agreements.map((agreement) => (
+              <p key={agreement.id} className="m-0 mt-1 text-[12.5px] text-ink-secondary">
+                {agreementWords(agreement, {
+                  t: i18n.getFixedT(i18n.resolvedLanguage ?? 'en', 'compensation'),
+                  currency: statement.currency,
+                  locale,
+                }).join(' · ')}
+              </p>
+            ))}
+          </div>
+          <Pill tone={closed ? 'success' : 'warning'}>
+            {t(`compensation:status.${statement.status}`)}
+          </Pill>
+        </header>
+        {provisionalNote && !closed && (
+          <p className="m-0 mb-3.5 rounded-lg border border-warning-border bg-warning-bg px-3 py-2 text-[12.5px] text-warning">
+            {t('compensation:statement.provisionalNote')}
           </p>
-          <Lines lines={statement.notComputed} money={money} />
-        </Block>
-      )}
-    </div>
+        )}
+
+        <div className="mb-3.5 grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
+          <Card label={t('compensation:statement.cards.opening')} value={money(totals.opening)} />
+          <Card label={t('compensation:statement.cards.earned')} value={money(fromCents(earned))} />
+          <Card label={t('compensation:statement.cards.paid')} value={money(totals.payouts)} />
+          <Card
+            label={
+              closing < 0n
+                ? t('compensation:statement.cards.owesClinic')
+                : t('compensation:statement.cards.closing')
+            }
+            value={money(fromCents(closing < 0n ? -closing : closing))}
+            tone={closing < 0n ? 'text-danger' : undefined}
+          />
+        </div>
+
+        {empty && (
+          <p className="m-0 mb-3 rounded-lg border border-dashed border-border px-4 py-5 text-center text-[12.5px] text-ink-muted">
+            {statement.firstMonth === statement.month
+              ? t('compensation:statement.emptyFirst')
+              : t('compensation:statement.empty')}
+          </p>
+        )}
+
+        {statement.earned.map((group) => (
+          <Block
+            key={group.component}
+            title={t(`compensation:components.${group.component}`)}
+            total={money(group.total)}
+          >
+            <Lines lines={group.lines} money={money} />
+          </Block>
+        ))}
+        {statement.late.map((group) => (
+          <Block
+            key={group.month}
+            eyebrow={t('compensation:statement.lateFrom', {
+              month: formatMonth(group.month, locale),
+            })}
+            title={t('compensation:statement.late')}
+            total={money(group.total)}
+          >
+            <Lines lines={group.lines} money={money} />
+          </Block>
+        ))}
+        {statement.noAgreement.length > 0 && (
+          <Block title={t('compensation:statement.noAgreement')}>
+            <Lines lines={statement.noAgreement} money={money} />
+          </Block>
+        )}
+        {statement.adjustments.length > 0 && (
+          <Block title={t('compensation:statement.adjustments')} total={money(totals.adjustments)}>
+            <MoneyRows
+              rows={statement.adjustments}
+              label={(row) => t(`compensation:adjustmentKinds.${row.kind}`)}
+              detail={(row) => row.note}
+              sign={1}
+              money={money}
+              onVoid={closed ? undefined : onVoidAdjustment}
+            />
+          </Block>
+        )}
+        {statement.payouts.length > 0 && (
+          <Block
+            title={t('compensation:statement.payouts')}
+            total={money(fromCents(-toCents(totals.payouts)))}
+          >
+            <MoneyRows
+              rows={statement.payouts}
+              label={(row) => t(`billing:methods.${row.method}`)}
+              detail={(row) => row.reference ?? row.note}
+              sign={-1}
+              money={money}
+              onVoid={closed ? undefined : onVoidPayout}
+            />
+          </Block>
+        )}
+        {statement.notComputed.length > 0 && (
+          <Block title={t('compensation:statement.notComputed')}>
+            <p className="m-0 mb-2 text-[12px] text-ink-muted">
+              {t('compensation:statement.notComputedHint')}
+            </p>
+            <Lines lines={statement.notComputed} money={money} />
+          </Block>
+        )}
+      </div>
+    </TooltipProvider>
   );
 }
