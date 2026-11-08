@@ -6,7 +6,7 @@
 ## Purpose
 
 The clinic's employees who are not dentists, their monthly salary history, and the monthly run.
-A confirmed line is a salary payment. `expenses` mirrors it as a *Salaries* row (ADR-0076).
+A confirmed line is a salary payment. `expenses` mirrors it as a _Salaries_ row (ADR-0076).
 Dentists are paid through `compensation` (ADR-0077).
 
 ## Depends on
@@ -23,13 +23,13 @@ except for those events.
 
 All are tenant tables with RLS.
 
-| Table                 | What                                                                                                          | Rules                                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `employees`           | details, `hire_date`, `payroll_from`, branch, `status` (`active`/`left`), `end_date`, `staff_profile_id`        | one live employee per staff profile; removed softly       |
-| `employee_salaries`   | amount, currency, `effective_month`, reason, `created_by`                                                     | append-only (no `UPDATE`/`DELETE` for the runtime role)    |
-| `payroll_lines`       | a touched line: `(employee, month)`, `pending`/`paid`/`skipped`, skip reason                                  | unique per employee and month; never deleted              |
-| `payroll_adjustments` | a pending line's bonuses, deductions (typed positive) and others (signed), with labels                         | replaced as a list                                        |
-| `payroll_payments`    | base, adjustments snapshot, net > 0, currency, paid on, method, note, void columns, idempotency               | one live payment per line; only the void columns update   |
+| Table                 | What                                                                                                     | Rules                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `employees`           | details, `hire_date`, `payroll_from`, branch, `status` (`active`/`left`), `end_date`, `staff_profile_id` | one live employee per staff profile; removed softly     |
+| `employee_salaries`   | amount, currency, `effective_month`, reason, `created_by`                                                | append-only (no `UPDATE`/`DELETE` for the runtime role) |
+| `payroll_lines`       | a touched line: `(employee, month)`, `pending`/`paid`/`skipped`, skip reason                             | unique per employee and month; never deleted            |
+| `payroll_adjustments` | a pending line's bonuses, deductions (typed positive) and others (signed), with labels                   | replaced as a list                                      |
+| `payroll_payments`    | base, adjustments snapshot, net > 0, currency, paid on, method, note, void columns, idempotency          | one live payment per line; only the void columns update |
 
 ## Rules
 
@@ -57,24 +57,24 @@ All are tenant tables with RLS.
 Every read needs `payroll:read`; every write needs `payroll:manage`. A platform admin holds
 neither.
 
-| Route                                                                                    | Notes                                            |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `GET/POST /payroll/employees` · `GET/PATCH/DELETE /payroll/employees/:id`                | the patch covers details, the link and the status |
-| `GET /payroll/staff`                                                                     | linkable staff                                   |
-| `POST /payroll/employees/:id/salaries` · `GET /payroll/employees/:id/export?lang=`       |                                                  |
-| `GET /payroll/runs/:month`                                                               | lines, totals, earlier months still pending      |
-| `PUT /payroll/runs/:month/lines/:employeeId/adjustments`                                 |                                                  |
-| `POST /payroll/confirm`                                                                  | `Idempotency-Key`                                |
-| `POST /payroll/runs/:month/lines/:employeeId/skip` · `…/unskip` · `…/void`                | skip and void need `{ reason }`                  |
-| `GET /payroll/months?year=` · `GET /payroll/months/export?year=&lang=`                   |                                                  |
+| Route                                                                              | Notes                                             |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `GET/POST /payroll/employees` · `GET/PATCH/DELETE /payroll/employees/:id`          | the patch covers details, the link and the status |
+| `GET /payroll/staff`                                                               | linkable staff                                    |
+| `POST /payroll/employees/:id/salaries` · `GET /payroll/employees/:id/export?lang=` |                                                   |
+| `GET /payroll/runs/:month`                                                         | lines, totals, earlier months still pending       |
+| `PUT /payroll/runs/:month/lines/:employeeId/adjustments`                           |                                                   |
+| `POST /payroll/confirm`                                                            | `Idempotency-Key`                                 |
+| `POST /payroll/runs/:month/lines/:employeeId/skip` · `…/unskip` · `…/void`         | skip and void need `{ reason }`                   |
+| `GET /payroll/months?year=` · `GET /payroll/months/export?year=&lang=`             |                                                   |
 
 ## Errors
 
-| Status | Codes                                                                                                                                                                                    |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status | Codes                                                                                                                                                                                                     |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 422    | `payroll.dentist_not_linkable`, `payroll.invalid_dates`, `payroll.not_employed`, `payroll.no_salary`, `payroll.net_not_positive`, `payroll.net_negative`, `payroll.future_date`, `tenant.currency_locked` |
-| 409    | `payroll.user_already_linked`, `payroll.month_paid`, `payroll.paid_outside_employment`, `payroll.line_not_pending`, `payroll.stale`, `payroll.not_removable`, `payroll.idempotency_mismatch` |
-| 404    | `payroll.not_found`, `payroll.staff_not_found`, `branch.not_found`                                                                                                                       |
+| 409    | `payroll.user_already_linked`, `payroll.month_paid`, `payroll.paid_outside_employment`, `payroll.line_not_pending`, `payroll.stale`, `payroll.not_removable`, `payroll.idempotency_mismatch`              |
+| 404    | `payroll.not_found`, `payroll.staff_not_found`, `branch.not_found`                                                                                                                                        |
 
 ## Audit
 

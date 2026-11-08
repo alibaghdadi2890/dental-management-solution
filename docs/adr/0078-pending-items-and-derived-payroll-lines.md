@@ -14,7 +14,7 @@ scheduler and adds no Redis.
 
 1. **Fixed expenses: a catch-up, not a job.** Every expenses read or write that shows waiting
    months first runs a catch-up.
-   - The catch-up gives each *active* template one item per month, from its `next_month` through
+   - The catch-up gives each _active_ template one item per month, from its `next_month` through
      the current month in the clinic's time zone, then moves `next_month` past it.
    - It runs under an advisory lock per clinic, and `(fixed_expense_id, month)` is unique, so it is
      idempotent.

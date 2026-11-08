@@ -22,11 +22,12 @@ something is hidden.
    (`RequestContext.hasPermission`, beside `compensation:*`).
 4. Rows in Expenses are filtered by source:
    - typed and fixed rows need `expense:read`;
-   - *Payroll* rows also need `payroll:read`;
-   - *Dentist compensation* rows also need `compensation:manage`.
+   - _Payroll_ rows also need `payroll:read`;
+   - _Dentist compensation_ rows also need `compensation:manage`.
 
    Rows a caller may not see are left out of lists, totals, the category summary and exports,
    silently. The Today card never shows the mirrored rows, whoever looks.
+
 5. The audit feed hides expense rows without `expense:read`. It hides employee, salary and payroll
    line rows, and the stored `PayrollPayment*` events, without `payroll:read`. Platform Activity
    never shows payroll.

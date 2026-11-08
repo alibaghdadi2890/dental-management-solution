@@ -19,7 +19,7 @@ not change how it computes anything.
 2. **Mirrors through events, in the transaction.** Confirming a payroll line publishes
    `PayrollPaymentConfirmed`. `compensation` already publishes `PayoutRecorded`. `expenses`
    subscribes to both with `@OnDomainEventInTransaction` and writes a read-only row in the
-   reserved category (*Salaries* or *Dentist compensation*). The voiding events
+   reserved category (_Salaries_ or _Dentist compensation_). The voiding events
    (`PayrollPaymentVoided`, `PayoutVoided`) void the row with the same reason.
    - `PayoutRecorded` and `PayoutVoided` gain the facts the mirror needs: amount, currency, method,
      reference and the void reason.
