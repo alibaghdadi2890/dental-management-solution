@@ -33,6 +33,8 @@ The default matrix (deny by default, the owner widens):
 | `appointment:write_all`                                                                                              | ✓     | ✓     | –       | ✓         | ✓         |
 | `appointment:override`                                                                                               | ✓     | ✓     | –       | –         | ✓         |
 | `expense:read`, `expense:manage`, `payroll:read`, `payroll:manage` (feature 17, ADR-0080, migration 0058)            | ✓     | ✓     | –       | –         | –         |
+| `lab:read`, `lab:manage` (feature 18, ADR-0086, migration 0059)                                                      | ✓     | ✓     | ✓       | ✓         | ✓         |
+| `lab:money_read`, `lab:money_manage` (feature 18, ADR-0086, migration 0059)                                          | ✓     | ✓     | –       | –         | –         |
 
 `visit:read` is the caller's own visits (dentist or starter), `visit:read_all` every visit;
 `payment:read` is one patient's account, `finance:read` money across patients; `visit:discount` is

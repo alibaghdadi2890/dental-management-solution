@@ -46,6 +46,12 @@ active statuses (ADR-0067). They are written by hand in the migration.
   `booked`, on the same row, while its start is ahead. It is placed as a move to the same time; its
   follow-up is booked again when still awaiting, otherwise the link is dropped.
 - **Follow-ups:** only cancel and no-show reopen one, and reopening restarts the window (ADR-0069).
+- **Lab work as a reason:** the Next appointment step offers one _Fit …_ row per open lab order of
+  the patient that no other appointment waits for (`labWorkForNextAppointment` in contracts), in the
+  lab colour (`--color-lab*`). It is the kind `lab_work`, never a chip: it carries the order's plan
+  items still open, 30 minutes, and _As soon as possible_ when the work is back or a custom date when
+  it is expected back (at the lab: the trip's expected date; not sent or sent back: the visit's day
+  plus the turnaround). The front desk's follow-up card shows the same _Lab work_ tag.
 - **Time:** `check in` on the local day; `confirm` and `reschedule` from today on; `no-show` once the
   start has passed; `cancel` for anything booked or confirmed, past ones included.
 - **Vetoes:** archiving a patient with upcoming appointments, `409 patient.has_upcoming_appointments`;
@@ -88,3 +94,8 @@ column and `appointment:write_all` every column. The service applies it on the s
 `AppointmentCancelled`, `AppointmentRestored`, `AppointmentMarkedNoShow`, `AppointmentStarted`, `AppointmentCompleted`, `FollowUpRecommended`,
 `FollowUpBooked`, `FollowUpReopened`, `FollowUpTagged`, `FollowUpDeclined`, `OpeningHoursChanged`.
 Every change also writes a dotted audit action for the Activity screen (area `schedule`).
+
+`labs` consumes `AppointmentBooked`, `AppointmentRescheduled`, `AppointmentCancelled`,
+`AppointmentMarkedNoShow` and `AppointmentCompleted` in the transaction to keep a lab order's
+appointment link (ADR-0084), and reads `refs`, `upcomingFor` and `openWeekdays` (ungated building
+blocks, feature 18). The booking warning about lab work is the SPA's (ADR-0081).

@@ -128,6 +128,11 @@ platform admin acting in the clinic). `apps/web/src/features/audit/`:
   raw events in `PAYROLL_EVENTS` are left out without `payroll:read`, and always from
   `GET /platform/audit`. The sentences name the category (translated by `categoryKey`), the fixed
   expense or the employee from the snapshot. A mirrored salary or payout row is not audited again.
+- **Labs** (feature 18, ADR-0086): the `labs` area (`lab.*`, `lab_service.*`, `lab_order.*`,
+  `lab_payment.*`, `lab_adjustment.*`). Without `lab:money_read` (`withoutLabMoney`) the
+  `lab_service`, `lab_payment` and `lab_adjustment` rows, the `lab.opening_balance` and
+  `lab_order.cost` actions and the raw `LAB_MONEY_EVENTS` are left out. Order rows are about the
+  patient (and the visit); a link changed by an appointment event says `by: 'system'`.
 
 ## HTTP
 

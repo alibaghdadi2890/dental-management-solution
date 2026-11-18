@@ -465,7 +465,9 @@ an unknown id inside a body is a 422 at its path.
   - `PatientCreated { patientId }`
   - `PatientUpdated { patientId, fields }`: the names of the changed patch fields.
   - `PatientArchived { patientId }`, inside the archive's transaction: `scheduling` refuses it while
-    the patient has an upcoming appointment (`409 patient.has_upcoming_appointments`).
+    the patient has an upcoming appointment (`409 patient.has_upcoming_appointments`), and `labs`
+    while an order is open (`409 lab_order.patient_has_open_orders`, ADR-0081). `labs` also
+    serves the list's `lab=open` filter (`GET /labs/patients`); `GET /patients` refuses it.
   - `PatientRestored { patientId }`
   - `PatientsMerged { keptId, droppedId }`, published inside the merge transaction. Consumed by
     `clinical`, whose in-transaction handler re-points the dropped patient's visits, diagnoses,

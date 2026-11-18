@@ -22,6 +22,9 @@ or payables.
 - `audit`
 - the events of `payroll` (`PayrollPaymentConfirmed`, `PayrollPaymentVoided`) and `compensation`
   (`PayoutRecorded`, `PayoutVoided`), consumed in their transactions (ADR-0076)
+- the events of `labs` (`LabPaymentRecorded`, `LabPaymentVoided`): a read-only row with source
+  `lab`, category _Lab fees_, the lab as payee, visible with `expense:read` and counted in Today's
+  card; voided with the payment (feature 18, ADR-0085). _Lab fees_ stays choosable by hand.
 - `TenantProvisioned` (seeds the categories, after the commit) and `TenantCurrencyChanged` (vetoed
   once any expense or fixed expense exists)
 

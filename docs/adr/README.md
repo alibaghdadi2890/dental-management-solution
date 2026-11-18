@@ -84,3 +84,9 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0078](0078-pending-items-and-derived-payroll-lines.md)                | Fixed expenses wait as items made on the next look; payroll lines derived    | Accepted                             |
 | [0079](0079-salaries-are-an-effective-dated-history.md)                | A salary is an effective-dated history                                       | Accepted                             |
 | [0080](0080-expense-and-payroll-permissions.md)                        | Expense and payroll permissions, and who sees which rows                     | Accepted (amends 0055)               |
+| [0081](0081-the-labs-module.md)                                        | The `labs` module, and how lab data reaches other screens                    | Accepted                             |
+| [0082](0082-one-order-several-trips.md)                                | One lab order, several trips, and one step back                              | Accepted                             |
+| [0083](0083-lab-cost-owed-on-arrival.md)                               | A lab order's cost is owed from its first arrival; the account is computed   | Accepted                             |
+| [0084](0084-the-appointment-link-follows-scheduling.md)                | An order's appointment link follows scheduling's events                      | Accepted                             |
+| [0085](0085-lab-payments-are-mirrored-into-expenses.md)                | Lab payments are mirrored into Expenses                                      | Accepted (extends 0076)              |
+| [0086](0086-lab-permissions.md)                                        | Lab permissions                                                              | Accepted                             |
