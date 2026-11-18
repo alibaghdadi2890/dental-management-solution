@@ -1,4 +1,5 @@
 import {
+  type ContactDetail,
   type ContactLinkInput,
   type ContactLinkPatch,
   type ContactLookupItem,
@@ -105,6 +106,48 @@ export class ContactsService {
     });
   }
 
+  /**
+   * A contact, resolved, and every patient who links them, archived included, by name (families C:
+   * the contact panel). Unknown or deleted → 404 `contact.not_found`.
+   */
+  async detail(contactId: string): Promise<ContactDetail> {
+    this.context.requirePermission('patient:read');
+    return this.tenantDb.run(async () => {
+      const record = await this.contacts.findById(contactId);
+      if (!record) throw new ContactNotFoundError(CONTACT_NOT_FOUND);
+      const links = await this.links.listForContact(contactId);
+      const patients = new Map(
+        (await this.patients.findByIds(links.map((link) => link.patientId))).map((patient) => [
+          patient.id,
+          patient,
+        ]),
+      );
+      const rows = links.flatMap((link) => {
+        const patient = patients.get(link.patientId);
+        return patient ? [{ link, patient }] : [];
+      });
+      rows.sort(
+        (a, b) =>
+          byteOrder(a.patient.nameKey, b.patient.nameKey) || byteOrder(a.patient.id, b.patient.id),
+      );
+      return {
+        contact: resolveContact(record.contact, record.linkedPatient),
+        patients: rows.map(({ link, patient }) => ({
+          patient: {
+            id: patient.id,
+            fullName: patient.fullName,
+            displayNumber: patient.displayNumber,
+            archived: patient.deletedAt !== null,
+          },
+          relationship: link.relationship,
+          isGuardian: link.isGuardian,
+          isBillingContact: link.isBillingContact,
+          isEmergencyContact: link.isEmergencyContact,
+        })),
+      };
+    });
+  }
+
   /** One contact, resolved (feature 5: a family's payer). Unknown or deleted → 404. */
   async contactView(contactId: string): Promise<ContactView> {
     this.context.requirePermission('patient:read');
@@ -163,13 +206,25 @@ export class ContactsService {
    * with a linked contact appears once, as that contact. At most 10, by name key (diacritics-
    * insensitive) in code-point order, contacts before patients on a tie, then id. Each half is
    * cut at 10 in SQL in the same order (`byNameKey`), so merging them here keeps the first 10.
+   * A patient carries their `familyContact` (families A, P5): the primary guardian, else the
+   * primary billing contact, resolved.
    */
   async lookup(query: ContactLookupQuery): Promise<ContactLookupItem[]> {
     this.context.requirePermission('patient:read');
-    const { contacts, patients } = await this.tenantDb.run(async () => ({
-      contacts: await this.contacts.lookup(query.q, LOOKUP_LIMIT),
-      patients: await this.patients.lookupUnlinked(query.q, LOOKUP_LIMIT),
-    }));
+    const { contacts, patients, family } = await this.tenantDb.run(async () => {
+      const unlinked = await this.patients.lookupUnlinked(query.q, LOOKUP_LIMIT);
+      return {
+        contacts: await this.contacts.lookup(query.q, LOOKUP_LIMIT),
+        patients: unlinked,
+        family: await this.links.familyContactsFor(unlinked.map((patient) => patient.id)),
+      };
+    });
+    const familyOf = new Map(
+      family.map((row) => [
+        row.patientId,
+        { role: row.role, contact: resolveContact(row.contact, row.linkedPatient) },
+      ]),
+    );
     const rows: { key: string; rank: number; id: string; item: ContactLookupItem }[] = [
       ...contacts.map((record) => {
         const contact = resolveContact(record.contact, record.linkedPatient);
@@ -187,6 +242,7 @@ export class ContactsService {
             fullName: patient.fullName,
             phone: patient.phone,
             dateOfBirth: patient.dateOfBirth,
+            familyContact: familyOf.get(patient.id) ?? null,
           },
         };
         return { key: patient.nameKey, rank: 1, id: patient.id, item };
@@ -350,7 +406,7 @@ export class ContactsService {
 }
 
 /** Unknown → 404; merged away → 409 `patient.merged`; archived → 409 `patient.archived`. */
-function assertWritable(patient: DomainPatient | undefined): void {
+export function assertWritable(patient: DomainPatient | undefined): void {
   if (!patient) throw new PatientNotFoundError(PATIENT_NOT_FOUND);
   if (patient.mergedIntoId !== null) {
     throw new PatientMergedError('This record was merged into another one; use the kept record');

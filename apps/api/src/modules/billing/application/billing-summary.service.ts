@@ -15,9 +15,10 @@ import { TenantDb } from '../../../platform/db/tenant-db';
 import type { Clock } from '../../../platform/kernel/clock';
 import { localDate, zonedInstant } from '../../../platform/kernel/local-date';
 import { CatalogService, ClinicalSummaryService } from '../../clinical';
-import { PatientsService } from '../../patients';
+import { ContactsService, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { agingBucket, agingTotals } from '../domain/aging';
+import { familyKeyOf, payerOf } from '../domain/families';
 import { splitByService } from '../domain/service-split';
 import { AllocationsRepository } from '../persistence/allocations.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
@@ -50,6 +51,7 @@ export class BillingSummaryService {
     private readonly tenantDb: TenantDb,
     private readonly tenancy: TenancyService,
     private readonly patients: PatientsService,
+    private readonly contacts: ContactsService,
     private readonly catalog: CatalogService,
     private readonly clinical: ClinicalSummaryService,
     private readonly summary: BillingSummaryRepository,
@@ -210,7 +212,11 @@ export class BillingSummaryService {
     });
   }
 
-  /** Receivables now (`GET /billing/aging`'s buckets) and the five largest balances. */
+  /**
+   * Receivables now (`GET /billing/aging`'s buckets) and the five largest balances by family
+   * (families C): the owing patients grouped under their primary billing contact
+   * (`familyKeyOf`, as Outstanding grouped by payer).
+   */
   async receivables(): Promise<FinancialReceivables> {
     this.context.requirePermission('finance:read');
     return this.tenantDb.run(async () => {
@@ -229,16 +235,40 @@ export class BillingSummaryService {
         if (remainder.date < row.oldest) row.oldest = remainder.date;
         byPatient.set(remainder.patientId, row);
       }
-      const largest = [...byPatient]
-        .sort(([idA, a], [idB, b]) =>
-          a.amount === b.amount ? (idA < idB ? -1 : 1) : a.amount > b.amount ? -1 : 1,
-        )
-        .slice(0, 5);
-      const refs = new Map(
-        (await this.patients.getMany(largest.map(([id]) => id))).map((patient) => [
-          patient.id,
-          patient,
+      const billing = new Map(
+        (await this.contacts.primaryBillingContacts([...byPatient.keys()])).map((row) => [
+          row.patientId,
+          row.contact,
         ]),
+      );
+      const payers = new Map([...billing.values()].map((contact) => [contact.id, contact]));
+      const familyOf = familyKeyOf(billing);
+      const families = new Map<string, { members: string[]; amount: bigint; oldest: string }>();
+      for (const [patientId, row] of byPatient) {
+        const key = familyOf(patientId);
+        const family = families.get(key) ?? { members: [], amount: 0n, oldest: row.oldest };
+        family.members.push(patientId);
+        family.amount += row.amount;
+        if (row.oldest < family.oldest) family.oldest = row.oldest;
+        families.set(key, family);
+      }
+      const largest = [...families]
+        .sort(([keyA, a], [keyB, b]) =>
+          a.amount === b.amount ? (keyA < keyB ? -1 : 1) : a.amount > b.amount ? -1 : 1,
+        )
+        .slice(0, 5)
+        .map(([key, family]) => ({
+          key,
+          ...family,
+          // The member owing longest stands for the family.
+          members: [...family.members].sort((a, b) =>
+            (byPatient.get(a)?.oldest ?? '') < (byPatient.get(b)?.oldest ?? '') ? -1 : 1,
+          ),
+        }));
+      const refs = new Map(
+        (await this.patients.getMany(largest.map((family) => family.members[0] ?? ''))).map(
+          (patient) => [patient.id, patient],
+        ),
       );
       return {
         currency: tenant.currency,
@@ -247,14 +277,20 @@ export class BillingSummaryService {
           bucket: bucket.bucket,
           amount: fromCents(bucket.amount),
         })),
-        largest: largest.map(([patientId, row]) => ({
-          patientId,
-          fullName: refs.get(patientId)?.fullName ?? '',
-          displayNumber: refs.get(patientId)?.displayNumber ?? '',
-          amount: fromCents(row.amount),
-          oldest: row.oldest,
-          bucket: agingBucket(row.oldest, today),
-        })),
+        largest: largest.map((family) => {
+          const first = family.members[0] ?? family.key;
+          const payer = payers.get(family.key);
+          return {
+            patientId: first,
+            fullName: refs.get(first)?.fullName ?? '',
+            displayNumber: refs.get(first)?.displayNumber ?? '',
+            payer: payer ? payerOf(payer) : null,
+            members: family.members.length,
+            amount: fromCents(family.amount),
+            oldest: family.oldest,
+            bucket: agingBucket(family.oldest, today),
+          };
+        }),
       };
     });
   }

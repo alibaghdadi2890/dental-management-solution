@@ -224,6 +224,54 @@ export class PatientContactsRepository {
     }));
   }
 
+  /**
+   * Each patient's family contact (families A, P5): the primary guardian, else the primary billing
+   * contact, with the role it is chosen for. Patients with neither are absent. One query; the two
+   * primaries per patient are told apart here (at most one of each, by the partial unique indexes).
+   */
+  async familyContactsFor(patientIds: readonly string[]): Promise<
+    (Omit<PatientContactRecord, 'link'> & {
+      patientId: string;
+      role: 'guardian' | 'billing';
+    })[]
+  > {
+    if (patientIds.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({
+          patientId: patientContacts.patientId,
+          isPrimaryGuardian: patientContacts.isPrimaryGuardian,
+          contact: contacts,
+          linkedPatient: linkedPatients,
+        })
+        .from(patientContacts)
+        .innerJoin(
+          contacts,
+          and(eq(contacts.id, patientContacts.contactId), isNull(contacts.deletedAt)),
+        )
+        .leftJoin(linkedPatients, eq(linkedPatients.id, contacts.linkedPatientId))
+        .where(
+          and(
+            inArray(patientContacts.patientId, [...patientIds]),
+            or(
+              eq(patientContacts.isPrimaryGuardian, true),
+              eq(patientContacts.isPrimaryBilling, true),
+            ),
+          ),
+        ),
+    );
+    const chosen = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      if (!chosen.has(row.patientId) || row.isPrimaryGuardian) chosen.set(row.patientId, row);
+    }
+    return [...chosen.values()].map((row) => ({
+      patientId: row.patientId,
+      role: row.isPrimaryGuardian ? 'guardian' : 'billing',
+      contact: toDomainContact(row.contact),
+      linkedPatient: toLinkedPatient(row.linkedPatient),
+    }));
+  }
+
   /** The patients linking `contactId` as their billing contact (C12), archived ones included. */
   async patientsBilledBy(contactId: string): Promise<string[]> {
     const rows = await this.db.run((tx) =>

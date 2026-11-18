@@ -42,6 +42,7 @@ import { ContactsService, PatientNotFoundError, PatientsService } from '../../pa
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
 import { addDays, agingBucket, agingTotals } from '../domain/aging';
+import { familyKeyOf, payerOf } from '../domain/families';
 import {
   byAge,
   heldPosition,
@@ -226,14 +227,7 @@ export class PaymentViewsService {
       );
       const payerContacts = new Map([...billing.values()].map((contact) => [contact.id, contact]));
       // A parent who is a patient joins the family they pay for, unless someone else bills them.
-      const familyOf = (patientId: string): string => {
-        const own = billing.get(patientId);
-        if (own) return own.id;
-        const asPayer = [...payerContacts.values()].find(
-          (contact) => contact.linkedPatient?.id === patientId,
-        );
-        return asPayer?.id ?? patientId;
-      };
+      const familyOf = familyKeyOf(billing);
 
       interface Group {
         key: string;
@@ -845,12 +839,7 @@ export class PaymentViewsService {
   }
 
   private payerOfContact(contact: ContactView): Payer {
-    return {
-      contactId: contact.id,
-      name: contact.fullName,
-      patientId:
-        contact.linkedPatient && !contact.linkedPatient.archived ? contact.linkedPatient.id : null,
-    };
+    return payerOf(contact);
   }
 
   private payerView(

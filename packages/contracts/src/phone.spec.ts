@@ -4,6 +4,7 @@ import {
   formatPhoneFor,
   normalizePhone,
   phoneDigits,
+  samePhone,
   storedPhone,
   SUPPORTED_COUNTRIES,
 } from './phone.js';
@@ -83,6 +84,25 @@ describe('phoneDigits', () => {
 
   it('reads Arabic-Indic digits as digits, so `q=٠٣١٢` matches a phone', () => {
     expect(phoneDigits('٠٣ ١٢٣')).toBe('03123');
+  });
+});
+
+describe('samePhone', () => {
+  it('matches a valid number however it is typed', () => {
+    expect(samePhone('03 123 456', '+961 3 123 456', 'LB')).toBe(true);
+    expect(samePhone('+9613123456', '03123456', 'LB')).toBe(true);
+    expect(samePhone('03 123 456', '03 123 457', 'LB')).toBe(false);
+  });
+
+  it('matches a number the country cannot place by its digits', () => {
+    expect(samePhone('03-123 45', '03 123 45', 'LB')).toBe(true);
+    expect(samePhone('03-123 45', '03 123 46', 'LB')).toBe(false);
+  });
+
+  it('never matches a blank phone, nor text without digits', () => {
+    expect(samePhone('', '', 'LB')).toBe(false);
+    expect(samePhone('  ', '03 123 456', 'LB')).toBe(false);
+    expect(samePhone('n/a', 'n/a', 'LB')).toBe(false);
   });
 });
 

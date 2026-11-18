@@ -11,7 +11,7 @@ import {
 import { monthSchema } from './compensation.js';
 import { PAYMENT_METHODS } from './billing.js';
 import { addDays } from './labs.js';
-import { AGING_BUCKETS } from './payments.js';
+import { AGING_BUCKETS, payerSchema } from './payments.js';
 import { ENTRY_VISIT_TYPES, VISIT_TYPES } from './visit-flow.js';
 
 /**
@@ -287,12 +287,19 @@ export const financialReceivablesSchema = z.object({
   currency: currencySchema,
   total: amount,
   buckets: z.array(z.object({ bucket: z.enum(AGING_BUCKETS), amount })),
-  /** The five largest balances. */
+  /**
+   * The five largest balances, by family (families C): the owing patients grouped under their
+   * primary billing contact, as Outstanding grouped by payer. `patientId`, `fullName` and
+   * `displayNumber` are the family's first member (the patient, alone); `members` counts the
+   * owing members; `payer` is the billing contact, or null for a patient nobody bills.
+   */
   largest: z.array(
     z.object({
       patientId: idSchema,
       fullName: z.string(),
       displayNumber: z.string(),
+      payer: payerSchema.nullable(),
+      members: z.number().int().positive(),
       amount,
       oldest: isoDateSchema,
       bucket: z.enum(AGING_BUCKETS),

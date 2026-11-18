@@ -157,11 +157,38 @@ export const patientContactSchema = z.object({
 });
 export type PatientContact = z.infer<typeof patientContactSchema>;
 
+/**
+ * `GET /contacts/:id` (families C): a contact, resolved, and every patient who links them, by
+ * name — the contact panel.
+ */
+export const contactDetailSchema = z.object({
+  contact: contactViewSchema,
+  patients: z.array(
+    z.object({
+      patient: z.object({
+        id: idSchema,
+        fullName: z.string(),
+        displayNumber: displayNumberSchema,
+        archived: z.boolean(),
+      }),
+      relationship: contactRelationshipSchema,
+      isGuardian: z.boolean(),
+      isBillingContact: z.boolean(),
+      isEmergencyContact: z.boolean(),
+    }),
+  ),
+});
+export type ContactDetail = z.infer<typeof contactDetailSchema>;
+
 /** `GET /contacts/lookup?q=`: by name, or by at least 2 phone digits. */
 export const contactLookupQuerySchema = z.object({ q: z.string().trim().min(1).max(100) });
 export type ContactLookupQuery = z.infer<typeof contactLookupQuerySchema>;
 
-/** A lookup hit: a contact, or a patient not yet anyone's contact (search-or-create, C5). */
+/**
+ * A lookup hit: a contact, or a patient not yet anyone's contact (search-or-create, C5). A
+ * patient's `familyContact` is their primary guardian, else their primary billing contact: whom the
+ * create and edit panels offer when the typed phone is on a minor's record (families A, P5).
+ */
 export const contactLookupItemSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('contact'), contact: contactViewSchema }),
   z.object({
@@ -172,6 +199,9 @@ export const contactLookupItemSchema = z.discriminatedUnion('kind', [
       fullName: z.string(),
       phone: z.string().nullable(),
       dateOfBirth: isoDateSchema.nullable(),
+      familyContact: z
+        .object({ role: z.enum(['guardian', 'billing']), contact: contactViewSchema })
+        .nullable(),
     }),
   }),
 ]);
@@ -192,3 +222,83 @@ export const matchedContactSchema = z.object({
   relationship: contactRelationshipSchema,
 });
 export type MatchedContact = z.infer<typeof matchedContactSchema>;
+
+/**
+ * A possible family (families B, ADR-0093): people sharing a phone who are not yet linked into one
+ * family. `contactIds` are the contacts each patient links; `selfContactId` is the contact that is
+ * the patient, if any. `phone` is the shared phone as stored (of the first person).
+ */
+export const familySuggestionSchema = z.object({
+  phoneKey: z.string(),
+  phone: z.string(),
+  sameFamilyName: z.boolean(),
+  patients: z.array(
+    z.object({
+      id: idSchema,
+      fullName: z.string(),
+      displayNumber: displayNumberSchema,
+      dateOfBirth: isoDateSchema.nullable(),
+      contactIds: z.array(idSchema),
+      selfContactId: idSchema.nullable(),
+    }),
+  ),
+  contacts: z.array(z.object({ id: idSchema, fullName: z.string() })),
+});
+export type FamilySuggestion = z.infer<typeof familySuggestionSchema>;
+
+/** The most members one Link family links. */
+export const FAMILY_LINK_MEMBERS_MAX = 20;
+
+/**
+ * `POST /patients/families/link`: each member is linked to the payer — a patient, a contact or a
+ * new contact — with the payer's relationship to them and at least one of the two roles.
+ */
+export const familyLinkInputSchema = z
+  .object({
+    payer: z.union([
+      z.strictObject({ patientId: idSchema }),
+      z.strictObject({ contactId: idSchema }),
+      z.strictObject({ newContact: newContactSchema }),
+    ]),
+    members: z
+      .array(
+        z
+          .object({
+            patientId: idSchema,
+            relationship: contactRelationshipSchema,
+            isGuardian: z.boolean().default(false),
+            isBillingContact: z.boolean().default(false),
+          })
+          .refine((member) => member.isGuardian || member.isBillingContact, {
+            message: ROLE_REQUIRED,
+            path: ['isGuardian'],
+          }),
+      )
+      .min(1)
+      .max(FAMILY_LINK_MEMBERS_MAX),
+  })
+  .superRefine((input, context) => {
+    const seen = new Set<string>();
+    const payerId = 'patientId' in input.payer ? input.payer.patientId : null;
+    input.members.forEach((member, index) => {
+      if (seen.has(member.patientId) || member.patientId === payerId) {
+        context.addIssue({
+          code: 'custom',
+          message: 'Each member once, and never the payer',
+          path: ['members', index, 'patientId'],
+        });
+      }
+      seen.add(member.patientId);
+    });
+  });
+export type FamilyLinkInput = z.infer<typeof familyLinkInputSchema>;
+
+export const familyLinkResultSchema = z.object({ linked: z.number().int().nonnegative() });
+export type FamilyLinkResult = z.infer<typeof familyLinkResultSchema>;
+
+/** `POST /patients/families/dismiss`: "Not a family" for these people sharing `phoneKey`. */
+export const familyDismissInputSchema = z.object({
+  phoneKey: z.string().regex(/^\d{1,40}$/),
+  people: z.array(idSchema).min(2).max(200),
+});
+export type FamilyDismissInput = z.infer<typeof familyDismissInputSchema>;

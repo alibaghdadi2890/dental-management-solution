@@ -1,6 +1,7 @@
 import type {
   AuditPage,
   Family,
+  FinancialReceivables,
   FamilyStatement,
   OutstandingPage,
   PatientAccount,
@@ -745,6 +746,49 @@ describe('billing: payments, refunds, voids and credit (feature 5)', () => {
       ['Family Younger', 'Family Parent'],
       ['Family Elder', 'Family Parent'],
     ]);
+  });
+
+  it("ranks the dashboard's largest balances by family (families C)", async () => {
+    // Far above the other tests' balances, so these three are the top of the clinic.
+    const single = await patientOwing('Largest Single', '90000', '2026-05-01');
+    const first = await patientOwing('Largest Child One', '60000', '2026-05-03');
+    const second = await patientOwing('Largest Child Two', '50000', '2026-05-02');
+    const [link] = await ok<{ contact: { id: string } }[]>(
+      owner.post(`/api/v1/patients/${first.id}/contacts`).send({
+        target: { newContact: { fullName: 'Largest Payer', phone: '71 909 090' } },
+        relationship: 'parent',
+        isBillingContact: true,
+      }),
+      201,
+    );
+    const contactId = link?.contact.id ?? '';
+    await ok(
+      owner.post(`/api/v1/patients/${second.id}/contacts`).send({
+        target: { contactId },
+        relationship: 'parent',
+        isBillingContact: true,
+      }),
+      201,
+    );
+
+    const { largest } = await ok<FinancialReceivables>(
+      owner.get('/api/v1/dashboards/financial/receivables'),
+    );
+    expect(largest[0]).toMatchObject({
+      payer: { contactId, name: 'Largest Payer', patientId: null },
+      members: 2,
+      amount: '110000.00',
+      oldest: '2026-05-02',
+      // The member owing longest stands for the family.
+      patientId: second.id,
+      fullName: 'Largest Child Two',
+    });
+    expect(largest[1]).toMatchObject({
+      payer: null,
+      members: 1,
+      amount: '90000.00',
+      patientId: single.id,
+    });
   });
 
   it('serves the account, history, receipt, statement, transactions, aging and outstanding (smoke)', async () => {

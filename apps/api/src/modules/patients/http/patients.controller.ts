@@ -4,6 +4,10 @@ import {
   dentitionOverrideSchema,
   duplicateCheckQuerySchema,
   duplicateGroupSchema,
+  familyDismissInputSchema,
+  familyLinkInputSchema,
+  familyLinkResultSchema,
+  familySuggestionSchema,
   idSchema,
   patientArchiveSchema,
   patientContactSchema,
@@ -39,6 +43,7 @@ import { z } from 'zod';
 import { idempotencyKey } from '../../../platform/http/idempotency-key';
 import { RequirePermission } from '../../../platform/http/route-access';
 import { ContactsService } from '../application/contacts.service';
+import { FamiliesService } from '../application/families.service';
 import { PatientsService } from '../application/patients.service';
 
 /**
@@ -86,6 +91,10 @@ class PatientNameDto extends createZodDto(patientNameSchema) {}
 class PatientContactDto extends createZodDto(patientContactSchema) {}
 class ContactLinkInputDto extends createZodDto(contactLinkInputSchema) {}
 class ContactLinkPatchDto extends createZodDto(contactLinkPatchSchema) {}
+class FamilySuggestionDto extends createZodDto(familySuggestionSchema) {}
+class FamilyLinkInputDto extends createZodDto(familyLinkInputSchema) {}
+class FamilyLinkResultDto extends createZodDto(familyLinkResultSchema) {}
+class FamilyDismissInputDto extends createZodDto(familyDismissInputSchema) {}
 
 /**
  * The Patients screen, the ⌘K palette and the patient record (docs/modules/patients.md), with the
@@ -96,6 +105,7 @@ export class PatientsController {
   constructor(
     private readonly patients: PatientsService,
     private readonly contacts: ContactsService,
+    private readonly families: FamiliesService,
   ) {}
 
   @Get()
@@ -119,6 +129,29 @@ export class PatientsController {
   @ZodResponse({ type: [DuplicateGroupDto] })
   duplicates() {
     return this.patients.duplicates();
+  }
+
+  /** Possible families (families B, ADR-0093). */
+  @Get('families')
+  @RequirePermission('patient:read')
+  @ZodResponse({ type: [FamilySuggestionDto] })
+  listFamilies() {
+    return this.families.list();
+  }
+
+  @Post('families/link')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermission('patient:write')
+  @ZodResponse({ type: FamilyLinkResultDto })
+  linkFamily(@Body() body: FamilyLinkInputDto) {
+    return this.families.link(body);
+  }
+
+  @Post('families/dismiss')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @RequirePermission('patient:write')
+  async dismissFamily(@Body() body: FamilyDismissInputDto): Promise<void> {
+    await this.families.dismiss(body);
   }
 
   @Get('duplicates/check')

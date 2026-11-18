@@ -407,6 +407,7 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
             fullName: 'Fadi Nassar',
             phone: '+96171400001',
             dateOfBirth: null,
+            familyContact: null,
           },
         },
       ]);
@@ -884,6 +885,45 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
       );
       expect(await lookup(main.owner, 'Lkq A0')).toEqual([]);
     });
+
+    it("gives a patient's primary guardian, else their primary billing contact (families A)", async () => {
+      // The phone is on the children's records; their contacts have phones of their own.
+      const withGuardian = await createPatient(main.owner, {
+        fullName: 'Fam Child One',
+        dateOfBirth: CHILD_DOB,
+        phone: '71 630 001',
+        contacts: [
+          linkInput(newContact('Fam Payer', '71 630 101'), 'other', { isBillingContact: true }),
+          linkInput(newContact('Fam Mother', '71 630 102'), 'parent', { isGuardian: true }),
+        ],
+      });
+      const billedOnly = await createPatient(main.owner, {
+        fullName: 'Fam Child Two',
+        dateOfBirth: CHILD_DOB,
+        phone: '71 630 002',
+        contacts: [
+          linkInput(newContact('Fam Uncle', '71 630 103'), 'other', { isBillingContact: true }),
+        ],
+      });
+      const alone = await createPatient(main.owner, { fullName: 'Fam Alone', phone: '71 630 003' });
+
+      const familyOf = async (q: string, patientId: string) => {
+        const item = (await lookup(main.owner, q)).find(
+          (row) => row.kind === 'patient' && row.patient.id === patientId,
+        );
+        if (item?.kind !== 'patient') throw new Error(`no patient ${patientId} for ${q}`);
+        return item.patient.familyContact;
+      };
+      expect(await familyOf('71 630 001', withGuardian.id)).toMatchObject({
+        role: 'guardian',
+        contact: { fullName: 'Fam Mother', phone: '+96171630102', linkedPatient: null },
+      });
+      expect(await familyOf('71 630 002', billedOnly.id)).toMatchObject({
+        role: 'billing',
+        contact: { fullName: 'Fam Uncle' },
+      });
+      expect(await familyOf('71 630 003', alone.id)).toBeNull();
+    });
   });
 
   describe('search and the list (C7)', () => {
@@ -900,6 +940,85 @@ describe('patients: contacts & family (addendum C1–C12)', () => {
         matchedContact: { fullName: 'Via Mother', relationship: 'parent' },
         primaryGuardian: { fullName: 'Via Mother', phone: '+96171700001', relationship: 'parent' },
       });
+    });
+
+    it("finds a child by their billing contact's name (families C)", async () => {
+      const child = await createPatient(main.owner, {
+        fullName: 'Nmq Child',
+        dateOfBirth: CHILD_DOB,
+        contacts: [
+          linkInput(newContact('Zuhair Qabbani', '71 700 101'), 'parent', {
+            isBillingContact: true,
+          }),
+        ],
+      });
+      const page = (await main.owner.get('/api/v1/patients?q=zuhair%20qabb')).body as PatientPage;
+      expect(page.items.map((row) => row.id)).toEqual([child.id]);
+      expect(page.items[0]?.matchedContact).toEqual({
+        fullName: 'Zuhair Qabbani',
+        relationship: 'parent',
+      });
+      // Matched by its own name: no "via" line.
+      const own = (await main.owner.get('/api/v1/patients?q=nmq%20child')).body as PatientPage;
+      expect(own.items[0]?.matchedContact).toBeNull();
+    });
+  });
+
+  describe('a contact (families C)', () => {
+    it('reads a contact with every patient who links them, and 404 for an unknown one', async () => {
+      const first = await createPatient(main.owner, {
+        fullName: 'Ctd Child A',
+        dateOfBirth: CHILD_DOB,
+        contacts: [linkInput(newContact('Ctd Mother', '71 710 001'), 'parent')],
+      });
+      const [mother] = await contactsOf(main.owner, first.id);
+      const contactId = mother?.contact.id ?? '';
+      const second = await createPatient(main.owner, {
+        fullName: 'Ctd Child B',
+        dateOfBirth: CHILD_DOB,
+        contacts: [linkInput({ contactId }, 'parent', { isBillingContact: true })],
+      });
+
+      const response = await main.owner.get(`/api/v1/contacts/${contactId}`);
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+      expect(response.body).toEqual({
+        contact: {
+          id: contactId,
+          fullName: 'Ctd Mother',
+          phone: '+96171710001',
+          email: null,
+          linkedPatient: null,
+        },
+        patients: [
+          {
+            patient: {
+              id: first.id,
+              fullName: 'Ctd Child A',
+              displayNumber: first.displayNumber,
+              archived: false,
+            },
+            relationship: 'parent',
+            isGuardian: true,
+            isBillingContact: false,
+            isEmergencyContact: false,
+          },
+          {
+            patient: {
+              id: second.id,
+              fullName: 'Ctd Child B',
+              displayNumber: second.displayNumber,
+              archived: false,
+            },
+            relationship: 'parent',
+            isGuardian: false,
+            isBillingContact: true,
+            isEmergencyContact: false,
+          },
+        ],
+      });
+      const unknown = await main.owner.get(`/api/v1/contacts/${newId()}`);
+      expect(unknown.status).toBe(404);
+      expect(problem(unknown.body).code).toBe('contact.not_found');
     });
   });
 

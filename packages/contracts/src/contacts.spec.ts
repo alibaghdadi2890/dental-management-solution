@@ -248,10 +248,43 @@ describe('contactLookupQuerySchema and contactLookupItemSchema', () => {
         fullName: 'Karim Haddad',
         phone: null,
         dateOfBirth: '1985-04-02',
+        familyContact: null,
       },
     };
     expect(contactLookupItemSchema.parse(contact)).toEqual(contact);
     expect(contactLookupItemSchema.parse(patient)).toEqual(patient);
     expect(contactLookupItemSchema.safeParse({ ...patient, kind: 'contact' }).success).toBe(false);
+  });
+
+  it("carries a patient's guardian or billing contact, with the role it holds", () => {
+    const withFamily = {
+      kind: 'patient',
+      patient: {
+        id: ID_B,
+        displayNumber: 'P-000007',
+        fullName: 'Lea Haddad',
+        phone: '+9613123456',
+        dateOfBirth: '2016-04-02',
+        familyContact: {
+          role: 'guardian',
+          contact: {
+            id: ID_A,
+            fullName: 'Mona Haddad',
+            phone: null,
+            email: null,
+            linkedPatient: null,
+          },
+        },
+      },
+    };
+    expect(contactLookupItemSchema.parse(withFamily)).toEqual(withFamily);
+    const badRole = {
+      ...withFamily,
+      patient: {
+        ...withFamily.patient,
+        familyContact: { ...withFamily.patient.familyContact, role: 'emergency' },
+      },
+    };
+    expect(contactLookupItemSchema.safeParse(badRole).success).toBe(false);
   });
 });

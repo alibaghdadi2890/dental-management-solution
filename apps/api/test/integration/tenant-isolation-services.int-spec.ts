@@ -1041,6 +1041,7 @@ describe('tenant isolation through the public services', () => {
       const contactRoutes = [
         ownerA.patch(`/api/v1/contacts/${guardianId}`).send({ fullName: 'Hijacked' }),
         ownerA.get(`/api/v1/contacts/${guardianId}/billed-patients`),
+        ownerA.get(`/api/v1/contacts/${guardianId}`),
         ownerA
           .patch(`/api/v1/patients/${a.patient.id}/contacts/${guardianId}`)
           .send({ isGuardian: true }),
@@ -1080,6 +1081,9 @@ describe('tenant isolation through the public services', () => {
       }
       const found = await ownerA.get('/api/v1/patients?q=03123456');
       expect((found.body as PatientPage).items.map((item) => item.id)).not.toContain(childId);
+      // Nor by the name of B's guardian (families C: the search matches a contact's name).
+      const byName = await ownerA.get('/api/v1/patients?q=Bravo%20Guardian');
+      expect((byName.body as PatientPage).items.map((item) => item.id)).not.toContain(childId);
 
       const contacts = testApp.app.get(ContactsService);
       await expect(
@@ -1597,6 +1601,7 @@ describe('tenant isolation through the public services', () => {
       'lab_order_files',
       'lab_payments',
       'lab_adjustments',
+      'family_dismissals',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

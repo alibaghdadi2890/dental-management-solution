@@ -85,6 +85,18 @@ export function phoneDigits(query: string): string {
 }
 
 /**
+ * Whether two phones are the same number: both as they would be stored (`storedPhone`), then
+ * compared by their digits, so `03-123 45` and `03 123 45` (a number the country cannot place,
+ * stored as typed) match, as do `03 123 456` and `+961 3 123 456`. A blank phone, or one without
+ * a digit, is nobody's.
+ */
+export function samePhone(a: string, b: string, country: CountryCode): boolean {
+  const digitsOf = (phone: string) => phoneDigits(storedPhone(phone, country)?.value ?? '');
+  const digits = digitsOf(a);
+  return digits !== '' && digits === digitsOf(b);
+}
+
+/**
  * Every ISO 3166-1 alpha-2 country `libphonenumber-js/max` has dialling data for — the same set
  * `countrySchema` (`common.ts`) accepts. The one place the web app needs this list, so it re-uses
  * this build instead of adding its own `libphonenumber-js` dependency (feature 3 Q3).

@@ -1,4 +1,5 @@
 import {
+  contactDetailSchema,
   contactLookupItemSchema,
   contactLookupQuerySchema,
   contactPatchSchema,
@@ -13,6 +14,7 @@ import { RequirePermission } from '../../../platform/http/route-access';
 import { ContactsService } from '../application/contacts.service';
 
 class ContactViewDto extends createZodDto(contactViewSchema) {}
+class ContactDetailDto extends createZodDto(contactDetailSchema) {}
 class ContactPatchDto extends createZodDto(contactPatchSchema) {}
 class ContactLookupQueryDto extends createZodDto(contactLookupQuerySchema) {}
 /** A union has no class form (a class must extend an object type): the DTO is the value itself. */
@@ -36,6 +38,13 @@ export class ContactsController {
   @ZodResponse({ type: [ContactLookupItemDto] })
   lookup(@Query() query: ContactLookupQueryDto) {
     return this.contacts.lookup(query);
+  }
+
+  @Get(':id')
+  @RequirePermission('patient:read')
+  @ZodResponse({ type: ContactDetailDto })
+  detail(@Param() params: ContactParamsDto) {
+    return this.contacts.detail(params.id);
   }
 
   @Patch(':id')

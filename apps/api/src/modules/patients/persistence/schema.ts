@@ -317,3 +317,27 @@ export const patientContacts = pgTable(
     tenantIsolationPolicy(),
   ],
 );
+
+/**
+ * "Not a family" answers (families B, ADR-0093): one row per phone key, with the patients and
+ * contacts the possible family held when it was answered. The group stays hidden while every one
+ * of its people is in `people`; a new person brings it back. Answering again replaces the row.
+ */
+export const familyDismissals = pgTable(
+  'family_dismissals',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    /** The digits of the shared phone (the first word of `phone_search`). */
+    phoneKey: text().notNull(),
+    /** Patient and contact ids, no foreign key: a merged or deleted one just stops matching. */
+    people: uuid().array().notNull(),
+    dismissedBy: uuid().notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('family_dismissals_tenant_idx').on(table.tenantId),
+    uniqueIndex('family_dismissals_phone_key').on(table.tenantId, table.phoneKey),
+    tenantIsolationPolicy(),
+  ],
+);

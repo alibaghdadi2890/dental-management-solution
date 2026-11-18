@@ -4,6 +4,7 @@ import { TenancyModule } from '../tenancy';
 import { UsersModule } from '../users';
 import { ContactLinks } from './application/contact-links';
 import { ContactsService } from './application/contacts.service';
+import { FamiliesService } from './application/families.service';
 import { MedicalOptionsSeedingSubscriber } from './application/medical-options-seeding.subscriber';
 import { MedicalOptionsService } from './application/medical-options.service';
 import { PatientsService } from './application/patients.service';
@@ -11,6 +12,7 @@ import { ContactsController } from './http/contacts.controller';
 import { MedicalOptionsController } from './http/medical-options.controller';
 import { PatientsController } from './http/patients.controller';
 import { ContactsRepository } from './persistence/contacts.repository';
+import { FamilySuggestionsRepository } from './persistence/family-suggestions.repository';
 import { MedicalOptionsRepository } from './persistence/medical-options.repository';
 import { PatientContactsRepository } from './persistence/patient-contacts.repository';
 import { PatientCountersRepository } from './persistence/patient-counters.repository';
@@ -27,6 +29,7 @@ import { PatientsRepository } from './persistence/patients.repository';
   providers: [
     PatientsService,
     ContactsService,
+    FamiliesService,
     MedicalOptionsService,
     MedicalOptionsSeedingSubscriber,
     ContactLinks,
@@ -36,6 +39,7 @@ import { PatientsRepository } from './persistence/patients.repository';
     PatientCountersRepository,
     ContactsRepository,
     PatientContactsRepository,
+    FamilySuggestionsRepository,
   ],
   exports: [PatientsService, ContactsService, MedicalOptionsService],
 })
