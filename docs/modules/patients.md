@@ -31,6 +31,8 @@ with an opening balance) are composed by `billing` on top of this module (design
   and national digits of a valid number, so `03123…` and `96131…` both match, and the typed digits
   of any other. Blank means none: `phone` and `phone_search` null, never matched by phone digits.
   There is no phone rule (the addendum's C3 is superseded) and no `invalid_phone` error.
+  `samePhone(a, b, country)` (`@dcm/contracts`) says whether two phones are one number: both as
+  stored, compared by their digits; a blank phone matches nobody.
 - **Missing information** (ADR-0052): `missingInformation` (`@dcm/contracts`) lists the important
   fields the record lacks — the date of birth, a sex other than `unknown`, and the phone, for
   which a guardian or billing contact stands in. Derived in the SPA (the Patient information
@@ -42,8 +44,9 @@ with an opening balance) are composed by `billing` on top of this module (design
 - **Dates:** the date of birth must not be after the tenant's today, computed from the injected
   clock in the tenant time zone (`localDate` in `platform/kernel`). Age bands use the same today.
 - **Search `q`:** a diacritics-insensitive substring of `name_key`, the display number, the
-  e-mail, and, when the query has at least 2 digits, the phone digits — the patient's own, and the
-  resolved phone of any of the patient's live contacts (addendum C7). A query shaped like a
+  e-mail, the resolved name key of any of the patient's live contacts (families C), and, when the
+  query has at least 2 digits, the phone digits — the patient's own, and the resolved phone of any
+  of the patient's live contacts (addendum C7). A query shaped like a
   patient number (`P-000123`, `p000123`: `/^p-?\d+$/i`) matches display numbers only, as
   `P-<digits>`; its digits never search phones. Bare digits (`000123`) are still a phone query.
   The alternatives are OR-ed over the whole `q`, not per word: a mixed query such as `Mona 0312`
@@ -97,6 +100,10 @@ with an opening balance) are composed by `billing` on top of this module (design
   patient (partial unique `(tenant_id, patient_id)` per primary flag). Composite foreign keys
   `(tenant_id, patient_id)` → `patients` and `(tenant_id, contact_id)` → `contacts` keep both
   ends in the link's tenant. Indexes on `tenant_id` and `contact_id`.
+- `family_dismissals` (tenant RLS; migration `0061_family_dismissals`, ADR-0093): "Not a family"
+  answers. `phone_key` (the digits of the shared phone), `people` (`uuid[]`, patient and contact
+  ids, no foreign key), `dismissed_by`. Unique `(tenant_id, phone_key)`: answering again replaces
+  the row.
 - `medical_history_options` (tenant RLS, soft delete; migration `0041_medical_history`): the
   clinic's allergy list and condition list. `kind` (Postgres enum `medical_option_kind`:
   `allergy`, `condition`), `name` (1–60 characters), `active`. Unique `(tenant_id, id)`; unique
@@ -149,10 +156,10 @@ returns a Not seen figure; that chip is `GET /billing/patients/not-seen-count`.
   - `primaryGuardian`: `{ contactId, fullName, phone, relationship }` of the patient's primary
     guardian link, resolved (a contact linked to a patient shows that patient's name and phone),
     or null. Also on `duplicates()` and `checkDuplicates()` items.
-  - `matchedContact`: `{ fullName, relationship }` of the contact through whose phone a digit `q`
+  - `matchedContact`: `{ fullName, relationship }` of the contact through whose name or phone `q`
     matched the patient — only when the patient's own name, number, e-mail and phone did not
-    match (else null, and always null without a phone query). Several matching contacts: the
-    primary guardian first, then the oldest link.
+    match (else null, and always null without a `q` or for a patient-number query). Several
+    matching contacts: the primary guardian first, then the oldest link.
 
 - `query` is `PatientListQuery`: `view`, `q`, `dentist` (staff profile id or `none`), `age`
   (`child`/`adult`/`senior`, by date of birth against the tenant's today), `alerts` (whether the
@@ -349,19 +356,20 @@ after commit. A write on an archived patient → 409 `patient.archived`, on a me
 `patient.merged` (checked under the patient lock). Archive itself leaves links in place, and a
 contact linked to an archived patient still resolves, with `linkedPatient.archived: true` (C9).
 
-| Method                                    | Access          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| ----------------------------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contactsOf(patientId)`                   | `patient:read`  | `PatientContact[]`, resolved, primaries first then oldest link; archived and merged-away patients too. Unknown → 404 `patient.not_found`.                                                                                                                                                                                                                                                                                                                  |
-| `patientsBilledBy(contactId)`             | `patient:read`  | `PatientListItem[]` of the patients linking the contact with `is_billing_contact`, archived included, by name. Unknown or deleted contact → 404 `contact.not_found`.                                                                                                                                                                                                                                                                                       |
-| `contactView(contactId)`                  | `patient:read`  | One contact, resolved (feature 5: a family's payer). Unknown or deleted → 404 `contact.not_found`.                                                                                                                                                                                                                                                                                                                                                         |
-| `contactOfPatient(patientId)`             | `patient:read`  | The live contact that is this patient (C4), resolved, or `null` (feature 5: a parent's own record shows the family they pay for).                                                                                                                                                                                                                                                                                                                          |
-| `primaryBillingContacts(patientIds)`      | `patient:read`  | `{ patientId, contact }[]`: the primary billing contact of each patient that has one, resolved, in no particular order (feature 5: Outstanding grouped by payer).                                                                                                                                                                                                                                                                                          |
-| `findContactsByPhone(phone)`              | `patient:read`  | `ContactView[]` whose resolved phone is `phone` normalised with the tenant country; an unparseable phone matches nobody (`[]`).                                                                                                                                                                                                                                                                                                                            |
-| `lookup({ q })`                           | `patient:read`  | Search-or-create (C5): contacts (resolved), and active patients who are nobody's contact yet, whose name key contains `q` or whose phone digits contain its digits (≥ 2). A patient with a linked contact appears once, as that contact. Both halves are read in one transaction, each cut at 10 in SQL by name key in the "C" collation; the merged list keeps that order (code points), contacts before patients on equal keys, then id, and at most 10. |
-| `link(patientId, input)`                  | `patient:write` | A `ContactLinkInput` (see [Linking](#linking)). Returns the patient's contacts.                                                                                                                                                                                                                                                                                                                                                                            |
-| `updateLink(patientId, contactId, patch)` | `patient:write` | Relationship, roles, primaries (`isPrimary…: true` moves the primary). Not linked → 404 `contact.not_found`; no role left → 422 `contact.role_required`. A patch that changes nothing writes and audits nothing. Audits `contact.roles`. Returns the patient's contacts.                                                                                                                                                                                   |
-| `unlink(patientId, contactId)`            | `patient:write` | Hard-deletes the link; a primary is replaced by the oldest remaining holder. The contact stays (the lookup still finds it). Not linked → 404. Audits `contact.unlink`, emits `ContactUnlinked`. Returns the remaining contacts.                                                                                                                                                                                                                            |
-| `updateContact(contactId, patch)`         | `patient:write` | Name, phone (normalised; invalid → 422 at `phone`) and e-mail of an **unlinked** contact. Linked → 409 `contact.linked` (edit the patient record); unknown → 404. Only changed fields are written; audits `contact.update` (resource `contact`, before/after name, phone, e-mail), emits `ContactUpdated`. Returns the `ContactView`.                                                                                                                      |
+| Method                                    | Access          | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `contactsOf(patientId)`                   | `patient:read`  | `PatientContact[]`, resolved, primaries first then oldest link; archived and merged-away patients too. Unknown → 404 `patient.not_found`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `patientsBilledBy(contactId)`             | `patient:read`  | `PatientListItem[]` of the patients linking the contact with `is_billing_contact`, archived included, by name. Unknown or deleted contact → 404 `contact.not_found`.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `detail(contactId)`                       | `patient:read`  | Families C: `ContactDetail` — the contact, resolved, and every patient who links them (relationship and roles), archived included, by name. Unknown or deleted → 404 `contact.not_found`. The SPA's contact panel.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `contactView(contactId)`                  | `patient:read`  | One contact, resolved (feature 5: a family's payer). Unknown or deleted → 404 `contact.not_found`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `contactOfPatient(patientId)`             | `patient:read`  | The live contact that is this patient (C4), resolved, or `null` (feature 5: a parent's own record shows the family they pay for).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `primaryBillingContacts(patientIds)`      | `patient:read`  | `{ patientId, contact }[]`: the primary billing contact of each patient that has one, resolved, in no particular order (feature 5: Outstanding grouped by payer).                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `findContactsByPhone(phone)`              | `patient:read`  | `ContactView[]` whose resolved phone is `phone` normalised with the tenant country; an unparseable phone matches nobody (`[]`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `lookup({ q })`                           | `patient:read`  | Search-or-create (C5): contacts (resolved), and active patients who are nobody's contact yet, whose name key contains `q` or whose phone digits contain its digits (≥ 2). A patient with a linked contact appears once, as that contact. Both halves are read in one transaction, each cut at 10 in SQL by name key in the "C" collation; the merged list keeps that order (code points), contacts before patients on equal keys, then id, and at most 10. A patient item carries `familyContact`: their primary guardian, else their primary billing contact, resolved, with the role (`{ role, contact }` or null; families A). |
+| `link(patientId, input)`                  | `patient:write` | A `ContactLinkInput` (see [Linking](#linking)). Returns the patient's contacts.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `updateLink(patientId, contactId, patch)` | `patient:write` | Relationship, roles, primaries (`isPrimary…: true` moves the primary). Not linked → 404 `contact.not_found`; no role left → 422 `contact.role_required`. A patch that changes nothing writes and audits nothing. Audits `contact.roles`. Returns the patient's contacts.                                                                                                                                                                                                                                                                                                                                                          |
+| `unlink(patientId, contactId)`            | `patient:write` | Hard-deletes the link; a primary is replaced by the oldest remaining holder. The contact stays (the lookup still finds it). Not linked → 404. Audits `contact.unlink`, emits `ContactUnlinked`. Returns the remaining contacts.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `updateContact(contactId, patch)`         | `patient:write` | Name, phone (normalised; invalid → 422 at `phone`) and e-mail of an **unlinked** contact. Linked → 409 `contact.linked` (edit the patient record); unknown → 404. Only changed fields are written; audits `contact.update` (resource `contact`, before/after name, phone, e-mail), emits `ContactUpdated`. Returns the `ContactView`.                                                                                                                                                                                                                                                                                             |
 
 ### Linking
 
@@ -399,6 +407,56 @@ at `contacts.<i>`, code `duplicate`. `linkContactId` must be an unlinked contact
 (`linkToPatient` clears its own fields), audited `contact.update` (resource `contact`) and
 announced `ContactUpdated`. Any failure rolls back the patient, its number and every new contact.
 
+### The phone offer (families A)
+
+Spec `2026-11-18-phone-contact-suggestion-design.md`; amends the addendum's C4 "Link offer". In
+the create and edit panels (`panels/use-link-offer.ts`), a typed phone — in edit, one that differs
+from the saved phone — is looked up by its digits, and the hits with the same number
+(`samePhone`) are offered one at a time, contacts first, whatever the patient's age: a contact or
+an adult patient themselves, a minor patient's `familyContact` ("This phone is on {minor}'s
+record…"). **Add as contact** stages the person in the contacts section (a minor's Guardian block;
+otherwise Contacts & family, opened, with Billing contact ticked); **This is {name}** (create only,
+an adult, a contact who is no patient) sets `linkContactId`; **Not now** for the panel's life. The
+patient itself and anyone linked or pending are never offered.
+
+### The contact panel and Register as patient (families C)
+
+Spec `2026-11-18-billing-contacts-design.md`. `features/patients/contact-panel/`: a slide-over
+mounted once in the app shell (`ContactPanelProvider`, opened with `useOpenContact()`), from ⌘K's
+Contacts group (up to 3 contacts who are no patient, from the lookup), Outstanding grouped by
+payer, the dashboard's largest balances and the Contacts & family card's ⋯ menu. It shows the
+contact's phone and e-mail, Open record (a contact who is a patient) or **Register as patient**
+(`patient:write`), the linked patients with their roles, and with `payment:read` the family's
+balance (`billing`'s `FamilyMembers`) for a billing contact. Register as patient opens the New
+patient panel prefilled with the name, phone and e-mail and `linkContactId` set: the "Will link
+to" chip is pinned (a changed phone or age keeps it; its × removes it).
+
+### Possible families (families B)
+
+Spec `2026-11-18-family-alerts-design.md`, ADR-0093. `FamiliesService`
+(`application/families.service.ts`), `FamilySuggestionsRepository`, `domain/family-suggestions.ts`:
+
+- **What one is** (`possibleFamilies`): active patients with a phone and live contacts who are no
+  patient with a phone, grouped by phone key (the first word of `phone_search`); a group of two or
+  more, at least one a patient, that is not already one family (all connected through links, a
+  contact who is a patient being that patient, through anyone). A shared family name alone never
+  makes one; `sameFamilyName` (every last name word alike) only orders the list (then larger
+  groups, then by key).
+- **`list()`** (`patient:read`, `GET /patients/families`): `FamilySuggestion[]`, each patient with
+  the contacts they link and the contact that is them.
+- **`link(input)`** (`patient:write`, `POST /patients/families/link`): one transaction. The member
+  patients and a payer patient are locked `FOR UPDATE` in one statement, a new contact payer is
+  created, then each member is linked as `POST /patients/:id/contacts` (`ContactLinks`, errors at
+  `members.<i>…`), or — already linked to the payer — gets the ticked roles (`updateLink`). A
+  billing link becomes the member's primary billing contact. An unknown member or payer patient →
+  422 at `members.<i>.patientId` / `payer.patientId`; an archived or merged member → 409.
+- **`dismiss(input)`** (`patient:write`, `POST /patients/families/dismiss`, 204): saves the
+  answer for the phone key and its people; audited `contact.family_dismiss` (resource
+  `family_dismissal`). A new person sharing the phone brings the group back.
+- **SPA**: the review strip over the active list (`families/review-strip.tsx`: possible duplicates
+  and possible families side by side, replacing the duplicates banner) and the review panel
+  `?panel=families` (`families/families-panel.tsx`, the card's logic in `family-review.ts`).
+
 ### Merge with contacts (C8)
 
 In the merge transaction, after the field merge and the `patient.merge` audit entry, the two
@@ -430,6 +488,9 @@ link it had now points at that contact.
 | ---------------------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /patients`                                | `patient:read`  | `view=owing` and `sort=balance` → 400 `validation_failed`; `GET /billing/patients` serves them.                                                                       |
 | `GET /patients/counts`                         | `patient:read`  |                                                                                                                                                                       |
+| `GET /patients/families`                       | `patient:read`  | `FamilySuggestion[]` (families B). Registered before `:id`.                                                                                                           |
+| `POST /patients/families/link`                 | `patient:write` | Body `FamilyLinkInput`. 200 `{ linked }`.                                                                                                                             |
+| `POST /patients/families/dismiss`              | `patient:write` | Body `FamilyDismissInput`. 204.                                                                                                                                       |
 | `GET /patients/duplicates`                     | `patient:read`  |                                                                                                                                                                       |
 | `GET /patients/duplicates/check`               | `patient:read`  | `?fullName=&dateOfBirth=&excludeId=`                                                                                                                                  |
 | `GET /patients/:id`                            | `patient:read`  |                                                                                                                                                                       |
@@ -446,6 +507,7 @@ link it had now points at that contact.
 | `DELETE /patients/:id/contacts/:contactId`     | `patient:write` | 200 with the patient's remaining contacts (not 204: a primary may have moved).                                                                                        |
 | `GET /contacts/lookup?q=`                      | `patient:read`  | `ContactLookupItem[]` (search-or-create).                                                                                                                             |
 | `PATCH /contacts/:id`                          | `patient:write` | Body `ContactPatch` (unlinked contacts only). 200 with the `ContactView`.                                                                                             |
+| `GET /contacts/:id`                            | `patient:read`  | `ContactDetail` (`detail`).                                                                                                                                           |
 | `GET /contacts/:id/billed-patients`            | `patient:read`  | `PatientListItem[]` (`patientsBilledBy`).                                                                                                                             |
 | `GET /medical-history/options`                 | `patient:read`  | `MedicalOption[]`: both lists.                                                                                                                                        |
 | `POST /medical-history/options`                | `patient:write` | Body `{ kind, name }` (`medicalOptionAddSchema`). 200 with the option, found or created.                                                                              |

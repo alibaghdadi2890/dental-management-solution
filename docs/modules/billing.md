@@ -581,7 +581,10 @@ with their discounts and gross price, collections (payments not voided − refun
 by method, by month; a branch keeps the payments recorded there), production and collections by
 dentist (the compensation statement's attribution, ADR-0059), production by service
 (`domain/service-split.ts`: each entry moves each code from its prorated share before to after),
-receivables with the five largest balances, and patient credit (Σ accounts in credit).
+receivables with the five largest balances, and patient credit (Σ accounts in credit). The largest
+balances are by family since families C: owing patients grouped under their primary billing contact
+with Outstanding's rule (`domain/families.ts`: `familyKeyOf`, `payerOf`, shared with
+`outstanding(group=payer)`); an item carries the `payer` and the number of owing `members`.
 
 Routes added: `GET /billing/visits/charged` and `/charged/summary` (`finance:read`: visits with a
 visit entry dated in `chargedFrom`–`chargedTo`, `discounted`; footer count, charged, discounts)

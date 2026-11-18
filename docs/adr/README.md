@@ -96,3 +96,4 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0090](0090-capacity-is-opening-hours-times-rooms.md)                  | Capacity is opening hours × active rooms                                     | Accepted                             |
 | [0091](0091-charts-and-the-quiet-mark.md)                              | Charts behind one folder, their colours, and the quiet mark                  | Accepted                             |
 | [0092](0092-dashboard-permissions.md)                                  | Dashboard permissions                                                        | Accepted                             |
+| [0093](0093-possible-families-by-shared-phone.md)                      | Possible families by a shared phone                                          | Accepted                             |

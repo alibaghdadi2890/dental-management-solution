@@ -46,7 +46,7 @@ cards ignore them.
 | ------------------------------------------ | -------------------------------------- | ------------------------------------------------------------ |
 | `GET /dashboards/financial/money`          | `dashboard:financial`                  | production, collected, discounts, average, months, methods   |
 | `GET /dashboards/financial/costs`          | `dashboard:financial` + `expense:read` | expenses (complete cost), by category, cost groups           |
-| `GET /dashboards/financial/receivables`    | `dashboard:financial`                  | now: aging buckets, five largest balances                    |
+| `GET /dashboards/financial/receivables`    | `dashboard:financial`                  | now: aging buckets, five largest balances by family          |
 | `GET /dashboards/financial/dentists`       | `dashboard:financial`                  | production, collected, earned (`compensation:manage`)        |
 | `GET /dashboards/financial/services`       | `dashboard:financial`                  | production by service and category                           |
 | `GET /dashboards/financial/plans`          | `dashboard:financial`                  | now: accepted not started by priority, proposed              |
