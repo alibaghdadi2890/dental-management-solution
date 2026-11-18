@@ -1,0 +1,255 @@
+{
+  "title": "Dashboard",
+  "noAccess": {
+    "title": "No access to the dashboard",
+    "body": "Ask the clinic owner if you need it."
+  },
+  "tabs": {
+    "label": "Dashboards",
+    "financial": "Financial",
+    "operational": "Operational"
+  },
+  "periods": {
+    "this_month": "This month",
+    "last_month": "Last month",
+    "last_3_months": "Last 3 months",
+    "this_year": "This year",
+    "last_12_months": "Last 12 months",
+    "custom": "Custom"
+  },
+  "filters": {
+    "period": "Period",
+    "branch": "Branch",
+    "allBranches": "All branches",
+    "dentist": "Dentist",
+    "allDentists": "All dentists",
+    "span": "{{span}} · vs {{compare}}",
+    "updated": "Updated {{time}}",
+    "refresh": "Refresh",
+    "from": "From",
+    "to": "To",
+    "pickFrom": "Choose the first day",
+    "pickTo": "Choose the last day"
+  },
+  "print": {
+    "printed": "Printed {{at}}"
+  },
+  "vs": "vs {{span}}",
+  "now": "Now",
+  "allBranchesOnly": "All branches only",
+  "allDentistsOnly": "All dentists only",
+  "allClear": "All clear",
+  "other": "Other",
+  "uncategorised": "No category",
+  "seeAll": "See all",
+  "largest": "Largest balances",
+  "unallocated": "Unallocated",
+  "proposed": "Proposed, not accepted",
+  "cameBack": "Came back",
+  "over15": "{{share}} over 15 min",
+  "bookedTaken": "{{booked}} booked · {{taken}} taken",
+  "weekOf": "Week of {{date}}",
+  "minutes_one": "{{count}} min",
+  "minutes_other": "{{count}} min",
+  "hours_one": "{{count}} h",
+  "hours_other": "{{count}} h",
+  "card": {
+    "menu": "More for {{title}}",
+    "viewAsTable": "View as table",
+    "viewAsChart": "View as chart",
+    "exportCsv": "Export CSV",
+    "loading": "Loading {{title}}",
+    "empty": "Nothing in this period",
+    "error": "This didn’t load."
+  },
+  "tile": {
+    "now": "now",
+    "noComparison": "Nothing to compare with",
+    "change": {
+      "good": "{{change}} {{against}}, better",
+      "bad": "{{change}} {{against}}, worse",
+      "neutral": "{{change}} {{against}}"
+    }
+  },
+  "tiles": {
+    "production": "Production",
+    "collected": "Collected",
+    "collectionRate": "Collection rate",
+    "netResult": "Net result",
+    "expenses": "Expenses",
+    "receivables": "Receivables",
+    "discounts": "Discounts",
+    "average": "Average per visit",
+    "visits": "Visits",
+    "noShowRate": "No-show rate",
+    "cancellationRate": "Cancellation rate",
+    "newPatients": "New patients",
+    "roomUse": "Room use",
+    "wait": "Wait (median)",
+    "planAcceptance": "Plan acceptance",
+    "activePatients": "Active patients"
+  },
+  "cards": {
+    "moneyInOut": "Money in and out",
+    "receivables": "Receivables by age",
+    "dentists": "Dentists",
+    "services": "Top services",
+    "expenses": "Expenses by category",
+    "where": "Where the money goes",
+    "methods": "Payment methods",
+    "planValue": "Treatment plan value",
+    "owes": "What the clinic owes",
+    "appointmentsByWeek": "Appointments by week",
+    "attention": "Needs attention",
+    "busyHours": "Busy hours",
+    "treatmentPlans": "Treatment plans",
+    "visitTypes": "Visits by type",
+    "dentistsOps": "Dentists",
+    "patients": "Patients",
+    "labs": "Labs",
+    "followUps": "Follow-ups"
+  },
+  "info": {
+    "production": "What visits charged in the period after discounts, by ledger date: charges with their corrections and reversals. A voided visit counts nothing. Opening balances and balance adjustments are not production.",
+    "collected": "Payments received in the period minus refunds, by payment date. Voided payments never count; advances count when received.",
+    "collectionRate": "Collected ÷ production. It passes 100% when patients pay old balances or in advance.",
+    "netResult": "Collected − expenses. A cash view, not accounting: no accruals, depreciation or tax.",
+    "expenses": "Confirmed expenses in the period, salaries, dentist payouts and lab payments included. Pending and voided ones never count.",
+    "receivables": "What patients owe today, whatever the period.",
+    "discounts": "Line and visit discounts on the visits charged in the period, with their share of the price before discounts.",
+    "average": "Production ÷ the visits charged in the period. Voided visits are left out.",
+    "moneyInOut": "The 12 months ending with the period. Hover a month for its net result and collection rate.",
+    "receivablesByAge": "Unpaid charges by the age of each charge: the same buckets as Payments › Outstanding.",
+    "dentists": "Production by the visit’s dentist; collections as the compensation statement counts them, when the payment is applied to the visit. Unallocated: collected that is not yet on any visit (credit, advances, old balances).",
+    "services": "Production spread over each visit’s services; a correction moves it between them.",
+    "expensesByCategory": "Each category’s share of what was collected in the period.",
+    "where": "Each cost as a share of what was collected in the period.",
+    "methods": "Collected by method, each refund taken from its own method.",
+    "planValue": "Accepted treatment not started yet, by priority. Work in progress is already charged.",
+    "owes": "Now, whatever the period: lab balances, salaries and dentist pay not paid yet, fixed expenses waiting at their usual amounts, and what patients hold as credit or advances.",
+    "visits": "Visits finished in the period. Imported visits are history and never count here.",
+    "noShowRate": "No-shows ÷ appointments due in the period (started by now). A rescheduled booking counts once, at its final time.",
+    "cancellationRate": "Cancellations ÷ appointments due in the period.",
+    "newPatients": "Patients whose first visit ever is in the period. A patient with an imported earlier visit is not new.",
+    "roomUse": "Hours booked (not cancelled) ÷ opening hours × active rooms, over the days of the period that have passed. Dentist schedules do not exist yet.",
+    "wait": "From check-in to the start of the visit, the same day. The share over 15 minutes is next to it.",
+    "planAcceptance": "Of the plan items recorded in the period, the share the patient accepted.",
+    "activePatients": "Patients with a visit in the last 12 months, whatever the period.",
+    "appointmentsByWeek": "The 12 weeks ending with the period, by what became of each appointment due.",
+    "attention": "Now, whatever the period. A line goes away when its count is zero.",
+    "busyHours": "Appointments due in the period by weekday and starting hour. Darker is more.",
+    "treatmentPlans": "Plan items recorded in the period, and the share that passed from the step before.",
+    "visitTypes": "Finished visits by type: minutes booked on the appointment and minutes on the visit timer, on average.",
+    "dentistsOps": "Each dentist’s visits, hours booked, average visit length, no-show rate, plan acceptance and median wait. Click a column to sort.",
+    "patients": "New and returning patients per month. Came back: of patients first seen three to six months ago, the share with a later visit.",
+    "labs": "From the lab reports: trips received on time, average turnaround against the lab’s promise, and remakes.",
+    "followUps": "Follow-ups recommended in the period, and where they stand."
+  },
+  "summary": {
+    "money": "Production {{production}}, collected {{collected}} in the period",
+    "receivables": "Receivables {{amount}}",
+    "appointments": "{{due}} appointments due in the period"
+  },
+  "series": {
+    "production": "Production",
+    "collected": "Collected",
+    "expenses": "Expenses",
+    "new": "New",
+    "returning": "Returning"
+  },
+  "outcomes": {
+    "completed": "Completed",
+    "cancelled": "Cancelled",
+    "noShow": "No-show",
+    "unresolved": "Unresolved"
+  },
+  "switch": {
+    "service": "Service",
+    "category": "Category",
+    "booked": "Booked",
+    "noShows": "No-shows"
+  },
+  "buckets": {
+    "d0_30": "0–30 days",
+    "d31_60": "31–60 days",
+    "d61_90": "61–90 days",
+    "d90_plus": "Over 90 days"
+  },
+  "groups": {
+    "salaries": "Salaries",
+    "dentist_compensation": "Dentist compensation",
+    "lab_fees": "Lab fees",
+    "other": "Everything else"
+  },
+  "owes": {
+    "labs": "Labs",
+    "salaries": "Salaries waiting",
+    "dentists": "Dentist compensation unpaid",
+    "fixed_one": "{{count}} fixed expense waiting",
+    "fixed_other": "{{count}} fixed expenses waiting",
+    "credit": "Patient credit and advances held"
+  },
+  "stages": {
+    "recorded": "Proposed",
+    "accepted": "Accepted",
+    "started": "Started",
+    "completed": "Completed"
+  },
+  "reasons": {
+    "none": "Not said"
+  },
+  "dentists": {
+    "visits": "Visits",
+    "bookedHours": "Booked",
+    "avgLength": "Avg length",
+    "noShowRate": "No-shows",
+    "acceptance": "Acceptance",
+    "wait": "Wait"
+  },
+  "labs": {
+    "onTime": "On time",
+    "turnaround": "Turnaround",
+    "remakes": "Remakes",
+    "days": "{{taken}} d vs {{promised}} d",
+    "remakeShort": "{{rate}} remade"
+  },
+  "followUps": {
+    "booked": "Booked",
+    "waiting": "Still waiting",
+    "declined": "Declined",
+    "expired": "Expired"
+  },
+  "attention": {
+    "unresolved": "Unresolved appointments",
+    "openVisits": "Visits left open",
+    "acceptedUnbooked": "Accepted plans with nothing booked",
+    "followUpsOverdue": "Follow-ups overdue",
+    "labLate": "Lab work late",
+    "labArrived": "Lab work arrived, no appointment",
+    "incomplete": "Registrations incomplete"
+  },
+  "table": {
+    "month": "Month",
+    "week": "Week",
+    "age": "Age",
+    "amount": "Amount",
+    "dentist": "Dentist",
+    "earned": "Compensation",
+    "service": "Service",
+    "category": "Category",
+    "cost": "Cost",
+    "shareOfCollected": "Share of collected",
+    "method": "Method",
+    "priority": "Priority",
+    "line": "Line",
+    "hour": "Hour",
+    "stage": "Step",
+    "count": "Count",
+    "passed": "From the step before",
+    "type": "Type",
+    "booked": "Booked",
+    "taken": "Taken",
+    "lab": "Lab",
+    "state": "State"
+  }
+}

@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { idSchema, isoDateSchema } from '@dcm/contracts';
+import { APPOINTMENT_LIST_STATUSES, idSchema, isoDateSchema } from '@dcm/contracts';
 import { z } from 'zod';
 import { type ScheduleSearch, SchedulePage } from '@/features/scheduling/schedule-page';
 
@@ -12,6 +12,14 @@ const scheduleSearchSchema = z.object({
   appointment: idSchema.optional().catch(undefined),
   book: z.boolean().optional().catch(undefined),
   bookFor: idSchema.optional().catch(undefined),
+  list: z.boolean().optional().catch(undefined),
+  from: isoDateSchema.optional().catch(undefined),
+  to: isoDateSchema.optional().catch(undefined),
+  status: z.enum(APPOINTMENT_LIST_STATUSES).optional().catch(undefined),
+  weekday: z.coerce.number().int().min(0).max(6).optional().catch(undefined),
+  hour: z.coerce.number().int().min(0).max(23).optional().catch(undefined),
+  due: z.boolean().optional().catch(undefined),
+  branch: idSchema.optional().catch(undefined),
 });
 
 export const Route = createFileRoute('/_app/schedule')({

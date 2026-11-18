@@ -63,7 +63,9 @@
     "billed": "{{amount}} billed",
     "rows": "Rows",
     "previous": "Previous",
-    "next": "Next"
+    "next": "Next",
+    "charged": "{{amount}} charged in the period",
+    "discounts": "{{amount}} in discounts"
   },
   "states": {
     "loading": "Loading visits",
@@ -239,5 +241,12 @@
   "chartTab": {
     "loading": "Loading the chart",
     "failed": "Couldn’t load the chart."
+  },
+  "drill": {
+    "charged": "Charged {{span}}",
+    "discounted": "With a discount",
+    "finished": "Finished",
+    "allBranches": "All branches",
+    "clear": "Clear the dashboard filter"
   }
 }

@@ -357,5 +357,22 @@
   },
   "startVisit": {
     "link": "Link to today's {{time}} appointment"
+  },
+  "list": {
+    "title": "Appointments",
+    "count_one": "{{formatted}} appointment",
+    "count_other": "{{formatted}} appointments",
+    "backToCalendar": "Back to calendar",
+    "when": "When",
+    "patient": "Patient",
+    "dentist": "Dentist",
+    "room": "Room",
+    "status": "Status",
+    "loading": "Loading appointments",
+    "errorTitle": "Appointments didn’t load",
+    "errorBody": "Check your connection and try again.",
+    "emptyTitle": "No appointments",
+    "emptyBody": "Nothing matches this period and filter.",
+    "more": "Load more"
   }
 }

@@ -30,7 +30,7 @@ export function AppHeader({
   const actions = patientActions(session);
 
   return (
-    <header className="flex h-14 flex-none items-center gap-3.5 border-b border-border bg-surface px-[22px]">
+    <header className="flex h-14 flex-none items-center gap-3.5 border-b border-border bg-surface px-[22px] print:hidden">
       <nav
         aria-label={t('breadcrumb')}
         className="flex flex-none items-center gap-2 text-[12.5px] leading-none whitespace-nowrap text-ink-muted"

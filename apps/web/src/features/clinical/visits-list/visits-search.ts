@@ -1,5 +1,7 @@
 import {
+  type ChargedVisitsFilters,
   idSchema,
+  isoDateSchema,
   VISIT_RANGES,
   VISIT_TYPES,
   type VisitFilters,
@@ -31,6 +33,16 @@ export interface VisitsSearch {
   size: VisitPageSize;
   /** The visit whose detail panel is open. */
   visit?: string | undefined;
+  /** A dashboard's drill-down (feature 19): visit dates in place of `range`, a branch or
+   * `all` in place of the session's, finished visits only. */
+  from?: string | undefined;
+  to?: string | undefined;
+  branch?: string | undefined;
+  finished?: true | undefined;
+  /** _Charged in the period_: visits with a ledger entry dated in it (`billing`'s view). */
+  chargedFrom?: string | undefined;
+  chargedTo?: string | undefined;
+  discounted?: true | undefined;
 }
 
 export const VISITS_SEARCH_DEFAULTS = { tab: 'all', range: DEFAULT_RANGE, size: 10 } as const;
@@ -53,6 +65,24 @@ const searchSchema = z.object({
     .pipe(z.union([z.literal(10), z.literal(25), z.literal(50)]))
     .catch(10),
   visit: idSchema.optional().catch(undefined),
+  from: isoDateSchema.optional().catch(undefined),
+  to: isoDateSchema.optional().catch(undefined),
+  branch: z
+    .union([idSchema, z.literal('all')])
+    .optional()
+    .catch(undefined),
+  finished: z
+    .union([z.literal(true), z.literal('true')])
+    .optional()
+    .catch(undefined)
+    .transform((value) => (value === undefined ? undefined : (true as const))),
+  chargedFrom: isoDateSchema.optional().catch(undefined),
+  chargedTo: isoDateSchema.optional().catch(undefined),
+  discounted: z
+    .union([z.literal(true), z.literal('true')])
+    .optional()
+    .catch(undefined)
+    .transform((value) => (value === undefined ? undefined : (true as const))),
 });
 
 /** What a `<Link>` or `navigate` may pass: everything defaults. */
@@ -60,7 +90,35 @@ export type VisitsSearchInput = Partial<VisitsSearch>;
 
 /** Never throws: an unknown or malformed value falls back to its default. */
 export function parseVisitsSearch(raw: unknown): VisitsSearch {
-  return searchSchema.parse(raw && typeof raw === 'object' ? raw : {});
+  const parsed = searchSchema.parse(raw && typeof raw === 'object' ? raw : {});
+  const range = parsed.from !== undefined && parsed.to !== undefined && parsed.from <= parsed.to;
+  const charged =
+    parsed.chargedFrom !== undefined &&
+    parsed.chargedTo !== undefined &&
+    parsed.chargedFrom <= parsed.chargedTo;
+  return Object.fromEntries(
+    Object.entries({
+      ...parsed,
+      from: range ? parsed.from : undefined,
+      to: range ? parsed.to : undefined,
+      chargedFrom: charged ? parsed.chargedFrom : undefined,
+      chargedTo: charged ? parsed.chargedTo : undefined,
+      discounted: charged ? parsed.discounted : undefined,
+    }).filter(([, value]) => value !== undefined),
+  ) as unknown as VisitsSearch;
+}
+
+/** The charged view's window and its filter, when the search asks for it. */
+export function chargedOf(
+  search: VisitsSearch,
+): Pick<ChargedVisitsFilters, 'chargedFrom' | 'chargedTo' | 'discounted'> | null {
+  return search.chargedFrom && search.chargedTo
+    ? {
+        chargedFrom: search.chargedFrom,
+        chargedTo: search.chargedTo,
+        ...(search.discounted ? { discounted: true } : {}),
+      }
+    : null;
 }
 
 /** The list filters the API takes for this search (*Unpaid* is the `all` tab on `billing`'s
@@ -73,6 +131,9 @@ export function filtersOf(search: VisitsSearch): VisitFilters {
     roomId: search.room,
     type: search.type,
     q: search.q,
+    ...(search.from && search.to ? { from: search.from, to: search.to } : {}),
+    ...(search.branch ? { branchId: search.branch } : {}),
+    ...(search.finished ? { finished: true } : {}),
   };
 }
 
@@ -88,6 +149,10 @@ export function activeFilterCount(search: VisitsSearch): number {
     search.room !== undefined,
     search.type !== undefined,
     search.q !== undefined,
+    search.from !== undefined,
+    search.branch !== undefined,
+    search.finished !== undefined,
+    search.chargedFrom !== undefined,
   ].filter(Boolean).length;
 }
 
@@ -104,5 +169,9 @@ export function filterParams(filters: VisitFilters): Record<string, string> {
   if (filters.type !== undefined) params['type'] = filters.type;
   if (filters.q !== undefined) params['q'] = filters.q;
   if (filters.patientId !== undefined) params['patientId'] = filters.patientId;
+  if (filters.from !== undefined) params['from'] = filters.from;
+  if (filters.to !== undefined) params['to'] = filters.to;
+  if (filters.branchId !== undefined) params['branchId'] = filters.branchId;
+  if (filters.finished) params['finished'] = 'true';
   return params;
 }

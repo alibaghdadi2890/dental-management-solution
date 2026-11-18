@@ -83,12 +83,17 @@ function toQueryString(params: Record<string, string | number | undefined>): str
 
 export function patientListQuery(query: PatientListQuery, tenantId?: string) {
   // Open lab work is `labs`' view (feature 18, ADR-0081); the filter bar keeps it off billing's.
+  // A dashboard figure's patients (feature 19): the module that holds the facts serves them.
   const path =
-    query.lab === 'open'
-      ? '/labs/patients'
-      : usesBillingRoute(query)
-        ? '/billing/patients'
-        : '/patients';
+    query.cohort === 'accepted_unbooked'
+      ? '/scheduling/patients'
+      : query.cohort !== undefined && query.cohort !== 'incomplete'
+        ? '/clinical/patients'
+        : query.lab === 'open'
+          ? '/labs/patients'
+          : usesBillingRoute(query)
+            ? '/billing/patients'
+            : '/patients';
   return queryOptions({
     queryKey: patientKeys.list(tenantId ?? actingTenantId(), query),
     queryFn: () =>

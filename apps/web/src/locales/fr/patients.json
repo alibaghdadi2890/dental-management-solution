@@ -575,5 +575,14 @@
     "dateOfBirth": "date de naissance",
     "sex": "sexe",
     "phone": "téléphone ou tuteur"
+  },
+  "cohorts": {
+    "first_seen": "Première visite",
+    "seen": "Vus dans les 12 derniers mois",
+    "proposed": "Plans proposés",
+    "accepted": "Plans acceptés non commencés",
+    "accepted_unbooked": "Plans acceptés sans rendez-vous",
+    "incomplete": "Inscription incomplète",
+    "clear": "Effacer le filtre du tableau de bord"
   }
 }

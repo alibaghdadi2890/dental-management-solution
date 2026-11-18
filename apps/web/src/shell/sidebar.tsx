@@ -209,7 +209,7 @@ export function Sidebar({ session }: { session: Session | undefined }) {
       <aside
         data-collapsed={collapsed || undefined}
         className={cn(
-          'flex flex-none flex-col overflow-hidden border-e border-border bg-surface transition-[width] duration-150 ease-out motion-reduce:transition-none',
+          'flex flex-none flex-col overflow-hidden border-e border-border bg-surface transition-[width] duration-150 ease-out motion-reduce:transition-none print:hidden',
           collapsed ? 'w-[60px]' : 'w-[212px]',
         )}
       >

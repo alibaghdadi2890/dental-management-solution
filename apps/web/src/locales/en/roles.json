@@ -12,6 +12,7 @@
     "expenses": "Expenses",
     "payroll": "Payroll",
     "lab": "Lab",
+    "dashboard": "Dashboard",
     "activity": "Activity",
     "clinic": "Clinic"
   },
@@ -179,6 +180,14 @@
     "import_run": {
       "label": "Import data",
       "description": "Bring services, patients and visits in from another system."
+    },
+    "dashboard_financial": {
+      "label": "See financial dashboard",
+      "description": "The Financial dashboard: production, collections, costs, what is owed and owing. Includes seeing money across patients."
+    },
+    "dashboard_operational": {
+      "label": "See operational dashboard",
+      "description": "The Operational dashboard: counts, rates and times for the whole clinic, whatever the user’s own visits. No money."
     }
   },
   "matrix": {

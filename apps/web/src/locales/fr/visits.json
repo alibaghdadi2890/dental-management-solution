@@ -63,7 +63,9 @@
     "billed": "{{amount}} facturés",
     "rows": "Lignes",
     "previous": "Précédent",
-    "next": "Suivant"
+    "next": "Suivant",
+    "charged": "{{amount}} facturés sur la période",
+    "discounts": "{{amount}} de remises"
   },
   "states": {
     "loading": "Chargement des visites",
@@ -239,5 +241,12 @@
   "chartTab": {
     "loading": "Chargement du schéma",
     "failed": "Impossible de charger le schéma."
+  },
+  "drill": {
+    "charged": "Facturé {{span}}",
+    "discounted": "Avec remise",
+    "finished": "Terminées",
+    "allBranches": "Tous les sites",
+    "clear": "Effacer le filtre du tableau de bord"
   }
 }

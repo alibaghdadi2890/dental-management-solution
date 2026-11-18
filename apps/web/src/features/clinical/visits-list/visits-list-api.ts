@@ -1,5 +1,7 @@
 import {
   auditPageSchema,
+  type ChargedVisitsFilters,
+  chargedVisitsSummarySchema,
   unpaidVisitsSummarySchema,
   visitBalanceSchema,
   visitListSummarySchema,
@@ -32,8 +34,18 @@ import { filterParams, type VisitTab } from './visits-search';
  */
 export const visitListKeys = {
   lists: (tenantId: string | null) => [...visitKeys.all(tenantId), 'list'] as const,
-  list: (tenantId: string | null, unpaid: boolean, query: VisitListQuery) =>
-    [...visitListKeys.lists(tenantId), unpaid ? 'unpaid' : 'visits', query] as const,
+  list: (
+    tenantId: string | null,
+    unpaid: boolean,
+    query: VisitListQuery,
+    charged: ChargedWindow | null = null,
+  ) =>
+    [
+      ...visitListKeys.lists(tenantId),
+      charged ? 'charged' : unpaid ? 'unpaid' : 'visits',
+      query,
+      charged,
+    ] as const,
   summary: (tenantId: string | null, unpaid: boolean, filters: VisitFilters) =>
     [...visitListKeys.lists(tenantId), 'summary', unpaid ? 'unpaid' : 'visits', filters] as const,
   audit: (tenantId: string | null, visitId: string) =>
@@ -51,21 +63,58 @@ function queryString(params: Record<string, string | number | undefined>): strin
   return text ? `?${text}` : '';
 }
 
+/** The charged view's window (feature 19): `billing`'s `GET /billing/visits/charged`. */
+export type ChargedWindow = Pick<ChargedVisitsFilters, 'chargedFrom' | 'chargedTo' | 'discounted'>;
+
+const chargedParams = (charged: ChargedWindow) => ({
+  chargedFrom: charged.chargedFrom,
+  chargedTo: charged.chargedTo,
+  ...(charged.discounted ? { discounted: 'true' } : {}),
+});
+
 const listParams = (query: VisitListQuery) => ({
   ...filterParams(query),
   limit: query.limit,
   cursor: query.cursor,
 });
 
-/** One cursor page: the clinic's visits, or with `unpaid` the visits still owing (`billing`). */
-export function visitPageQuery(query: VisitListQuery, unpaid: boolean) {
+/** One cursor page: the clinic's visits, or with `unpaid` the visits still owing (`billing`),
+ * or with `charged` the visits charged in a window (`billing`, feature 19). */
+export function visitPageQuery(
+  query: VisitListQuery,
+  unpaid: boolean,
+  charged: ChargedWindow | null = null,
+) {
   return queryOptions({
-    queryKey: visitListKeys.list(actingTenantId(), unpaid, query),
+    queryKey: visitListKeys.list(actingTenantId(), unpaid, query, charged),
     queryFn: () =>
       apiFetch(
-        `${unpaid ? '/billing/visits/unpaid' : '/visits'}${queryString(listParams(query))}`,
+        charged
+          ? `/billing/visits/charged${queryString({ ...listParams(query), ...chargedParams(charged) })}`
+          : `${unpaid ? '/billing/visits/unpaid' : '/visits'}${queryString(listParams(query))}`,
         visitPageSchema,
       ),
+  });
+}
+
+/** The charged view's footer: how many, Σ charged in the window, the discounts. */
+export function chargedSummaryQuery(filters: VisitFilters, charged: ChargedWindow | null) {
+  return queryOptions({
+    queryKey: [
+      ...visitListKeys.lists(actingTenantId()),
+      'charged-summary',
+      filters,
+      charged,
+    ] as const,
+    queryFn: () =>
+      apiFetch(
+        `/billing/visits/charged/summary${queryString({
+          ...filterParams(filters),
+          ...(charged ? chargedParams(charged) : {}),
+        })}`,
+        chargedVisitsSummarySchema,
+      ),
+    enabled: charged !== null,
   });
 }
 

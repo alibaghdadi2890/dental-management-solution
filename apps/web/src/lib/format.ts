@@ -185,3 +185,43 @@ export function dateInputOrder(country: string): DateInputOrder {
   if (YMD_COUNTRIES.has(code)) return 'YMD';
   return 'DMY';
 }
+
+const numberLocale = (locale: string) => (locale === 'en' ? 'en-US' : locale);
+
+/** Money in whole units, rounded ("$5,000", "−$1,879"): a dashboard tile (feature 19). The exact
+ * amount is `formatMoney`'s. */
+export function formatMoneyWhole({ amount, currency }: Money, locale: string): string {
+  const value = Number(amount);
+  const formatted = new Intl.NumberFormat(numberLocale(locale), {
+    style: 'currency',
+    currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Math.abs(Math.round(value)));
+  return Math.round(value) < 0 ? `−${formatted}` : formatted;
+}
+
+/** Money as a short axis tick: "12k", "1.2M", "800". */
+export function formatCompact(value: number, locale: string): string {
+  return new Intl.NumberFormat(numberLocale(locale), {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+/** A count ("1,234"). */
+export function formatCount(value: number, locale: string): string {
+  return new Intl.NumberFormat(numberLocale(locale), { maximumFractionDigits: 0 }).format(value);
+}
+
+/** A rate (0–1, or above for a collection rate) as a whole percent, one decimal under 10%:
+ * "116%", "4.4%". `null` is "—" (nothing to divide by). */
+export function formatPercent(value: number | null, locale: string): string {
+  if (value === null || !Number.isFinite(value)) return '—';
+  const percent = Math.abs(value * 100);
+  return new Intl.NumberFormat(numberLocale(locale), {
+    style: 'percent',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: percent < 10 && percent !== 0 ? 1 : 0,
+  }).format(value);
+}

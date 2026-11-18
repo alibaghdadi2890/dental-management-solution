@@ -11,6 +11,12 @@ const PATHS: Record<NavKey, ReactNode> = {
       <circle cx="8" cy="10.1" r="1.2" fill="currentColor" stroke="none" />
     </>
   ),
+  dashboard: (
+    <>
+      <path d="M2.25 13.75h11.5" />
+      <path d="M4 11.5V8M7.25 11.5V4.5M10.5 11.5V6.75M13.25 11.5V9.5" />
+    </>
+  ),
   schedule: (
     <>
       <rect x="2.25" y="3" width="11.5" height="10.75" rx="2" />

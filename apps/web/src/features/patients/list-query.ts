@@ -1,6 +1,8 @@
 import {
   AGE_BANDS,
   idSchema,
+  isoDateSchema,
+  PATIENT_COHORTS,
   PATIENT_PAGE_SIZES,
   patientListQuerySchema,
   patientSortSchema,
@@ -68,6 +70,11 @@ const rawSearchSchema = z.object({
   alerts: lenient(z.enum(['yes', 'no'])),
   lastVisit: lenient(z.enum(['any', 'never'])),
   lab: lenient(z.enum(['open'])),
+  cohort: lenient(z.enum(PATIENT_COHORTS)),
+  from: lenient(isoDateSchema),
+  to: lenient(isoDateSchema),
+  cohortBranch: lenient(idSchema),
+  cohortDentist: lenient(idSchema),
   sort: lenient(patientSortSchema),
   dir: lenient(z.enum(['asc', 'desc'])),
   page: lenient(z.coerce.number().int().min(1)),
@@ -103,7 +110,21 @@ export function parsePatientsSearch(raw: unknown): PatientsSearch {
  * `GET /patients`, its query key, or the "selection resets on query change" key. */
 export function listQueryOf(search: PatientsSearch): PatientListQuery {
   const { view, q, dentist, age, alerts, lastVisit, lab, sort, dir, page, size } = search;
-  return { view, q, dentist, age, alerts, lastVisit, lab, sort, dir, page, size };
+  const { cohort, from, to, cohortBranch, cohortDentist } = search;
+  return {
+    view,
+    q,
+    dentist,
+    age,
+    alerts,
+    lastVisit,
+    lab,
+    sort,
+    dir,
+    page,
+    size,
+    ...(cohort ? { cohort, from, to, cohortBranch, cohortDentist } : {}),
+  };
 }
 
 export type PatientPanel =
@@ -202,7 +223,7 @@ export function panelNavigation(
 }
 
 /** The chip/search fields the filter bar's "Clear filters" and its tinted-chip state track. */
-const CHIP_FIELDS = ['q', 'dentist', 'age', 'alerts', 'lastVisit', 'lab'] as const;
+const CHIP_FIELDS = ['q', 'dentist', 'age', 'alerts', 'lastVisit', 'lab', 'cohort'] as const;
 
 /**
  * Counts the search box plus each filter chip currently away from its default (design "a chip
@@ -223,6 +244,7 @@ const RESETTING_KEYS = [
   'alerts',
   'lastVisit',
   'lab',
+  'cohort',
   'view',
   'sort',
   'size',

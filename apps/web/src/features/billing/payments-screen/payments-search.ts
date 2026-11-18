@@ -1,5 +1,7 @@
 import {
   AGING_BUCKETS,
+  idSchema,
+  isoDateSchema,
   type AgingBucket,
   OUTSTANDING_GROUPS,
   type OutstandingGroup,
@@ -30,6 +32,11 @@ export interface PaymentsSearch {
   /** Outstanding by patient, or by payer (families). */
   group: OutstandingGroup;
   size: PaymentPageSize;
+  /** A dashboard's period (feature 19): paid dates, both ends included, in place of `range`. */
+  from?: string | undefined;
+  to?: string | undefined;
+  /** The branch the payments were recorded in (feature 19). */
+  branch?: string | undefined;
 }
 
 export const PAYMENTS_SEARCH_DEFAULTS = {
@@ -52,6 +59,9 @@ const searchSchema = z.object({
     .transform((value) => (value ? value : undefined)),
   bucket: z.enum(AGING_BUCKETS).optional().catch(undefined),
   group: z.enum(OUTSTANDING_GROUPS).catch('patient'),
+  from: isoDateSchema.optional().catch(undefined),
+  to: isoDateSchema.optional().catch(undefined),
+  branch: idSchema.optional().catch(undefined),
   size: z.coerce
     .number()
     .pipe(z.union([z.literal(10), z.literal(25), z.literal(50)]))
@@ -62,11 +72,23 @@ export type PaymentsSearchInput = Partial<PaymentsSearch>;
 
 /** Never throws: an unknown or malformed value falls back to its default. */
 export function parsePaymentsSearch(raw: unknown): PaymentsSearch {
-  return searchSchema.parse(raw && typeof raw === 'object' ? raw : {});
+  const parsed = searchSchema.parse(raw && typeof raw === 'object' ? raw : {});
+  // A custom range needs both ends, in order.
+  if (!parsed.from || !parsed.to || parsed.from > parsed.to) {
+    const { from: _from, to: _to, ...rest } = parsed;
+    return rest;
+  }
+  return parsed;
 }
 
 export function transactionFiltersOf(search: PaymentsSearch): TransactionFilters {
-  return { range: search.range, method: search.method, q: search.q };
+  return {
+    range: search.range,
+    method: search.method,
+    q: search.q,
+    ...(search.from && search.to ? { from: search.from, to: search.to } : {}),
+    ...(search.branch ? { branchId: search.branch } : {}),
+  };
 }
 
 export function transactionQueryOf(
@@ -103,8 +125,13 @@ export function toggleBucket(search: PaymentsSearch, bucket: AgingBucket): Payme
 /** How many filters of the open tab differ from their default. */
 export function activeFilterCount(search: PaymentsSearch): number {
   return search.tab === 'transactions'
-    ? [search.range !== '30d', search.method !== undefined, search.q !== undefined].filter(Boolean)
-        .length
+    ? [
+        search.range !== '30d',
+        search.method !== undefined,
+        search.q !== undefined,
+        search.from !== undefined,
+        search.branch !== undefined,
+      ].filter(Boolean).length
     : [search.bucket !== undefined, search.q !== undefined].filter(Boolean).length;
 }
 

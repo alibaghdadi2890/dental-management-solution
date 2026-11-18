@@ -46,7 +46,10 @@
     },
     "group": "العرض",
     "byPatient": "حسب المريض",
-    "byPayer": "حسب الدافع (العائلات)"
+    "byPayer": "حسب الدافع (العائلات)",
+    "period": "الفترة",
+    "total": "المجموع {{amount}}",
+    "clearPeriod": "مسح الفترة"
   },
   "columns": {
     "transactions": "المعاملات",

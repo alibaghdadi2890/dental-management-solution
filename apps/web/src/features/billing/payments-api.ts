@@ -1,4 +1,5 @@
 import {
+  transactionSummarySchema,
   type ExportLanguage,
   familySchema,
   familyStatementSchema,
@@ -63,6 +64,9 @@ const filterParams = (filters: TransactionFilters) => ({
   method: filters.method,
   kind: filters.kind,
   q: filters.q,
+  from: filters.from,
+  to: filters.to,
+  branchId: filters.branchId,
   patientId: filters.patientId,
 });
 
@@ -137,6 +141,18 @@ export function transactionsQuery(query: TransactionQuery) {
           cursor: query.cursor,
         })}`,
         transactionPageSchema,
+      ),
+  });
+}
+
+/** `GET /billing/payments/summary` (feature 19): the total of the Transactions filters. */
+export function transactionSummaryQuery(filters: TransactionFilters) {
+  return queryOptions({
+    queryKey: [...billingKeys.all(actingTenantId()), 'transactions-summary', filters] as const,
+    queryFn: () =>
+      apiFetch(
+        `/billing/payments/summary${queryString(filterParams(filters))}`,
+        transactionSummarySchema,
       ),
   });
 }

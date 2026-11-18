@@ -75,7 +75,9 @@
     "billed": "{{amount}} مفوترة",
     "rows": "الصفوف",
     "previous": "السابق",
-    "next": "التالي"
+    "next": "التالي",
+    "charged": "{{amount}} مفوتر في الفترة",
+    "discounts": "{{amount}} خصومات"
   },
   "states": {
     "loading": "جارٍ تحميل الزيارات",
@@ -263,5 +265,12 @@
   "chartTab": {
     "loading": "جارٍ تحميل المخطط",
     "failed": "تعذّر تحميل المخطط."
+  },
+  "drill": {
+    "charged": "مفوتر {{span}}",
+    "discounted": "مع خصم",
+    "finished": "منتهية",
+    "allBranches": "كل الفروع",
+    "clear": "مسح مرشح لوحة المؤشرات"
   }
 }

@@ -20,9 +20,10 @@ import { branchRoomsQuery } from '@/features/tenancy/tenancy-api';
 import { useStaffNames } from '@/features/users/use-staff-names';
 import { ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-error-message';
-import { formatMoney } from '@/lib/format';
+import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { VisitDetailPanel } from './visit-detail-panel';
 import {
+  chargedSummaryQuery,
   downloadVisitsExport,
   unpaidSummaryQuery,
   visitBalancesQuery,
@@ -30,6 +31,7 @@ import {
   visitPageQuery,
 } from './visits-list-api';
 import {
+  chargedOf,
   activeFilterCount,
   clearFilters,
   filtersOf,
@@ -126,10 +128,13 @@ function VisitsList({
   const cursors = pages.key === filterKey ? pages.cursors : [undefined];
   const cursor = cursors.at(-1);
 
+  // A dashboard's Production opens the visits charged in its period (feature 19).
+  const charged = canFinance ? chargedOf(search) : null;
   const list = useQuery({
-    ...visitPageQuery(listQueryOf(effective, cursor), unpaid),
+    ...visitPageQuery(listQueryOf(effective, cursor), unpaid, charged),
     placeholderData: keepPreviousData,
   });
+  const chargedSummary = useQuery(chargedSummaryQuery(filters, charged));
   const summary = useQuery(visitListSummaryQuery(filters));
   const unpaidSummary = useQuery(unpaidSummaryQuery(filters, canFinance));
   const items = list.data?.items ?? [];
@@ -167,7 +172,14 @@ function VisitsList({
     unpaid: unpaidSummary.data?.tabCount,
     voided_amended: tabs?.voidedAmended,
   };
-  const footerFigures = unpaid ? unpaidSummary.data : summary.data;
+  const footerFigures = charged
+    ? chargedSummary.data && {
+        count: chargedSummary.data.count,
+        billed: [{ amount: chargedSummary.data.charged, currency: chargedSummary.data.currency }],
+      }
+    : unpaid
+      ? unpaidSummary.data
+      : summary.data;
   const open = items.find((visit) => visit.id === search.visit);
 
   let subtitle = t('subtitleLoading');
@@ -252,8 +264,23 @@ function VisitsList({
                 }),
                 // Σ billed is clinic money: null without finance:read (ADR-0055).
                 ...(footerFigures.billed ?? []).map((billed) =>
-                  t('footer.billed', { amount: formatMoney(billed, locale) }),
+                  charged
+                    ? t('footer.charged', { amount: formatMoney(billed, locale) })
+                    : t('footer.billed', { amount: formatMoney(billed, locale) }),
                 ),
+                ...(charged && chargedSummary.data
+                  ? [
+                      t('footer.discounts', {
+                        amount: formatMoney(
+                          {
+                            amount: chargedSummary.data.discounts,
+                            currency: chargedSummary.data.currency,
+                          },
+                          locale,
+                        ),
+                      }),
+                    ]
+                  : []),
               ].join(' · ')
             : ' '}
         </span>
@@ -334,6 +361,21 @@ function VisitsList({
               value={search.q ?? ''}
               onCommit={(q) => {
                 set({ q: q || undefined }, { replace: true });
+              }}
+            />
+            <DrillChip
+              search={search}
+              locale={locale}
+              onClear={() => {
+                set({
+                  from: undefined,
+                  to: undefined,
+                  branch: undefined,
+                  finished: undefined,
+                  chargedFrom: undefined,
+                  chargedTo: undefined,
+                  discounted: undefined,
+                });
               }}
             />
             <FilterChip
@@ -421,5 +463,50 @@ function VisitsList({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * What a dashboard's drill-down set (feature 19): the charged window or the visit dates, the
+ * branch (or every branch) and _finished only_, in one chip with its clear button.
+ */
+function DrillChip({
+  search,
+  locale,
+  onClear,
+}: {
+  search: VisitsSearch;
+  locale: string;
+  onClear: () => void;
+}) {
+  const { t } = useTranslation('visits');
+  const { data: session } = useSession();
+  const parts: string[] = [];
+  const span = (from: string, to: string) =>
+    `${formatCalendarDate(from, locale)} – ${formatCalendarDate(to, locale)}`;
+  if (search.chargedFrom && search.chargedTo) {
+    parts.push(t('drill.charged', { span: span(search.chargedFrom, search.chargedTo) }));
+  }
+  if (search.discounted) parts.push(t('drill.discounted'));
+  if (search.from && search.to) parts.push(span(search.from, search.to));
+  if (search.finished) parts.push(t('drill.finished'));
+  if (search.branch === 'all') parts.push(t('drill.allBranches'));
+  else if (search.branch) {
+    const name = session?.branches.find((branch) => branch.id === search.branch)?.name;
+    if (name) parts.push(name);
+  }
+  if (parts.length === 0) return null;
+  return (
+    <span className="flex h-9 items-center gap-2 rounded-lg border border-primary-tint-border bg-primary-tint ps-[11px] pe-1.5 text-[12.5px] font-medium">
+      {parts.join(' · ')}
+      <button
+        type="button"
+        aria-label={t('drill.clear')}
+        onClick={onClear}
+        className="grid size-6 cursor-pointer place-items-center rounded-md text-ink-muted hover:bg-surface hover:text-ink"
+      >
+        {'✕'}
+      </button>
+    </span>
   );
 }

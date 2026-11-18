@@ -113,6 +113,24 @@
   --color-lab: #1f5f66;
   --color-lab-bg: #e8f2f2;
   --color-lab-border: #b9d8da;
+  /* Charts (feature 19, ADR-0091): identity series, one magnitude ramp. A series keeps its colour
+     on every chart; state colours stay the status ones above. Checked for colour-blind separation
+     (deuteranopia, protanopia, tritanopia) and ≥ 3:1 against the card surface. */
+  --color-chart-production: #3b3f8f;
+  --color-chart-collected: #2a8a74;
+  --color-chart-expenses: #c0702a;
+  --color-chart-other: #8f8a80;
+  --color-chart-ramp-1: #e4e6f5;
+  --color-chart-ramp-2: #c3c7ea;
+  --color-chart-ramp-3: #9aa0d8;
+  --color-chart-ramp-4: #6b72bf;
+  --color-chart-ramp-5: #3b3f8f;
+  --color-chart-ramp-6: #2b2e6b;
+  --color-chart-grid: #eee9df;
+  --color-chart-completed: #8f8a80;
+  --color-chart-cancelled: #d8d2c6;
+  --color-chart-no-show: #9b2c2c;
+  --color-chart-unresolved: #b8893a;
 
   /* Motion (POC): panel slidein .18s, dialog popin .18s, scrim fadein .14s, toast toastin .2s */
   --animate-slidein: slidein 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -313,5 +331,17 @@
     background: #ffffff;
     height: auto;
     overflow: visible;
+  }
+}
+
+/* The dashboards (feature 19): a tab prints on A4 landscape, without the app's chrome. */
+@page dashboard {
+  size: A4 landscape;
+  margin: 10mm;
+}
+
+@media print {
+  .dashboard-print {
+    page: dashboard;
   }
 }

@@ -42,7 +42,10 @@
     },
     "group": "Show",
     "byPatient": "By patient",
-    "byPayer": "By payer (families)"
+    "byPayer": "By payer (families)",
+    "period": "Period",
+    "total": "Total {{amount}}",
+    "clearPeriod": "Clear the period"
   },
   "columns": {
     "transactions": "Transactions",

@@ -1,6 +1,7 @@
 import { AGE_BANDS, type PatientListQuery, type Practitioner } from '@dcm/contracts';
 import { useEffect, useEffectEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatCalendarDate } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { FilterChip, SearchInput } from '@/components/ui/list';
 import { usePermission } from '@/features/auth/use-permission';
@@ -32,7 +33,7 @@ export function FilterBar({
   dentistNames: ReadonlyMap<string, string>;
   onChange: (next: PatientListQuery, options?: { replace?: boolean }) => void;
 }) {
-  const { t } = useTranslation(['patients', 'labs']);
+  const { t, i18n } = useTranslation(['patients', 'labs']);
   const canSeeLab = usePermission('lab:read');
   const committed = query.q ?? '';
   const [text, setText] = useState(committed);
@@ -116,6 +117,33 @@ export function FilterBar({
           set({ lastVisit: value === 'never' ? 'never' : undefined });
         }}
       />
+      {query.cohort && (
+        <span className="flex h-9 items-center gap-2 rounded-lg border border-primary-tint-border bg-primary-tint ps-[11px] pe-1.5 text-[12.5px] font-medium">
+          {t(`cohorts.${query.cohort}`)}
+          {query.from && query.to && (
+            <span className="font-normal text-ink-secondary">
+              {formatCalendarDate(query.from, i18n.language)} –{' '}
+              {formatCalendarDate(query.to, i18n.language)}
+            </span>
+          )}
+          <button
+            type="button"
+            aria-label={t('cohorts.clear')}
+            onClick={() => {
+              set({
+                cohort: undefined,
+                from: undefined,
+                to: undefined,
+                cohortBranch: undefined,
+                cohortDentist: undefined,
+              });
+            }}
+            className="grid size-6 cursor-pointer place-items-center rounded-md text-ink-muted hover:bg-surface hover:text-ink"
+          >
+            {'✕'}
+          </button>
+        </span>
+      )}
       {canSeeLab && (
         <FilterChip
           label={t('labs:patients.filter')}

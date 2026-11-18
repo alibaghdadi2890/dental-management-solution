@@ -12,6 +12,7 @@
     "expenses": "Dépenses",
     "payroll": "Paie",
     "lab": "Laboratoire",
+    "dashboard": "Tableau de bord",
     "activity": "Activité",
     "clinic": "Cabinet"
   },
@@ -179,6 +180,14 @@
     "import_run": {
       "label": "Importer des données",
       "description": "Reprendre actes, patients et visites d’un autre logiciel."
+    },
+    "dashboard_financial": {
+      "label": "Voir le tableau de bord financier",
+      "description": "Le tableau de bord financier : production, encaissements, coûts, ce qui est dû au cabinet et par lui. Inclut l’argent de tous les patients."
+    },
+    "dashboard_operational": {
+      "label": "Voir le tableau de bord opérationnel",
+      "description": "Le tableau de bord opérationnel : nombres, taux et durées de tout le cabinet, quelles que soient les visites de l’utilisateur. Sans argent."
     }
   },
   "matrix": {

@@ -30,6 +30,7 @@ import {
   ViewTabs,
 } from '@/components/ui/list';
 import { useToast } from '@/components/ui/toast-context';
+import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { invalidateVisitData } from '@/features/clinical/visits-list/visits-list-api';
 import { ApiError } from '@/lib/api';
@@ -40,6 +41,7 @@ import { AdjustBalanceMenu } from '../adjust/adjust-entry';
 import { useRecordPayment } from '../payments/payment-dialog-context';
 import { useReleaseHold } from '../payments/use-release-hold';
 import {
+  transactionSummaryQuery,
   agingQuery,
   downloadTransactionsExport,
   openPrintable,
@@ -181,17 +183,27 @@ export function PaymentsPage({ search, onSearch }: PaymentsPageProps) {
         />
         {search.tab === 'transactions' ? (
           <>
-            <FilterChip
-              label={t('filters.date')}
-              value={search.range === '30d' ? '' : search.range}
-              options={PAYMENT_RANGES.map((range) => ({
-                value: range === '30d' ? '' : range,
-                label: t(`filters.range.${range}`),
-              }))}
-              onChange={(value) => {
-                set({ range: PAYMENT_RANGES.find((range) => range === value) ?? '30d' });
-              }}
-            />
+            {search.from && search.to ? (
+              <PeriodChip
+                search={search}
+                locale={locale}
+                onClear={() => {
+                  set({ from: undefined, to: undefined, branch: undefined });
+                }}
+              />
+            ) : (
+              <FilterChip
+                label={t('filters.date')}
+                value={search.range === '30d' ? '' : search.range}
+                options={PAYMENT_RANGES.map((range) => ({
+                  value: range === '30d' ? '' : range,
+                  label: t(`filters.range.${range}`),
+                }))}
+                onChange={(value) => {
+                  set({ range: PAYMENT_RANGES.find((range) => range === value) ?? '30d' });
+                }}
+              />
+            )}
             <FilterChip
               label={t('filters.method')}
               value={search.method ?? ''}
@@ -254,6 +266,53 @@ export function PaymentsPage({ search, onSearch }: PaymentsPageProps) {
         <OutstandingTable search={search} locale={locale} onSearch={onSearch} />
       )}
     </Page>
+  );
+}
+
+/**
+ * A dashboard's period on the Transactions tab (feature 19): its dates, the branch when one was
+ * chosen, and the total collected for the filters — the figure the dashboard showed.
+ */
+function PeriodChip({
+  search,
+  locale,
+  onClear,
+}: {
+  search: PaymentsSearch;
+  locale: string;
+  onClear: () => void;
+}) {
+  const { t } = useTranslation('payments');
+  const summary = useQuery(transactionSummaryQuery(transactionFiltersOf(search)));
+  const { data: session } = useSession();
+  const branch = session?.branches.find((entry) => entry.id === search.branch);
+  return (
+    <span className="flex h-9 items-center gap-2 rounded-lg border border-primary-tint-border bg-primary-tint ps-[11px] pe-1.5 text-[12.5px]">
+      <span className="text-ink-muted">{t('filters.period')}</span>
+      <span className="font-medium">
+        {formatCalendarDate(search.from ?? '', locale)} –{' '}
+        {formatCalendarDate(search.to ?? '', locale)}
+        {branch ? ` · ${branch.name}` : ''}
+      </span>
+      {summary.data && (
+        <span className="font-mono font-semibold tabular-nums" dir="ltr">
+          {t('filters.total', {
+            amount: formatMoney(
+              { amount: summary.data.collected, currency: summary.data.currency },
+              locale,
+            ),
+          })}
+        </span>
+      )}
+      <button
+        type="button"
+        aria-label={t('filters.clearPeriod')}
+        onClick={onClear}
+        className="grid size-6 cursor-pointer place-items-center rounded-md text-ink-muted hover:bg-surface hover:text-ink"
+      >
+        {'✕'}
+      </button>
+    </span>
   );
 }
 

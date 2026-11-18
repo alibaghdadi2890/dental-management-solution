@@ -22,6 +22,7 @@ import { patientQuery } from '@/features/patients/patients-api';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, formatTime, todayIn } from '@/lib/format';
 import { useIdempotencyKeys } from '@/lib/idempotency';
+import { ScheduleList, type ScheduleListFilter } from './schedule-list';
 import { AnchoredPopover, AppointmentDetails } from './appointment-popover';
 import { ConflictLines } from './conflict-lines';
 import { conflictsOf, useConflictWords } from './conflict-words';
@@ -53,6 +54,16 @@ export interface ScheduleSearch {
   book?: boolean | undefined;
   /** Opens the panel on this patient: from the record. */
   bookFor?: string | undefined;
+  /** The List view (feature 19): a dashboard figure's appointments, `from`–`to`. */
+  list?: boolean | undefined;
+  from?: string | undefined;
+  to?: string | undefined;
+  status?: ScheduleListFilter['status'];
+  weekday?: number | undefined;
+  hour?: number | undefined;
+  due?: boolean | undefined;
+  /** The List view's branch (the calendar stays on the session's). */
+  branch?: string | undefined;
 }
 
 /** A proposed change, waiting for its confirmation at the drop. */
@@ -103,6 +114,25 @@ export function SchedulePage({
   if (!tenant || !branch) return null;
   if (!canRead) {
     return <EmptyState title={t('noAccess.title')} body={t('noAccess.body')} />;
+  }
+  if (search.list && search.from && search.to) {
+    return (
+      <ScheduleList
+        filter={{
+          from: search.from,
+          to: search.to,
+          branchId: search.branch,
+          dentistId: search.dentist,
+          status: search.status,
+          weekday: search.weekday,
+          hour: search.hour,
+          due: search.due,
+        }}
+        onClose={() => {
+          onSearch({ date: search.to });
+        }}
+      />
+    );
   }
   return (
     <ScheduleScreen

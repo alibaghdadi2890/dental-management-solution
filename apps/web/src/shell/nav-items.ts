@@ -14,9 +14,15 @@ interface NavEntry<TKey extends string, TPath extends string> {
  * (`finance:read`, ADR-0055). Compensation is how the clinic pays its dentists
  * (`compensation:manage`, feature 13b); My statement is a dentist's own, shown by the sidebar only
  * once they have a month to read. Expenses and Payroll are the clinic's spending (feature 17). Lab
- * is the lab orders, labs, accounts and reports (feature 18, `lab:read`). */
+ * is the lab orders, labs, accounts and reports (feature 18, `lab:read`). Dashboard is the
+ * financial and operational dashboards (feature 19), with either capability. */
 export const MAIN_NAV = [
   { key: 'today', to: '/today', permission: ['visit:read', 'expense:read', 'lab:read'] },
+  {
+    key: 'dashboard',
+    to: '/dashboard',
+    permission: ['dashboard:financial', 'dashboard:operational'],
+  },
   { key: 'schedule', to: '/schedule', permission: 'appointment:read' },
   { key: 'lab', to: '/lab', permission: 'lab:read' },
   { key: 'patients', to: '/patients', permission: 'patient:read' },

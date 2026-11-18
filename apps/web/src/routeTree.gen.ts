@@ -15,6 +15,7 @@ import { Route as PrintRouteImport } from './routes/print'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppActivityRouteImport } from './routes/_app/activity'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
 import { Route as AppLabRouteImport } from './routes/_app/lab'
 import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
@@ -69,6 +70,11 @@ const AppActivityRoute = AppActivityRouteImport.update({
 const AppCatalogRoute = AppCatalogRouteImport.update({
   id: '/catalog',
   path: '/catalog',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
 const AppExpensesRoute = AppExpensesRouteImport.update({
@@ -210,6 +216,7 @@ export interface FileRoutesByFullPath {
   '/print': typeof PrintRouteWithChildren
   '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
+  '/dashboard': typeof AppDashboardRoute
   '/expenses': typeof AppExpensesRoute
   '/lab': typeof AppLabRoute
   '/payroll': typeof AppPayrollRoute
@@ -242,6 +249,7 @@ export interface FileRoutesByTo {
   '/print': typeof PrintRouteWithChildren
   '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
+  '/dashboard': typeof AppDashboardRoute
   '/expenses': typeof AppExpensesRoute
   '/lab': typeof AppLabRoute
   '/payroll': typeof AppPayrollRoute
@@ -277,6 +285,7 @@ export interface FileRoutesById {
   '/print': typeof PrintRouteWithChildren
   '/_app/activity': typeof AppActivityRoute
   '/_app/catalog': typeof AppCatalogRoute
+  '/_app/dashboard': typeof AppDashboardRoute
   '/_app/expenses': typeof AppExpensesRoute
   '/_app/lab': typeof AppLabRoute
   '/_app/payroll': typeof AppPayrollRoute
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/activity'
     | '/catalog'
+    | '/dashboard'
     | '/expenses'
     | '/lab'
     | '/payroll'
@@ -345,6 +355,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/activity'
     | '/catalog'
+    | '/dashboard'
     | '/expenses'
     | '/lab'
     | '/payroll'
@@ -379,6 +390,7 @@ export interface FileRouteTypes {
     | '/print'
     | '/_app/activity'
     | '/_app/catalog'
+    | '/_app/dashboard'
     | '/_app/expenses'
     | '/_app/lab'
     | '/_app/payroll'
@@ -456,6 +468,13 @@ declare module '@tanstack/react-router' {
       path: '/catalog'
       fullPath: '/catalog'
       preLoaderRoute: typeof AppCatalogRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/expenses': {
@@ -646,6 +665,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppActivityRoute: typeof AppActivityRoute
   AppCatalogRoute: typeof AppCatalogRoute
+  AppDashboardRoute: typeof AppDashboardRoute
   AppExpensesRoute: typeof AppExpensesRoute
   AppLabRoute: typeof AppLabRoute
   AppPayrollRoute: typeof AppPayrollRoute
@@ -672,6 +692,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppActivityRoute: AppActivityRoute,
   AppCatalogRoute: AppCatalogRoute,
+  AppDashboardRoute: AppDashboardRoute,
   AppExpensesRoute: AppExpensesRoute,
   AppLabRoute: AppLabRoute,
   AppPayrollRoute: AppPayrollRoute,

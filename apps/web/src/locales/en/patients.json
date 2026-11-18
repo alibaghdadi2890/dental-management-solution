@@ -575,5 +575,14 @@
     "dateOfBirth": "date of birth",
     "sex": "sex",
     "phone": "phone or guardian"
+  },
+  "cohorts": {
+    "first_seen": "First seen",
+    "seen": "Seen in the last 12 months",
+    "proposed": "Proposed plans",
+    "accepted": "Accepted plans not started",
+    "accepted_unbooked": "Accepted plans, nothing booked",
+    "incomplete": "Registration incomplete",
+    "clear": "Clear the dashboard filter"
   }
 }

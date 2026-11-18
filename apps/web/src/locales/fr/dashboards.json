@@ -1,0 +1,255 @@
+{
+  "title": "Tableau de bord",
+  "noAccess": {
+    "title": "Pas d’accès au tableau de bord",
+    "body": "Demandez-le au titulaire du cabinet si vous en avez besoin."
+  },
+  "tabs": {
+    "label": "Tableaux de bord",
+    "financial": "Financier",
+    "operational": "Opérationnel"
+  },
+  "periods": {
+    "this_month": "Ce mois-ci",
+    "last_month": "Le mois dernier",
+    "last_3_months": "Les 3 derniers mois",
+    "this_year": "Cette année",
+    "last_12_months": "Les 12 derniers mois",
+    "custom": "Personnalisée"
+  },
+  "filters": {
+    "period": "Période",
+    "branch": "Site",
+    "allBranches": "Tous les sites",
+    "dentist": "Dentiste",
+    "allDentists": "Tous les dentistes",
+    "span": "{{span}} · vs {{compare}}",
+    "updated": "Mis à jour à {{time}}",
+    "refresh": "Actualiser",
+    "from": "Du",
+    "to": "Au",
+    "pickFrom": "Choisir le premier jour",
+    "pickTo": "Choisir le dernier jour"
+  },
+  "print": {
+    "printed": "Imprimé le {{at}}"
+  },
+  "vs": "vs {{span}}",
+  "now": "Maintenant",
+  "allBranchesOnly": "Tous les sites uniquement",
+  "allDentistsOnly": "Tous les dentistes uniquement",
+  "allClear": "Rien en attente",
+  "other": "Autres",
+  "uncategorised": "Sans catégorie",
+  "seeAll": "Tout voir",
+  "largest": "Soldes les plus élevés",
+  "unallocated": "Non affecté",
+  "proposed": "Proposé, non accepté",
+  "cameBack": "Sont revenus",
+  "over15": "{{share}} au-delà de 15 min",
+  "bookedTaken": "{{booked}} prévues · {{taken}} réelles",
+  "weekOf": "Semaine du {{date}}",
+  "minutes_one": "{{count}} min",
+  "minutes_other": "{{count}} min",
+  "hours_one": "{{count}} h",
+  "hours_other": "{{count}} h",
+  "card": {
+    "menu": "Plus pour {{title}}",
+    "viewAsTable": "Voir en tableau",
+    "viewAsChart": "Voir en graphique",
+    "exportCsv": "Exporter en CSV",
+    "loading": "Chargement de {{title}}",
+    "empty": "Rien sur cette période",
+    "error": "Le chargement a échoué."
+  },
+  "tile": {
+    "now": "actuel",
+    "noComparison": "Rien à comparer",
+    "change": {
+      "good": "{{change}} {{against}}, mieux",
+      "bad": "{{change}} {{against}}, moins bien",
+      "neutral": "{{change}} {{against}}"
+    }
+  },
+  "tiles": {
+    "production": "Production",
+    "collected": "Encaissé",
+    "collectionRate": "Taux d’encaissement",
+    "netResult": "Résultat net",
+    "expenses": "Dépenses",
+    "receivables": "Créances",
+    "discounts": "Remises",
+    "average": "Moyenne par visite",
+    "visits": "Visites",
+    "noShowRate": "Taux d’absence",
+    "cancellationRate": "Taux d’annulation",
+    "newPatients": "Nouveaux patients",
+    "roomUse": "Occupation des salles",
+    "wait": "Attente (médiane)",
+    "planAcceptance": "Acceptation des plans",
+    "activePatients": "Patients actifs"
+  },
+  "cards": {
+    "moneyInOut": "Entrées et sorties",
+    "receivables": "Créances par ancienneté",
+    "dentists": "Dentistes",
+    "services": "Principaux actes",
+    "expenses": "Dépenses par catégorie",
+    "where": "Où va l’argent",
+    "methods": "Moyens de paiement",
+    "planValue": "Valeur des plans de traitement",
+    "owes": "Ce que doit le cabinet",
+    "appointmentsByWeek": "Rendez-vous par semaine",
+    "attention": "À traiter",
+    "busyHours": "Heures chargées",
+    "treatmentPlans": "Plans de traitement",
+    "visitTypes": "Visites par type",
+    "dentistsOps": "Dentistes",
+    "patients": "Patients",
+    "labs": "Laboratoires",
+    "followUps": "Suivis"
+  },
+  "info": {
+    "production": "Ce que les visites ont facturé sur la période après remises, à la date d’écriture : les facturations avec leurs corrections et annulations. Une visite annulée ne compte pas. Les soldes d’ouverture et les ajustements de solde ne sont pas de la production.",
+    "collected": "Les paiements reçus sur la période moins les remboursements, à la date de paiement. Les paiements annulés ne comptent jamais ; les avances comptent à leur réception.",
+    "collectionRate": "Encaissé ÷ production. Il dépasse 100 % quand des patients règlent d’anciens soldes ou paient d’avance.",
+    "netResult": "Encaissé − dépenses. Une vue de trésorerie, pas une comptabilité : ni provisions, ni amortissements, ni impôts.",
+    "expenses": "Les dépenses confirmées sur la période, salaires, rémunérations des dentistes et paiements aux laboratoires compris. Celles en attente ou annulées ne comptent jamais.",
+    "receivables": "Ce que les patients doivent aujourd’hui, quelle que soit la période.",
+    "discounts": "Les remises de lignes et de visites sur les visites facturées sur la période, avec leur part du prix avant remise.",
+    "average": "Production ÷ visites facturées sur la période. Les visites annulées sont exclues.",
+    "moneyInOut": "Les 12 mois qui se terminent avec la période. Survolez un mois pour son résultat net et son taux d’encaissement.",
+    "receivablesByAge": "Les facturations impayées selon leur ancienneté : les mêmes tranches que Paiements › Impayés.",
+    "dentists": "La production selon le dentiste de la visite ; les encaissements comme le relevé de rémunération les compte, quand le paiement est affecté à la visite. Non affecté : l’encaissé qui n’est encore sur aucune visite (avoir, avances, anciens soldes).",
+    "services": "La production répartie sur les actes de chaque visite ; une correction la déplace entre eux.",
+    "expensesByCategory": "La part de chaque catégorie dans ce qui a été encaissé sur la période.",
+    "where": "Chaque coût en part de ce qui a été encaissé sur la période.",
+    "methods": "L’encaissé par moyen de paiement, chaque remboursement déduit de son propre moyen.",
+    "planValue": "Les traitements acceptés pas encore commencés, par priorité. Les travaux en cours sont déjà facturés.",
+    "owes": "Maintenant, quelle que soit la période : les soldes des laboratoires, les salaires et rémunérations non payés, les dépenses fixes en attente à leur montant habituel, et ce que les patients détiennent en avoir ou en avances.",
+    "visits": "Les visites terminées sur la période. Les visites importées sont de l’historique et ne comptent jamais ici.",
+    "noShowRate": "Absences ÷ rendez-vous dus sur la période (déjà commencés). Un rendez-vous reporté compte une fois, à son horaire final.",
+    "cancellationRate": "Annulations ÷ rendez-vous dus sur la période.",
+    "newPatients": "Les patients dont la toute première visite est dans la période. Un patient avec une visite antérieure importée n’est pas nouveau.",
+    "roomUse": "Heures réservées (non annulées) ÷ heures d’ouverture × salles actives, sur les jours écoulés de la période. Les agendas des dentistes n’existent pas encore.",
+    "wait": "De l’arrivée au début de la visite, le même jour. La part au-delà de 15 minutes est à côté.",
+    "planAcceptance": "Parmi les éléments de plan saisis sur la période, la part acceptée par le patient.",
+    "activePatients": "Les patients ayant eu une visite dans les 12 derniers mois, quelle que soit la période.",
+    "appointmentsByWeek": "Les 12 semaines qui se terminent avec la période, selon ce qu’est devenu chaque rendez-vous dû.",
+    "attention": "Maintenant, quelle que soit la période. Une ligne disparaît quand son nombre est nul.",
+    "busyHours": "Les rendez-vous dus sur la période par jour et heure de début. Plus foncé, c’est plus.",
+    "treatmentPlans": "Les éléments de plan saisis sur la période, et la part passée de l’étape précédente.",
+    "visitTypes": "Les visites terminées par type : minutes prévues au rendez-vous et minutes au chronomètre de la visite, en moyenne.",
+    "dentistsOps": "Pour chaque dentiste : visites, heures réservées, durée moyenne de visite, taux d’absence, acceptation des plans et attente médiane. Cliquez une colonne pour trier.",
+    "patients": "Nouveaux patients et patients revenus par mois. Sont revenus : parmi les patients vus pour la première fois il y a trois à six mois, la part ayant eu une visite ensuite.",
+    "labs": "D’après les rapports de laboratoire : envois reçus à temps, délai moyen face à la promesse du laboratoire, et refaçons.",
+    "followUps": "Les suivis recommandés sur la période, et où ils en sont."
+  },
+  "summary": {
+    "money": "Production {{production}}, encaissé {{collected}} sur la période",
+    "receivables": "Créances {{amount}}",
+    "appointments": "{{due}} rendez-vous dus sur la période"
+  },
+  "series": {
+    "production": "Production",
+    "collected": "Encaissé",
+    "expenses": "Dépenses",
+    "new": "Nouveaux",
+    "returning": "Revenus"
+  },
+  "outcomes": {
+    "completed": "Terminé",
+    "cancelled": "Annulé",
+    "noShow": "Absent",
+    "unresolved": "Non clôturé"
+  },
+  "switch": {
+    "service": "Acte",
+    "category": "Catégorie",
+    "booked": "Réservés",
+    "noShows": "Absences"
+  },
+  "buckets": {
+    "d0_30": "0–30 jours",
+    "d31_60": "31–60 jours",
+    "d61_90": "61–90 jours",
+    "d90_plus": "Plus de 90 jours"
+  },
+  "groups": {
+    "salaries": "Salaires",
+    "dentist_compensation": "Rémunération des dentistes",
+    "lab_fees": "Frais de laboratoire",
+    "other": "Tout le reste"
+  },
+  "owes": {
+    "labs": "Laboratoires",
+    "salaries": "Salaires en attente",
+    "dentists": "Rémunération des dentistes non payée",
+    "fixed_one": "{{count}} dépense fixe en attente",
+    "fixed_other": "{{count}} dépenses fixes en attente",
+    "credit": "Avoirs et avances des patients"
+  },
+  "stages": {
+    "recorded": "Proposé",
+    "accepted": "Accepté",
+    "started": "Commencé",
+    "completed": "Terminé"
+  },
+  "reasons": {
+    "none": "Non précisé"
+  },
+  "dentists": {
+    "visits": "Visites",
+    "bookedHours": "Réservé",
+    "avgLength": "Durée moy.",
+    "noShowRate": "Absences",
+    "acceptance": "Acceptation",
+    "wait": "Attente"
+  },
+  "labs": {
+    "onTime": "À temps",
+    "turnaround": "Délai",
+    "remakes": "Refaçons",
+    "days": "{{taken}} j vs {{promised}} j",
+    "remakeShort": "{{rate}} refaits"
+  },
+  "followUps": {
+    "booked": "Réservés",
+    "waiting": "En attente",
+    "declined": "Refusés",
+    "expired": "Expirés"
+  },
+  "attention": {
+    "unresolved": "Rendez-vous non clôturés",
+    "openVisits": "Visites restées ouvertes",
+    "acceptedUnbooked": "Plans acceptés sans rendez-vous",
+    "followUpsOverdue": "Suivis en retard",
+    "labLate": "Travaux de laboratoire en retard",
+    "labArrived": "Travaux arrivés, sans rendez-vous",
+    "incomplete": "Inscriptions incomplètes"
+  },
+  "table": {
+    "month": "Mois",
+    "week": "Semaine",
+    "age": "Ancienneté",
+    "amount": "Montant",
+    "dentist": "Dentiste",
+    "earned": "Rémunération",
+    "service": "Acte",
+    "category": "Catégorie",
+    "cost": "Coût",
+    "shareOfCollected": "Part de l’encaissé",
+    "method": "Moyen",
+    "priority": "Priorité",
+    "line": "Ligne",
+    "hour": "Heure",
+    "stage": "Étape",
+    "count": "Nombre",
+    "passed": "Depuis l’étape précédente",
+    "type": "Type",
+    "booked": "Prévu",
+    "taken": "Réel",
+    "lab": "Laboratoire",
+    "state": "État"
+  }
+}

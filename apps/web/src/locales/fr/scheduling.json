@@ -357,5 +357,22 @@
   },
   "startVisit": {
     "link": "Lier au rendez-vous de {{time}} aujourd'hui"
+  },
+  "list": {
+    "title": "Rendez-vous",
+    "count_one": "{{formatted}} rendez-vous",
+    "count_other": "{{formatted}} rendez-vous",
+    "backToCalendar": "Retour à l’agenda",
+    "when": "Quand",
+    "patient": "Patient",
+    "dentist": "Dentiste",
+    "room": "Salle",
+    "status": "Statut",
+    "loading": "Chargement des rendez-vous",
+    "errorTitle": "Les rendez-vous n’ont pas pu être chargés",
+    "errorBody": "Vérifiez votre connexion et réessayez.",
+    "emptyTitle": "Aucun rendez-vous",
+    "emptyBody": "Rien ne correspond à cette période et ce filtre.",
+    "more": "Charger plus"
   }
 }
