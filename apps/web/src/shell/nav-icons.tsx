@@ -52,6 +52,12 @@ const PATHS: Record<NavKey, ReactNode> = {
       <path d="M11.75 10v2.5" />
     </>
   ),
+  lab: (
+    <>
+      <path d="M6 1.75v4.5L2.6 12.4a1.25 1.25 0 0 0 1.1 1.85h8.6a1.25 1.25 0 0 0 1.1-1.85L10 6.25v-4.5" />
+      <path d="M5 1.75h6M4.4 9.5h7.2" />
+    </>
+  ),
   myStatement: (
     <>
       <path d="M4 1.75h5.5L12.5 4.75v9.5H4z" />

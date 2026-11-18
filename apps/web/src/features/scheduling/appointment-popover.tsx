@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Popover } from 'radix-ui';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppointmentLabWork } from '@/features/labs/appointment-lab-work';
 import { Button } from '@/components/ui/button';
 import { Select, TextInput } from '@/components/ui/field';
 import { useToast } from '@/components/ui/toast-context';
@@ -258,6 +259,7 @@ export function AppointmentDetails({
             ) : null}
           </p>
           <p className="m-0 mt-0.5 text-[12.5px] text-ink-secondary">{appointment.reason}</p>
+          <AppointmentLabWork appointmentId={appointment.id} tenant={session.tenant} />
         </div>
         <AppointmentStatusPill appointment={appointment} />
       </div>

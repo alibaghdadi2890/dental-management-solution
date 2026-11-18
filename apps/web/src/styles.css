@@ -108,6 +108,11 @@
   --color-avatar-rose-ink: #8a3a2e;
   --color-avatar-violet: #eeecf3;
   --color-avatar-violet-ink: #4f4870;
+  /* Lab work as a reason for the next appointment: teal, apart from the indigo plan rows and the
+     green / amber / red of the lab labels */
+  --color-lab: #1f5f66;
+  --color-lab-bg: #e8f2f2;
+  --color-lab-border: #b9d8da;
 
   /* Motion (POC): panel slidein .18s, dialog popin .18s, scrim fadein .14s, toast toastin .2s */
   --animate-slidein: slidein 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);

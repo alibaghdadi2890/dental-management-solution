@@ -349,7 +349,10 @@ export function HistoryTab({
           ) : (
             list.data.items.map((expense) => {
               const voided = expense.voidedAt !== null;
-              const mirrored = expense.source === 'payroll' || expense.source === 'compensation';
+              const mirrored =
+                expense.source === 'payroll' ||
+                expense.source === 'compensation' ||
+                expense.source === 'lab';
               return (
                 <div
                   key={expense.id}

@@ -1,5 +1,6 @@
 import {
   type Appointment,
+  APPOINTMENT_REASON_MAX,
   canWriteAppointment,
   combineProposals,
   FOLLOW_UP_DURATION_MAX,
@@ -10,6 +11,9 @@ import {
   type FollowUpKind,
   followUpSearchWindow,
   type FollowUpTiming,
+  type LabOrderSummary,
+  labWorkForNextAppointment,
+  type LabWorkForNextAppointment,
   type NextAppointmentProposal,
   type NextAppointmentRequest,
   type PatientChart,
@@ -26,6 +30,7 @@ import { Field, Select, TextInput } from '@/components/ui/field';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { useToothLabel } from '@/features/clinical/chart/use-chart-settings';
+import { orderNumber, useOpenLabOrders } from '@/features/labs/lab-words';
 import { formatCalendarDate, formatTime, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { DialogSteps } from './dialog-steps';
@@ -43,10 +48,15 @@ const chipClass = (on: boolean) =>
 /** "Root canal treatment" → "root canal treatment", inside a sentence. */
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
+/** Plan items a booked appointment can still take on: a closed one would only warn later. */
+const OPEN_PLAN_STATUSES: readonly string[] = ['planned', 'in_progress'];
+
 /**
  * **Next appointment** (A13, D1): what the dentist recommends, between the check before Complete and
- * the payment. Proposals come from the chart (`proposeNextAppointment`); nothing here waits on a
- * slot. *Book now* books before completion, and the completion then carries the appointment (A15).
+ * the payment. Proposals come from the chart (`proposeNextAppointment`), and the patient's open lab
+ * work adds a *Fit* reason per order in the lab colour (`labWorkForNextAppointment`), timed for when
+ * the work can be back; nothing here waits on a slot. *Book now* books before completion, and the
+ * completion then carries the appointment (A15).
  */
 export function NextAppointmentDialog({
   visit,
@@ -64,6 +74,7 @@ export function NextAppointmentDialog({
   onComplete: (nextAppointment: NextAppointmentRequest | undefined) => void;
 }) {
   const { t, i18n } = useTranslation('scheduling');
+  const { t: tLabs } = useTranslation('labs');
   const { data: session } = useSession();
   const toothLabel = useToothLabel();
   const timeZone = session?.tenant?.timeZone ?? 'UTC';
@@ -73,8 +84,15 @@ export function NextAppointmentDialog({
     [chart, visit.id],
   );
   const top = proposals[0];
+  const { orders: openLabOrders } = useOpenLabOrders();
+  const labWork = useMemo(
+    () => labWorkForNextAppointment(openLabOrders, visit),
+    [openLabOrders, visit],
+  );
   const [selected, setSelected] = useState<readonly NextAppointmentProposal[]>(top ? [top] : []);
   const [kind, setKind] = useState<FollowUpKind | null>(null);
+  const [labOrderId, setLabOrderId] = useState<string | null>(null);
+  const labChoice = labWork.find((row) => row.order.id === labOrderId) ?? null;
   const [otherText, setOtherText] = useState('');
   const combined = selected.length > 0 ? combineProposals(selected) : null;
   const [durationMin, setDurationMin] = useState(combined?.durationMin ?? 30);
@@ -107,16 +125,55 @@ export function NextAppointmentDialog({
       ? `${t('next.continue', { name: lowerFirst(proposal.name) })}${where}`
       : `${proposal.name}${where}`;
   };
+  /** "Fit zirconia crown #16, #17": what the lab sends back, teeth or arch, without the shade. */
+  const labTitle = (order: LabOrderSummary) => {
+    const items = order.items
+      .map((item) => {
+        const what = `${item.quantity > 1 ? `${item.quantity} × ` : ''}${item.description}`;
+        return item.target === 'teeth'
+          ? `${what} ${item.teeth.map((code) => toothLabel(code)).join(' ')}`
+          : `${what} · ${tLabs(`target.${item.target}`)}`;
+      })
+      .join(', ');
+    return t('next.labFit', { items: lowerFirst(items) || orderNumber(order) }).slice(
+      0,
+      APPOINTMENT_REASON_MAX,
+    );
+  };
+  /** When it can be fitted: arrived, expected back, or how long after sending. */
+  const labWhen = ({ order, atLab }: LabWorkForNextAppointment) =>
+    order.status === 'arrived'
+      ? order.receivedOn
+        ? tLabs('visit.arrivedOn', { date: formatCalendarDate(order.receivedOn, i18n.language) })
+        : tLabs('label.arrived')
+      : atLab && order.expectedOn
+        ? tLabs('visit.expectedHint', {
+            date: formatCalendarDate(order.expectedOn, i18n.language),
+          })
+        : tLabs('order.waitDays', { count: order.expectedDays });
   const title =
     selected.length > 0
       ? selected.map(proposalTitle).join(' + ')
-      : kind === 'other'
-        ? otherText.trim() || t('kinds.other')
-        : kind
-          ? t(`kinds.${kind}`)
-          : '';
+      : labChoice
+        ? labTitle(labChoice.order)
+        : kind === 'other'
+          ? otherText.trim() || t('kinds.other')
+          : kind
+            ? t(`kinds.${kind}`)
+            : '';
   const firstSelected = selected[0];
-  const chosenKind: FollowUpKind | null = firstSelected?.kind ?? kind;
+  const chosenKind: FollowUpKind | null = firstSelected?.kind ?? (labChoice ? 'lab_work' : kind);
+  // The lab order's plan items that are still open, so the appointment takes them on.
+  const planIds =
+    selected.length > 0
+      ? selected.map((proposal) => proposal.planId)
+      : labChoice
+        ? labChoice.order.planIds.filter((planId) =>
+            chart?.plans.some(
+              (plan) => plan.id === planId && OPEN_PLAN_STATUSES.includes(plan.status),
+            ),
+          )
+        : [];
   const custom = timing === 'custom';
   const customMissing = custom && customDate === '';
   const hasChoice = chosenKind !== null;
@@ -142,7 +199,7 @@ export function NextAppointmentDialog({
     return {
       kind: chosenKind,
       title,
-      planIds: selected.map((proposal) => proposal.planId),
+      planIds,
       priority: combined?.priority ?? null,
       sessionNumber: selected.length === 1 ? (firstSelected?.sessionNumber ?? null) : null,
       sessionTotal: selected.length === 1 ? (firstSelected?.sessionTotal ?? null) : null,
@@ -163,6 +220,7 @@ export function NextAppointmentDialog({
       : [proposal];
     setSelected(next);
     setKind(null);
+    setLabOrderId(null);
     if (next.length > 0) {
       const merged = combineProposals(next);
       setDurationMin(merged.durationMin);
@@ -172,8 +230,22 @@ export function NextAppointmentDialog({
   const pickKind = (next: FollowUpKind) => {
     setSelected([]);
     setKind(next);
+    setLabOrderId(null);
     setDurationMin(FOLLOW_UP_KIND_DEFAULTS[next].durationMin);
     setTiming(FOLLOW_UP_KIND_DEFAULTS[next].timing);
+  };
+  /** Timed for when the work can be back, so the fit is never booked before it. */
+  const pickLab = (row: LabWorkForNextAppointment) => {
+    setSelected([]);
+    setKind(null);
+    setLabOrderId(row.order.id);
+    setDurationMin(FOLLOW_UP_KIND_DEFAULTS.lab_work.durationMin);
+    if (row.readyOn <= today) {
+      setTiming('asap');
+    } else {
+      setTiming('custom');
+      setCustomDate(row.readyOn);
+    }
   };
 
   const dentist = resources.data?.dentists.find((item) => item.id === dentistId);
@@ -231,7 +303,7 @@ export function NextAppointmentDialog({
                   from: window.from,
                   to: window.to,
                   timingLabel: t(`timings.${timing}`),
-                  planIds: selected.map((proposal) => proposal.planId),
+                  planIds,
                   sourceVisitId: visit.id,
                 }}
                 cancelLabel={t('next.sendToFrontDesk')}
@@ -254,6 +326,44 @@ export function NextAppointmentDialog({
               </div>
             ) : (
               <div className="flex flex-col gap-4">
+                {labWork.length > 0 ? (
+                  <ul
+                    aria-label={t('next.labTag')}
+                    className="m-0 flex list-none flex-col gap-1.5 p-0"
+                  >
+                    {labWork.map((row) => {
+                      const on = labOrderId === row.order.id;
+                      return (
+                        <li key={row.order.id}>
+                          <button
+                            type="button"
+                            aria-pressed={on}
+                            data-reason="lab_work"
+                            className={cn(
+                              'flex w-full cursor-pointer items-center gap-2.5 rounded-lg border border-s-[3px] border-s-lab bg-lab-bg px-3 py-2 text-start',
+                              on ? 'border-lab ring-1 ring-lab' : 'border-lab-border',
+                            )}
+                            onClick={() => {
+                              pickLab(row);
+                            }}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[13px] font-medium text-ink">
+                                {labTitle(row.order)}
+                              </span>
+                              <span className="block text-[11.5px] text-lab">
+                                <span dir="ltr">{orderNumber(row.order)}</span> · {labWhen(row)}
+                              </span>
+                            </span>
+                            <span className="flex-none rounded-[4px] border border-lab-border bg-surface px-1.5 py-0.5 text-[11px] font-semibold text-lab">
+                              {t('next.labTag')}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
                 {proposals.length > 0 ? (
                   <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
                     {proposals.map((proposal) => {
@@ -301,12 +411,15 @@ export function NextAppointmentDialog({
                       );
                     })}
                   </ul>
-                ) : (
+                ) : labWork.length > 0 ? null : (
                   <p className="m-0 text-[13px] text-ink-secondary">{t('next.nothingOpen')}</p>
                 )}
                 <div role="group" aria-label={t('next.kinds')} className="flex flex-wrap gap-1">
                   {FOLLOW_UP_KINDS.filter(
-                    (item) => item !== 'continue_treatment' && item !== 'planned_treatment',
+                    (item) =>
+                      item !== 'continue_treatment' &&
+                      item !== 'planned_treatment' &&
+                      item !== 'lab_work',
                   ).map((item) => (
                     <button
                       key={item}

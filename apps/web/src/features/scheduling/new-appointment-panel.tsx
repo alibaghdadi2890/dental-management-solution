@@ -15,6 +15,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LabBookingWarning } from '@/features/labs/appointment-lab-work';
 import { Button } from '@/components/ui/button';
 import { Field, Select, TextInput } from '@/components/ui/field';
 import { RightPanel } from '@/components/ui/right-panel';
@@ -755,6 +756,7 @@ export function NewAppointmentPanel({
           )}
         </Field>
         {conflicts.length > 0 ? <ConflictLines conflicts={conflicts} /> : null}
+        <LabBookingWarning patientId={patient?.id} day={date} />
         {blockedByOverride && !hard ? (
           <p className="m-0 text-[12px] text-warning">{words.needsOverride}</p>
         ) : null}

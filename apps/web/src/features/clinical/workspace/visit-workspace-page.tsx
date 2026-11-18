@@ -18,6 +18,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Navigate } from '@tanstack/react-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { VisitLabWork } from '@/features/labs/visit-lab-work';
 import { CardSkeleton } from '@/components/ui/card';
 import { EmptyState, ErrorState } from '@/components/ui/list';
 import { useSession } from '@/features/auth/session';
@@ -464,6 +465,14 @@ function Workspace({
             </div>
           )}
           <VisitStepper flow={flow} />
+          <div className="px-5 pt-3">
+            <VisitLabWork
+              visit={visit}
+              mode="workspace"
+              patientName={patient.data?.fullName}
+              teeth={selection.tooth ? [selection.tooth] : []}
+            />
+          </div>
           {step === 'intake' && (
             <IntakeStep
               visit={visit}

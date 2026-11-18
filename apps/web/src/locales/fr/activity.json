@@ -61,7 +61,8 @@
     "compensation": "Rémunération",
     "schedule": "Agenda",
     "expenses": "Dépenses",
-    "payroll": "Paie"
+    "payroll": "Paie",
+    "labs": "Laboratoire"
   },
   "ranges": {
     "today": "Aujourd’hui",
@@ -295,6 +296,45 @@
     },
     "scheduling_settings": {
       "update": "A modifié la durée de la liste des suivis"
+    },
+    "lab": {
+      "create": "A enregistré le laboratoire {{subject}}",
+      "update": "A modifié le laboratoire {{subject}}",
+      "opening_balance": "A saisi le solde d’ouverture de {{subject}}"
+    },
+    "lab_service": {
+      "create": "A ajouté {{service}} au tarif de {{subject}}",
+      "update": "A modifié {{service}} dans le tarif de {{subject}}"
+    },
+    "lab_payment": {
+      "record": "A payé {{amount}} à {{subject}}",
+      "void": "A annulé un paiement de {{amount}} à {{subject}}"
+    },
+    "lab_adjustment": {
+      "record": "A ajusté le compte de {{subject}} de {{amount}}"
+    },
+    "lab_order": {
+      "create": "A commandé le travail {{number}} pour {{subject}} : {{items}}",
+      "update": "A modifié la commande {{number}} de {{subject}}",
+      "send": "A envoyé la commande {{number}} de {{subject}} au laboratoire",
+      "receive": "A reçu le travail {{number}} de {{subject}}",
+      "expected": "A changé la date prévue du travail {{number}} de {{subject}}",
+      "done": "A marqué le travail {{number}} de {{subject}} terminé",
+      "send_back": "A renvoyé le travail {{number}} de {{subject}} au laboratoire",
+      "remake": "A demandé une reprise de {{number}} pour {{subject}}",
+      "hold": "A mis en attente la commande {{number}} de {{subject}}",
+      "resume": "A repris la commande {{number}} de {{subject}}",
+      "cancel": "A annulé la commande {{number}} de {{subject}}",
+      "undo": "A ramené la commande {{number}} de {{subject}} une étape en arrière",
+      "link": "A lié la commande {{number}} au rendez-vous de {{subject}}",
+      "link_system": "La commande {{number}} a été liée au nouveau rendez-vous de {{subject}}, automatiquement",
+      "unlink": "A retiré le rendez-vous de la commande {{number}} de {{subject}}",
+      "unlink_system": "Le rendez-vous a été retiré de la commande {{number}} de {{subject}}, automatiquement",
+      "relink": "A déplacé la commande {{number}} vers un autre rendez-vous de {{subject}}",
+      "relink_system": "La commande {{number}} a suivi le rendez-vous déplacé de {{subject}}, automatiquement",
+      "cost": "A modifié le coût de la commande {{number}} de {{subject}}",
+      "trip_dates": "A corrigé les dates de la commande {{number}} de {{subject}}",
+      "attachments": "A modifié les fichiers de la commande {{number}} de {{subject}}"
     }
   },
   "fields": {

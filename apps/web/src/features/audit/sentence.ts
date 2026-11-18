@@ -162,6 +162,37 @@ const PAYROLL: ReadonlySet<string> = new Set([
   'payroll_line.void',
 ]);
 
+const LABS: ReadonlySet<string> = new Set([
+  'lab.create',
+  'lab.update',
+  'lab.opening_balance',
+  'lab_service.create',
+  'lab_service.update',
+  'lab_payment.record',
+  'lab_payment.void',
+  'lab_adjustment.record',
+  ...[
+    'create',
+    'update',
+    'send',
+    'receive',
+    'expected',
+    'done',
+    'send_back',
+    'remake',
+    'hold',
+    'resume',
+    'cancel',
+    'undo',
+    'link',
+    'unlink',
+    'relink',
+    'cost',
+    'trip_dates',
+    'attachments',
+  ].map((verb) => `lab_order.${verb}`),
+]);
+
 /** The actions with a sentence under `activity:actions.<action>` and no special case below. */
 const PLAIN = new Set([
   'patient.create',
@@ -443,6 +474,32 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
         action: readableAction(action),
       },
     );
+  }
+
+  // --- Labs (feature 18): a lab is named in the snapshot; an order is about the patient ---
+  if (
+    prefix === 'lab' ||
+    prefix === 'lab_service' ||
+    prefix === 'lab_payment' ||
+    prefix === 'lab_adjustment'
+  ) {
+    const lab = field(entry, 'labName') ?? field(entry, 'name');
+    const currency = field(entry, 'currency');
+    const amount = text(after.amount);
+    return done(LABS.has(action) ? action : 'fallback', lab ? { kind: 'text', label: lab } : null, {
+      amount: amount && currency ? lookups.money(amount, currency) : '',
+      service: prefix === 'lab_service' ? (text(after.name) ?? '') : '',
+      action: readableAction(action),
+    });
+  }
+  if (prefix === 'lab_order') {
+    const bySystem = text(after.by) === 'system';
+    return done(LABS.has(action) ? (bySystem ? `${action}_system` : action) : 'fallback', patient, {
+      number: field(entry, 'number') ?? '',
+      lab: field(entry, 'labName') ?? '',
+      items: field(entry, 'items') ?? '',
+      action: readableAction(action),
+    });
   }
 
   // --- Schedule (feature 14): about the patient; a follow-up also says what it is ---

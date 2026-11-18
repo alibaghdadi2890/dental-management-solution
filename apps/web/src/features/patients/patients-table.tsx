@@ -11,6 +11,8 @@ import { owedBalances } from '@/features/billing/owed-balances';
 import { ageOrNull, formatCalendarDate, formatMoney, formatPhone } from '@/lib/format';
 import { firstName, initials } from '@/lib/initials';
 import { cn } from '@/lib/utils';
+import { LabSummaryPill } from '@/features/labs/lab-order-label';
+import { useOpenLabOrders } from '@/features/labs/lab-words';
 import type { SortableColumn } from './list-query';
 import { minorOn } from './patient-form';
 
@@ -317,6 +319,7 @@ export function PatientRow({
   onOpen: () => void;
   menu: ReactNode;
 }) {
+  const labOrders = useOpenLabOrders();
   const { t } = useTranslation('patients');
   const archived = patient.archivedAt !== null;
   const years = ageOrNull(patient.dateOfBirth, context.today);
@@ -391,6 +394,7 @@ export function PatientRow({
                   {t('archivedBadge')}
                 </span>
               )}
+              <LabSummaryPill orders={labOrders.byPatient.get(patient.id)} />
             </span>
             <span className="block font-mono text-[11.5px] leading-[1.4] text-ink-muted">
               <span dir="ltr">{patient.displayNumber}</span>

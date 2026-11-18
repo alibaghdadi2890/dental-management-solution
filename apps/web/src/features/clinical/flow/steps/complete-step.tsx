@@ -2,6 +2,7 @@ import { fromCents, type PatientChart, toCents, type Visit } from '@dcm/contract
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { VisitLabWork } from '@/features/labs/visit-lab-work';
 import { usePermission } from '@/features/auth/use-permission';
 import { balanceQuery } from '@/features/billing/billing-api';
 import { formatMoney } from '@/lib/format';
@@ -49,6 +50,7 @@ export function CompleteStep({
         </div>
         <div className="flex min-w-0 flex-col gap-4">
           <Totals visit={visit} canWrite={canWrite} />
+          <VisitLabWork visit={visit} mode="complete" />
           {(visit.status === 'in_progress' || visit.status === 'paused') && (
             <Outstanding visit={visit} />
           )}

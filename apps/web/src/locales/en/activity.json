@@ -61,7 +61,8 @@
     "compensation": "Compensation",
     "schedule": "Schedule",
     "expenses": "Expenses",
-    "payroll": "Payroll"
+    "payroll": "Payroll",
+    "labs": "Lab"
   },
   "ranges": {
     "today": "Today",
@@ -295,6 +296,45 @@
     },
     "scheduling_settings": {
       "update": "Changed the follow-up window"
+    },
+    "lab": {
+      "create": "Registered the lab {{subject}}",
+      "update": "Edited the lab {{subject}}",
+      "opening_balance": "Set {{subject}}’s opening balance"
+    },
+    "lab_service": {
+      "create": "Added {{service}} to {{subject}}’s price list",
+      "update": "Changed {{service}} on {{subject}}’s price list"
+    },
+    "lab_payment": {
+      "record": "Paid {{subject}} {{amount}}",
+      "void": "Voided a payment of {{amount}} to {{subject}}"
+    },
+    "lab_adjustment": {
+      "record": "Adjusted {{subject}}’s account by {{amount}}"
+    },
+    "lab_order": {
+      "create": "Ordered lab work {{number}} for {{subject}}: {{items}}",
+      "update": "Edited lab order {{number}} for {{subject}}",
+      "send": "Sent lab order {{number}} for {{subject}} to the lab",
+      "receive": "Received lab work {{number}} for {{subject}}",
+      "expected": "Changed when lab work {{number}} for {{subject}} is expected",
+      "done": "Marked lab work {{number}} for {{subject}} done",
+      "send_back": "Sent lab work {{number}} for {{subject}} back to the lab",
+      "remake": "Asked for a remake of {{number}} for {{subject}}",
+      "hold": "Put lab order {{number}} for {{subject}} on hold",
+      "resume": "Resumed lab order {{number}} for {{subject}}",
+      "cancel": "Cancelled lab order {{number}} for {{subject}}",
+      "undo": "Took lab order {{number}} for {{subject}} one step back",
+      "link": "Linked lab order {{number}} to {{subject}}’s appointment",
+      "link_system": "Linked lab order {{number}} to {{subject}}’s new appointment, automatically",
+      "unlink": "Removed the appointment from lab order {{number}} for {{subject}}",
+      "unlink_system": "Removed the appointment from lab order {{number}} for {{subject}}, automatically",
+      "relink": "Moved lab order {{number}} to another appointment of {{subject}}",
+      "relink_system": "Moved lab order {{number}} with {{subject}}’s rescheduled appointment, automatically",
+      "cost": "Changed the cost of lab order {{number}} for {{subject}}",
+      "trip_dates": "Corrected the dates of lab order {{number}} for {{subject}}",
+      "attachments": "Changed the files of lab order {{number}} for {{subject}}"
     }
   },
   "fields": {

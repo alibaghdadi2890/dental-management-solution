@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { FilterChip, SearchInput } from '@/components/ui/list';
+import { usePermission } from '@/features/auth/use-permission';
 import { activeFilterCount, clearFilters, withFilter } from './list-query';
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -31,7 +32,8 @@ export function FilterBar({
   dentistNames: ReadonlyMap<string, string>;
   onChange: (next: PatientListQuery, options?: { replace?: boolean }) => void;
 }) {
-  const { t } = useTranslation('patients');
+  const { t } = useTranslation(['patients', 'labs']);
+  const canSeeLab = usePermission('lab:read');
   const committed = query.q ?? '';
   const [text, setText] = useState(committed);
   const [seen, setSeen] = useState(committed);
@@ -114,6 +116,29 @@ export function FilterBar({
           set({ lastVisit: value === 'never' ? 'never' : undefined });
         }}
       />
+      {canSeeLab && (
+        <FilterChip
+          label={t('labs:patients.filter')}
+          value={query.lab ?? ''}
+          options={[
+            { value: '', label: t('labs:patients.any') },
+            { value: 'open', label: t('labs:patients.open') },
+          ]}
+          onChange={(value) => {
+            set(
+              value === 'open'
+                ? {
+                    lab: 'open',
+                    ...(query.view === 'owing' || query.view === 'notSeen'
+                      ? { view: 'active' }
+                      : {}),
+                    ...(query.sort === 'balance' ? { sort: 'name', dir: 'asc' } : {}),
+                  }
+                : { lab: undefined },
+            );
+          }}
+        />
+      )}
       <FilterChip
         label={t('filters.age')}
         value={query.age ?? ''}

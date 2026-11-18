@@ -209,6 +209,7 @@
     "healing_review": "مراجعة الالتئام",
     "consultation": "استشارة",
     "routine_examination": "فحص دوري",
+    "lab_work": "تركيب عمل المختبر",
     "other": "أخرى"
   },
   "timings": {
@@ -223,6 +224,8 @@
   "next": {
     "title": "الموعد التالي",
     "continue": "متابعة: {{name}}",
+    "labFit": "تركيب {{items}}",
+    "labTag": "أعمال المختبر",
     "session": "الجلسة {{number}} من {{total}}",
     "sessionOpen": "الجلسة {{number}}",
     "pending": "علاج معلق",

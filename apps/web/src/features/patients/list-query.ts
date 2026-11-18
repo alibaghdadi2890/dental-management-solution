@@ -67,6 +67,7 @@ const rawSearchSchema = z.object({
   age: lenient(z.enum(AGE_BANDS)),
   alerts: lenient(z.enum(['yes', 'no'])),
   lastVisit: lenient(z.enum(['any', 'never'])),
+  lab: lenient(z.enum(['open'])),
   sort: lenient(patientSortSchema),
   dir: lenient(z.enum(['asc', 'desc'])),
   page: lenient(z.coerce.number().int().min(1)),
@@ -101,8 +102,8 @@ export function parsePatientsSearch(raw: unknown): PatientsSearch {
 /** The list query inside the route search — without `panel`, which must never reach
  * `GET /patients`, its query key, or the "selection resets on query change" key. */
 export function listQueryOf(search: PatientsSearch): PatientListQuery {
-  const { view, q, dentist, age, alerts, lastVisit, sort, dir, page, size } = search;
-  return { view, q, dentist, age, alerts, lastVisit, sort, dir, page, size };
+  const { view, q, dentist, age, alerts, lastVisit, lab, sort, dir, page, size } = search;
+  return { view, q, dentist, age, alerts, lastVisit, lab, sort, dir, page, size };
 }
 
 export type PatientPanel =
@@ -201,7 +202,7 @@ export function panelNavigation(
 }
 
 /** The chip/search fields the filter bar's "Clear filters" and its tinted-chip state track. */
-const CHIP_FIELDS = ['q', 'dentist', 'age', 'alerts', 'lastVisit'] as const;
+const CHIP_FIELDS = ['q', 'dentist', 'age', 'alerts', 'lastVisit', 'lab'] as const;
 
 /**
  * Counts the search box plus each filter chip currently away from its default (design "a chip
@@ -221,6 +222,7 @@ const RESETTING_KEYS = [
   'age',
   'alerts',
   'lastVisit',
+  'lab',
   'view',
   'sort',
   'size',

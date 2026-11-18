@@ -101,6 +101,7 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
   const canCompensate = usePermission('compensation:manage');
   const canSeeExpenses = usePermission('expense:read');
   const canSeePayroll = usePermission('payroll:read');
+  const canSeeLab = usePermission('lab:read');
   const today = todayIn(tenant.timeZone);
 
   const term = search.q === undefined ? null : searchTerm(search.q);
@@ -204,7 +205,8 @@ export function ActivityPage({ search, onSearch, tenant }: ActivityPageProps) {
               (canFinance || area !== 'payments') &&
               (canCompensate || area !== 'compensation') &&
               (canSeeExpenses || area !== 'expenses') &&
-              (canSeePayroll || area !== 'payroll'),
+              (canSeePayroll || area !== 'payroll') &&
+              (canSeeLab || area !== 'labs'),
           ),
         ].map((area) => {
           const on = search.area === area;

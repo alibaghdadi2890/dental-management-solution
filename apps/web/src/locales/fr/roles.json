@@ -11,6 +11,7 @@
     "compensation": "Rémunération",
     "expenses": "Dépenses",
     "payroll": "Paie",
+    "lab": "Laboratoire",
     "activity": "Activité",
     "clinic": "Cabinet"
   },
@@ -130,6 +131,22 @@
     "payroll_manage": {
       "label": "Gérer la paie",
       "description": "Ajouter et modifier des employés, changer les salaires, ajuster, confirmer, ignorer et annuler les lignes de paie."
+    },
+    "lab_read": {
+      "label": "Voir les commandes de laboratoire",
+      "description": "Les commandes de laboratoire et leur statut, la file Travaux de laboratoire du jour, l’annuaire des laboratoires sans les prix et les rapports sans les coûts."
+    },
+    "lab_manage": {
+      "label": "Gérer les commandes de laboratoire",
+      "description": "Créer et modifier les commandes, joindre des fichiers, les marquer envoyées, reçues et terminées, les suspendre, les annuler, les renvoyer, demander une reprise, lier le rendez-vous et imprimer le bon."
+    },
+    "lab_money_read": {
+      "label": "Voir l’argent des laboratoires",
+      "description": "Les tarifs des laboratoires, le coût des commandes, les comptes et relevés des laboratoires, les montants dus et les coûts des rapports."
+    },
+    "lab_money_manage": {
+      "label": "Gérer l’argent des laboratoires",
+      "description": "Enregistrer et modifier les laboratoires, leurs prestations et leurs prix ; modifier le coût des commandes ; saisir soldes d’ouverture, ajustements, paiements et annulations."
     },
     "appointment_read": {
       "label": "Voir l'agenda",

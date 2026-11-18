@@ -35,7 +35,8 @@
     "manual": "Recorded",
     "fixed": "Fixed",
     "payroll": "Payroll",
-    "compensation": "Compensation"
+    "compensation": "Compensation",
+    "lab": "Labs"
   },
   "filters": {
     "label": "Filters",
@@ -127,7 +128,8 @@
       "amount": "Enter an amount greater than zero",
       "description": "Say what this expense was",
       "future": "The date can't be in the future"
-    }
+    },
+    "labFeesHint": "Payments to labs registered under Lab are recorded there and appear here by themselves."
   },
   "pending": {
     "title": "Waiting for confirmation",

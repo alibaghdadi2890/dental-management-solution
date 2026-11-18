@@ -15,6 +15,7 @@ import { LatestImagesCard } from '@/features/files/file-rows';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { NextAppointmentCard } from '@/features/scheduling/patient-schedule';
+import { PatientLabCard } from '@/features/labs/patient-lab-card';
 import { NeedsAttentionCard } from './needs-attention-card';
 
 type Tenant = NonNullable<Session['tenant']>;
@@ -209,6 +210,7 @@ export function OverviewTab({
   const canPay = usePermission('payment:read');
   const canVisits = usePermission('visit:read');
   const canFiles = usePermission('file:read');
+  const canLab = usePermission('lab:read');
   const canEdit = usePermission('patient:write');
   const [historyTooth, setHistoryTooth] = useState<ToothCode | null>(null);
   return (
@@ -225,6 +227,7 @@ export function OverviewTab({
               : undefined
           }
         />
+        {canLab && <PatientLabCard patient={patient} />}
         {canVisits && (
           <LastVisitCard patientId={patient.id} locale={locale} onAllVisits={onAllVisits} />
         )}

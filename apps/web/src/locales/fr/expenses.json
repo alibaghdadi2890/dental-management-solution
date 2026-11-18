@@ -35,7 +35,8 @@
     "manual": "Saisie",
     "fixed": "Fixe",
     "payroll": "Paie",
-    "compensation": "Rémunération"
+    "compensation": "Rémunération",
+    "lab": "Laboratoires"
   },
   "filters": {
     "label": "Filtres",
@@ -127,7 +128,8 @@
       "amount": "Saisissez un montant supérieur à zéro",
       "description": "Indiquez ce que représente cette dépense",
       "future": "La date ne peut pas être dans le futur"
-    }
+    },
+    "labFeesHint": "Les paiements aux laboratoires enregistrés dans Laboratoire y sont saisis et apparaissent ici d’eux-mêmes."
   },
   "pending": {
     "title": "En attente de confirmation",

@@ -63,7 +63,14 @@ function FollowUpCard({ followUp }: { followUp: FollowUp }) {
     <div className="rounded-lg border border-border p-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <p className="m-0 text-[14px] font-semibold">{followUp.title}</p>
+          <p className="m-0 text-[14px] font-semibold">
+            {followUp.title}
+            {followUp.kind === 'lab_work' ? (
+              <span className="ms-2 inline-block rounded-[4px] border border-lab-border bg-lab-bg px-1.5 py-0.5 align-middle text-[11px] font-semibold text-lab">
+                {t('next.labTag')}
+              </span>
+            ) : null}
+          </p>
           <p className="m-0 mt-0.5 text-[12px] text-ink-muted">
             {t('followUp.fromVisit', {
               visit: `V-${String(followUp.sourceVisitNumber).padStart(6, '0')}`,

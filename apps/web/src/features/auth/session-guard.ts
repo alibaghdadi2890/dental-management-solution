@@ -16,7 +16,7 @@ export function landingPath(session: Session): '/admin/tenants' | '/today' | '/p
   const can = (permission: Session['permissions'][number]) =>
     session.permissions.includes(permission);
   if (can('payment:write') && !can('visit:write')) return '/today';
-  return can('expense:read') && !can('patient:read') ? '/today' : '/patients';
+  return (can('expense:read') || can('lab:read')) && !can('patient:read') ? '/today' : '/patients';
 }
 
 /** The login screen's notice after being sent there. */

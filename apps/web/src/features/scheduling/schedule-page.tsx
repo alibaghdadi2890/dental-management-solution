@@ -9,6 +9,7 @@ import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/rea
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LabBookingWarning } from '@/features/labs/appointment-lab-work';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/list';
 import { InPanelSlot, PanelLayout } from '@/components/ui/panel-slot';
@@ -611,6 +612,14 @@ function ScheduleScreen({
           {pending.conflicts.length > 0 ? (
             <div className="mt-2">
               <ConflictLines conflicts={pending.conflicts} />
+            </div>
+          ) : null}
+          {pending.kind === 'move' ? (
+            <div className="mt-2">
+              <LabBookingWarning
+                patientId={pending.appointment.patient.id}
+                day={todayIn(timeZone, pending.start)}
+              />
             </div>
           ) : null}
           {pending.conflicts.length > 0 && !canOverride ? (

@@ -13,10 +13,12 @@ interface NavEntry<TKey extends string, TPath extends string> {
  * expenses card for whoever sees expenses (feature 17); Payments is the clinic's finances
  * (`finance:read`, ADR-0055). Compensation is how the clinic pays its dentists
  * (`compensation:manage`, feature 13b); My statement is a dentist's own, shown by the sidebar only
- * once they have a month to read. Expenses and Payroll are the clinic's spending (feature 17). */
+ * once they have a month to read. Expenses and Payroll are the clinic's spending (feature 17). Lab
+ * is the lab orders, labs, accounts and reports (feature 18, `lab:read`). */
 export const MAIN_NAV = [
-  { key: 'today', to: '/today', permission: ['visit:read', 'expense:read'] },
+  { key: 'today', to: '/today', permission: ['visit:read', 'expense:read', 'lab:read'] },
   { key: 'schedule', to: '/schedule', permission: 'appointment:read' },
+  { key: 'lab', to: '/lab', permission: 'lab:read' },
   { key: 'patients', to: '/patients', permission: 'patient:read' },
   { key: 'visits', to: '/visits', permission: 'visit:read' },
   { key: 'payments', to: '/payments', permission: 'finance:read' },

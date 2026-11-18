@@ -11,6 +11,7 @@
     "compensation": "Compensation",
     "expenses": "Expenses",
     "payroll": "Payroll",
+    "lab": "Lab",
     "activity": "Activity",
     "clinic": "Clinic"
   },
@@ -130,6 +131,22 @@
     "payroll_manage": {
       "label": "Manage payroll",
       "description": "Add and edit employees, change salaries, adjust, confirm, skip and void payroll lines."
+    },
+    "lab_read": {
+      "label": "See lab orders",
+      "description": "Lab orders and their status labels, the Lab work lane on Today, the lab directory without prices, and the lab reports without costs."
+    },
+    "lab_manage": {
+      "label": "Manage lab orders",
+      "description": "Create and edit lab orders, attach files, mark them sent, received and done, hold, cancel, send back, ask for a remake, link the appointment and print the slip."
+    },
+    "lab_money_read": {
+      "label": "See lab money",
+      "description": "Lab price lists, order costs, lab accounts and statements, outstanding amounts and the costs in the lab reports."
+    },
+    "lab_money_manage": {
+      "label": "Manage lab money",
+      "description": "Register and edit labs, their services and prices; edit order costs; record opening balances, adjustments, payments and voids."
     },
     "appointment_read": {
       "label": "See the calendar",

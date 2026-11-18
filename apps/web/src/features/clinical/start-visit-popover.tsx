@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { Popover } from 'radix-ui';
 import { type ReactNode, type SubmitEvent, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { StartVisitLabNotice } from '@/features/labs/visit-lab-work';
 import { Button } from '@/components/ui/button';
 import { Field, Select, TextInput } from '@/components/ui/field';
 import { RightPanel } from '@/components/ui/right-panel';
@@ -461,6 +462,7 @@ function StartVisitForm({
           })}
         </label>
       ) : null}
+      <StartVisitLabNotice patientId={patientId} appointmentId={linkedId} />
       <Field label={t('startVisit.dentist')} error={errors.dentist}>
         {(field) => (
           <Select

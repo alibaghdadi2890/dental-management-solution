@@ -34,6 +34,7 @@ export const NAMESPACES = [
   'alerts',
   'expenses',
   'payroll',
+  'labs',
 ] as const;
 
 type Messages = Record<string, unknown>;

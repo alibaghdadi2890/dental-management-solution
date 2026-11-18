@@ -97,6 +97,24 @@ export function formatCalendarDate(iso: string, locale: string): string {
   return formatDate(iso, { timeZone: 'UTC', locale });
 }
 
+/** A calendar date without its year, for dates close to today: "20 Nov" in English. */
+export function formatDayMonth(iso: string, locale: string): string {
+  const date = new Date(`${iso}T00:00:00Z`);
+  if (locale === 'en') {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    }).formatToParts(date);
+    return `${part(parts, 'day')} ${part(parts, 'month')}`;
+  }
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  }).format(date);
+}
+
 /** Whole years on `today` (the tenant's `YYYY-MM-DD`), or `null` without a date of birth or for
  * one after `today` (bad data or clock skew: never a negative age). */
 export function ageOrNull(dob: string | null, today: string): number | null {

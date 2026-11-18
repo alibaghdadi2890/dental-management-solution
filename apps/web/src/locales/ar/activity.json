@@ -61,7 +61,8 @@
     "compensation": "أتعاب الأطباء",
     "schedule": "المواعيد",
     "expenses": "المصاريف",
-    "payroll": "الرواتب"
+    "payroll": "الرواتب",
+    "labs": "المختبر"
   },
   "ranges": {
     "today": "اليوم",
@@ -295,6 +296,45 @@
     },
     "scheduling_settings": {
       "update": "غيّر مدة قائمة المتابعات"
+    },
+    "lab": {
+      "create": "سجّل المختبر {{subject}}",
+      "update": "عدّل المختبر {{subject}}",
+      "opening_balance": "حدّد الرصيد الافتتاحي لـ {{subject}}"
+    },
+    "lab_service": {
+      "create": "أضاف {{service}} إلى قائمة أسعار {{subject}}",
+      "update": "غيّر {{service}} في قائمة أسعار {{subject}}"
+    },
+    "lab_payment": {
+      "record": "دفع إلى {{subject}} مبلغ {{amount}}",
+      "void": "ألغى دفعة بمبلغ {{amount}} إلى {{subject}}"
+    },
+    "lab_adjustment": {
+      "record": "سوّى حساب {{subject}} بمبلغ {{amount}}"
+    },
+    "lab_order": {
+      "create": "طلب أعمال مختبر {{number}} لـ {{subject}}: {{items}}",
+      "update": "عدّل طلب المختبر {{number}} لـ {{subject}}",
+      "send": "أرسل طلب المختبر {{number}} لـ {{subject}} إلى المختبر",
+      "receive": "استلم أعمال المختبر {{number}} لـ {{subject}}",
+      "expected": "غيّر موعد وصول أعمال المختبر {{number}} لـ {{subject}}",
+      "done": "سجّل إنجاز أعمال المختبر {{number}} لـ {{subject}}",
+      "send_back": "أعاد أعمال المختبر {{number}} لـ {{subject}} إلى المختبر",
+      "remake": "طلب إعادة صنع {{number}} لـ {{subject}}",
+      "hold": "علّق طلب المختبر {{number}} لـ {{subject}}",
+      "resume": "استأنف طلب المختبر {{number}} لـ {{subject}}",
+      "cancel": "ألغى طلب المختبر {{number}} لـ {{subject}}",
+      "undo": "أعاد طلب المختبر {{number}} لـ {{subject}} خطوة إلى الوراء",
+      "link": "ربط طلب المختبر {{number}} بموعد {{subject}}",
+      "link_system": "رُبط طلب المختبر {{number}} بموعد {{subject}} الجديد تلقائيًا",
+      "unlink": "أزال الموعد من طلب المختبر {{number}} لـ {{subject}}",
+      "unlink_system": "أُزيل الموعد من طلب المختبر {{number}} لـ {{subject}} تلقائيًا",
+      "relink": "نقل طلب المختبر {{number}} إلى موعد آخر لـ {{subject}}",
+      "relink_system": "انتقل طلب المختبر {{number}} مع موعد {{subject}} المُعاد جدولته تلقائيًا",
+      "cost": "غيّر تكلفة طلب المختبر {{number}} لـ {{subject}}",
+      "trip_dates": "صحّح تواريخ طلب المختبر {{number}} لـ {{subject}}",
+      "attachments": "غيّر ملفات طلب المختبر {{number}} لـ {{subject}}"
     }
   },
   "fields": {

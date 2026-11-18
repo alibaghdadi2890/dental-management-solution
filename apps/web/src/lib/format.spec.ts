@@ -6,6 +6,7 @@ import {
   type DateFormatOptions,
   formatAgeLine,
   formatCalendarDate,
+  formatDayMonth,
   formatDate,
   formatDateTime,
   formatMoney,
@@ -150,5 +151,12 @@ describe('dateInputOrder', () => {
 
   it('is case-insensitive', () => {
     expect(dateInputOrder('us')).toBe('MDY');
+  });
+});
+
+describe('formatDayMonth', () => {
+  it('drops the year, and never shifts the day', () => {
+    expect(formatDayMonth('2026-11-20', 'en')).toBe('20 Nov');
+    expect(formatDayMonth('2026-01-01', 'fr')).toMatch(/^1/);
   });
 });

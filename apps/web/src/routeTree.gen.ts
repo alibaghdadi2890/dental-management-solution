@@ -16,6 +16,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppActivityRouteImport } from './routes/_app/activity'
 import { Route as AppCatalogRouteImport } from './routes/_app/catalog'
 import { Route as AppExpensesRouteImport } from './routes/_app/expenses'
+import { Route as AppLabRouteImport } from './routes/_app/lab'
 import { Route as AppPayrollRouteImport } from './routes/_app/payroll'
 import { Route as AppScheduleRouteImport } from './routes/_app/schedule'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
@@ -25,6 +26,7 @@ import { Route as AppAdminActivityRouteImport } from './routes/_app/admin/activi
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppCompensationIndexRouteImport } from './routes/_app/compensation/index'
 import { Route as AppCompensationProfileIdRouteImport } from './routes/_app/compensation/$profileId'
+import { Route as AppLabsLabIdRouteImport } from './routes/_app/labs.$labId'
 import { Route as AppMyStatementRouteImport } from './routes/_app/my/statement'
 import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
 import { Route as AppPatientsPatientIdRouteImport } from './routes/_app/patients/$patientId'
@@ -33,6 +35,7 @@ import { Route as AppVisitsIndexRouteImport } from './routes/_app/visits/index'
 import { Route as AppVisitsVisitIdRouteImport } from './routes/_app/visits/$visitId'
 import { Route as PrintFamilyStatementContactIdRouteImport } from './routes/print/family-statement.$contactId'
 import { Route as PrintInvoiceVisitIdRouteImport } from './routes/print/invoice.$visitId'
+import { Route as PrintLabSlipOrderIdRouteImport } from './routes/print/lab-slip.$orderId'
 import { Route as PrintQuotePatientIdRouteImport } from './routes/print/quote.$patientId'
 import { Route as PrintReceiptPaymentIdRouteImport } from './routes/print/receipt.$paymentId'
 import { Route as PrintStatementPatientIdRouteImport } from './routes/print/statement.$patientId'
@@ -71,6 +74,11 @@ const AppCatalogRoute = AppCatalogRouteImport.update({
 const AppExpensesRoute = AppExpensesRouteImport.update({
   id: '/expenses',
   path: '/expenses',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppLabRoute = AppLabRouteImport.update({
+  id: '/lab',
+  path: '/lab',
   getParentRoute: () => AppRoute,
 } as any)
 const AppPayrollRoute = AppPayrollRouteImport.update({
@@ -119,6 +127,11 @@ const AppCompensationProfileIdRoute =
     path: '/compensation/$profileId',
     getParentRoute: () => AppRoute,
   } as any)
+const AppLabsLabIdRoute = AppLabsLabIdRouteImport.update({
+  id: '/labs/$labId',
+  path: '/labs/$labId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppMyStatementRoute = AppMyStatementRouteImport.update({
   id: '/my/statement',
   path: '/my/statement',
@@ -160,6 +173,11 @@ const PrintInvoiceVisitIdRoute = PrintInvoiceVisitIdRouteImport.update({
   path: '/invoice/$visitId',
   getParentRoute: () => PrintRoute,
 } as any)
+const PrintLabSlipOrderIdRoute = PrintLabSlipOrderIdRouteImport.update({
+  id: '/lab-slip/$orderId',
+  path: '/lab-slip/$orderId',
+  getParentRoute: () => PrintRoute,
+} as any)
 const PrintQuotePatientIdRoute = PrintQuotePatientIdRouteImport.update({
   id: '/quote/$patientId',
   path: '/quote/$patientId',
@@ -193,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
   '/expenses': typeof AppExpensesRoute
+  '/lab': typeof AppLabRoute
   '/payroll': typeof AppPayrollRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
@@ -200,11 +219,13 @@ export interface FileRoutesByFullPath {
   '/admin/activity': typeof AppAdminActivityRoute
   '/admin/roles': typeof AppAdminRolesRoute
   '/compensation/$profileId': typeof AppCompensationProfileIdRoute
+  '/labs/$labId': typeof AppLabsLabIdRoute
   '/my/statement': typeof AppMyStatementRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
   '/print/invoice/$visitId': typeof PrintInvoiceVisitIdRoute
+  '/print/lab-slip/$orderId': typeof PrintLabSlipOrderIdRoute
   '/print/quote/$patientId': typeof PrintQuotePatientIdRoute
   '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
@@ -222,6 +243,7 @@ export interface FileRoutesByTo {
   '/activity': typeof AppActivityRoute
   '/catalog': typeof AppCatalogRoute
   '/expenses': typeof AppExpensesRoute
+  '/lab': typeof AppLabRoute
   '/payroll': typeof AppPayrollRoute
   '/schedule': typeof AppScheduleRoute
   '/settings': typeof AppSettingsRoute
@@ -230,11 +252,13 @@ export interface FileRoutesByTo {
   '/admin/activity': typeof AppAdminActivityRoute
   '/admin/roles': typeof AppAdminRolesRoute
   '/compensation/$profileId': typeof AppCompensationProfileIdRoute
+  '/labs/$labId': typeof AppLabsLabIdRoute
   '/my/statement': typeof AppMyStatementRoute
   '/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
   '/print/invoice/$visitId': typeof PrintInvoiceVisitIdRoute
+  '/print/lab-slip/$orderId': typeof PrintLabSlipOrderIdRoute
   '/print/quote/$patientId': typeof PrintQuotePatientIdRoute
   '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
@@ -254,6 +278,7 @@ export interface FileRoutesById {
   '/_app/activity': typeof AppActivityRoute
   '/_app/catalog': typeof AppCatalogRoute
   '/_app/expenses': typeof AppExpensesRoute
+  '/_app/lab': typeof AppLabRoute
   '/_app/payroll': typeof AppPayrollRoute
   '/_app/schedule': typeof AppScheduleRoute
   '/_app/settings': typeof AppSettingsRoute
@@ -262,11 +287,13 @@ export interface FileRoutesById {
   '/_app/admin/activity': typeof AppAdminActivityRoute
   '/_app/admin/roles': typeof AppAdminRolesRoute
   '/_app/compensation/$profileId': typeof AppCompensationProfileIdRoute
+  '/_app/labs/$labId': typeof AppLabsLabIdRoute
   '/_app/my/statement': typeof AppMyStatementRoute
   '/_app/patients/$patientId': typeof AppPatientsPatientIdRoute
   '/_app/visits/$visitId': typeof AppVisitsVisitIdRoute
   '/print/family-statement/$contactId': typeof PrintFamilyStatementContactIdRoute
   '/print/invoice/$visitId': typeof PrintInvoiceVisitIdRoute
+  '/print/lab-slip/$orderId': typeof PrintLabSlipOrderIdRoute
   '/print/quote/$patientId': typeof PrintQuotePatientIdRoute
   '/print/receipt/$paymentId': typeof PrintReceiptPaymentIdRoute
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
@@ -287,6 +314,7 @@ export interface FileRouteTypes {
     | '/activity'
     | '/catalog'
     | '/expenses'
+    | '/lab'
     | '/payroll'
     | '/schedule'
     | '/settings'
@@ -294,11 +322,13 @@ export interface FileRouteTypes {
     | '/admin/activity'
     | '/admin/roles'
     | '/compensation/$profileId'
+    | '/labs/$labId'
     | '/my/statement'
     | '/patients/$patientId'
     | '/visits/$visitId'
     | '/print/family-statement/$contactId'
     | '/print/invoice/$visitId'
+    | '/print/lab-slip/$orderId'
     | '/print/quote/$patientId'
     | '/print/receipt/$paymentId'
     | '/print/statement/$patientId'
@@ -316,6 +346,7 @@ export interface FileRouteTypes {
     | '/activity'
     | '/catalog'
     | '/expenses'
+    | '/lab'
     | '/payroll'
     | '/schedule'
     | '/settings'
@@ -324,11 +355,13 @@ export interface FileRouteTypes {
     | '/admin/activity'
     | '/admin/roles'
     | '/compensation/$profileId'
+    | '/labs/$labId'
     | '/my/statement'
     | '/patients/$patientId'
     | '/visits/$visitId'
     | '/print/family-statement/$contactId'
     | '/print/invoice/$visitId'
+    | '/print/lab-slip/$orderId'
     | '/print/quote/$patientId'
     | '/print/receipt/$paymentId'
     | '/print/statement/$patientId'
@@ -347,6 +380,7 @@ export interface FileRouteTypes {
     | '/_app/activity'
     | '/_app/catalog'
     | '/_app/expenses'
+    | '/_app/lab'
     | '/_app/payroll'
     | '/_app/schedule'
     | '/_app/settings'
@@ -355,11 +389,13 @@ export interface FileRouteTypes {
     | '/_app/admin/activity'
     | '/_app/admin/roles'
     | '/_app/compensation/$profileId'
+    | '/_app/labs/$labId'
     | '/_app/my/statement'
     | '/_app/patients/$patientId'
     | '/_app/visits/$visitId'
     | '/print/family-statement/$contactId'
     | '/print/invoice/$visitId'
+    | '/print/lab-slip/$orderId'
     | '/print/quote/$patientId'
     | '/print/receipt/$paymentId'
     | '/print/statement/$patientId'
@@ -429,6 +465,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppExpensesRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/lab': {
+      id: '/_app/lab'
+      path: '/lab'
+      fullPath: '/lab'
+      preLoaderRoute: typeof AppLabRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/payroll': {
       id: '/_app/payroll'
       path: '/payroll'
@@ -492,6 +535,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompensationProfileIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/labs/$labId': {
+      id: '/_app/labs/$labId'
+      path: '/labs/$labId'
+      fullPath: '/labs/$labId'
+      preLoaderRoute: typeof AppLabsLabIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/my/statement': {
       id: '/_app/my/statement'
       path: '/my/statement'
@@ -548,6 +598,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PrintInvoiceVisitIdRouteImport
       parentRoute: typeof PrintRoute
     }
+    '/print/lab-slip/$orderId': {
+      id: '/print/lab-slip/$orderId'
+      path: '/lab-slip/$orderId'
+      fullPath: '/print/lab-slip/$orderId'
+      preLoaderRoute: typeof PrintLabSlipOrderIdRouteImport
+      parentRoute: typeof PrintRoute
+    }
     '/print/quote/$patientId': {
       id: '/print/quote/$patientId'
       path: '/quote/$patientId'
@@ -590,6 +647,7 @@ interface AppRouteChildren {
   AppActivityRoute: typeof AppActivityRoute
   AppCatalogRoute: typeof AppCatalogRoute
   AppExpensesRoute: typeof AppExpensesRoute
+  AppLabRoute: typeof AppLabRoute
   AppPayrollRoute: typeof AppPayrollRoute
   AppScheduleRoute: typeof AppScheduleRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -598,6 +656,7 @@ interface AppRouteChildren {
   AppAdminActivityRoute: typeof AppAdminActivityRoute
   AppAdminRolesRoute: typeof AppAdminRolesRoute
   AppCompensationProfileIdRoute: typeof AppCompensationProfileIdRoute
+  AppLabsLabIdRoute: typeof AppLabsLabIdRoute
   AppMyStatementRoute: typeof AppMyStatementRoute
   AppPatientsPatientIdRoute: typeof AppPatientsPatientIdRoute
   AppVisitsVisitIdRoute: typeof AppVisitsVisitIdRoute
@@ -614,6 +673,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppActivityRoute: AppActivityRoute,
   AppCatalogRoute: AppCatalogRoute,
   AppExpensesRoute: AppExpensesRoute,
+  AppLabRoute: AppLabRoute,
   AppPayrollRoute: AppPayrollRoute,
   AppScheduleRoute: AppScheduleRoute,
   AppSettingsRoute: AppSettingsRoute,
@@ -622,6 +682,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminActivityRoute: AppAdminActivityRoute,
   AppAdminRolesRoute: AppAdminRolesRoute,
   AppCompensationProfileIdRoute: AppCompensationProfileIdRoute,
+  AppLabsLabIdRoute: AppLabsLabIdRoute,
   AppMyStatementRoute: AppMyStatementRoute,
   AppPatientsPatientIdRoute: AppPatientsPatientIdRoute,
   AppVisitsVisitIdRoute: AppVisitsVisitIdRoute,
@@ -639,6 +700,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 interface PrintRouteChildren {
   PrintFamilyStatementContactIdRoute: typeof PrintFamilyStatementContactIdRoute
   PrintInvoiceVisitIdRoute: typeof PrintInvoiceVisitIdRoute
+  PrintLabSlipOrderIdRoute: typeof PrintLabSlipOrderIdRoute
   PrintQuotePatientIdRoute: typeof PrintQuotePatientIdRoute
   PrintReceiptPaymentIdRoute: typeof PrintReceiptPaymentIdRoute
   PrintStatementPatientIdRoute: typeof PrintStatementPatientIdRoute
@@ -647,6 +709,7 @@ interface PrintRouteChildren {
 const PrintRouteChildren: PrintRouteChildren = {
   PrintFamilyStatementContactIdRoute: PrintFamilyStatementContactIdRoute,
   PrintInvoiceVisitIdRoute: PrintInvoiceVisitIdRoute,
+  PrintLabSlipOrderIdRoute: PrintLabSlipOrderIdRoute,
   PrintQuotePatientIdRoute: PrintQuotePatientIdRoute,
   PrintReceiptPaymentIdRoute: PrintReceiptPaymentIdRoute,
   PrintStatementPatientIdRoute: PrintStatementPatientIdRoute,

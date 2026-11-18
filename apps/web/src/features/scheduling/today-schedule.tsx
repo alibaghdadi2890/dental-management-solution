@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { type ReactNode, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppointmentLabMark } from '@/features/labs/lab-order-label';
 import { Button } from '@/components/ui/button';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
 import { useSession } from '@/features/auth/session';
@@ -123,6 +124,7 @@ function Row({
       <div className="min-w-0 flex-1">
         <p className="m-0 flex items-center gap-1.5 text-[13px] font-medium">
           <span className="truncate">{appointment.patient.fullName}</span>
+          <AppointmentLabMark appointmentId={appointment.id} />
           {appointment.patient.registrationIncomplete ? (
             <span className="flex-none rounded-[4px] border border-warning-border bg-warning-bg px-1 text-[10.5px] font-medium text-warning">
               {t('status.incomplete')}

@@ -201,6 +201,7 @@
     "healing_review": "Contrôle de cicatrisation",
     "consultation": "Consultation",
     "routine_examination": "Examen de routine",
+    "lab_work": "Pose d’un travail de laboratoire",
     "other": "Autre"
   },
   "timings": {
@@ -215,6 +216,8 @@
   "next": {
     "title": "Prochain rendez-vous",
     "continue": "Poursuivre : {{name}}",
+    "labFit": "Pose : {{items}}",
+    "labTag": "Laboratoire",
     "session": "Séance {{number}} sur {{total}}",
     "sessionOpen": "Séance {{number}}",
     "pending": "Traitement en attente",

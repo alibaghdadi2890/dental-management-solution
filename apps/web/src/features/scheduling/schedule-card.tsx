@@ -1,6 +1,7 @@
 import type { Appointment } from '@dcm/contracts';
 import { type SyntheticEvent, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AppointmentLabMark } from '@/features/labs/lab-order-label';
 import { Tooltip } from '@/components/ui/tooltip';
 import { formatTime } from '@/lib/format';
 import { initials } from '@/lib/initials';
@@ -114,6 +115,7 @@ export function ScheduleCard({
       <span className="schedule-card-line">
         {short ? <span className="schedule-card-time">{time}</span> : null}
         <span className="schedule-card-name">{appointment.patient.fullName}</span>
+        <AppointmentLabMark appointmentId={appointment.id} compact={narrow} />
         {narrow ? null : incomplete}
         <AppointmentStatusMark appointment={appointment} roomy={!week || lanes === 1} />
       </span>

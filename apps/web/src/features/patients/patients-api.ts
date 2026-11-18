@@ -82,7 +82,13 @@ function toQueryString(params: Record<string, string | number | undefined>): str
 }
 
 export function patientListQuery(query: PatientListQuery, tenantId?: string) {
-  const path = usesBillingRoute(query) ? '/billing/patients' : '/patients';
+  // Open lab work is `labs`' view (feature 18, ADR-0081); the filter bar keeps it off billing's.
+  const path =
+    query.lab === 'open'
+      ? '/labs/patients'
+      : usesBillingRoute(query)
+        ? '/billing/patients'
+        : '/patients';
   return queryOptions({
     queryKey: patientKeys.list(tenantId ?? actingTenantId(), query),
     queryFn: () =>

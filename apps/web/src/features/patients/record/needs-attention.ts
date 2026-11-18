@@ -1,6 +1,7 @@
 import {
   type DiagnosisRecord,
   type FollowUp,
+  type LabOrderSummary,
   type MissingInformation,
   type Money,
   type PatientChart,
@@ -10,7 +11,8 @@ import {
 
 /**
  * One row of the Overview's **Needs attention** card (feature 10, V11), in the order the card
- * lists them: work in progress to continue, an urgent plan the patient accepted that is not done,
+ * lists them: late lab work and lab work arrived with no appointment (feature 18), work in
+ * progress to continue, an urgent plan the patient accepted that is not done,
  * money owed, a patient who was never examined here, and important details the record lacks
  * (ADR-0052).
  */
@@ -20,7 +22,9 @@ export type AttentionItem =
   | { kind: 'balance'; owed: Money }
   | { kind: 'examination' }
   | { kind: 'details'; missing: MissingInformation[] }
-  | { kind: 'followUp'; followUp: FollowUp };
+  | { kind: 'followUp'; followUp: FollowUp }
+  | { kind: 'labLate'; order: LabOrderSummary }
+  | { kind: 'labBook'; order: LabOrderSummary };
 
 export interface AttentionFacts {
   /** Undefined until the chart is in (or without `visit:read`): no plan rows. */
@@ -33,6 +37,8 @@ export interface AttentionFacts {
   missing: MissingInformation[] | undefined;
   /** What is left to book: awaiting and not expired (feature 14). */
   followUps?: readonly FollowUp[] | undefined;
+  /** The patient's open lab orders (feature 18): late work, and work arrived with no appointment. */
+  labOrders?: readonly LabOrderSummary[] | undefined;
 }
 
 /**
@@ -45,11 +51,18 @@ export function needsAttention({
   hasVisits,
   missing,
   followUps = [],
+  labOrders = [],
 }: AttentionFacts): AttentionItem[] {
   const phases = planPhases(chart?.plans ?? []);
   const open = phases.flatMap((phase) => phase.open);
   const urgent = phases.find((phase) => phase.priority === 'urgent')?.open ?? [];
   return [
+    ...labOrders
+      .filter((order) => order.label?.kind === 'late')
+      .map((order): AttentionItem => ({ kind: 'labLate', order })),
+    ...labOrders
+      .filter((order) => order.status === 'arrived' && order.appointment === null)
+      .map((order): AttentionItem => ({ kind: 'labBook', order })),
     ...followUps.map((followUp): AttentionItem => ({ kind: 'followUp', followUp })),
     ...open
       .filter((plan) => plan.status === 'in_progress')

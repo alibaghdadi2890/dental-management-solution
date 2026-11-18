@@ -201,6 +201,7 @@
     "healing_review": "Healing review",
     "consultation": "Consultation",
     "routine_examination": "Routine examination",
+    "lab_work": "Lab work fit",
     "other": "Other"
   },
   "timings": {
@@ -215,6 +216,8 @@
   "next": {
     "title": "Next appointment",
     "continue": "Continue {{name}}",
+    "labFit": "Fit {{items}}",
+    "labTag": "Lab work",
     "session": "Session {{number}} of {{total}}",
     "sessionOpen": "Session {{number}}",
     "pending": "Pending treatment",

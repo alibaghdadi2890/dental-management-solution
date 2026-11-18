@@ -1,7 +1,10 @@
 import { type FollowUp, missingInformation, type Patient, type Session } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useId, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { LabOrderLabelPill } from '@/features/labs/lab-order-label';
+import { orderNumber, useItemText, useOpenLabOrders } from '@/features/labs/lab-words';
 import { usePermission } from '@/features/auth/use-permission';
 import { balanceQuery } from '@/features/billing/billing-api';
 import { owedBalances } from '@/features/billing/owed-balances';
@@ -53,7 +56,10 @@ export function NeedsAttentionCard({
   /** Opens the Patient information tab; left out when the caller may not edit the record. */
   onCompleteDetails: (() => void) | undefined;
 }) {
-  const { t, i18n } = useTranslation(['patients', 'clinical', 'scheduling']);
+  const { t, i18n } = useTranslation(['patients', 'clinical', 'scheduling', 'labs']);
+  const labOrders = useOpenLabOrders();
+  const navigate = useNavigate();
+  const itemText = useItemText();
   const locale = i18n.resolvedLanguage ?? 'en';
   const titleId = useId();
   const target = useTargetLabel();
@@ -74,6 +80,7 @@ export function NeedsAttentionCard({
 
   const items = needsAttention({
     followUps: followUps.data?.filter(isOpenFollowUp),
+    labOrders: labOrders.byPatient.get(patient.id),
     chart: chart.data,
     owed: lead && Number(lead.amount) > 0 ? lead : null,
     hasVisits: lastVisit.data === undefined ? undefined : lastVisit.data !== null,
@@ -96,6 +103,26 @@ export function NeedsAttentionCard({
 
   const rowOf = (item: AttentionItem): Row => {
     switch (item.kind) {
+      case 'labLate':
+      case 'labBook': {
+        const { order } = item;
+        return {
+          key: order.id,
+          chip: '—',
+          muted: item.kind === 'labBook',
+          title: t(
+            item.kind === 'labLate' ? 'labs:record.needsLate' : 'labs:record.needsNoAppointment',
+          ),
+          reason: `${orderNumber(order)} · ${order.labName} · ${order.items.map(itemText).join(', ')}`,
+          tag: order.label ? <LabOrderLabelPill label={order.label} /> : null,
+          action: {
+            label: t('labs:record.open'),
+            run: () => {
+              void navigate({ to: '/lab', search: { order: order.id } });
+            },
+          },
+        };
+      }
       case 'followUp': {
         const { followUp } = item;
         const overdue = followUp.overdueDays > 0;

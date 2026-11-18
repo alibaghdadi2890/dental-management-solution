@@ -260,6 +260,11 @@ export function ExpensePanel({
               </Select>
             )}
           </Field>
+          {chosen?.key === 'lab_fees' && (
+            <p className="m-0 -mt-2 text-[12.5px] text-ink-muted">
+              {t('expenses:panel.labFeesHint')}
+            </p>
+          )}
           <div>
             <MethodPicker
               label={t('expenses:panel.method')}
