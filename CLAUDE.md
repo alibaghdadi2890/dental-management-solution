@@ -127,10 +127,14 @@ modules/<name>/
 | `alerts`        | arrival alerts for the people who run visits (feature 15): "Your patients", derived from `scheduling` and `clinical` (who is waiting, who is in a room, ADR-0073); `alert_follows` (who follows which dentist); the SSE stream, a per-tenant ping after the commit, in process (one API instance) | scheduling, clinical, users; pings on the check-in and visit events |
 | `notifications` | reminders, templates, SMS/WhatsApp/email delivery via BullMQ         | tenancy (reacts to scheduling events) |
 | `imports`       | the import APIs (ADR-0053: services, patients with opening balances, visits imported uncharged — rows of JSON, per row transaction, dry run); later import jobs: uploaded file, column mapping, staged rows + preview; writes only through `patients`, `billing` and `clinical` services | patients, clinical, billing |
+| `dashboards`    | the Financial and Operational dashboards (feature 19); owns no tables: every figure is the summary of the module that holds its facts and equals its home screen for the same filter (ADR-0087); complete cost for cost figures (ADR-0088), the period and its comparison (`resolvePeriod`, ADR-0089), capacity from opening hours × active rooms (ADR-0090); `dashboard:financial` / `dashboard:operational` (ADR-0092) | billing, clinical, scheduling, patients, expenses, payroll, compensation, labs, tenancy, users; nothing imports it |
 | `provisioning`  | platform back office: provisions a tenant end to end (tenant, first branch, owner, system roles), cross-tenant tenants list, suspension; owns no tables | tenancy, auth, users, roles |
 
 Every module that mutates also depends on `audit`. Nothing calls `provisioning` (ADR-0009); its
 events may be consumed (ADR-0014).
+The owning modules expose the dashboards' summaries from their own services (`BillingSummaryService`,
+`ClinicalSummaryService`, `SchedulingSummaryService`, and methods on the expenses, payroll, patients and labs
+services); `dashboards` is the only new dependency edge (ADR-0087).
 
 Phase 2 adds `assistant` (agent runtime, conversations, tool registry, confirmation workflow) and
 `voice` (STT/TTS adapters in front of `assistant`).
@@ -220,6 +224,10 @@ The decided meanings (ADR-0055):
 - **Lab work.** `lab:read` / `lab:manage` are lab orders (everyone who works with patients);
   `lab:money_read` / `lab:money_manage` are prices, costs and lab accounts. Without lab money a
   response carries no price (`null`) and the money routes answer 403 (ADR-0086).
+- **Dashboards.** `dashboard:financial` (implies `finance:read`) is the Financial tab,
+  `dashboard:operational` the Operational one (counts, rates and times for the whole clinic, no
+  money). Each part still needs its home permission, and cost figures need complete cost:
+  `expense:read` + `payroll:read` + `compensation:manage`, never a smaller total (ADR-0088, ADR-0092).
 
 Rules:
 - Every controller route declares its access: `@RequirePermission(p)`, `@Authenticated()` (any
@@ -361,6 +369,14 @@ Even in phase 1, write application services so they can be exposed as tools late
 - All dates handled with the tenant timezone from session; display via one shared formatter.
 - Calendar views use a scheduler component with resource support; do not build the grid by hand.
   It is `react-big-calendar`, behind one file, `features/scheduling/schedule-calendar.tsx` (ADR-0071).
+- Charts come from one place: `components/charts/` (ADR-0091). Recharts is imported only there; a
+  feature uses its components and its colour tokens (`chart-tokens.ts`, `--color-chart-*`): a series keeps
+  one colour everywhere, four at most per chart, state colours only for statuses, never a pie, donut,
+  gauge or second scale. Every chart card offers _View as table_.
+- Minimal text: few labels, titles of two to four words, no helper sentences or descriptive subtitles in
+  cards. Whatever needs explaining sits behind the quiet **!** (`components/ui/info-mark.tsx`), which opens
+  on hover, keyboard focus and tap (ADR-0091). A figure is a `FigureTile` (`components/ui/figure-tile.tsx`):
+  its change chip says good or bad, never up or down, with an arrow and a sign.
 - A tooth is drawn from a `ToothRender` (`features/clinical/chart/tooth-render.ts`): `toToothRender`
   decides what is painted, in which colour and tone, and words the tooltip; `ToothGlyph` only
   renders it and derives nothing. A new way to draw a tooth is a second renderer of that object.

@@ -90,3 +90,9 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0084](0084-the-appointment-link-follows-scheduling.md)                | An order's appointment link follows scheduling's events                      | Accepted                             |
 | [0085](0085-lab-payments-are-mirrored-into-expenses.md)                | Lab payments are mirrored into Expenses                                      | Accepted (extends 0076)              |
 | [0086](0086-lab-permissions.md)                                        | Lab permissions                                                              | Accepted                             |
+| [0087](0087-the-dashboards-module.md)                                  | The `dashboards` module owns no tables; it asks the modules with the facts   | Accepted                             |
+| [0088](0088-complete-cost.md)                                          | Cost figures need complete cost                                              | Accepted                             |
+| [0089](0089-the-period-and-its-comparison.md)                          | The period, what it is compared with, and the trends                         | Accepted                             |
+| [0090](0090-capacity-is-opening-hours-times-rooms.md)                  | Capacity is opening hours × active rooms                                     | Accepted                             |
+| [0091](0091-charts-and-the-quiet-mark.md)                              | Charts behind one folder, their colours, and the quiet mark                  | Accepted                             |
+| [0092](0092-dashboard-permissions.md)                                  | Dashboard permissions                                                        | Accepted                             |

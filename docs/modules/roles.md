@@ -157,3 +157,9 @@ audit (tenant scope comes from RLS; `tenancy` is an allowed edge but not needed 
 ## Permissions
 
 `role:read`, `role:write`.
+
+## Feature 19
+
+`dashboard:financial` (⇒ `finance:read`) and `dashboard:operational`, capability group
+`dashboard` (ADR-0092). Owner and admin hold both; migration 0060 adds them to those roles of
+every clinic and to their templates.

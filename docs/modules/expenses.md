@@ -102,3 +102,10 @@ confirmation also writes a hidden `expense.record`.
   - **Fixed expenses**: the template panel, with its months and Confirm, Skip, Undo skip, Pause,
     Resume and End;
   - **Categories**, for `expense:manage`.
+
+## Feature 19
+
+`ExpensesService` is exported for the financial dashboard: `dashboardCosts` (confirmed, not
+voided expenses of the caller's visible sources by category; totals, months and the four cost
+groups only with complete cost, ADR-0088) and `fixedWaiting` (Today's pending items: count, Σ
+usual amount).

@@ -885,3 +885,19 @@ events; ADR-0024); `clinical` never imports `billing` or `files`.
 
 The catalog permissions cover both the service and the diagnosis catalog. Feature 10 added no
 permission.
+
+## Summaries and cohorts (feature 19)
+
+`ClinicalSummaryService` (exported, `persistence/summary.repository.ts`): finished visits
+(completed or amended, never imported) by span and month, their rows for waits and lengths; new
+patients (first counted visit ever, imported ones included), active (a visit in the last 12
+months), _came back_ and new/returning per month; plan items by stage (`recorded_at` in the
+span); plan value (still `planned`: accepted by priority, proposed); visits left open (live,
+started before today). Operational reads need `dashboard:operational`, the plan value
+`finance:read`. `visitFacts` and `discountFacts` are ungated building blocks for `billing`, and
+`acceptedPatientIds` for `scheduling`.
+
+The visits list filters gain `from`/`to` (in place of `range`), `branchId` (another branch, or
+`all`) and `finished`. `GET /clinical/patients?cohort=` serves the Patients screen for
+`first_seen`, `seen`, `proposed` and `accepted` (the same query and page as `GET /patients`).
+Migration 0060 adds `visits_local_date_idx` and `treatment_plans_recorded_idx`.

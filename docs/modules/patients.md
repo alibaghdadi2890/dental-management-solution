@@ -509,3 +509,11 @@ depends on `patients` (`create` with contacts, `getMany`, `listItemsByIds` (the 
 - The medical history of a patient is edited with `patient:write`. The medical-history lists
   are read with `patient:read` and edited with `catalog:write` (owner; a platform admin acting
   in the tenant): they are edited on the Catalog screen, like the catalogs.
+
+## Feature 19
+
+- `cohort` on the list query: `incomplete` is served by `GET /patients` itself (quick
+  registrations not finished); the others need the module that holds their facts and are refused
+  here with 422 (`clinical` and `scheduling` serve them).
+- `incompleteCount` and `firstVisitTypes` (`dashboard:operational`) feed the operational
+  dashboard.

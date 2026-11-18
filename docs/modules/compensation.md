@@ -121,3 +121,9 @@ Every route needs `compensation:manage` unless stated.
 - **Compensation** (`/compensation`). The month's report, and each dentist's statement with
   Add adjustment, Record payout, Close month / Reopen and Export.
 - **My statement** (`/my/statement`). The dentist's own months, read-only.
+
+## Feature 19
+
+`CompensationService` is exported: the financial dashboard reads `report(month)` for what each
+dentist earned over whole months (closed months as frozen) and the current month's
+`balanceOwed`, both only with `compensation:manage`.

@@ -92,3 +92,8 @@ which only `payroll:read` sees and platform Activity never shows.
 - **Employees**: the list and the employee panel, with details, link, Mark as left, Remove, the
   salary history with Change salary, and the payroll history with export.
 - **Year**: the net paid per month, with export.
+
+## Feature 19
+
+`PayrollRunsService` is exported for the financial dashboard: `waiting` (`payroll:read`) is the
+pending net of this month and every earlier month.

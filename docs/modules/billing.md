@@ -571,3 +571,19 @@ scope; without `payment:read` it answers `handedOff: true` with the visit's own 
   just the charge. Every system role that holds `visit:write` (owner, dentist, assistant) also
   holds both (`docs/modules/roles.md`'s matrix), so this never surfaces in practice; it matters
   only if a future custom role grants `visit:write` without them.
+
+## Summaries and drill-downs (feature 19)
+
+`BillingSummaryService` (exported) answers the financial dashboard (ADR-0087), every method
+`finance:read`: production (Σ visit entries by `effective_date`; a branch keeps the visits of that
+branch through `clinical`'s visit facts), visits charged (a charge in the span, never reversed)
+with their discounts and gross price, collections (payments not voided − refunds by `paid_at`,
+by method, by month; a branch keeps the payments recorded there), production and collections by
+dentist (the compensation statement's attribution, ADR-0059), production by service
+(`domain/service-split.ts`: each entry moves each code from its prorated share before to after),
+receivables with the five largest balances, and patient credit (Σ accounts in credit).
+
+Routes added: `GET /billing/visits/charged` and `/charged/summary` (`finance:read`: visits with a
+visit entry dated in `chargedFrom`–`chargedTo`, `discounted`; footer count, charged, discounts)
+and `GET /billing/payments/summary` (the Transactions filters' payments, refunds and net). The
+Transactions filters gain `from`, `to` and `branchId`.

@@ -81,3 +81,9 @@ payments and adjustments need an `Idempotency-Key`.
 
 - `LabPaymentRecorded`, `LabPaymentVoided` (consumed by `expenses`; stored by the audit
   subscriber, hidden without `lab:money_read`).
+
+## Feature 19
+
+`LabsService` and `LabOrderReadsService` are exported for the dashboards: the accounts' total
+outstanding (`lab:money_read`), the reports by lab without costs (`lab:read`), and `attention`
+(late orders, and orders arrived with no appointment ahead, by branch and dentist).

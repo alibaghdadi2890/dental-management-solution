@@ -99,3 +99,17 @@ Every change also writes a dotted audit action for the Activity screen (area `sc
 `AppointmentMarkedNoShow` and `AppointmentCompleted` in the transaction to keep a lab order's
 appointment link (ADR-0084), and reads `refs`, `upcomingFor` and `openWeekdays` (ungated building
 blocks, feature 18). The booking warning about lab work is the SPA's (ADR-0081).
+
+## Summaries and the List view (feature 19)
+
+`SchedulingSummaryService` (exported): appointments due (started by now; `rescheduled` rows
+never count, their successor does) by outcome, week and dentist; room use against opening hours
+× active rooms over the passed days (`domain/capacity.ts`, ADR-0090); busy hours (weekday ×
+hour); follow-ups created in the span by state; needs attention (unresolved, overdue follow-ups,
+patients with an accepted plan item and no upcoming appointment); check-in times for the waits.
+Dashboard reads need `dashboard:operational`.
+
+Routes added: `GET /scheduling/appointments/list` (`appointment:read`; dates, optional branch,
+dentist, status incl. derived `unresolved`, weekday, hour, `due`; cursor-paged with a total) and
+`GET /scheduling/patients?cohort=accepted_unbooked` (`patient:read`). Migration 0060 adds
+`appointments_starts_idx`.
