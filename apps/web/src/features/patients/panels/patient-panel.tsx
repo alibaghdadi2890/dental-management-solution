@@ -1,5 +1,6 @@
 import { useSession } from '@/features/auth/session';
-import type { PatientPanel as Panel } from '../list-query';
+import type { PatientPanel as Panel, PatientPrefill } from '../list-query';
+import { FamiliesPanel } from '../families/families-panel';
 import { MergePanel } from './merge-panel';
 import { PatientFormPanel } from './patient-form-panel';
 import { QuickViewPanel } from './quick-view-panel';
@@ -16,7 +17,7 @@ export function PatientPanel({
   onOpen,
 }: {
   panel: Panel;
-  prefill: { fullName?: string | undefined; phone?: string | undefined };
+  prefill: PatientPrefill;
   onClose: () => void;
   onOpen: (panel: Panel) => void;
 }) {
@@ -47,5 +48,7 @@ export function PatientPanel({
       );
     case 'merge':
       return <MergePanel ids={panel.ids} tenant={tenant} onClose={onClose} onOpen={onOpen} />;
+    case 'families':
+      return <FamiliesPanel tenant={tenant} onClose={onClose} />;
   }
 }

@@ -1,43 +1,58 @@
-import { type ContactLookupItem, storedPhone } from '@dcm/contracts';
+import {
+  type ContactLookupItem,
+  type ContactView,
+  type PatientContact,
+  samePhone,
+  storedPhone,
+} from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
+import type { LinkerRequest } from '../contact-linker';
 import type { ContactSelection } from '../contact-picker';
+import { linkExclusions, NO_ROLES } from '../contact-rows';
 import { contactLookupQuery } from '../contacts-api';
 import { minorOn, pendingExclusions } from '../patient-form';
 import type { PatientForm } from '../use-patient-form';
 
 const DEBOUNCE_MS = 300;
 
-/** What the typed phone leads the create panel to ask. */
-export type PhoneOffer =
-  /** An adult: "Is this patient {name}? Link to their contact record." (`linkContactId`). */
-  | { kind: 'identity'; key: string; contactId: string; fullName: string }
-  /** A minor: "This phone belongs to {name}. Add {name} as guardian?" (a guardian link). */
-  | { kind: 'guardian'; key: string; selection: ContactSelection };
-
-interface Candidate {
+/** What the typed phone leads the panel to offer (families A, P4). */
+export interface PhoneOffer {
   key: string;
-  /** A contact already (rather than a patient who would become one). */
-  contact: boolean;
-  /** A patient who is a minor on the tenant's today: never anyone's guardian. */
-  minor: boolean;
-  /** Unlinked: a contact who is nobody's patient record, so could be *this* patient. */
-  unlinked: boolean;
-  /** The patient this person is, if any (a pending patient target is the same person). */
-  patientId: string | null;
+  /** Whom "Add as contact" stages. */
   selection: ContactSelection;
+  /** The minor whose record holds the phone, when the offer is their family contact. */
+  via: { name: string; role: 'guardian' | 'billing' } | null;
+  /** Create, an adult patient, and a contact who is no patient: "This is {name}" links to it. */
+  identityContactId: string | null;
 }
 
-function candidateOf(item: ContactLookupItem, today: string): Candidate {
-  if (item.kind === 'contact') {
-    const { contact } = item;
-    return {
+/** The edit panel's patient: its saved phone, and its links (never offered again; null while
+ * they load, and nothing is offered until they have). */
+export interface LinkOfferEdit {
+  patientId: string;
+  savedPhone: string | null;
+  links: readonly PatientContact[] | null;
+}
+
+interface Candidate {
+  offer: PhoneOffer;
+  /** The patient this person is, if any. */
+  patientId: string | null;
+}
+
+function contactCandidate(
+  contact: ContactView,
+  via: PhoneOffer['via'],
+  identity: boolean,
+): Candidate {
+  return {
+    patientId: contact.linkedPatient?.id ?? null,
+    offer: {
       key: `contact:${contact.id}`,
-      contact: true,
-      minor: false,
-      unlinked: contact.linkedPatient === null,
-      patientId: contact.linkedPatient?.id ?? null,
+      via,
+      identityContactId: identity && contact.linkedPatient === null ? contact.id : null,
       selection: {
         target: { contactId: contact.id },
         display: {
@@ -48,97 +63,124 @@ function candidateOf(item: ContactLookupItem, today: string): Candidate {
         },
         relationship: null,
       },
-    };
-  }
-  const { patient } = item;
-  return {
-    key: `patient:${patient.id}`,
-    contact: false,
-    minor: minorOn(patient.dateOfBirth, today),
-    unlinked: false,
-    patientId: patient.id,
-    selection: {
-      target: { patientId: patient.id },
-      display: {
-        fullName: patient.fullName,
-        phone: patient.phone,
-        patientNumber: patient.displayNumber,
-        archived: false,
-      },
-      relationship: null,
     },
   };
 }
 
-function phoneOf(item: ContactLookupItem): string | null {
-  return item.kind === 'contact' ? item.contact.phone : item.patient.phone;
+/**
+ * Whom a lookup hit offers: a contact, or an adult patient (or one without a date of birth),
+ * themselves; a minor patient, who is nobody's guardian, their family contact if they have one.
+ * Contacts come first, then patients, each in lookup order.
+ */
+function candidatesOf(
+  items: readonly ContactLookupItem[],
+  today: string,
+  identity: boolean,
+): Candidate[] {
+  const contacts: Candidate[] = [];
+  const patients: Candidate[] = [];
+  for (const item of items) {
+    if (item.kind === 'contact') {
+      contacts.push(contactCandidate(item.contact, null, identity));
+      continue;
+    }
+    const { patient } = item;
+    if (minorOn(patient.dateOfBirth, today)) {
+      const family = patient.familyContact;
+      if (family) {
+        const via = { name: patient.fullName, role: family.role };
+        patients.push(contactCandidate(family.contact, via, false));
+      }
+      continue;
+    }
+    patients.push({
+      patientId: patient.id,
+      offer: {
+        key: `patient:${patient.id}`,
+        via: null,
+        identityContactId: null,
+        selection: {
+          target: { patientId: patient.id },
+          display: {
+            fullName: patient.fullName,
+            phone: patient.phone,
+            patientNumber: patient.displayNumber,
+            archived: false,
+          },
+          relationship: null,
+        },
+      },
+    });
+  }
+  return [...contacts, ...patients];
 }
 
 /**
- * The create panel's "this phone is someone we know" offer (design addendum C4, Implementation
- * notes "Link offer"). The typed phone, once valid for the tenant's country, is looked up by its
- * E.164 digits (`GET /contacts/lookup`, debounced) and matched exactly:
+ * The create and edit panels' "this phone is someone we know" (families A; design addendum C4 as
+ * amended). Once a phone is typed — in edit, one that differs from the saved phone — it is looked up
+ * by its digits (`GET /contacts/lookup`, debounced) and the hits with the same number (`samePhone`)
+ * are offered one at a time, whatever the patient's age:
  *
- * - an **adult** is asked whether they *are* an unlinked contact ("the mother becomes a patient"):
- *   Yes sets `linkContactId`, shown as a removable "Will link to {name}" chip. The link holds while
- *   the phone stays that number (however it is typed) and the patient an adult;
- * - a **minor** never becomes a contact — their phone is most often a parent's — so the match is
- *   offered as guardian instead: accepting stages it in the Guardian block (`guardianRequest`). A
- *   contact is offered before a patient, and a patient who is a minor (a sibling sharing the
- *   phone) never is.
+ * - **Add as contact** stages the person in the contacts section (`request`): the Guardian block for
+ *   a minor, otherwise "Contacts & family" with Billing contact ticked;
+ * - **This is {name}** (create only, an adult, and a contact who is no patient) sets
+ *   `linkContactId`, shown as a removable "Will link to {name}" chip. The link holds while the
+ *   phone stays that number and the patient an adult.
  *
- * Someone already added to this patient is never offered, nor one the person answered No / Not now
- * to. Off (`enabled` false) in the edit panel: only a create can become a contact.
+ * Never offered: the patient itself, someone already linked or pending, and anyone answered Not
+ * now to while the panel is open.
+ *
+ * `prefilled` is the contact a Register as patient opened the panel for (families C): the chip
+ * starts with it and stays whatever the phone or age — only its × removes it.
  */
-export function useLinkOffer(form: PatientForm, enabled: boolean) {
+export function useLinkOffer(
+  form: PatientForm,
+  edit: LinkOfferEdit | null,
+  prefilled: { id: string; fullName: string } | null = null,
+) {
   const { values, country } = form;
   const minor = form.showGuardianBlock;
-  // As the server stores it (ADR-0052): E.164 when valid, otherwise as typed.
-  const e164 = enabled ? (storedPhone(values.phone, country)?.value ?? null) : null;
-  const digits = e164 === null ? '' : e164.replace(/\D/g, '');
+  const typed = storedPhone(values.phone, country)?.value ?? null;
+  const unchanged =
+    edit !== null && edit.savedPhone !== null && samePhone(values.phone, edit.savedPhone, country);
+  const digits = typed === null || unchanged ? '' : typed.replace(/\D/g, '');
   const settled = useDebouncedValue(digits, DEBOUNCE_MS);
   const lookup = useQuery({ ...contactLookupQuery(settled), enabled: settled !== '' });
 
-  const [linked, setLinked] = useState<{ id: string; fullName: string; phone: string } | null>(
-    null,
-  );
+  const [linked, setLinked] = useState<{
+    id: string;
+    fullName: string;
+    phone: string;
+    pinned: boolean;
+  } | null>(prefilled && { ...prefilled, phone: '', pinned: true });
   const [dismissed, setDismissed] = useState<readonly string[]>([]);
-  const [guardianRequest, setGuardianRequest] = useState<ContactSelection | null>(null);
+  const [request, setRequest] = useState<LinkerRequest | null>(null);
 
   // The link goes with the phone it was made for, and as soon as the patient is a minor.
-  if (linked !== null && (minor || e164 !== linked.phone)) {
+  if (linked !== null && !linked.pinned && (minor || typed !== linked.phone)) {
     setLinked(null);
     form.setLinkContactId(null);
   }
 
-  const { contactIds, patientIds } = pendingExclusions(values);
-  const added = ({ key, patientId }: Candidate) =>
-    contactIds.some((id) => key === `contact:${id}`) ||
+  const { contactIds, patientIds } = edit
+    ? linkExclusions(edit.patientId, edit.links ?? [])
+    : pendingExclusions(values);
+  const excluded = ({ offer, patientId }: Candidate) =>
+    dismissed.includes(offer.key) ||
+    contactIds.some((id) => offer.key === `contact:${id}`) ||
     (patientId !== null && patientIds.includes(patientId));
-  const candidates =
-    e164 !== null && settled === digits && lookup.data
-      ? lookup.data
-          .filter((item) => phoneOf(item) === e164)
-          .map((item) => candidateOf(item, form.today))
-          .filter((candidate) => !dismissed.includes(candidate.key) && !added(candidate))
-      : [];
 
-  let offer: PhoneOffer | null = null;
-  if (minor) {
-    const adults = candidates.filter((candidate) => !candidate.minor);
-    const first = adults.find((candidate) => candidate.contact) ?? adults[0];
-    if (first) offer = { kind: 'guardian', key: first.key, selection: first.selection };
-  } else if (linked === null) {
-    const first = candidates.find(({ unlinked }) => unlinked);
-    if (first && 'contactId' in first.selection.target) {
-      offer = {
-        kind: 'identity',
-        key: first.key,
-        contactId: first.selection.target.contactId,
-        fullName: first.selection.display.fullName,
-      };
-    }
-  }
+  const offer =
+    digits !== '' && settled === digits && lookup.data && linked === null && edit?.links !== null
+      ? (candidatesOf(
+          lookup.data.filter((item) => {
+            const phone = item.kind === 'contact' ? item.contact.phone : item.patient.phone;
+            return phone !== null && samePhone(phone, values.phone, country);
+          }),
+          form.today,
+          edit === null && !minor,
+        ).find((candidate) => !excluded(candidate))?.offer ?? null)
+      : null;
 
   const dismiss = (key: string) => {
     setDismissed((keys) => [...keys, key]);
@@ -148,18 +190,26 @@ export function useLinkOffer(form: PatientForm, enabled: boolean) {
     offer,
     /** The contact this patient will be linked to (the chip), or null. */
     linked,
-    /** Yes, same person / Add as guardian. */
-    accept: (accepted: PhoneOffer) => {
-      if (accepted.kind === 'guardian') {
-        dismiss(accepted.key);
-        setGuardianRequest({ ...accepted.selection });
-        return;
-      }
-      if (e164 === null) return;
-      form.setLinkContactId(accepted.contactId);
-      setLinked({ id: accepted.contactId, fullName: accepted.fullName, phone: e164 });
+    /** Add as contact: staged in the contacts section, a new object each time. */
+    addAsContact: (accepted: PhoneOffer) => {
+      dismiss(accepted.key);
+      setRequest({
+        selection: { ...accepted.selection },
+        roles: minor ? NO_ROLES : { ...NO_ROLES, billing: true },
+      });
     },
-    /** No / Not now: not asked again about that person while the panel is open. */
+    /** This is {name}: the patient becomes that contact (`linkContactId`). */
+    linkAsSelf: (accepted: PhoneOffer) => {
+      if (typed === null || accepted.identityContactId === null) return;
+      form.setLinkContactId(accepted.identityContactId);
+      setLinked({
+        id: accepted.identityContactId,
+        fullName: accepted.selection.display.fullName,
+        phone: typed,
+        pinned: false,
+      });
+    },
+    /** Not now: not offered again while the panel is open. */
     dismiss: (dismissedOffer: PhoneOffer) => {
       dismiss(dismissedOffer.key);
     },
@@ -168,7 +218,7 @@ export function useLinkOffer(form: PatientForm, enabled: boolean) {
       setLinked(null);
       form.setLinkContactId(null);
     },
-    /** The contact to stage in the Guardian block, a new object each time it is asked for. */
-    guardianRequest,
+    /** The contact to stage in the contacts section. */
+    request,
   };
 }

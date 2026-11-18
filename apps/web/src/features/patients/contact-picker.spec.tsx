@@ -45,6 +45,7 @@ const SAMI: ContactLookupItem = {
     fullName: 'Sami Haddad',
     phone: '+33612345678',
     dateOfBirth: '1980-01-01',
+    familyContact: null,
   },
 };
 const ALL = [MARIA, OMAR, LINA, SAMI];

@@ -3,6 +3,7 @@ import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { patientKeys } from './patients-api';
 import { renderShell } from '@/shell/shell.test-utils';
+import { LINA, MONA_ID, mockMona } from './contact-panel/contact-panel.test-utils';
 import {
   ALL_PERMISSIONS,
   id,
@@ -11,6 +12,7 @@ import {
   mockApi,
   patient,
   problem,
+  sent,
   sessionWith,
 } from './patients.test-utils';
 
@@ -392,5 +394,53 @@ describe('CommandPalette', () => {
       expect(document.activeElement).toBe(name);
     });
     expect(name).toHaveProperty('value', 'Rana');
+  });
+});
+
+describe('CommandPalette — contacts and the contact panel (families C)', () => {
+  it('offers no "Create" while a contact matches, only the contact', async () => {
+    mockMona([]);
+    const { dialog, input } = await openPalette();
+    type(input, 'mona');
+    expect(await within(dialog).findByRole('option', { name: /Mona Haddad/ })).toBeTruthy();
+    expect(within(dialog).queryByRole('button', { name: 'Create "mona"' })).toBeNull();
+    expect(within(dialog).queryByText('No patient matches "mona"')).toBeNull();
+  });
+
+  // The one test here that opens the contact panel (see `contact-panel.test-utils.ts`).
+  it('reaches a contact by the keys, shows their panel, and registers them as a patient', async () => {
+    const fetchMock = mockMona([LINA]);
+    const { dialog, input } = await openPalette();
+    type(input, 'mona');
+    const contacts = await within(dialog).findByRole('group', { name: 'Contacts' });
+    const option = within(contacts).getByRole('option', { name: /Mona Haddad/ });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(option.getAttribute('aria-selected')).toBe('true');
+    fireEvent.keyDown(input, { key: 'Enter' });
+
+    const panel = await screen.findByRole('dialog', { name: 'Mona Haddad' });
+    expect(await within(panel).findByRole('link', { name: 'Lina Haddad' })).toBeTruthy();
+    expect(within(panel).getByText('Guardian')).toBeTruthy();
+    expect(await within(panel).findByText('Family balance')).toBeTruthy();
+    expect(within(panel).getAllByText('$420').length).toBeGreaterThan(0);
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Register as patient' }));
+    const form = await screen.findByRole('complementary', { name: 'Register a patient' });
+    expect(within(form).getByRole<HTMLInputElement>('textbox', { name: /^Full name/ }).value).toBe(
+      'Mona Haddad',
+    );
+    expect(screen.getByText('Will link to Mona Haddad')).toBeTruthy();
+    // The person chose this contact: a changed phone keeps the link.
+    fireEvent.change(within(form).getByRole('textbox', { name: /^Phone/ }), {
+      target: { value: '03 999 888' },
+    });
+    expect(screen.getByText('Will link to Mona Haddad')).toBeTruthy();
+    fireEvent.click(within(form).getByRole('button', { name: 'Create patient' }));
+    await screen.findByText('Patient created');
+    expect(sent(fetchMock, 'POST', '/patients')).toMatchObject({
+      fullName: 'Mona Haddad',
+      email: 'mona@example.com',
+      linkContactId: MONA_ID,
+    });
   });
 });

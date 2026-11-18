@@ -55,6 +55,7 @@ const SAMI: ContactLookupItem = {
     fullName: 'Sami Haddad',
     phone: '+9613222333',
     dateOfBirth: '1980-01-01',
+    familyContact: null,
   },
 };
 const SAMI_LINK = patientContact(62, 'Sami Haddad', {

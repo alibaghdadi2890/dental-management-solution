@@ -2,6 +2,7 @@ import type {
   AuditEntry,
   BalanceMoney,
   ContactLookupItem,
+  FamilySuggestion,
   LastVisit,
   MedicalHistory,
   MedicalOption,
@@ -252,6 +253,8 @@ export interface MockApi {
   contacts?: Record<string, PatientContact[]>;
   /** `GET /contacts/lookup` answer, whatever the query. */
   lookup?: ContactLookupItem[];
+  /** `GET /patients/families` answer (families B); none by default. */
+  families?: FamilySuggestion[];
   /** `GET /patients/duplicates/check` answer. */
   twins?: PatientListItem[];
   /** Money paid in advance for the plan per patient id (the account's `held`), and what the plan
@@ -282,6 +285,7 @@ export function mockApi({
   audit = {},
   contacts = {},
   lookup = [],
+  families = [],
   twins = [],
   held = {},
   mutation,
@@ -368,6 +372,7 @@ export function mockApi({
     }
     if (bare === '/billing/balances') return Promise.resolve(json([]));
     if (bare === '/contacts/lookup') return Promise.resolve(json(lookup));
+    if (bare === '/patients/families') return Promise.resolve(json(families));
     const contactsOf = /^\/patients\/([^/]+)\/contacts$/.exec(bare)?.[1];
     if (contactsOf) return Promise.resolve(json(contacts[contactsOf] ?? []));
     if (bare === '/patients' || bare === '/billing/patients') {

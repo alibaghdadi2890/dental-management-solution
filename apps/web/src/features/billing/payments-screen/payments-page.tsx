@@ -33,6 +33,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { invalidateVisitData } from '@/features/clinical/visits-list/visits-list-api';
+import { useOpenContact } from '@/features/patients/contact-panel/contact-panel-context';
 import { ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, formatMoney } from '@/lib/format';
@@ -803,6 +804,7 @@ function OutstandingTable({
 }) {
   const { t } = useTranslation('payments');
   const openPayment = useRecordPayment();
+  const openContact = useOpenContact();
   const pages = useCursorStack(
     JSON.stringify([search.bucket, search.q, search.group, search.size]),
   );
@@ -868,9 +870,21 @@ function OutstandingTable({
               >
                 {family ? (
                   <span role="cell" className="min-w-0">
-                    <span className="block truncate font-medium">
-                      {t('family.name', { name: item.payer?.name ?? '' })}
-                    </span>
+                    {openContact && item.payer?.contactId ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (item.payer?.contactId) openContact(item.payer.contactId);
+                        }}
+                        className="block max-w-full cursor-pointer truncate border-0 bg-transparent p-0 text-start font-medium text-ink hover:text-primary hover:underline"
+                      >
+                        {t('family.name', { name: item.payer.name })}
+                      </button>
+                    ) : (
+                      <span className="block truncate font-medium">
+                        {t('family.name', { name: item.payer?.name ?? '' })}
+                      </span>
+                    )}
                     <span className="block truncate text-[11.5px] text-ink-muted">
                       {item.members.map((member, index) => (
                         <span key={member.id}>

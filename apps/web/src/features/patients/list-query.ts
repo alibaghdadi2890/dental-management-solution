@@ -131,7 +131,8 @@ export type PatientPanel =
   | { kind: 'new' }
   | { kind: 'edit'; id: string }
   | { kind: 'quick'; id: string }
-  | { kind: 'merge'; ids: readonly [string, string] };
+  | { kind: 'merge'; ids: readonly [string, string] }
+  | { kind: 'families' };
 
 /**
  * Parses the `panel` search param (README: `?panel=new`, `?panel=edit:<id>`, quick view, and the
@@ -142,6 +143,7 @@ export type PatientPanel =
 export function parsePanel(panel: string | undefined | null): PatientPanel | null {
   if (!panel) return null;
   if (panel === 'new') return { kind: 'new' };
+  if (panel === 'families') return { kind: 'families' };
 
   const editId = /^edit:(.+)$/.exec(panel)?.[1];
   if (editId) return { kind: 'edit', id: editId };
@@ -168,13 +170,18 @@ export function panelParam(panel: PatientPanel | null): string | undefined {
       return `quick:${panel.id}`;
     case 'merge':
       return `merge:${panel.ids[0]},${panel.ids[1]}`;
+    case 'families':
+      return 'families';
   }
 }
 
-/** What the create panel starts with (design "digits → phone, otherwise name"). */
+/** What the create panel starts with (design "digits → phone, otherwise name"); a contact's
+ * Register as patient (families C) also brings the e-mail and the contact it links to. */
 export interface PatientPrefill {
   fullName?: string;
   phone?: string;
+  email?: string;
+  contactId?: string;
 }
 
 declare module '@tanstack/react-router' {

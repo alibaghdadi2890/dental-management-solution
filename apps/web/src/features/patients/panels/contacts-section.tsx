@@ -4,8 +4,7 @@ import { type ReactNode, type RefObject, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ContactLinker } from '../contact-linker';
-import type { ContactSelection } from '../contact-picker';
+import { ContactLinker, type LinkerRequest } from '../contact-linker';
 import { ContactRoleEditor, type LinkChange } from '../contact-role-editor';
 import { ContactRow } from '../contact-row';
 import {
@@ -41,18 +40,21 @@ export function NoGuardianNote({ hint = true }: { hint?: boolean }) {
  * Guardian block, headed and always open, with the amber note while no contact is a guardian; for
  * an adult the "Contacts & family (optional)" disclosure — collapsed while there is no contact,
  * opened once there is one, and from then on open or closed as the person leaves it (removing the
- * last contact never closes it under them). `bodyRef` holds the rows and the picker.
+ * last contact never closes it under them, and a contact staged from the phone offer, `request`,
+ * opens it). `bodyRef` holds the rows and the picker.
  */
 function ContactsBlock({
   minor,
   count,
   hasGuardian,
+  request,
   bodyRef,
   children,
 }: {
   minor: boolean;
   count: number;
   hasGuardian: boolean;
+  request: LinkerRequest | null;
   bodyRef: RefObject<HTMLDivElement | null>;
   children: ReactNode;
 }) {
@@ -60,7 +62,12 @@ function ContactsBlock({
   const headingId = useId();
   const regionId = useId();
   const [expanded, setExpanded] = useState<boolean | null>(null);
+  const [seenRequest, setSeenRequest] = useState(request);
   if (expanded === null && count > 0) setExpanded(true);
+  if (request !== seenRequest) {
+    setSeenRequest(request);
+    if (request) setExpanded(true);
+  }
   const open = expanded ?? false;
 
   if (minor) {
@@ -176,16 +183,16 @@ function RowActions({
  * The create panel's contacts: the links that go with the create (`pendingContacts`, design
  * addendum C4). Each row can be edited (relationship, roles) or removed before saving; the server's
  * error about one (`contacts.<i>`) shows on its row. At the create's cap (10) the picker gives way
- * to a note. `guardianRequest` stages a contact in the Guardian block (the phone offer, C4).
+ * to a note. `request` stages a contact from the phone offer (families A).
  */
 export function PendingContactsSection({
   form,
   country,
-  guardianRequest,
+  request,
 }: {
   form: PatientForm;
   country: string;
-  guardianRequest: ContactSelection | null;
+  request: LinkerRequest | null;
 }) {
   const { t } = useTranslation('patients');
   const { values } = form;
@@ -198,7 +205,13 @@ export function PendingContactsSection({
   const keys = pending.map(({ key }) => key);
 
   return (
-    <ContactsBlock minor={minor} count={pending.length} hasGuardian={hasGuardian} bodyRef={bodyRef}>
+    <ContactsBlock
+      minor={minor}
+      count={pending.length}
+      hasGuardian={hasGuardian}
+      request={request}
+      bodyRef={bodyRef}
+    >
       {pending.length > 0 && (
         <ul aria-label={t('contacts.list')} className="m-0 list-none p-0">
           {pending.map((contact, index) => {
@@ -254,7 +267,7 @@ export function PendingContactsSection({
           hasGuardian={hasGuardian}
           excludeContactIds={exclusions.contactIds}
           excludePatientIds={exclusions.patientIds}
-          request={minor ? guardianRequest : null}
+          request={request}
           onAdd={(link, display) => form.addContact(link, display)}
         />
       )}
@@ -267,16 +280,18 @@ export function PendingContactsSection({
  * at once through the contact routes — add, change relationship or roles, make primary, remove
  * (after a confirm) — each with a toast, never part of Save. One action at a time: the others wait
  * while it runs. An archived (or merged) patient's contacts can't change: the server refuses, so
- * the actions are off.
+ * the actions are off. `request` stages a contact from the phone offer (families A).
  */
 export function CurrentContactsSection({
   patient,
   minor,
   country,
+  request,
 }: {
   patient: Patient;
   minor: boolean;
   country: string;
+  request: LinkerRequest | null;
 }) {
   const { t } = useTranslation('patients');
   const contacts = useQuery(contactsQuery(patient.id));
@@ -366,6 +381,7 @@ export function CurrentContactsSection({
       minor={minor}
       count={links.length}
       hasGuardian={hasGuardian || !contacts.isSuccess}
+      request={request}
       bodyRef={bodyRef}
     >
       {list}
@@ -376,6 +392,7 @@ export function CurrentContactsSection({
         excludeContactIds={exclusions.contactIds}
         excludePatientIds={exclusions.patientIds}
         disabled={archived || busy || !contacts.isSuccess}
+        request={request}
         onAdd={add}
       />
     </ContactsBlock>

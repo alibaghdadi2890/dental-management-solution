@@ -10,6 +10,7 @@ import { todayIn } from '@/lib/format';
 import { ContactRoleEditor } from '../contact-role-editor';
 import { ContactRow } from '../contact-row';
 import { type ContactRowModel, PRIMARY_FIELD, rowOfLink } from '../contact-rows';
+import { useOpenContact } from '../contact-panel/contact-panel-context';
 import { contactsQuery } from '../contacts-api';
 import { NoGuardianNote } from '../panels/contacts-section';
 import { LoadState } from '../panels/load-state';
@@ -19,20 +20,25 @@ import type { ContactActions } from '../use-contact-actions';
 
 type Tenant = NonNullable<Session['tenant']>;
 
-/** A contact row's ⋯ menu: Edit roles, Remove, then Open record for a contact who is a patient.
- * Closing it after Edit roles leaves focus on the editor that opened, not on the ⋯ button. */
+/** A contact row's ⋯ menu: Edit roles, Remove, then Open record for a contact who is a patient,
+ * or Open contact and Register as patient for one who is not (families C). Closing it after Edit
+ * roles leaves focus on the editor that opened, not on the ⋯ button. */
 function ContactMenu({
   row,
   disabled,
   onEdit,
   onRemove,
   onOpenRecord,
+  onOpenContact,
+  onRegister,
 }: {
   row: ContactRowModel;
   disabled: boolean;
   onEdit: () => void;
   onRemove: () => void;
   onOpenRecord: (() => void) | null;
+  onOpenContact: (() => void) | null;
+  onRegister: (() => void) | null;
 }) {
   const { t } = useTranslation('patients');
   const keepFocus = useRef(false);
@@ -80,6 +86,10 @@ function ContactMenu({
             {t('contacts.card.openRecord')}
           </MenuItem>
         )}
+        {onOpenContact && (
+          <MenuItem onSelect={onOpenContact}>{t('contacts.card.openContact')}</MenuItem>
+        )}
+        {onRegister && <MenuItem onSelect={onRegister}>{t('contacts.card.register')}</MenuItem>}
       </MenuContent>
     </Menu>
   );
@@ -111,7 +121,8 @@ export function ContactsCard({
 }) {
   const { t } = useTranslation('patients');
   const canWrite = usePermission('patient:write');
-  const { openPatient } = usePatientNavigation();
+  const { openPatient, openNewPatient } = usePatientNavigation();
+  const openContact = useOpenContact();
   const contacts = useQuery(contactsQuery(patient.id));
   const { busy, update, remove } = actions;
   const [editing, setEditing] = useState<string | null>(null);
@@ -177,6 +188,26 @@ export function ContactsCard({
                             : () => {
                                 openPatient(linkedId);
                               }
+                        }
+                        onOpenContact={
+                          linkedId === null && openContact
+                            ? () => {
+                                openContact(link.contact.id);
+                              }
+                            : null
+                        }
+                        onRegister={
+                          linkedId === null
+                            ? () => {
+                                const { contact } = link;
+                                openNewPatient({
+                                  fullName: contact.fullName,
+                                  ...(contact.phone ? { phone: contact.phone } : {}),
+                                  ...(contact.email ? { email: contact.email } : {}),
+                                  contactId: contact.id,
+                                });
+                              }
+                            : null
                         }
                       />
                     )

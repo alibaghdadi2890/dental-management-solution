@@ -1,6 +1,8 @@
 import {
   auditPageSchema,
   duplicateGroupsSchema,
+  familyLinkResultSchema,
+  familySuggestionSchema,
   owingCountSchema,
   patientCountsSchema,
   patientListItemSchema,
@@ -9,6 +11,8 @@ import {
   type AuditPage,
   type DentitionOverride,
   type DuplicateCheckQuery,
+  type FamilyDismissInput,
+  type FamilyLinkInput,
   type ExportLanguage,
   type PatientArchive,
   type PatientCreateInput,
@@ -46,6 +50,7 @@ export const patientKeys = {
   notSeenCount: (tenantId: string | null) =>
     [...patientKeys.all(tenantId), 'notSeenCount'] as const,
   duplicates: (tenantId: string | null) => [...patientKeys.all(tenantId), 'duplicates'] as const,
+  families: (tenantId: string | null) => [...patientKeys.all(tenantId), 'families'] as const,
   duplicateCheck: (tenantId: string | null, query: DuplicateCheckQuery) =>
     [...patientKeys.all(tenantId), 'duplicateCheck', query] as const,
   detail: (tenantId: string | null, id: string) =>
@@ -204,6 +209,27 @@ export function restorePatients(input: PatientRestore) {
 /** Returns the kept patient. */
 export function mergePatients(input: PatientMerge) {
   return apiFetch('/patients/merge', patientSchema, { method: 'POST', json: input });
+}
+
+/** `GET /patients/families` (families B): people sharing a phone, not yet one family. */
+export function familiesQuery() {
+  return queryOptions({
+    queryKey: patientKeys.families(actingTenantId()),
+    queryFn: () => apiFetch('/patients/families', z.array(familySuggestionSchema)),
+  });
+}
+
+/** Links every member to the payer in one transaction. */
+export function linkFamily(input: FamilyLinkInput) {
+  return apiFetch('/patients/families/link', familyLinkResultSchema, {
+    method: 'POST',
+    json: input,
+  });
+}
+
+/** "Not a family", kept for the clinic until someone new shares the phone. */
+export function dismissFamily(input: FamilyDismissInput) {
+  return apiFetch('/patients/families/dismiss', z.undefined(), { method: 'POST', json: input });
 }
 
 /**

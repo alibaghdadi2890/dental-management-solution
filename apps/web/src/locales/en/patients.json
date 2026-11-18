@@ -22,6 +22,32 @@
     "body": "Same name and date of birth. Review before the next visit is booked.",
     "review": "Review & merge"
   },
+  "families": {
+    "strip_one": "{{count, number}} possible family",
+    "strip_other": "{{count, number}} possible families",
+    "stripBody": "Patients share a phone but aren’t linked as a family.",
+    "review": "Review & link",
+    "title": "Possible families",
+    "progress": "{{index, number}} of {{count, number}}",
+    "share": "Share {{phone}}",
+    "sameName": "same family name",
+    "payer": "Who pays / is guardian",
+    "someoneElse": "Someone else",
+    "name": "Name",
+    "members": "Family members",
+    "minor": "Minor",
+    "alreadyLinked": "Already linked",
+    "relationship": "{{payer}} is their",
+    "relationshipOf": "Relationship to {{name}}",
+    "link": "Link family",
+    "dismiss": "Not a family",
+    "skip": "Skip",
+    "linked": "Family linked",
+    "dismissed": "Marked as not a family",
+    "done": "No possible families left.",
+    "failed": "Couldn’t load the possible families.",
+    "failedAction": "That didn’t work: {{reason}}"
+  },
   "search": {
     "placeholder": "Name, phone, email or patient ID",
     "label": "Search patients"
@@ -355,7 +381,19 @@
     "noPatients": "No patients yet.",
     "loading": "Searching patients",
     "failed": "Couldn't search patients.",
-    "via": "via {{name}} · {{relationship}}"
+    "via": "via {{name}} · {{relationship}}",
+    "contacts": "Contacts",
+    "contact": "Contact"
+  },
+  "contactPanel": {
+    "eyebrow": "Contact",
+    "patient": "Patient {{number}}",
+    "openRecord": "Open record",
+    "register": "Register as patient",
+    "linked": "Linked patients",
+    "none": "Not linked to any patient",
+    "money": "Family balance",
+    "failed": "Couldn’t load the contact."
   },
   "record": {
     "startVisit": "Start visit",
@@ -507,11 +545,11 @@
     },
     "tooMany": "A patient can be registered with at most {{max, number}} contacts. Add more from the record afterwards.",
     "linkOffer": {
-      "identity": "Is this patient {{name}}? Link to their contact record.",
-      "same": "Yes, same person",
-      "different": "No",
-      "guardian": "This phone belongs to {{name}}. Add {{name}} as guardian?",
-      "addGuardian": "Add as guardian",
+      "uses": "{{name}} uses this phone.",
+      "viaGuardian": "This phone is on {{minor}}’s record. Their guardian is {{name}}.",
+      "viaBilling": "This phone is on {{minor}}’s record. Their billing contact is {{name}}.",
+      "same": "This is {{name}}",
+      "addContact": "Add as contact",
       "notNow": "Not now",
       "chip": "Will link to {{name}}",
       "remove": "Don’t link to {{name}}",
@@ -548,7 +586,9 @@
       "editRoles": "Edit roles",
       "remove": "Remove",
       "openRecord": "Open record",
-      "empty": "No contacts recorded"
+      "empty": "No contacts recorded",
+      "openContact": "Open contact",
+      "register": "Register as patient"
     },
     "addPanel": {
       "title": "Add contact"

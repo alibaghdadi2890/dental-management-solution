@@ -36,6 +36,13 @@ export interface StagedDefaults {
   roles: RoleFlags;
 }
 
+/** A contact staged from outside the picker (the panels' phone offer), with the roles it starts
+ * with in "Contacts & family" (the Guardian block keeps its own toggles). */
+export interface LinkerRequest {
+  selection: ContactSelection;
+  roles: RoleFlags;
+}
+
 /**
  * Adds a contact to a patient: the search-or-create picker, then what the link needs before it is
  * made. In the Guardian block a new contact (which already carries its relationship) is added at
@@ -48,8 +55,8 @@ export interface StagedDefaults {
  * edit panel) — and answers whether it was made; a refused one stays staged to try again (a new
  * guardian refused by the server is staged then, so what was typed is not lost).
  *
- * `request` stages a contact from outside the picker (the create panel's "Add {name} as
- * guardian?"): each new request object is staged once. `stagedDefaults` (family mode) sets the
+ * `request` stages a contact from outside the picker (the panels' "Add as contact"): each new
+ * request object is staged once, with its roles. `stagedDefaults` (family mode) sets the
  * relationship and roles a pick starts with.
  */
 export function ContactLinker({
@@ -70,7 +77,7 @@ export function ContactLinker({
   excludeContactIds: readonly string[];
   excludePatientIds: readonly string[];
   disabled?: boolean;
-  request?: ContactSelection | null;
+  request?: LinkerRequest | null;
   stagedDefaults?: StagedDefaults | undefined;
   onAdd: (link: ContactLinkInput, display: ContactDisplay) => boolean | Promise<boolean>;
 }) {
@@ -83,18 +90,18 @@ export function ContactLinker({
   const off = disabled || busy;
   const defaultRelationship = stagedDefaults?.relationship ?? DEFAULT_RELATIONSHIP[mode];
 
-  const stage = (selection: ContactSelection) => {
+  const stage = (selection: ContactSelection, roles?: RoleFlags) => {
     setStaged({
       selection,
       relationship: selection.relationship ?? defaultRelationship,
-      roles: stagedDefaults?.roles ?? NO_ROLES,
+      roles: roles ?? stagedDefaults?.roles ?? NO_ROLES,
     });
   };
 
   const [takenRequest, setTakenRequest] = useState(request);
   if (request !== takenRequest) {
     setTakenRequest(request);
-    if (request) stage(request);
+    if (request) stage(request.selection, request.roles);
   }
 
   /** Back to the search box, which mounts again once the staged contact is gone. */

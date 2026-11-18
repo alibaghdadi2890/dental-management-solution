@@ -22,6 +22,32 @@
     "body": "Même nom et même date de naissance. À vérifier avant la prochaine prise de rendez-vous.",
     "review": "Vérifier et fusionner"
   },
+  "families": {
+    "strip_one": "{{count, number}} famille possible",
+    "strip_other": "{{count, number}} familles possibles",
+    "stripBody": "Des patients partagent un numéro sans être liés en famille.",
+    "review": "Vérifier et lier",
+    "title": "Familles possibles",
+    "progress": "{{index, number}} sur {{count, number}}",
+    "share": "Partagent le {{phone}}",
+    "sameName": "même nom de famille",
+    "payer": "Qui paie / est responsable",
+    "someoneElse": "Une autre personne",
+    "name": "Nom",
+    "members": "Membres de la famille",
+    "minor": "Mineur",
+    "alreadyLinked": "Déjà lié",
+    "relationship": "{{payer}} est son",
+    "relationshipOf": "Lien avec {{name}}",
+    "link": "Lier la famille",
+    "dismiss": "Pas une famille",
+    "skip": "Passer",
+    "linked": "Famille liée",
+    "dismissed": "Marqué comme pas une famille",
+    "done": "Plus aucune famille possible.",
+    "failed": "Impossible de charger les familles possibles.",
+    "failedAction": "Échec : {{reason}}"
+  },
   "search": {
     "placeholder": "Nom, téléphone, e-mail ou n° patient",
     "label": "Rechercher des patients"
@@ -355,7 +381,19 @@
     "noPatients": "Aucun patient pour le moment.",
     "loading": "Recherche de patients",
     "failed": "Impossible de rechercher les patients.",
-    "via": "via {{name}} · {{relationship}}"
+    "via": "via {{name}} · {{relationship}}",
+    "contacts": "Contacts",
+    "contact": "Contact"
+  },
+  "contactPanel": {
+    "eyebrow": "Contact",
+    "patient": "Patient {{number}}",
+    "openRecord": "Ouvrir le dossier",
+    "register": "Enregistrer comme patient",
+    "linked": "Patients liés",
+    "none": "Lié à aucun patient",
+    "money": "Solde de la famille",
+    "failed": "Impossible de charger le contact."
   },
   "record": {
     "startVisit": "Démarrer une visite",
@@ -507,11 +545,11 @@
     },
     "tooMany": "Un patient peut être enregistré avec {{max, number}} contacts au maximum. Ajoutez-en d’autres depuis le dossier ensuite.",
     "linkOffer": {
-      "identity": "Ce patient est-il {{name}} ? Le relier à sa fiche de contact.",
-      "same": "Oui, même personne",
-      "different": "Non",
-      "guardian": "Ce numéro appartient à {{name}}. Ajouter {{name}} comme responsable légal ?",
-      "addGuardian": "Ajouter comme responsable",
+      "uses": "Ce numéro est celui de {{name}}.",
+      "viaGuardian": "Ce numéro figure sur la fiche de {{minor}}. Son responsable légal est {{name}}.",
+      "viaBilling": "Ce numéro figure sur la fiche de {{minor}}. Son contact de facturation est {{name}}.",
+      "same": "C’est {{name}}",
+      "addContact": "Ajouter comme contact",
       "notNow": "Plus tard",
       "chip": "Sera relié à {{name}}",
       "remove": "Ne pas relier à {{name}}",
@@ -548,7 +586,9 @@
       "editRoles": "Modifier les rôles",
       "remove": "Retirer",
       "openRecord": "Ouvrir le dossier",
-      "empty": "Aucun contact enregistré"
+      "empty": "Aucun contact enregistré",
+      "openContact": "Ouvrir le contact",
+      "register": "Enregistrer comme patient"
     },
     "addPanel": {
       "title": "Ajouter un contact"

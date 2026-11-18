@@ -1,4 +1,5 @@
 import { exportLanguageSchema, type PatientListQuery, type Session } from '@dcm/contracts';
+import { useQuery } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +12,7 @@ import { usePermission } from '@/features/auth/use-permission';
 import { ApiError } from '@/lib/api';
 import { todayIn } from '@/lib/format';
 import { BulkBar } from './bulk-bar';
-import { DuplicateBanner } from './duplicate-banner';
+import { ReviewStrip } from './families/review-strip';
 import { FilterBar } from './filter-bar';
 import {
   clearFilters,
@@ -29,7 +30,7 @@ import {
 import { PagerBar } from './pager-bar';
 import { usePatientNavigation } from './patient-navigation';
 import { PatientRowMenu } from './patient-row-menu';
-import { downloadExport, type PatientExportRequest } from './patients-api';
+import { downloadExport, familiesQuery, type PatientExportRequest } from './patients-api';
 import {
   PATIENT_TABLE_MIN_WIDTH,
   PatientRow,
@@ -108,6 +109,8 @@ function PatientsList({
   const count = (value: number) => new Intl.NumberFormat(locale).format(value);
 
   const requested = listQueryOf(search);
+  // Possible families (families B): counted for the review strip over the active list.
+  const families = useQuery({ ...familiesQuery(), enabled: requested.view === 'active' });
   const query = canFinance ? requested : withoutBalanceViews(requested);
   const fellBack = query !== requested;
   const panel = parsePanel(search.panel);
@@ -270,13 +273,21 @@ function PatientsList({
               };
             })}
           />
-          {query.view === 'active' && data.duplicateCount > 0 && (
-            <DuplicateBanner
-              count={data.duplicateCount}
-              onReview={
+          {query.view === 'active' && (
+            <ReviewStrip
+              duplicates={data.duplicateCount}
+              families={families.data?.length ?? 0}
+              onReviewDuplicates={
                 canWrite && firstPair
                   ? () => {
                       openPanel({ kind: 'merge', ids: firstPair });
+                    }
+                  : undefined
+              }
+              onReviewFamilies={
+                canWrite
+                  ? () => {
+                      openPanel({ kind: 'families' });
                     }
                   : undefined
               }

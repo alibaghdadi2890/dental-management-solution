@@ -1,4 +1,5 @@
 import {
+  type ContactView,
   type PatientListItem,
   type PatientListQuery,
   patientListQuerySchema,
@@ -18,6 +19,8 @@ import { ageOrNull, formatPhone, todayIn } from '@/lib/format';
 import { initials } from '@/lib/initials';
 import { useDebouncedValue } from '@/lib/use-debounced-value';
 import { cn } from '@/lib/utils';
+import { useOpenContact } from './contact-panel/contact-panel-context';
+import { contactLookupQuery } from './contacts-api';
 import type { PatientPrefill } from './list-query';
 import { usePatientNavigation } from './patient-navigation';
 import { patientListQuery } from './patients-api';
@@ -27,6 +30,8 @@ type Tenant = NonNullable<Session['tenant']>;
 const DEBOUNCE_MS = 180;
 const RECENT_SHOWN = 5;
 const RESULTS_SHOWN = 8;
+/** Contacts who are no patient, under the patients (families C). */
+const CONTACTS_SHOWN = 3;
 /** The smallest page size `GET /patients` accepts; the palette shows a slice of it. */
 const FETCH_SIZE = 10;
 const MAX_QUERY = 100;
@@ -51,6 +56,8 @@ function prefillFor(query: string): PatientPrefill {
  * updated patients; a query searches `GET /patients` (debounced) and shows the first 8. ↑/↓ move
  * the active row, Enter or a click opens it; nothing matching offers "Create …" with
  * `patient:write`. Everything typed is dropped on close (the body unmounts with the dialog).
+ * While searching, up to 3 contacts who are no patient (`GET /contacts/lookup`) follow the
+ * patients under "Contacts" (families C); one opens the contact panel.
  */
 export function CommandPalette({
   open,
@@ -62,6 +69,7 @@ export function CommandPalette({
   const { t } = useTranslation('patients');
   const { data: session } = useSession();
   const { openPatient, openNewPatient } = usePatientNavigation();
+  const openContact = useOpenContact();
   // Radix only hands focus back to a `Dialog.Trigger`, and the palette has none (the shortcut or
   // the header opens it): it remembers what had focus itself.
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -112,6 +120,15 @@ export function CommandPalette({
                 openNewPatient(prefillFor(query));
               });
             }}
+            onOpenContact={
+              openContact
+                ? (contactId) => {
+                    leave(() => {
+                      openContact(contactId);
+                    });
+                  }
+                : null
+            }
           />
         </Dialog.Content>
       </Dialog.Portal>
@@ -122,38 +139,56 @@ export function CommandPalette({
 /** The typed text, debounced into the query that is searched, and what that query found. The
  * results are `settled` once they answer exactly what is typed (a background refresh of the same
  * list doesn't unsettle them). */
-function usePaletteSearch(text: string) {
+function usePaletteSearch(text: string, withContacts: boolean) {
   const typed = text.trim();
   const query = useDebouncedValue(typed, DEBOUNCE_MS);
   const searching = query !== '';
   const results = useQuery(patientListQuery(searching ? searchFor(query) : RECENT));
   const rows = results.data?.items.slice(0, searching ? RESULTS_SHOWN : RECENT_SHOWN) ?? [];
-  const settled = typed === query && results.isSuccess;
-  return { typed, query, searching, results, rows, settled };
+  const contactsAsked = searching && withContacts;
+  const lookup = useQuery({ ...contactLookupQuery(query), enabled: contactsAsked });
+  const contacts: ContactView[] = contactsAsked
+    ? (lookup.data ?? [])
+        .flatMap((item) =>
+          item.kind === 'contact' && item.contact.linkedPatient === null ? [item.contact] : [],
+        )
+        .slice(0, CONTACTS_SHOWN)
+    : [];
+  // A failed contact lookup only hides the group: the patients still answer.
+  const contactsSettled = !contactsAsked || lookup.isSuccess || lookup.isError;
+  const settled = typed === query && results.isSuccess && contactsSettled;
+  return { typed, query, searching, results, rows, contacts, contactsSettled, settled };
 }
 
 function PaletteBody({
   tenant,
   onOpenPatient,
   onCreate,
+  onOpenContact,
 }: {
   tenant: Tenant;
   onOpenPatient: (id: string) => void;
   onCreate: (query: string) => void;
+  /** Null without the contact panel: no Contacts group. */
+  onOpenContact: ((contactId: string) => void) | null;
 }) {
   const { t } = useTranslation(['patients', 'common']);
   const canCreate = usePermission('patient:write');
   const baseId = useId();
   const listId = `${baseId}-list`;
   const headingId = `${baseId}-heading`;
+  const contactsHeadingId = `${baseId}-contacts`;
   const optionId = (index: number) => `${baseId}-option-${String(index)}`;
 
   const [text, setText] = useState('');
-  const { typed, query, searching, results, rows, settled } = usePaletteSearch(text);
+  const { typed, query, searching, results, rows, contacts, contactsSettled, settled } =
+    usePaletteSearch(text, onOpenContact !== null);
+  // Patients, then contacts: one list for the keys.
+  const options = rows.length + contacts.length;
 
   // The active row starts at the top of every new result list.
   const [cursor, setCursor] = useState({ query, index: 0 });
-  const active = cursor.query === query ? Math.min(cursor.index, rows.length - 1) : 0;
+  const active = cursor.query === query ? Math.min(cursor.index, options - 1) : 0;
   const moveTo = (index: number) => {
     setCursor({ query, index });
     document.getElementById(optionId(index))?.scrollIntoView({ block: 'nearest' });
@@ -161,9 +196,12 @@ function PaletteBody({
 
   const today = todayIn(tenant.timeZone);
   const failed = results.isError && results.data === undefined;
-  const loading = !failed && results.isPending;
+  // With no patient found, the contacts decide between them and "No patient matches".
+  const loading = !failed && (results.isPending || (rows.length === 0 && !contactsSettled));
   const hasRows = !failed && !loading && rows.length > 0;
-  const noMatch = !failed && !loading && rows.length === 0 && searching;
+  const hasContacts = !failed && !loading && contacts.length > 0;
+  const hasOptions = hasRows || hasContacts;
+  const noMatch = !failed && !loading && options === 0 && searching;
   const noPatients = !failed && !loading && rows.length === 0 && !searching;
 
   // Enter opens the active row — or, with nothing found, creates — but only once the results
@@ -173,8 +211,10 @@ function PaletteBody({
   const pendingEnter = useRef<string | null>(null);
   const enter = () => {
     const row = rows[active];
+    const contact = contacts[active - rows.length];
     if (row) onOpenPatient(row.id);
-    else if (searching && canCreate) onCreate(query);
+    else if (contact && onOpenContact) onOpenContact(contact.id);
+    else if (searching && canCreate && options === 0) onCreate(query);
   };
   const enterWhenSettled = useEffectEvent(() => {
     if (pendingEnter.current === null || pendingEnter.current !== query || !settled) return;
@@ -195,9 +235,9 @@ function PaletteBody({
     if (event.nativeEvent.isComposing || event.keyCode === 229) return;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
-      if (rows.length === 0) return;
+      if (options === 0) return;
       const step = event.key === 'ArrowDown' ? 1 : -1;
-      moveTo(Math.min(Math.max(active + step, 0), rows.length - 1));
+      moveTo(Math.min(Math.max(active + step, 0), options - 1));
       return;
     }
     if (event.key !== 'Enter') return;
@@ -214,9 +254,9 @@ function PaletteBody({
           role="combobox"
           aria-label={t('palette.label')}
           aria-autocomplete="list"
-          aria-expanded={hasRows}
-          aria-controls={hasRows ? listId : undefined}
-          aria-activedescendant={hasRows ? optionId(active) : undefined}
+          aria-expanded={hasOptions}
+          aria-controls={hasOptions ? listId : undefined}
+          aria-activedescendant={hasOptions ? optionId(active) : undefined}
           value={text}
           maxLength={MAX_QUERY}
           placeholder={t('palette.placeholder')}
@@ -303,11 +343,11 @@ function PaletteBody({
             )}
           </div>
         )}
-        {hasRows && (
+        {hasOptions && (
           <ul
             id={listId}
             role="listbox"
-            aria-labelledby={headingId}
+            aria-labelledby={hasRows ? headingId : contactsHeadingId}
             className="m-0 list-none p-0 pb-1.5"
           >
             {rows.map((row, index) => (
@@ -326,6 +366,36 @@ function PaletteBody({
                 }}
               />
             ))}
+            {hasContacts && (
+              <li role="presentation">
+                <div
+                  id={contactsHeadingId}
+                  className="px-4 pt-3 pb-1.5 text-[11.5px] leading-none font-medium tracking-[0.06em] text-ink-muted uppercase"
+                >
+                  {t('palette.contacts')}
+                </div>
+                <ul role="group" aria-labelledby={contactsHeadingId} className="m-0 list-none p-0">
+                  {contacts.map((contact, index) => {
+                    const position = rows.length + index;
+                    return (
+                      <PaletteContactRow
+                        key={contact.id}
+                        id={optionId(position)}
+                        contact={contact}
+                        active={position === active}
+                        phone={contact.phone ? formatPhone(contact.phone, tenant.country) : null}
+                        onHover={() => {
+                          if (position !== active) setCursor({ query, index: position });
+                        }}
+                        onOpen={() => {
+                          onOpenContact?.(contact.id);
+                        }}
+                      />
+                    );
+                  })}
+                </ul>
+              </li>
+            )}
           </ul>
         )}
       </div>
@@ -399,6 +469,56 @@ function PaletteRow({
       <span className="flex-none text-xs leading-none text-ink-muted">
         {t('palette.neverSeen')}
       </span>
+    </li>
+  );
+}
+
+/** A contact who is no patient (families C): opens the contact panel. */
+function PaletteContactRow({
+  id,
+  contact,
+  active,
+  phone,
+  onHover,
+  onOpen,
+}: {
+  id: string;
+  contact: ContactView;
+  active: boolean;
+  phone: string | null;
+  onHover: () => void;
+  onOpen: () => void;
+}) {
+  const { t } = useTranslation('patients');
+  return (
+    <li
+      id={id}
+      role="option"
+      aria-selected={active}
+      onMouseMove={onHover}
+      onClick={onOpen}
+      className={cn(
+        'flex cursor-pointer items-center gap-3 px-4 py-2',
+        active ? 'bg-primary-tint/60' : 'bg-surface',
+      )}
+    >
+      <span
+        aria-hidden
+        className="grid size-[34px] flex-none place-items-center rounded-full border border-dashed border-border bg-surface text-[12.5px] leading-none font-semibold text-ink-secondary"
+      >
+        {initials(contact.fullName)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[13.5px] leading-[1.3] font-medium">
+          {contact.fullName}
+        </span>
+        {phone !== null && (
+          <span dir="ltr" className="mt-0.5 block font-mono text-xs leading-[1.4] text-ink-muted">
+            {phone}
+          </span>
+        )}
+      </span>
+      <span className="flex-none text-xs leading-none text-ink-muted">{t('palette.contact')}</span>
     </li>
   );
 }

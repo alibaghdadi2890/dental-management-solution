@@ -13,7 +13,8 @@ import { formatCalendarDate, formatList, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useIdempotencyKeys } from '@/lib/idempotency';
 import { ContactDraftContext, useContactDrafts } from '../contact-drafts';
-import { type PatientPanel, parsePatientsSearch } from '../list-query';
+import { contactsQuery } from '../contacts-api';
+import { type PatientPanel, type PatientPrefill, parsePatientsSearch } from '../list-query';
 import {
   amountValue,
   emptyForm,
@@ -40,15 +41,18 @@ import { useLinkOffer } from './use-link-offer';
 
 type Tenant = NonNullable<Session['tenant']>;
 
-export type FormMode =
-  | { kind: 'new'; prefill: { fullName?: string | undefined; phone?: string | undefined } }
-  | { kind: 'edit'; id: string };
+export type FormMode = { kind: 'new'; prefill: PatientPrefill } | { kind: 'edit'; id: string };
 
 /** What identifies the open form: the URL's panel, plus the create pre-fill (history state). */
 const formKeyOf = ({ search, state }: GuardLocation) => {
   const { panel } = parsePatientsSearch(search);
   const prefill = state.patientPrefill;
-  return JSON.stringify([panel ?? '', prefill?.fullName ?? '', prefill?.phone ?? '']);
+  return JSON.stringify([
+    panel ?? '',
+    prefill?.fullName ?? '',
+    prefill?.phone ?? '',
+    prefill?.contactId ?? '',
+  ]);
 };
 
 /** A form held in the URL search is left when that panel changes (another panel, or a new
@@ -200,8 +204,15 @@ function PatientForm({
   // Save has nothing to send for it.
   const drafts = useContactDrafts();
   const unsaved = dirty || drafts.dirty;
-  // Create only: the typed phone matches someone known (design addendum C4).
-  const phoneOffer = useLinkOffer(form, !editing);
+  // The typed phone matches someone known (families A): in edit, once it differs from the saved one.
+  const links = useQuery({ ...contactsQuery(patient?.id ?? ''), enabled: patient !== undefined });
+  const phoneOffer = useLinkOffer(
+    form,
+    patient
+      ? { patientId: patient.id, savedPhone: patient.phone, links: links.data ?? null }
+      : null,
+    prefill?.contactId ? { id: prefill.contactId, fullName: prefill.fullName ?? '' } : null,
+  );
 
   const twin = useDuplicateTwin({
     fullName: values.fullName,
@@ -399,13 +410,16 @@ function PatientForm({
 
         {field('fullName')}
         {field('phone')}
-        {phoneOffer.offer && (
+        {phoneOffer.offer && !archived && (
           <LinkOffer
             offer={phoneOffer.offer}
-            // Staging the offered guardian would replace a pick or a new contact in progress.
-            blocked={phoneOffer.offer.kind === 'guardian' && drafts.adding}
-            onAccept={() => {
-              if (phoneOffer.offer) phoneOffer.accept(phoneOffer.offer);
+            // Staging the offered contact would replace a pick or a new contact in progress.
+            blocked={drafts.adding}
+            onAdd={() => {
+              if (phoneOffer.offer) phoneOffer.addAsContact(phoneOffer.offer);
+            }}
+            onSame={() => {
+              if (phoneOffer.offer) phoneOffer.linkAsSelf(phoneOffer.offer);
             }}
             onDismiss={() => {
               if (phoneOffer.offer) phoneOffer.dismiss(phoneOffer.offer);
@@ -425,13 +439,10 @@ function PatientForm({
               patient={patient}
               minor={form.showGuardianBlock}
               country={country}
+              request={phoneOffer.request}
             />
           ) : (
-            <PendingContactsSection
-              form={form}
-              country={country}
-              guardianRequest={phoneOffer.guardianRequest}
-            />
+            <PendingContactsSection form={form} country={country} request={phoneOffer.request} />
           )}
         </ContactDraftContext>
 

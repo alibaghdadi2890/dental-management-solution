@@ -3,44 +3,62 @@ import { Button } from '@/components/ui/button';
 import type { PhoneOffer } from './use-link-offer';
 
 /**
- * What the typed phone leads to ask (`useLinkOffer`): for an adult "Is this patient {name}? Link
- * to their contact record." — Yes, same person / No; for a minor "This phone belongs to {name}.
- * Add {name} as guardian?" — Add as guardian / Not now. `blocked` holds back accepting while
- * another contact is being added (accepting would stage over it), and says so.
+ * What the typed phone offers (`useLinkOffer`, families A): "{name} uses this phone." — or, the
+ * phone being on a minor's record, "This phone is on {minor}'s record. Their guardian (billing
+ * contact) is {name}." — with Not now, This is {name} (create, an adult, a contact who is no
+ * patient) and Add as contact. `blocked` holds back Add while another contact is being added
+ * (adding would stage over it), and says so.
  */
 export function LinkOffer({
   offer,
   blocked = false,
-  onAccept,
+  onAdd,
+  onSame,
   onDismiss,
 }: {
   offer: PhoneOffer;
   blocked?: boolean;
-  onAccept: () => void;
+  onAdd: () => void;
+  onSame: () => void;
   onDismiss: () => void;
 }) {
   const { t } = useTranslation('patients');
-  const identity = offer.kind === 'identity';
-  const name = identity ? offer.fullName : offer.selection.display.fullName;
+  const name = offer.selection.display.fullName;
+  const message = offer.via
+    ? t(
+        offer.via.role === 'guardian'
+          ? 'contacts.linkOffer.viaGuardian'
+          : 'contacts.linkOffer.viaBilling',
+        {
+          minor: offer.via.name,
+          name,
+        },
+      )
+    : t('contacts.linkOffer.uses', { name });
   return (
     <div
       role="status"
       className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-primary-tint-border bg-primary-tint px-3 py-2.5 text-[12.5px] leading-[1.45] text-ink"
     >
       <p className="m-0 min-w-0 flex-1 basis-56">
-        {t(identity ? 'contacts.linkOffer.identity' : 'contacts.linkOffer.guardian', { name })}
+        {message}
         {blocked && (
           <span className="mt-0.5 block text-xs leading-snug text-ink-muted">
             {t('contacts.linkOffer.finishFirst')}
           </span>
         )}
       </p>
-      <div className="flex flex-none gap-2">
+      <div className="flex flex-none flex-wrap gap-2">
         <Button size="sm" onClick={onDismiss}>
-          {t(identity ? 'contacts.linkOffer.different' : 'contacts.linkOffer.notNow')}
+          {t('contacts.linkOffer.notNow')}
         </Button>
-        <Button size="sm" variant="primary" disabled={blocked} onClick={onAccept}>
-          {t(identity ? 'contacts.linkOffer.same' : 'contacts.linkOffer.addGuardian')}
+        {offer.identityContactId !== null && (
+          <Button size="sm" onClick={onSame}>
+            {t('contacts.linkOffer.same', { name })}
+          </Button>
+        )}
+        <Button size="sm" variant="primary" disabled={blocked} onClick={onAdd}>
+          {t('contacts.linkOffer.addContact')}
         </Button>
       </div>
     </div>

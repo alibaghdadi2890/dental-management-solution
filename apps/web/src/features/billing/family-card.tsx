@@ -1,4 +1,4 @@
-import { type PatientAccount, toCents } from '@dcm/contracts';
+import { type Family, type PatientAccount, toCents } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
@@ -38,9 +38,8 @@ export function FamilyCards({ account, locale }: { account: PatientAccount; loca
 }
 
 /**
- * One billing contact's family: each account with its balance and oldest unpaid charge, the
- * total, **Record family payment** (the household preset, `payment:write`) and **Family
- * statement**.
+ * One billing contact's family on a member's Balance tab: shown for a family of two or more, with
+ * **Family statement** in the card's header.
  */
 function FamilyCard({
   contactId,
@@ -53,27 +52,58 @@ function FamilyCard({
 }) {
   const { t } = useTranslation('billing');
   const family = useQuery(familyQuery(contactId));
-  const openPayment = useRecordPayment();
   const data = family.data;
   if (!data || data.members.length < 2) return null;
+  return (
+    <Card
+      title={t('family.title', { name: data.payer.name })}
+      action={<FamilyStatementButton contactId={contactId} />}
+    >
+      <FamilyMembers family={data} contactId={contactId} patientId={patientId} locale={locale} />
+    </Card>
+  );
+}
+
+/** **Family statement**: the printable of every member's account and the family total. */
+export function FamilyStatementButton({ contactId }: { contactId: string }) {
+  const { t } = useTranslation('billing');
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        openPrintable(printPath.familyStatement(contactId));
+      }}
+    >
+      {t('family.statement')}
+    </Button>
+  );
+}
+
+/**
+ * A family's accounts (feature 5, ADR-0028): each member with their balance and oldest unpaid
+ * charge, the total, and **Record family payment** (the household preset, `payment:write`) while
+ * the family owes. `patientId` is the record it shows on (not a link there); the contact panel
+ * (families C) shows it for any family, one member included.
+ */
+export function FamilyMembers({
+  family: data,
+  contactId,
+  patientId = null,
+  locale,
+}: {
+  family: Family;
+  contactId: string;
+  patientId?: string | null;
+  locale: string;
+}) {
+  const { t } = useTranslation('billing');
+  const openPayment = useRecordPayment();
   const money = (amount: string) => formatMoney({ amount, currency: data.currency }, locale);
   const owing = toCents(data.total) > 0n;
 
   return (
-    <Card
-      title={t('family.title', { name: data.payer.name })}
-      action={
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            openPrintable(printPath.familyStatement(contactId));
-          }}
-        >
-          {t('family.statement')}
-        </Button>
-      }
-    >
+    <>
       <ul aria-label={t('family.members', { name: data.payer.name })} className="m-0 list-none p-0">
         {data.members.map((member) => (
           <li
@@ -138,6 +168,6 @@ function FamilyCard({
           {t('family.record')}
         </Button>
       )}
-    </Card>
+    </>
   );
 }

@@ -1,4 +1,5 @@
 import {
+  contactDetailSchema,
   contactLookupItemSchema,
   contactViewSchema,
   patientContactSchema,
@@ -27,6 +28,8 @@ export const contactKeys = {
     [...patientKeys.all(tenantId), 'contacts', patientId] as const,
   lookup: (tenantId: string | null, q: string) =>
     [...patientKeys.all(tenantId), 'contactLookup', q] as const,
+  detail: (tenantId: string | null, contactId: string) =>
+    [...patientKeys.all(tenantId), 'contact', contactId] as const,
 };
 
 const scope = (tenantId?: string) => (tenantId === undefined ? {} : { tenantId });
@@ -39,6 +42,14 @@ export function contactsQuery(patientId: string, tenantId?: string) {
     queryKey: contactKeys.ofPatient(tenantId ?? actingTenantId(), patientId),
     queryFn: () =>
       apiFetch(`/patients/${patientId}/contacts`, patientContactsSchema, scope(tenantId)),
+  });
+}
+
+/** `GET /contacts/:id` (families C): the contact and every patient who links them. */
+export function contactDetailQuery(contactId: string) {
+  return queryOptions({
+    queryKey: contactKeys.detail(actingTenantId(), contactId),
+    queryFn: () => apiFetch(`/contacts/${contactId}`, contactDetailSchema),
   });
 }
 

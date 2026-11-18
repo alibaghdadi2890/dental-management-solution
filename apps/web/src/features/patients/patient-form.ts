@@ -90,6 +90,9 @@ export interface PendingContact {
 export interface PatientFormPrefill {
   fullName?: string;
   phone?: string;
+  email?: string;
+  /** Register as patient (families C): the contact this patient becomes (`linkContactId`). */
+  contactId?: string;
 }
 
 const EMPTY: PatientFormValues = {
@@ -113,7 +116,13 @@ const EMPTY: PatientFormValues = {
 
 /** A blank create form, optionally pre-filled (⌘K "Create '{query}'": digits → phone, else name). */
 export function emptyForm(prefill: PatientFormPrefill = {}): PatientFormValues {
-  return { ...EMPTY, fullName: prefill.fullName ?? '', phone: prefill.phone ?? '' };
+  return {
+    ...EMPTY,
+    fullName: prefill.fullName ?? '',
+    phone: prefill.phone ?? '',
+    email: prefill.email ?? '',
+    linkContactId: prefill.contactId ?? '',
+  };
 }
 
 /** The edit form / Patient information tab's starting values for an existing patient. The Account

@@ -43,6 +43,8 @@
   "uncategorised": "No category",
   "seeAll": "See all",
   "largest": "Largest balances",
+  "familyMembers_one": "{{count, number}} patient",
+  "familyMembers_other": "{{count, number}} patients",
   "unallocated": "Unallocated",
   "proposed": "Proposed, not accepted",
   "cameBack": "Came back",

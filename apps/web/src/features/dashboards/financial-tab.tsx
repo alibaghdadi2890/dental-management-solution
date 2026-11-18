@@ -35,6 +35,7 @@ import {
   formatMoneyWhole,
   formatPercent,
 } from '@/lib/format';
+import { useOpenContact } from '@/features/patients/contact-panel/contact-panel-context';
 import { cn } from '@/lib/utils';
 import { amountOf, stateOf, tileState } from './card-state';
 import { formatSpan } from './format-span';
@@ -66,6 +67,7 @@ export function FinancialTab({
   const { t: clinicalT } = useTranslation('clinical');
   const { t: expensesT } = useTranslation('expenses');
   const navigate = useNavigate();
+  const openContact = useOpenContact();
   const locale = i18n.language;
   const currency = session.tenant?.currency ?? 'USD';
   const can = (permission: Session['permissions'][number]) =>
@@ -433,22 +435,49 @@ export function FinancialTab({
           <div>
             <h3 className="mb-1.5 text-[12px] font-medium text-ink-muted">{t('largest')}</h3>
             <ul className="flex flex-col">
-              {r.largest.map((row) => (
-                <li key={row.patientId}>
-                  {drill.linkTo(drill.patient(row.patientId))?.(
-                    <span className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-1 py-1 text-[12.5px]">
-                      <span className="truncate">{row.fullName}</span>
-                      <span className="text-[11.5px] text-ink-muted">
-                        {t(`buckets.${row.bucket}`)}
+              {r.largest.map((row) => {
+                // A family of two or more reads as its payer and opens the contact panel.
+                const payerId = row.members > 1 ? (row.payer?.contactId ?? null) : null;
+                const content = (
+                  <span className="grid grid-cols-[1fr_auto_auto] items-center gap-2 px-1 py-1 text-[12.5px]">
+                    <span className="min-w-0">
+                      <span className="block truncate">
+                        {payerId && row.payer ? row.payer.name : row.fullName}
                       </span>
-                      <span dir="ltr" className="font-mono tabular-nums" title={exact(row.amount)}>
-                        {whole(row.amount)}
-                      </span>
-                    </span>,
-                    'block rounded-md hover:bg-faint focus-visible:outline-2 focus-visible:outline-ring',
-                  )}
-                </li>
-              ))}
+                      {payerId && (
+                        <span className="block truncate text-[11.5px] text-ink-muted">
+                          {t('familyMembers', { count: row.members })}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[11.5px] text-ink-muted">
+                      {t(`buckets.${row.bucket}`)}
+                    </span>
+                    <span dir="ltr" className="font-mono tabular-nums" title={exact(row.amount)}>
+                      {whole(row.amount)}
+                    </span>
+                  </span>
+                );
+                const rowClass =
+                  'block w-full rounded-md text-start hover:bg-faint focus-visible:outline-2 focus-visible:outline-ring';
+                return (
+                  <li key={payerId ?? row.patientId}>
+                    {payerId && openContact ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openContact(payerId);
+                        }}
+                        className={cn(rowClass, 'cursor-pointer border-0 bg-transparent p-0')}
+                      >
+                        {content}
+                      </button>
+                    ) : (
+                      drill.linkTo(drill.patient(row.patientId))?.(content, rowClass)
+                    )}
+                  </li>
+                );
+              })}
             </ul>
             {drill.linkTo(drill.receivables())?.(
               <span>{t('seeAll')}</span>,

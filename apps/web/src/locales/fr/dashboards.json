@@ -43,6 +43,8 @@
   "uncategorised": "Sans catégorie",
   "seeAll": "Tout voir",
   "largest": "Soldes les plus élevés",
+  "familyMembers_one": "{{count, number}} patient",
+  "familyMembers_other": "{{count, number}} patients",
   "unallocated": "Non affecté",
   "proposed": "Proposé, non accepté",
   "cameBack": "Sont revenus",

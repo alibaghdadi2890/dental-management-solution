@@ -41,7 +41,12 @@ export function PatientsScreen({
         <PatientPanel
           key={
             panel.kind === 'new'
-              ? JSON.stringify([panelParam(panel), prefill?.fullName, prefill?.phone])
+              ? JSON.stringify([
+                  panelParam(panel),
+                  prefill?.fullName,
+                  prefill?.phone,
+                  prefill?.contactId,
+                ])
               : panelParam(panel)
           }
           panel={panel}
