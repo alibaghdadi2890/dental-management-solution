@@ -27,5 +27,6 @@ import { LinesRepository } from './persistence/lines.repository';
     EmployeesRepository,
     LinesRepository,
   ],
+  exports: [PayrollRunsService],
 })
 export class PayrollModule {}

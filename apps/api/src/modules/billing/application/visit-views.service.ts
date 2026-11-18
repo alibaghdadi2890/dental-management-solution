@@ -1,4 +1,7 @@
 import {
+  type ChargedVisitsFilters,
+  type ChargedVisitsQuery,
+  type ChargedVisitsSummary,
   type CheckoutQueue,
   formatVisitNumber,
   fromCents,
@@ -23,6 +26,7 @@ import { TenancyService } from '../../tenancy';
 import { csvRow, UTF8_BOM } from '../../../platform/kernel/csv';
 import { AllocationsRepository } from '../persistence/allocations.repository';
 import { LedgerEntriesRepository } from '../persistence/ledger-entries.repository';
+import { BillingSummaryService } from './billing-summary.service';
 
 type VisitColumnKey =
   | 'visit'
@@ -132,8 +136,50 @@ export class VisitViewsService {
     private readonly visits: VisitListService,
     private readonly entries: LedgerEntriesRepository,
     private readonly allocations: AllocationsRepository,
+    private readonly money: BillingSummaryService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
+
+  /**
+   * `GET /billing/visits/charged` (feature 19): the visits with a visit entry dated in the
+   * window — a dashboard's Production — with the list's other filters; the visit dates are not
+   * a filter here.
+   */
+  async charged(query: ChargedVisitsQuery): Promise<VisitPage> {
+    this.context.requirePermission('finance:read');
+    return this.tenantDb.run(async () => {
+      const { chargedFrom, chargedTo, discounted, ...list } = query;
+      const idsIn = await this.chargedIds({ from: chargedFrom, to: chargedTo }, discounted);
+      return this.visits.search(
+        { ...list, range: 'all', from: undefined, to: undefined },
+        { idsIn },
+      );
+    });
+  }
+
+  /** The charged view's footer: how many visits, Σ their entries in the window, the discounts. */
+  async chargedSummary(filters: ChargedVisitsFilters): Promise<ChargedVisitsSummary> {
+    this.context.requirePermission('finance:read');
+    return this.tenantDb.run(async () => {
+      const { chargedFrom, chargedTo, discounted, ...list } = filters;
+      const span = { from: chargedFrom, to: chargedTo };
+      const idsIn = await this.chargedIds(span, discounted);
+      const ids = await this.visits.matchingIds(
+        { ...list, range: 'all', from: undefined, to: undefined },
+        { idsIn },
+      );
+      const totals = await this.money.chargedTotals(span, ids);
+      return { count: ids.length, ...totals };
+    });
+  }
+
+  private async chargedIds(
+    span: { from: string; to: string },
+    discounted: boolean | undefined,
+  ): Promise<string[]> {
+    const { all } = await this.money.chargedVisits(span);
+    return discounted ? this.money.discountedAmong(all) : all;
+  }
 
   /** `GET /billing/visits/unpaid`: the list's page shape, owing visits only. */
   async unpaid(query: VisitListQuery): Promise<VisitPage> {

@@ -1,5 +1,5 @@
 import type { VisitStatus, VisitType } from '@dcm/contracts';
-import { and, eq, gte, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, lte, or, sql, type SQL } from 'drizzle-orm';
 import { visits, visitServices } from './schema';
 
 /** The caller's own visits (ADR-0055): they are the dentist (by staff profile, when they have
@@ -16,10 +16,15 @@ export interface VisitOwner {
  * services and the patients `q` found.
  */
 export interface VisitCriteria {
-  /** The session branch's visits, or one patient's in every branch (the record's history). */
-  scope: { branchId: string } | { patientId: string };
+  /** The session branch's visits, or one patient's in every branch (the record's history), or
+   * every branch's (a dashboard's drill-down, feature 19). */
+  scope: { branchId: string } | { patientId: string } | { allBranches: true };
   statuses: readonly VisitStatus[];
   fromDate?: string | undefined;
+  /** The last local date, included (a custom range, feature 19). */
+  toDate?: string | undefined;
+  /** Leaves imported visits out (the finished filter, feature 19). */
+  excludeImported?: boolean | undefined;
   dentistId?: string | undefined;
   roomId?: string | undefined;
   type?: VisitType | undefined;
@@ -47,6 +52,7 @@ function escapeLike(value: string): string {
 const uuidList = (ids: readonly string[]) => sql`${sql.param([...ids])}::uuid[]`;
 
 export function scopeCondition(scope: VisitCriteria['scope']): SQL {
+  if ('allBranches' in scope) return sql`true`;
   return 'branchId' in scope
     ? eq(visits.branchId, scope.branchId)
     : eq(visits.patientId, scope.patientId);
@@ -79,6 +85,8 @@ export function whereFor(criteria: VisitCriteria): SQL {
     inArray(visits.status, [...criteria.statuses]),
   ];
   if (criteria.fromDate !== undefined) conditions.push(gte(visits.localDate, criteria.fromDate));
+  if (criteria.toDate !== undefined) conditions.push(lte(visits.localDate, criteria.toDate));
+  if (criteria.excludeImported) conditions.push(isNull(visits.importedAt));
   if (criteria.dentistId !== undefined) conditions.push(eq(visits.dentistId, criteria.dentistId));
   if (criteria.roomId !== undefined) conditions.push(eq(visits.roomId, criteria.roomId));
   if (criteria.type !== undefined) conditions.push(eq(visits.type, criteria.type));

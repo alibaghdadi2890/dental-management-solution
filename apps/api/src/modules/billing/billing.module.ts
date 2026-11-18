@@ -5,6 +5,7 @@ import { PatientsModule } from '../patients';
 import { TenancyModule } from '../tenancy';
 import { UsersModule } from '../users';
 import { BillingService } from './application/billing.service';
+import { BillingSummaryService } from './application/billing-summary.service';
 import { ChargeLabels } from './application/charge-labels';
 import { CurrencyLockSubscriber } from './application/currency-lock.subscriber';
 import { MergeLedgerSubscriber } from './application/merge-ledger.subscriber';
@@ -26,6 +27,7 @@ import { LedgerEntriesRepository } from './persistence/ledger-entries.repository
 import { HoldsRepository } from './persistence/holds.repository';
 import { PaymentsRepository } from './persistence/payments.repository';
 import { PlanSharesRepository } from './persistence/plan-shares.repository';
+import { BillingSummaryRepository } from './persistence/summary.repository';
 import { VisitMoneyFeedRepository } from './persistence/visit-money-feed.repository';
 
 /**
@@ -66,7 +68,9 @@ import { VisitMoneyFeedRepository } from './persistence/visit-money-feed.reposit
     CurrencyLockSubscriber,
     PlanClosureSubscriber,
     VisitViewsService,
+    BillingSummaryService,
+    BillingSummaryRepository,
   ],
-  exports: [BillingService],
+  exports: [BillingService, BillingSummaryService],
 })
 export class BillingModule {}

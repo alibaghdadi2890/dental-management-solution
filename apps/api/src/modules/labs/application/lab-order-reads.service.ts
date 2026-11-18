@@ -124,6 +124,34 @@ export class LabOrderReadsService {
     });
   }
 
+  /**
+   * Needs attention now (feature 19): open orders late at the lab, and orders arrived with no
+   * appointment ahead (their ids, the Lab screen opens them), of a branch and a dentist.
+   */
+  attention(filter: {
+    branchId?: string | undefined;
+    dentistId?: string | undefined;
+  }): Promise<{ late: number; arrivedUnbooked: string[] }> {
+    this.context.requirePermission('lab:read');
+    return this.tenantDb.run(async () => {
+      const batch = await this.presenter.batch(
+        await this.orders.open({ branchId: filter.branchId, dentistId: filter.dentistId }),
+      );
+      let late = 0;
+      const arrivedUnbooked: string[] = [];
+      for (const summary of batch.summaries) {
+        if (summary.label?.kind === 'late') late += 1;
+        const appointment = summary.appointment
+          ? batch.appointments.get(summary.appointment.id)
+          : undefined;
+        if (summary.status === 'arrived' && !isUpcoming(appointment, batch.today)) {
+          arrivedUnbooked.push(summary.id);
+        }
+      }
+      return { late, arrivedUnbooked };
+    });
+  }
+
   /** The appointment to propose at creation (B5): the next with that dentist, else the next. */
   proposal(patientId: string, dentistId: string | undefined): Promise<LabProposal> {
     this.context.requirePermission('lab:read');

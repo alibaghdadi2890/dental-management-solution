@@ -51,5 +51,6 @@ import { OrdersRepository } from './persistence/orders.repository';
     LabsRepository,
     OrdersRepository,
   ],
+  exports: [LabsService, LabOrderReadsService],
 })
 export class LabsModule {}

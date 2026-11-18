@@ -1,6 +1,6 @@
 import type { PaymentKind, PaymentMethod } from '@dcm/contracts';
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, gte, inArray, lt, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, lt, lte, or, type SQL, sql } from 'drizzle-orm';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import type { DateIdCursor } from '../domain/payment-cursor';
 import type { Payment } from '../domain/payment';
@@ -39,6 +39,9 @@ function toDomain(row: PaymentRow): Payment {
 /** The Transactions filters, resolved: `match` ORs a patient, receipt or visit search (q). */
 export interface TransactionCriteria {
   from?: string;
+  /** The last paid date, included (feature 19). */
+  to?: string;
+  branchId?: string;
   method?: PaymentMethod;
   kind?: PaymentKind;
   patientId?: string;
@@ -48,6 +51,8 @@ export interface TransactionCriteria {
 function whereFor(criteria: TransactionCriteria): SQL | undefined {
   const conditions: (SQL | undefined)[] = [
     criteria.from === undefined ? undefined : gte(payments.paidAt, criteria.from),
+    criteria.to === undefined ? undefined : lte(payments.paidAt, criteria.to),
+    criteria.branchId === undefined ? undefined : eq(payments.branchId, criteria.branchId),
     criteria.method === undefined ? undefined : eq(payments.method, criteria.method),
     criteria.kind === undefined ? undefined : eq(payments.kind, criteria.kind),
     criteria.patientId === undefined ? undefined : eq(payments.patientId, criteria.patientId),
@@ -201,6 +206,28 @@ export class PaymentsRepository {
         .where(and(gte(payments.paidAt, from), eq(payments.currency, currency))),
     );
     return row ?? { collected: '0', refunds: '0' };
+  }
+
+  /**
+   * For the Transactions filters (feature 19's total): payments not voided and refunds in
+   * `currency`, summed by Postgres on `numeric`. Voids are neither.
+   */
+  async totals(
+    criteria: TransactionCriteria,
+    currency: string,
+  ): Promise<{ payments: string; refunds: string }> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select({
+          payments: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.kind} = 'payment' and not exists (
+            select 1 from payments v where v.reverses_payment_id = ${payments.id} and v.kind = 'void'
+          )), 0)::text`,
+          refunds: sql<string>`coalesce(sum(${payments.amount}) filter (where ${payments.kind} = 'refund'), 0)::text`,
+        })
+        .from(payments)
+        .where(and(whereFor(criteria), eq(payments.currency, currency))),
+    );
+    return row ?? { payments: '0', refunds: '0' };
   }
 
   /** Moves every row of `fromPatientId` to `toPatientId` (the merge re-point, P15). */

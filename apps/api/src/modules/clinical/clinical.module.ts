@@ -6,6 +6,7 @@ import { UsersModule } from '../users';
 import { CatalogSeedingSubscriber } from './application/catalog/catalog-seeding.subscriber';
 import { CatalogService } from './application/catalog/catalog.service';
 import { ChartService } from './application/reads/chart.service';
+import { ClinicalSummaryService } from './application/reads/clinical-summary.service';
 import { MergeClinicalSubscriber } from './application/merge-clinical.subscriber';
 import { PatientRecordsService } from './application/records/patient-records.service';
 import { PlanUnperformer } from './application/plan/plan-unperformer';
@@ -35,6 +36,7 @@ import { DiagnosesRepository } from './persistence/diagnoses.repository';
 import { PatientDiagnosesRepository } from './persistence/patient-diagnoses.repository';
 import { PlanSessionsRepository } from './persistence/plan-sessions.repository';
 import { ProceduresRepository } from './persistence/procedures.repository';
+import { ClinicalSummaryRepository } from './persistence/summary.repository';
 import { ToothPresenceRepository } from './persistence/tooth-presence.repository';
 import { TreatmentPlansRepository } from './persistence/treatment-plans.repository';
 import { VisitAmendmentsRepository } from './persistence/visit-amendments.repository';
@@ -64,6 +66,8 @@ import { AuditVisitScopeProvider } from './application/visits/audit-visit-scope.
   providers: [
     AuditVisitScopeProvider,
     CatalogService,
+    ClinicalSummaryService,
+    ClinicalSummaryRepository,
     CatalogSeedingSubscriber,
     ProceduresRepository,
     DiagnosesRepository,
@@ -106,6 +110,7 @@ import { AuditVisitScopeProvider } from './application/visits/audit-visit-scope.
     VisitFactsService,
     PatientRecordsService,
     ChartService,
+    ClinicalSummaryService,
   ],
 })
 export class ClinicalModule {}

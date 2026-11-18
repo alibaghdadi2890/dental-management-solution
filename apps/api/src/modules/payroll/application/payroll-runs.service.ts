@@ -110,6 +110,23 @@ export class PayrollRunsService {
     });
   }
 
+  /** Salaries waiting now (feature 19): the pending net of this month and every earlier one. */
+  waiting(): Promise<string> {
+    this.context.requirePermission('payroll:read');
+    return this.tenantDb.run(async () => {
+      const everyone = await this.employees.list();
+      const snapshot = await this.reader.snapshot(everyone.map((row) => row.id));
+      const pending: string[] = [];
+      for (const row of everyone) {
+        for (const month of employedMonths(row, snapshot.currentMonth)) {
+          const line = this.reader.line(row, month, snapshot);
+          if (line.status === 'pending') pending.push(line.net);
+        }
+      }
+      return sum(pending);
+    });
+  }
+
   /** Replaces a pending line's adjustments; the net may never fall below zero. */
   setAdjustments(employeeId: string, month: string, input: SetAdjustments): Promise<PayrollLine> {
     this.context.requirePermission('payroll:manage');

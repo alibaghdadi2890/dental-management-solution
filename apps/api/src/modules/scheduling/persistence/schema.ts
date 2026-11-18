@@ -93,6 +93,8 @@ export const appointments = pgTable(
   (table) => [
     index('appointments_tenant_idx').on(table.tenantId),
     index('appointments_branch_starts_idx').on(table.tenantId, table.branchId, table.startsAt),
+    // The dashboards and the Schedule's List view (feature 19): every branch by start.
+    index('appointments_starts_idx').on(table.tenantId, table.startsAt),
     index('appointments_dentist_starts_idx').on(table.tenantId, table.dentistId, table.startsAt),
     index('appointments_patient_starts_idx').on(table.tenantId, table.patientId, table.startsAt),
     index('appointments_lineage_idx').on(table.tenantId, table.lineageId),

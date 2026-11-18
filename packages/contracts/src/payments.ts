@@ -216,8 +216,25 @@ export const transactionFiltersSchema = z.object({
   /** A patient (name, number, phone), a receipt (`RCT-12` or `12`) or a visit number (`V-12`). */
   q: searchText,
   patientId: blankToUndefined(idSchema.optional()),
+  /** A custom range of paid dates (both ends included), in place of `range` (feature 19). */
+  from: blankToUndefined(isoDateSchema.optional()),
+  to: blankToUndefined(isoDateSchema.optional()),
+  /** The branch it was recorded in (feature 19). */
+  branchId: blankToUndefined(idSchema.optional()),
 });
 export type TransactionFilters = z.infer<typeof transactionFiltersSchema>;
+
+/**
+ * `GET /billing/payments/summary` (feature 19): for the filters, payments not voided, refunds,
+ * and the net collected — the dashboard's Collected.
+ */
+export const transactionSummarySchema = z.object({
+  currency: currencySchema,
+  payments: balanceAmountSchema,
+  refunds: balanceAmountSchema,
+  collected: balanceAmountSchema,
+});
+export type TransactionSummary = z.infer<typeof transactionSummarySchema>;
 
 export const transactionQuerySchema = transactionFiltersSchema.extend(cursorPageQuerySchema.shape);
 export type TransactionQuery = z.infer<typeof transactionQuerySchema>;

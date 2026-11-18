@@ -442,6 +442,22 @@ export class PatientsService {
     });
   }
 
+  /**
+   * For the operational dashboard (feature 19): quick registrations not finished, and what
+   * `patientIds` (the period's new patients) came for. Counts only, no names.
+   */
+  async incompleteCount(): Promise<number> {
+    this.context.requirePermission('dashboard:operational');
+    return this.tenantDb.run(() => this.patients.incompleteCount());
+  }
+
+  async firstVisitTypes(
+    patientIds: readonly string[],
+  ): Promise<{ type: string | null; count: number }[]> {
+    this.context.requirePermission('dashboard:operational');
+    return this.tenantDb.run(() => this.patients.firstVisitTypes([...new Set(patientIds)]));
+  }
+
   /** The tab chips; the *Not seen* chip is `clinical`'s (`GET /clinical/patients/not-seen/count`). */
   async counts(): Promise<PatientCounts> {
     this.context.requirePermission('patient:read');
@@ -626,6 +642,7 @@ export class PatientsService {
     if (query.q !== undefined) filters.q = query.q;
     if (query.dentist !== undefined) filters.dentist = query.dentist;
     if (query.alerts !== undefined) filters.alerts = query.alerts;
+    if (query.cohort === 'incomplete') filters.incompleteOnly = true;
     if (query.age !== undefined) {
       const bounds = ageBandBounds(query.age, this.today(await this.tenancy.currentTenant()));
       if (bounds.after !== undefined) filters.dobAfter = bounds.after;
@@ -707,9 +724,12 @@ export class PatientsService {
  * `view=notSeen` and `lastVisit=never` those only `clinical` supplies.
  */
 function assertInternalFor(
-  query: Pick<PatientListQuery, 'view' | 'sort' | 'lastVisit' | 'lab'>,
+  query: Pick<PatientListQuery, 'view' | 'sort' | 'lastVisit' | 'lab' | 'cohort'>,
   internal: PatientSearchInternal,
 ): void {
+  if (query.cohort !== undefined && query.cohort !== 'incomplete' && internal.idsIn === undefined) {
+    throw unsupported('cohort', 'This cohort is served by the module that holds its facts');
+  }
   if (query.lab === 'open' && internal.idsIn === undefined) {
     throw unsupported('lab', 'The lab-order filter is served by labs');
   }
@@ -728,7 +748,7 @@ function assertInternalFor(
 }
 
 function unsupported(
-  path: 'view' | 'sort' | 'lastVisit' | 'lab',
+  path: 'view' | 'sort' | 'lastVisit' | 'lab' | 'cohort',
   message: string,
 ): ValidationFailedError {
   return new ValidationFailedError(message, [{ path, code: 'unsupported', message }]);

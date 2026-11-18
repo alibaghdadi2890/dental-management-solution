@@ -2,6 +2,12 @@
 export { ClinicalModule } from './clinical.module';
 export { CatalogService } from './application/catalog/catalog.service';
 export { ChartService } from './application/reads/chart.service';
+export {
+  ClinicalSummaryService,
+  type PatientsSummary,
+  type SummaryFilter,
+} from './application/reads/clinical-summary.service';
+export type { FinishedVisitRow, PlanStageRow } from './persistence/summary.repository';
 export { PatientRecordsService } from './application/records/patient-records.service';
 export { type VisitSearchInternal, VisitListService } from './application/reads/visit-list.service';
 export {

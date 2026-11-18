@@ -42,5 +42,6 @@ import { FixedExpensesRepository } from './persistence/fixed-expenses.repository
     ExpensesRepository,
     FixedExpensesRepository,
   ],
+  exports: [ExpensesService],
 })
 export class ExpensesModule {}

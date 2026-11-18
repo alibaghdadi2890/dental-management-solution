@@ -47,6 +47,8 @@ export const PERMISSIONS = [
   'lab:manage',
   'lab:money_read',
   'lab:money_manage',
+  'dashboard:financial',
+  'dashboard:operational',
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

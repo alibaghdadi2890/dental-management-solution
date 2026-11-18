@@ -4,7 +4,9 @@ import {
   receiptSchema,
   transactionExportQuerySchema,
   transactionPageSchema,
+  transactionFiltersSchema,
   transactionQuerySchema,
+  transactionSummarySchema,
   paymentPreviewSchema,
   paymentWriteResultSchema,
   recordPaymentResultSchema,
@@ -45,6 +47,8 @@ class ReleaseHoldInputDto extends createZodDto(releaseHoldInputSchema) {}
 class PaymentWriteResultDto extends createZodDto(paymentWriteResultSchema) {}
 class PaymentParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class TransactionQueryDto extends createZodDto(transactionQuerySchema) {}
+class TransactionFiltersDto extends createZodDto(transactionFiltersSchema) {}
+class TransactionSummaryDto extends createZodDto(transactionSummarySchema) {}
 class TransactionPageDto extends createZodDto(transactionPageSchema) {}
 class TransactionExportQueryDto extends createZodDto(transactionExportQuerySchema) {}
 class ReceiptDto extends createZodDto(receiptSchema) {}
@@ -74,6 +78,14 @@ export class BillingPaymentsController {
   }
 
   /** `text/csv`, streamed like the visits export; `lang`, else `Accept-Language`. */
+  /** The total of the filters (feature 19: a dashboard's Collected opens here). */
+  @Get('summary')
+  @RequirePermission('finance:read')
+  @ZodResponse({ type: TransactionSummaryDto })
+  summary(@Query() query: TransactionFiltersDto) {
+    return this.views.summary(query);
+  }
+
   @Get('export')
   @RequirePermission('finance:read')
   @ApiProduces('text/csv')

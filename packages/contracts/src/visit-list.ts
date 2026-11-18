@@ -13,6 +13,7 @@ import {
   isoDateSchema,
   isoDateTimeSchema,
   moneySchema,
+  queryBooleanSchema,
 } from './common.js';
 import { surfacesSchema, toothCodeSchema } from './tooth.js';
 import { visitStepSchema, visitTypeSchema } from './visit-flow.js';
@@ -55,6 +56,13 @@ export const visitFiltersSchema = z.object({
   /** One patient's visits across every branch (the record's history tab); without it the list
    * is the session branch's. */
   patientId: blankToUndefined(idSchema.optional()),
+  /** A custom range of visit dates (both ends included), in place of `range` (feature 19). */
+  from: blankToUndefined(isoDateSchema.optional()),
+  to: blankToUndefined(isoDateSchema.optional()),
+  /** Another branch, or `all`, in place of the session's (feature 19, a dashboard's drill-down). */
+  branchId: blankToUndefined(z.union([idSchema, z.literal('all')]).optional()),
+  /** Only finished visits (completed, or corrected since), never imported ones (feature 19). */
+  finished: blankToUndefined(queryBooleanSchema),
 });
 export type VisitFilters = z.infer<typeof visitFiltersSchema>;
 

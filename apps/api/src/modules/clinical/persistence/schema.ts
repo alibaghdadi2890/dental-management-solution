@@ -301,6 +301,8 @@ export const visits = pgTable(
       table.startedAt.desc(),
       table.id.desc(),
     ),
+    // The dashboards (feature 19): every branch's visits by date.
+    index('visits_local_date_idx').on(table.tenantId, table.localDate),
     index('visits_live_idx')
       .on(table.tenantId, table.status)
       .where(sql`${table.status} in ${LIVE_STATUS_LIST}`),
@@ -562,6 +564,8 @@ export const treatmentPlans = pgTable(
     // Target of the visit_services composite foreign key.
     unique('treatment_plans_tenant_id_unique').on(table.tenantId, table.id),
     index('treatment_plans_patient_tooth_idx').on(table.tenantId, table.patientId, table.toothCode),
+    // The dashboards (feature 19): items recorded in a period.
+    index('treatment_plans_recorded_idx').on(table.tenantId, table.recordedAt),
     foreignKey({
       name: 'treatment_plans_procedure_fk',
       columns: [table.tenantId, table.procedureId],

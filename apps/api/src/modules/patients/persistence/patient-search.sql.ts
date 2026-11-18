@@ -39,6 +39,8 @@ export interface PatientSearchFilters {
   alerts?: 'yes' | 'no';
   /** Leaves these patients out (an empty list leaves nobody out). */
   idsNotIn?: readonly string[];
+  /** Only a phone booking's quick patients, not finished yet (feature 19's cohort). */
+  incompleteOnly?: true;
 }
 
 export type PatientSortKey = 'name' | 'age' | 'recent' | 'dentist' | 'balance';
@@ -208,6 +210,8 @@ export function whereFor(filters: PatientSearchFilters, idsIn: readonly string[]
   } else if (filters.alerts === 'no') {
     conditions.push(sql`not ${hasAlert}`);
   }
+
+  if (filters.incompleteOnly) conditions.push(eq(patients.registrationIncomplete, true));
 
   if (idsIn) conditions.push(idAmong(patients.id, idsIn));
   if (filters.idsNotIn && filters.idsNotIn.length > 0) {

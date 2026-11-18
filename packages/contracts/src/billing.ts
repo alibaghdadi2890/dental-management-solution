@@ -4,11 +4,13 @@ import {
   blankToUndefined,
   commaSeparatedIds,
   currencySchema,
+  cursorPageQuerySchema,
   decimalAmountSchema,
   idSchema,
   isoDateSchema,
   notFutureDateSchema,
   optionalText,
+  queryBooleanSchema,
 } from './common.js';
 import { patientCreateSchema, patientListQuerySchema, patientSchema } from './patients.js';
 import { VISIT_LIST_TABS, visitFiltersSchema, visitListItemSchema } from './visit-list.js';
@@ -224,6 +226,32 @@ export const unpaidVisitsSummarySchema = z.object({
   tabCount: z.number().int().nonnegative(),
 });
 export type UnpaidVisitsSummary = z.infer<typeof unpaidVisitsSummarySchema>;
+
+/**
+ * `GET /billing/visits/charged` (feature 19): the visits with a visit entry (charge, correction,
+ * reversal) dated in `chargedFrom`–`chargedTo`, the dashboard's Production; `discounted` keeps
+ * those with a line or visit discount. The other filters are the list's.
+ */
+export const chargedVisitsFiltersSchema = visitFiltersSchema.extend({
+  chargedFrom: isoDateSchema,
+  chargedTo: isoDateSchema,
+  discounted: blankToUndefined(queryBooleanSchema),
+});
+export type ChargedVisitsFilters = z.infer<typeof chargedVisitsFiltersSchema>;
+
+export const chargedVisitsQuerySchema = chargedVisitsFiltersSchema.extend(
+  cursorPageQuerySchema.shape,
+);
+export type ChargedVisitsQuery = z.infer<typeof chargedVisitsQuerySchema>;
+
+/** The charged view's footer: Σ the entries dated in the window, and the discounts. */
+export const chargedVisitsSummarySchema = z.object({
+  count: z.number().int().nonnegative(),
+  currency: currencySchema,
+  charged: balanceAmountSchema,
+  discounts: balanceAmountSchema,
+});
+export type ChargedVisitsSummary = z.infer<typeof chargedVisitsSummarySchema>;
 
 /** `GET /billing/visits/export`: the list filters (any tab, *Unpaid* included) and a language. */
 export const visitExportQuerySchema = visitFiltersSchema.extend({

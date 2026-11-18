@@ -421,6 +421,13 @@
       "when": 1794424192660,
       "tag": "0059_lab_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1795009326064,
+      "tag": "0060_dashboards",
+      "breakpoints": true
     }
   ]
 }

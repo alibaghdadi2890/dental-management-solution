@@ -1,4 +1,8 @@
 import {
+  appointmentListPageSchema,
+  appointmentListQuerySchema,
+  patientListQuerySchema,
+  patientPageSchema,
   appointmentCheckResultSchema,
   appointmentCheckSchema,
   appointmentRangeQuerySchema,
@@ -43,8 +47,13 @@ import { RequirePermission } from '../../../platform/http/route-access';
 import { AppointmentsService } from '../application/appointments.service';
 import { FollowUpsService } from '../application/follow-ups.service';
 import { OpeningHoursService } from '../application/opening-hours.service';
+import { SchedulingSummaryService } from '../application/scheduling-summary.service';
 
 class AppointmentDto extends createZodDto(appointmentSchema) {}
+class AppointmentListQueryDto extends createZodDto(appointmentListQuerySchema) {}
+class AppointmentListPageDto extends createZodDto(appointmentListPageSchema) {}
+class PatientListQueryDto extends createZodDto(patientListQuerySchema) {}
+class PatientPageDto extends createZodDto(patientPageSchema) {}
 class AppointmentListDto extends createZodDto(z.array(appointmentSchema)) {}
 class RangeQueryDto extends createZodDto(appointmentRangeQuerySchema) {}
 class BookDto extends createZodDto(bookAppointmentSchema) {}
@@ -80,7 +89,24 @@ export class SchedulingController {
     private readonly appointments: AppointmentsService,
     private readonly followUps: FollowUpsService,
     private readonly openingHours: OpeningHoursService,
+    private readonly summary: SchedulingSummaryService,
   ) {}
+
+  /** The Schedule's List view (feature 19): a dashboard figure's appointments. */
+  @Get('appointments/list')
+  @RequirePermission('appointment:read')
+  @ZodResponse({ type: AppointmentListPageDto })
+  list(@Query() query: AppointmentListQueryDto) {
+    return this.summary.list(query);
+  }
+
+  /** Patients with an accepted plan item and nothing booked (feature 19's cohort). */
+  @Get('patients')
+  @RequirePermission('patient:read')
+  @ZodResponse({ type: PatientPageDto })
+  patients(@Query() query: PatientListQueryDto) {
+    return this.summary.acceptedUnbooked(query);
+  }
 
   @Get('appointments')
   @RequirePermission('appointment:read')

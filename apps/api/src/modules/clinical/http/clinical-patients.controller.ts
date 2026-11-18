@@ -5,6 +5,8 @@ import {
   lastVisitSchema,
   patientChartSchema,
   patientHistoryConfirmationSchema,
+  patientListQuerySchema,
+  patientPageSchema,
   toothCodeSchema,
   toothHistorySchema,
   visitStatsQuerySchema,
@@ -17,6 +19,7 @@ import { createZodDto, ZodResponse } from 'nestjs-zod';
 import { z } from 'zod';
 import { RequirePermission } from '../../../platform/http/route-access';
 import { ChartService } from '../application/reads/chart.service';
+import { ClinicalSummaryService } from '../application/reads/clinical-summary.service';
 import { VisitListService } from '../application/reads/visit-list.service';
 
 class PatientChartDto extends createZodDto(patientChartSchema) {}
@@ -28,6 +31,8 @@ const LastVisitOutput = LastVisitDto.Output;
 class LastVisitQueryDto extends createZodDto(lastVisitQuerySchema) {}
 class HistoryConfirmationDto extends createZodDto(patientHistoryConfirmationSchema) {}
 class FileCitationDto extends createZodDto(fileCitationSchema) {}
+class PatientListQueryDto extends createZodDto(patientListQuerySchema) {}
+class PatientPageDto extends createZodDto(patientPageSchema) {}
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class VisitStatsQueryDto extends createZodDto(visitStatsQuerySchema) {}
 class VisitStatDto extends createZodDto(visitStatSchema) {}
@@ -44,7 +49,16 @@ export class ClinicalPatientsController {
   constructor(
     private readonly chart: ChartService,
     private readonly visits: VisitListService,
+    private readonly summary: ClinicalSummaryService,
   ) {}
+
+  /** A dashboard figure's patients (feature 19): `cohort` = first_seen, seen, proposed, accepted. */
+  @Get()
+  @RequirePermission('patient:read')
+  @ZodResponse({ type: PatientPageDto })
+  cohort(@Query() query: PatientListQueryDto) {
+    return this.summary.cohort(query);
+  }
 
   /** Last visit and visit count of the visible page's patients (D18). */
   @Get('visit-stats')

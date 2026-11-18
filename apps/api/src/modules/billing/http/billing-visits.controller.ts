@@ -1,4 +1,7 @@
 import {
+  chargedVisitsFiltersSchema,
+  chargedVisitsQuerySchema,
+  chargedVisitsSummarySchema,
   unpaidVisitsSummarySchema,
   visitBalanceSchema,
   visitBalancesQuerySchema,
@@ -25,6 +28,9 @@ class VisitPageDto extends createZodDto(visitPageSchema) {}
 class VisitFiltersDto extends createZodDto(visitFiltersSchema) {}
 class UnpaidVisitsSummaryDto extends createZodDto(unpaidVisitsSummarySchema) {}
 class VisitExportQueryDto extends createZodDto(visitExportQuerySchema) {}
+class ChargedVisitsQueryDto extends createZodDto(chargedVisitsQuerySchema) {}
+class ChargedVisitsFiltersDto extends createZodDto(chargedVisitsFiltersSchema) {}
+class ChargedVisitsSummaryDto extends createZodDto(chargedVisitsSummarySchema) {}
 
 /** A download idle this long (no socket activity) is dropped. */
 const EXPORT_IDLE_TIMEOUT_MS = 60_000;
@@ -50,6 +56,21 @@ export class BillingVisitsController {
   @ZodResponse({ type: [VisitBalanceDto] })
   balances(@Query() query: VisitBalancesQueryDto) {
     return this.billing.balancesForVisits(query.visitIds);
+  }
+
+  /** Visits with an entry dated in the window (feature 19: a dashboard's Production). */
+  @Get('charged')
+  @RequirePermission('finance:read')
+  @ZodResponse({ type: VisitPageDto })
+  charged(@Query() query: ChargedVisitsQueryDto) {
+    return this.views.charged(query);
+  }
+
+  @Get('charged/summary')
+  @RequirePermission('finance:read')
+  @ZodResponse({ type: ChargedVisitsSummaryDto })
+  chargedSummary(@Query() query: ChargedVisitsFiltersDto) {
+    return this.views.chargedSummary(query);
   }
 
   @Get('unpaid')

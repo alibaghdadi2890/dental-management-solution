@@ -49,6 +49,7 @@ export const CAPABILITY_GROUPS = [
     key: 'lab',
     permissions: ['lab:read', 'lab:manage', 'lab:money_read', 'lab:money_manage'],
   },
+  { key: 'dashboard', permissions: ['dashboard:financial', 'dashboard:operational'] },
   { key: 'activity', permissions: ['audit:read'] },
   { key: 'clinic', permissions: ['tenant:read', 'tenant:write', 'import:run'] },
 ] as const satisfies readonly {
@@ -86,6 +87,8 @@ export const CAPABILITY_IMPLIES: Readonly<
   // Lab money is about orders and labs: seeing it means seeing them (ADR-0086).
   'lab:money_read': ['lab:read'],
   'lab:money_manage': ['lab:money_read'],
+  // The financial dashboard is money across patients (ADR-0092).
+  'dashboard:financial': ['finance:read'],
   'user:write': ['user:read'],
   // Giving people access means seeing who they are.
   'role:write': ['role:read', 'user:read'],

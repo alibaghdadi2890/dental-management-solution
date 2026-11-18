@@ -2,6 +2,10 @@
 export { SchedulingModule } from './scheduling.module';
 export { type AppointmentRef, AppointmentsService } from './application/appointments.service';
 export {
+  type ScheduleFilter,
+  SchedulingSummaryService,
+} from './application/scheduling-summary.service';
+export {
   APPOINTMENT_BOOKED,
   APPOINTMENT_CANCELLED,
   APPOINTMENT_COMPLETED,

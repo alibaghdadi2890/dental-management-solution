@@ -126,6 +126,16 @@ export class VisitListService {
     });
   }
 
+  /** The ids of every visit matching the filters among `internal.idsIn`, unpaged (`billing`'s
+   * charged view, feature 19). Same scope and visit scope as the list. */
+  async matchingIds(query: VisitFilters, internal: VisitSearchInternal): Promise<string[]> {
+    this.context.requirePermission('visit:read');
+    return this.tenantDb.run(async () => {
+      const criteria = await this.criteriaFor(query, internal);
+      return criteria ? this.visits.matchingIds(criteria) : [];
+    });
+  }
+
   /**
    * Last visit and visit count per patient (D18: counted visits only, any branch), in input
    * order; a patient without visits gets `lastVisitDate: null` and 0.
@@ -170,18 +180,31 @@ export class VisitListService {
   ): Promise<VisitCriteria | null> {
     const own = ownedFilter(this.context);
     if (own === null) return null;
-    const branchId = this.context.branchId;
-    const scope =
+    // Another branch, or every branch (a dashboard's drill-down), is for whoever reads every
+    // visit; everyone else keeps to the session's branch.
+    if (query.branchId !== undefined && query.branchId !== this.context.branchId) {
+      this.context.requirePermission('visit:read_all');
+    }
+    const branchId = query.branchId ?? this.context.branchId;
+    const scope: VisitCriteria['scope'] | null =
       query.patientId !== undefined
         ? { patientId: query.patientId }
-        : branchId
-          ? { branchId }
-          : null;
+        : branchId === 'all'
+          ? { allBranches: true }
+          : branchId
+            ? { branchId }
+            : null;
     if (!scope) return null;
+    const custom = query.from !== undefined && query.to !== undefined;
+    const statuses = query.finished
+      ? TAB_STATUSES[query.tab].filter((status) => status === 'completed' || status === 'amended')
+      : TAB_STATUSES[query.tab];
     return {
       scope,
-      statuses: TAB_STATUSES[query.tab],
-      fromDate: rangeStart(query.range, await this.today()) ?? undefined,
+      statuses,
+      excludeImported: query.finished === true,
+      toDate: custom ? query.to : undefined,
+      fromDate: custom ? query.from : (rangeStart(query.range, await this.today()) ?? undefined),
       dentistId: query.dentistId,
       roomId: query.roomId,
       type: query.type,

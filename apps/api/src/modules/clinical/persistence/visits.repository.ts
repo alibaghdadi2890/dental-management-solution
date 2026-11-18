@@ -551,6 +551,15 @@ export class VisitsRepository {
     return rows.map(toStored);
   }
 
+  /** The ids of every matching visit, unpaged (`billing`'s charged view sums their entries). */
+  async matchingIds(criteria: VisitCriteria): Promise<string[]> {
+    if (criteria.idsIn?.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx.select({ id: visits.id }).from(visits).where(whereFor(criteria)),
+    );
+    return rows.map((row) => row.id);
+  }
+
   /** How many visits match, and Σ total of the counted ones among them per currency (D12). */
   async aggregate(
     criteria: VisitCriteria,

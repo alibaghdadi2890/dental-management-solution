@@ -246,6 +246,21 @@ export const patientListQuerySchema = z.object({
   lastVisit: blankToUndefined(z.enum(['any', 'never']).optional()),
   /** Only patients with an open lab order: served by `GET /labs/patients` (feature 18, D1). */
   lab: blankToUndefined(z.enum(['open']).optional()),
+  /**
+   * A dashboard figure's patients (feature 19, `PATIENT_COHORTS`): `first_seen`, `seen`,
+   * `proposed` and `accepted` are served by `GET /clinical/patients`, `accepted_unbooked` by
+   * `GET /scheduling/patients`, `incomplete` by `GET /patients` itself. `from`/`to` bound
+   * `first_seen` and `proposed`; `cohortBranch` and `cohortDentist` the visits behind them.
+   */
+  cohort: blankToUndefined(
+    z
+      .enum(['first_seen', 'seen', 'proposed', 'accepted', 'accepted_unbooked', 'incomplete'])
+      .optional(),
+  ),
+  from: blankToUndefined(isoDateSchema.optional()),
+  to: blankToUndefined(isoDateSchema.optional()),
+  cohortBranch: blankToUndefined(idSchema.optional()),
+  cohortDentist: blankToUndefined(idSchema.optional()),
   sort: blankToUndefined(patientSortSchema.default('name')),
   dir: blankToUndefined(z.enum(['asc', 'desc']).default('asc')),
   page: blankToUndefined(z.coerce.number().int().min(1).default(1)),

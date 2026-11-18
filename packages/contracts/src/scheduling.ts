@@ -209,6 +209,41 @@ export const appointmentRangeQuerySchema = z.object({
 });
 export type AppointmentRangeQuery = z.infer<typeof appointmentRangeQuerySchema>;
 
+/** The Schedule's List view (feature 19): `unresolved` is derived, the rest stored statuses. */
+export const APPOINTMENT_LIST_STATUSES = [
+  'completed',
+  'cancelled',
+  'no_show',
+  'unresolved',
+] as const;
+
+/**
+ * `GET /scheduling/appointments/list` (feature 19): appointments starting on clinic-local days
+ * `from`–`to`, oldest first, a branch or all; `weekday` (0 = Sunday) and `hour` narrow it to a
+ * cell of the dashboard's busy hours; `due` keeps those that have started. Rescheduled rows are
+ * never listed: their successor is.
+ */
+export const appointmentListQuerySchema = z.object({
+  from: isoDateSchema,
+  to: isoDateSchema,
+  branchId: blankToUndefined(idSchema.optional()),
+  dentistId: blankToUndefined(idSchema.optional()),
+  status: blankToUndefined(z.enum(APPOINTMENT_LIST_STATUSES).optional()),
+  weekday: blankToUndefined(z.coerce.number().int().min(0).max(6).optional()),
+  hour: blankToUndefined(z.coerce.number().int().min(0).max(23).optional()),
+  due: blankToUndefined(queryBooleanSchema),
+  cursor: blankToUndefined(z.string().min(1).optional()),
+  limit: blankToUndefined(z.coerce.number().int().min(1).max(100).default(50)),
+});
+export type AppointmentListQuery = z.infer<typeof appointmentListQuerySchema>;
+
+export const appointmentListPageSchema = z.object({
+  items: z.array(appointmentSchema),
+  nextCursor: z.string().nullable(),
+  total: z.number().int().nonnegative(),
+});
+export type AppointmentListPage = z.infer<typeof appointmentListPageSchema>;
+
 const roomChoiceSchema = z.union([idSchema, z.literal('auto')]);
 /** Also `none`: an appointment left without a room keeps none (ADR-0075). */
 const keptRoomChoiceSchema = z.union([idSchema, z.literal('auto'), z.literal('none')]);

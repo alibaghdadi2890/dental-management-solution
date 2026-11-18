@@ -28,6 +28,7 @@ import {
   type TransactionFilters,
   type TransactionPage,
   type TransactionQuery,
+  type TransactionSummary,
   type VisitNumber,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
@@ -131,6 +132,24 @@ export class PaymentViewsService {
           rows.length > query.limit && last
             ? encodeDateIdCursor({ date: last.paidAt, id: last.id })
             : null,
+      };
+    });
+  }
+
+  /** `GET /billing/payments/summary` (feature 19): the total of the Transactions filters. */
+  async summary(filters: TransactionFilters): Promise<TransactionSummary> {
+    this.context.requirePermission('finance:read');
+    return this.tenantDb.run(async () => {
+      const tenant = await this.tenancy.currentTenant();
+      const criteria = await this.criteriaFor(filters, this.today(tenant));
+      const totals = await this.payments.totals(criteria, tenant.currency);
+      const paid = toCents(totals.payments);
+      const refunds = toCents(totals.refunds);
+      return {
+        currency: tenant.currency,
+        payments: fromCents(paid),
+        refunds: fromCents(refunds),
+        collected: fromCents(paid - refunds),
       };
     });
   }
@@ -757,8 +776,14 @@ export class PaymentViewsService {
     today: string,
   ): Promise<TransactionCriteria> {
     const range = filters.range;
+    const custom = filters.from !== undefined && filters.to !== undefined;
     const criteria: TransactionCriteria = {
-      ...(range === 'all' ? {} : { from: addDays(today, 1 - RANGE_DAYS[range]) }),
+      ...(custom
+        ? { from: filters.from, to: filters.to }
+        : range === 'all'
+          ? {}
+          : { from: addDays(today, 1 - RANGE_DAYS[range]) }),
+      ...(filters.branchId ? { branchId: filters.branchId } : {}),
       ...(filters.method ? { method: filters.method } : {}),
       ...(filters.kind ? { kind: filters.kind } : {}),
       ...(filters.patientId ? { patientId: filters.patientId } : {}),

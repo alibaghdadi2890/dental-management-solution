@@ -34,5 +34,6 @@ import { PeriodsRepository } from './persistence/periods.repository';
     PayoutsRepository,
     PeriodsRepository,
   ],
+  exports: [CompensationService],
 })
 export class CompensationModule {}

@@ -585,6 +585,30 @@ export class PatientsRepository {
     return { active: Number(row?.active ?? 0), archived: Number(row?.archived ?? 0) };
   }
 
+  /** Active quick registrations not finished yet (feature 19's Needs attention). */
+  async incompleteCount(): Promise<number> {
+    const [row] = await this.db.run((tx) =>
+      tx
+        .select({ total: sql<string>`count(*)` })
+        .from(patients)
+        .where(sql`${patients.deletedAt} is null and ${patients.registrationIncomplete}`),
+    );
+    return Number(row?.total ?? 0);
+  }
+
+  /** How many of `ids` came first for each entry visit type (null: not said). */
+  async firstVisitTypes(ids: readonly string[]): Promise<{ type: string | null; count: number }[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({ type: patients.firstVisitType, total: sql<string>`count(*)` })
+        .from(patients)
+        .where(sql`${patients.id} = any(${sql.param([...ids])}::uuid[])`)
+        .groupBy(patients.firstVisitType),
+    );
+    return rows.map((row) => ({ type: row.type, count: Number(row.total) }));
+  }
+
   /** Active rows with a non-null date of birth whose (name_key, dob) is shared by ≥ 2 rows. */
   async duplicateRows(): Promise<DomainPatientListRow[]> {
     return this.db.run(async (tx) => {

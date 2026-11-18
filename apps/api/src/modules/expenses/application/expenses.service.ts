@@ -1,5 +1,7 @@
 import {
+  type CostGroup,
   DASHBOARD_RECENT,
+  type DateSpan,
   type Expense,
   type ExpenseDashboard,
   type ExpenseExportQuery,
@@ -334,6 +336,81 @@ export class ExpensesService {
         pending: await this.fixed.pending(),
       };
     });
+  }
+
+  /**
+   * The financial dashboard's costs (feature 19, ADR-0088): confirmed, not voided expenses of
+   * the sources the caller may see, by category over the span. With complete cost (every source:
+   * `payroll:read` and `compensation:manage` too) also the totals of the span and the one before,
+   * the months and the four cost groups; otherwise those are null, never a smaller total.
+   */
+  async dashboardCosts(spans: {
+    current: DateSpan;
+    previous: DateSpan;
+    months: readonly string[];
+  }): Promise<{
+    completeCost: boolean;
+    total: { current: string; previous: string } | null;
+    months: { month: string; amount: string }[] | null;
+    categories: { categoryId: string; key: string | null; name: string | null; amount: string }[];
+    groups: { group: CostGroup; amount: string }[] | null;
+  }> {
+    this.context.requirePermission('expense:read');
+    return this.tenantDb.run(async () => {
+      const complete =
+        this.context.hasPermission('payroll:read') &&
+        this.context.hasPermission('compensation:manage');
+      const sources = this.sources();
+      const byCategory = await this.expenses.byCategory({ ...spans.current, sources });
+      const known = new Map((await this.categoryRows.list()).map((row) => [row.id, row]));
+      const categories = byCategory
+        .filter((row) => toCents(row.amount) !== 0n)
+        .map((row) => ({
+          categoryId: row.categoryId,
+          key: known.get(row.categoryId)?.key ?? null,
+          name: known.get(row.categoryId)?.name ?? null,
+          amount: row.amount,
+        }));
+      if (!complete)
+        return { completeCost: false, total: null, months: null, categories, groups: null };
+      const first = spans.months[0] ?? spans.current.from.slice(0, 7);
+      const last = spans.months.at(-1) ?? first;
+      const byMonth = new Map(
+        (await this.expenses.byMonth({ from: `${first}-01`, to: lastDay(last), sources })).map(
+          (row) => [row.month, row.amount],
+        ),
+      );
+      const groups = new Map<CostGroup, bigint>();
+      for (const row of categories) {
+        const group: CostGroup =
+          row.key === 'salaries' || row.key === 'dentist_compensation' || row.key === 'lab_fees'
+            ? row.key
+            : 'other';
+        groups.set(group, (groups.get(group) ?? 0n) + toCents(row.amount));
+      }
+      return {
+        completeCost: true,
+        total: {
+          current: (await this.expenses.totals({ ...spans.current, sources })).amount,
+          previous: (await this.expenses.totals({ ...spans.previous, sources })).amount,
+        },
+        months: spans.months.map((month) => ({ month, amount: byMonth.get(month) ?? '0.00' })),
+        categories,
+        groups: (['salaries', 'dentist_compensation', 'lab_fees', 'other'] as const).map(
+          (group) => ({ group, amount: fromCents(groups.get(group) ?? 0n) }),
+        ),
+      };
+    });
+  }
+
+  /** Fixed expenses waiting to be confirmed now: how many, and Σ their usual amounts. */
+  async fixedWaiting(): Promise<{ count: number; amount: string }> {
+    this.context.requirePermission('expense:read');
+    const items = await this.fixed.pending();
+    return {
+      count: items.length,
+      amount: fromCents(items.reduce((total, item) => total + toCents(item.amount), 0n)),
+    };
   }
 
   /**
