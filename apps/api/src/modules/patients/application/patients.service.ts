@@ -707,9 +707,12 @@ export class PatientsService {
  * `view=notSeen` and `lastVisit=never` those only `clinical` supplies.
  */
 function assertInternalFor(
-  query: Pick<PatientListQuery, 'view' | 'sort' | 'lastVisit'>,
+  query: Pick<PatientListQuery, 'view' | 'sort' | 'lastVisit' | 'lab'>,
   internal: PatientSearchInternal,
 ): void {
+  if (query.lab === 'open' && internal.idsIn === undefined) {
+    throw unsupported('lab', 'The lab-order filter is served by labs');
+  }
   if (query.view === 'owing' && internal.idsIn === undefined) {
     throw unsupported('view', 'The owing view is served by billing');
   }
@@ -724,6 +727,9 @@ function assertInternalFor(
   }
 }
 
-function unsupported(path: 'view' | 'sort' | 'lastVisit', message: string): ValidationFailedError {
+function unsupported(
+  path: 'view' | 'sort' | 'lastVisit' | 'lab',
+  message: string,
+): ValidationFailedError {
   return new ValidationFailedError(message, [{ path, code: 'unsupported', message }]);
 }

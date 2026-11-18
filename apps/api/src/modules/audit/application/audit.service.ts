@@ -86,7 +86,8 @@ export class AuditService {
    * The feed and a resource's trail. A caller sees rows about a visit only within their visit
    * scope, the money rows (payments, ledger entries) only with `finance:read` (ADR-0055),
    * compensation rows only with `compensation:manage` (ADR-0060), expense rows only with
-   * `expense:read` and payroll rows only with `payroll:read` (ADR-0080).
+   * `expense:read`, payroll rows only with `payroll:read` (ADR-0080) and lab money rows only with
+   * `lab:money_read` (ADR-0086).
    */
   async list(query: AuditQuery): Promise<AuditPage> {
     this.context.requirePermission('audit:read');
@@ -98,6 +99,7 @@ export class AuditService {
       withoutCompensation: !this.context.hasPermission('compensation:manage'),
       withoutExpenses: !this.context.hasPermission('expense:read'),
       withoutPayroll: !this.context.hasPermission('payroll:read'),
+      withoutLabMoney: !this.context.hasPermission('lab:money_read'),
       resourceType: query.resourceType,
       resourceId: query.resourceId,
       feed: query.feed,

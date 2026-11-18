@@ -414,6 +414,13 @@
       "when": 1793960490840,
       "tag": "0058_expenses_payroll",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1794424192660,
+      "tag": "0059_lab_orders",
+      "breakpoints": true
     }
   ]
 }

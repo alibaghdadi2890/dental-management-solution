@@ -121,7 +121,8 @@ export class CategoriesService {
   }
 
   /** A reserved category's row, created first if the clinic has lost it. */
-  async reserved(key: ReservedCategoryKey): Promise<StoredCategory> {
+  /** A system category by key, created when missing: the reserved ones, and Lab fees for lab payments. */
+  async reserved(key: ReservedCategoryKey | 'lab_fees'): Promise<StoredCategory> {
     const found = await this.categories.byKey(key);
     if (found) return found;
     await this.categories.insertMissingKeys();

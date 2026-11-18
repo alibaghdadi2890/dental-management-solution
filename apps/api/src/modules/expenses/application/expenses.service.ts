@@ -51,9 +51,9 @@ export interface CsvFile {
   body: string;
 }
 
-/** A salary payment or dentist payout, as `expenses` mirrors it (ADR-0076). */
+/** A salary payment, a dentist payout or a lab payment, as `expenses` mirrors it (ADR-0076, ADR-0085). */
 export interface Mirror {
-  source: 'payroll' | 'compensation';
+  source: 'payroll' | 'compensation' | 'lab';
   sourceId: string;
   spentOn: string;
   amount: string;
@@ -325,7 +325,7 @@ export class ExpensesService {
       const filter: ExpenseFilter = {
         from: `${month}-01`,
         to: lastDay(month),
-        sources: ['manual', 'fixed'],
+        sources: ['manual', 'fixed', 'lab'],
       };
       return {
         month,
@@ -343,7 +343,11 @@ export class ExpensesService {
   async recordMirror(mirror: Mirror): Promise<void> {
     await this.tenantDb.run(async () => {
       const category = await this.categories.reserved(
-        mirror.source === 'payroll' ? 'salaries' : 'dentist_compensation',
+        mirror.source === 'payroll'
+          ? 'salaries'
+          : mirror.source === 'lab'
+            ? 'lab_fees'
+            : 'dentist_compensation',
       );
       await this.expenses.insertMirror({
         ...mirror,
@@ -375,6 +379,7 @@ export class ExpensesService {
     return [
       'manual',
       'fixed',
+      'lab',
       ...(this.context.hasPermission('payroll:read') ? (['payroll'] as const) : []),
       ...(this.context.hasPermission('compensation:manage') ? (['compensation'] as const) : []),
     ];
@@ -401,11 +406,13 @@ export class ExpensesService {
     if (!row || !this.sources().includes(row.source)) {
       throw new ExpenseNotFoundError('No such expense', { id });
     }
-    if (row.source === 'payroll' || row.source === 'compensation') {
+    if (row.source === 'payroll' || row.source === 'compensation' || row.source === 'lab') {
       throw new SystemRowError(
         row.source === 'payroll'
           ? 'Salary rows are changed from Payroll'
-          : 'Dentist compensation rows are changed from Compensation',
+          : row.source === 'lab'
+            ? 'Lab payments are changed from Lab'
+            : 'Dentist compensation rows are changed from Compensation',
       );
     }
     if (row.voidedAt !== null) throw new ExpenseVoidedError('This expense is voided');

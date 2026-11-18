@@ -14,6 +14,7 @@ export * from './digits.js';
 export * from './expenses.js';
 export * from './files.js';
 export * from './imports.js';
+export * from './labs.js';
 export * from './marks.js';
 export * from './medical-history.js';
 export * from './patient-age.js';

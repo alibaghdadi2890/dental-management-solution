@@ -90,6 +90,8 @@ export const FOLLOW_UP_KINDS = [
   'healing_review',
   'consultation',
   'routine_examination',
+  /** Fitting work back from the lab (feature 18); offered per order, never as a chip. */
+  'lab_work',
   'other',
 ] as const;
 export const followUpKindSchema = z.enum(FOLLOW_UP_KINDS);
@@ -105,6 +107,7 @@ export const FOLLOW_UP_KIND_DEFAULTS: Readonly<
   healing_review: { durationMin: 15, timing: 'within_1_week', visitType: 'treatment' },
   consultation: { durationMin: 30, timing: 'no_preference', visitType: 'consultation' },
   routine_examination: { durationMin: 30, timing: 'within_1_month', visitType: 'examination' },
+  lab_work: { durationMin: 30, timing: 'asap', visitType: 'treatment' },
   other: { durationMin: 30, timing: 'no_preference', visitType: null },
 };
 

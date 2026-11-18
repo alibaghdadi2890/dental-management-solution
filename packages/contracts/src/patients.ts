@@ -244,6 +244,8 @@ export const patientListQuerySchema = z.object({
   age: blankToUndefined(z.enum(AGE_BANDS).optional()),
   alerts: blankToUndefined(z.enum(['yes', 'no']).optional()),
   lastVisit: blankToUndefined(z.enum(['any', 'never']).optional()),
+  /** Only patients with an open lab order: served by `GET /labs/patients` (feature 18, D1). */
+  lab: blankToUndefined(z.enum(['open']).optional()),
   sort: blankToUndefined(patientSortSchema.default('name')),
   dir: blankToUndefined(z.enum(['asc', 'desc']).default('asc')),
   page: blankToUndefined(z.coerce.number().int().min(1).default(1)),

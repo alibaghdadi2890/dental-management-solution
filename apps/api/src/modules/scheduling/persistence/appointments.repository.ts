@@ -122,6 +122,16 @@ export class AppointmentsRepository {
     );
   }
 
+  byIds(ids: readonly string[]): Promise<StoredAppointment[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.db.run((tx) =>
+      tx
+        .select()
+        .from(appointments)
+        .where(inArray(appointments.id, [...ids])),
+    );
+  }
+
   forPatient(patientId: string): Promise<StoredAppointment[]> {
     return this.db.run((tx) =>
       tx

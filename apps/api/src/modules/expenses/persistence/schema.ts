@@ -110,7 +110,7 @@ export const expenses = pgTable(
     /** One row per payroll payment or payout, ever. */
     uniqueIndex('expenses_mirror_unique')
       .on(table.tenantId, table.source, table.sourceId)
-      .where(sql`${table.source} in ('payroll', 'compensation')`),
+      .where(sql`${table.source} in ('payroll', 'compensation', 'lab')`),
     /** At most one live expense per fixed item; a voided one makes room for the next. */
     uniqueIndex('expenses_fixed_live_unique')
       .on(table.tenantId, table.sourceId)

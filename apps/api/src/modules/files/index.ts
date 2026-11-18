@@ -1,6 +1,6 @@
 // Public API of the files module. Other modules import from this file only (CLAUDE.md §4).
 export { FilesModule } from './files.module';
-export { FilesService } from './application/files.service';
+export { type FileRef, FilesService } from './application/files.service';
 export {
   FILE_ARCHIVED,
   FILE_RESTORED,

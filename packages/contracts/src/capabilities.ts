@@ -45,6 +45,10 @@ export const CAPABILITY_GROUPS = [
   { key: 'compensation', permissions: ['compensation:read', 'compensation:manage'] },
   { key: 'expenses', permissions: ['expense:read', 'expense:manage'] },
   { key: 'payroll', permissions: ['payroll:read', 'payroll:manage'] },
+  {
+    key: 'lab',
+    permissions: ['lab:read', 'lab:manage', 'lab:money_read', 'lab:money_manage'],
+  },
   { key: 'activity', permissions: ['audit:read'] },
   { key: 'clinic', permissions: ['tenant:read', 'tenant:write', 'import:run'] },
 ] as const satisfies readonly {
@@ -78,6 +82,10 @@ export const CAPABILITY_IMPLIES: Readonly<
   'compensation:manage': ['compensation:read'],
   'expense:manage': ['expense:read'],
   'payroll:manage': ['payroll:read'],
+  'lab:manage': ['lab:read'],
+  // Lab money is about orders and labs: seeing it means seeing them (ADR-0086).
+  'lab:money_read': ['lab:read'],
+  'lab:money_manage': ['lab:money_read'],
   'user:write': ['user:read'],
   // Giving people access means seeing who they are.
   'role:write': ['role:read', 'user:read'],

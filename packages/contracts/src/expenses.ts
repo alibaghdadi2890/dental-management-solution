@@ -85,7 +85,7 @@ export const updateExpenseCategorySchema = z
 export type UpdateExpenseCategory = z.infer<typeof updateExpenseCategorySchema>;
 
 /** Where an expense comes from: typed by hand, a confirmed fixed item, or a mirror (read-only). */
-export const EXPENSE_SOURCES = ['manual', 'fixed', 'payroll', 'compensation'] as const;
+export const EXPENSE_SOURCES = ['manual', 'fixed', 'payroll', 'compensation', 'lab'] as const;
 export const expenseSourceSchema = z.enum(EXPENSE_SOURCES);
 export type ExpenseSource = z.infer<typeof expenseSourceSchema>;
 

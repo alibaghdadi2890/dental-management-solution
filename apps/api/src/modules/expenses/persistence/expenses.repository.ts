@@ -172,7 +172,7 @@ export class ExpensesRepository {
 
   /** Voids the live mirror of a payment or payout, if any. */
   voidMirror(
-    source: 'payroll' | 'compensation',
+    source: 'payroll' | 'compensation' | 'lab',
     sourceId: string,
     mark: { at: Date; by: string; reason: string },
   ): Promise<void> {

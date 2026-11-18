@@ -141,6 +141,18 @@ const isWaiting = (row: StoredAppointment) => row.status === 'booked' || row.sta
 const idempotent = (key: string | undefined, request: unknown) =>
   key === undefined ? null : { key, hash: requestHash(request) };
 
+/** An appointment as another module refers to it (feature 18). */
+export interface AppointmentRef {
+  id: string;
+  patientId: string;
+  branchId: string;
+  dentistId: string;
+  dentistName: string;
+  startsAt: Date;
+  localDate: string;
+  status: StoredAppointment['status'];
+}
+
 /**
  * Booking and the appointment's life (ADR-0066, ADR-0067). Every write re-checks `appointment:write`
  * and the column (`canWriteAppointment`), audits and publishes in its transaction. A room or patient
@@ -352,6 +364,54 @@ export class AppointmentsService {
         }),
       }));
     });
+  }
+
+  // --- Reads for other modules: ungated, the caller checked its own permission (feature 18) ---
+
+  /** Appointments by id, with the dentist's name and the tenant-local date. */
+  refs(ids: readonly string[]): Promise<AppointmentRef[]> {
+    return this.tenantDb.run(async () =>
+      this.toRefs(await this.appointments.byIds([...new Set(ids)])),
+    );
+  }
+
+  /** The patient's active appointments from today on (clinic time zone), soonest first. */
+  upcomingFor(patientId: string): Promise<AppointmentRef[]> {
+    return this.tenantDb.run(async () => {
+      const { date } = await this.today();
+      const refs = await this.toRefs(await this.appointments.activeForPatient(patientId));
+      return refs.filter((ref) => ref.localDate >= date);
+    });
+  }
+
+  /** The weekdays (0 is Sunday) the branch opens (ADR-0068). */
+  openWeekdays(branchId: string): Promise<Set<number>> {
+    return this.tenantDb.run(async () => {
+      const days = await this.hours.forBranch(branchId);
+      return new Set(days.filter((day) => day.isOpen).map((day) => day.weekday));
+    });
+  }
+
+  private async toRefs(rows: readonly StoredAppointment[]): Promise<AppointmentRef[]> {
+    if (rows.length === 0) return [];
+    const { timeZone } = await this.tenancy.currentTenant();
+    const dentists = new Map(
+      (await this.users.practitionersByProfileIds(rows.map((row) => row.dentistId))).map(
+        (item) => [item.id, item.displayName] as const,
+      ),
+    );
+    return [...rows]
+      .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+      .map((row) => ({
+        id: row.id,
+        patientId: row.patientId,
+        branchId: row.branchId,
+        dentistId: row.dentistId,
+        dentistName: dentists.get(row.dentistId) ?? '',
+        startsAt: row.startsAt,
+        localDate: localDate(row.startsAt, timeZone),
+        status: row.status,
+      }));
   }
 
   // --- Writes ---

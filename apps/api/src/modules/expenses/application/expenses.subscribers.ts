@@ -13,6 +13,12 @@ import {
   type PayrollPaymentConfirmed,
   type PayrollPaymentVoided,
 } from '../../payroll';
+import {
+  LAB_PAYMENT_RECORDED,
+  LAB_PAYMENT_VOIDED,
+  type LabPaymentRecorded,
+  type LabPaymentVoided,
+} from '../../labs';
 import { TENANT_PROVISIONED, type TenantProvisioned } from '../../provisioning';
 import { TENANT_CURRENCY_CHANGED, type TenantCurrencyChanged } from '../../tenancy';
 import { UsersService } from '../../users';
@@ -133,5 +139,38 @@ export class SalaryMirrorSubscriber {
   @OnDomainEventInTransaction(PAYROLL_PAYMENT_VOIDED)
   async onPaymentVoided(event: PayrollPaymentVoided): Promise<void> {
     await this.expenses.voidMirror('payroll', event.payload.paymentId, event.payload.reason);
+  }
+}
+
+/**
+ * Only a payment to a lab is an expense (feature 18, ADR-0085): a lab payment writes a read-only
+ * Lab fees row with the lab as payee, and voiding it voids the row, in the payment's transaction.
+ * Order costs, opening balances and adjustments never reach Expenses.
+ */
+@Injectable()
+export class LabPaymentMirrorSubscriber {
+  constructor(private readonly expenses: ExpensesService) {}
+
+  @OnDomainEventInTransaction(LAB_PAYMENT_RECORDED)
+  async onPaymentRecorded(event: LabPaymentRecorded): Promise<void> {
+    const { paymentId, labName, paidOn, amount, currency, method, reference, note } = event.payload;
+    await this.expenses.recordMirror({
+      source: 'lab',
+      sourceId: paymentId,
+      spentOn: paidOn,
+      amount,
+      currency,
+      method,
+      payee: labName,
+      reference,
+      description: note,
+      branchId: null,
+      sourceMonth: null,
+    });
+  }
+
+  @OnDomainEventInTransaction(LAB_PAYMENT_VOIDED)
+  async onPaymentVoided(event: LabPaymentVoided): Promise<void> {
+    await this.expenses.voidMirror('lab', event.payload.paymentId, event.payload.reason);
   }
 }

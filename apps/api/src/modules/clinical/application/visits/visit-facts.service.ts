@@ -151,6 +151,17 @@ export class VisitFactsService {
     return this.tenantDb.run(() => this.plans.statusesOf([...new Set(planIds)]));
   }
 
+  /**
+   * For `labs` (feature 18): the patient and status of each planned item among `planIds`, so an
+   * order names only its patient's plan. Unknown ids are absent. Not permission-gated: read under
+   * the order's own checks.
+   */
+  planOwners(
+    planIds: readonly string[],
+  ): Promise<Map<string, { patientId: string; status: PlanStatus }>> {
+    return this.tenantDb.run(() => this.plans.ownersOf([...new Set(planIds)]));
+  }
+
   /** For `scheduling` (A15): a live visit's patient, or null when the visit is not live. */
   liveVisit(visitId: string): Promise<{ patientId: string } | null> {
     return this.tenantDb.run(async () => {

@@ -104,6 +104,15 @@ function described(file: StoredFile) {
   };
 }
 
+/** A saved file as another module refers to it (feature 18). */
+export interface FileRef {
+  id: string;
+  patientId: string;
+  originalFilename: string;
+  kind: string;
+  archived: boolean;
+}
+
 /**
  * A patient's images and documents (feature 8; docs/modules/files.md, ADR-0038 to ADR-0040).
  *
@@ -360,6 +369,21 @@ export class FilesService {
    * Every saved file of a patient, archived ones included, the most recently taken first
    * (spec D8; at most `PATIENT_FILES_LIMIT`). An unknown patient has none.
    */
+  /**
+   * For `labs` (feature 18): the saved files among `ids` with their patient, name and kind, so an
+   * order attaches only its patient's files. Not permission-gated: read under the order's checks.
+   */
+  async refs(ids: readonly string[]): Promise<FileRef[]> {
+    const rows = await this.tenantDb.run(() => this.files.savedByIds([...new Set(ids)]));
+    return rows.map((row) => ({
+      id: row.id,
+      patientId: row.patientId,
+      originalFilename: row.originalFilename,
+      kind: row.kind,
+      archived: row.archivedAt !== null,
+    }));
+  }
+
   async list(patientId: string): Promise<PatientFiles> {
     this.context.requirePermission('file:read');
     return { items: await this.present(await this.files.listForPatient(patientId)) };

@@ -54,6 +54,7 @@ export const EXPENSE_EXPORT_LABELS: Record<ExportLanguage, ExpenseExportLabels> 
       fixed: 'Fixed expense',
       payroll: 'Payroll',
       compensation: 'Compensation',
+      lab: 'Labs',
     },
     methods: {
       cash: 'Cash',
@@ -104,6 +105,7 @@ export const EXPENSE_EXPORT_LABELS: Record<ExportLanguage, ExpenseExportLabels> 
       fixed: 'مصروف ثابت',
       payroll: 'الرواتب',
       compensation: 'التعويضات',
+      lab: 'المختبرات',
     },
     methods: {
       cash: 'نقدًا',
@@ -154,6 +156,7 @@ export const EXPENSE_EXPORT_LABELS: Record<ExportLanguage, ExpenseExportLabels> 
       fixed: 'Dépense fixe',
       payroll: 'Paie',
       compensation: 'Rémunération',
+      lab: 'Laboratoires',
     },
     methods: {
       cash: 'Espèces',

@@ -105,6 +105,19 @@ export class FilesRepository {
     return row && toStored(row);
   }
 
+  /** The saved files among `ids`, archived ones included, in no particular order. */
+  savedByIds(ids: readonly string[]): Promise<StoredFile[]> {
+    if (ids.length === 0) return Promise.resolve([]);
+    return this.db.run(async (tx) =>
+      (
+        await tx
+          .select()
+          .from(files)
+          .where(and(inArray(files.id, [...ids]), saved))
+      ).map(toStored),
+    );
+  }
+
   /** The saved files among `ids`, locked `FOR UPDATE` in id order. */
   lockSaved(ids: readonly string[]): Promise<StoredFile[]> {
     if (ids.length === 0) return Promise.resolve([]);

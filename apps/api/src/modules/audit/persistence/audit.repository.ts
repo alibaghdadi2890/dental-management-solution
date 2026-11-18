@@ -3,6 +3,7 @@ import {
   type ActivityArea,
   type AuditEntry,
   COMPENSATION_EVENTS,
+  LAB_MONEY_EVENTS,
   PAYROLL_EVENTS,
   type PlatformAuditEntry,
 } from '@dcm/contracts';
@@ -42,6 +43,8 @@ export interface AuditFilter {
   /** Without `payroll:read`, and always across clinics (ADR-0080): no employee, salary or
    * payroll rows, nor their raw domain events. */
   withoutPayroll?: boolean | undefined;
+  /** Without `lab:money_read`: prices, costs, charges, payments and adjustments of labs (ADR-0086). */
+  withoutLabMoney?: boolean | undefined;
   after?: AuditCursorPosition | undefined;
   limit: number;
 }
@@ -136,6 +139,11 @@ export class AuditRepository {
     if (filter.withoutPayroll) {
       conditions.push(
         sql`not (${auditLog.resourceType} in ('employee', 'employee_salary', 'payroll_line') or (${auditLog.resourceType} = 'event' and ${auditLog.action} = any(${sql.param([...PAYROLL_EVENTS])}::text[])))`,
+      );
+    }
+    if (filter.withoutLabMoney) {
+      conditions.push(
+        sql`not (${auditLog.resourceType} in ('lab_service', 'lab_payment', 'lab_adjustment') or ${auditLog.action} in ('lab.opening_balance', 'lab_order.cost') or (${auditLog.resourceType} = 'event' and ${auditLog.action} = any(${sql.param([...LAB_MONEY_EVENTS])}::text[])))`,
       );
     }
     if (filter.after) {

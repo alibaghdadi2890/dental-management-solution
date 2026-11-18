@@ -4,7 +4,7 @@ import { SYSTEM_ROLES, systemRole } from './system-roles';
 
 const sorted = (values: readonly string[]) => [...values].sort();
 
-/** The feature 13a default matrix (ADR-0055) with `visit:start` (ADR-0074), written out per role so any change is a visible
+/** The feature 13a default matrix (ADR-0055) with `visit:start` (ADR-0074) and the lab orders (ADR-0086), written out per role so any change is a visible
  * diff. */
 const MATRIX = {
   owner: PERMISSIONS.filter((permission) => permission !== 'platform:admin'),
@@ -28,6 +28,8 @@ const MATRIX = {
     'compensation:read',
     'appointment:read',
     'appointment:write',
+    'lab:read',
+    'lab:manage',
   ],
   assistant: [
     'tenant:read',
@@ -44,6 +46,8 @@ const MATRIX = {
     'appointment:read',
     'appointment:write',
     'appointment:write_all',
+    'lab:read',
+    'lab:manage',
   ],
   frontdesk: [
     'tenant:read',
@@ -62,6 +66,8 @@ const MATRIX = {
     'appointment:write',
     'appointment:write_all',
     'appointment:override',
+    'lab:read',
+    'lab:manage',
   ],
 } as const;
 

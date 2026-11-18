@@ -1,4 +1,10 @@
 import type {
+  Lab,
+  LabAccounts,
+  LabOrder,
+  LabOrderSummary,
+  LabPayment,
+  LabService,
   Agreement,
   AuditPage,
   Branch,
@@ -1401,6 +1407,112 @@ describe('tenant isolation through the public services', () => {
         adjustments: [],
       });
     });
+    it("labs (ADR-0081–0086): B's labs, orders and accounts are not found for A, and unchanged", async () => {
+      const dentist = (
+        await ownerB.post('/api/v1/users').send({
+          displayName: 'Bravo Dentist',
+          email: uniqueEmail('dentist'),
+          practitionerType: 'dentist',
+          roleKeys: ['dentist'],
+          branchIds: [b.branch.id],
+          temporaryPassword: TEMPORARY,
+        })
+      ).body as StaffUser;
+      const lab = (
+        await ownerB.post('/api/v1/labs').send({
+          name: 'Bravo Lab',
+          deliveryMethods: ['courier'],
+          turnaroundDays: 7,
+        })
+      ).body as Lab;
+      const service = (
+        await ownerB.post(`/api/v1/labs/${lab.id}/services`).send({ name: 'Crown', price: '50' })
+      ).body as LabService;
+      const order = (
+        await ownerB
+          .post('/api/v1/lab-orders')
+          .set('Idempotency-Key', newId())
+          .send({
+            patientId: b.patient.id,
+            dentistId: dentist.profileId,
+            labId: lab.id,
+            branchId: b.branch.id,
+            items: [{ serviceId: service.id, target: 'upper' }],
+          })
+      ).body as LabOrder;
+      const payment = (
+        await ownerB
+          .post(`/api/v1/labs/${lab.id}/payments`)
+          .set('Idempotency-Key', newId())
+          .send({ paidOn: '2026-01-02', amount: '10', method: 'cash' })
+      ).body as LabPayment;
+      expect([lab.id, service.id, order.id, payment.id].every(Boolean)).toBe(true);
+      const attempts = [
+        () => ownerA.patch(`/api/v1/labs/${lab.id}`).send({ name: 'Renamed' }),
+        () => ownerA.post(`/api/v1/labs/${lab.id}/services`).send({ name: 'Planted', price: '1' }),
+        () => ownerA.patch(`/api/v1/labs/${lab.id}/services/${service.id}`).send({ price: '1' }),
+        () =>
+          ownerA
+            .put(`/api/v1/labs/${lab.id}/opening-balance`)
+            .send({ amount: '1', asOf: '2026-01-01' }),
+        () =>
+          ownerA
+            .post(`/api/v1/labs/${lab.id}/payments`)
+            .set('Idempotency-Key', newId())
+            .send({ paidOn: '2026-01-02', amount: '1', method: 'cash' }),
+        () => ownerA.post(`/api/v1/labs/payments/${payment.id}/void`).send({ reason: 'Not ours' }),
+        () =>
+          ownerA
+            .post(`/api/v1/labs/${lab.id}/adjustments`)
+            .set('Idempotency-Key', newId())
+            .send({ onDate: '2026-01-02', kind: 'credit', amount: '1', reason: 'Not ours' }),
+        () => ownerA.get(`/api/v1/labs/${lab.id}/statement?from=2026-01-01&to=2026-12-31`),
+        () => ownerA.get(`/api/v1/lab-orders/${order.id}`),
+        () => ownerA.patch(`/api/v1/lab-orders/${order.id}`).send({ notes: 'Planted' }),
+        () =>
+          ownerA
+            .post(`/api/v1/lab-orders/${order.id}/send`)
+            .send({ sentOn: '2026-01-02', via: 'courier' }),
+        () =>
+          ownerA
+            .post('/api/v1/lab-orders/receive')
+            .send({ orderIds: [order.id], receivedOn: '2026-01-02' }),
+        () => ownerA.post(`/api/v1/lab-orders/${order.id}/hold`).send({ reason: 'Not ours' }),
+        () => ownerA.post(`/api/v1/lab-orders/${order.id}/cancel`).send({ reason: 'Not ours' }),
+        () => ownerA.post(`/api/v1/lab-orders/${order.id}/undo`).send({ step: 'sent' }),
+        () => ownerA.post(`/api/v1/lab-orders/${order.id}/link`).send({ appointmentId: null }),
+        () => ownerA.post(`/api/v1/lab-orders/${order.id}/attachments`).send({ fileIds: [] }),
+        () =>
+          ownerA
+            .post('/api/v1/lab-orders')
+            .set('Idempotency-Key', newId())
+            .send({
+              patientId: b.patient.id,
+              dentistId: dentist.profileId,
+              labId: lab.id,
+              branchId: b.branch.id,
+              items: [{ description: 'Planted', target: 'upper' }],
+            }),
+      ];
+      for (const [index, attempt] of attempts.entries()) {
+        const response = await attempt();
+        expect(response.status, `attempt ${index}: ${JSON.stringify(response.body)}`).toBe(404);
+      }
+      const labsA = (await ownerA.get('/api/v1/labs?includeInactive=true')).body as Lab[];
+      expect(labsA.map((row) => row.id)).not.toContain(lab.id);
+      const openA = (await ownerA.get('/api/v1/lab-orders/open')).body as LabOrderSummary[];
+      expect(openA.map((row) => row.id)).not.toContain(order.id);
+      const accountsA = (await ownerA.get('/api/v1/labs/accounts')).body as LabAccounts;
+      expect(accountsA.labs.map((row) => row.labId)).not.toContain(lab.id);
+
+      const orderB = (await ownerB.get(`/api/v1/lab-orders/${order.id}`)).body as LabOrder;
+      expect(orderB).toMatchObject({ status: 'to_send', notes: null, tripCount: 0 });
+      const accountsB = (await ownerB.get('/api/v1/labs/accounts')).body as LabAccounts;
+      expect(accountsB.labs.find((row) => row.labId === lab.id)).toMatchObject({
+        paid: '10.00',
+        outstanding: '-10.00',
+      });
+    });
   });
 
   describe('X-Tenant-Id', () => {
@@ -1476,6 +1588,15 @@ describe('tenant isolation through the public services', () => {
       'payroll_lines',
       'payroll_adjustments',
       'payroll_payments',
+      'labs',
+      'lab_services',
+      'lab_order_counters',
+      'lab_orders',
+      'lab_order_items',
+      'lab_order_trips',
+      'lab_order_files',
+      'lab_payments',
+      'lab_adjustments',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

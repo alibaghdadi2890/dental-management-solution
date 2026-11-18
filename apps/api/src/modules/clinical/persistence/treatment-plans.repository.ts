@@ -182,6 +182,24 @@ export class TreatmentPlansRepository {
     return new Map(rows.map((row) => [row.id, row.status]));
   }
 
+  /** The patient and status of each plan among `ids`; unknown ids are absent. */
+  async ownersOf(
+    ids: readonly string[],
+  ): Promise<Map<string, { patientId: string; status: PlanStatus }>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.db.run((tx) =>
+      tx
+        .select({
+          id: treatmentPlans.id,
+          patientId: treatmentPlans.patientId,
+          status: treatmentPlans.status,
+        })
+        .from(treatmentPlans)
+        .where(inArray(treatmentPlans.id, [...ids])),
+    );
+    return new Map(rows.map((row) => [row.id, { patientId: row.patientId, status: row.status }]));
+  }
+
   async update(id: string, patch: TreatmentPlanPatch): Promise<StoredTreatmentPlan> {
     const [row] = await this.db.run((tx) =>
       tx.update(treatmentPlans).set(patch).where(eq(treatmentPlans.id, id)).returning(),
