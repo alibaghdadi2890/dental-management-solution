@@ -12,6 +12,7 @@
     "expenses": "Expenses",
     "payroll": "Payroll",
     "lab": "Lab",
+    "inventory": "Inventory",
     "dashboard": "Dashboard",
     "activity": "Activity",
     "clinic": "Clinic"
@@ -148,6 +149,26 @@
     "lab_money_manage": {
       "label": "Manage lab money",
       "description": "Register and edit labs, their services and prices; edit order costs; record opening balances, adjustments, payments and voids."
+    },
+    "inventory_read": {
+      "label": "See stock",
+      "description": "Items, quantities, labels, the Today card, the suppliers directory, the reorder list and reports without costs."
+    },
+    "inventory_write": {
+      "label": "Take out and receive",
+      "description": "Take stock out and undo it the same day, report a wrong count, receive deliveries without prices and attach the invoice."
+    },
+    "inventory_manage": {
+      "label": "Manage inventory",
+      "description": "Items and categories, reorder levels, suppliers, adjustments and write-offs, counts, reversals, mark ordered, void a receipt."
+    },
+    "inventory_money_read": {
+      "label": "See inventory money",
+      "description": "Costs, stock value, receipt totals and attached invoices, suppliers’ accounts and statements, costs in reports."
+    },
+    "inventory_money_manage": {
+      "label": "Manage inventory money",
+      "description": "Price receipts, one-off purchases, opening balances, payments, adjustments and voids on suppliers’ accounts."
     },
     "appointment_read": {
       "label": "See the calendar",

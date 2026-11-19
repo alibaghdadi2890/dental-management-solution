@@ -6,7 +6,7 @@ import { SearchIcon } from '@/components/ui/search-icon';
 import { PatientsTray } from '@/features/alerts/patients-tray';
 import { CheckoutPill } from '@/features/clinical/checkout-pill';
 import { usePatientNavigation } from '@/features/patients/patient-navigation';
-import { patientActions } from './nav-items';
+import { patientActions, searchScope } from './nav-items';
 
 /** The shortcut hint reads "⌘K" on Apple devices, "Ctrl K" everywhere else. */
 const APPLE = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -16,6 +16,7 @@ export function AppHeader({
   onFindPatient,
 }: {
   session: Session | undefined;
+  /** Opens the search (the header button and Ctrl/⌘+K). */
   onFindPatient: () => void;
 }) {
   const { t } = useTranslation(['shell', 'common']);
@@ -28,6 +29,14 @@ export function AppHeader({
       ? t('platformCrumb')
       : session?.tenant?.name;
   const actions = patientActions(session);
+  const scope = searchScope(session);
+  const canSearch = scope.patients || scope.stock;
+  // The button's words follow what the search finds (S2).
+  const searchLabel = !scope.stock
+    ? t('header.findPatient')
+    : scope.patients
+      ? t('header.search')
+      : t('header.searchStock');
 
   return (
     <header className="flex h-14 flex-none items-center gap-3.5 border-b border-border bg-surface px-[22px] print:hidden">
@@ -47,9 +56,9 @@ export function AppHeader({
       </nav>
       {session?.tenant && <PatientsTray />}
       {session?.tenant && <CheckoutPill />}
-      {(actions.find || actions.create) && (
+      {(canSearch || actions.create) && (
         <div className="ms-auto flex min-w-0 items-center gap-2">
-          {actions.find && (
+          {canSearch && (
             <button
               type="button"
               aria-haspopup="dialog"
@@ -59,7 +68,7 @@ export function AppHeader({
             >
               <SearchIcon className="text-ink-muted" />
               <span className="min-w-0 flex-1 truncate text-[12.5px] leading-none text-ink-muted">
-                {t('header.findPatient')}
+                {searchLabel}
               </span>
               <kbd
                 aria-hidden

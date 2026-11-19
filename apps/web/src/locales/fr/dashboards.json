@@ -109,7 +109,8 @@
     "dentistsOps": "Dentistes",
     "patients": "Patients",
     "labs": "Laboratoires",
-    "followUps": "Suivis"
+    "followUps": "Suivis",
+    "stock": "Stock"
   },
   "info": {
     "production": "Ce que les visites ont facturé sur la période après remises, à la date d’écriture : les facturations avec leurs corrections et annulations. Une visite annulée ne compte pas. Les soldes d’ouverture et les ajustements de solde ne sont pas de la production.",
@@ -145,7 +146,8 @@
     "dentistsOps": "Pour chaque dentiste : visites, heures réservées, durée moyenne de visite, taux d’absence, acceptation des plans et attente médiane. Cliquez une colonne pour trier.",
     "patients": "Nouveaux patients et patients revenus par mois. Sont revenus : parmi les patients vus pour la première fois il y a trois à six mois, la part ayant eu une visite ensuite.",
     "labs": "D’après les rapports de laboratoire : envois reçus à temps, délai moyen face à la promesse du laboratoire, et refaçons.",
-    "followUps": "Les suivis recommandés sur la période, et où ils en sont."
+    "followUps": "Les suivis recommandés sur la période, et où ils en sont.",
+    "stock": "La valeur du stock maintenant, chaque lot au prix payé, et ce qui est sorti sur la période au coût des lots, moins les remises en stock. Les barres sont les articles les plus consommés en coût. Égal aux rapports du stock."
   },
   "summary": {
     "money": "Production {{production}}, encaissé {{collected}} sur la période",
@@ -189,7 +191,8 @@
     "dentists": "Rémunération des dentistes non payée",
     "fixed_one": "{{count}} dépense fixe en attente",
     "fixed_other": "{{count}} dépenses fixes en attente",
-    "credit": "Avoirs et avances des patients"
+    "credit": "Avoirs et avances des patients",
+    "suppliers": "Fournisseurs"
   },
   "stages": {
     "recorded": "Proposé",
@@ -228,7 +231,10 @@
     "followUpsOverdue": "Suivis en retard",
     "labLate": "Travaux de laboratoire en retard",
     "labArrived": "Travaux arrivés, sans rendez-vous",
-    "incomplete": "Inscriptions incomplètes"
+    "incomplete": "Inscriptions incomplètes",
+    "stockOut": "En rupture",
+    "stockLow": "Stock bas",
+    "stockExpired": "Stock périmé"
   },
   "table": {
     "month": "Mois",
@@ -252,6 +258,13 @@
     "booked": "Prévu",
     "taken": "Réel",
     "lab": "Laboratoire",
-    "state": "État"
+    "state": "État",
+    "item": "Article"
+  },
+  "stock": {
+    "value": "Valeur actuelle",
+    "consumption": "Consommation",
+    "noDentist": "Pas par dentiste",
+    "toPrice": "{{count}} à chiffrer"
   }
 }

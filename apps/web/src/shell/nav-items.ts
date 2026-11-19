@@ -14,10 +14,15 @@ interface NavEntry<TKey extends string, TPath extends string> {
  * (`finance:read`, ADR-0055). Compensation is how the clinic pays its dentists
  * (`compensation:manage`, feature 13b); My statement is a dentist's own, shown by the sidebar only
  * once they have a month to read. Expenses and Payroll are the clinic's spending (feature 17). Lab
- * is the lab orders, labs, accounts and reports (feature 18, `lab:read`). Dashboard is the
+ * is the lab orders, labs, accounts and reports (feature 18, `lab:read`). Inventory is stock,
+ * receipts, counts, suppliers and reports (feature 20a, `inventory:read`). Dashboard is the
  * financial and operational dashboards (feature 19), with either capability. */
 export const MAIN_NAV = [
-  { key: 'today', to: '/today', permission: ['visit:read', 'expense:read', 'lab:read'] },
+  {
+    key: 'today',
+    to: '/today',
+    permission: ['visit:read', 'expense:read', 'lab:read', 'inventory:read'],
+  },
   {
     key: 'dashboard',
     to: '/dashboard',
@@ -25,6 +30,7 @@ export const MAIN_NAV = [
   },
   { key: 'schedule', to: '/schedule', permission: 'appointment:read' },
   { key: 'lab', to: '/lab', permission: 'lab:read' },
+  { key: 'inventory', to: '/inventory', permission: 'inventory:read' },
   { key: 'patients', to: '/patients', permission: 'patient:read' },
   { key: 'visits', to: '/visits', permission: 'visit:read' },
   { key: 'payments', to: '/payments', permission: 'finance:read' },
@@ -79,8 +85,27 @@ export function visibleNav(session: Session): VisibleNav {
   };
 }
 
-/** The header's "Find patient" (and its Ctrl/⌘+K shortcut) and "New patient": only inside a
- * clinic — a platform admin not acting in one has no patients — and only with the permission. */
+/** What the header's search finds (search S1): patients and contacts with `patient:read`, the
+ * stock of the user's branch (or the first) with `inventory:read`. Only inside a clinic. */
+export interface SearchScope {
+  patients: boolean;
+  stock: boolean;
+  /** The branch whose stock is searched; null without one. */
+  branchId: string | null;
+}
+
+export function searchScope(session: Session | undefined): SearchScope {
+  if (!session?.tenant) return { patients: false, stock: false, branchId: null };
+  const branchId = session.branch?.id ?? session.branches[0]?.id ?? null;
+  return {
+    patients: session.permissions.includes('patient:read'),
+    stock: branchId !== null && session.permissions.includes('inventory:read'),
+    branchId,
+  };
+}
+
+/** The header's "New patient": only inside a clinic — a platform admin not acting in one has no
+ * patients — and only with the permission. `find` is the patients part of the search. */
 export function patientActions(session: Session | undefined): { find: boolean; create: boolean } {
   if (!session?.tenant) return { find: false, create: false };
   return {

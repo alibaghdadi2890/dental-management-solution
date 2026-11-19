@@ -27,6 +27,7 @@ import { Route as AppAdminActivityRouteImport } from './routes/_app/admin/activi
 import { Route as AppAdminRolesRouteImport } from './routes/_app/admin/roles'
 import { Route as AppCompensationIndexRouteImport } from './routes/_app/compensation/index'
 import { Route as AppCompensationProfileIdRouteImport } from './routes/_app/compensation/$profileId'
+import { Route as AppInventoryIndexRouteImport } from './routes/_app/inventory/index'
 import { Route as AppLabsLabIdRouteImport } from './routes/_app/labs.$labId'
 import { Route as AppMyStatementRouteImport } from './routes/_app/my/statement'
 import { Route as AppPatientsIndexRouteImport } from './routes/_app/patients/index'
@@ -42,6 +43,10 @@ import { Route as PrintReceiptPaymentIdRouteImport } from './routes/print/receip
 import { Route as PrintStatementPatientIdRouteImport } from './routes/print/statement.$patientId'
 import { Route as AppAdminTenantsIndexRouteImport } from './routes/_app/admin/tenants/index'
 import { Route as AppAdminTenantsTenantIdRouteImport } from './routes/_app/admin/tenants/$tenantId'
+import { Route as AppInventoryCountsCountIdRouteImport } from './routes/_app/inventory/counts.$countId'
+import { Route as AppInventoryReceiptsReceiptIdRouteImport } from './routes/_app/inventory/receipts.$receiptId'
+import { Route as AppInventoryReceiptsNewRouteImport } from './routes/_app/inventory/receipts.new'
+import { Route as AppInventorySuppliersSupplierIdRouteImport } from './routes/_app/inventory/suppliers.$supplierId'
 
 const AppRoute = AppRouteImport.update({
   id: '/_app',
@@ -133,6 +138,11 @@ const AppCompensationProfileIdRoute =
     path: '/compensation/$profileId',
     getParentRoute: () => AppRoute,
   } as any)
+const AppInventoryIndexRoute = AppInventoryIndexRouteImport.update({
+  id: '/inventory/',
+  path: '/inventory/',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLabsLabIdRoute = AppLabsLabIdRouteImport.update({
   id: '/labs/$labId',
   path: '/labs/$labId',
@@ -209,6 +219,29 @@ const AppAdminTenantsTenantIdRoute = AppAdminTenantsTenantIdRouteImport.update({
   path: '/admin/tenants/$tenantId',
   getParentRoute: () => AppRoute,
 } as any)
+const AppInventoryCountsCountIdRoute =
+  AppInventoryCountsCountIdRouteImport.update({
+    id: '/inventory/counts/$countId',
+    path: '/inventory/counts/$countId',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppInventoryReceiptsReceiptIdRoute =
+  AppInventoryReceiptsReceiptIdRouteImport.update({
+    id: '/inventory/receipts/$receiptId',
+    path: '/inventory/receipts/$receiptId',
+    getParentRoute: () => AppRoute,
+  } as any)
+const AppInventoryReceiptsNewRoute = AppInventoryReceiptsNewRouteImport.update({
+  id: '/inventory/receipts/new',
+  path: '/inventory/receipts/new',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInventorySuppliersSupplierIdRoute =
+  AppInventorySuppliersSupplierIdRouteImport.update({
+    id: '/inventory/suppliers/$supplierId',
+    path: '/inventory/suppliers/$supplierId',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -238,10 +271,15 @@ export interface FileRoutesByFullPath {
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/admin/': typeof AppAdminIndexRoute
   '/compensation/': typeof AppCompensationIndexRoute
+  '/inventory/': typeof AppInventoryIndexRoute
   '/patients/': typeof AppPatientsIndexRoute
   '/payments/': typeof AppPaymentsIndexRoute
   '/visits/': typeof AppVisitsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
+  '/inventory/counts/$countId': typeof AppInventoryCountsCountIdRoute
+  '/inventory/receipts/$receiptId': typeof AppInventoryReceiptsReceiptIdRoute
+  '/inventory/receipts/new': typeof AppInventoryReceiptsNewRoute
+  '/inventory/suppliers/$supplierId': typeof AppInventorySuppliersSupplierIdRoute
   '/admin/tenants/': typeof AppAdminTenantsIndexRoute
 }
 export interface FileRoutesByTo {
@@ -272,10 +310,15 @@ export interface FileRoutesByTo {
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/admin': typeof AppAdminIndexRoute
   '/compensation': typeof AppCompensationIndexRoute
+  '/inventory': typeof AppInventoryIndexRoute
   '/patients': typeof AppPatientsIndexRoute
   '/payments': typeof AppPaymentsIndexRoute
   '/visits': typeof AppVisitsIndexRoute
   '/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
+  '/inventory/counts/$countId': typeof AppInventoryCountsCountIdRoute
+  '/inventory/receipts/$receiptId': typeof AppInventoryReceiptsReceiptIdRoute
+  '/inventory/receipts/new': typeof AppInventoryReceiptsNewRoute
+  '/inventory/suppliers/$supplierId': typeof AppInventorySuppliersSupplierIdRoute
   '/admin/tenants': typeof AppAdminTenantsIndexRoute
 }
 export interface FileRoutesById {
@@ -308,10 +351,15 @@ export interface FileRoutesById {
   '/print/statement/$patientId': typeof PrintStatementPatientIdRoute
   '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/compensation/': typeof AppCompensationIndexRoute
+  '/_app/inventory/': typeof AppInventoryIndexRoute
   '/_app/patients/': typeof AppPatientsIndexRoute
   '/_app/payments/': typeof AppPaymentsIndexRoute
   '/_app/visits/': typeof AppVisitsIndexRoute
   '/_app/admin/tenants/$tenantId': typeof AppAdminTenantsTenantIdRoute
+  '/_app/inventory/counts/$countId': typeof AppInventoryCountsCountIdRoute
+  '/_app/inventory/receipts/$receiptId': typeof AppInventoryReceiptsReceiptIdRoute
+  '/_app/inventory/receipts/new': typeof AppInventoryReceiptsNewRoute
+  '/_app/inventory/suppliers/$supplierId': typeof AppInventorySuppliersSupplierIdRoute
   '/_app/admin/tenants/': typeof AppAdminTenantsIndexRoute
 }
 export interface FileRouteTypes {
@@ -344,10 +392,15 @@ export interface FileRouteTypes {
     | '/print/statement/$patientId'
     | '/admin/'
     | '/compensation/'
+    | '/inventory/'
     | '/patients/'
     | '/payments/'
     | '/visits/'
     | '/admin/tenants/$tenantId'
+    | '/inventory/counts/$countId'
+    | '/inventory/receipts/$receiptId'
+    | '/inventory/receipts/new'
+    | '/inventory/suppliers/$supplierId'
     | '/admin/tenants/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -378,10 +431,15 @@ export interface FileRouteTypes {
     | '/print/statement/$patientId'
     | '/admin'
     | '/compensation'
+    | '/inventory'
     | '/patients'
     | '/payments'
     | '/visits'
     | '/admin/tenants/$tenantId'
+    | '/inventory/counts/$countId'
+    | '/inventory/receipts/$receiptId'
+    | '/inventory/receipts/new'
+    | '/inventory/suppliers/$supplierId'
     | '/admin/tenants'
   id:
     | '__root__'
@@ -413,10 +471,15 @@ export interface FileRouteTypes {
     | '/print/statement/$patientId'
     | '/_app/admin/'
     | '/_app/compensation/'
+    | '/_app/inventory/'
     | '/_app/patients/'
     | '/_app/payments/'
     | '/_app/visits/'
     | '/_app/admin/tenants/$tenantId'
+    | '/_app/inventory/counts/$countId'
+    | '/_app/inventory/receipts/$receiptId'
+    | '/_app/inventory/receipts/new'
+    | '/_app/inventory/suppliers/$supplierId'
     | '/_app/admin/tenants/'
   fileRoutesById: FileRoutesById
 }
@@ -554,6 +617,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCompensationProfileIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/inventory/': {
+      id: '/_app/inventory/'
+      path: '/inventory'
+      fullPath: '/inventory/'
+      preLoaderRoute: typeof AppInventoryIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/labs/$labId': {
       id: '/_app/labs/$labId'
       path: '/labs/$labId'
@@ -659,6 +729,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminTenantsTenantIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/inventory/counts/$countId': {
+      id: '/_app/inventory/counts/$countId'
+      path: '/inventory/counts/$countId'
+      fullPath: '/inventory/counts/$countId'
+      preLoaderRoute: typeof AppInventoryCountsCountIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/inventory/receipts/$receiptId': {
+      id: '/_app/inventory/receipts/$receiptId'
+      path: '/inventory/receipts/$receiptId'
+      fullPath: '/inventory/receipts/$receiptId'
+      preLoaderRoute: typeof AppInventoryReceiptsReceiptIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/inventory/receipts/new': {
+      id: '/_app/inventory/receipts/new'
+      path: '/inventory/receipts/new'
+      fullPath: '/inventory/receipts/new'
+      preLoaderRoute: typeof AppInventoryReceiptsNewRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/inventory/suppliers/$supplierId': {
+      id: '/_app/inventory/suppliers/$supplierId'
+      path: '/inventory/suppliers/$supplierId'
+      fullPath: '/inventory/suppliers/$supplierId'
+      preLoaderRoute: typeof AppInventorySuppliersSupplierIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -682,10 +780,15 @@ interface AppRouteChildren {
   AppVisitsVisitIdRoute: typeof AppVisitsVisitIdRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
   AppCompensationIndexRoute: typeof AppCompensationIndexRoute
+  AppInventoryIndexRoute: typeof AppInventoryIndexRoute
   AppPatientsIndexRoute: typeof AppPatientsIndexRoute
   AppPaymentsIndexRoute: typeof AppPaymentsIndexRoute
   AppVisitsIndexRoute: typeof AppVisitsIndexRoute
   AppAdminTenantsTenantIdRoute: typeof AppAdminTenantsTenantIdRoute
+  AppInventoryCountsCountIdRoute: typeof AppInventoryCountsCountIdRoute
+  AppInventoryReceiptsReceiptIdRoute: typeof AppInventoryReceiptsReceiptIdRoute
+  AppInventoryReceiptsNewRoute: typeof AppInventoryReceiptsNewRoute
+  AppInventorySuppliersSupplierIdRoute: typeof AppInventorySuppliersSupplierIdRoute
   AppAdminTenantsIndexRoute: typeof AppAdminTenantsIndexRoute
 }
 
@@ -709,10 +812,15 @@ const AppRouteChildren: AppRouteChildren = {
   AppVisitsVisitIdRoute: AppVisitsVisitIdRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
   AppCompensationIndexRoute: AppCompensationIndexRoute,
+  AppInventoryIndexRoute: AppInventoryIndexRoute,
   AppPatientsIndexRoute: AppPatientsIndexRoute,
   AppPaymentsIndexRoute: AppPaymentsIndexRoute,
   AppVisitsIndexRoute: AppVisitsIndexRoute,
   AppAdminTenantsTenantIdRoute: AppAdminTenantsTenantIdRoute,
+  AppInventoryCountsCountIdRoute: AppInventoryCountsCountIdRoute,
+  AppInventoryReceiptsReceiptIdRoute: AppInventoryReceiptsReceiptIdRoute,
+  AppInventoryReceiptsNewRoute: AppInventoryReceiptsNewRoute,
+  AppInventorySuppliersSupplierIdRoute: AppInventorySuppliersSupplierIdRoute,
   AppAdminTenantsIndexRoute: AppAdminTenantsIndexRoute,
 }
 

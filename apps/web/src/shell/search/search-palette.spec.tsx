@@ -1,9 +1,13 @@
 import type { Patient } from '@dcm/contracts';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { patientKeys } from './patients-api';
+import { patientKeys } from '@/features/patients/patients-api';
 import { renderShell } from '@/shell/shell.test-utils';
-import { LINA, MONA_ID, mockMona } from './contact-panel/contact-panel.test-utils';
+import {
+  LINA,
+  MONA_ID,
+  mockMona,
+} from '@/features/patients/contact-panel/contact-panel.test-utils';
 import {
   ALL_PERMISSIONS,
   id,
@@ -14,7 +18,7 @@ import {
   problem,
   sent,
   sessionWith,
-} from './patients.test-utils';
+} from '@/features/patients/patients.test-utils';
 
 const page = (patients: Patient[]) =>
   json({ items: patients.map(listItem), total: patients.length, page: 1, size: 10 });
@@ -43,11 +47,15 @@ async function openPalette(url = '/visits', permissions = ALL_PERMISSIONS) {
   return { ...shell, dialog, input: within(dialog).getByRole('combobox') };
 }
 
+/** The id of a row's first cell: what `aria-activedescendant` names on a row's open cell. */
+const firstCell = (row: HTMLElement | undefined) =>
+  row ? within(row).getAllByRole('gridcell')[0]?.id : undefined;
+
 const type = (input: HTMLElement, value: string) => {
   fireEvent.change(input, { target: { value } });
 };
 
-describe('CommandPalette', () => {
+describe('SearchPalette', () => {
   beforeEach(() => {
     // jsdom has no layout: keeping the active row in view is a no-op here.
     Element.prototype.scrollIntoView = vi.fn();
@@ -82,20 +90,19 @@ describe('CommandPalette', () => {
     const { dialog } = await openPalette();
     expect(await within(dialog).findByText('Recent patients')).toBeTruthy();
     expect(within(dialog).getByRole('status').textContent).toBe('Recent patients');
-    const options = within(dialog).getAllByRole('option');
+    const options = within(dialog).getAllByRole('row');
     expect(options).toHaveLength(5);
     const [first] = options;
     expect(within(first as HTMLElement).getByText('Recent 1')).toBeTruthy();
     expect(within(first as HTMLElement).getByText('P-000001')).toBeTruthy();
     expect(within(first as HTMLElement).getByText('03 123 456')).toBeTruthy();
     expect(within(first as HTMLElement).getByText(/^Age \d+$/)).toBeTruthy();
-    expect(within(first as HTMLElement).getByText('Never seen')).toBeTruthy();
   });
 
   it('reads "Age —" when the date of birth is unknown', async () => {
     mockPatients({ [RECENT]: page([patient(1, 'Rana Haddad', { dateOfBirth: null })]) });
     const { dialog } = await openPalette();
-    const option = await within(dialog).findByRole('option');
+    const option = await within(dialog).findByRole('row');
     expect(within(option).getByText('Age —')).toBeTruthy();
   });
 
@@ -106,7 +113,7 @@ describe('CommandPalette', () => {
     type(input, '03');
     expect(await within(dialog).findByText('10 results')).toBeTruthy();
     expect(within(dialog).getByRole('status').textContent).toBe('10 results for “03”');
-    expect(within(dialog).getAllByRole('option')).toHaveLength(8);
+    expect(within(dialog).getAllByRole('row')).toHaveLength(8);
     const searches = fetchMock.mock.calls
       .map(([url]) => url)
       .filter((url) => url.startsWith('/api/v1/patients?q='));
@@ -133,7 +140,7 @@ describe('CommandPalette', () => {
     });
     const { dialog, input } = await openPalette();
     type(input, '987');
-    const [viaGuardian, own] = await within(dialog).findAllByRole('option');
+    const [viaGuardian, own] = await within(dialog).findAllByRole('row');
     expect(within(viaGuardian as HTMLElement).getByText('via Maria Haddad · Parent')).toBeTruthy();
     expect(own?.textContent).not.toContain('via');
   });
@@ -141,12 +148,12 @@ describe('CommandPalette', () => {
   it('moves the active row with the arrow keys and opens it with Enter', async () => {
     mockPatients({ [RECENT]: page(many(3, 'Recent')) });
     const { dialog, input, location } = await openPalette();
-    const options = await within(dialog).findAllByRole('option');
-    expect(input.getAttribute('aria-activedescendant')).toBe(options[0]?.id);
+    const options = await within(dialog).findAllByRole('row');
+    expect(input.getAttribute('aria-activedescendant')).toBe(firstCell(options[0]));
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'ArrowUp' });
-    expect(input.getAttribute('aria-activedescendant')).toBe(options[1]?.id);
+    expect(input.getAttribute('aria-activedescendant')).toBe(firstCell(options[1]));
     expect(options[1]?.getAttribute('aria-selected')).toBe('true');
     fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() => {
@@ -223,7 +230,7 @@ describe('CommandPalette', () => {
     );
     const { dialog } = await openPalette();
     expect(within(dialog).getByRole('status').textContent).toBe('Searching patients');
-    expect(within(dialog).queryByRole('option')).toBeNull();
+    expect(within(dialog).queryByRole('row')).toBeNull();
   });
 
   it('says so when the search fails, and retries', async () => {
@@ -235,7 +242,7 @@ describe('CommandPalette', () => {
     expect(await within(dialog).findByText("Couldn't search patients.")).toBeTruthy();
     fail = false;
     fireEvent.click(within(dialog).getByRole('button', { name: 'Try again' }));
-    expect(await within(dialog).findAllByRole('option')).toHaveLength(2);
+    expect(await within(dialog).findAllByRole('row')).toHaveLength(2);
   });
 
   it('starts empty again after closing', async () => {
@@ -258,7 +265,7 @@ describe('CommandPalette', () => {
       [search('Sami')]: page([patient(7, 'Sami Aoun')]),
     });
     const { dialog, input, location } = await openPalette();
-    await within(dialog).findAllByRole('option');
+    await within(dialog).findAllByRole('row');
     type(input, 'Sami');
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(location().pathname).toBe('/visits');
@@ -322,7 +329,7 @@ describe('CommandPalette', () => {
   it('opens the active row while the list refreshes in the background', async () => {
     const base = mockPatients({ [RECENT]: page(many(2, 'Recent')) });
     const { dialog, input, location, client } = await openPalette();
-    await within(dialog).findAllByRole('option');
+    await within(dialog).findAllByRole('row');
     vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
       url.includes('sort=recent') ? new Promise<Response>(() => undefined) : base(url, init),
     );
@@ -339,17 +346,17 @@ describe('CommandPalette', () => {
       [RECENT]: () => (fail ? problem(500, 'internal') : page(many(2, 'Recent'))),
     });
     const { dialog, client } = await openPalette();
-    await within(dialog).findAllByRole('option');
+    await within(dialog).findAllByRole('row');
     fail = true;
     await client.refetchQueries({ queryKey: patientKeys.all(null) });
-    expect(within(dialog).getAllByRole('option')).toHaveLength(2);
+    expect(within(dialog).getAllByRole('row')).toHaveLength(2);
     expect(within(dialog).queryByText("Couldn't search patients.")).toBeNull();
   });
 
   it('ignores Enter while an input method is composing', async () => {
     mockPatients({ [RECENT]: page(many(2, 'Recent')) });
     const { dialog, input, location } = await openPalette();
-    await within(dialog).findAllByRole('option');
+    await within(dialog).findAllByRole('row');
     fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
     fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
     expect(screen.getByRole('dialog', { name: 'Find patient' })).toBeTruthy();
@@ -397,12 +404,12 @@ describe('CommandPalette', () => {
   });
 });
 
-describe('CommandPalette — contacts and the contact panel (families C)', () => {
+describe('SearchPalette — contacts and the contact panel (families C)', () => {
   it('offers no "Create" while a contact matches, only the contact', async () => {
     mockMona([]);
     const { dialog, input } = await openPalette();
     type(input, 'mona');
-    expect(await within(dialog).findByRole('option', { name: /Mona Haddad/ })).toBeTruthy();
+    expect(await within(dialog).findByRole('row', { name: /Mona Haddad/ })).toBeTruthy();
     expect(within(dialog).queryByRole('button', { name: 'Create "mona"' })).toBeNull();
     expect(within(dialog).queryByText('No patient matches "mona"')).toBeNull();
   });
@@ -412,8 +419,8 @@ describe('CommandPalette — contacts and the contact panel (families C)', () =>
     const fetchMock = mockMona([LINA]);
     const { dialog, input } = await openPalette();
     type(input, 'mona');
-    const contacts = await within(dialog).findByRole('group', { name: 'Contacts' });
-    const option = within(contacts).getByRole('option', { name: /Mona Haddad/ });
+    const contacts = await within(dialog).findByRole('rowgroup', { name: 'Contacts' });
+    const option = within(contacts).getByRole('row', { name: /Mona Haddad/ });
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     expect(option.getAttribute('aria-selected')).toBe('true');
     fireEvent.keyDown(input, { key: 'Enter' });

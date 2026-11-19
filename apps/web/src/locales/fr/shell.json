@@ -26,6 +26,7 @@
     "dashboard": "Tableau de bord",
     "schedule": "Agenda",
     "lab": "Laboratoire",
+    "inventory": "Stock",
     "activity": "Activité",
     "collapse": "Réduire le menu",
     "expand": "Développer le menu",
@@ -42,7 +43,9 @@
     "findPatient": "Rechercher un patient",
     "newPatient": "Nouveau patient",
     "shortcutApple": "⌘K",
-    "shortcutOther": "Ctrl K"
+    "shortcutOther": "Ctrl K",
+    "search": "Rechercher",
+    "searchStock": "Rechercher en stock"
   },
   "user": {
     "fallbackRole": "Personnel",
@@ -63,5 +66,29 @@
   },
   "checkoutPill": {
     "label": "Encaissement · {{n, number}}"
+  },
+  "search": {
+    "all": {
+      "title": "Rechercher",
+      "label": "Rechercher des patients et des articles en stock",
+      "placeholder": "Patient, téléphone, n° ou article"
+    },
+    "stockOnly": {
+      "title": "Rechercher en stock",
+      "label": "Rechercher des articles par nom ou code",
+      "placeholder": "Nom ou code de l’article"
+    },
+    "stock": "Stock",
+    "stockIn": "Stock · {{branch}}",
+    "takeOut": "Sortir",
+    "noMatch": "Aucun résultat pour « {{query}} »",
+    "stockIdle": "Tapez le nom ou le code d’un article.",
+    "next": "Prochain {{when}}",
+    "owes": "Doit",
+    "credit": "En crédit",
+    "owesAmount": "Doit {{amount}}",
+    "creditAmount": "Crédit {{amount}}",
+    "schedule": "Planifier",
+    "recordPayment": "Encaisser"
   }
 }

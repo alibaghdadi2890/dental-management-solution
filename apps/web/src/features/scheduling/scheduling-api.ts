@@ -15,6 +15,7 @@ import {
   type SchedulingSettings,
   slotDaysSchema,
   todayBoardSchema,
+  upcomingAppointmentsSchema,
 } from '@dcm/contracts';
 import { type QueryClient, queryOptions } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -118,6 +119,23 @@ export function worklistQuery(branchId: string, enabled = true) {
     queryFn: () => apiFetch(`${base}/follow-ups?branchId=${branchId}`, followUpsSchema),
     refetchInterval: SCHEDULE_REFETCH_MS,
     enabled,
+  });
+}
+
+/** `GET /scheduling/patients/upcoming?patientIds=` (search S9): each one's next appointment. */
+export function upcomingQuery(patientIds: readonly string[]) {
+  return queryOptions({
+    queryKey: [
+      ...schedulingKeys.all(actingTenantId()),
+      'upcoming',
+      [...patientIds].sort(),
+    ] as const,
+    queryFn: () =>
+      apiFetch(
+        `${base}/patients/upcoming?patientIds=${patientIds.join(',')}`,
+        upcomingAppointmentsSchema,
+      ),
+    enabled: patientIds.length > 0,
   });
 }
 

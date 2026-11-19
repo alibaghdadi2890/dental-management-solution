@@ -36,7 +36,8 @@
     "fixed": "Fixe",
     "payroll": "Paie",
     "compensation": "Rémunération",
-    "lab": "Laboratoires"
+    "lab": "Laboratoires",
+    "supplier": "Fournisseurs"
   },
   "filters": {
     "label": "Filtres",
@@ -129,7 +130,11 @@
       "description": "Indiquez ce que représente cette dépense",
       "future": "La date ne peut pas être dans le futur"
     },
-    "labFeesHint": "Les paiements aux laboratoires enregistrés dans Laboratoire y sont saisis et apparaissent ici d’eux-mêmes."
+    "labFeesHint": "Les paiements aux laboratoires enregistrés dans Laboratoire y sont saisis et apparaissent ici d’eux-mêmes.",
+    "suppliesInfo": "Les paiements aux fournisseurs enregistrés se saisissent dans Stock et apparaissent ici d’eux-mêmes.",
+    "resemblesTitle": "Déjà payé à un fournisseur ?",
+    "resemblesBody": "Les dépenses contiennent déjà un paiement fournisseur semblable : {{rows}}.",
+    "saveAnyway": "Enregistrer quand même"
   },
   "pending": {
     "title": "En attente de confirmation",

@@ -86,6 +86,12 @@ export function FinancialTab({
   const services = useQuery(cardQuery('financial/services', query));
   const plans = useQuery({ ...cardQuery('financial/plans', query), enabled: !branch });
   const owes = useQuery({ ...cardQuery('financial/owes', query), enabled: !branch });
+  // The Stock card (feature 20a, C4): inventory money; stock is not a dentist's.
+  const canStock = can('inventory:money_read');
+  const stock = useQuery({
+    ...cardQuery('financial/stock', query),
+    enabled: canStock && query.dentistId === undefined,
+  });
 
   const whole = (amount: string) => formatMoneyWhole({ amount, currency }, locale);
   const exact = (amount: string) => formatMoney({ amount, currency }, locale);
@@ -861,6 +867,12 @@ export function FinancialTab({
           amount: o.labs,
           target: { to: '/lab', search: { tab: 'labs' } },
         },
+        o.suppliers !== null && {
+          key: 'suppliers',
+          label: t('owes.suppliers'),
+          amount: o.suppliers,
+          target: { to: '/inventory', search: { tab: 'suppliers' } },
+        },
         o.salaries !== null && {
           key: 'salaries',
           label: t('owes.salaries'),
@@ -925,6 +937,86 @@ export function FinancialTab({
       <span className="sr-only">{t('now')}</span>
     </ChartCard>,
   );
+
+  if (canStock) {
+    const st = stock.data;
+    const stockItems = st
+      ? [
+          ...st.top.map((row) => ({ key: row.itemId, label: row.name, amount: row.cost })),
+          ...(toCents(st.other) > 0n
+            ? [{ key: 'other', label: t('other'), amount: st.other }]
+            : []),
+        ]
+      : [];
+    const toPrice = st ? st.unpriced.receipts + st.unpriced.openingBatches : 0;
+    cards.push(
+      <ChartCard
+        key="stock"
+        className="col-span-12 lg:col-span-6"
+        title={t('cards.stock')}
+        info={t('info.stock')}
+        state={
+          query.dentistId !== undefined
+            ? { kind: 'aside', text: t('stock.noDentist') }
+            : stateOf(stock)
+        }
+        table={
+          st && {
+            columns: [t('table.item'), t('table.cost')],
+            rows: stockItems.map((row) => ({
+              cells: [row.label, exact(row.amount)],
+              exact: [null, row.amount],
+            })),
+          }
+        }
+        exportName="stock"
+        canExport={canExportMoney}
+      >
+        {st && (
+          <>
+            <div className="mb-3 flex flex-wrap items-baseline gap-x-6 gap-y-1 text-[12.5px]">
+              {drill.linkTo({ to: '/inventory', search: { tab: 'reports' } })?.(
+                <span className="flex flex-col">
+                  <span className="text-ink-muted">{t('stock.value')}</span>
+                  <span
+                    dir="ltr"
+                    className="font-mono text-[18px] font-semibold tabular-nums"
+                    title={exact(st.value)}
+                  >
+                    {whole(st.value)}
+                  </span>
+                </span>,
+                'rounded-md hover:bg-faint',
+              )}
+              <span className="flex flex-col">
+                <span className="text-ink-muted">{t('stock.consumption')}</span>
+                <span
+                  dir="ltr"
+                  className="font-mono text-[18px] font-semibold tabular-nums"
+                  title={exact(st.consumption)}
+                >
+                  {whole(st.consumption)}
+                </span>
+              </span>
+              {toPrice > 0 && (
+                <span className="text-warning">{t('stock.toPrice', { count: toPrice })}</span>
+              )}
+            </div>
+            <BarList
+              items={stockItems.map((row) => ({
+                key: row.key,
+                label: row.label,
+                value: amountOf(row.amount),
+                display: whole(row.amount),
+                title: exact(row.amount),
+                color: row.key === 'other' ? SERIES.other : SERIES.expenses,
+              }))}
+            />
+          </>
+        )}
+      </ChartCard>,
+    );
+  }
 
   return (
     <div className="grid grid-cols-12 gap-3">

@@ -11,13 +11,13 @@ export function isPaletteShortcut(event: KeyboardEvent): boolean {
 }
 
 /** A confirm dialog (`ConfirmDialog`, the unsaved-changes guard, the idle timeout) is open: it
- * must be answered first, not covered by the palette. */
+ * must be answered first, not covered by the search. */
 const alertOpen = () => document.querySelector('[role="alertdialog"]') !== null;
 
 /**
- * The shell-owned open state of the ⌘K patient palette, with the global shortcut: Ctrl/⌘+K
- * toggles it from anywhere (POC: it always opens, taking the browser's own shortcut), except over
- * a modal alert. `enabled` off (no clinic, or no `patient:read`) closes it and unbinds the key.
+ * The shell-owned open state of the ⌘K search, with the global shortcut: Ctrl/⌘+K toggles it
+ * from anywhere (POC: it always opens, taking the browser's own shortcut), except over a modal
+ * alert. `enabled` off (no clinic, or nothing to search) closes it and unbinds the key.
  */
 export function useCommandPalette(enabled: boolean) {
   const [open, setOpen] = useState(false);

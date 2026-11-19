@@ -62,7 +62,8 @@
     "schedule": "Schedule",
     "expenses": "Expenses",
     "payroll": "Payroll",
-    "labs": "Lab"
+    "labs": "Lab",
+    "inventory": "Inventory"
   },
   "ranges": {
     "today": "Today",
@@ -335,6 +336,57 @@
       "cost": "Changed the cost of lab order {{number}} for {{subject}}",
       "trip_dates": "Corrected the dates of lab order {{number}} for {{subject}}",
       "attachments": "Changed the files of lab order {{number}} for {{subject}}"
+    },
+    "inventory_item": {
+      "create": "Added {{subject}} to inventory",
+      "update": "Edited {{subject}}",
+      "ordered": "Marked {{subject}} ordered",
+      "unordered": "Unmarked {{subject}} ordered",
+      "report_count": "Reported a wrong count of {{subject}}",
+      "branch_level": "Set the reorder level of {{subject}} to {{level}}",
+      "opening_cost": "Set the opening cost of {{subject}}"
+    },
+    "inventory_category": {
+      "create": "Added the inventory category {{subject}}",
+      "rename": "Renamed an inventory category to {{subject}}",
+      "deactivate": "Turned off the inventory category {{subject}}",
+      "reactivate": "Turned on the inventory category {{subject}}",
+      "delete": "Deleted the inventory category {{subject}}"
+    },
+    "inventory_supplier": {
+      "create": "Added the supplier {{subject}}",
+      "update": "Edited the supplier {{subject}}",
+      "opening_balance": "Set the opening balance of {{subject}} to {{amount}}"
+    },
+    "inventory_receipt": {
+      "receive": "Received {{subject}}",
+      "price": "Priced {{subject}}: {{amount}}",
+      "edit": "Corrected {{subject}}",
+      "void": "Voided {{subject}}",
+      "attach": "Attached the invoice to {{subject}}",
+      "detach": "Removed a file from {{subject}}"
+    },
+    "inventory_movement": {
+      "take_out": "Took out {{quantity}} of {{subject}}",
+      "undo": "Put back {{quantity}} of {{subject}}",
+      "reverse": "Reversed taking out {{quantity}} of {{subject}}",
+      "adjust": "Adjusted {{subject}} by {{quantity}}",
+      "opening": "Entered the opening stock of {{subject}}: {{quantity}}"
+    },
+    "inventory_count": {
+      "start": "Started a stock count",
+      "apply": "Applied a stock count",
+      "discard": "Discarded a stock count"
+    },
+    "inventory_payment": {
+      "record": "Paid {{subject}} {{amount}}",
+      "void": "Voided a payment of {{amount}} to {{subject}}"
+    },
+    "inventory_adjustment": {
+      "record": "Adjusted the account of {{subject}} by {{amount}}"
+    },
+    "inventory_settings": {
+      "update": "Set the expiring window to {{days}} days"
     }
   },
   "fields": {

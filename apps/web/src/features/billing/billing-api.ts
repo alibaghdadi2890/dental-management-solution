@@ -1,4 +1,5 @@
 import {
+  balanceStatesSchema,
   openingBalanceResultSchema,
   patientBalanceSchema,
   patientBalancesSchema,
@@ -49,6 +50,16 @@ export function balancesQuery(ids: readonly string[], tenantId?: string) {
         patientBalancesSchema,
         scope(tenantId),
       ),
+    enabled: ids.length > 0,
+  });
+}
+
+/** `GET /billing/balance-states?patientIds=` (search S9): owes, in credit or settled, no amount. */
+export function balanceStatesQuery(ids: readonly string[]) {
+  return queryOptions({
+    queryKey: [...billingKeys.all(actingTenantId()), 'balance-states', [...ids].sort()] as const,
+    queryFn: () =>
+      apiFetch(`/billing/balance-states?patientIds=${ids.join(',')}`, balanceStatesSchema),
     enabled: ids.length > 0,
   });
 }

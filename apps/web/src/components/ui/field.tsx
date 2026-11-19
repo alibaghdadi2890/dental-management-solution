@@ -34,6 +34,8 @@ export function Select({ className, children, ...props }: SelectHTMLAttributes<H
 interface FieldProps {
   label: ReactNode;
   hint?: ReactNode;
+  /** The quiet **!** (`InfoMark`) beside the label, outside it: it never joins the field's name. */
+  info?: ReactNode;
   error?: string | undefined;
   children: (props: {
     id: string;
@@ -44,18 +46,31 @@ interface FieldProps {
 }
 
 /** POC form field: 12.5px/500 label with an optional right-aligned hint, inline error in danger red. */
-export function Field({ label, hint, error, children, className }: FieldProps) {
+export function Field({ label, hint, info, error, children, className }: FieldProps) {
   const id = useId();
   const errorId = `${id}-error`;
+  const labelElement = (
+    <label
+      htmlFor={id}
+      className={cn(
+        'flex justify-between text-[12.5px] leading-none font-medium',
+        info === undefined ? 'mb-1.5' : 'flex-1',
+      )}
+    >
+      <span>{label}</span>
+      {hint && <span className="font-normal text-ink-muted">{hint}</span>}
+    </label>
+  );
   return (
     <div className={cn('block', className)}>
-      <label
-        htmlFor={id}
-        className="mb-1.5 flex justify-between text-[12.5px] leading-none font-medium"
-      >
-        <span>{label}</span>
-        {hint && <span className="font-normal text-ink-muted">{hint}</span>}
-      </label>
+      {info === undefined ? (
+        labelElement
+      ) : (
+        <div className="mb-1.5 flex items-center gap-1.5">
+          {labelElement}
+          {info}
+        </div>
+      )}
       {children({
         id,
         'aria-invalid': Boolean(error),

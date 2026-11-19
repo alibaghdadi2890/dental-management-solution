@@ -152,11 +152,11 @@ test('the owner registers a child with a new guardian and an opening balance, co
     await expect(page).toHaveURL(/\/patients(\?.*)?$/);
     await page.keyboard.press('Control+K');
     const palette = page.getByRole('combobox', {
-      name: 'Search patients by name, phone or patient ID',
+      name: 'Search patients and stock items',
     });
     await expect(palette).toBeFocused();
     await palette.fill('3123');
-    const option = page.getByRole('option', { name: new RegExp(lina.name) });
+    const option = page.getByRole('row', { name: new RegExp(lina.name) });
     await expect(option).toContainText(`via ${maria.name} · Parent`);
     await palette.press('Enter');
     await expect(page).toHaveURL((url) => url.pathname === recordPath);

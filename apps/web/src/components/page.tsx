@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 
 interface PageProps {
   title: string;
-  subtitle: string;
+  /** Left out where the screen needs none (CLAUDE.md §13: minimal text). */
+  subtitle?: string;
   actions?: ReactNode;
   children?: ReactNode;
 }
@@ -17,7 +18,7 @@ export function Page({ title, subtitle, actions, children }: PageProps) {
             <h1 className="mb-1 text-[21px] leading-tight font-semibold tracking-[-0.02em]">
               {title}
             </h1>
-            <p className="text-[13px] leading-snug text-ink-tertiary">{subtitle}</p>
+            {subtitle && <p className="text-[13px] leading-snug text-ink-tertiary">{subtitle}</p>}
           </div>
           {actions && <div className="flex gap-2">{actions}</div>}
         </div>

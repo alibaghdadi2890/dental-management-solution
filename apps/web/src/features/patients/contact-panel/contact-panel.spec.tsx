@@ -4,7 +4,7 @@ import { renderShell } from '@/shell/shell.test-utils';
 import { ALL_PERMISSIONS, sessionWith } from '../patients.test-utils';
 import { MONA_ID, mockMona } from './contact-panel.test-utils';
 
-/** The contact panel's money (families C); its flow from ⌘K is in `command-palette.spec.tsx`. */
+/** The contact panel's money (families C); its flow from ⌘K is in `shell/search/search-palette.spec.tsx`. */
 describe('ContactPanel', () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
@@ -25,7 +25,7 @@ describe('ContactPanel', () => {
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
     const dialog = await screen.findByRole('dialog', { name: 'Find patient' });
     fireEvent.change(within(dialog).getByRole('combobox'), { target: { value: 'mona' } });
-    fireEvent.click(await within(dialog).findByRole('option', { name: /Mona Haddad/ }));
+    fireEvent.click(await within(dialog).findByRole('row', { name: /Mona Haddad/ }));
 
     const panel = await screen.findByRole('dialog', { name: 'Mona Haddad' });
     expect(await within(panel).findByRole('link', { name: 'Lina Haddad' })).toBeTruthy();

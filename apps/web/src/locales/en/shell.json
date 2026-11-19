@@ -26,6 +26,7 @@
     "dashboard": "Dashboard",
     "schedule": "Schedule",
     "lab": "Lab",
+    "inventory": "Inventory",
     "activity": "Activity",
     "collapse": "Collapse menu",
     "expand": "Expand menu",
@@ -42,7 +43,9 @@
     "findPatient": "Find patient",
     "newPatient": "New patient",
     "shortcutApple": "⌘K",
-    "shortcutOther": "Ctrl K"
+    "shortcutOther": "Ctrl K",
+    "search": "Search",
+    "searchStock": "Search stock"
   },
   "user": {
     "fallbackRole": "Staff",
@@ -63,5 +66,29 @@
   },
   "checkoutPill": {
     "label": "Checkout · {{n, number}}"
+  },
+  "search": {
+    "all": {
+      "title": "Search",
+      "label": "Search patients and stock items",
+      "placeholder": "Patient, phone, ID or item"
+    },
+    "stockOnly": {
+      "title": "Search stock",
+      "label": "Search stock items by name or code",
+      "placeholder": "Item name or code"
+    },
+    "stock": "Stock",
+    "stockIn": "Stock · {{branch}}",
+    "takeOut": "Take out",
+    "noMatch": "Nothing matches \"{{query}}\"",
+    "stockIdle": "Type an item’s name or code.",
+    "next": "Next {{when}}",
+    "owes": "Owes",
+    "credit": "In credit",
+    "owesAmount": "Owes {{amount}}",
+    "creditAmount": "Credit {{amount}}",
+    "schedule": "Schedule",
+    "recordPayment": "Record payment"
   }
 }

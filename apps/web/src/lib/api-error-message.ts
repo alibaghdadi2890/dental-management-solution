@@ -11,6 +11,7 @@ const NAMESPACES = [
   'scheduling',
   'expenses',
   'payroll',
+  'inventory',
   'common',
 ] as const;
 

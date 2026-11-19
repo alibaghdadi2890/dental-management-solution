@@ -36,7 +36,8 @@
     "fixed": "Fixed",
     "payroll": "Payroll",
     "compensation": "Compensation",
-    "lab": "Labs"
+    "lab": "Labs",
+    "supplier": "Suppliers"
   },
   "filters": {
     "label": "Filters",
@@ -129,7 +130,11 @@
       "description": "Say what this expense was",
       "future": "The date can't be in the future"
     },
-    "labFeesHint": "Payments to labs registered under Lab are recorded there and appear here by themselves."
+    "labFeesHint": "Payments to labs registered under Lab are recorded there and appear here by themselves.",
+    "suppliesInfo": "Payments to registered suppliers are recorded under Inventory and appear here by themselves.",
+    "resemblesTitle": "Already paid as a supplier payment?",
+    "resemblesBody": "Expenses already has a supplier payment like it: {{rows}}.",
+    "saveAnyway": "Save anyway"
   },
   "pending": {
     "title": "Waiting for confirmation",

@@ -21,6 +21,7 @@ import {
   visitPageQuery,
 } from '@/features/clinical/visits-list/visits-list-api';
 import { worklistQuery } from '@/features/scheduling/scheduling-api';
+import { TodayStockCard } from '@/features/inventory/today-stock-card';
 import { FollowUpWorklist, TodaySchedule } from '@/features/scheduling/today-schedule';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, todayIn } from '@/lib/format';
@@ -99,6 +100,8 @@ export function TodayPage({
   // This month's expenses (feature 17, A5): its own permission, never salaries or payouts.
   const canSeeExpenses = usePermission('expense:read');
   const canSeeLab = usePermission('lab:read');
+  // The Stock card (feature 20a, C2): exceptions only, for whoever sees stock.
+  const canSeeStock = usePermission('inventory:read');
   const queue = useCheckoutQueue();
   // The patient of the open dialog, kept once their visit has left the queue (paid in full).
   const [opened, setOpened] = useState<{ id: string; name: string }>();
@@ -124,7 +127,14 @@ export function TodayPage({
     .filter(Boolean)
     .join(' · ');
 
-  if (!queue.enabled && !canSeeVisits && !canSeeSchedule && !canSeeExpenses && !canSeeLab) {
+  if (
+    !queue.enabled &&
+    !canSeeVisits &&
+    !canSeeSchedule &&
+    !canSeeExpenses &&
+    !canSeeLab &&
+    !canSeeStock
+  ) {
     return (
       <Page title={t('title')} subtitle={subtitle}>
         <p className="text-[13px] leading-snug text-ink-secondary">
@@ -217,6 +227,7 @@ export function TodayPage({
         {canSeeLab && session.branch ? (
           <TodayLabLane branchId={session.branch.id} tenant={session.tenant} />
         ) : null}
+        {canSeeStock && session.branch ? <TodayStockCard branchId={session.branch.id} /> : null}
         {queue.enabled && (
           <Lane
             title={t('checkout.title')}

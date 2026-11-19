@@ -41,6 +41,9 @@ type AttentionKey =
   | 'followUpsOverdue'
   | 'labLate'
   | 'labArrived'
+  | 'stockOut'
+  | 'stockLow'
+  | 'stockExpired'
   | 'incomplete';
 type SortKey =
   | 'name'
@@ -368,6 +371,17 @@ export function OperationalTab({
             search: { status: 'all', ids: at.labArrivedUnbooked?.orderIds.join(',') ?? '' },
           },
         },
+        ...(['stockOut', 'stockLow', 'stockExpired'] as const).map((key) => ({
+          key,
+          value: at[key],
+          target: {
+            to: '/inventory',
+            search: {
+              status: key === 'stockOut' ? 'out' : key === 'stockLow' ? 'low' : 'expired',
+              ...(query.branchId ? { branch: query.branchId } : {}),
+            },
+          },
+        })),
         { key: 'incomplete' as const, value: at.incomplete, target: drill.cohort('incomplete') },
       ]
     : [];

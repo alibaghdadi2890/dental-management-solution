@@ -26,6 +26,7 @@
     "dashboard": "لوحة المؤشرات",
     "schedule": "المواعيد",
     "lab": "المختبر",
+    "inventory": "المخزون",
     "activity": "النشاط",
     "collapse": "طي القائمة",
     "expand": "توسيع القائمة",
@@ -42,7 +43,9 @@
     "findPatient": "البحث عن مريض",
     "newPatient": "مريض جديد",
     "shortcutApple": "⌘K",
-    "shortcutOther": "Ctrl K"
+    "shortcutOther": "Ctrl K",
+    "search": "بحث",
+    "searchStock": "بحث في المخزون"
   },
   "user": {
     "fallbackRole": "موظف",
@@ -63,5 +66,29 @@
   },
   "checkoutPill": {
     "label": "الدفع · {{n, number}}"
+  },
+  "search": {
+    "all": {
+      "title": "بحث",
+      "label": "البحث عن المرضى وأصناف المخزون",
+      "placeholder": "مريض، هاتف، رقم أو صنف"
+    },
+    "stockOnly": {
+      "title": "بحث في المخزون",
+      "label": "البحث عن أصناف المخزون بالاسم أو الرمز",
+      "placeholder": "اسم الصنف أو رمزه"
+    },
+    "stock": "المخزون",
+    "stockIn": "المخزون · {{branch}}",
+    "takeOut": "صرف",
+    "noMatch": "لا نتائج لـ \"{{query}}\"",
+    "stockIdle": "اكتب اسم الصنف أو رمزه.",
+    "next": "الموعد القادم {{when}}",
+    "owes": "عليه رصيد",
+    "credit": "له رصيد",
+    "owesAmount": "عليه {{amount}}",
+    "creditAmount": "له {{amount}}",
+    "schedule": "حجز موعد",
+    "recordPayment": "تسجيل دفعة"
   }
 }

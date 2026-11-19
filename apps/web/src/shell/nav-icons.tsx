@@ -64,6 +64,12 @@ const PATHS: Record<NavKey, ReactNode> = {
       <path d="M5 1.75h6M4.4 9.5h7.2" />
     </>
   ),
+  inventory: (
+    <>
+      <path d="M2.25 5.25 8 2.25l5.75 3v6L8 14.25l-5.75-3z" />
+      <path d="M2.25 5.25 8 8.25l5.75-3M8 8.25v6" />
+    </>
+  ),
   myStatement: (
     <>
       <path d="M4 1.75h5.5L12.5 4.75v9.5H4z" />

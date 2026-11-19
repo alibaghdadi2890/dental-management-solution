@@ -418,7 +418,6 @@
     "resultsFor": "لـ «{{query}}»",
     "age": "العمر {{age, number}}",
     "ageUnknown": "العمر —",
-    "neverSeen": "لم تتم زيارته بعد",
     "noMatch": "لا يوجد مريض يطابق «{{query}}»",
     "noMatchHint": "ابحث بالاسم الكامل أو رقم الهاتف أو رقم المريض.",
     "create": "إنشاء «{{query}}»",

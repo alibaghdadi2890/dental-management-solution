@@ -109,7 +109,8 @@
     "dentistsOps": "Dentists",
     "patients": "Patients",
     "labs": "Labs",
-    "followUps": "Follow-ups"
+    "followUps": "Follow-ups",
+    "stock": "Stock"
   },
   "info": {
     "production": "What visits charged in the period after discounts, by ledger date: charges with their corrections and reversals. A voided visit counts nothing. Opening balances and balance adjustments are not production.",
@@ -145,7 +146,8 @@
     "dentistsOps": "Each dentist’s visits, hours booked, average visit length, no-show rate, plan acceptance and median wait. Click a column to sort.",
     "patients": "New and returning patients per month. Came back: of patients first seen three to six months ago, the share with a later visit.",
     "labs": "From the lab reports: trips received on time, average turnaround against the lab’s promise, and remakes.",
-    "followUps": "Follow-ups recommended in the period, and where they stand."
+    "followUps": "Follow-ups recommended in the period, and where they stand.",
+    "stock": "Stock value now, each batch at what was paid for it, and what was taken out in the period at the cost of the batches it left, net of what was put back. The bars are the most consumed items by cost. Equal to Inventory’s Reports."
   },
   "summary": {
     "money": "Production {{production}}, collected {{collected}} in the period",
@@ -189,7 +191,8 @@
     "dentists": "Dentist compensation unpaid",
     "fixed_one": "{{count}} fixed expense waiting",
     "fixed_other": "{{count}} fixed expenses waiting",
-    "credit": "Patient credit and advances held"
+    "credit": "Patient credit and advances held",
+    "suppliers": "Suppliers"
   },
   "stages": {
     "recorded": "Proposed",
@@ -228,7 +231,10 @@
     "followUpsOverdue": "Follow-ups overdue",
     "labLate": "Lab work late",
     "labArrived": "Lab work arrived, no appointment",
-    "incomplete": "Registrations incomplete"
+    "incomplete": "Registrations incomplete",
+    "stockOut": "Out of stock",
+    "stockLow": "Low stock",
+    "stockExpired": "Expired stock"
   },
   "table": {
     "month": "Month",
@@ -252,6 +258,13 @@
     "booked": "Booked",
     "taken": "Taken",
     "lab": "Lab",
-    "state": "State"
+    "state": "State",
+    "item": "Item"
+  },
+  "stock": {
+    "value": "Value now",
+    "consumption": "Consumption",
+    "noDentist": "Not by dentist",
+    "toPrice": "{{count}} to price"
   }
 }

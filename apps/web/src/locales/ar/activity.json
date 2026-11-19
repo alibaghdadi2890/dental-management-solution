@@ -62,7 +62,8 @@
     "schedule": "المواعيد",
     "expenses": "المصاريف",
     "payroll": "الرواتب",
-    "labs": "المختبر"
+    "labs": "المختبر",
+    "inventory": "المخزون"
   },
   "ranges": {
     "today": "اليوم",
@@ -335,6 +336,57 @@
       "cost": "غيّر تكلفة طلب المختبر {{number}} لـ {{subject}}",
       "trip_dates": "صحّح تواريخ طلب المختبر {{number}} لـ {{subject}}",
       "attachments": "غيّر ملفات طلب المختبر {{number}} لـ {{subject}}"
+    },
+    "inventory_item": {
+      "create": "أضاف {{subject}} إلى المخزون",
+      "update": "عدّل {{subject}}",
+      "ordered": "أشّر {{subject}} كمطلوب",
+      "unordered": "ألغى تأشير {{subject}} كمطلوب",
+      "report_count": "أبلغ عن جرد خاطئ لـ{{subject}}",
+      "branch_level": "حدّد حد إعادة الطلب لـ{{subject}} بـ{{level}}",
+      "opening_cost": "حدّد التكلفة الافتتاحية لـ{{subject}}"
+    },
+    "inventory_category": {
+      "create": "أضاف فئة المخزون {{subject}}",
+      "rename": "أعاد تسمية فئة مخزون إلى {{subject}}",
+      "deactivate": "أوقف فئة المخزون {{subject}}",
+      "reactivate": "فعّل فئة المخزون {{subject}}",
+      "delete": "حذف فئة المخزون {{subject}}"
+    },
+    "inventory_supplier": {
+      "create": "أضاف المورد {{subject}}",
+      "update": "عدّل المورد {{subject}}",
+      "opening_balance": "حدّد الرصيد الافتتاحي لـ{{subject}} بـ{{amount}}"
+    },
+    "inventory_receipt": {
+      "receive": "استلم {{subject}}",
+      "price": "سعّر {{subject}}: {{amount}}",
+      "edit": "صحّح {{subject}}",
+      "void": "ألغى {{subject}}",
+      "attach": "أرفق الفاتورة بـ{{subject}}",
+      "detach": "أزال ملفًا من {{subject}}"
+    },
+    "inventory_movement": {
+      "take_out": "صرف {{quantity}} من {{subject}}",
+      "undo": "أعاد {{quantity}} من {{subject}}",
+      "reverse": "عكس صرف {{quantity}} من {{subject}}",
+      "adjust": "سوّى {{subject}} بمقدار {{quantity}}",
+      "opening": "أدخل المخزون الافتتاحي لـ{{subject}}: {{quantity}}"
+    },
+    "inventory_count": {
+      "start": "بدأ جردًا",
+      "apply": "طبّق جردًا",
+      "discard": "أهمل جردًا"
+    },
+    "inventory_payment": {
+      "record": "دفع لـ{{subject}} {{amount}}",
+      "void": "ألغى دفعة {{amount}} لـ{{subject}}"
+    },
+    "inventory_adjustment": {
+      "record": "سوّى حساب {{subject}} بمقدار {{amount}}"
+    },
+    "inventory_settings": {
+      "update": "حدّد مهلة انتهاء الصلاحية بـ{{days}} يومًا"
     }
   },
   "fields": {

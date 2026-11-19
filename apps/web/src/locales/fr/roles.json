@@ -12,6 +12,7 @@
     "expenses": "Dépenses",
     "payroll": "Paie",
     "lab": "Laboratoire",
+    "inventory": "Stock",
     "dashboard": "Tableau de bord",
     "activity": "Activité",
     "clinic": "Cabinet"
@@ -148,6 +149,26 @@
     "lab_money_manage": {
       "label": "Gérer l’argent des laboratoires",
       "description": "Enregistrer et modifier les laboratoires, leurs prestations et leurs prix ; modifier le coût des commandes ; saisir soldes d’ouverture, ajustements, paiements et annulations."
+    },
+    "inventory_read": {
+      "label": "Voir le stock",
+      "description": "Articles, quantités, étiquettes, la carte du jour, l’annuaire des fournisseurs, la liste à commander et les rapports sans coûts."
+    },
+    "inventory_write": {
+      "label": "Sortir et réceptionner",
+      "description": "Sortir du stock et l’annuler le jour même, signaler un comptage faux, réceptionner sans prix et joindre la facture."
+    },
+    "inventory_manage": {
+      "label": "Gérer le stock",
+      "description": "Articles et catégories, seuils de commande, fournisseurs, ajustements et pertes, inventaires, annulations, commandé, annuler une réception."
+    },
+    "inventory_money_read": {
+      "label": "Voir l’argent du stock",
+      "description": "Coûts, valeur du stock, totaux des réceptions et factures jointes, comptes et relevés des fournisseurs, coûts des rapports."
+    },
+    "inventory_money_manage": {
+      "label": "Gérer l’argent du stock",
+      "description": "Chiffrer les réceptions, achats ponctuels, soldes d’ouverture, paiements, ajustements et annulations des comptes fournisseurs."
     },
     "appointment_read": {
       "label": "Voir l'agenda",

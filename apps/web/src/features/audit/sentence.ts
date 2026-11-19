@@ -193,6 +193,43 @@ const LABS: ReadonlySet<string> = new Set([
   ].map((verb) => `lab_order.${verb}`),
 ]);
 
+/** Inventory (feature 20a): the actions with a sentence of their own. */
+const INVENTORY: ReadonlySet<string> = new Set([
+  'inventory_item.create',
+  'inventory_item.update',
+  'inventory_item.ordered',
+  'inventory_item.unordered',
+  'inventory_item.report_count',
+  'inventory_item.branch_level',
+  'inventory_item.opening_cost',
+  'inventory_category.create',
+  'inventory_category.rename',
+  'inventory_category.deactivate',
+  'inventory_category.reactivate',
+  'inventory_category.delete',
+  'inventory_supplier.create',
+  'inventory_supplier.update',
+  'inventory_supplier.opening_balance',
+  'inventory_receipt.receive',
+  'inventory_receipt.price',
+  'inventory_receipt.edit',
+  'inventory_receipt.void',
+  'inventory_receipt.attach',
+  'inventory_receipt.detach',
+  'inventory_movement.take_out',
+  'inventory_movement.undo',
+  'inventory_movement.reverse',
+  'inventory_movement.adjust',
+  'inventory_movement.opening',
+  'inventory_count.start',
+  'inventory_count.apply',
+  'inventory_count.discard',
+  'inventory_payment.record',
+  'inventory_payment.void',
+  'inventory_adjustment.record',
+  'inventory_settings.update',
+]);
+
 /** The actions with a sentence under `activity:actions.<action>` and no special case below. */
 const PLAIN = new Set([
   'patient.create',
@@ -500,6 +537,38 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
       items: field(entry, 'items') ?? '',
       action: readableAction(action),
     });
+  }
+
+  // --- Inventory (feature 20a): an item, a supplier or a receipt is named in the snapshot ---
+  if (prefix.startsWith('inventory_')) {
+    const currency = field(entry, 'currency');
+    const amount = text(after.amount) ?? text(after.total);
+    const number = after.number ?? before.number;
+    const receipt = typeof number === 'number' ? `GR-${String(number).padStart(6, '0')}` : null;
+    const name =
+      prefix === 'inventory_receipt'
+        ? [receipt, field(entry, 'supplierName') ?? field(entry, 'payee')]
+            .filter(Boolean)
+            .join(' · ')
+        : (field(entry, 'item') ??
+          field(entry, 'supplierName') ??
+          field(entry, 'payee') ??
+          field(entry, 'name'));
+    const quantity = after.quantity;
+    return done(
+      INVENTORY.has(action) ? action : 'fallback',
+      name ? { kind: 'text', label: name } : null,
+      {
+        amount: amount && currency ? lookups.money(amount, currency) : '',
+        quantity:
+          typeof quantity === 'number'
+            ? `${String(quantity)} ${field(entry, 'unit') ?? ''}`.trim()
+            : '',
+        level: typeof after.reorderLevel === 'number' ? String(after.reorderLevel) : '—',
+        days: typeof after.expiringDays === 'number' ? String(after.expiringDays) : '',
+        action: readableAction(action),
+      },
+    );
   }
 
   // --- Schedule (feature 14): about the patient; a follow-up also says what it is ---

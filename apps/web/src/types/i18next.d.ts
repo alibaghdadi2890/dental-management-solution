@@ -9,6 +9,7 @@ import type clinical from '../locales/en/clinical.json';
 import type compensation from '../locales/en/compensation.json';
 import type expenses from '../locales/en/expenses.json';
 import type dashboards from '../locales/en/dashboards.json';
+import type inventory from '../locales/en/inventory.json';
 import type labs from '../locales/en/labs.json';
 import type scheduling from '../locales/en/scheduling.json';
 import type common from '../locales/en/common.json';
@@ -50,6 +51,7 @@ declare module 'i18next' {
       expenses: typeof expenses;
       payroll: typeof payroll;
       labs: typeof labs;
+      inventory: typeof inventory;
       dashboards: typeof dashboards;
     };
   }

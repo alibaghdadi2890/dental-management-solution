@@ -12,13 +12,15 @@ import { Button } from '@/components/ui/button';
 import { useConfirm } from '@/components/ui/confirm-context';
 import { DateInput } from '@/components/ui/date-input';
 import { Field, Select, TextInput } from '@/components/ui/field';
+import { InfoMark } from '@/components/ui/info-mark';
 import { RightPanel } from '@/components/ui/right-panel';
 import { useToast } from '@/components/ui/toast-context';
 import { MoneyInput } from '@/features/billing/money-input';
 import { formatMonth } from '@/features/compensation/months';
 import { parseAmount } from '@/lib/amount';
+import { ApiError } from '@/lib/api';
 import { apiErrorMessage } from '@/lib/api-error-message';
-import { dateInputOrder, todayIn } from '@/lib/format';
+import { dateInputOrder, formatCalendarDate, formatMoney, todayIn } from '@/lib/format';
 import { useIdempotencyKeys } from '@/lib/idempotency';
 import { confirmItems, invalidateExpenses, recordExpense, updateExpense } from './expenses-api';
 import { type ExpenseProblem, selectableCategories, useCategoryName } from './expense-words';
@@ -122,7 +124,7 @@ export function ExpensePanel({
     });
   };
 
-  const submit = async () => {
+  const submit = async (allowResemblance = false): Promise<void> => {
     setTried(true);
     if (!ready || amount === null || amount === '' || method === null || saving) return;
     setSaving(true);
@@ -139,9 +141,9 @@ export function ExpensePanel({
     };
     try {
       if (mode.kind === 'record') {
-        await recordExpense(request, keyFor(request));
+        await recordExpense({ ...request, allowResemblance }, keyFor(request));
       } else if (mode.kind === 'edit') {
-        await updateExpense(mode.expense.id, request);
+        await updateExpense(mode.expense.id, { ...request, allowResemblance });
       } else {
         const body = { items: [{ itemId: mode.item.id, ...request }] };
         await confirmItems(body, keyFor(body));
@@ -159,7 +161,29 @@ export function ExpensePanel({
       );
       onClose();
     } catch (failure) {
-      setError(apiErrorMessage(failure, i18n));
+      if (failure instanceof ApiError && failure.code === 'expense.resembles_supplier_payment') {
+        // A warning, never a block (feature 20a, C3): the user may save anyway.
+        const rows = (failure.problem.matches ?? [])
+          .map((row) =>
+            [
+              row.payee,
+              formatMoney({ amount: row.amount, currency: tenant.currency }, locale),
+              formatCalendarDate(row.spentOn, locale),
+            ]
+              .filter(Boolean)
+              .join(' · '),
+          )
+          .join('; ');
+        confirm({
+          title: t('expenses:panel.resemblesTitle'),
+          body: t('expenses:panel.resemblesBody', { rows }),
+          okLabel: t('expenses:panel.saveAnyway'),
+          tone: 'warn',
+          onConfirm: () => submit(true),
+        });
+      } else {
+        setError(apiErrorMessage(failure, i18n));
+      }
     } finally {
       setSaving(false);
     }
@@ -239,7 +263,19 @@ export function ExpensePanel({
               />
             )}
           </Field>
-          <Field label={t('expenses:panel.category')} error={problem(problems.category)}>
+          <Field
+            label={t('expenses:panel.category')}
+            info={
+              <>
+                {chosen?.key === 'supplies' && (
+                  <InfoMark about={t('expenses:panel.category')}>
+                    {t('expenses:panel.suppliesInfo')}
+                  </InfoMark>
+                )}
+              </>
+            }
+            error={problem(problems.category)}
+          >
             {(props) => (
               <Select
                 {...props}

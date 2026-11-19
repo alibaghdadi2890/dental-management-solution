@@ -62,7 +62,8 @@
     "schedule": "Agenda",
     "expenses": "Dépenses",
     "payroll": "Paie",
-    "labs": "Laboratoire"
+    "labs": "Laboratoire",
+    "inventory": "Stock"
   },
   "ranges": {
     "today": "Aujourd’hui",
@@ -335,6 +336,57 @@
       "cost": "A modifié le coût de la commande {{number}} de {{subject}}",
       "trip_dates": "A corrigé les dates de la commande {{number}} de {{subject}}",
       "attachments": "A modifié les fichiers de la commande {{number}} de {{subject}}"
+    },
+    "inventory_item": {
+      "create": "A ajouté {{subject}} au stock",
+      "update": "A modifié {{subject}}",
+      "ordered": "A marqué {{subject}} commandé",
+      "unordered": "A retiré « commandé » de {{subject}}",
+      "report_count": "A signalé un comptage faux de {{subject}}",
+      "branch_level": "A fixé le seuil de {{subject}} à {{level}}",
+      "opening_cost": "A saisi le coût d’ouverture de {{subject}}"
+    },
+    "inventory_category": {
+      "create": "A ajouté la catégorie {{subject}}",
+      "rename": "A renommé une catégorie en {{subject}}",
+      "deactivate": "A désactivé la catégorie {{subject}}",
+      "reactivate": "A réactivé la catégorie {{subject}}",
+      "delete": "A supprimé la catégorie {{subject}}"
+    },
+    "inventory_supplier": {
+      "create": "A ajouté le fournisseur {{subject}}",
+      "update": "A modifié le fournisseur {{subject}}",
+      "opening_balance": "A fixé le solde d’ouverture de {{subject}} à {{amount}}"
+    },
+    "inventory_receipt": {
+      "receive": "A réceptionné {{subject}}",
+      "price": "A chiffré {{subject}} : {{amount}}",
+      "edit": "A corrigé {{subject}}",
+      "void": "A annulé {{subject}}",
+      "attach": "A joint la facture à {{subject}}",
+      "detach": "A retiré un fichier de {{subject}}"
+    },
+    "inventory_movement": {
+      "take_out": "A sorti {{quantity}} de {{subject}}",
+      "undo": "A remis {{quantity}} de {{subject}}",
+      "reverse": "A annulé la sortie de {{quantity}} de {{subject}}",
+      "adjust": "A ajusté {{subject}} de {{quantity}}",
+      "opening": "A saisi le stock d’ouverture de {{subject}} : {{quantity}}"
+    },
+    "inventory_count": {
+      "start": "A lancé un inventaire",
+      "apply": "A appliqué un inventaire",
+      "discard": "A abandonné un inventaire"
+    },
+    "inventory_payment": {
+      "record": "A payé {{amount}} à {{subject}}",
+      "void": "A annulé un paiement de {{amount}} à {{subject}}"
+    },
+    "inventory_adjustment": {
+      "record": "A ajusté le compte de {{subject}} de {{amount}}"
+    },
+    "inventory_settings": {
+      "update": "A fixé le délai de péremption à {{days}} jours"
     }
   },
   "fields": {

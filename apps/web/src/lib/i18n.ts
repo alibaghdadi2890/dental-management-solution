@@ -35,6 +35,7 @@ export const NAMESPACES = [
   'expenses',
   'payroll',
   'labs',
+  'inventory',
   'dashboards',
 ] as const;
 
