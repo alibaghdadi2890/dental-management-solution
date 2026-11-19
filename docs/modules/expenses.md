@@ -109,3 +109,18 @@ confirmation also writes a hidden `expense.record`.
 voided expenses of the caller's visible sources by category; totals, months and the four cost
 groups only with complete cost, ADR-0088) and `fixedWaiting` (Today's pending items: count, Σ
 usual amount).
+
+## Feature 20a: supplier payments (ADR-0098)
+
+- A new source **`supplier`** (label _Suppliers_): `SupplierPaymentMirrorSubscriber` writes a
+  read-only row in category `supplies` for every `SupplierPaymentRecorded` (a payment to a
+  supplier's account, or a one-off purchase's), payee = the supplier's name or the typed payee,
+  and voids it on `SupplierPaymentVoided`, in the payment's transaction. Visible to everyone with
+  `expense:read`, counted in month totals and in Today's card; refused for edit and void here
+  (`expense.system_row`). Migration 0062 recreates the source check and the mirror index.
+- **The resemblance warning:** a manual expense recorded or edited into _Dental supplies &
+  materials_ is refused with 409 `expense.resembles_supplier_payment` (the matching rows in
+  `matches`) when a live `supplier` row has the same payee (case and spaces ignored) or the same
+  amount within ±3 days, unless sent with `allowResemblance` (`domain/resemblance.ts`). The
+  request hash leaves the flag out, so _Save anyway_ is the same request. The category's **!**
+  says payments to registered suppliers are recorded under Inventory.

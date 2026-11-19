@@ -94,3 +94,14 @@ patients, clinical, billing (opening balances, ADR-0053)
 ## Permissions
 
 `import:run` (plus the target modules' write permissions, re-checked by their services).
+
+## Inventory items (feature 20a)
+
+`POST /api/v1/imports/inventory-items` — rows of `importInventoryItemRowSchema`: `code?`, `name`,
+`category` (a predefined category's name in any language, else the clinic's own, created when
+new), `unit`, `packName?` + `packSize?`, `reorderLevel?`, `tracksExpiry`, `usualSupplier?` (an
+existing supplier's name; unknown → `import.unknown_supplier`), `usualOrderPacks?`, `note?`,
+`opening?` `[{ branchId?, quantity, unitCost?, lot?, expiresOn? }]`. An item is matched by code,
+else by name, else created through `ItemsService.saveItems`; opening stock goes through
+`StockService.importOpening` only while the item has no batch in that branch, so a second run is
+`exists` and adds nothing. A cost needs `inventory:money_manage`; the services re-check.

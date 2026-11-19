@@ -75,3 +75,17 @@ cards ignore them.
 `/dashboard` (sidebar _Dashboard_, with either permission): the Financial and Operational tabs,
 one sticky filter row, tiles, the main chart, the breakdowns and the lists. The charts are drawn
 by `apps/web/src/components/charts/` (ADR-0091).
+
+## Feature 20a: inventory
+
+- **Financial · What the clinic owes** gains **Suppliers** (`SuppliersService.outstanding`, with
+  `inventory:money_read`), equal to the Suppliers tab's total.
+- **Financial · Stock** (`GET /dashboards/financial/stock`, `dashboard:financial` +
+  `inventory:money_read`): Reports' stock value now (by branch), consumption in the period, the
+  top eight items by cost and _Other_, and what is still to price (`InventoryReportsService.stockCard`).
+  The SPA sets it aside with a dentist filter.
+- **Operational · Needs attention** gains `stockOut`, `stockLow`, `stockExpired`
+  (`StockService.attention`: item-branch pairs with that label, for the branch or all), with
+  `inventory:read`, null with a dentist filter; each opens the Stock list filtered.
+- Supplier payments are already inside Expenses: Expenses, Net result, complete cost and _Where
+  the money goes_ do not change.

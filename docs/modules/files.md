@@ -211,3 +211,9 @@ dentist. Migration `0038_files` grants them to the system roles of tenants seede
 `files.spec.ts` (accepted types, the archive rule); web `features/files/*.spec.ts(x)`; Playwright
 `apps/web/e2e/files.spec.ts`. The evidence veto is covered by
 `apps/api/test/integration/visit-flows.int-spec.ts`.
+
+## Shared byte check (feature 20a, ADR-0100)
+
+`contentMatches` and `CONTENT_HEAD_BYTES` moved from `files/domain/content-check.ts` to
+`platform/storage/content-check.ts` (pure, no patient knowledge): `inventory`'s receipt
+attachments seal their uploads the same way. Nothing else of this module moved.

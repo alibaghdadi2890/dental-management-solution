@@ -75,14 +75,15 @@ active statuses (ADR-0067). They are written by hand in the migration.
 
 ## HTTP (`/api/v1/scheduling`)
 
-| Route                                                                                                                  | Access                               |
-| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `GET /appointments`, `GET /appointments/:id`, `POST /appointments/check`, `GET /slots`, `GET /resources`, `GET /today` | `appointment:read`                   |
-| `GET /patients/:id/appointments`, `GET /patients/:id/follow-ups`, `GET /branches/:id/opening-hours`, `GET /settings`   | `appointment:read`                   |
-| `POST /appointments`, `PATCH /appointments/:id`, `POST /appointments/:id/reschedule` (`Idempotency-Key`)               | `appointment:write`, plus the column |
-| `POST /appointments/:id/resize`, `/confirm`, `/check-in`, `/undo-check-in`, `/room`, `/cancel`, `/restore`, `/no-show` | `appointment:write`, plus the column |
-| `GET /follow-ups`, `POST /follow-ups/:id/will-call`, `/decline`                                                        | `appointment:write_all`              |
-| `PUT /branches/:id/opening-hours`, `PUT /settings`                                                                     | `tenant:write`                       |
+| Route                                                                                                                                  | Access                               |
+| -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `GET /appointments`, `GET /appointments/:id`, `POST /appointments/check`, `GET /slots`, `GET /resources`, `GET /today`                 | `appointment:read`                   |
+| `GET /patients/:id/appointments`, `GET /patients/:id/follow-ups`, `GET /branches/:id/opening-hours`, `GET /settings`                   | `appointment:read`                   |
+| `GET /patients/upcoming?patientIds=` (the search's next appointments, ADR-0102: each patient's first booked or confirmed one from now) | `appointment:read`                   |
+| `POST /appointments`, `PATCH /appointments/:id`, `POST /appointments/:id/reschedule` (`Idempotency-Key`)                               | `appointment:write`, plus the column |
+| `POST /appointments/:id/resize`, `/confirm`, `/check-in`, `/undo-check-in`, `/room`, `/cancel`, `/restore`, `/no-show`                 | `appointment:write`, plus the column |
+| `GET /follow-ups`, `POST /follow-ups/:id/will-call`, `/decline`                                                                        | `appointment:write_all`              |
+| `PUT /branches/:id/opening-hours`, `PUT /settings`                                                                                     | `tenant:write`                       |
 
 The column rule is `canWriteAppointment` in `@dcm/contracts`: `appointment:write` is the caller's own
 column and `appointment:write_all` every column. The service applies it on the source and the target.

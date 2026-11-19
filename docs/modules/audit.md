@@ -155,3 +155,11 @@ platform admin acting in the clinic). `apps/web/src/features/audit/`:
 ## Permissions
 
 `audit:read`.
+
+- **Inventory** (feature 20a, ADR-0101): the `inventory` area (`inventory_item.*`,
+  `inventory_category.*`, `inventory_supplier.*`, `inventory_receipt.*`, `inventory_movement.*`,
+  `inventory_count.*`, `inventory_payment.*`, `inventory_adjustment.*`, `inventory_settings.*`).
+  Without `inventory:money_read` (`withoutInventoryMoney`) the feed leaves out
+  `inventory_payment` and `inventory_adjustment` rows, `inventory_receipt.price`,
+  `inventory_supplier.opening_balance`, `inventory_item.opening_cost` and the stored
+  `SupplierPayment*` events. No other snapshot holds a price.

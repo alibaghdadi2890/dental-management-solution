@@ -97,3 +97,12 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0091](0091-charts-and-the-quiet-mark.md)                              | Charts behind one folder, their colours, and the quiet mark                  | Accepted                             |
 | [0092](0092-dashboard-permissions.md)                                  | Dashboard permissions                                                        | Accepted                             |
 | [0093](0093-possible-families-by-shared-phone.md)                      | Possible families by a shared phone                                          | Accepted                             |
+| [0094](0094-the-inventory-module.md)                                   | The `inventory` module and its edges                                         | Accepted                             |
+| [0095](0095-stock-is-movements-over-batches.md)                        | Stock is movements over batches                                              | Accepted                             |
+| [0096](0096-usage-by-take-out.md)                                      | Usage is recorded by taking stock out                                        | Accepted                             |
+| [0097](0097-valuation-at-cost-and-late-pricing.md)                     | Stock valued at cost, and late pricing                                       | Accepted                             |
+| [0098](0098-a-receipt-is-owed-a-payment-is-mirrored.md)                | A receipt is owed; only a payment is an expense                              | Accepted (extends 0076, 0085)        |
+| [0099](0099-the-count-while-work-continues.md)                         | A count while work continues                                                 | Accepted                             |
+| [0100](0100-receipt-attachments.md)                                    | Receipt attachments                                                          | Accepted (extends 0039, 0041)        |
+| [0101](0101-inventory-permissions.md)                                  | Inventory permissions                                                        | Accepted (amends 0055)               |
+| [0102](0102-the-search-is-the-apps.md)                                 | The search is the app's, and its rows carry actions                          | Accepted                             |

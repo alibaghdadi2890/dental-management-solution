@@ -16,7 +16,8 @@ Patient records: demographics, phone and e-mail, insurance (as text), medical hi
 primary dentist, notes, archive (soft delete) and merge; contacts (guardians, billing and
 emergency contacts, who may themselves be patients: design addendum C1–C2). The POC's Patients
 screen (list, quick view, create/edit, merge), the ⌘K palette and the patient record header are
-the UI reference.
+the UI reference. The ⌘K search itself is the shell's (ADR-0102); this feature gives it the Patients
+and Contacts groups.
 Balances are not here: views that need them (Owes balance, sort by balance, CSV export, create
 with an opening balance) are composed by `billing` on top of this module (design Q5; ADR-0017).
 
