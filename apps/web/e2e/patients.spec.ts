@@ -205,8 +205,8 @@ test('the owner registers a child with a new guardian and an opening balance, co
     await form.getByRole('textbox', { name: /^Phone/ }).fill(maria.phone);
     await form
       .getByRole('status')
-      .filter({ hasText: `Is this patient ${maria.name}?` })
-      .getByRole('button', { name: 'Yes, same person' })
+      .filter({ hasText: `${maria.name} uses this phone.` })
+      .getByRole('button', { name: `This is ${maria.name}` })
       .click();
     await expect(form.getByText(`Will link to ${maria.name}`)).toBeVisible();
     await form.getByRole('button', { name: 'Create patient' }).click();
