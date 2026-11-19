@@ -120,9 +120,11 @@ export class CategoriesService {
     return { ...row, kind: categoryKindOf(row.key) };
   }
 
-  /** A reserved category's row, created first if the clinic has lost it. */
-  /** A system category by key, created when missing: the reserved ones, and Lab fees for lab payments. */
-  async reserved(key: ReservedCategoryKey | 'lab_fees'): Promise<StoredCategory> {
+  /**
+   * A system category by key, created when missing: the reserved ones, Lab fees for lab payments
+   * and Dental supplies & materials for supplier payments (feature 20a).
+   */
+  async reserved(key: ReservedCategoryKey | 'lab_fees' | 'supplies'): Promise<StoredCategory> {
     const found = await this.categories.byKey(key);
     if (found) return found;
     await this.categories.insertMissingKeys();

@@ -172,7 +172,7 @@ export class ExpensesRepository {
 
   /** Voids the live mirror of a payment or payout, if any. */
   voidMirror(
-    source: 'payroll' | 'compensation' | 'lab',
+    source: 'payroll' | 'compensation' | 'lab' | 'supplier',
     sourceId: string,
     mark: { at: Date; by: string; reason: string },
   ): Promise<void> {
@@ -188,6 +188,41 @@ export class ExpensesRepository {
           ),
         );
     });
+  }
+
+  /**
+   * Live supplier rows (feature 20a) that a manual expense could resemble: the same amount within
+   * `days` days of `spentOn`, or the same payee (spaces and case ignored).
+   */
+  supplierRowsLike(row: { amount: string; spentOn: string; payee: string | null }, days: number) {
+    const payee = (row.payee ?? '').replace(/\s+/g, '').toLocaleLowerCase();
+    return this.db.run((tx) =>
+      tx
+        .select({
+          id: expenses.id,
+          spentOn: expenses.spentOn,
+          amount: expenses.amount,
+          payee: expenses.payee,
+        })
+        .from(expenses)
+        .where(
+          and(
+            eq(expenses.source, 'supplier'),
+            isNull(expenses.voidedAt),
+            or(
+              and(
+                eq(expenses.amount, row.amount),
+                sql`${expenses.spentOn} between ${row.spentOn}::date - ${days}::int and ${row.spentOn}::date + ${days}::int`,
+              ),
+              payee === ''
+                ? undefined
+                : sql`lower(regexp_replace(coalesce(${expenses.payee}, ''), '[[:space:]]', '', 'g')) = ${payee}`,
+            ),
+          ),
+        )
+        .orderBy(expenses.spentOn)
+        .limit(5),
+    );
   }
 
   /** Newest first (date, then id), after `cursor`. */

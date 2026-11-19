@@ -9,6 +9,7 @@ import {
   CategorySeedingSubscriber,
   ExpensesCurrencyLockSubscriber,
   LabPaymentMirrorSubscriber,
+  SupplierPaymentMirrorSubscriber,
   PayoutMirrorSubscriber,
   SalaryMirrorSubscriber,
 } from './application/expenses.subscribers';
@@ -21,7 +22,7 @@ import { FixedExpensesRepository } from './persistence/fixed-expenses.repository
 /**
  * See docs/modules/expenses.md and ADR-0076, ADR-0078. Depends on `tenancy` (currency, time
  * zone, branches), `users` (the dentist named on a mirrored payout) and `audit`. Reacts in the
- * transaction to `compensation`'s payout events, `payroll`'s and `labs`' payment events (the mirrors) and
+ * transaction to `compensation`'s payout events, `payroll`'s, `labs`' and `inventory`'s payment events (the mirrors) and
  * to `TenantCurrencyChanged` (the lock), and after the commit to `TenantProvisioned`. Nothing
  * imports `expenses`.
  */
@@ -36,6 +37,7 @@ import { FixedExpensesRepository } from './persistence/fixed-expenses.repository
     CategorySeedingSubscriber,
     ExpensesCurrencyLockSubscriber,
     LabPaymentMirrorSubscriber,
+    SupplierPaymentMirrorSubscriber,
     PayoutMirrorSubscriber,
     SalaryMirrorSubscriber,
     CategoriesRepository,

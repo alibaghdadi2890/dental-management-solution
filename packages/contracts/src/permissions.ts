@@ -47,6 +47,11 @@ export const PERMISSIONS = [
   'lab:manage',
   'lab:money_read',
   'lab:money_manage',
+  'inventory:read',
+  'inventory:write',
+  'inventory:manage',
+  'inventory:money_read',
+  'inventory:money_manage',
   'dashboard:financial',
   'dashboard:operational',
 ] as const;

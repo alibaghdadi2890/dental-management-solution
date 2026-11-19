@@ -1,5 +1,6 @@
 import {
   adjustmentInputSchema,
+  balanceStateSchema,
   balancesQuerySchema,
   createWithOpeningBalanceSchema,
   currencyLockSchema,
@@ -35,6 +36,7 @@ class OpeningBalanceResultDto extends createZodDto(openingBalanceResultSchema) {
 class AdjustmentInputDto extends createZodDto(adjustmentInputSchema) {}
 class PatientBalanceDto extends createZodDto(patientBalanceSchema) {}
 class BalancesQueryDto extends createZodDto(balancesQuerySchema) {}
+class BalanceStateDto extends createZodDto(balanceStateSchema) {}
 class PatientParamsDto extends createZodDto(z.object({ id: idSchema })) {}
 class VisitParamsDto extends createZodDto(z.object({ visitId: idSchema })) {}
 class FullVisitSummaryDto extends createZodDto(fullVisitSummarySchema) {}
@@ -138,6 +140,14 @@ export class BillingController {
   @ZodResponse({ type: [PatientBalanceDto] })
   balances(@Query() query: BalancesQueryDto) {
     return this.billing.balancesFor(query.patientIds);
+  }
+
+  /** The search's balances without `finance:read` (search S9): no amount. */
+  @Get('balance-states')
+  @RequirePermission('payment:read')
+  @ZodResponse({ type: [BalanceStateDto] })
+  balanceStates(@Query() query: BalancesQueryDto) {
+    return this.billing.balanceStatesFor(query.patientIds);
   }
 
   @Get('patients/:id/balance')

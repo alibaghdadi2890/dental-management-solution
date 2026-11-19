@@ -154,6 +154,19 @@ export const balancesQuerySchema = z.object({
 });
 export type BalancesQuery = z.infer<typeof balancesQuerySchema>;
 
+/**
+ * A patient's balance without its amount (search S9): `owes` in any currency, else `credit` in
+ * any, else `settled`. For whoever reads one patient's account (`payment:read`) but not money
+ * across patients: a list of amounts needs `finance:read` (ADR-0055).
+ */
+export const BALANCE_STATES = ['owes', 'credit', 'settled'] as const;
+export const balanceStateSchema = z.object({
+  patientId: idSchema,
+  state: z.enum(BALANCE_STATES),
+});
+export type BalanceState = z.infer<typeof balanceStateSchema>;
+export const balanceStatesSchema = z.array(balanceStateSchema);
+
 /** The languages the CSV export's header row and values come in. */
 export const EXPORT_LANGUAGES = ['en', 'ar', 'fr'] as const;
 export const exportLanguageSchema = z.enum(EXPORT_LANGUAGES);

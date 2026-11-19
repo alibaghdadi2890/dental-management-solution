@@ -100,6 +100,7 @@ export class AuditService {
       withoutExpenses: !this.context.hasPermission('expense:read'),
       withoutPayroll: !this.context.hasPermission('payroll:read'),
       withoutLabMoney: !this.context.hasPermission('lab:money_read'),
+      withoutInventoryMoney: !this.context.hasPermission('inventory:money_read'),
       resourceType: query.resourceType,
       resourceId: query.resourceId,
       feed: query.feed,

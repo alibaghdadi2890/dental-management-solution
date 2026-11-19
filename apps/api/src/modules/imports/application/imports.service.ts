@@ -1,4 +1,6 @@
 import type {
+  ImportInventoryItemRow,
+  ImportInventoryItemsRequest,
   ImportPatientRow,
   ImportPatientsRequest,
   ImportResult,
@@ -15,6 +17,7 @@ import { DomainError } from '../../../platform/kernel/domain-error';
 import { ValidationFailedError } from '../../../platform/kernel/validation-failed.error';
 import { BillingService } from '../../billing';
 import { CatalogService, VisitImportService } from '../../clinical';
+import { ItemsService, StockService, SuppliersService } from '../../inventory';
 import { MedicalOptionsService, PatientsService } from '../../patients';
 
 /** What one row did: a record created, or one a previous run already created. */
@@ -62,6 +65,9 @@ export class ImportsService {
     private readonly billing: BillingService,
     private readonly catalog: CatalogService,
     private readonly visits: VisitImportService,
+    private readonly inventoryItems: ItemsService,
+    private readonly inventoryStock: StockService,
+    private readonly suppliers: SuppliersService,
   ) {}
 
   /** New catalog services; a code the clinic already has is left as it is (`exists`). */
@@ -89,6 +95,60 @@ export class ImportsService {
       (row) => row.externalId,
       (row) => this.visit(row),
     );
+  }
+
+  /**
+   * Inventory items and their opening stock (feature 20a, B8): matched by code, else by name,
+   * else created; opening stock only where the item has none yet, so a re-run adds nothing.
+   */
+  importInventoryItems(request: ImportInventoryItemsRequest): Promise<ImportResult> {
+    return this.each(
+      request,
+      (row) => row.code ?? row.name,
+      (row) => this.inventoryItem(row),
+    );
+  }
+
+  private async inventoryItem(row: ImportInventoryItemRow): Promise<RowOutcome> {
+    let created = false;
+    let item = await this.inventoryItems.findForImport(row.code, row.name);
+    if (!item) {
+      const usualSupplierId = row.usualSupplier
+        ? await this.suppliers.idByName(row.usualSupplier)
+        : null;
+      if (row.usualSupplier && usualSupplierId === null) {
+        throw new ImportRowError(
+          'import.unknown_supplier',
+          `No supplier is named ${row.usualSupplier}`,
+          'usualSupplier',
+        );
+      }
+      const [saved] = await this.inventoryItems.saveItems({
+        items: [
+          {
+            name: row.name,
+            code: row.code,
+            categoryId: await this.inventoryItems.categoryForImport(row.category),
+            unit: row.unit,
+            packName: row.packName,
+            packSize: row.packSize,
+            reorderLevel: row.reorderLevel,
+            usualSupplierId,
+            usualOrderPacks: row.usualOrderPacks,
+            tracksExpiry: row.tracksExpiry,
+            note: row.note,
+            active: true,
+          },
+        ],
+      });
+      if (!saved) throw new Error(`import: inventory item ${row.name} was not saved`);
+      item = saved;
+      created = true;
+    }
+    for (const entry of row.opening) {
+      if (await this.inventoryStock.importOpening(item.id, entry.branchId, entry)) created = true;
+    }
+    return { status: created ? 'created' : 'exists', id: item.id };
   }
 
   private async service(row: ImportServiceRow): Promise<RowOutcome> {

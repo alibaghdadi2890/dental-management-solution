@@ -36,6 +36,8 @@ const FRONTDESK = [
   'appointment:override',
   'lab:read',
   'lab:manage',
+  'inventory:read',
+  'inventory:write',
 ];
 
 describe('session: role-based permissions, branch switch and password change', () => {

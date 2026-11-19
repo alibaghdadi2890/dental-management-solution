@@ -49,6 +49,16 @@ export const CAPABILITY_GROUPS = [
     key: 'lab',
     permissions: ['lab:read', 'lab:manage', 'lab:money_read', 'lab:money_manage'],
   },
+  {
+    key: 'inventory',
+    permissions: [
+      'inventory:read',
+      'inventory:write',
+      'inventory:manage',
+      'inventory:money_read',
+      'inventory:money_manage',
+    ],
+  },
   { key: 'dashboard', permissions: ['dashboard:financial', 'dashboard:operational'] },
   { key: 'activity', permissions: ['audit:read'] },
   { key: 'clinic', permissions: ['tenant:read', 'tenant:write', 'import:run'] },
@@ -87,6 +97,12 @@ export const CAPABILITY_IMPLIES: Readonly<
   // Lab money is about orders and labs: seeing it means seeing them (ADR-0086).
   'lab:money_read': ['lab:read'],
   'lab:money_manage': ['lab:money_read'],
+  // Taking out and receiving is working with stock; managing it includes both (ADR-0101).
+  'inventory:write': ['inventory:read'],
+  'inventory:manage': ['inventory:write'],
+  // Inventory money is about stock: seeing costs means seeing the stock they are of.
+  'inventory:money_read': ['inventory:read'],
+  'inventory:money_manage': ['inventory:money_read'],
   // The financial dashboard is money across patients (ADR-0092).
   'dashboard:financial': ['finance:read'],
   'user:write': ['user:read'],

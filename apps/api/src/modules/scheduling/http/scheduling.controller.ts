@@ -7,6 +7,8 @@ import {
   appointmentCheckSchema,
   appointmentRangeQuerySchema,
   appointmentSchema,
+  upcomingAppointmentSchema,
+  upcomingQuerySchema,
   bookAppointmentSchema,
   cancelAppointmentSchema,
   changeAppointmentRoomSchema,
@@ -55,6 +57,8 @@ class AppointmentListPageDto extends createZodDto(appointmentListPageSchema) {}
 class PatientListQueryDto extends createZodDto(patientListQuerySchema) {}
 class PatientPageDto extends createZodDto(patientPageSchema) {}
 class AppointmentListDto extends createZodDto(z.array(appointmentSchema)) {}
+class UpcomingAppointmentDto extends createZodDto(upcomingAppointmentSchema) {}
+class UpcomingQueryDto extends createZodDto(upcomingQuerySchema) {}
 class RangeQueryDto extends createZodDto(appointmentRangeQuerySchema) {}
 class BookDto extends createZodDto(bookAppointmentSchema) {}
 class RescheduleDto extends createZodDto(rescheduleAppointmentSchema) {}
@@ -249,6 +253,14 @@ export class SchedulingController {
   @ZodResponse({ type: TodayDto })
   today(@Query() query: BranchQueryDto) {
     return this.appointments.todayBoard(query.branchId);
+  }
+
+  /** The search's next appointments (search S9). Before `patients/:id/…`; its own depth anyway. */
+  @Get('patients/upcoming')
+  @RequirePermission('appointment:read')
+  @ZodResponse({ type: [UpcomingAppointmentDto] })
+  upcoming(@Query() query: UpcomingQueryDto) {
+    return this.appointments.nextFor(query.patientIds);
   }
 
   @Get('patients/:id/appointments')

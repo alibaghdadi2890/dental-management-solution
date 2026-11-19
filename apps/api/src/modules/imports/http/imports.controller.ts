@@ -1,4 +1,5 @@
 import {
+  importInventoryItemsRequestSchema,
   importPatientsRequestSchema,
   importResultSchema,
   importServicesRequestSchema,
@@ -12,6 +13,7 @@ import { ImportsService } from '../application/imports.service';
 class ImportServicesDto extends createZodDto(importServicesRequestSchema) {}
 class ImportPatientsDto extends createZodDto(importPatientsRequestSchema) {}
 class ImportVisitsDto extends createZodDto(importVisitsRequestSchema) {}
+class ImportInventoryItemsDto extends createZodDto(importInventoryItemsRequestSchema) {}
 class ImportResultDto extends createZodDto(importResultSchema) {}
 
 /**
@@ -36,6 +38,14 @@ export class ImportsController {
   @ZodResponse({ type: ImportResultDto })
   patients(@Body() body: ImportPatientsDto) {
     return this.imports.importPatients(body);
+  }
+
+  @Post('inventory-items')
+  @RequirePermission('import:run')
+  @HttpCode(HttpStatus.OK)
+  @ZodResponse({ type: ImportResultDto })
+  inventoryItems(@Body() body: ImportInventoryItemsDto) {
+    return this.imports.importInventoryItems(body);
   }
 
   @Post('visits')

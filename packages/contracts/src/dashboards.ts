@@ -348,12 +348,28 @@ export type FinancialPlans = z.infer<typeof financialPlansSchema>;
 export const financialOwesSchema = z.object({
   currency: currencySchema,
   labs: amount.nullable(),
+  /** Suppliers' outstanding (feature 20a); null without `inventory:money_read`. */
+  suppliers: amount.nullable(),
   salaries: amount.nullable(),
   dentists: amount.nullable(),
   fixed: z.object({ count, amount }).nullable(),
   credit: amount,
 });
 export type FinancialOwes = z.infer<typeof financialOwesSchema>;
+
+/**
+ * The Stock card (feature 20a, C4): stock value now, consumption in the period, the most consumed
+ * items by cost (top eight and the rest). Null with a dentist filter: stock is not a dentist's.
+ */
+export const financialStockSchema = z.object({
+  currency: currencySchema,
+  value: amount,
+  consumption: amount,
+  top: z.array(z.object({ itemId: idSchema, name: z.string(), cost: amount })),
+  other: amount,
+  unpriced: z.object({ receipts: count, openingBatches: count }),
+});
+export type FinancialStock = z.infer<typeof financialStockSchema>;
 
 // --- Operational ---
 
@@ -484,6 +500,10 @@ export const operationalAttentionSchema = z.object({
   followUpsOverdue: count,
   labLate: count.nullable(),
   labArrivedUnbooked: z.object({ count, orderIds: z.array(idSchema) }).nullable(),
+  /** Item-branch pairs labelled so now (feature 20a); null without `inventory:read`. */
+  stockOut: count.nullable(),
+  stockLow: count.nullable(),
+  stockExpired: count.nullable(),
   incomplete: count.nullable(),
 });
 export type OperationalAttention = z.infer<typeof operationalAttentionSchema>;

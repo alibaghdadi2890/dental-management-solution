@@ -85,7 +85,14 @@ export const updateExpenseCategorySchema = z
 export type UpdateExpenseCategory = z.infer<typeof updateExpenseCategorySchema>;
 
 /** Where an expense comes from: typed by hand, a confirmed fixed item, or a mirror (read-only). */
-export const EXPENSE_SOURCES = ['manual', 'fixed', 'payroll', 'compensation', 'lab'] as const;
+export const EXPENSE_SOURCES = [
+  'manual',
+  'fixed',
+  'payroll',
+  'compensation',
+  'lab',
+  'supplier',
+] as const;
 export const expenseSourceSchema = z.enum(EXPENSE_SOURCES);
 export type ExpenseSource = z.infer<typeof expenseSourceSchema>;
 
@@ -115,6 +122,18 @@ export const expenseSchema = z.object({
 });
 export type Expense = z.infer<typeof expenseSchema>;
 
+/** A supplier row in Expenses that a manual one resembles (feature 20a, C3). */
+export const resemblingExpenseSchema = z.object({
+  id: idSchema,
+  spentOn: isoDateSchema,
+  amount: balanceAmountSchema,
+  payee: z.string().nullable(),
+});
+export type ResemblingExpense = z.infer<typeof resemblingExpenseSchema>;
+
+/** The days either side of a manual expense's date within which the same amount resembles. */
+export const RESEMBLANCE_DAYS = 3;
+
 /** Editable from Expenses: typed or confirmed rows, never the mirrors. */
 export const isEditableExpense = (expense: Pick<Expense, 'source' | 'voidedAt'>): boolean =>
   (expense.source === 'manual' || expense.source === 'fixed') && expense.voidedAt === null;
@@ -130,15 +149,26 @@ const expenseFields = {
   branchId: idSchema.nullish().transform((value) => value ?? null),
 };
 
+/**
+ * Saving into *Dental supplies & materials* a row that resembles a supplier payment already in
+ * Expenses is refused with `expense.resembles_supplier_payment` until it is sent again with this
+ * (feature 20a, C3): a warning, never a block.
+ */
+const allowResemblance = z.boolean().default(false);
+
 /** `POST /expenses` (Idempotency-Key). *Other* needs a description (checked by the service). */
-export const recordExpenseSchema = z.object(expenseFields);
+export const recordExpenseSchema = z.object({ ...expenseFields, allowResemblance });
 export type RecordExpense = z.infer<typeof recordExpenseSchema>;
 export type RecordExpenseRequest = z.input<typeof recordExpenseSchema>;
 
 export const updateExpenseSchema = z
   .object(expenseFields)
   .partial()
-  .refine((patch) => Object.keys(patch).length > 0, 'Nothing to change');
+  .extend({ allowResemblance })
+  .refine(
+    ({ allowResemblance: _allow, ...patch }) => Object.keys(patch).length > 0,
+    'Nothing to change',
+  );
 export type UpdateExpense = z.infer<typeof updateExpenseSchema>;
 export type UpdateExpenseRequest = z.input<typeof updateExpenseSchema>;
 

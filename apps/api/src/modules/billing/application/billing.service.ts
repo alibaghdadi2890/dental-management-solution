@@ -1,5 +1,6 @@
 import {
   type AdjustmentInput,
+  type BalanceState,
   type CreateWithOpeningBalance,
   type CurrencyLock,
   fromCents,
@@ -25,6 +26,7 @@ import { VisitNotLiveError, VisitFactsService } from '../../clinical';
 import { PatientNotFoundError, PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { heldUnspent } from '../domain/allocate';
+import { balanceStateOf } from '../domain/balance-state';
 import { patientBalance, sumBalances } from '../domain/balances';
 import type { LedgerEntry } from '../domain/ledger-entry';
 import { LedgerIdempotencyMismatchError } from '../domain/ledger-errors';
@@ -214,6 +216,25 @@ export class BillingService {
           sums.filter((sum) => sum.patientId === patientId),
         ),
       );
+    });
+  }
+
+  /**
+   * The search's balances without `finance:read` (search S9): owes, in credit or settled, for the
+   * patients among `patientIds` the caller can see; no amount (ADR-0055).
+   */
+  async balanceStatesFor(patientIds: readonly string[]): Promise<BalanceState[]> {
+    this.context.requirePermission('payment:read');
+    return this.tenantDb.run(async () => {
+      const visible = new Set((await this.patients.getMany(patientIds)).map(({ id }) => id));
+      const known = [...new Set(patientIds)].filter((id) => visible.has(id));
+      const sums = await this.entries.sumsByPatient(known);
+      return known.map((patientId) => ({
+        patientId,
+        state: balanceStateOf(
+          sums.filter((sum) => sum.patientId === patientId).map((sum) => sum.amount),
+        ),
+      }));
     });
   }
 

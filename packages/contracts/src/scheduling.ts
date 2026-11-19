@@ -797,3 +797,22 @@ export function combineProposals(proposals: readonly NextAppointmentProposal[]):
       'no_preference',
   };
 }
+
+/** At most this many patients per `GET /scheduling/patients/upcoming` (the search's rows). */
+const UPCOMING_PATIENTS_MAX = 100;
+
+/** `GET /scheduling/patients/upcoming?patientIds=` (search S9). */
+export const upcomingQuerySchema = z.object({
+  patientIds: commaSeparatedIds(UPCOMING_PATIENTS_MAX),
+});
+export type UpcomingQuery = z.infer<typeof upcomingQuerySchema>;
+
+/** A patient's next booked or confirmed appointment from now; patients with none are left out. */
+export const upcomingAppointmentSchema = z.object({
+  patientId: idSchema,
+  appointmentId: idSchema,
+  startsAt: isoDateTimeSchema,
+  dentistName: z.string(),
+});
+export type UpcomingAppointment = z.infer<typeof upcomingAppointmentSchema>;
+export const upcomingAppointmentsSchema = z.array(upcomingAppointmentSchema);

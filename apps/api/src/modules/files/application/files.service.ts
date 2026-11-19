@@ -33,7 +33,7 @@ import { type VisitRef, VisitFactsService } from '../../clinical';
 import { PatientsService } from '../../patients';
 import { TenancyService } from '../../tenancy';
 import { UsersService } from '../../users';
-import { CONTENT_HEAD_BYTES, contentMatches } from '../domain/content-check';
+import { CONTENT_HEAD_BYTES, contentMatches } from '../../../platform/storage/content-check';
 import { changesOf } from '../domain/file-changes';
 import {
   FileArchiveForbiddenError,

@@ -73,7 +73,8 @@ const DEFAULT_EXPIRY_SECONDS = 300;
  * S3-compatible object storage. Keys are always namespaced by tenant, and every call refuses keys
  * outside the current tenant. Signed-URL generation is the one external call allowed inside a
  * mutating request (CLAUDE.md §9); `head`, `readStart`, `copy` and `remove` are for the `files`
- * module, outside its transactions (ADR-0039, ADR-0041).
+ * module and for `inventory`'s receipt attachments, outside their transactions (ADR-0039,
+ * ADR-0041, ADR-0100).
  */
 @Injectable()
 export class ObjectStorage {

@@ -8,6 +8,15 @@ import {
   serviceItemInputSchema,
 } from './catalog.js';
 import { idSchema, isoDateSchema, nameSchema, optionalText } from './common.js';
+import {
+  ITEM_CODE_MAX,
+  ITEM_NAME_MAX,
+  LOT_MAX,
+  PACK_SIZE_MAX,
+  QUANTITY_MAX,
+  SUPPLIER_NAME_MAX,
+  UNIT_NAME_MAX,
+} from './inventory.js';
 import { patientInputSchema, patientSexSchema } from './patients.js';
 import { toothCodeSchema } from './tooth.js';
 
@@ -111,6 +120,63 @@ export const importVisitRowSchema = z
 export const importVisitsRequestSchema = importRequestSchema(importVisitRowSchema);
 export type ImportVisitsRequest = z.infer<typeof importVisitsRequestSchema>;
 export type ImportVisitRow = z.infer<typeof importVisitRowSchema>;
+
+/**
+ * An inventory item and its opening stock (feature 20a, B8). Matched by code, else by name, else
+ * created; `category` is a predefined category's name in any language or a custom one (created
+ * when new); `usualSupplier` a supplier's name. Opening stock is added for a branch only while the
+ * item has no batch there, so a second run adds nothing. Without `branchId` it is the clinic's
+ * first branch.
+ */
+export const importInventoryItemRowSchema = z
+  .object({
+    code: optionalText(ITEM_CODE_MAX),
+    name: z.string().trim().min(1).max(ITEM_NAME_MAX),
+    category: z.string().trim().min(1).max(60),
+    unit: z.string().trim().min(1).max(UNIT_NAME_MAX),
+    packName: optionalText(UNIT_NAME_MAX),
+    packSize: z
+      .number()
+      .int()
+      .min(1)
+      .max(PACK_SIZE_MAX)
+      .nullish()
+      .transform((v) => v ?? null),
+    reorderLevel: z
+      .number()
+      .int()
+      .min(0)
+      .nullish()
+      .transform((v) => v ?? null),
+    tracksExpiry: z.boolean().default(false),
+    usualSupplier: optionalText(SUPPLIER_NAME_MAX),
+    usualOrderPacks: z
+      .number()
+      .int()
+      .min(1)
+      .nullish()
+      .transform((v) => v ?? null),
+    note: optionalText(500),
+    opening: z
+      .array(
+        z.object({
+          branchId: idSchema.nullish().transform((v) => v ?? null),
+          quantity: z.number().int().min(1).max(QUANTITY_MAX),
+          unitCost: nonNegativeAmountSchema.nullish().transform((v) => v ?? null),
+          lot: optionalText(LOT_MAX),
+          expiresOn: isoDateSchema.nullish().transform((v) => v ?? null),
+        }),
+      )
+      .max(20)
+      .default([]),
+  })
+  .refine((row) => (row.packName === null) === (row.packSize === null), {
+    path: ['packSize'],
+    message: 'A pack needs a name and a size',
+  });
+export const importInventoryItemsRequestSchema = importRequestSchema(importInventoryItemRowSchema);
+export type ImportInventoryItemsRequest = z.infer<typeof importInventoryItemsRequestSchema>;
+export type ImportInventoryItemRow = z.infer<typeof importInventoryItemRowSchema>;
 
 export const IMPORT_ROW_STATUSES = ['created', 'exists', 'failed'] as const;
 

@@ -7,6 +7,7 @@ import {
   type FinancialPlans,
   type FinancialReceivables,
   type FinancialServices,
+  type FinancialStock,
   fromCents,
   isWholeMonths,
   toCents,
@@ -19,6 +20,7 @@ import { BillingSummaryService } from '../../billing';
 import { ClinicalSummaryService } from '../../clinical';
 import { CompensationService } from '../../compensation';
 import { ExpensesService } from '../../expenses';
+import { InventoryReportsService, SuppliersService } from '../../inventory';
 import { LabsService } from '../../labs';
 import { PayrollRunsService } from '../../payroll';
 import { TenancyService } from '../../tenancy';
@@ -50,6 +52,8 @@ export class FinancialDashboardService {
     private readonly payroll: PayrollRunsService,
     private readonly compensation: CompensationService,
     private readonly labs: LabsService,
+    private readonly suppliers: SuppliersService,
+    private readonly inventory: InventoryReportsService,
   ) {}
 
   /** Production, collections, discounts and their 12 months; the payment methods. */
@@ -192,6 +196,20 @@ export class FinancialDashboardService {
     return this.clinical.planValue();
   }
 
+  /**
+   * The Stock card (feature 20a, C4): Reports' stock value now, consumption in the period and the
+   * most consumed items, with `inventory:money_read`. Stock is not a dentist's: the SPA sets the
+   * card aside with a dentist filter, and the figures ignore it.
+   */
+  stock(query: DashboardQuery): Promise<FinancialStock> {
+    this.context.requirePermission('dashboard:financial');
+    this.context.requirePermission('inventory:money_read');
+    return this.tenantDb.run(async () => {
+      const spans = await this.periods.resolve(query);
+      return this.inventory.stockCard({ ...spans.current, branchId: query.branchId });
+    });
+  }
+
   /** What the clinic owes now; each line only with its own permission, otherwise null. */
   owes(): Promise<FinancialOwes> {
     this.context.requirePermission('dashboard:financial');
@@ -203,6 +221,7 @@ export class FinancialDashboardService {
       return {
         currency: tenant.currency,
         labs: can('lab:money_read') ? (await this.labs.accounts()).total.outstanding : null,
+        suppliers: can('inventory:money_read') ? await this.suppliers.outstanding() : null,
         salaries: can('payroll:read') ? await this.payroll.waiting() : null,
         dentists: can('compensation:manage')
           ? (await this.compensation.report(month)).kpis.balanceOwed

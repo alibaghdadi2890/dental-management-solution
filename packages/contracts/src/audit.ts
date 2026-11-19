@@ -29,6 +29,7 @@ export const ACTIVITY_AREAS = [
   'expenses',
   'payroll',
   'labs',
+  'inventory',
 ] as const;
 export const activityAreaSchema = z.enum(ACTIVITY_AREAS);
 export type ActivityArea = z.infer<typeof activityAreaSchema>;
@@ -71,6 +72,15 @@ const AREA_OF_PREFIX: Readonly<Record<string, ActivityArea>> = {
   lab_order: 'labs',
   lab_payment: 'labs',
   lab_adjustment: 'labs',
+  inventory_category: 'inventory',
+  inventory_item: 'inventory',
+  inventory_supplier: 'inventory',
+  inventory_receipt: 'inventory',
+  inventory_movement: 'inventory',
+  inventory_count: 'inventory',
+  inventory_payment: 'inventory',
+  inventory_adjustment: 'inventory',
+  inventory_settings: 'inventory',
 };
 
 /**

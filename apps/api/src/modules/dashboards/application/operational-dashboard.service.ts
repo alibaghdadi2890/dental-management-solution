@@ -18,6 +18,7 @@ import { RequestContext } from '../../../platform/cls/request-context';
 import { TenantDb } from '../../../platform/db/tenant-db';
 import { localDate } from '../../../platform/kernel/local-date';
 import { ClinicalSummaryService, type FinishedVisitRow, type PlanStageRow } from '../../clinical';
+import { StockService } from '../../inventory';
 import { LabOrderReadsService, LabsService } from '../../labs';
 import { PatientsService } from '../../patients';
 import { SchedulingSummaryService } from '../../scheduling';
@@ -62,6 +63,7 @@ export class OperationalDashboardService {
     private readonly patients: PatientsService,
     private readonly labOrders: LabOrderReadsService,
     private readonly labs: LabsService,
+    private readonly stock: StockService,
   ) {}
 
   appointments(query: DashboardQuery): Promise<OperationalAppointments> {
@@ -241,6 +243,11 @@ export class OperationalDashboardService {
         ? await this.labOrders.attention(filter)
         : null;
       const clinicWide = query.branchId === undefined && query.dentistId === undefined;
+      // Stock is per branch, never a dentist's (feature 20a, C4).
+      const stock =
+        this.context.hasPermission('inventory:read') && query.dentistId === undefined
+          ? await this.stock.attention(query.branchId)
+          : null;
       return {
         unresolved: schedule.unresolved,
         openVisits: await this.clinical.openVisits(today, filter),
@@ -250,6 +257,9 @@ export class OperationalDashboardService {
         labArrivedUnbooked: lab
           ? { count: lab.arrivedUnbooked.length, orderIds: lab.arrivedUnbooked.slice(0, 50) }
           : null,
+        stockOut: stock?.out ?? null,
+        stockLow: stock?.low ?? null,
+        stockExpired: stock?.expired ?? null,
         incomplete: clinicWide ? await this.patients.incompleteCount() : null,
       };
     });

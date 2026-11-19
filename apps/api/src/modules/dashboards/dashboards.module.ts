@@ -3,6 +3,7 @@ import { BillingModule } from '../billing';
 import { ClinicalModule } from '../clinical';
 import { CompensationModule } from '../compensation';
 import { ExpensesModule } from '../expenses';
+import { InventoryModule } from '../inventory';
 import { LabsModule } from '../labs';
 import { PatientsModule } from '../patients';
 import { PayrollModule } from '../payroll';
@@ -17,7 +18,7 @@ import { DashboardsController } from './http/dashboards.controller';
 /**
  * See docs/modules/dashboards.md and ADR-0087 to ADR-0092. Owns no tables: every figure comes
  * from the summary of the module that holds its facts (`billing`, `clinical`, `scheduling`,
- * `patients`, `expenses`, `payroll`, `compensation`, `labs`), with `tenancy` and `users` for the
+ * `patients`, `expenses`, `payroll`, `compensation`, `labs`, `inventory`), with `tenancy` and `users` for the
  * clinic and the names. No module imports `dashboards`.
  */
 @Module({
@@ -26,6 +27,7 @@ import { DashboardsController } from './http/dashboards.controller';
     ClinicalModule,
     CompensationModule,
     ExpensesModule,
+    InventoryModule,
     LabsModule,
     PatientsModule,
     PayrollModule,

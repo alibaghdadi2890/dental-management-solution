@@ -14,6 +14,12 @@ import {
   type PayrollPaymentVoided,
 } from '../../payroll';
 import {
+  SUPPLIER_PAYMENT_RECORDED,
+  SUPPLIER_PAYMENT_VOIDED,
+  type SupplierPaymentRecorded,
+  type SupplierPaymentVoided,
+} from '../../inventory';
+import {
   LAB_PAYMENT_RECORDED,
   LAB_PAYMENT_VOIDED,
   type LabPaymentRecorded,
@@ -172,5 +178,40 @@ export class LabPaymentMirrorSubscriber {
   @OnDomainEventInTransaction(LAB_PAYMENT_VOIDED)
   async onPaymentVoided(event: LabPaymentVoided): Promise<void> {
     await this.expenses.voidMirror('lab', event.payload.paymentId, event.payload.reason);
+  }
+}
+
+/**
+ * Only a payment to a supplier is an expense (feature 20a, ADR-0098): a supplier payment, or a
+ * one-off purchase's, writes a read-only Dental supplies & materials row with the payee, and
+ * voiding it voids the row, in the payment's transaction. Receipts, opening balances,
+ * adjustments and stock movements never reach Expenses.
+ */
+@Injectable()
+export class SupplierPaymentMirrorSubscriber {
+  constructor(private readonly expenses: ExpensesService) {}
+
+  @OnDomainEventInTransaction(SUPPLIER_PAYMENT_RECORDED)
+  async onPaymentRecorded(event: SupplierPaymentRecorded): Promise<void> {
+    const { paymentId, payee, paidOn, amount, currency, method, reference, note, branchId } =
+      event.payload;
+    await this.expenses.recordMirror({
+      source: 'supplier',
+      sourceId: paymentId,
+      spentOn: paidOn,
+      amount,
+      currency,
+      method,
+      payee,
+      reference,
+      description: note,
+      branchId,
+      sourceMonth: null,
+    });
+  }
+
+  @OnDomainEventInTransaction(SUPPLIER_PAYMENT_VOIDED)
+  async onPaymentVoided(event: SupplierPaymentVoided): Promise<void> {
+    await this.expenses.voidMirror('supplier', event.payload.paymentId, event.payload.reason);
   }
 }

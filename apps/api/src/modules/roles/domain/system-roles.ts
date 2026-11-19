@@ -45,6 +45,8 @@ export const SYSTEM_ROLES: readonly SystemRole[] = [
       'appointment:write',
       'lab:read',
       'lab:manage',
+      'inventory:read',
+      'inventory:write',
     ],
   },
   {
@@ -67,6 +69,9 @@ export const SYSTEM_ROLES: readonly SystemRole[] = [
       'appointment:write_all',
       'lab:read',
       'lab:manage',
+      'inventory:read',
+      'inventory:write',
+      'inventory:manage',
     ],
   },
   {
@@ -91,6 +96,8 @@ export const SYSTEM_ROLES: readonly SystemRole[] = [
       'appointment:override',
       'lab:read',
       'lab:manage',
+      'inventory:read',
+      'inventory:write',
     ],
   },
 ];

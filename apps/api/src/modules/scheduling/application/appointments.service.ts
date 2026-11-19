@@ -28,6 +28,7 @@ import {
   type SlotDay,
   type SlotQuery,
   type TodayBoard,
+  type UpcomingAppointment,
 } from '@dcm/contracts';
 import { Inject, Injectable } from '@nestjs/common';
 import { PermissionDeniedError } from '../../../platform/cls/permission-denied.error';
@@ -213,6 +214,22 @@ export class AppointmentsService {
     return this.tenantDb.run(async () =>
       this.presenter.presentAll(await this.appointments.forPatient(patientId)),
     );
+  }
+
+  /** Each patient's next booked or confirmed appointment from now (search S9); none, left out. */
+  nextFor(patientIds: readonly string[]): Promise<UpcomingAppointment[]> {
+    this.context.requirePermission('appointment:read');
+    return this.tenantDb.run(async () => {
+      const rows = await this.appointments.nextForPatients(patientIds, this.clock.now());
+      const dentists = await this.users.practitionersByProfileIds(rows.map((row) => row.dentistId));
+      const names = new Map(dentists.map((dentist) => [dentist.id, dentist.displayName]));
+      return rows.map((row) => ({
+        patientId: row.patientId,
+        appointmentId: row.id,
+        startsAt: row.startsAt.toISOString(),
+        dentistName: names.get(row.dentistId) ?? '',
+      }));
+    });
   }
 
   resources(branchId: string): Promise<ScheduleResources> {

@@ -107,10 +107,10 @@ export const expenses = pgTable(
     uniqueIndex('expenses_manual_idempotency_unique')
       .on(table.tenantId, table.idempotencyKey)
       .where(sql`${table.idempotencyKey} is not null and ${table.source} = 'manual'`),
-    /** One row per payroll payment or payout, ever. */
+    /** One row per payroll payment, payout, lab or supplier payment, ever. */
     uniqueIndex('expenses_mirror_unique')
       .on(table.tenantId, table.source, table.sourceId)
-      .where(sql`${table.source} in ('payroll', 'compensation', 'lab')`),
+      .where(sql`${table.source} in ('payroll', 'compensation', 'lab', 'supplier')`),
     /** At most one live expense per fixed item; a voided one makes room for the next. */
     uniqueIndex('expenses_fixed_live_unique')
       .on(table.tenantId, table.sourceId)

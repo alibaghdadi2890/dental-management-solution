@@ -142,6 +142,24 @@ export class AppointmentsRepository {
     );
   }
 
+  /** Each patient's first booked or confirmed appointment starting from `now` (search S9). */
+  nextForPatients(patientIds: readonly string[], now: Date): Promise<StoredAppointment[]> {
+    if (patientIds.length === 0) return Promise.resolve([]);
+    return this.db.run((tx) =>
+      tx
+        .selectDistinctOn([appointments.patientId])
+        .from(appointments)
+        .where(
+          and(
+            inArray(appointments.patientId, [...patientIds]),
+            inArray(appointments.status, ['booked', 'confirmed']),
+            gte(appointments.startsAt, now),
+          ),
+        )
+        .orderBy(appointments.patientId, asc(appointments.startsAt), asc(appointments.id)),
+    );
+  }
+
   activeForPatient(patientId: string): Promise<StoredAppointment[]> {
     return this.db.run((tx) =>
       tx

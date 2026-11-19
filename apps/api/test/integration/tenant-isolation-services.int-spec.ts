@@ -1,4 +1,13 @@
 import type {
+  Count,
+  InventoryCategory,
+  InventoryItem,
+  StockList,
+  StockReceipt,
+  Supplier,
+  SupplierAccounts,
+  SupplierPayment,
+  TakeOutResult,
   Lab,
   LabAccounts,
   LabOrder,
@@ -420,6 +429,10 @@ describe('tenant isolation through the public services', () => {
       );
       expect(balances.status).toBe(200);
       expect(balances.body).toEqual([{ patientId: a.patient.id, balances: [], charged: [] }]);
+      const states = await ownerA.get(
+        `/api/v1/billing/balance-states?patientIds=${a.patient.id},${id}`,
+      );
+      expect(states.body).toEqual([{ patientId: a.patient.id, state: 'settled' }]);
 
       // B's patient owes; A's owing list (the building block of A's patient views) never has it.
       const owingInA = await asPlatformAdminIn(testApp.app, a.tenant.id, () =>
@@ -1180,6 +1193,10 @@ describe('tenant isolation through the public services', () => {
         .send({ startsAt });
       expect(moved.status).toBe(404);
       expect((await ownerA.get(`/api/v1/scheduling/appointments/${id}`)).status).toBe(404);
+      const upcoming = await ownerA.get(
+        `/api/v1/scheduling/patients/upcoming?patientIds=${patient.id}`,
+      );
+      expect(upcoming.body).toEqual([]);
       expect(
         (
           await ownerA.post('/api/v1/scheduling/appointments/check').send({
@@ -1517,6 +1534,163 @@ describe('tenant isolation through the public services', () => {
         outstanding: '-10.00',
       });
     });
+    it("inventory (ADR-0094–0101): B's items, stock, receipts, suppliers and accounts are not found for A, and unchanged", async () => {
+      const categoriesB = (await ownerB.get('/api/v1/inventory/categories'))
+        .body as InventoryCategory[];
+      const supplier = (
+        await ownerB.post('/api/v1/inventory/suppliers').send({ name: 'Bravo Supplies' })
+      ).body as Supplier;
+      const [item] = (
+        await ownerB.put('/api/v1/inventory/items').send({
+          items: [{ name: 'Bravo gloves', categoryId: categoriesB[0]?.id, unit: 'piece' }],
+        })
+      ).body as InventoryItem[];
+      const receipt = (
+        await ownerB
+          .post('/api/v1/inventory/receipts')
+          .set('Idempotency-Key', newId())
+          .send({
+            supplierId: supplier.id,
+            branchId: b.branch.id,
+            receivedOn: '2026-01-02',
+            lines: [{ itemId: item?.id, quantity: 10, price: '1' }],
+          })
+      ).body as StockReceipt;
+      const takeOut = (
+        await ownerB
+          .post('/api/v1/inventory/take-outs')
+          .set('Idempotency-Key', newId())
+          .send({ branchId: b.branch.id, items: [{ itemId: item?.id, quantity: 1 }] })
+      ).body as TakeOutResult;
+      const payment = (
+        await ownerB
+          .post(`/api/v1/inventory/suppliers/${supplier.id}/payments`)
+          .set('Idempotency-Key', newId())
+          .send({ paidOn: '2026-01-02', amount: '5', method: 'cash' })
+      ).body as SupplierPayment;
+      const count = (await ownerB.post('/api/v1/inventory/counts').send({ branchId: b.branch.id }))
+        .body as Count;
+      const itemId = item?.id ?? '';
+      const batchId = receipt.lines[0]?.batchId ?? '';
+      const movementId = takeOut.movements[0]?.id ?? '';
+      expect(
+        [supplier.id, itemId, receipt.id, movementId, payment.id, count.id].every(Boolean),
+      ).toBe(true);
+      const key = () => newId();
+      const attempts = [
+        () => ownerA.get(`/api/v1/inventory/items/${itemId}`),
+        () =>
+          ownerA
+            .put(`/api/v1/inventory/items/${itemId}/branches/${a.branch.id}/ordered`)
+            .send({ orderedOn: '2026-01-02' }),
+        () =>
+          ownerA
+            .post(`/api/v1/inventory/items/${itemId}/report-count`)
+            .send({ branchId: a.branch.id }),
+        () => ownerA.get(`/api/v1/inventory/stock?branchId=${b.branch.id}`),
+        () =>
+          ownerA
+            .post('/api/v1/inventory/take-outs')
+            .set('Idempotency-Key', key())
+            .send({ branchId: a.branch.id, items: [{ itemId, quantity: 1 }] }),
+        () => ownerA.post(`/api/v1/inventory/movements/${movementId}/undo`),
+        () =>
+          ownerA
+            .post(`/api/v1/inventory/movements/${movementId}/reverse`)
+            .send({ reason: 'Not ours' }),
+        () =>
+          ownerA
+            .post('/api/v1/inventory/adjustments')
+            .set('Idempotency-Key', key())
+            .send({ branchId: a.branch.id, itemId, batchId, reason: 'lost', quantity: -1 }),
+        () => ownerA.get(`/api/v1/inventory/receipts/${receipt.id}`),
+        () =>
+          ownerA
+            .put(`/api/v1/inventory/receipts/${receipt.id}/prices`)
+            .send({ lines: [{ batchId, price: '0', pricePer: 'unit' }] }),
+        () => ownerA.patch(`/api/v1/inventory/receipts/${receipt.id}`).send({ note: 'Planted' }),
+        () =>
+          ownerA.post(`/api/v1/inventory/receipts/${receipt.id}/void`).send({ reason: 'Not ours' }),
+        () =>
+          ownerA
+            .post(`/api/v1/inventory/receipts/${receipt.id}/files/uploads`)
+            .send({ files: [{ filename: 'a.pdf', mimeType: 'application/pdf', sizeBytes: 10 }] }),
+        () =>
+          ownerA
+            .post('/api/v1/inventory/receipts')
+            .set('Idempotency-Key', key())
+            .send({
+              supplierId: supplier.id,
+              branchId: a.branch.id,
+              receivedOn: '2026-01-02',
+              lines: [{ itemId, quantity: 1 }],
+            }),
+        () => ownerA.get(`/api/v1/inventory/suppliers/${supplier.id}`),
+        () => ownerA.patch(`/api/v1/inventory/suppliers/${supplier.id}`).send({ name: 'Renamed' }),
+        () =>
+          ownerA
+            .put(`/api/v1/inventory/suppliers/${supplier.id}/opening-balance`)
+            .send({ amount: '1', asOf: '2026-01-01' }),
+        () =>
+          ownerA
+            .post(`/api/v1/inventory/suppliers/${supplier.id}/payments`)
+            .set('Idempotency-Key', key())
+            .send({ paidOn: '2026-01-02', amount: '1', method: 'cash' }),
+        () =>
+          ownerA
+            .post(`/api/v1/inventory/suppliers/${supplier.id}/adjustments`)
+            .set('Idempotency-Key', key())
+            .send({ onDate: '2026-01-02', kind: 'credit', amount: '1', reason: 'Not ours' }),
+        () =>
+          ownerA.get(
+            `/api/v1/inventory/suppliers/${supplier.id}/statement?from=2026-01-01&to=2026-12-31`,
+          ),
+        () =>
+          ownerA.post(`/api/v1/inventory/payments/${payment.id}/void`).send({ reason: 'Not ours' }),
+        () => ownerA.get(`/api/v1/inventory/counts/${count.id}`),
+        () =>
+          ownerA.put(`/api/v1/inventory/counts/${count.id}/lines/${itemId}`).send({ counted: 1 }),
+        () =>
+          ownerA.post(`/api/v1/inventory/counts/${count.id}/apply`).set('Idempotency-Key', key()),
+        () => ownerA.post(`/api/v1/inventory/counts/${count.id}/discard`),
+        () =>
+          ownerA
+            .put(`/api/v1/inventory/batches/${batchId}/price`)
+            .send({ price: '1', pricePer: 'unit' }),
+      ];
+      for (const [index, attempt] of attempts.entries()) {
+        const response = await attempt();
+        expect(response.status, `attempt ${index}: ${JSON.stringify(response.body)}`).toBe(404);
+      }
+      const planted = await ownerA.put('/api/v1/inventory/items').send({
+        items: [{ id: itemId, name: 'Planted', categoryId: categoriesB[0]?.id, unit: 'x' }],
+      });
+      expect(planted.status).toBe(422);
+      const itemsA = (await ownerA.get('/api/v1/inventory/items')).body as InventoryItem[];
+      expect(itemsA.map((row) => row.id)).not.toContain(itemId);
+      const suppliersA = (await ownerA.get('/api/v1/inventory/suppliers?includeInactive=true'))
+        .body as Supplier[];
+      expect(suppliersA.map((row) => row.id)).not.toContain(supplier.id);
+      const receiptsA = (await ownerA.get('/api/v1/inventory/receipts')).body as {
+        items: { id: string }[];
+      };
+      expect(receiptsA.items.map((row) => row.id)).not.toContain(receipt.id);
+
+      const stockB = (await ownerB.get(`/api/v1/inventory/stock?branchId=${b.branch.id}`))
+        .body as StockList;
+      expect(stockB.rows.find((row) => row.itemId === itemId)).toMatchObject({
+        name: 'Bravo gloves',
+        onHand: 9,
+      });
+      const accountsB = (await ownerB.get('/api/v1/inventory/suppliers/accounts'))
+        .body as SupplierAccounts;
+      expect(accountsB.suppliers.find((row) => row.supplierId === supplier.id)).toMatchObject({
+        owed: '10.00',
+        paid: '5.00',
+      });
+      const countB = (await ownerB.get(`/api/v1/inventory/counts/${count.id}`)).body as Count;
+      expect(countB.status).toBe('open');
+    });
   });
 
   describe('X-Tenant-Id', () => {
@@ -1602,6 +1776,21 @@ describe('tenant isolation through the public services', () => {
       'lab_payments',
       'lab_adjustments',
       'family_dismissals',
+      'inventory_categories',
+      'inventory_suppliers',
+      'inventory_items',
+      'inventory_item_branches',
+      'inventory_receipt_counters',
+      'inventory_receipts',
+      'inventory_batches',
+      'inventory_movements',
+      'inventory_movement_batches',
+      'inventory_counts',
+      'inventory_count_lines',
+      'inventory_supplier_payments',
+      'inventory_supplier_adjustments',
+      'inventory_receipt_files',
+      'inventory_settings',
     ];
     const result = await database.ownerPool.query<{ relname: string; relrowsecurity: boolean }>(
       `select relname, relrowsecurity from pg_class

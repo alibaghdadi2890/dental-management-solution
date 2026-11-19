@@ -10,6 +10,7 @@ import type {
   StaffUser,
   StartVisitResult,
   TodayBoard,
+  UpcomingAppointment,
 } from '@dcm/contracts';
 import type TestAgent from 'supertest/lib/agent';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -310,6 +311,44 @@ describe('scheduling: appointments and follow-ups (feature 14)', () => {
       expect(
         await problem(bookRequest(desk.agent, { ...body, durationMin: 45 }, key)),
       ).toMatchObject({ status: 409, code: 'appointment.idempotency_mismatch' });
+    });
+  });
+
+  describe('next appointments (search S9)', () => {
+    it('gives each patient the first booked or confirmed appointment from now', async () => {
+      const [soon, none, cancelled, past] = [
+        await newPatient(),
+        await newPatient(),
+        await newPatient(),
+        await newPatient(),
+      ];
+      const day = freshDay();
+      const later = freshDay();
+      const first = await book(soon.id, at('09:00', day), { confirmed: true });
+      await book(soon.id, at('09:00', later));
+      const gone = await book(cancelled.id, at('10:00', day));
+      await post(desk.agent, `appointments/${gone.id}/cancel`, { reason: 'Travelling' });
+      const before = await book(past.id, at('08:00', day));
+      testApp.clock.set(new Date(Date.parse(before.startsAt) + 60_000));
+      try {
+        const ids = [soon.id, none.id, cancelled.id, past.id].join(',');
+        const next = await ok<UpcomingAppointment[]>(
+          owner.get(`/api/v1/scheduling/patients/upcoming?patientIds=${ids}`),
+        );
+        expect(next).toEqual([
+          {
+            patientId: soon.id,
+            appointmentId: first.id,
+            startsAt: first.startsAt,
+            dentistName: 'Dr. Reyes',
+          },
+        ]);
+      } finally {
+        testApp.clock.set(NOW);
+      }
+      const many = Array.from({ length: 101 }, () => newId()).join(',');
+      const tooMany = await owner.get(`/api/v1/scheduling/patients/upcoming?patientIds=${many}`);
+      expect(tooMany.status).toBe(400);
     });
   });
 

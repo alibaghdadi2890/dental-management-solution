@@ -205,6 +205,26 @@ export const problemDetailsSchema = z.object({
     .optional(),
   /** `patient.has_upcoming_appointments`: who the refused archive is about. */
   patientName: z.string().optional(),
+  /** `inventory.not_enough_stock` (feature 20a): the item and what the system has. */
+  itemId: z.string().optional(),
+  onHand: z.number().int().optional(),
+  /** `inventory.expired_batch`: the batch past its expiry. */
+  batchId: z.string().optional(),
+  expiresOn: z.string().optional(),
+  /** `inventory.duplicate_invoice`: the earlier receipt of that invoice. */
+  receiptId: z.string().optional(),
+  receiptNumber: z.number().int().optional(),
+  /** `expense.resembles_supplier_payment`: the supplier rows it resembles. */
+  matches: z
+    .array(
+      z.object({
+        id: z.string(),
+        spentOn: z.string(),
+        amount: z.string(),
+        payee: z.string().nullable(),
+      }),
+    )
+    .optional(),
 });
 export type ProblemDetails = z.infer<typeof problemDetailsSchema>;
 

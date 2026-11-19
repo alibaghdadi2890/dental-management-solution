@@ -7,6 +7,7 @@ import {
   financialPlansSchema,
   financialReceivablesSchema,
   financialServicesSchema,
+  financialStockSchema,
   operationalAppointmentsSchema,
   operationalAttentionSchema,
   operationalBusyHoursSchema,
@@ -31,6 +32,7 @@ class FinancialDentistsDto extends createZodDto(financialDentistsSchema) {}
 class ServicesDto extends createZodDto(financialServicesSchema) {}
 class PlanValueDto extends createZodDto(financialPlansSchema) {}
 class OwesDto extends createZodDto(financialOwesSchema) {}
+class StockDto extends createZodDto(financialStockSchema) {}
 class AppointmentsDto extends createZodDto(operationalAppointmentsSchema) {}
 class BusyHoursDto extends createZodDto(operationalBusyHoursSchema) {}
 class VisitsDto extends createZodDto(operationalVisitsSchema) {}
@@ -93,6 +95,13 @@ export class DashboardsController {
   @ZodResponse({ type: PlanValueDto })
   planValue() {
     return this.financial.plans();
+  }
+
+  @Get('financial/stock')
+  @RequirePermission('dashboard:financial')
+  @ZodResponse({ type: StockDto })
+  stock(@Query() query: DashboardQueryDto) {
+    return this.financial.stock(query);
   }
 
   @Get('financial/owes')

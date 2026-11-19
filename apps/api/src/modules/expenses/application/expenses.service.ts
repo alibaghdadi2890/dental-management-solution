@@ -14,6 +14,7 @@ import {
   type PaymentMethod,
   type RecordExpense,
   fromCents,
+  RESEMBLANCE_DAYS,
   toCents,
   type UpdateExpense,
 } from '@dcm/contracts';
@@ -26,10 +27,12 @@ import { requestHash } from '../../../platform/kernel/request-hash';
 import { AuditService } from '../../audit';
 import { TenancyService } from '../../tenancy';
 import { assertDescribed } from '../domain/categories';
+import { resembles } from '../domain/resemblance';
 import {
   ExpenseIdempotencyMismatchError,
   ExpenseNotFoundError,
   ExpenseVoidedError,
+  ResemblesSupplierPaymentError,
   SystemRowError,
 } from '../domain/expense-errors';
 import { CategoriesRepository } from '../persistence/categories.repository';
@@ -41,7 +44,7 @@ import {
   type StoredExpense,
 } from '../persistence/expenses.repository';
 import { FixedExpensesRepository } from '../persistence/fixed-expenses.repository';
-import { CategoriesService } from './categories.service';
+import { CategoriesService, type KnownCategory } from './categories.service';
 import { ClinicCalendar } from './clinic-calendar';
 import { EXPENSE_EXPORT_LABELS } from './export-labels';
 import { FixedExpensesService } from './fixed-expenses.service';
@@ -53,9 +56,12 @@ export interface CsvFile {
   body: string;
 }
 
-/** A salary payment, a dentist payout or a lab payment, as `expenses` mirrors it (ADR-0076, ADR-0085). */
+/**
+ * A salary payment, a dentist payout, a lab payment or a supplier payment, as `expenses` mirrors
+ * it (ADR-0076, ADR-0085, ADR-0098).
+ */
 export interface Mirror {
-  source: 'payroll' | 'compensation' | 'lab';
+  source: 'payroll' | 'compensation' | 'lab' | 'supplier';
   sourceId: string;
   spentOn: string;
   amount: string;
@@ -119,8 +125,10 @@ export class ExpensesService {
   /** `POST /expenses`: a payment already made. A retry with the same key returns it. */
   record(input: RecordExpense, idempotencyKey: string): Promise<Expense> {
     this.context.requirePermission('expense:manage');
+    const { allowResemblance, ...fields } = input;
     return this.tenantDb.run(async () => {
-      const hash = requestHash({ record: input });
+      // The warning's answer is not part of the request: "Save anyway" retries the same one.
+      const hash = requestHash({ record: fields });
       await this.expenses.lockIdempotencyKey(idempotencyKey);
       const [first] = await this.expenses.byIdempotencyKey(idempotencyKey);
       if (first) {
@@ -130,9 +138,10 @@ export class ExpensesService {
       await this.calendar.assertNotFuture(input.spentOn);
       const category = await this.categories.requireSelectable(input.categoryId);
       assertDescribed(category.kind, input.description);
+      if (!allowResemblance) await this.warnResemblance(category, input);
       await this.calendar.assertBranch(input.branchId);
       const created = await this.expenses.insert({
-        ...input,
+        ...fields,
         currency: await this.calendar.currency(),
         source: 'manual',
         sourceId: null,
@@ -176,6 +185,18 @@ export class ExpensesService {
         changed.description !== undefined ? changed.description : row.description,
       );
       if (changed.branchId !== undefined) await this.calendar.assertBranch(changed.branchId);
+      const resemblanceFields = ['categoryId', 'payee', 'amount', 'spentOn'] as const;
+      if (!patch.allowResemblance && resemblanceFields.some((field) => field in changed)) {
+        await this.warnResemblance(
+          category,
+          {
+            payee: changed.payee !== undefined ? changed.payee : row.payee,
+            amount: changed.amount ?? row.amount,
+            spentOn: changed.spentOn ?? row.spentOn,
+          },
+          id,
+        );
+      }
       const updated = await this.expenses.update(id, changed, this.context.requireUserId());
       const record = row as unknown as Record<string, unknown>;
       await this.audit.record({
@@ -327,7 +348,7 @@ export class ExpensesService {
       const filter: ExpenseFilter = {
         from: `${month}-01`,
         to: lastDay(month),
-        sources: ['manual', 'fixed', 'lab'],
+        sources: ['manual', 'fixed', 'lab', 'supplier'],
       };
       return {
         month,
@@ -424,7 +445,9 @@ export class ExpensesService {
           ? 'salaries'
           : mirror.source === 'lab'
             ? 'lab_fees'
-            : 'dentist_compensation',
+            : mirror.source === 'supplier'
+              ? 'supplies'
+              : 'dentist_compensation',
       );
       await this.expenses.insertMirror({
         ...mirror,
@@ -451,12 +474,30 @@ export class ExpensesService {
     );
   }
 
+  /**
+   * A manual expense in *Dental supplies & materials* that resembles a supplier payment already
+   * in Expenses warns (C3); answered from `expenses`' own rows.
+   */
+  private async warnResemblance(
+    category: KnownCategory,
+    row: { payee: string | null; amount: string; spentOn: string },
+    exceptId?: string,
+  ): Promise<void> {
+    if (category.key !== 'supplies') return;
+    const amount = fromCents(toCents(row.amount));
+    const matches = (
+      await this.expenses.supplierRowsLike({ ...row, amount }, RESEMBLANCE_DAYS)
+    ).filter((other) => other.id !== exceptId && resembles({ ...row, amount }, other));
+    if (matches.length > 0) throw new ResemblesSupplierPaymentError(matches);
+  }
+
   /** The sources the caller may see (ADR-0080). */
   private sources(): ExpenseSource[] {
     return [
       'manual',
       'fixed',
       'lab',
+      'supplier',
       ...(this.context.hasPermission('payroll:read') ? (['payroll'] as const) : []),
       ...(this.context.hasPermission('compensation:manage') ? (['compensation'] as const) : []),
     ];
@@ -483,13 +524,15 @@ export class ExpensesService {
     if (!row || !this.sources().includes(row.source)) {
       throw new ExpenseNotFoundError('No such expense', { id });
     }
-    if (row.source === 'payroll' || row.source === 'compensation' || row.source === 'lab') {
+    if (row.source !== 'manual' && row.source !== 'fixed') {
       throw new SystemRowError(
         row.source === 'payroll'
           ? 'Salary rows are changed from Payroll'
           : row.source === 'lab'
             ? 'Lab payments are changed from Lab'
-            : 'Dentist compensation rows are changed from Compensation',
+            : row.source === 'supplier'
+              ? 'Supplier payments are changed from Inventory'
+              : 'Dentist compensation rows are changed from Compensation',
       );
     }
     if (row.voidedAt !== null) throw new ExpenseVoidedError('This expense is voided');

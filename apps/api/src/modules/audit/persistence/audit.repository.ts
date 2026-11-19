@@ -3,6 +3,7 @@ import {
   type ActivityArea,
   type AuditEntry,
   COMPENSATION_EVENTS,
+  INVENTORY_MONEY_EVENTS,
   LAB_MONEY_EVENTS,
   PAYROLL_EVENTS,
   type PlatformAuditEntry,
@@ -45,6 +46,8 @@ export interface AuditFilter {
   withoutPayroll?: boolean | undefined;
   /** Without `lab:money_read`: prices, costs, charges, payments and adjustments of labs (ADR-0086). */
   withoutLabMoney?: boolean | undefined;
+  /** Without `inventory:money_read` (feature 20a): supplier money, prices and costs. */
+  withoutInventoryMoney?: boolean | undefined;
   after?: AuditCursorPosition | undefined;
   limit: number;
 }
@@ -144,6 +147,11 @@ export class AuditRepository {
     if (filter.withoutLabMoney) {
       conditions.push(
         sql`not (${auditLog.resourceType} in ('lab_service', 'lab_payment', 'lab_adjustment') or ${auditLog.action} in ('lab.opening_balance', 'lab_order.cost') or (${auditLog.resourceType} = 'event' and ${auditLog.action} = any(${sql.param([...LAB_MONEY_EVENTS])}::text[])))`,
+      );
+    }
+    if (filter.withoutInventoryMoney) {
+      conditions.push(
+        sql`not (${auditLog.resourceType} in ('inventory_payment', 'inventory_adjustment') or ${auditLog.action} in ('inventory_receipt.price', 'inventory_supplier.opening_balance', 'inventory_item.opening_cost') or (${auditLog.resourceType} = 'event' and ${auditLog.action} = any(${sql.param([...INVENTORY_MONEY_EVENTS])}::text[])))`,
       );
     }
     if (filter.after) {

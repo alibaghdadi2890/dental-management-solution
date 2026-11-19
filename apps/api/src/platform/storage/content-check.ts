@@ -1,4 +1,7 @@
-/** How much of a stored object Save reads to check what it is. */
+/**
+ * How much of a stored object a save reads to check what it is. Shared by `files` and `inventory`'s
+ * receipt attachments (moved here from `files/domain` for feature 20a, ADR-0100).
+ */
 export const CONTENT_HEAD_BYTES = 1024;
 
 /** HEIC and HEIF brands (ISO base media `ftyp`), still images and sequences. */

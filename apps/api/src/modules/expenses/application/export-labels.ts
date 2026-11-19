@@ -55,6 +55,7 @@ export const EXPENSE_EXPORT_LABELS: Record<ExportLanguage, ExpenseExportLabels> 
       payroll: 'Payroll',
       compensation: 'Compensation',
       lab: 'Labs',
+      supplier: 'Suppliers',
     },
     methods: {
       cash: 'Cash',
@@ -106,6 +107,7 @@ export const EXPENSE_EXPORT_LABELS: Record<ExportLanguage, ExpenseExportLabels> 
       payroll: 'الرواتب',
       compensation: 'التعويضات',
       lab: 'المختبرات',
+      supplier: 'الموردون',
     },
     methods: {
       cash: 'نقدًا',
@@ -157,6 +159,7 @@ export const EXPENSE_EXPORT_LABELS: Record<ExportLanguage, ExpenseExportLabels> 
       payroll: 'Paie',
       compensation: 'Rémunération',
       lab: 'Laboratoires',
+      supplier: 'Fournisseurs',
     },
     methods: {
       cash: 'Espèces',

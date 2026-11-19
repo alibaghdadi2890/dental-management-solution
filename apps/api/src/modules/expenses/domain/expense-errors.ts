@@ -1,4 +1,19 @@
+import type { ResemblingExpense } from '@dcm/contracts';
 import { DomainError } from '../../../platform/kernel/domain-error';
+
+/**
+ * A manual expense in *Dental supplies & materials* that resembles a supplier payment already in
+ * Expenses (feature 20a, C3): a warning `allowResemblance` goes through.
+ */
+export class ResemblesSupplierPaymentError extends DomainError {
+  readonly code = 'expense.resembles_supplier_payment';
+  readonly kind = 'conflict';
+  override readonly extensions: Readonly<{ matches: readonly ResemblingExpense[] }>;
+  constructor(matches: readonly ResemblingExpense[]) {
+    super('This looks like a supplier payment already in Expenses');
+    this.extensions = { matches };
+  }
+}
 
 export class ExpenseNotFoundError extends DomainError {
   readonly code = 'expense.not_found';

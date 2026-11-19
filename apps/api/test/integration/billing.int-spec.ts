@@ -1082,6 +1082,28 @@ describe('billing: ledger, opening balances and balances', () => {
       });
     });
 
+    it('front desk reads balance states, never amounts across patients (search S9)', async () => {
+      const credit = await createPatient(main.owner, 'In Credit');
+      const courtesy = { amount: '-20.00', effectiveDate: TODAY, reason: 'courtesy' };
+      expect((await adjust(main.owner, credit.id, courtesy)).status).toBe(201);
+      const settled = await createPatient(main.owner, 'Settled Up');
+      const states = await frontdesk.get(
+        `/api/v1/billing/balance-states?patientIds=${patient.id},${credit.id},${newId()},${settled.id}`,
+      );
+      expect(states.status, JSON.stringify(states.body)).toBe(200);
+      expect(states.body).toEqual([
+        { patientId: patient.id, state: 'owes' },
+        { patientId: credit.id, state: 'credit' },
+        { patientId: settled.id, state: 'settled' },
+      ]);
+      expect(
+        (await frontdesk.get(`/api/v1/billing/balances?patientIds=${patient.id}`)).status,
+      ).toBe(403);
+      expect(
+        (await assistant.get(`/api/v1/billing/balance-states?patientIds=${patient.id}`)).status,
+      ).toBe(403);
+    });
+
     it('a dentist cannot adjust a balance; the owner can (ADR-0055: payment:refund)', async () => {
       const dentist = await staffAgent(main, 'dentist');
       const courtesy = { amount: '-5.00', effectiveDate: TODAY, reason: 'courtesy' };

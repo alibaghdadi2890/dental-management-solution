@@ -30,6 +30,8 @@ const MATRIX = {
     'appointment:write',
     'lab:read',
     'lab:manage',
+    'inventory:read',
+    'inventory:write',
   ],
   assistant: [
     'tenant:read',
@@ -48,6 +50,9 @@ const MATRIX = {
     'appointment:write_all',
     'lab:read',
     'lab:manage',
+    'inventory:read',
+    'inventory:write',
+    'inventory:manage',
   ],
   frontdesk: [
     'tenant:read',
@@ -68,6 +73,8 @@ const MATRIX = {
     'appointment:override',
     'lab:read',
     'lab:manage',
+    'inventory:read',
+    'inventory:write',
   ],
 } as const;
 

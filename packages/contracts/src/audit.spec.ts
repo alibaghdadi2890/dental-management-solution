@@ -77,7 +77,9 @@ describe('areaOfAction', () => {
     expect(areaOfAction('payroll_line.confirm')).toBe('payroll');
     expect(areaOfAction('lab_order.send')).toBe('labs');
     expect(areaOfAction('lab_payment.record')).toBe('labs');
-    expect(ACTIVITY_AREAS).toHaveLength(13);
+    expect(areaOfAction('inventory_movement.take_out')).toBe('inventory');
+    expect(areaOfAction('inventory_payment.record')).toBe('inventory');
+    expect(ACTIVITY_AREAS).toHaveLength(14);
   });
 
   it('gives no area to a stored domain event or an action of no area', () => {
