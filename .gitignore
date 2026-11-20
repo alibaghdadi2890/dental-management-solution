@@ -14,3 +14,6 @@ playwright-report/
 
 # Playwright MCP browser artefacts
 .playwright-mcp/
+
+# Brainstorm mockups (superpowers visual companion)
+.superpowers/

@@ -89,3 +89,11 @@ by `apps/web/src/components/charts/` (ADR-0091).
   `inventory:read`, null with a dentist filter; each opens the Stock list filtered.
 - Supplier payments are already inside Expenses: Expenses, Net result, complete cost and _Where
   the money goes_ do not change.
+
+## Feature 21: the waitlist
+
+- **Operational · Needs attention** gains `openingsToFill`: the openings at least one waiting
+  entry fits and nobody left open, the same count as Today's _Openings to fill_. It covers the
+  filter's branch (every branch without one) and dentist
+  (`SchedulingSummaryService.attention` → `WaitlistOpeningsService.openingsToFill`). It is null
+  without `appointment:write_all`, and it opens Today. Nothing else changes on the dashboards.

@@ -7,8 +7,10 @@ columns and the Activity feed (feature 7, ADR-0037).
 
 Append-only audit log: who/what/when/tenant/before/after for every mutation, fed by explicit
 entries from application services (inside their transaction) and by a single generic subscriber
-to all domain events. Agent tool calls will be recorded with `actor_kind = 'agent'`. Owners and
-dentists read it on the **Activity** screen.
+to all domain events. Agent tool calls will be recorded with `actor_kind = 'agent'`. A change a
+rule makes inside someone's action is recorded with `actor_kind = 'system'`, through
+`AuditRecord.actorKind`, and the user is still recorded (the waitlist's rules, feature 21,
+ADR-0107). Owners and dentists read it on the **Activity** screen.
 
 ## Owns
 

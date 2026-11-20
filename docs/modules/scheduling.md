@@ -1,7 +1,7 @@
 # `scheduling` module
 
 **Status:** implemented for feature 14: calendar, booking, moving, check-in, follow-ups and the
-worklist (ADR-0066 to ADR-0072).
+worklist (ADR-0066 to ADR-0072); the waitlist for feature 21 (ADR-0103 to ADR-0107).
 
 ## Purpose
 
@@ -28,6 +28,10 @@ without the next step being either booked or on someone's list.**
 | `follow_ups`           | one per source visit: kind, title, plans, duration, timing, due date, `window_from`, notes, status, the will-call tag         |
 | `branch_opening_hours` | seven rows per branch                                                                                                         |
 | `scheduling_settings`  | one row per tenant at most: the follow-up window; none reads as 30                                                            |
+| `waitlist_entries`     | migration 0063: a patient waiting for an earlier time for an appointment, or with none; wishes, urgent, last attempt, status  |
+| `waitlist_left_open`   | migration 0063: freed appointments whose opening was left open (off Today and the dashboard)                                  |
+
+`appointments.waitlist_entry_id` (0063) remembers the entry a row was booked or moved from.
 
 Exclusion constraints `appointments_room_no_overlap` and `appointments_patient_no_overlap` cover the
 active statuses (ADR-0067). They are written by hand in the migration.
@@ -100,6 +104,54 @@ Every change also writes a dotted audit action for the Activity screen (area `sc
 `AppointmentMarkedNoShow` and `AppointmentCompleted` in the transaction to keep a lab order's
 appointment link (ADR-0084), and reads `refs`, `upcomingFor` and `openWeekdays` (ungated building
 blocks, feature 18). The booking warning about lab work is the SPA's (ADR-0081).
+
+## The waitlist (feature 21)
+
+Two kinds of entry in one list (ADR-0103): a patient with an appointment who wants an earlier time
+(the _Wants an earlier time_ tick of New and Edit appointment, saved in that request), and a patient
+with none (_Add to waitlist_: the Waitlist view, the slot finder, a follow-up, the record, the cancel
+tick). One waiting entry per appointment and one without, checked under a per-patient lock.
+
+- **Openings (ADR-0104)** are worked out when read (`domain/openings.ts`). A cancelled or moved row
+  whose start is ahead frees its time. The opening is the dentist's free run around it, with at
+  least 15 minutes of freed time: the opening hours as they are now, after now, minus the dentist's
+  active appointments in any branch. Its id is its first freed appointment, plus an instant when
+  the opening is split.
+- **Who fits and the order (ADR-0105)**: `domain/waitlist-fit.ts`, `domain/waitlist-order.ts`
+  (urgent, not tried today, longest wait). Lab work expected after the opening is the SPA's
+  business: such entries are listed last with the lab mark.
+- **Fill (ADR-0106)**: the existing move or booking, with `override: false`, under a per-dentist
+  lock. The opening is worked out again (`409 waitlist.opening_taken`) and the entry is booked in
+  the same transaction. It is idempotent by the key stored on the new appointment row.
+- **What ends an entry (ADR-0107)**: it is filled, removed, or expired. Expired is derived: its
+  appointment is no longer waiting ahead, or _Until_ has passed. Rules run in the transaction and
+  are audited as the system's:
+  - a move takes the entry along;
+  - a booking that takes the entry's follow-up books it;
+  - a declined follow-up, an archive and a merge's duplicate remove it;
+  - a deactivated dentist's entries become _Any dentist_;
+  - Restore undoes the cancel tick.
+- Audit actions (area `schedule`):
+  `waitlist_entry.add|update|no_answer|not_this_time|book|remove|follow|keep|any_dentist`,
+  `waitlist_opening.leave_open`. No domain event is added: the fill publishes the booking's or the
+  move's.
+
+| Route                                                                              | Access                           |
+| ---------------------------------------------------------------------------------- | -------------------------------- |
+| `GET /waitlist` (`status`, `dentistId`, `appointment`, `fits`, cursor for history) | `appointment:write_all`          |
+| `GET /waitlist/openings?branchId`, `GET /waitlist/openings/:appointmentId?at=`     | `appointment:write_all`          |
+| `POST /waitlist/openings/:appointmentId/leave-open`, `POST /waitlist/:id/attempt`  | `appointment:write_all`          |
+| `POST /waitlist/:id/fill` (`Idempotency-Key`)                                      | `appointment:write_all`          |
+| `GET /patients/:id/waitlist`                                                       | `appointment:read`               |
+| `POST /waitlist`, `PATCH /waitlist/:id`, `POST /waitlist/:id/remove`               | `appointment:write` + the column |
+
+Changes to existing routes:
+
+- `POST /appointments` gains `waitlist`: the tick's wishes.
+- `PATCH /appointments/:id` gains `waitlist`; `null` removes the entry.
+- `/cancel` gains `waitlist`: the tick.
+- `SchedulingSummaryService.attention` gains `openingsToFill` for the dashboard; it is null without
+  `appointment:write_all`.
 
 ## Summaries and the List view (feature 19)
 

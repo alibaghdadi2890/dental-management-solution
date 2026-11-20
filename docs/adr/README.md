@@ -106,3 +106,9 @@ Decisions listed in CLAUDE.md §17 predate this log.
 | [0100](0100-receipt-attachments.md)                                    | Receipt attachments                                                          | Accepted (extends 0039, 0041)        |
 | [0101](0101-inventory-permissions.md)                                  | Inventory permissions                                                        | Accepted (amends 0055)               |
 | [0102](0102-the-search-is-the-apps.md)                                 | The search is the app's, and its rows carry actions                          | Accepted                             |
+| [0103](0103-the-waitlist-two-kinds-of-entry.md)                        | The waitlist: two kinds of entry in one list                                 | Accepted                             |
+| [0104](0104-an-opening-is-derived-free-time.md)                        | An opening is free time around freed time, worked out when read              | Accepted                             |
+| [0105](0105-who-fits-and-in-what-order.md)                             | Who fits an opening, and in what order                                       | Accepted                             |
+| [0106](0106-filling-is-the-booking-or-the-move.md)                     | Filling an opening is the existing booking or move, without overrides        | Accepted                             |
+| [0107](0107-what-ends-an-entry.md)                                     | What ends a waitlist entry                                                   | Accepted                             |
+| [0108](0108-read-only-overview-strips.md)                              | Read-only overview strips may be drawn by hand                               | Accepted (amends 0071)               |
