@@ -133,3 +133,57 @@ export class StaffHasOpenAppointmentsError extends DomainError {
     this.extensions = { count };
   }
 }
+
+export class WaitlistEntryNotFoundError extends DomainError {
+  readonly code = 'waitlist.not_found';
+  readonly kind = 'not_found' as const;
+  constructor(id: string) {
+    super('Waitlist entry not found', { id });
+  }
+}
+
+/** The patient already waits for this appointment, or without one (ADR-0103). */
+export class WaitlistEntryExistsError extends DomainError {
+  readonly code = 'waitlist.entry_exists';
+  readonly kind = 'conflict' as const;
+  override readonly extensions: Readonly<{ entryId: string }>;
+  constructor(entryId: string) {
+    super('This patient is already on the waitlist', { entryId });
+    this.extensions = { entryId };
+  }
+}
+
+/** Booked, removed or expired since it was listed. */
+export class WaitlistEntryNotWaitingError extends DomainError {
+  readonly code = 'waitlist.not_waiting';
+  readonly kind = 'conflict' as const;
+  constructor(id: string) {
+    super('This waitlist entry is no longer waiting', { id });
+  }
+}
+
+/** The time is no longer free for this entry: someone filled it, or it changed (ADR-0106). */
+export class WaitlistOpeningTakenError extends DomainError {
+  readonly code = 'waitlist.opening_taken';
+  readonly kind = 'conflict' as const;
+  constructor(openingId: string) {
+    super('This time was just taken', { openingId });
+  }
+}
+
+export class WaitlistInvalidUntilError extends DomainError {
+  readonly code = 'waitlist.invalid_until';
+  readonly kind = 'invalid' as const;
+  constructor() {
+    super('Until must be from today and at most 180 days ahead');
+  }
+}
+
+/** A follow-up the entry stands for must be the patient's and awaiting. */
+export class WaitlistFollowUpInvalidError extends DomainError {
+  readonly code = 'waitlist.follow_up_invalid';
+  readonly kind = 'invalid' as const;
+  constructor(id: string) {
+    super('This follow-up is not waiting for this patient', { id });
+  }
+}

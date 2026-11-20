@@ -1233,6 +1233,62 @@ describe('tenant isolation through the public services', () => {
       expect(after.body).toMatchObject({ status: 'booked', startsAt });
     });
 
+    it("waitlist (feature 21): B's entries and openings are not found for A, and unchanged", async () => {
+      const { profileId } = await bOwnerDentist();
+      const branchId = b.branch.id;
+      const patient = (
+        await ownerB
+          .post('/api/v1/patients')
+          .set('Idempotency-Key', newId())
+          .send({ fullName: 'Wai Isolated' })
+      ).body as { id: string };
+      const booked = await ownerB
+        .post('/api/v1/scheduling/appointments')
+        .set('Idempotency-Key', newId())
+        .send({
+          branchId,
+          patientId: patient.id,
+          dentistId: profileId,
+          startsAt: '2099-03-03T08:00:00.000Z',
+          durationMin: 30,
+          reason: 'Check-up',
+        });
+      const freedId = (booked.body as { id: string }).id;
+      await ownerB.post(`/api/v1/scheduling/appointments/${freedId}/cancel`).send({});
+      const added = await ownerB.post('/api/v1/scheduling/waitlist').send({
+        branchId,
+        patientId: patient.id,
+        dentistId: profileId,
+        reason: 'Check-up',
+      });
+      expect(added.status, JSON.stringify(added.body)).toBe(201);
+      const id = (added.body as { id: string }).id;
+
+      const writes = [
+        ownerA.patch(`/api/v1/scheduling/waitlist/${id}`).send({ wishes: {} }),
+        ownerA.post(`/api/v1/scheduling/waitlist/${id}/remove`).send({}),
+        ownerA.post(`/api/v1/scheduling/waitlist/${id}/attempt`).send({ outcome: 'no_answer' }),
+        ownerA
+          .post(`/api/v1/scheduling/waitlist/${id}/fill`)
+          .set('Idempotency-Key', newId())
+          .send({ openingId: freedId, startsAt: '2099-03-03T08:00:00.000Z' }),
+        ownerA.post(`/api/v1/scheduling/waitlist/openings/${freedId}/leave-open`).send({}),
+        ownerA.get(`/api/v1/scheduling/waitlist/openings/${freedId}`),
+      ];
+      for (const response of await Promise.all(writes)) expect(response.status).toBe(404);
+      const reads = await Promise.all([
+        ownerA.get(`/api/v1/scheduling/waitlist?branchId=${branchId}`),
+        ownerA.get(`/api/v1/scheduling/waitlist/openings?branchId=${branchId}`),
+        ownerA.get(`/api/v1/scheduling/patients/${patient.id}/waitlist`),
+      ]);
+      expect(reads.map((response) => response.status)).toEqual([200, 200, 200]);
+      expect((reads[0].body as { items: unknown[] }).items).toEqual([]);
+      expect((reads[1].body as { openings: unknown[]; waitingCount: number }).openings).toEqual([]);
+      expect(reads[2].body).toEqual([]);
+      const after = await ownerB.get(`/api/v1/scheduling/patients/${patient.id}/waitlist`);
+      expect(after.body).toMatchObject([{ id, status: 'waiting', lastAttempt: null }]);
+    });
+
     it("compensation (ADR-0058–0060): B's dentists, agreements, rows and months are not found for A, and unchanged", async () => {
       const { profileId } = await bOwnerDentist();
       const bBase = `/api/v1/compensation/dentists/${profileId}`;
@@ -1756,6 +1812,8 @@ describe('tenant isolation through the public services', () => {
       'follow_ups',
       'branch_opening_hours',
       'scheduling_settings',
+      'waitlist_entries',
+      'waitlist_left_open',
       'alert_follows',
       'expense_categories',
       'expenses',

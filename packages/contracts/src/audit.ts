@@ -58,6 +58,8 @@ const AREA_OF_PREFIX: Readonly<Record<string, ActivityArea>> = {
   compensation: 'compensation',
   appointment: 'schedule',
   follow_up: 'schedule',
+  waitlist_entry: 'schedule',
+  waitlist_opening: 'schedule',
   opening_hours: 'schedule',
   scheduling_settings: 'schedule',
   expense: 'expenses',

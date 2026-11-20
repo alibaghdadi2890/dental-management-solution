@@ -13,6 +13,7 @@ import {
   type StoredAppointment,
 } from '../persistence/appointments.repository';
 import { FollowUpsRepository } from '../persistence/follow-ups.repository';
+import { type StoredWaitlistEntry, WaitlistRepository } from '../persistence/waitlist.repository';
 
 function lineageOf(row: StoredAppointment, rows: readonly LineageRow[]): AppointmentLineage {
   const family = rows.filter((candidate) => candidate.lineageId === row.lineageId);
@@ -25,12 +26,29 @@ function lineageOf(row: StoredAppointment, rows: readonly LineageRow[]): Appoint
   };
 }
 
+function waitlistOf(entry: StoredWaitlistEntry | undefined): Appointment['waitlist'] {
+  if (!entry) return null;
+  return {
+    entryId: entry.id,
+    wishes: {
+      weekdays: entry.weekdays,
+      betweenFrom: entry.betweenFrom?.slice(0, 5) ?? null,
+      betweenTo: entry.betweenTo?.slice(0, 5) ?? null,
+      notBefore: entry.notBefore,
+      sameDay: entry.sameDay,
+    },
+    urgent: entry.urgent,
+    note: entry.note,
+  };
+}
+
 /** Rows to the read model, resolving names in batches. Reads through the caller's transaction. */
 @Injectable()
 export class AppointmentPresenter {
   constructor(
     private readonly appointments: AppointmentsRepository,
     private readonly followUps: FollowUpsRepository,
+    private readonly waitlist: WaitlistRepository,
     private readonly patients: PatientsService,
     private readonly users: UsersService,
     private readonly tenancy: TenancyService,
@@ -66,6 +84,19 @@ export class AppointmentPresenter {
     const followUpsById = new Map(followUps.map((followUp) => [followUp.id, followUp]));
     const { timeZone } = await this.tenancy.currentTenant();
     const now = this.clock.now();
+    // The waiting entry of an appointment still waiting ahead: past that it has expired (ADR-0107).
+    const entries = new Map(
+      (
+        await this.waitlist.waitingForAppointments(
+          rows
+            .filter(
+              (row) =>
+                (row.status === 'booked' || row.status === 'confirmed') && row.startsAt > now,
+            )
+            .map((row) => row.id),
+        )
+      ).map((entry) => [entry.appointmentId, entry]),
+    );
 
     return rows.map((row) => {
       const patient = patients.get(row.patientId);
@@ -105,6 +136,8 @@ export class AppointmentPresenter {
         checkedInAt: row.checkedInAt?.toISOString() ?? null,
         cancelReason: row.cancelReason,
         unresolved: isUnresolved(row.status, row.endsAt, now),
+        waitlist: waitlistOf(entries.get(row.id)),
+        fromWaitlist: row.waitlistEntryId !== null,
         updatedAt: row.updatedAt.toISOString(),
       };
     });

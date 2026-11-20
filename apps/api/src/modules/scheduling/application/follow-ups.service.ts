@@ -40,6 +40,8 @@ import {
 import { AppointmentsRepository } from '../persistence/appointments.repository';
 import { FollowUpsRepository, type StoredFollowUp } from '../persistence/follow-ups.repository';
 import { OpeningHoursRepository } from '../persistence/opening-hours.repository';
+import { WaitlistRepository } from '../persistence/waitlist.repository';
+import { WaitlistService } from './waitlist.service';
 
 export interface CompletionFacts {
   visitId: string;
@@ -63,6 +65,8 @@ export class FollowUpsService {
     private readonly followUps: FollowUpsRepository,
     private readonly appointments: AppointmentsRepository,
     private readonly settings: OpeningHoursRepository,
+    private readonly waitlist: WaitlistService,
+    private readonly waitlistRows: WaitlistRepository,
     private readonly patients: PatientsService,
     private readonly users: UsersService,
     private readonly tenancy: TenancyService,
@@ -279,6 +283,7 @@ export class FollowUpsService {
       patientId: after.patientId,
     });
     await this.events.publish(event);
+    await this.waitlist.onFollowUpDeclined(id);
     return after;
   }
 
@@ -315,6 +320,12 @@ export class FollowUpsService {
     const plans = await this.visitFacts.planStatuses(rows.flatMap((row) => row.planIds));
     const taggers = await this.users.namesByUserIds(
       rows.flatMap((row) => (row.willCallBy ? [row.willCallBy] : [])),
+    );
+    // Waiting without an appointment for it, and not past its date (feature 21, C5).
+    const onWaitlist = new Set(
+      (await this.waitlistRows.waitingForFollowUps(rows.map((row) => row.id)))
+        .filter((entry) => entry.appointmentId === null && (entry.untilOn ?? '') >= today)
+        .flatMap((entry) => (entry.followUpId ? [entry.followUpId] : [])),
     );
     const availableInBranch = new Map<string, Set<string>>();
     for (const branchId of new Set(rows.map((row) => row.branchId))) {
@@ -366,6 +377,7 @@ export class FollowUpsService {
         declinedReason: row.declinedReason,
         appointmentId: row.status === 'awaiting' ? null : (holders.get(row.id) ?? null),
         invalidReason: invalidReasonOf(statuses),
+        onWaitlist: onWaitlist.has(row.id),
         createdAt: row.createdAt.toISOString(),
         ...deriveFollowUp(row, windowDays, today),
       };

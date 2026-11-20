@@ -10,11 +10,14 @@ import { FollowUpsService } from './application/follow-ups.service';
 import { OpeningHoursService } from './application/opening-hours.service';
 import { SchedulingSubscriber } from './application/scheduling.subscriber';
 import { SchedulingSummaryService } from './application/scheduling-summary.service';
+import { WaitlistOpeningsService } from './application/waitlist-openings.service';
+import { WaitlistService } from './application/waitlist.service';
 import { SchedulingController } from './http/scheduling.controller';
 import { AppointmentsRepository } from './persistence/appointments.repository';
 import { FollowUpsRepository } from './persistence/follow-ups.repository';
 import { OpeningHoursRepository } from './persistence/opening-hours.repository';
 import { SchedulingSummaryRepository } from './persistence/summary.repository';
+import { WaitlistRepository } from './persistence/waitlist.repository';
 
 /**
  * See docs/modules/scheduling.md and ADR-0066–0072. Depends on `tenancy` (branches, rooms, time
@@ -35,6 +38,9 @@ import { SchedulingSummaryRepository } from './persistence/summary.repository';
     OpeningHoursRepository,
     SchedulingSummaryService,
     SchedulingSummaryRepository,
+    WaitlistService,
+    WaitlistOpeningsService,
+    WaitlistRepository,
   ],
   exports: [AppointmentsService, SchedulingSummaryService],
 })

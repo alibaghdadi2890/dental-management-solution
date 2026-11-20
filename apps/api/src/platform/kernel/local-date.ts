@@ -15,6 +15,16 @@ export function localDate(instant: Date, timeZone: string): string {
   return `${part('year').padStart(4, '0')}-${part('month')}-${part('day')}`;
 }
 
+/** The wall-clock time of `instant` in `timeZone`, `HH:MM` on a 24-hour clock. */
+export function localClock(instant: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(instant);
+}
+
 /** The offset of `timeZone` from UTC at `instant`, in minutes (Beirut in winter: 120). */
 function offsetMinutes(instant: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {

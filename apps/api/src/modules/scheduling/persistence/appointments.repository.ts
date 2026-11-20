@@ -35,6 +35,7 @@ export type AppointmentPatch = Partial<
     | 'cancelReason'
     | 'reason'
     | 'visitType'
+    | 'waitlistEntryId'
   >
 >;
 
@@ -119,6 +120,58 @@ export class AppointmentsRepository {
           and(active, lt(appointments.startsAt, span.end), gte(appointments.endsAt, span.start)),
         )
         .orderBy(asc(appointments.startsAt)),
+    );
+  }
+
+  /** The branch's freed slots (feature 21, B1): cancelled or moved rows whose start is ahead. */
+  freedInBranch(branchId: string | undefined, now: Date): Promise<StoredAppointment[]> {
+    return this.db.run((tx) =>
+      tx
+        .select()
+        .from(appointments)
+        .where(
+          and(
+            branchId ? eq(appointments.branchId, branchId) : undefined,
+            inArray(appointments.status, ['cancelled', 'rescheduled']),
+            gte(appointments.startsAt, now),
+          ),
+        )
+        .orderBy(asc(appointments.startsAt), asc(appointments.id)),
+    );
+  }
+
+  /** Active appointments of these dentists ending after `from`, in every branch. */
+  activeForDentists(dentistIds: readonly string[], from: Date): Promise<StoredAppointment[]> {
+    if (dentistIds.length === 0) return Promise.resolve([]);
+    return this.db.run((tx) =>
+      tx
+        .select()
+        .from(appointments)
+        .where(
+          and(
+            active,
+            inArray(appointments.dentistId, [...new Set(dentistIds)]),
+            gte(appointments.endsAt, from),
+          ),
+        ),
+    );
+  }
+
+  /** Active appointments of these patients ending after `from`, soonest first. */
+  activeForPatients(patientIds: readonly string[], from: Date): Promise<StoredAppointment[]> {
+    if (patientIds.length === 0) return Promise.resolve([]);
+    return this.db.run((tx) =>
+      tx
+        .select()
+        .from(appointments)
+        .where(
+          and(
+            active,
+            inArray(appointments.patientId, [...new Set(patientIds)]),
+            gte(appointments.endsAt, from),
+          ),
+        )
+        .orderBy(asc(appointments.startsAt), asc(appointments.id)),
     );
   }
 
@@ -242,6 +295,15 @@ export class AppointmentsRepository {
         ),
     );
     return new Map(rows.flatMap((row) => (row.followUpId ? [[row.followUpId, row.id]] : [])));
+  }
+
+  /** Writes placing time for one dentist run one at a time (ADR-0106): no double booking. */
+  async lockDentist(dentistId: string): Promise<void> {
+    await this.db.run((tx) =>
+      tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`appointment-dentist:${dentistId}`}, 0))`,
+      ),
+    );
   }
 
   /** Requests sharing an `Idempotency-Key` run one at a time, to the end of the transaction. */

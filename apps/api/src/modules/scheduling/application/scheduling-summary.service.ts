@@ -28,6 +28,7 @@ import {
   SchedulingSummaryRepository,
 } from '../persistence/summary.repository';
 import { AppointmentPresenter } from './appointment-presenter';
+import { WaitlistOpeningsService } from './waitlist-openings.service';
 
 /** A branch and a dentist the summary keeps to (each optional). */
 export interface ScheduleFilter {
@@ -71,6 +72,7 @@ export class SchedulingSummaryService {
     private readonly hours: OpeningHoursRepository,
     private readonly summary: SchedulingSummaryRepository,
     private readonly presenter: AppointmentPresenter,
+    private readonly openings: WaitlistOpeningsService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -205,9 +207,12 @@ export class SchedulingSummaryService {
    * expired), and — without a branch or dentist — patients with an accepted, unstarted plan item
    * and no upcoming appointment.
    */
-  async attention(
-    filter: ScheduleFilter,
-  ): Promise<{ unresolved: number; followUpsOverdue: number; acceptedUnbooked: number | null }> {
+  async attention(filter: ScheduleFilter): Promise<{
+    unresolved: number;
+    followUpsOverdue: number;
+    acceptedUnbooked: number | null;
+    openingsToFill: number | null;
+  }> {
     this.context.requirePermission('dashboard:operational');
     return this.tenantDb.run(async () => {
       const { timeZone } = await this.tenancy.currentTenant();
@@ -223,6 +228,8 @@ export class SchedulingSummaryService {
         unresolved: await this.summary.unresolvedCount(now, filter),
         followUpsOverdue: overdue,
         acceptedUnbooked: clinicWide ? (await this.acceptedUnbookedIds(now)).length : null,
+        // Today's *Openings to fill* (feature 21, C6), for whoever has that lane.
+        openingsToFill: await this.openings.openingsToFill(filter),
       };
     });
   }

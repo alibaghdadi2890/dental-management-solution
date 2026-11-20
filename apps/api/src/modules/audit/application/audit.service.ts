@@ -37,6 +37,11 @@ export interface AuditRecord {
    * (the ledger entry of a payment, of a visit charge). It is still in the log.
    */
   hidden?: boolean | undefined;
+  /**
+   * `system` for a change a rule made inside someone's action (the waitlist's rules, feature 21):
+   * the user is still recorded, as whose action set the rule off.
+   */
+  actorKind?: 'system' | undefined;
 }
 
 /**
@@ -69,7 +74,7 @@ export class AuditService {
       ...subjectOf(entry, this.subject.getStore() ?? {}),
       area: entry.hidden ? null : areaOfAction(entry.action),
       actorUserId: this.context.userId ?? null,
-      actorKind: this.context.actorKind ?? 'system',
+      actorKind: entry.actorKind ?? this.context.actorKind ?? 'system',
       actorPlatformAdmin: this.context.isPlatformAdmin,
       action: entry.action,
       resourceType: entry.resourceType,

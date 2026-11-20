@@ -28,6 +28,19 @@ import {
   slotDaysSchema,
   slotQuerySchema,
   todayBoardSchema,
+  addWaitlistEntrySchema,
+  fillWaitlistEntrySchema,
+  leaveOpeningOpenSchema,
+  removeWaitlistEntrySchema,
+  updateWaitlistEntrySchema,
+  waitlistAttemptSchema,
+  waitlistEntrySchema,
+  waitlistOpeningDetailSchema,
+  waitlistOpeningQuerySchema,
+  leaveOpeningResultSchema,
+  waitlistOpeningsSchema,
+  waitlistPageSchema,
+  waitlistQuerySchema,
 } from '@dcm/contracts';
 import {
   Body,
@@ -50,6 +63,8 @@ import { AppointmentsService } from '../application/appointments.service';
 import { FollowUpsService } from '../application/follow-ups.service';
 import { OpeningHoursService } from '../application/opening-hours.service';
 import { SchedulingSummaryService } from '../application/scheduling-summary.service';
+import { WaitlistOpeningsService } from '../application/waitlist-openings.service';
+import { WaitlistService } from '../application/waitlist.service';
 
 class AppointmentDto extends createZodDto(appointmentSchema) {}
 class AppointmentListQueryDto extends createZodDto(appointmentListQuerySchema) {}
@@ -82,6 +97,21 @@ class DeclineDto extends createZodDto(declineFollowUpSchema) {}
 class OpeningHoursDto extends createZodDto(openingHoursSchema) {}
 class SettingsDto extends createZodDto(schedulingSettingsSchema) {}
 class IdParamsDto extends createZodDto(z.object({ id: idSchema })) {}
+class AppointmentIdParamsDto extends createZodDto(z.object({ appointmentId: idSchema })) {}
+class WaitlistEntryDto extends createZodDto(waitlistEntrySchema) {}
+class WaitlistEntryListDto extends createZodDto(z.array(waitlistEntrySchema)) {}
+class WaitlistQueryDto extends createZodDto(waitlistQuerySchema) {}
+class WaitlistPageDto extends createZodDto(waitlistPageSchema) {}
+class WaitlistOpeningsDto extends createZodDto(waitlistOpeningsSchema) {}
+class LeaveOpenResultDto extends createZodDto(leaveOpeningResultSchema) {}
+class WaitlistOpeningDetailDto extends createZodDto(waitlistOpeningDetailSchema) {}
+class WaitlistOpeningQueryDto extends createZodDto(waitlistOpeningQuerySchema) {}
+class LeaveOpenDto extends createZodDto(leaveOpeningOpenSchema) {}
+class AddWaitlistDto extends createZodDto(addWaitlistEntrySchema) {}
+class UpdateWaitlistDto extends createZodDto(updateWaitlistEntrySchema) {}
+class RemoveWaitlistDto extends createZodDto(removeWaitlistEntrySchema) {}
+class AttemptDto extends createZodDto(waitlistAttemptSchema) {}
+class FillDto extends createZodDto(fillWaitlistEntrySchema) {}
 
 /**
  * The calendar, bookings, follow-ups and opening hours (feature 14, docs/modules/scheduling.md). The
@@ -94,6 +124,8 @@ export class SchedulingController {
     private readonly followUps: FollowUpsService,
     private readonly openingHours: OpeningHoursService,
     private readonly summary: SchedulingSummaryService,
+    private readonly waitlist: WaitlistService,
+    private readonly openings: WaitlistOpeningsService,
   ) {}
 
   /** The Schedule's List view (feature 19): a dashboard figure's appointments. */
@@ -298,6 +330,92 @@ export class SchedulingController {
   @ZodResponse({ type: FollowUpDto })
   decline(@Param() params: IdParamsDto, @Body() body: DeclineDto) {
     return this.followUps.decline(params.id, body);
+  }
+
+  // --- The waitlist (feature 21, docs/modules/scheduling.md) ---
+
+  @Get('waitlist')
+  @RequirePermission('appointment:write_all')
+  @ZodResponse({ type: WaitlistPageDto })
+  waitlistList(@Query() query: WaitlistQueryDto) {
+    return this.openings.list(query);
+  }
+
+  @Get('waitlist/openings')
+  @RequirePermission('appointment:write_all')
+  @ZodResponse({ type: WaitlistOpeningsDto })
+  waitlistOpenings(@Query() query: BranchQueryDto) {
+    return this.openings.openings(query.branchId);
+  }
+
+  @Get('waitlist/openings/:appointmentId')
+  @RequirePermission('appointment:write_all')
+  @ZodResponse({ type: WaitlistOpeningDetailDto })
+  waitlistOpening(
+    @Param() params: AppointmentIdParamsDto,
+    @Query() query: WaitlistOpeningQueryDto,
+  ) {
+    return this.openings.opening(params.appointmentId, query.at);
+  }
+
+  @Post('waitlist/openings/:appointmentId/leave-open')
+  @RequirePermission('appointment:write_all')
+  @HttpCode(200)
+  @ZodResponse({ type: LeaveOpenResultDto })
+  leaveOpen(@Param() params: AppointmentIdParamsDto, @Body() body: LeaveOpenDto) {
+    return this.openings.leaveOpen(params.appointmentId, body.at);
+  }
+
+  @Get('patients/:id/waitlist')
+  @RequirePermission('appointment:read')
+  @ZodResponse({ type: WaitlistEntryListDto })
+  patientWaitlist(@Param() params: IdParamsDto) {
+    return this.waitlist.forPatient(params.id);
+  }
+
+  /** Without an appointment; the column is the service's (an entry names its dentist). */
+  @Post('waitlist')
+  @RequirePermission('appointment:write')
+  @ZodResponse({ type: WaitlistEntryDto, status: 201 })
+  addToWaitlist(@Body() body: AddWaitlistDto) {
+    return this.waitlist.add(body);
+  }
+
+  @Patch('waitlist/:id')
+  @RequirePermission('appointment:write')
+  @ZodResponse({ type: WaitlistEntryDto })
+  updateWaitlist(@Param() params: IdParamsDto, @Body() body: UpdateWaitlistDto) {
+    return this.waitlist.update(params.id, body);
+  }
+
+  @Post('waitlist/:id/remove')
+  @RequirePermission('appointment:write')
+  @HttpCode(200)
+  @ZodResponse({ type: WaitlistEntryDto })
+  removeFromWaitlist(@Param() params: IdParamsDto, @Body() body: RemoveWaitlistDto) {
+    return this.waitlist.remove(params.id, body);
+  }
+
+  @Post('waitlist/:id/attempt')
+  @RequirePermission('appointment:write_all')
+  @HttpCode(200)
+  @ZodResponse({ type: WaitlistEntryDto })
+  attempt(@Param() params: IdParamsDto, @Body() body: AttemptDto) {
+    return this.waitlist.attempt(params.id, body);
+  }
+
+  /** The existing booking or move into an opening (ADR-0106): retried safely with the key. */
+  @Post('waitlist/:id/fill')
+  @RequirePermission('appointment:write_all')
+  @HttpCode(200)
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ZodResponse({ type: AppointmentDto })
+  fill(
+    @Param() params: IdParamsDto,
+    @Body() body: FillDto,
+    @Headers('idempotency-key') key: string | undefined,
+  ) {
+    return this.openings.fill(params.id, body, idempotencyKey(key));
   }
 
   @Get('branches/:id/opening-hours')

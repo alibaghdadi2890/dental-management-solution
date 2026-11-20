@@ -28,6 +28,7 @@ export * from './phone.js';
 export * from './practitioners.js';
 export * from './roles.js';
 export * from './scheduling.js';
+export * from './waitlist.js';
 export * from './session.js';
 export * from './tenancy.js';
 export * from './tooth.js';

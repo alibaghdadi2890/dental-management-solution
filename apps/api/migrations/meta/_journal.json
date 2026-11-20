@@ -442,6 +442,13 @@
       "when": 1795083934914,
       "tag": "0062_inventory",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1795117153906,
+      "tag": "0063_waitlist",
+      "breakpoints": true
     }
   ]
 }

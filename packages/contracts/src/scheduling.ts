@@ -14,6 +14,7 @@ import {
 import type { Permission } from './permissions.js';
 import type { ToothCode } from './tooth.js';
 import { type VisitType, visitTypeSchema } from './visit-flow.js';
+import { appointmentWaitlistSchema, waitlistWishesSchema } from './waitlist.js';
 
 /**
  * Appointments and follow-ups (feature 14, ADR-0066 to ADR-0072). An appointment reserves a dentist
@@ -196,6 +197,10 @@ export const appointmentSchema = z.object({
   cancelReason: z.string().nullable(),
   /** `booked` or `confirmed` and over: derived, never stored. */
   unresolved: z.boolean(),
+  /** Its waiting entry: the patient wants an earlier time (feature 21, C2). */
+  waitlist: appointmentWaitlistSchema.nullable(),
+  /** Booked or moved here from the waitlist (B4). */
+  fromWaitlist: z.boolean(),
   updatedAt: isoDateTimeSchema,
 });
 export type Appointment = z.infer<typeof appointmentSchema>;
@@ -267,6 +272,8 @@ export const bookAppointmentSchema = z.object({
   sourceVisitId: idSchema.optional(),
   /** Goes through the warnings; needs `appointment:override`. */
   override: z.boolean().default(false),
+  /** *Wants an earlier time* ticked: the wishes of its waitlist entry (feature 21, A4). */
+  waitlist: waitlistWishesSchema.optional(),
 });
 export type BookAppointment = z.infer<typeof bookAppointmentSchema>;
 export type BookAppointmentRequest = z.input<typeof bookAppointmentSchema>;
@@ -287,7 +294,11 @@ export const resizeAppointmentSchema = z.object({
 export type ResizeAppointment = z.infer<typeof resizeAppointmentSchema>;
 export type ResizeAppointmentRequest = z.input<typeof resizeAppointmentSchema>;
 
-export const cancelAppointmentSchema = z.object({ reason: optionalText(500) });
+/** `waitlist`: the cancel's *Add to waitlist* tick (feature 21, A4). */
+export const cancelAppointmentSchema = z.object({
+  reason: optionalText(500),
+  waitlist: z.boolean().default(false),
+});
 export type CancelAppointment = z.infer<typeof cancelAppointmentSchema>;
 
 /** Undoes a cancel (ADR-0075): the warnings a move would meet need the override. */
@@ -310,6 +321,8 @@ export const editAppointmentSchema = z.object({
   /** *Confirmed with patient*: confirms in place; a moved appointment is unconfirmed without it. */
   confirmed: z.boolean().default(false),
   override: z.boolean().default(false),
+  /** *Wants an earlier time*: the wishes, `null` unticked (removes the entry), absent unchanged. */
+  waitlist: waitlistWishesSchema.nullable().optional(),
 });
 export type EditAppointment = z.infer<typeof editAppointmentSchema>;
 export type EditAppointmentRequest = z.input<typeof editAppointmentSchema>;
@@ -469,6 +482,8 @@ export const followUpSchema = z.object({
   /** Days past due while awaiting; 0 when not overdue. */
   overdueDays: z.number().int().nonnegative(),
   invalidReason: z.enum(FOLLOW_UP_INVALID_REASONS).nullable(),
+  /** A waiting entry stands for it (feature 21, C5). */
+  onWaitlist: z.boolean(),
   createdAt: isoDateTimeSchema,
 });
 export type FollowUp = z.infer<typeof followUpSchema>;

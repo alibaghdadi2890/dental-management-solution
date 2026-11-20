@@ -106,6 +106,7 @@ import {
 import { OpeningHoursRepository } from '../persistence/opening-hours.repository';
 import { AppointmentPresenter } from './appointment-presenter';
 import { type CompletionFacts, FollowUpsService } from './follow-ups.service';
+import { WaitlistService } from './waitlist.service';
 
 const USUAL_ROOM_DAYS = 30;
 const MERGE_CANCEL_REASON = 'Duplicate after merge';
@@ -135,7 +136,11 @@ interface MoveValues {
   confirmed: boolean;
   overridden: ConflictKind[];
   idempotency: { key: string; hash: string } | null;
+  /** Moved from the waitlist (feature 21): that entry is booked, not followed. */
+  waitlistEntryId?: string | null;
 }
+
+type Idempotency = { key: string; hash: string } | null;
 
 const isWaiting = (row: StoredAppointment) => row.status === 'booked' || row.status === 'confirmed';
 
@@ -170,6 +175,7 @@ export class AppointmentsService {
     private readonly hours: OpeningHoursRepository,
     private readonly presenter: AppointmentPresenter,
     private readonly followUps: FollowUpsService,
+    private readonly waitlist: WaitlistService,
     private readonly patients: PatientsService,
     private readonly users: UsersService,
     private readonly tenancy: TenancyService,
@@ -441,59 +447,155 @@ export class AppointmentsService {
       this.tenantDb.run(async () => {
         const first = await this.replay(idempotency);
         if (first) return first;
-        const start = new Date(input.startsAt);
-        if (start < this.clock.now()) throw new AppointmentInPastError();
-        const dentist = await this.dentistOf(input.branchId, input.dentistId);
-        await this.patients.lockForBooking(input.patientId);
-        if (input.sourceVisitId) await this.assertSourceVisit(input.sourceVisitId, input.patientId);
-        if (input.followUpId)
-          await this.followUps.lockForBooking(input.followUpId, input.patientId);
-        const span = { start, end: plusMinutes(start, input.durationMin) };
-        const placement = await this.place({
-          branchId: input.branchId,
-          dentist,
-          patientId: input.patientId,
-          span,
-          roomChoice: input.roomId,
-        });
-        const overridden = this.assertAllowed(placement.conflicts, input.override);
-        const userId = this.context.requireUserId();
-        const id = newId();
-        const row = await this.appointments.insert({
-          id,
-          branchId: input.branchId,
-          patientId: input.patientId,
-          dentistId: input.dentistId,
-          roomId: placement.pick.room?.id ?? null,
-          roomAuto: placement.roomAuto,
-          startsAt: span.start,
-          endsAt: span.end,
-          status: input.confirmed ? 'confirmed' : 'booked',
-          reason: input.reason,
-          visitType: input.visitType,
-          planIds: input.planIds,
-          followUpId: input.followUpId ?? null,
-          sourceVisitId: input.sourceVisitId ?? null,
-          lineageId: id,
-          overridden,
-          bookedBy: userId,
-          confirmedBy: input.confirmed ? userId : null,
-          confirmedAt: input.confirmed ? this.clock.now() : null,
-          idempotencyKey: idempotency?.key ?? null,
-          idempotencyHash: idempotency?.hash ?? null,
-        });
-        if (input.followUpId) await this.followUps.markBooked(input.followUpId, row.id);
-        await this.record('appointment.book', row, { after: this.snapshot(row) });
-        const event: AppointmentBooked = this.events.create(APPOINTMENT_BOOKED, {
-          appointmentId: row.id,
-          patientId: row.patientId,
-          dentistId: row.dentistId,
-          overridden,
-        });
-        await this.events.publish(event);
-        return this.presenter.present(row);
+        return this.presenter.present(await this.bookRow(input, idempotency, null));
       }),
     );
+  }
+
+  // --- The waitlist's fill (feature 21, ADR-0106): in-module, in the caller's transaction ---
+
+  /**
+   * Runs a fill as `book` and `reschedule` run: one transaction, a race on a room or the patient
+   * answered as a conflict (*Auto* tries once more), the same key replaying the first result.
+   */
+  runFill(
+    idempotency: { key: string; hash: string },
+    work: () => Promise<StoredAppointment>,
+  ): Promise<Appointment> {
+    return this.translatingRaces(true, () =>
+      this.tenantDb.run(async () => {
+        const first = await this.replay(idempotency);
+        if (first) return first;
+        return this.presenter.present(await work());
+      }),
+    );
+  }
+
+  /** The booking, never through a warning whoever asks (decision 5). */
+  bookForWaitlist(
+    input: BookAppointment,
+    idempotency: { key: string; hash: string },
+    entryId: string,
+  ): Promise<StoredAppointment> {
+    this.assertColumn(input.dentistId);
+    return this.bookRow({ ...input, override: false }, idempotency, entryId);
+  }
+
+  /**
+   * The move, never through a warning: a room picked by hand that is taken then is replaced by
+   * *Auto*'s choice (B4). The caller locked the patient.
+   */
+  async moveForWaitlist(
+    id: string,
+    change: { startsAt: Date; dentistId: string; roomId?: string | undefined; confirmed: boolean },
+    idempotency: { key: string; hash: string },
+    entryId: string,
+  ): Promise<StoredAppointment> {
+    const before = await this.appointments.lock(id);
+    this.assertColumn(before.dentistId);
+    this.assertColumn(change.dentistId);
+    await this.lockSchedule(before.patientId, change.dentistId);
+    const today = await this.today();
+    if (!canMove(this.momentOf(before, today.timeZone), today.date)) {
+      throw new AppointmentActionUnavailableError('reschedule');
+    }
+    assertTransition(before.status, 'rescheduled');
+    if (change.startsAt < this.clock.now()) throw new AppointmentInPastError();
+    const dentist = await this.dentistOf(before.branchId, change.dentistId);
+    const span = {
+      start: change.startsAt,
+      end: new Date(
+        change.startsAt.getTime() + before.endsAt.getTime() - before.startsAt.getTime(),
+      ),
+    };
+    const request = {
+      branchId: before.branchId,
+      dentist,
+      patientId: before.patientId,
+      span,
+      roomChoice: change.roomId ?? (before.roomAuto ? 'auto' : (before.roomId ?? 'auto')),
+      ignoreAppointmentId: before.id,
+    };
+    let placement = await this.place(request);
+    if (request.roomChoice !== 'auto' && placement.conflicts.some((item) => item.kind === 'room')) {
+      placement = await this.place({ ...request, roomChoice: 'auto' });
+    }
+    const overridden = this.assertAllowed(placement.conflicts, false);
+    return this.moveRow(before, {
+      dentistId: change.dentistId,
+      span,
+      placement,
+      reason: before.reason,
+      visitType: before.visitType,
+      confirmed: change.confirmed,
+      overridden,
+      idempotency,
+      waitlistEntryId: entryId,
+    });
+  }
+
+  /** A new booking's row, its follow-up and its waitlist entry, audited and published. */
+  private async bookRow(
+    input: BookAppointment,
+    idempotency: Idempotency,
+    waitlistEntryId: string | null,
+  ): Promise<StoredAppointment> {
+    const start = new Date(input.startsAt);
+    if (start < this.clock.now()) throw new AppointmentInPastError();
+    const dentist = await this.dentistOf(input.branchId, input.dentistId);
+    await this.patients.lockForBooking(input.patientId);
+    await this.lockSchedule(input.patientId, input.dentistId);
+    if (input.sourceVisitId) await this.assertSourceVisit(input.sourceVisitId, input.patientId);
+    if (input.followUpId) await this.followUps.lockForBooking(input.followUpId, input.patientId);
+    const span = { start, end: plusMinutes(start, input.durationMin) };
+    const placement = await this.place({
+      branchId: input.branchId,
+      dentist,
+      patientId: input.patientId,
+      span,
+      roomChoice: input.roomId,
+    });
+    const overridden = this.assertAllowed(placement.conflicts, input.override);
+    const userId = this.context.requireUserId();
+    const id = newId();
+    const row = await this.appointments.insert({
+      id,
+      branchId: input.branchId,
+      patientId: input.patientId,
+      dentistId: input.dentistId,
+      roomId: placement.pick.room?.id ?? null,
+      roomAuto: placement.roomAuto,
+      startsAt: span.start,
+      endsAt: span.end,
+      status: input.confirmed ? 'confirmed' : 'booked',
+      reason: input.reason,
+      visitType: input.visitType,
+      planIds: input.planIds,
+      followUpId: input.followUpId ?? null,
+      sourceVisitId: input.sourceVisitId ?? null,
+      lineageId: id,
+      overridden,
+      bookedBy: userId,
+      confirmedBy: input.confirmed ? userId : null,
+      confirmedAt: input.confirmed ? this.clock.now() : null,
+      waitlistEntryId,
+      idempotencyKey: idempotency?.key ?? null,
+      idempotencyHash: idempotency?.hash ?? null,
+    });
+    if (input.followUpId) {
+      await this.followUps.markBooked(input.followUpId, row.id);
+      await this.waitlist.onFollowUpBooked(input.followUpId, row.id, waitlistEntryId ?? undefined);
+    }
+    await this.record('appointment.book', row, { after: this.snapshot(row) });
+    const event: AppointmentBooked = this.events.create(APPOINTMENT_BOOKED, {
+      appointmentId: row.id,
+      patientId: row.patientId,
+      dentistId: row.dentistId,
+      overridden,
+    });
+    await this.events.publish(event);
+    if (input.waitlist) await this.waitlist.saveForAppointment(row, input.waitlist, 'appointment');
+    return row;
   }
 
   /** A new row in the same lineage; the old one stays as `rescheduled` (CLAUDE.md §8). */
@@ -512,6 +614,7 @@ export class AppointmentsService {
         this.assertColumn(before.dentistId);
         const dentistId = input.dentistId ?? before.dentistId;
         this.assertColumn(dentistId);
+        await this.lockSchedule(before.patientId, dentistId);
         const today = await this.today();
         if (!canMove(this.momentOf(before, today.timeZone), today.date)) {
           throw new AppointmentActionUnavailableError('reschedule');
@@ -566,6 +669,7 @@ export class AppointmentsService {
         const before = await this.appointments.lock(id);
         this.assertColumn(before.dentistId);
         this.assertColumn(input.dentistId);
+        await this.lockSchedule(before.patientId, input.dentistId);
         const today = await this.today();
         if (!canMove(this.momentOf(before, today.timeZone), today.date)) {
           throw new AppointmentActionUnavailableError('edit');
@@ -608,6 +712,10 @@ export class AppointmentsService {
         const row = moved
           ? await this.moveRow(before, { ...values, idempotency })
           : await this.editInPlace(before, values);
+        if (input.waitlist === null) await this.waitlist.removeForAppointment(row.id);
+        else if (input.waitlist) {
+          await this.waitlist.saveForAppointment(row, input.waitlist, 'appointment');
+        }
         return this.presenter.present(row);
       }),
     );
@@ -620,6 +728,7 @@ export class AppointmentsService {
       this.tenantDb.run(async () => {
         const before = await this.appointments.lock(id);
         this.assertColumn(before.dentistId);
+        await this.lockSchedule(before.patientId, before.dentistId);
         const today = await this.today();
         if (!canMove(this.momentOf(before, today.timeZone), today.date)) {
           throw new AppointmentActionUnavailableError('resize');
@@ -764,7 +873,9 @@ export class AppointmentsService {
       if (!canCancel(this.momentOf(before, 'UTC'))) {
         throw new AppointmentActionUnavailableError('cancel');
       }
-      return this.cancelRow(before, input.reason);
+      const row = await this.cancelRow(before, input.reason);
+      await this.waitlist.onCancelled(row, input.waitlist);
+      return row;
     });
   }
 
@@ -783,6 +894,7 @@ export class AppointmentsService {
         await this.patients.lockForBooking(current.patientId);
         const before = await this.appointments.lock(id);
         this.assertColumn(before.dentistId);
+        await this.lockSchedule(before.patientId, before.dentistId);
         if (!canRestore(this.momentOf(before, 'UTC'), this.clock.now())) {
           throw new AppointmentActionUnavailableError('restore');
         }
@@ -813,6 +925,7 @@ export class AppointmentsService {
           before: { status: before.status, cancelReason: before.cancelReason },
           after: { status: row.status, roomId: row.roomId },
         });
+        await this.waitlist.onRestored(row);
         const event: AppointmentRestored = this.events.create(APPOINTMENT_RESTORED, {
           appointmentId: id,
           patientId: row.patientId,
@@ -941,6 +1054,7 @@ export class AppointmentsService {
       throw new PatientHasUpcomingAppointmentsError(patientId, patient?.fullName ?? '', count);
     }
     await this.followUps.declineAwaitingOfArchived(patientId);
+    await this.waitlist.onPatientArchived(patientId);
   }
 
   /** G14: a dropped appointment overlapping a kept one is cancelled, its follow-up reopened. */
@@ -949,7 +1063,11 @@ export class AppointmentsService {
     const cancelled = new Set<string>();
     const cancel = async (row: StoredAppointment) => {
       cancelled.add(row.id);
-      await this.cancelRow(await this.appointments.lock(row.id), MERGE_CANCEL_REASON);
+      const closed = await this.cancelRow(
+        await this.appointments.lock(row.id),
+        MERGE_CANCEL_REASON,
+      );
+      await this.waitlist.onCancelled(closed, false, true);
     };
     for (const row of await this.appointments.activeForPatient(droppedId)) {
       const span = { start: row.startsAt, end: row.endsAt };
@@ -969,15 +1087,27 @@ export class AppointmentsService {
     }
     await this.appointments.repointPatient(droppedId, keptId);
     await this.followUps.repointPatient(droppedId, keptId);
+    await this.waitlist.onPatientsMerged(droppedId, keptId);
   }
 
   /** G16: their open appointments are moved or closed first. */
   async onStaffDeactivated(profileId: string): Promise<void> {
     const count = await this.appointments.countOpenForDentist(profileId);
     if (count > 0) throw new StaffHasOpenAppointmentsError(profileId, count);
+    await this.waitlist.onDentistDeactivated(profileId);
   }
 
   // --- Helpers ---
+
+  /**
+   * The lock order of every write that places time (ADR-0106): the appointment row (when there is
+   * one), then the patient's waitlist lock, then the dentist's. Two writes for one dentist run one at
+   * a time, so neither misses the other's uncommitted row and a dentist is never double-booked.
+   */
+  async lockSchedule(patientId: string, dentistId: string): Promise<void> {
+    await this.waitlist.lockPatient(patientId);
+    await this.appointments.lockDentist(dentistId);
+  }
 
   /** One locked status action: the column check, the presenter. */
   private act(
@@ -1045,9 +1175,11 @@ export class AppointmentsService {
       bookedBy: userId,
       confirmedBy: values.confirmed ? userId : null,
       confirmedAt: values.confirmed ? this.clock.now() : null,
+      waitlistEntryId: values.waitlistEntryId ?? null,
       idempotencyKey: idempotency?.key ?? null,
       idempotencyHash: idempotency?.hash ?? null,
     });
+    await this.waitlist.followMove(before, row, values.waitlistEntryId ?? undefined);
     await this.record('appointment.reschedule', row, {
       before: this.snapshot(before),
       after: this.snapshot(row),
@@ -1213,9 +1345,7 @@ export class AppointmentsService {
     return warnings.map((item) => item.kind);
   }
 
-  private async replay(
-    idempotency: { key: string; hash: string } | null,
-  ): Promise<Appointment | undefined> {
+  private async replay(idempotency: Idempotency): Promise<Appointment | undefined> {
     if (!idempotency) return undefined;
     await this.appointments.lockIdempotencyKey(idempotency.key);
     const first = await this.appointments.byIdempotencyKey(idempotency.key);

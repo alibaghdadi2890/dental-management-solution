@@ -498,6 +498,8 @@ export const operationalAttentionSchema = z.object({
   openVisits: count,
   acceptedUnbooked: count.nullable(),
   followUpsOverdue: count,
+  /** Today's *Openings to fill* (feature 21); null without `appointment:write_all`. */
+  openingsToFill: count.nullable(),
   labLate: count.nullable(),
   labArrivedUnbooked: z.object({ count, orderIds: z.array(idSchema) }).nullable(),
   /** Item-branch pairs labelled so now (feature 20a); null without `inventory:read`. */

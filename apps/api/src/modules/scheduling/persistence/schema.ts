@@ -6,6 +6,8 @@ import {
   FOLLOW_UP_TIMINGS,
   PLAN_PRIORITIES,
   type VisitType,
+  WAITLIST_ATTEMPT_OUTCOMES,
+  WAITLIST_STATUSES,
 } from '@dcm/contracts';
 import { sql } from 'drizzle-orm';
 import {
@@ -35,6 +37,7 @@ const instant = () => timestamp({ withTimezone: true });
 
 export const appointmentStatus = pgEnum('appointment_status', APPOINTMENT_STATUSES);
 export const followUpStatus = pgEnum('follow_up_status', FOLLOW_UP_STATUSES);
+export const waitlistStatus = pgEnum('waitlist_status', WAITLIST_STATUSES);
 
 /**
  * A reservation of a dentist and optionally a room of a branch (ADR-0066). Room and patient overlaps
@@ -85,6 +88,8 @@ export const appointments = pgTable(
     closedBy: uuid(),
     closedAt: instant(),
     cancelReason: text(),
+    /** The waitlist entry this row was booked or moved from (feature 21, B4). */
+    waitlistEntryId: uuid(),
     /** `Idempotency-Key` of the request that created the row, and its hash (ADR-0037). */
     idempotencyKey: uuid(),
     idempotencyHash: text(),
@@ -204,4 +209,90 @@ export const schedulingSettings = pgTable(
     check('scheduling_settings_window', sql`${table.followUpWindowDays} between 1 and 365`),
     tenantIsolationPolicy(),
   ],
+);
+
+/**
+ * The waitlist (feature 21, ADR-0103): a patient who wants an earlier time for `appointment_id`, or
+ * who waits with none. With an appointment, its reason, type, duration and plans are the
+ * appointment's and these columns keep what the entry had when it was added. `expired` is derived
+ * (ADR-0107), so a waiting entry past its date stays `waiting` here; one waiting entry per
+ * appointment and one without is the service's rule, under a per-patient lock. Never deleted.
+ */
+export const waitlistEntries = pgTable(
+  'waitlist_entries',
+  {
+    id: idColumn(),
+    tenantId: tenantIdColumn(),
+    branchId: uuid().notNull(),
+    patientId: uuid().notNull(),
+    appointmentId: uuid(),
+    /** A staff profile id; null is *Any dentist*. */
+    dentistId: uuid(),
+    reason: text().notNull(),
+    visitType: text().$type<VisitType>(),
+    durationMin: integer().notNull(),
+    planIds: uuid()
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    followUpId: uuid(),
+    /** Without an appointment: the last day an opening may fall on (clinic-local). */
+    untilOn: date(),
+    /** 0 is Sunday; empty is any day. */
+    weekdays: smallint()
+      .array()
+      .notNull()
+      .default(sql`'{}'::smallint[]`),
+    betweenFrom: time(),
+    betweenTo: time(),
+    notBefore: date(),
+    sameDay: boolean().notNull().default(false),
+    urgent: boolean().notNull().default(false),
+    note: text(),
+    status: waitlistStatus().notNull().default('waiting'),
+    /** The last call only: calls are not logged (decision 7). */
+    attemptAt: instant(),
+    attemptBy: uuid(),
+    attemptOutcome: text({ enum: WAITLIST_ATTEMPT_OUTCOMES }),
+    /** The cancellation that made it wait without an appointment, and whether it was new then. */
+    cancelledAppointmentId: uuid(),
+    cancelCreated: boolean().notNull().default(false),
+    bookedAppointmentId: uuid(),
+    removeReason: text(),
+    /** Auth user ids (CLAUDE.md §7). */
+    createdBy: uuid().notNull(),
+    closedBy: uuid(),
+    closedAt: instant(),
+    ...timestamps(),
+  },
+  (table) => [
+    index('waitlist_entries_tenant_idx').on(table.tenantId),
+    index('waitlist_entries_branch_status_idx').on(table.tenantId, table.branchId, table.status),
+    index('waitlist_entries_patient_idx').on(table.tenantId, table.patientId),
+    index('waitlist_entries_appointment_idx').on(table.tenantId, table.appointmentId),
+    index('waitlist_entries_follow_up_idx').on(table.tenantId, table.followUpId),
+    index('waitlist_entries_cancelled_idx').on(table.tenantId, table.cancelledAppointmentId),
+    check(
+      'waitlist_entries_kind',
+      sql`(${table.appointmentId} is null) = (${table.untilOn} is not null)`,
+    ),
+    check(
+      'waitlist_entries_between',
+      sql`(${table.betweenFrom} is null) = (${table.betweenTo} is null) and (${table.betweenFrom} is null or ${table.betweenFrom} < ${table.betweenTo})`,
+    ),
+    check('waitlist_entries_duration', sql`${table.durationMin} between 5 and 480`),
+    tenantIsolationPolicy(),
+  ],
+);
+
+/** *Leave open* (B6): a freed appointment whose opening stays off Today. */
+export const waitlistLeftOpen = pgTable(
+  'waitlist_left_open',
+  {
+    tenantId: tenantIdColumn(),
+    appointmentId: uuid().primaryKey(),
+    leftBy: uuid().notNull(),
+    ...timestamps(),
+  },
+  (table) => [index('waitlist_left_open_tenant_idx').on(table.tenantId), tenantIsolationPolicy()],
 );

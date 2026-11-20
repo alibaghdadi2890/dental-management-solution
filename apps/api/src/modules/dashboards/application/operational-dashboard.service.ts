@@ -253,6 +253,7 @@ export class OperationalDashboardService {
         openVisits: await this.clinical.openVisits(today, filter),
         acceptedUnbooked: schedule.acceptedUnbooked,
         followUpsOverdue: schedule.followUpsOverdue,
+        openingsToFill: schedule.openingsToFill,
         labLate: lab?.late ?? null,
         labArrivedUnbooked: lab
           ? { count: lab.arrivedUnbooked.length, orderIds: lab.arrivedUnbooked.slice(0, 50) }
