@@ -202,6 +202,7 @@ test('the dentist completes a visit; the owner lets front desk discount; it disc
     // Recording the payment ends the checkout: no way back to the figures, nothing left open.
     await expect(checkout).toBeHidden();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-    await expect(page.getByText('No one is waiting to check out.')).toBeVisible();
+    // Nobody left to check out: the card is gone (Today shows no empty card).
+    await expect(page.getByRole('region', { name: /^Ready for checkout/ })).toHaveCount(0);
   });
 });

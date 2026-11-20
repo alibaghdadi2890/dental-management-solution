@@ -1,0 +1,217 @@
+/* The Today board's cards (spec 2026-11-20-today-board-refresh): one hue per card, a header washed
+   in it, and the arrival motion. Hues are used by board cards only, never by charts (ADR-0091).
+   Every badge colour carries white text at 4.5:1 or more. */
+
+[data-hue='indigo'] {
+  --hue: #3b3f8f;
+  --hue-ink: #2b2e6b;
+  --hue-tint: #eceef8;
+  --hue-border: #c3c7ea;
+}
+[data-hue='amber'] {
+  --hue: #8f6516;
+  --hue-ink: #6b4c12;
+  --hue-tint: #faf1dd;
+  --hue-border: #ead7ab;
+}
+[data-hue='rose'] {
+  --hue: #a63d52;
+  --hue-ink: #7f2a3b;
+  --hue-tint: #f9e9ec;
+  --hue-border: #ecc6cd;
+}
+[data-hue='violet'] {
+  --hue: #5f539c;
+  --hue-ink: #463e74;
+  --hue-tint: #efedf6;
+  --hue-border: #d6d1e8;
+}
+[data-hue='sky'] {
+  --hue: #24679a;
+  --hue-ink: #1a4b70;
+  --hue-tint: #e7f1f8;
+  --hue-border: #bcd7ea;
+}
+[data-hue='teal'] {
+  --hue: #1f5f66;
+  --hue-ink: #17474d;
+  --hue-tint: #e8f2f2;
+  --hue-border: #b9d8da;
+}
+[data-hue='green'] {
+  --hue: #23735f;
+  --hue-ink: #1a5646;
+  --hue-tint: #e6f3ef;
+  --hue-border: #bfded5;
+}
+[data-hue='orange'] {
+  --hue: #a9581c;
+  --hue-ink: #7a3f12;
+  --hue-tint: #fbeee2;
+  --hue-border: #efcfb1;
+}
+
+.board-card {
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+.board-card:hover {
+  border-color: var(--hue-border);
+  box-shadow: 0 6px 18px rgb(27 26 31 / 0.08);
+}
+
+.board-card-head {
+  display: flex;
+  min-height: 42px;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  padding-block: 8px;
+  padding-inline: 14px 8px;
+  border-bottom: 1px solid var(--hue-border);
+  background-image: linear-gradient(to right, var(--hue-tint), var(--color-surface));
+  background-repeat: no-repeat;
+  background-position: left;
+  color: var(--hue-ink);
+}
+.board-card-head:dir(rtl) {
+  background-image: linear-gradient(to left, var(--hue-tint), var(--color-surface));
+  background-position: right;
+}
+.board-card[data-collapsed] .board-card-head {
+  border-bottom-color: transparent;
+}
+
+.board-badge {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--hue);
+  color: #fff;
+}
+.board-count {
+  display: inline-block;
+  border-radius: 999px;
+  background: var(--hue);
+  padding: 3px 7px;
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* A row's main action takes the card's hue. Unlayered, so it wins over the button's utilities. */
+.board-card .board-hue-button {
+  border-color: var(--hue);
+  background: var(--hue);
+  color: #fff;
+}
+.board-card .board-hue-button:hover:not(:disabled) {
+  border-color: var(--hue-ink);
+  background: var(--hue-ink);
+}
+
+/* A row that arrived while the card was on screen: it slides open in a wash of the hue. */
+.board-row-arrive {
+  overflow: hidden;
+  animation:
+    board-row-in 0.35s ease-out,
+    board-row-glow 2.2s ease-out;
+}
+/* A card that arrived after the board settled: it blooms, its header wash sweeps in, a ring fades. */
+.board-card-arrive {
+  animation:
+    board-bloom 0.45s cubic-bezier(0.2, 0.8, 0.2, 1),
+    board-ring 2.6s ease-out;
+}
+.board-card-arrive .board-card-head {
+  animation: board-sweep 0.7s 0.15s ease-out both;
+}
+.board-bump {
+  animation: board-bump 0.35s ease;
+}
+
+@keyframes board-bloom {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.015);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+@keyframes board-ring {
+  0%,
+  40% {
+    box-shadow:
+      0 0 0 2px var(--color-background),
+      0 0 0 4px var(--hue),
+      0 10px 28px -8px var(--hue);
+  }
+  100% {
+    box-shadow:
+      0 0 0 2px transparent,
+      0 0 0 4px transparent,
+      0 0 0 transparent;
+  }
+}
+@keyframes board-sweep {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
+@keyframes board-row-in {
+  from {
+    max-height: 0;
+    opacity: 0;
+  }
+  to {
+    max-height: 160px;
+    opacity: 1;
+  }
+}
+@keyframes board-row-glow {
+  0%,
+  50% {
+    background-color: var(--hue-tint);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+@keyframes board-bump {
+  50% {
+    transform: scale(1.3);
+  }
+}
+
+/* Reduced motion: nothing moves or sweeps; the ring and the row's wash still say what is new. */
+@media (prefers-reduced-motion: reduce) {
+  .board-card-arrive {
+    animation: board-ring 2.6s ease-out;
+  }
+  .board-card-arrive .board-card-head,
+  .board-bump {
+    animation: none;
+  }
+  .board-row-arrive {
+    animation: board-row-glow 2.2s ease-out;
+  }
+}

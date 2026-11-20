@@ -247,9 +247,6 @@
     "title": "This month's expenses",
     "count_one": "{{count}} expense",
     "count_other": "{{count}} expenses",
-    "seeAll": "See all",
-    "empty": "No expenses this month yet.",
-    "loading": "Loading this month's expenses",
     "failed": "This month's expenses couldn't load."
   },
   "errors": {

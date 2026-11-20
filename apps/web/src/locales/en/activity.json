@@ -292,6 +292,25 @@
       "will_call": "Noted that {{subject}} will call to book: {{title}}",
       "decline": "Recorded that {{subject}} declined the follow-up: {{title}}"
     },
+    "waitlist_entry": {
+      "add_appointment": "Added {{subject}} to the waitlist for an earlier time",
+      "add_waitlist": "Added {{subject}} to the waitlist",
+      "add_slot_finder": "Added {{subject}} to the waitlist from the slot finder",
+      "add_follow_up": "Added {{subject}} to the waitlist from a follow-up",
+      "add_record": "Added {{subject}} to the waitlist from the patient record",
+      "add_cancel": "Kept {{subject}} on the waitlist when cancelling the appointment",
+      "update": "Changed {{subject}}'s waitlist wishes",
+      "no_answer": "Called {{subject}} for a waitlist opening: no answer",
+      "not_this_time": "Called {{subject}} for a waitlist opening: not this time",
+      "book": "Booked {{subject}} from the waitlist: {{when}} · {{dentist}}",
+      "remove": "Removed {{subject}} from the waitlist",
+      "follow": "{{subject}}'s waitlist entry followed the appointment",
+      "keep": "{{subject}} waits without the cancelled appointment",
+      "any_dentist": "{{subject}}'s waitlist entry now takes any dentist"
+    },
+    "waitlist_opening": {
+      "leave_open": "Left an opening open: {{when}} · {{dentist}}"
+    },
     "opening_hours": {
       "update": "Changed a branch's opening hours"
     },

@@ -41,6 +41,8 @@ export interface Lookups {
   money: (amount: string, currency: string) => string;
   /** "November 2026" for `2026-11`, in the UI language. */
   month: (month: string) => string;
+  /** A calendar date (`YYYY-MM-DD`) in the UI language: "Tue 24 Nov 2026". */
+  day: (date: string) => string;
   /** A tooth code in the clinic's notation. */
   tooth: (code: string) => string;
   /** The label of a payment method, an adjustment reason, a file's category or type, a visit's
@@ -125,6 +127,27 @@ const SCHEDULE: ReadonlySet<string> = new Set([
   'follow_up.reopen',
   'follow_up.will_call',
   'follow_up.decline',
+]);
+
+/** The waitlist (feature 21): the actions with a sentence of their own. */
+const WAITLIST: ReadonlySet<string> = new Set([
+  'waitlist_entry.update',
+  'waitlist_entry.no_answer',
+  'waitlist_entry.not_this_time',
+  'waitlist_entry.book',
+  'waitlist_entry.remove',
+  'waitlist_entry.follow',
+  'waitlist_entry.keep',
+  'waitlist_entry.any_dentist',
+  'waitlist_opening.leave_open',
+]);
+const WAITLIST_SOURCES: ReadonlySet<string> = new Set([
+  'appointment',
+  'waitlist',
+  'slot_finder',
+  'follow_up',
+  'record',
+  'cancel',
 ]);
 
 /** Expenses and payroll (feature 17): the actions with a sentence of their own. */
@@ -575,6 +598,21 @@ export function sentenceOf(entry: AuditEntry, lookups: Lookups): Sentence {
   if (prefix === 'appointment' || prefix === 'follow_up') {
     return done(SCHEDULE.has(action) ? action : 'fallback', patient, {
       title: field(entry, 'title') ?? '',
+      action: readableAction(action),
+    });
+  }
+  if (prefix === 'waitlist_entry' || prefix === 'waitlist_opening') {
+    const from = field(entry, 'from');
+    const key =
+      action === 'waitlist_entry.add'
+        ? `waitlist_entry.add_${from && WAITLIST_SOURCES.has(from) ? from : 'waitlist'}`
+        : WAITLIST.has(action)
+          ? action
+          : 'fallback';
+    const date = field(entry, 'date');
+    return done(key, action === 'waitlist_opening.leave_open' ? null : patient, {
+      when: [date ? lookups.day(date) : null, field(entry, 'time')].filter(Boolean).join(' · '),
+      dentist: field(entry, 'dentistName') ?? '',
       action: readableAction(action),
     });
   }

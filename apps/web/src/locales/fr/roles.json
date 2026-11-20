@@ -180,7 +180,7 @@
     },
     "appointment_write_all": {
       "label": "Gérer les rendez-vous de tous les dentistes",
-      "description": "Agir sur les rendez-vous de tous les dentistes et la liste des suivis."
+      "description": "Agir sur les rendez-vous de tous les dentistes, la liste des suivis et la liste d'attente."
     },
     "appointment_override": {
       "label": "Réserver malgré les avertissements",

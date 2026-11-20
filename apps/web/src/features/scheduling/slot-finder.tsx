@@ -28,6 +28,9 @@ import {
   schedulingKeys,
   slotsQuery,
 } from './scheduling-api';
+import { OnTheWaitlistLine } from './waitlist/on-the-waitlist-line';
+import { useFreedTimeToast } from './waitlist/use-freed-time-toast';
+import { useWaitlistPanels } from './waitlist/waitlist-context';
 
 const SHOWN_PER_DAY = 3;
 const MORE_DATES_DAYS = 14;
@@ -98,6 +101,25 @@ export function SlotFinder({
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [picked, setPicked] = useState<Slot | null>(null);
   const [taken, setTaken] = useState(false);
+  const { openEntry } = useWaitlistPanels();
+  const freedToast = useFreedTimeToast();
+  // *Add to waitlist* (A4): pre-filled from the search; a move's finder has no such link.
+  const addToWaitlist =
+    openEntry && !context.rescheduleId
+      ? () => {
+          onCancel();
+          openEntry({
+            source: 'slot_finder',
+            patient: { id: context.patientId, fullName: context.patientName, meta: '' },
+            dentistId: dentistId ?? undefined,
+            reason: context.reason,
+            visitType: context.visitType,
+            durationMin: context.durationMin,
+            planIds: context.planIds,
+            followUpId: context.followUpId,
+          });
+        }
+      : null;
   const dentist = resources.data?.dentists.find((item) => item.id === dentistId);
   const actor = {
     permissions: session?.permissions ?? [],
@@ -151,6 +173,7 @@ export function SlotFinder({
     onSuccess: async (appointment) => {
       await invalidateSchedule(queryClient);
       onBooked(appointment);
+      if (context.rescheduleId) await freedToast(context.rescheduleId, t('toast.moved'));
     },
     onError: async (error) => {
       if (error instanceof ApiError && error.code === 'appointment.conflict') {
@@ -189,6 +212,9 @@ export function SlotFinder({
             {formatTime(picked.startsAt, clock)}–{formatTime(picked.endsAt, clock)}
           </dd>
         </dl>
+        {context.rescheduleId ? null : (
+          <OnTheWaitlistLine patientId={context.patientId} followUpId={context.followUpId} />
+        )}
         {book.isError && !taken ? (
           <p role="alert" className="m-0 text-[12.5px] text-danger">
             {book.error instanceof ApiError && book.error.code === 'follow_up.not_awaiting'
@@ -265,6 +291,11 @@ export function SlotFinder({
         >
           {t('finder.openCalendar')}
         </Link>
+        {addToWaitlist ? (
+          <Button size="sm" variant="ghost" onClick={addToWaitlist}>
+            {t('waitlist.addTitle')}
+          </Button>
+        ) : null}
       </div>
       {panel === 'dentist' ? (
         <div role="group" aria-label={t('finder.dentist')} className="flex flex-wrap gap-1">
@@ -394,6 +425,11 @@ export function SlotFinder({
           >
             {t('finder.later')}
           </Button>
+          {addToWaitlist ? (
+            <Button size="sm" variant="primary" className="ms-2 mt-2" onClick={addToWaitlist}>
+              {t('waitlist.addTitle')}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {dentistId === null ? (

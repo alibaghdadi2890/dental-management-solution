@@ -1,6 +1,7 @@
 import { stepLabelKey, type VisitListItem } from '@dcm/contracts';
 import { Link } from '@tanstack/react-router';
 import { useTranslation } from 'react-i18next';
+import { useRowArrival } from '@/components/board/board-kit';
 import { useElapsedText } from '@/features/clinical/use-visit-timer';
 import { cn } from '@/lib/utils';
 
@@ -26,9 +27,15 @@ export function ChairRow({
     `clinical:flow.steps.${stepLabelKey(visit.type, visit.currentStep)}`,
   );
   const running = visit.status === 'in_progress';
+  const arrival = useRowArrival();
 
   return (
-    <li className="flex items-center gap-3 border-t border-inner-divider px-[18px] py-3 first:border-t-0">
+    <li
+      className={cn(
+        'flex items-center gap-3 border-t border-row-divider px-3.5 py-2.5 first:border-t-0',
+        arrival,
+      )}
+    >
       <span
         aria-hidden
         className={cn(

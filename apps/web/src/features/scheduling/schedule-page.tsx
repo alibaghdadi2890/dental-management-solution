@@ -41,11 +41,15 @@ import {
   slotsQuery,
 } from './scheduling-api';
 import { useAppointmentAbilities } from './use-appointment-actions';
+import { useFreedTimeToast } from './waitlist/use-freed-time-toast';
+import { openingsQuery } from './waitlist/waitlist-api';
+import { WaitlistView, type WaitlistViewSearch } from './waitlist/waitlist-view';
 import { useScheduleDisplay } from './use-schedule-display';
 
-export interface ScheduleSearch {
+export interface ScheduleSearch extends WaitlistViewSearch {
   date?: string | undefined;
-  view?: ScheduleView | undefined;
+  /** `waitlist`: Schedule › Waitlist (feature 21, C1). */
+  view?: ScheduleView | 'waitlist' | undefined;
   dentist?: string | undefined;
   room?: string | undefined;
   unresolved?: boolean | undefined;
@@ -171,6 +175,8 @@ function ScheduleScreen({
   const words = useConflictWords();
   const abilities = useAppointmentAbilities();
   const canOverride = usePermission('appointment:override');
+  const canFill = usePermission('appointment:write_all');
+  const freedToast = useFreedTimeToast();
   const keyFor = useIdempotencyKeys();
   const [slotLength, setSlotLength] = useScheduleDisplay(userId);
   const [selected, setSelected] = useState<{
@@ -187,7 +193,9 @@ function ScheduleScreen({
 
   const today = todayIn(timeZone);
   const date = search.date ?? today;
-  const view: ScheduleView = search.view ?? 'day';
+  const view: ScheduleView = search.view === 'week' ? 'week' : 'day';
+  const waitlistOn = search.view === 'waitlist' && canFill;
+  const waitlist = useQuery(openingsQuery(branchId, canFill));
   const dates = useMemo(() => (view === 'day' ? [date] : weekOf(date)), [view, date]);
   const firstDate = dates[0] ?? date;
   const lastDate = dates.at(-1) ?? date;
@@ -434,9 +442,10 @@ function ScheduleScreen({
       return rescheduleAppointment(change.appointment.id, input, key);
     },
     onSuccess: async (_, change) => {
-      toast(change.kind === 'move' ? t('toast.moved') : t('toast.resized'));
       setPending(null);
       await invalidateSchedule(queryClient);
+      if (change.kind === 'move') await freedToast(change.appointment.id, t('toast.moved'));
+      else toast(t('toast.resized'));
     },
     onError: async (error) => {
       const refusal = conflictsOf(error)[0];
@@ -506,6 +515,7 @@ function ScheduleScreen({
       <div className="flex h-full min-h-0 flex-col px-6 pt-5 pb-3">
         <ScheduleToolbar
           view={view}
+          waitlist={canFill ? { on: waitlistOn, count: waitlist.data?.waitingCount } : null}
           date={date}
           today={today}
           dates={dates}
@@ -521,7 +531,16 @@ function ScheduleScreen({
             openPanel({ date: date < today ? today : date, durationMin: slotLength });
           }}
         />
-        {resources.isSuccess && resources.data.dentists.length === 0 ? (
+        {waitlistOn ? (
+          <WaitlistView
+            branchId={branchId}
+            dentists={resources.data?.dentists ?? []}
+            search={search}
+            onSearch={(next) => {
+              onSearch({ ...search, ...next });
+            }}
+          />
+        ) : resources.isSuccess && resources.data.dentists.length === 0 ? (
           <EmptyState title={t('calendar.noDentists')} body={t('calendar.noDentistsBody')} />
         ) : (
           <ScheduleCalendar

@@ -180,7 +180,7 @@
     },
     "appointment_write_all": {
       "label": "Manage every dentist's appointments",
-      "description": "Act on every dentist's appointments and the follow-up list."
+      "description": "Act on every dentist's appointments, the follow-up list and the waitlist."
     },
     "appointment_override": {
       "label": "Book through warnings",

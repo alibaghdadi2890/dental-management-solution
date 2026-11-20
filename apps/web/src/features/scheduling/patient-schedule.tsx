@@ -1,4 +1,11 @@
-import { type Appointment, type FollowUp, isActiveAppointment, type Patient } from '@dcm/contracts';
+import {
+  type Appointment,
+  canWriteWaitlistEntry,
+  type FollowUp,
+  isActiveAppointment,
+  type Patient,
+} from '@dcm/contracts';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
@@ -7,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
+import { useToast } from '@/components/ui/toast-context';
+import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, formatTime, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { AppointmentStatusPill } from './appointment-status';
@@ -15,6 +24,10 @@ import { isOpenFollowUp, patientAppointmentsQuery } from './scheduling-api';
 import { moveContext, useFollowUpContext } from './slot-context';
 import { SlotFinderDialog } from './slot-finder-dialog';
 import { useAppointmentAbilities, useAppointmentActions } from './use-appointment-actions';
+import { patientWaitlistQuery, removeWaitlistEntry, waitingWithout } from './waitlist/waitlist-api';
+import { useWaitlistPanels } from './waitlist/waitlist-context';
+import { useWishesText, wishesState } from './waitlist/wishes-state';
+import { invalidateSchedule } from './scheduling-api';
 import type { TimelineEntry } from './use-schedule-timeline';
 
 const minutesOf = (appointment: Appointment) =>
@@ -31,7 +44,61 @@ export function NextAppointmentCard({ patient }: { patient: Patient }) {
   const { cancel } = useAppointmentActions();
   const [moving, setMoving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const queryClient = useQueryClient();
+  const { openEntry } = useWaitlistPanels();
+  const wishesText = useWishesText();
+  const waiting = useQuery({
+    ...patientWaitlistQuery(patient.id, canRead),
+    select: waitingWithout,
+  });
+  const toast = useToast();
+  const remove = useMutation({
+    mutationFn: (id: string) => removeWaitlistEntry(id, ''),
+    onSuccess: () => invalidateSchedule(queryClient),
+    onError: (error) => {
+      toast(apiErrorMessage(error, i18n), { tone: 'danger' });
+    },
+  });
   if (!canRead || !session?.tenant) return null;
+  const entry = waiting.data;
+  const mayChange =
+    entry !== null &&
+    entry !== undefined &&
+    canWriteWaitlistEntry(
+      { permissions: session.permissions, profileId: session.profile?.id ?? null },
+      entry,
+    );
+  // *On the waitlist · until {date}* (C4), with Edit and Remove for whoever may change it.
+  const waitingLine = entry ? (
+    <p className="m-0 flex flex-wrap items-center gap-1.5 text-[12.5px] text-primary">
+      {t('waitlist.onTheWaitlistUntil', {
+        date: formatCalendarDate(entry.until, i18n.language),
+      })}
+      {mayChange && openEntry ? (
+        <button
+          type="button"
+          className="cursor-pointer border-none bg-transparent p-0 text-primary hover:underline"
+          onClick={() => {
+            openEntry({ source: 'record', entry, wishes: wishesState(entry.wishes, entry) });
+          }}
+        >
+          {t('waitlist.edit')}
+        </button>
+      ) : null}
+      {mayChange ? (
+        <button
+          type="button"
+          disabled={remove.isPending}
+          className="cursor-pointer border-none bg-transparent p-0 text-primary hover:underline"
+          onClick={() => {
+            remove.mutate(entry.id);
+          }}
+        >
+          {t('waitlist.removeShort')}
+        </button>
+      ) : null}
+    </p>
+  ) : null;
   const clock = { timeZone: session.tenant.timeZone, locale: i18n.language };
   const today = todayIn(session.tenant.timeZone);
   const next = [...(appointments.data ?? [])]
@@ -52,6 +119,12 @@ export function NextAppointmentCard({ patient }: { patient: Patient }) {
             {formatCalendarDate(next.localDate, i18n.language)} · {formatTime(next.startsAt, clock)}
           </p>
           <p className="m-0 text-ink-secondary">{next.reason}</p>
+          {next.waitlist ? (
+            <p className="m-0 text-[12.5px] text-primary">
+              {t('waitlist.wantsEarlier')} · {wishesText(next.waitlist.wishes)}
+            </p>
+          ) : null}
+          {waitingLine}
           <p className="m-0 text-[12.5px] text-ink-muted">
             {[next.dentistName, next.roomName, t('panel.minutes', { count: minutesOf(next) })]
               .filter(Boolean)
@@ -117,17 +190,41 @@ export function NextAppointmentCard({ patient }: { patient: Patient }) {
           ) : null}
         </div>
       ) : (
-        <div className="flex items-center justify-between gap-3 text-[13px] text-ink-secondary">
-          <span>{t('record.noNext')}</span>
-          {canBook && patient.archivedAt === null ? (
-            <Link
-              to="/schedule"
-              search={{ bookFor: patient.id }}
-              className="font-medium text-primary hover:underline"
-            >
-              {t('record.book')}
-            </Link>
-          ) : null}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-3 text-[13px] text-ink-secondary">
+            <span>{t('record.noNext')}</span>
+            {canBook && patient.archivedAt === null ? (
+              <span className="flex items-center gap-3">
+                {openEntry && !entry ? (
+                  <button
+                    type="button"
+                    className="cursor-pointer border-none bg-transparent p-0 font-medium text-primary hover:underline"
+                    onClick={() => {
+                      openEntry({
+                        source: 'record',
+                        patient: {
+                          id: patient.id,
+                          fullName: patient.fullName,
+                          meta: patient.displayNumber,
+                        },
+                        dentistId: patient.primaryDentistId ?? undefined,
+                      });
+                    }}
+                  >
+                    {t('waitlist.addTitle')}
+                  </button>
+                ) : null}
+                <Link
+                  to="/schedule"
+                  search={{ bookFor: patient.id }}
+                  className="font-medium text-primary hover:underline"
+                >
+                  {t('record.book')}
+                </Link>
+              </span>
+            ) : null}
+          </div>
+          {waitingLine}
         </div>
       )}
     </Card>

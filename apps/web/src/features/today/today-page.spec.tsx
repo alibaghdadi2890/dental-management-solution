@@ -98,8 +98,9 @@ describe('TodayPage', () => {
     expect(seated?.textContent).toBe(
       'Omar SalehExamination · Dr. Ana Reyes · Room 1On Findings12:05',
     );
-    // The front desk reads the lane; it has no workspace to open.
-    expect(chair.queryByRole('link')).toBeNull();
+    // The front desk reads the lane; it has no workspace to open (the title opens the Visits list).
+    expect(chair.queryByRole('link', { name: 'Omar Saleh' })).toBeNull();
+    expect(chair.getByRole('link', { name: 'In the chair' }).getAttribute('href')).toBe('/visits');
     expect(
       fetchMock.mock.calls.some(([url]) => url.includes('/visits?') && url.includes('in_progress')),
     ).toBe(true);
@@ -117,11 +118,30 @@ describe('TodayPage', () => {
     expect(screen.queryByText('Rana Haddad')).toBeNull();
   });
 
-  it('says so when nobody waits and nobody is in the chair', async () => {
+  it('shows no empty card: with nobody waiting and nobody in the chair, one all-clear line', async () => {
     mockBoard({ waiting: [], chair: [] });
     renderShell({ url: '/today', session: sessionWith(FRONT_DESK) });
-    expect(await screen.findByText('No one is waiting to check out.')).toBeTruthy();
-    expect(await screen.findByText('No visit in progress.')).toBeTruthy();
+    expect(await screen.findByText('Nothing needs attention right now.')).toBeTruthy();
+    expect(screen.queryByRole('region', { name: /^Ready for checkout/ })).toBeNull();
+    expect(screen.queryByRole('region', { name: /^In the chair/ })).toBeNull();
+    // A band without a card is hidden, label and all.
+    expect(screen.queryByRole('group', { name: 'Now' })).toBeNull();
+  });
+
+  it('a card that comes once the board has settled blooms in; the first ones do not', async () => {
+    const board = { waiting: [] as VisitListItem[], chair: [OMAR] };
+    mockBoard(board);
+    const { client } = renderShell({ url: '/today', session: sessionWith(FRONT_DESK) });
+    const chair = await lane(/^In the chair · 1$/);
+    expect(chair.className).not.toContain('board-card-arrive');
+    expect(screen.getByRole('group', { name: 'Now' })).toBeTruthy();
+
+    // Settled (nothing fetched for a moment), then Rana's visit finishes elsewhere.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    board.waiting = [RANA];
+    await client.invalidateQueries();
+    const waiting = await lane(/^Ready for checkout · 1$/);
+    expect(waiting.className).toContain('board-card-arrive');
   });
 
   it('links a live visit to its workspace with visit:write', async () => {

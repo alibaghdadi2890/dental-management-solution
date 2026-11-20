@@ -225,7 +225,8 @@ export const checkInAppointment = (id: string, roomId?: string) =>
 export const undoCheckIn = (id: string) => act(id, 'undo-check-in');
 export const changeAppointmentRoom = (id: string, roomId: string | null) =>
   act(id, 'room', { roomId });
-export const cancelAppointment = (id: string, reason: string) => act(id, 'cancel', { reason });
+export const cancelAppointment = (id: string, reason: string, waitlist = false) =>
+  act(id, 'cancel', { reason, waitlist });
 export const markNoShow = (id: string) => act(id, 'no-show');
 export const restoreAppointment = (id: string, override: boolean) =>
   act(id, 'restore', { override });

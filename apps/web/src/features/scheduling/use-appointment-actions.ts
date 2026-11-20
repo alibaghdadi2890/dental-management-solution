@@ -24,6 +24,7 @@ import {
   restoreAppointment,
   undoCheckIn,
 } from './scheduling-api';
+import { useFreedTimeToast } from './waitlist/use-freed-time-toast';
 
 /** What this caller may do to this appointment now: the same rules as the API (A7, G21). */
 export interface AppointmentAbilities {
@@ -102,9 +103,30 @@ function useAction<TInput>(run: (input: TInput) => Promise<Appointment>, done: s
   });
 }
 
+/** Cancel (A4): the *Add to waitlist* tick, and a toast saying who fits the time it frees. */
+function useCancel() {
+  const { t, i18n } = useTranslation('scheduling');
+  const toast = useToast();
+  const freedToast = useFreedTimeToast();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason, waitlist }: { id: string; reason: string; waitlist?: boolean }) =>
+      cancelAppointment(id, reason, waitlist ?? false),
+    onSuccess: async (appointment) => {
+      await invalidateSchedule(queryClient);
+      await freedToast(appointment.id, t('toast.cancelled'));
+    },
+    onError: (error) => {
+      toast(apiErrorMessage(error, i18n), { tone: 'danger' });
+      return invalidateSchedule(queryClient);
+    },
+  });
+}
+
 /** The popover's and the board's one-click actions. */
 export function useAppointmentActions() {
   const { t } = useTranslation('scheduling');
+  const cancel = useCancel();
   return {
     confirm: useAction((id: string) => confirmAppointment(id), t('toast.confirmed')),
     checkIn: useAction(
@@ -113,10 +135,7 @@ export function useAppointmentActions() {
     ),
     undoCheckIn: useAction((id: string) => undoCheckIn(id), t('toast.checkInUndone')),
     noShow: useAction((id: string) => markNoShow(id), t('toast.noShow')),
-    cancel: useAction(
-      ({ id, reason }: { id: string; reason: string }) => cancelAppointment(id, reason),
-      t('toast.cancelled'),
-    ),
+    cancel,
     restore: useAction(
       ({ id, override }: { id: string; override: boolean }) => restoreAppointment(id, override),
       t('toast.restored'),

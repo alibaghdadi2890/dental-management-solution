@@ -39,6 +39,7 @@ type AttentionKey =
   | 'openVisits'
   | 'acceptedUnbooked'
   | 'followUpsOverdue'
+  | 'openingsToFill'
   | 'labLate'
   | 'labArrived'
   | 'stockOut'
@@ -351,6 +352,8 @@ export function OperationalTab({
           target: drill.cohort('accepted_unbooked'),
         },
         { key: 'followUpsOverdue' as const, value: at.followUpsOverdue, target: { to: '/today' } },
+        // Today's *Openings to fill* (feature 21, C6): the same count, the same list.
+        { key: 'openingsToFill' as const, value: at.openingsToFill, target: { to: '/today' } },
         {
           key: 'labLate' as const,
           value: at.labLate,

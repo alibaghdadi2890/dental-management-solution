@@ -16,6 +16,8 @@ import { formatCalendarDate, formatTime, todayIn } from '@/lib/format';
 import { patientAppointmentsQuery, patientFollowUpsQuery } from './scheduling-api';
 import { SlotFinder } from './slot-finder';
 import { useFollowUpOutcomes } from './use-follow-up-outcomes';
+import { followUpDraft } from './waitlist/follow-up-draft';
+import { useWaitlistPanels } from './waitlist/waitlist-context';
 
 /** The reason of *Patient declined…*: optional, then the outcome. */
 export function DeclineForm({ onDecline }: { onDecline: (reason: string) => void }) {
@@ -112,6 +114,7 @@ export function CheckoutNextStep({ visit }: { visit: Visit }) {
   const [finding, setFinding] = useState(false);
   const [declining, setDeclining] = useState(false);
   const { willCall, decline } = useFollowUpOutcomes();
+  const { openEntry } = useWaitlistPanels();
   if (!followUps.data) return null;
 
   if (!followUp) {
@@ -197,6 +200,15 @@ export function CheckoutNextStep({ visit }: { visit: Visit }) {
                   {t('followUp.markWillCall')}
                 </MenuItem>
               )}
+              {openEntry && !followUp.onWaitlist ? (
+                <MenuItem
+                  onSelect={() => {
+                    openEntry(followUpDraft(followUp));
+                  }}
+                >
+                  {t('waitlist.addTitle')}
+                </MenuItem>
+              ) : null}
               <MenuItem
                 onSelect={() => {
                   setDeclining(true);

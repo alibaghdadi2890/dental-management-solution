@@ -6,7 +6,7 @@ import {
   type VisitNumber,
 } from '@dcm/contracts';
 import type { i18n as I18n } from 'i18next';
-import { formatMoney } from '@/lib/format';
+import { formatCalendarDate, formatMoney } from '@/lib/format';
 import type { Lookups } from './sentence';
 import { formatMonth } from '@/features/compensation/months';
 
@@ -38,6 +38,7 @@ export function buildLookups({
     staff,
     money: (amount, currency) => formatMoney({ amount, currency }, locale),
     month: (month) => (/^\d{4}-\d{2}$/.test(month) ? formatMonth(month, locale) : month),
+    day: (date) => (/^\d{4}-\d{2}-\d{2}$/.test(date) ? formatCalendarDate(date, locale) : date),
     tooth: (code) => {
       const known = toothCodeSchema.safeParse(code);
       return known.success ? toothLabel(known.data, notation) : code;

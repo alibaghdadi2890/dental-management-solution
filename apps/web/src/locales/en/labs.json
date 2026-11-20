@@ -429,7 +429,6 @@
   },
   "today": {
     "title": "Lab work",
-    "empty": "No lab work needs attention",
     "reasons": {
       "book": "No appointment"
     },

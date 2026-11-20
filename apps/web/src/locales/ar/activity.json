@@ -292,6 +292,25 @@
       "will_call": "سجّل أن {{subject}} سيتصل للحجز: {{title}}",
       "decline": "سجّل رفض {{subject}} للمتابعة: {{title}}"
     },
+    "waitlist_entry": {
+      "add_appointment": "أضاف {{subject}} إلى قائمة الانتظار لموعد أبكر",
+      "add_waitlist": "أضاف {{subject}} إلى قائمة الانتظار",
+      "add_slot_finder": "أضاف {{subject}} إلى قائمة الانتظار من البحث عن المواعيد",
+      "add_follow_up": "أضاف {{subject}} إلى قائمة الانتظار من متابعة",
+      "add_record": "أضاف {{subject}} إلى قائمة الانتظار من ملف المريض",
+      "add_cancel": "أبقى {{subject}} في قائمة الانتظار عند إلغاء الموعد",
+      "update": "غيّر رغبات {{subject}} في قائمة الانتظار",
+      "no_answer": "اتصل بـ {{subject}} لموعد متاح: لا رد",
+      "not_this_time": "اتصل بـ {{subject}} لموعد متاح: ليس هذه المرة",
+      "book": "حجز موعد {{subject}} من قائمة الانتظار: {{when}} · {{dentist}}",
+      "remove": "أزال {{subject}} من قائمة الانتظار",
+      "follow": "تبع إدخال {{subject}} في قائمة الانتظار الموعد",
+      "keep": "ينتظر {{subject}} دون الموعد الملغى",
+      "any_dentist": "أصبح إدخال {{subject}} في قائمة الانتظار يقبل أي طبيب"
+    },
+    "waitlist_opening": {
+      "leave_open": "أبقى موعدًا متاحًا دون ملء: {{when}} · {{dentist}}"
+    },
     "opening_hours": {
       "update": "غيّر ساعات عمل فرع"
     },

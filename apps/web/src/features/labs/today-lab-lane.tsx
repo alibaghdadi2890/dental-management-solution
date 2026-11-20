@@ -4,6 +4,10 @@ import { Link } from '@tanstack/react-router';
 import { Popover } from 'radix-ui';
 import { type ReactNode, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { BoardIcon } from '@/components/board/board-icons';
+import { BoardMore } from '@/components/board/board-more';
+import { CARD_LINK, HUE_BUTTON, useRowArrival } from '@/components/board/board-kit';
+import { TodayCard } from '@/components/board/today-card';
 import { Button } from '@/components/ui/button';
 import { DateInput } from '@/components/ui/date-input';
 import { useToast } from '@/components/ui/toast-context';
@@ -36,6 +40,10 @@ const FAR = '2100-12-31';
 /** Hover long enough to mean it before the details open; leave briefly before they close. */
 const OPEN_DELAY = 250;
 const CLOSE_DELAY = 150;
+/** The lane's first rows; the rest behind _Show all_. */
+const ROWS = 5;
+/** How often the board asks again: work is sent and received from other screens too. */
+const TODAY_REFETCH_MS = 60_000;
 
 /**
  * Today's **Lab work** lane (C3), for the current branch: late work, work not arrived for an
@@ -51,7 +59,12 @@ const CLOSE_DELAY = 150;
 export function TodayLabLane({ branchId, tenant }: { branchId: string; tenant: Tenant }) {
   const { t, i18n } = useTranslation('labs');
   const canManage = usePermission('lab:manage');
-  const lane = useQuery(labTodayQuery(branchId));
+  const lane = useQuery({
+    ...labTodayQuery(branchId),
+    refetchInterval: TODAY_REFETCH_MS,
+    refetchOnWindowFocus: 'always',
+  });
+  const [all, setAll] = useState(false);
   const queryClient = useQueryClient();
   const toast = useToast();
   const [busy, setBusy] = useState<string>();
@@ -80,32 +93,44 @@ export function TodayLabLane({ branchId, tenant }: { branchId: string; tenant: T
     }
   };
 
+  if (rows.length === 0) return null;
+  const shown = all ? rows : rows.slice(0, ROWS);
   return (
-    <section aria-label={t('today.title')} className="mb-6">
-      <h2 className="mb-2.5 text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase [&:lang(ar)]:tracking-normal">
-        {lane.data ? `${t('today.title')} · ${String(rows.length)}` : t('today.title')}
-      </h2>
-      <div className="overflow-hidden rounded-xl border border-border bg-surface">
-        {rows.length === 0 ? (
-          <p className="m-0 px-[18px] py-5 text-[12.5px] leading-snug text-ink-muted">
-            {lane.isPending ? t('loading') : t('today.empty')}
-          </p>
-        ) : (
-          <ul className="m-0 list-none p-0">
-            {rows.map((row) => (
-              <LaneRow
-                key={row.order.id}
-                row={row}
-                tenant={tenant}
-                canManage={canManage}
-                busy={busy === row.order.id}
-                onAct={(work, undo) => void act(row.order, work, undo)}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
-    </section>
+    <TodayCard
+      id="lab-work"
+      hue="teal"
+      icon={<BoardIcon name="lab" />}
+      title={t('today.title')}
+      regionLabel={t('today.title')}
+      link={(label) => (
+        <Link to="/lab" className={CARD_LINK}>
+          {label}
+        </Link>
+      )}
+      count={rows.length}
+      span={8}
+    >
+      <ul className="m-0 list-none p-0">
+        {shown.map((row) => (
+          <LaneRow
+            key={row.order.id}
+            row={row}
+            tenant={tenant}
+            canManage={canManage}
+            busy={busy === row.order.id}
+            onAct={(work, undo) => void act(row.order, work, undo)}
+          />
+        ))}
+      </ul>
+      {!all && rows.length > ROWS ? (
+        <BoardMore
+          total={rows.length}
+          onShowAll={() => {
+            setAll(true);
+          }}
+        />
+      ) : null}
+    </TodayCard>
   );
 }
 
@@ -132,6 +157,7 @@ function LaneRow({
   const urgent = kind === 'late' || kind === 'due_soon';
   const unsent = order.status === 'to_send' || order.status === 'remake';
   const atLab = order.status === 'at_lab';
+  const arrival = useRowArrival();
 
   // Hover opens after a short pause and closes once the pointer has left both the row and the card.
   const hover = (next: boolean) => () => {
@@ -172,7 +198,7 @@ function LaneRow({
   };
 
   const primary = !canManage ? null : unsent ? (
-    <Button size="sm" variant="primary" busy={busy} onClick={markSent}>
+    <Button size="sm" variant="primary" className={HUE_BUTTON} busy={busy} onClick={markSent}>
       {t('order.actions.markSent')}
     </Button>
   ) : atLab && reason !== 'book' ? (
@@ -192,9 +218,10 @@ function LaneRow({
   return (
     <li
       className={cn(
-        'flex items-center gap-3 border-t border-s-[3px] border-row-divider py-2.5 ps-[15px] pe-[18px] first:border-t-0',
+        'flex items-center gap-3 border-t border-s-[3px] border-row-divider py-2.5 ps-[11px] pe-3.5 first:border-t-0',
         LAB_ROW_ACCENTS[kind],
         kind === 'late' && 'bg-danger-bg/40',
+        arrival,
       )}
     >
       <Popover.Root open={open} onOpenChange={setOpen}>

@@ -229,6 +229,7 @@
     "openVisits": "Visits left open",
     "acceptedUnbooked": "Accepted plans with nothing booked",
     "followUpsOverdue": "Follow-ups overdue",
+    "openingsToFill": "Openings to fill",
     "labLate": "Lab work late",
     "labArrived": "Lab work arrived, no appointment",
     "incomplete": "Registrations incomplete",

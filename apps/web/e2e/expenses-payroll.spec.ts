@@ -121,12 +121,12 @@ test('a fixed expense waits, is confirmed at its real amount, and shows on Today
     await expect(page.getByRole('row', { name: /Electricity.*\$138\.50/ })).toBeVisible();
   });
 
-  await test.step('Today shows the month with what still waits, and See all opens the history', async () => {
+  await test.step('Today shows the month with what still waits, and its title opens the history', async () => {
     await page.getByRole('link', { name: 'Today' }).click();
     const card = page.getByRole('region', { name: "This month's expenses" });
     await expect(card.getByText('$138.50').first()).toBeVisible();
     await expect(card.getByText('Waiting for confirmation · 1')).toBeVisible();
-    await card.getByRole('link', { name: 'See all' }).click();
+    await card.getByRole('link', { name: "This month's expenses" }).click();
     await expect(page).toHaveURL(/\/expenses/);
     await expect(page.getByText('Total · 1 expense')).toBeVisible();
   });

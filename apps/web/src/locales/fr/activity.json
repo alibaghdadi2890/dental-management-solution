@@ -292,6 +292,25 @@
       "will_call": "A noté que {{subject}} rappellera : {{title}}",
       "decline": "A noté que {{subject}} a refusé le suivi : {{title}}"
     },
+    "waitlist_entry": {
+      "add_appointment": "A ajouté {{subject}} à la liste d'attente pour un rendez-vous plus tôt",
+      "add_waitlist": "A ajouté {{subject}} à la liste d'attente",
+      "add_slot_finder": "A ajouté {{subject}} à la liste d'attente depuis la recherche de créneaux",
+      "add_follow_up": "A ajouté {{subject}} à la liste d'attente depuis un suivi",
+      "add_record": "A ajouté {{subject}} à la liste d'attente depuis le dossier",
+      "add_cancel": "A gardé {{subject}} sur la liste d'attente en annulant le rendez-vous",
+      "update": "A modifié les souhaits de {{subject}} sur la liste d'attente",
+      "no_answer": "A appelé {{subject}} pour un créneau libéré : pas de réponse",
+      "not_this_time": "A appelé {{subject}} pour un créneau libéré : pas cette fois",
+      "book": "A réservé {{subject}} depuis la liste d'attente : {{when}} · {{dentist}}",
+      "remove": "A retiré {{subject}} de la liste d'attente",
+      "follow": "L'inscription de {{subject}} a suivi le rendez-vous",
+      "keep": "{{subject}} attend sans le rendez-vous annulé",
+      "any_dentist": "L'inscription de {{subject}} accepte désormais n'importe quel dentiste"
+    },
+    "waitlist_opening": {
+      "leave_open": "A laissé un créneau libre : {{when}} · {{dentist}}"
+    },
     "opening_hours": {
       "update": "A modifié les heures d'ouverture d'un site"
     },

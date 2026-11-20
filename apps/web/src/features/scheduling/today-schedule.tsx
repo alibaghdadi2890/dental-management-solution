@@ -1,14 +1,19 @@
 import type { Appointment, FollowUp } from '@dcm/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type ReactNode, useId, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppointmentLabMark } from '@/features/labs/lab-order-label';
+import { BoardIcon } from '@/components/board/board-icons';
+import { BoardMore } from '@/components/board/board-more';
+import { CARD_ACTION, CARD_LINK, HUE_BUTTON, useRowArrival } from '@/components/board/board-kit';
+import { TodayCard } from '@/components/board/today-card';
+import { useNow } from '@/components/board/use-now';
 import { Button } from '@/components/ui/button';
 import { Menu, MenuContent, MenuItem, MenuTrigger } from '@/components/ui/menu';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
 import { StartVisitPopover } from '@/features/clinical/start-visit-popover';
+import { AppointmentLabMark } from '@/features/labs/lab-order-label';
 import { usePatientNavigation } from '@/features/patients/patient-navigation';
 import { formatCalendarDate, formatTime, todayIn } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -17,34 +22,15 @@ import { DeclineForm } from './checkout-next-step';
 import { todayBoardQuery, worklistQuery } from './scheduling-api';
 import { useFollowUpContext } from './slot-context';
 import { SlotFinderDialog } from './slot-finder-dialog';
+import { TodayTimeline } from './today-timeline';
+import { waitingTone } from './today-timeline-layout';
 import { useAppointmentAbilities, useAppointmentActions } from './use-appointment-actions';
 import { useFollowUpOutcomes } from './use-follow-up-outcomes';
+import { followUpDraft } from './waitlist/follow-up-draft';
+import { useWaitlistPanels } from './waitlist/waitlist-context';
 
-const COMING_UP_ROWS = 5;
-const WORKLIST_ROWS = 5;
-
-function Section({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count?: number | undefined;
-  children: ReactNode;
-}) {
-  const headingId = useId();
-  return (
-    <section aria-labelledby={headingId} className="mb-6">
-      <h2
-        id={headingId}
-        className="mb-2.5 text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase [&:lang(ar)]:tracking-normal"
-      >
-        {count === undefined ? title : `${title} · ${String(count)}`}
-      </h2>
-      <div className="overflow-hidden rounded-xl border border-border bg-surface">{children}</div>
-    </section>
-  );
-}
+/** A long card's first rows; the rest behind _Show all_. */
+const ROWS = 5;
 
 function StartButton({ appointment, label }: { appointment: Appointment; label: string }) {
   return (
@@ -59,7 +45,7 @@ function StartButton({ appointment, label }: { appointment: Appointment; label: 
         reason: appointment.reason,
       }}
     >
-      <Button size="sm" variant="primary">
+      <Button size="sm" variant="primary" className={HUE_BUTTON}>
         {label}
       </Button>
     </StartVisitPopover>
@@ -115,12 +101,18 @@ function Row({
   action,
 }: {
   appointment: Appointment;
-  meta: string;
+  meta: ReactNode;
   action: ReactNode;
 }) {
   const { t } = useTranslation('scheduling');
+  const arrival = useRowArrival();
   return (
-    <li className="flex items-center gap-3 border-b border-inner-divider px-[18px] py-2.5 last:border-b-0">
+    <li
+      className={cn(
+        'flex items-center gap-3 border-t border-row-divider px-3.5 py-2.5 first:border-t-0',
+        arrival,
+      )}
+    >
       <div className="min-w-0 flex-1">
         <p className="m-0 flex items-center gap-1.5 text-[13px] font-medium">
           <span className="truncate">{appointment.patient.fullName}</span>
@@ -160,26 +152,24 @@ function ComingUpAction({ appointment }: { appointment: Appointment }) {
   return <AppointmentStatusPill appointment={appointment} />;
 }
 
-/** Waiting's minutes, at the board's own 30-second beat. */
 const minutesSince = (iso: string | null, now: number) =>
-  iso ? Math.max(0, Math.round((now - Date.parse(iso)) / 60_000)) : 0;
+  iso ? Math.max(0, Math.floor((now - Date.parse(iso)) / 60_000)) : 0;
+
+const TONE = { normal: 'text-ink', warning: 'text-warning', danger: 'text-danger' } as const;
 
 /**
- * The Today board's schedule lanes (A17): the day at a glance, the next appointment, who is waiting
- * and who is coming up. All of it derives from `GET /scheduling/today`.
+ * The day's appointments for the Today board's scheduling cards (A17), split as the cards need
+ * them against the board's one clock: who is waiting (longest first), what is still to come.
+ * Null while unread or without `appointment:read`.
  */
-export function TodaySchedule({ branchId }: { branchId: string }) {
-  const { t, i18n } = useTranslation('scheduling');
+function useDay(branchId: string) {
+  const { i18n } = useTranslation();
   const { data: session } = useSession();
   const canRead = usePermission('appointment:read');
-  const canVisit = usePermission('visit:start');
-  const canBook = usePermission('appointment:write');
   const board = useQuery(todayBoardQuery(branchId, canRead));
-  const [showAll, setShowAll] = useState(false);
+  const now = useNow();
   if (!canRead || !board.data || !session?.tenant) return null;
-  const clock = { timeZone: session.tenant.timeZone, locale: i18n.language };
-  const { appointments, unresolvedCount, unconfirmedCount } = board.data;
-  const now = board.dataUpdatedAt;
+  const { appointments } = board.data;
   const waiting = appointments
     .filter((item) => item.status === 'checked_in')
     .sort((a, b) => Date.parse(a.checkedInAt ?? '') - Date.parse(b.checkedInAt ?? ''));
@@ -187,140 +177,193 @@ export function TodaySchedule({ branchId }: { branchId: string }) {
     (item) =>
       (item.status === 'booked' || item.status === 'confirmed') && Date.parse(item.startsAt) >= now,
   );
-  const next = comingUp[0];
-  const shown = showAll ? comingUp : comingUp.slice(0, COMING_UP_ROWS);
-  const dentists = [...new Set(appointments.map((item) => item.dentistName))];
+  return {
+    board: board.data,
+    waiting,
+    comingUp,
+    now,
+    timeZone: session.tenant.timeZone,
+    clock: { timeZone: session.tenant.timeZone, locale: i18n.language },
+  };
+}
 
+/** **Today's schedule**: the day as a timeline (T7), its counts, _+ New appointment_. */
+export function TodayScheduleCard({ branchId }: { branchId: string }) {
+  const { t } = useTranslation('scheduling');
+  const canBook = usePermission('appointment:write');
+  const day = useDay(branchId);
+  if (!day || day.board.appointments.length === 0) return null;
+  const { appointments, unresolvedCount, unconfirmedCount } = day.board;
   return (
-    <>
-      <Section title={t('today.schedule')}>
-        <div className="flex flex-wrap items-center gap-3 border-b border-inner-divider px-[18px] py-2.5 text-[12.5px]">
-          <span className="text-ink-secondary">
-            {t('today.count', { count: appointments.length })}
-            {unconfirmedCount > 0
-              ? ` · ${t('today.unconfirmed', { count: unconfirmedCount })}`
-              : ''}
-          </span>
+    <TodayCard
+      id="schedule"
+      hue="indigo"
+      icon={<BoardIcon name="schedule" />}
+      title={t('today.schedule')}
+      regionLabel={t('today.schedule')}
+      link={(label) => (
+        <Link to="/schedule" className={CARD_LINK}>
+          {label}
+        </Link>
+      )}
+      count={appointments.length}
+      extra={
+        <>
+          {unconfirmedCount > 0 ? (
+            <span className="text-[11.5px] font-medium text-ink-secondary">
+              {t('today.unconfirmed', { count: unconfirmedCount })}
+            </span>
+          ) : null}
           {unresolvedCount > 0 ? (
             <Link
               to="/schedule"
               search={{ unresolved: true }}
-              className="rounded-[4px] border border-warning-border bg-warning-bg px-1.5 py-0.5 text-[11.5px] font-medium text-warning"
+              className="rounded-[4px] border border-warning-border bg-warning-bg px-1.5 py-0.5 text-[11px] font-medium text-warning hover:underline"
             >
               {t('today.unresolved', { count: unresolvedCount })}
             </Link>
           ) : null}
-          <span className="ms-auto flex items-center gap-3">
-            <Link to="/schedule" className="font-medium text-primary hover:underline">
-              {t('today.viewCalendar')}
-            </Link>
-            {canBook ? (
-              <Link
-                to="/schedule"
-                search={{ book: true }}
-                className="font-medium text-primary hover:underline"
-              >
-                {t('today.newAppointment')}
-              </Link>
-            ) : null}
-          </span>
-        </div>
-        {dentists.length > 0 ? (
-          <ul className="m-0 list-none p-0">
-            {dentists.map((dentist) => (
-              <li
-                key={dentist}
-                className="flex items-center gap-3 border-b border-inner-divider px-[18px] py-2 last:border-b-0"
-              >
-                <span className="w-[140px] flex-none truncate text-[12.5px] font-medium">
-                  {dentist}
-                </span>
-                <span className="flex min-w-0 flex-wrap gap-1">
-                  {appointments
-                    .filter((item) => item.dentistName === dentist)
-                    .map((item) => (
-                      <Link
-                        key={item.id}
-                        to="/schedule"
-                        search={{ appointment: item.id }}
-                        title={`${item.patient.fullName} · ${item.reason}`}
-                        className={cn(
-                          'rounded-[4px] border border-border px-1.5 py-0.5 font-mono text-[11px] hover:border-primary',
-                          item.status === 'cancelled' && 'text-ink-muted line-through',
-                          (item.status === 'completed' || item.status === 'no_show') &&
-                            'text-ink-muted',
-                          item.status === 'in_room' && 'border-primary-tint-border bg-primary-tint',
-                        )}
-                      >
-                        {formatTime(item.startsAt, clock)}
-                      </Link>
-                    ))}
-                </span>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </Section>
-      {next ? (
-        <Section title={t('today.next')}>
-          <ul className="m-0 list-none p-0">
+        </>
+      }
+      action={
+        canBook ? (
+          <Link to="/schedule" search={{ book: true }} className={CARD_ACTION}>
+            {t('today.newAppointment')}
+          </Link>
+        ) : null
+      }
+      span={8}
+    >
+      <TodayTimeline appointments={appointments} timeZone={day.timeZone} />
+    </TodayCard>
+  );
+}
+
+/** **Next appointment**: its time large, a countdown, and _Check in_. */
+export function NextUpCard({ branchId }: { branchId: string }) {
+  const { t } = useTranslation('scheduling');
+  const day = useDay(branchId);
+  const next = day?.comingUp[0];
+  if (!day || !next) return null;
+  const minutes = Math.max(0, Math.ceil((Date.parse(next.startsAt) - day.now) / 60_000));
+  return (
+    <TodayCard
+      id="next"
+      hue="indigo"
+      icon={<BoardIcon name="next" />}
+      title={t('today.next')}
+      span={3}
+    >
+      <p className="m-0 flex items-baseline gap-2 px-3.5 pt-3">
+        <span
+          dir="ltr"
+          className="font-mono text-[26px] leading-none font-bold text-(--hue-ink) tabular-nums"
+        >
+          {formatTime(next.startsAt, day.clock)}
+        </span>
+        <span className="text-[12px] font-medium text-ink-secondary">
+          {minutes === 0 ? t('today.startsNow') : t('today.inMinutes', { count: minutes })}
+        </span>
+      </p>
+      <ul className="m-0 list-none p-0">
+        <Row
+          appointment={next}
+          meta={[next.dentistName, next.reason].filter(Boolean).join(' · ')}
+          action={<ComingUpAction appointment={next} />}
+        />
+      </ul>
+    </TodayCard>
+  );
+}
+
+/** **Waiting**: checked in, longest first; minutes tick and turn warning, then danger. */
+export function WaitingCard({ branchId }: { branchId: string }) {
+  const { t } = useTranslation('scheduling');
+  const canVisit = usePermission('visit:start');
+  const day = useDay(branchId);
+  const [all, setAll] = useState(false);
+  if (!day || day.waiting.length === 0) return null;
+  const rows = all ? day.waiting : day.waiting.slice(0, ROWS);
+  return (
+    <TodayCard
+      id="waiting"
+      hue="amber"
+      icon={<BoardIcon name="waiting" />}
+      title={t('today.waiting')}
+      count={day.waiting.length}
+      span={5}
+    >
+      <ul className="m-0 list-none p-0">
+        {rows.map((item) => {
+          const minutes = minutesSince(item.checkedInAt, day.now);
+          const tone = waitingTone(minutes);
+          return (
             <Row
-              appointment={next}
-              meta={`${formatTime(next.startsAt, clock)} · ${t('today.inMinutes', {
-                count: Math.max(0, Math.round((Date.parse(next.startsAt) - now) / 60_000)),
-              })} · ${next.dentistName}`}
-              action={<ComingUpAction appointment={next} />}
+              key={item.id}
+              appointment={item}
+              meta={
+                <>
+                  <span data-tone={tone} className={cn('font-semibold tabular-nums', TONE[tone])}>
+                    {t('today.waitingFor', { count: minutes })}
+                  </span>
+                  {` · ${[item.dentistName, item.roomName].filter(Boolean).join(' · ')}`}
+                </>
+              }
+              action={
+                canVisit ? <StartButton appointment={item} label={t('actions.startVisit')} /> : null
+              }
             />
-          </ul>
-        </Section>
+          );
+        })}
+      </ul>
+      {!all && day.waiting.length > ROWS ? (
+        <BoardMore
+          total={day.waiting.length}
+          onShowAll={() => {
+            setAll(true);
+          }}
+        />
       ) : null}
-      {waiting.length > 0 ? (
-        <Section title={t('today.waiting')} count={waiting.length}>
-          <ul className="m-0 list-none p-0">
-            {waiting.map((item) => (
-              <Row
-                key={item.id}
-                appointment={item}
-                meta={`${t('today.waitingFor', { count: minutesSince(item.checkedInAt, now) })} · ${item.dentistName}${
-                  item.roomName ? ` · ${item.roomName}` : ''
-                }`}
-                action={
-                  canVisit ? (
-                    <StartButton appointment={item} label={t('actions.startVisit')} />
-                  ) : null
-                }
-              />
-            ))}
-          </ul>
-        </Section>
+    </TodayCard>
+  );
+}
+
+/** **Coming up**: what is still booked after the next one, with _Check in_. */
+export function ComingUpCard({ branchId }: { branchId: string }) {
+  const { t } = useTranslation('scheduling');
+  const day = useDay(branchId);
+  const [all, setAll] = useState(false);
+  const later = day?.comingUp.slice(1) ?? [];
+  if (!day || later.length === 0) return null;
+  const rows = all ? later : later.slice(0, ROWS);
+  return (
+    <TodayCard
+      id="coming-up"
+      hue="indigo"
+      icon={<BoardIcon name="list" />}
+      title={t('today.comingUp')}
+      count={later.length}
+      span={6}
+    >
+      <ul className="m-0 list-none p-0">
+        {rows.map((item) => (
+          <Row
+            key={item.id}
+            appointment={item}
+            meta={`${formatTime(item.startsAt, day.clock)} · ${item.dentistName} · ${item.reason}`}
+            action={<ComingUpAction appointment={item} />}
+          />
+        ))}
+      </ul>
+      {!all && later.length > ROWS ? (
+        <BoardMore
+          total={later.length}
+          onShowAll={() => {
+            setAll(true);
+          }}
+        />
       ) : null}
-      {comingUp.length > 1 ? (
-        <Section title={t('today.comingUp')} count={comingUp.length - 1}>
-          <ul className="m-0 list-none p-0">
-            {shown.slice(1).map((item) => (
-              <Row
-                key={item.id}
-                appointment={item}
-                meta={`${formatTime(item.startsAt, clock)} · ${item.dentistName} · ${item.reason}`}
-                action={<ComingUpAction appointment={item} />}
-              />
-            ))}
-          </ul>
-          {!showAll && comingUp.length > COMING_UP_ROWS ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="m-1"
-              onClick={() => {
-                setShowAll(true);
-              }}
-            >
-              {t('today.more_n', { count: comingUp.length - COMING_UP_ROWS })}
-            </Button>
-          ) : null}
-        </Section>
-      ) : null}
-    </>
+    </TodayCard>
   );
 }
 
@@ -329,11 +372,13 @@ function WorklistRow({ followUp, today }: { followUp: FollowUp; today: string })
   const contextOf = useFollowUpContext();
   const { openPatient } = usePatientNavigation();
   const { willCall, decline } = useFollowUpOutcomes();
+  const { openEntry } = useWaitlistPanels();
   const [finding, setFinding] = useState(false);
   const [declining, setDeclining] = useState(false);
+  const arrival = useRowArrival();
   const overdue = followUp.overdueDays > 0;
   return (
-    <li className="border-b border-inner-divider px-[18px] py-2.5 last:border-b-0">
+    <li className={cn('border-t border-row-divider px-3.5 py-2.5 first:border-t-0', arrival)}>
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <p className="m-0 flex items-center gap-1.5 text-[13px]">
@@ -365,11 +410,17 @@ function WorklistRow({ followUp, today }: { followUp: FollowUp; today: string })
                 {t('followUp.willCall')}
               </span>
             ) : null}
+            {followUp.onWaitlist ? (
+              <span className="rounded-[4px] border border-primary-tint-border px-1 text-primary">
+                {t('waitlist.onTheWaitlist')}
+              </span>
+            ) : null}
           </p>
         </div>
         <Button
           size="sm"
-          variant="secondary"
+          variant="primary"
+          className={HUE_BUTTON}
           onClick={() => {
             setFinding(true);
           }}
@@ -392,6 +443,15 @@ function WorklistRow({ followUp, today }: { followUp: FollowUp; today: string })
                 {t('followUp.willCall')}
               </MenuItem>
             )}
+            {openEntry && !followUp.onWaitlist ? (
+              <MenuItem
+                onSelect={() => {
+                  openEntry(followUpDraft(followUp));
+                }}
+              >
+                {t('waitlist.addTitle')}
+              </MenuItem>
+            ) : null}
             <MenuItem
               onSelect={() => {
                 setDeclining(true);
@@ -432,34 +492,37 @@ function WorklistRow({ followUp, today }: { followUp: FollowUp; today: string })
 }
 
 /** **Follow-ups to schedule** (A16): whoever manages every dentist's appointments. */
-export function FollowUpWorklist({ branchId }: { branchId: string }) {
+export function FollowUpsCard({ branchId }: { branchId: string }) {
   const { t } = useTranslation('scheduling');
   const { data: session } = useSession();
   const canWork = usePermission('appointment:write_all');
   const worklist = useQuery(worklistQuery(branchId, canWork));
   const [all, setAll] = useState(false);
   if (!canWork || !worklist.data || worklist.data.length === 0 || !session?.tenant) return null;
-  const rows = all ? worklist.data : worklist.data.slice(0, WORKLIST_ROWS);
+  const rows = all ? worklist.data : worklist.data.slice(0, ROWS);
   const today = todayIn(session.tenant.timeZone);
   return (
-    <Section title={t('followUp.title')} count={worklist.data.length}>
+    <TodayCard
+      id="follow-ups"
+      hue="violet"
+      icon={<BoardIcon name="followUp" />}
+      title={t('followUp.title')}
+      count={worklist.data.length}
+      span={4}
+    >
       <ul className="m-0 list-none p-0">
         {rows.map((followUp) => (
           <WorklistRow key={followUp.id} followUp={followUp} today={today} />
         ))}
       </ul>
-      {!all && worklist.data.length > WORKLIST_ROWS ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="m-1"
-          onClick={() => {
+      {!all && worklist.data.length > ROWS ? (
+        <BoardMore
+          total={worklist.data.length}
+          onShowAll={() => {
             setAll(true);
           }}
-        >
-          {t('followUp.viewAll', { count: worklist.data.length })}
-        </Button>
+        />
       ) : null}
-    </Section>
+    </TodayCard>
   );
 }

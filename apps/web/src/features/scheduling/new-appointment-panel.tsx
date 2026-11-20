@@ -42,9 +42,14 @@ import {
   checkAppointment,
   editAppointment,
   invalidateSchedule,
+  openingHoursQuery,
   patientFollowUpsQuery,
   schedulingKeys,
 } from './scheduling-api';
+import { useFreedTimeToast } from './waitlist/use-freed-time-toast';
+import { OnTheWaitlistLine } from './waitlist/on-the-waitlist-line';
+import { BeforeLine, WishesFields } from './waitlist/wishes';
+import { EMPTY_WISHES, wishesInput, wishesState, wishesValid } from './waitlist/wishes-state';
 
 export interface PanelPatient {
   id: string;
@@ -279,7 +284,7 @@ function PanelGroup({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-function PatientPicker({ onPick }: { onPick: (patient: PanelPatient) => void }) {
+export function PatientPicker({ onPick }: { onPick: (patient: PanelPatient) => void }) {
   const { t } = useTranslation('scheduling');
   const canCreate = usePermission('patient:write');
   const [q, setQ] = useState('');
@@ -407,6 +412,14 @@ export function NewAppointmentPanel({
   const [followUp, setFollowUp] = useState<FollowUp | null>(null);
   const canOverride = session?.permissions.includes('appointment:override') ?? false;
   const words = useConflictWords();
+  const freedToast = useFreedTimeToast();
+  const hours = useQuery(openingHoursQuery(branchId));
+  // *Wants an earlier time* (feature 21, A4): the appointment's waitlist entry and its wishes.
+  const [initialWishes] = useState(() =>
+    editing?.waitlist ? wishesState(editing.waitlist.wishes, editing.waitlist) : EMPTY_WISHES,
+  );
+  const [wants, setWants] = useState(editing?.waitlist != null);
+  const [wishes, setWishes] = useState(initialWishes);
 
   const startsAt = instantOf(date, time, timeZone).toISOString();
   const moved =
@@ -422,7 +435,9 @@ export function NewAppointmentPanel({
     visitType === initial.visitType &&
     durationMin === initial.durationMin &&
     roomId === initial.roomId &&
-    confirmed === (editing.status === 'confirmed');
+    confirmed === (editing.status === 'confirmed') &&
+    wants === (editing.waitlist !== null) &&
+    JSON.stringify(wishes) === JSON.stringify(initialWishes);
   const durations = [...new Set([...SLOT_LENGTHS, initial.durationMin])].sort((a, b) => a - b);
   const times = TIMES.includes(initial.time) ? TIMES : [...TIMES, initial.time].sort();
   /** A new date, time or dentist is a move: unconfirmed until the box is ticked again. */
@@ -482,6 +497,11 @@ export function NewAppointmentPanel({
           roomId,
           confirmed,
           override: soft && canOverride,
+          ...(wants
+            ? { waitlist: wishesInput(wishes) }
+            : editing.waitlist
+              ? { waitlist: null }
+              : {}),
         };
         return editAppointment(editing.id, changes, keyFor({ id: editing.id, ...changes }));
       }
@@ -498,13 +518,16 @@ export function NewAppointmentPanel({
         override: soft && canOverride,
         planIds: followUp?.planIds ?? [],
         ...(followUp ? { followUpId: followUp.id } : {}),
+        ...(wants ? { waitlist: wishesInput(wishes) } : {}),
       };
       return bookAppointment(input, keyFor(input));
     },
     onSuccess: async () => {
-      toast(editing ? t('toast.edited') : t('toast.booked'));
       await invalidateSchedule(queryClient);
       onBooked(date);
+      // A move frees the old time: the toast says who fits it (C2).
+      if (editing && moved) await freedToast(editing.id, t('toast.edited'));
+      else toast(editing ? t('toast.edited') : t('toast.booked'));
     },
     onError: () => invalidateSchedule(queryClient),
   });
@@ -518,6 +541,7 @@ export function NewAppointmentPanel({
     blockedByOverride ||
     check.isFetching ||
     book.isPending ||
+    (wants && !wishesValid(wishes)) ||
     unchanged;
 
   const pickChip = (key: ReasonChipKey, visit: VisitType | null) => {
@@ -760,6 +784,31 @@ export function NewAppointmentPanel({
         {blockedByOverride && !hard ? (
           <p className="m-0 text-[12px] text-warning">{words.needsOverride}</p>
         ) : null}
+        <label className="flex cursor-pointer items-center gap-2 text-[13px]">
+          <input
+            type="checkbox"
+            checked={wants}
+            onChange={(event) => {
+              setWants(event.target.checked);
+            }}
+          />
+          {t('waitlist.wantsEarlier')}
+        </label>
+        {wants ? (
+          <div className="rounded-lg border border-border p-3">
+            <WishesFields
+              value={wishes}
+              onChange={setWishes}
+              openWeekdays={
+                new Set(
+                  (hours.data?.days ?? []).filter((day) => day.isOpen).map((day) => day.weekday),
+                )
+              }
+              until={<BeforeLine date={date} />}
+            />
+          </div>
+        ) : null}
+        {editing ? null : <OnTheWaitlistLine patientId={patient?.id} followUpId={followUp?.id} />}
         <label className="flex cursor-pointer items-center gap-2 text-[13px]">
           <input
             type="checkbox"

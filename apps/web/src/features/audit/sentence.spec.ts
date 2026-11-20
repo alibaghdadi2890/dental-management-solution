@@ -20,6 +20,7 @@ const lookups: Lookups = {
   tooth: (code) => `#${code}`,
   label: (group, value) => (group === 'method' && value === 'cash' ? 'cash' : value),
   month: (month) => `month ${month}`,
+  day: (date) => `day ${date}`,
 };
 
 const entry = (patch: Partial<AuditEntry>): AuditEntry => ({
@@ -420,5 +421,32 @@ describe('every action the API emits has a sentence (H7)', () => {
         en.actions,
       );
     expect(typeof template, sentence.key).toBe('string');
+  });
+
+  it('reads the waitlist: where it was added, the opening booked, the opening left open', () => {
+    const about = { resourceType: 'waitlist_entry', patientId: PATIENT };
+    expect(read({ ...about, action: 'waitlist_entry.add', after: { from: 'cancel' } })).toBe(
+      'Kept [Rami Khoury] on the waitlist when cancelling the appointment',
+    );
+    expect(read({ ...about, action: 'waitlist_entry.add', after: { from: 'unknown' } })).toBe(
+      'Added [Rami Khoury] to the waitlist',
+    );
+    expect(
+      read({
+        ...about,
+        action: 'waitlist_entry.book',
+        after: { date: '2026-11-24', time: '15:00', dentistName: 'Dr. Reyes' },
+      }),
+    ).toBe('Booked [Rami Khoury] from the waitlist: day 2026-11-24 · 15:00 · Dr. Reyes');
+    expect(read({ ...about, action: 'waitlist_entry.no_answer' })).toBe(
+      'Called [Rami Khoury] for a waitlist opening: no answer',
+    );
+    expect(
+      read({
+        action: 'waitlist_opening.leave_open',
+        resourceType: 'waitlist_opening',
+        after: { date: '2026-11-24', time: '15:00', dentistName: 'Dr. Reyes' },
+      }),
+    ).toBe('Left an opening open: day 2026-11-24 · 15:00 · Dr. Reyes');
   });
 });

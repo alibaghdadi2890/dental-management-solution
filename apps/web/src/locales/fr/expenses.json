@@ -247,9 +247,6 @@
     "title": "Dépenses du mois",
     "count_one": "{{count}} dépense",
     "count_other": "{{count}} dépenses",
-    "seeAll": "Tout voir",
-    "empty": "Aucune dépense ce mois-ci pour l'instant.",
-    "loading": "Chargement des dépenses du mois",
     "failed": "Les dépenses du mois n'ont pas pu être chargées."
   },
   "errors": {

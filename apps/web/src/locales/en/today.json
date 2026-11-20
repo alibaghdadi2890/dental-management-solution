@@ -4,8 +4,6 @@
   "toPatients": "Go to Patients",
   "checkout": {
     "title": "Ready for checkout",
-    "empty": "No one is waiting to check out.",
-    "loading": "Loading the visits waiting for checkout",
     "failed": "Couldn't load the visits waiting for checkout.",
     "finished": "finished {{time}}",
     "action": "Check out",
@@ -14,13 +12,19 @@
   },
   "chair": {
     "title": "In the chair",
-    "empty": "No visit in progress.",
-    "loading": "Loading the visits in progress",
     "failed": "Couldn't load the visits in progress.",
     "paused": "Paused",
     "onStep": "On {{step}}"
   },
   "dialog": {
     "title": "Checkout · {{name}}"
+  },
+  "loading": "Loading today",
+  "allClear": "Nothing needs attention right now.",
+  "toSchedule": "Open the schedule",
+  "bands": {
+    "now": "Now",
+    "today": "Today",
+    "backOffice": "Back office"
   }
 }

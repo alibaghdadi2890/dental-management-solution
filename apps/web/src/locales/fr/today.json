@@ -4,8 +4,6 @@
   "toPatients": "Aller aux patients",
   "checkout": {
     "title": "À encaisser",
-    "empty": "Personne n’attend à l’encaissement.",
-    "loading": "Chargement des visites à encaisser",
     "failed": "Impossible de charger les visites à encaisser.",
     "finished": "terminée à {{time}}",
     "action": "Encaisser",
@@ -14,13 +12,19 @@
   },
   "chair": {
     "title": "Au fauteuil",
-    "empty": "Aucune visite en cours.",
-    "loading": "Chargement des visites en cours",
     "failed": "Impossible de charger les visites en cours.",
     "paused": "En pause",
     "onStep": "Étape : {{step}}"
   },
   "dialog": {
     "title": "Encaissement · {{name}}"
+  },
+  "loading": "Chargement de la journée",
+  "allClear": "Rien ne demande votre attention pour le moment.",
+  "toSchedule": "Ouvrir le planning",
+  "bands": {
+    "now": "Maintenant",
+    "today": "Aujourd’hui",
+    "backOffice": "Gestion"
   }
 }

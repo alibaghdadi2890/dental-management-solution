@@ -28,6 +28,7 @@ const dayOfMonth = (date: string) => String(Number(date.slice(8)));
 /** The design's two rows: range and view, then the days, the filters and Display. */
 export function ScheduleToolbar({
   view,
+  waitlist,
   date,
   today,
   dates,
@@ -42,6 +43,8 @@ export function ScheduleToolbar({
   onNew,
 }: {
   view: ScheduleView;
+  /** The Waitlist view's switch, with how many wait; null without `appointment:write_all`. */
+  waitlist: { on: boolean; count: number | undefined } | null;
   date: string;
   today: string;
   dates: readonly string[];
@@ -72,7 +75,7 @@ export function ScheduleToolbar({
     <div className="mb-3 flex flex-col gap-2.5">
       <div className="flex flex-wrap items-center gap-2.5">
         <h1 className="m-0 text-[19px] leading-none font-semibold">{t('title')}</h1>
-        <div className="flex items-center gap-1">
+        <div className={cn('flex items-center gap-1', waitlist?.on && 'hidden')}>
           <Button
             size="sm"
             variant="secondary"
@@ -104,7 +107,7 @@ export function ScheduleToolbar({
             {t('toolbar.today')}
           </Button>
         </div>
-        <span className="text-[14px] font-medium">{label}</span>
+        {waitlist?.on ? null : <span className="text-[14px] font-medium">{label}</span>}
         <div className="ms-auto flex items-center gap-2">
           <div
             role="group"
@@ -115,8 +118,8 @@ export function ScheduleToolbar({
               <button
                 key={option}
                 type="button"
-                aria-pressed={view === option}
-                className={segment(view === option)}
+                aria-pressed={view === option && !waitlist?.on}
+                className={segment(view === option && !waitlist?.on)}
                 onClick={() => {
                   onSearch({ ...search, view: option === 'day' ? undefined : option });
                 }}
@@ -124,6 +127,23 @@ export function ScheduleToolbar({
                 {t(`toolbar.${option}`)}
               </button>
             ))}
+            {waitlist ? (
+              <button
+                type="button"
+                aria-pressed={waitlist.on}
+                className={cn(segment(waitlist.on), 'flex items-center gap-1.5')}
+                onClick={() => {
+                  onSearch({ ...search, view: 'waitlist' });
+                }}
+              >
+                {t('toolbar.waitlist')}
+                {waitlist.count === undefined ? null : (
+                  <span className="rounded-full bg-sunken px-1.5 text-[11px] leading-[16px] tabular-nums">
+                    {waitlist.count}
+                  </span>
+                )}
+              </button>
+            ) : null}
           </div>
           {canBook ? (
             <Button size="sm" variant="primary" onClick={onNew}>
@@ -132,7 +152,7 @@ export function ScheduleToolbar({
           ) : null}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2.5">
+      <div className={cn('flex flex-wrap items-center gap-2.5', waitlist?.on && 'hidden')}>
         {view === 'day' ? (
           <div role="group" aria-label={t('toolbar.days')} className="flex gap-0.5">
             {weekOf(date).map((day) => (

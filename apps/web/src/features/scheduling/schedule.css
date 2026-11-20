@@ -399,6 +399,18 @@
   font-weight: 500;
 }
 
+/* The waitlist's mark (feature 21): an earlier time is wanted. Quiet, in the primary colour. */
+.schedule-card-waitlist {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--color-primary-tint);
+  color: var(--color-primary);
+}
+
 /* A card's status: pushed to the far edge, and only as loud as it needs to be. */
 .schedule-status,
 .schedule-status-ring,

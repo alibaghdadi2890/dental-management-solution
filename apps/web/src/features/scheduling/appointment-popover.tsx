@@ -19,6 +19,9 @@ import { checkAppointment } from './scheduling-api';
 import { clinicClock } from './schedule-time';
 import { POPOVER_EDGE, POPOVER_GAP, placePopover } from './popover-placement';
 import { useAppointmentAbilities, useAppointmentActions } from './use-appointment-actions';
+import { openingQuery } from './waitlist/waitlist-api';
+import { useWaitlistPanels } from './waitlist/waitlist-context';
+import { useWishesText } from './waitlist/wishes-state';
 
 function OwesLine({ patientId }: { patientId: string }) {
   const { t } = useTranslation('scheduling');
@@ -44,6 +47,8 @@ function CancelConfirm({
 }) {
   const { t } = useTranslation('scheduling');
   const [reason, setReason] = useState('');
+  // On by default when the patient already waits for an earlier time (A4).
+  const [keep, setKeep] = useState(appointment.waitlist !== null);
   const { cancel } = useAppointmentActions();
   return (
     <div className="mt-3 border-t border-border pt-3">
@@ -61,6 +66,16 @@ function CancelConfirm({
           setReason(event.target.value);
         }}
       />
+      <label className="mt-2 flex cursor-pointer items-center gap-2 text-[12.5px]">
+        <input
+          type="checkbox"
+          checked={keep}
+          onChange={(event) => {
+            setKeep(event.target.checked);
+          }}
+        />
+        {t('waitlist.addTitle')}
+      </label>
       <div className="mt-2 flex justify-end gap-2">
         <Button size="sm" variant="secondary" onClick={onKeep}>
           {t('popover.keep')}
@@ -70,7 +85,10 @@ function CancelConfirm({
           variant="danger"
           disabled={cancel.isPending}
           onClick={() => {
-            cancel.mutate({ id: appointment.id, reason }, { onSuccess: onCancelled });
+            cancel.mutate(
+              { id: appointment.id, reason, waitlist: keep },
+              { onSuccess: onCancelled },
+            );
           }}
         >
           {t('popover.cancelConfirm')}
@@ -212,6 +230,31 @@ function RoomLine({
   );
 }
 
+/** *Fill from waitlist · n* (C2): a cancelled or moved card whose time is an opening someone fits. */
+function FillFromWaitlist({ appointment }: { appointment: Appointment }) {
+  const { t } = useTranslation('scheduling');
+  const { openFill } = useWaitlistPanels();
+  const [openedAt] = useState(Date.now);
+  const freed =
+    (appointment.status === 'cancelled' || appointment.status === 'rescheduled') &&
+    Date.parse(appointment.startsAt) > openedAt;
+  const detail = useQuery({ ...openingQuery(appointment.id), enabled: freed && openFill !== null });
+  const count = detail.data?.fits.length ?? 0;
+  const opening = detail.data?.opening;
+  if (!openFill || !opening || count === 0) return null;
+  return (
+    <Button
+      size="sm"
+      variant="primary"
+      onClick={() => {
+        openFill(appointment.id, opening.startsAt);
+      }}
+    >
+      {t('waitlist.fillFrom', { count })}
+    </Button>
+  );
+}
+
 /** Everything the popover says and does; the page owns where it is anchored. */
 export function AppointmentDetails({
   appointment,
@@ -237,6 +280,7 @@ export function AppointmentDetails({
   const [room, setRoom] = useState('');
   const abilities = useAppointmentAbilities()(appointment);
   const actions = useAppointmentActions();
+  const wishesText = useWishesText();
   if (!session?.tenant) return null;
   const clock = { timeZone: session.tenant.timeZone, locale: i18n.language };
   const when = `${formatCalendarDate(appointment.localDate, i18n.language)} · ${formatTime(
@@ -276,6 +320,11 @@ export function AppointmentDetails({
               visit: `V-${String(followUp.sourceVisitNumber).padStart(6, '0')}`,
               dentist: followUp.recommendedByName,
             })}
+          </span>
+        ) : null}
+        {appointment.waitlist ? (
+          <span className="text-primary">
+            {t('waitlist.wantsEarlier')} · {wishesText(appointment.waitlist.wishes)}
           </span>
         ) : null}
         {appointment.bookedByName ? (
@@ -377,6 +426,7 @@ export function AppointmentDetails({
               {t('actions.undoCheckIn')}
             </Button>
           ) : null}
+          <FillFromWaitlist appointment={appointment} />
           {abilities.restore ? <RestoreButton appointment={appointment} onDone={onClose} /> : null}
           {abilities.move ? (
             <Button size="sm" variant="secondary" onClick={onReschedule}>

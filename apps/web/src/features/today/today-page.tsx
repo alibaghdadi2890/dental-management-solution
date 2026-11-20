@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { type ReactNode, useId, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Band, Board } from '@/components/board/board';
+import { BoardIcon } from '@/components/board/board-icons';
+import { CARD_LINK } from '@/components/board/board-kit';
+import { TodayCard } from '@/components/board/today-card';
 import { Page } from '@/components/page';
-import { CardSkeleton } from '@/components/ui/card';
 import { useToast } from '@/components/ui/toast-context';
 import { useSession } from '@/features/auth/session';
 import { usePermission } from '@/features/auth/use-permission';
@@ -22,54 +25,72 @@ import {
 } from '@/features/clinical/visits-list/visits-list-api';
 import { worklistQuery } from '@/features/scheduling/scheduling-api';
 import { TodayStockCard } from '@/features/inventory/today-stock-card';
-import { FollowUpWorklist, TodaySchedule } from '@/features/scheduling/today-schedule';
+import {
+  ComingUpCard,
+  FollowUpsCard,
+  NextUpCard,
+  TodayScheduleCard,
+  WaitingCard,
+} from '@/features/scheduling/today-schedule';
+import { TodayOpeningsLane } from '@/features/scheduling/waitlist/today-openings-lane';
 import { apiErrorMessage } from '@/lib/api-error-message';
 import { formatCalendarDate, todayIn } from '@/lib/format';
 import { ChairRow } from './chair-lane';
 import { CheckoutCard } from './checkout-lane';
 
-/** A lane of the board: its heading with the count, then the rows or what stands in for them. */
-function Lane({
-  title,
-  count,
-  framed = true,
-  children,
-}: {
-  title: string;
-  count: number | undefined;
-  /** One bordered surface around the rows; off when each row is a card of its own. */
-  framed?: boolean;
-  children: ReactNode;
-}) {
-  const headingId = useId();
-  return (
-    <section aria-labelledby={headingId} className="mb-6">
-      <h2
-        id={headingId}
-        className="mb-2.5 text-[11.5px] leading-none font-medium tracking-[.05em] text-ink-muted uppercase [&:lang(ar)]:tracking-normal"
-      >
-        {count === undefined ? title : `${title} · ${String(count)}`}
-      </h2>
-      {framed ? (
-        <div className="overflow-hidden rounded-xl border border-border bg-surface">{children}</div>
-      ) : (
-        children
-      )}
-    </section>
-  );
-}
-
 const Note = ({ children, alert = false }: { children: ReactNode; alert?: boolean }) => (
   <p
     {...(alert ? { role: 'alert' } : {})}
-    className="m-0 px-[18px] py-5 text-[12.5px] leading-snug text-ink-muted"
+    className="m-0 px-3.5 py-5 text-[12.5px] leading-snug text-ink-muted"
   >
     {children}
   </p>
 );
 
+const SKELETON = [
+  ['waiting', 'col-span-5'],
+  ['chair', 'col-span-4'],
+  ['next', 'col-span-3'],
+  ['schedule', 'col-span-8'],
+  ['follow-ups', 'col-span-4'],
+] as const;
+
+/** The first load, before any card has come back: the board's shape in quiet blocks. */
+function BoardSkeleton({ label }: { label: string }) {
+  return (
+    <div aria-busy="true" aria-label={label} className="grid grid-cols-12 gap-3">
+      {SKELETON.map(([key, span]) => (
+        <span key={key} className={`${span} block h-28 animate-pulse rounded-xl bg-subtle`} />
+      ))}
+    </div>
+  );
+}
+
+/** Every card the caller may see is empty: one calm line, and where to go instead. */
+function AllClear({ canSeeSchedule }: { canSeeSchedule: boolean }) {
+  const { t } = useTranslation('today');
+  return (
+    <p className="m-0 py-10 text-center text-[13px] leading-snug text-ink-secondary">
+      {t('allClear')}{' '}
+      {canSeeSchedule ? (
+        <>
+          <Link to="/schedule" className="font-medium text-primary hover:underline">
+            {t('toSchedule')}
+          </Link>
+          {' · '}
+        </>
+      ) : null}
+      <Link to="/patients" className="font-medium text-primary hover:underline">
+        {t('toPatients')}
+      </Link>
+    </p>
+  );
+}
+
 /**
- * The Today board (spec `2026-10-04-today-board-design.md`): the home of whoever collects.
+ * The Today board (spec `2026-10-04-today-board-design.md`, laid out by
+ * `2026-11-20-today-board-refresh-design.md`): three bands by urgency — Now, Today, Back office —
+ * of cards in their hues, each absent while it has nothing to show, arriving with a bloom.
  * **Ready for checkout** — today's visits of the branch that still owe, oldest first, each with
  * **Check out**, which opens the same checkout dialog the completer saw (the open visit is in the
  * URL) — and **In the chair**, the branch's live visits with their running time. Both poll every
@@ -123,6 +144,7 @@ export function TodayPage({
   });
   if (!session?.tenant) return null;
   const { timeZone } = session.tenant;
+  const branch = session.branch;
   const subtitle = [formatCalendarDate(todayIn(timeZone), locale), session.branch?.name]
     .filter(Boolean)
     .join(' · ');
@@ -159,20 +181,12 @@ export function TodayPage({
   const inChair = [...(chair.data?.items ?? [])].reverse();
   const awaitingVisits = new Set(worklist.data?.map((followUp) => followUp.sourceVisitId));
 
-  let waiting: ReactNode;
-  if (queue.loading) {
-    waiting = (
-      <div className="px-[18px] py-4">
-        <CardSkeleton label={t('checkout.loading')} />
-      </div>
-    );
-  } else if (queue.failed && waitingVisits.length === 0) {
+  let waiting: ReactNode = null;
+  if (queue.failed && waitingVisits.length === 0) {
     waiting = <Note alert>{t('checkout.failed')}</Note>;
-  } else if (waitingVisits.length === 0) {
-    waiting = <Note>{t('checkout.empty')}</Note>;
-  } else {
+  } else if (!queue.loading && waitingVisits.length > 0) {
     waiting = (
-      <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+      <ul className="m-0 list-none p-0">
         {waitingVisits.map((visit) => (
           <CheckoutCard
             key={visit.id}
@@ -193,18 +207,10 @@ export function TodayPage({
     );
   }
 
-  let seated: ReactNode;
-  if (chair.isPending) {
-    seated = (
-      <div className="px-[18px] py-4">
-        <CardSkeleton label={t('chair.loading')} />
-      </div>
-    );
-  } else if (chair.isError && inChair.length === 0) {
+  let seated: ReactNode = null;
+  if (chair.isError && inChair.length === 0) {
     seated = <Note alert>{t('chair.failed')}</Note>;
-  } else if (inChair.length === 0) {
-    seated = <Note>{t('chair.empty')}</Note>;
-  } else {
+  } else if (inChair.length > 0) {
     seated = (
       <ul className="m-0 list-none p-0">
         {inChair.map((visit) => (
@@ -222,27 +228,58 @@ export function TodayPage({
   return (
     <>
       <Page title={t('title')} subtitle={subtitle}>
-        {session.branch ? <TodaySchedule branchId={session.branch.id} /> : null}
-        {session.branch ? <FollowUpWorklist branchId={session.branch.id} /> : null}
-        {canSeeLab && session.branch ? (
-          <TodayLabLane branchId={session.branch.id} tenant={session.tenant} />
-        ) : null}
-        {canSeeStock && session.branch ? <TodayStockCard branchId={session.branch.id} /> : null}
-        {queue.enabled && (
-          <Lane
-            title={t('checkout.title')}
-            count={queue.loading ? undefined : waitingVisits.length}
-            framed={waitingVisits.length === 0}
-          >
-            {waiting}
-          </Lane>
-        )}
-        {canSeeVisits && (
-          <Lane title={t('chair.title')} count={chair.isPending ? undefined : inChair.length}>
-            {seated}
-          </Lane>
-        )}
-        {canSeeExpenses && <TodayExpensesCard session={session} />}
+        <Board
+          userId={session.user.id}
+          loading={<BoardSkeleton label={t('loading')} />}
+          empty={<AllClear canSeeSchedule={canSeeSchedule} />}
+        >
+          <Band label={t('bands.now')}>
+            {branch ? <WaitingCard branchId={branch.id} /> : null}
+            {canSeeVisits && seated ? (
+              <TodayCard
+                id="chair"
+                hue="indigo"
+                icon={<BoardIcon name="chair" />}
+                title={t('chair.title')}
+                link={(label) => (
+                  <Link to="/visits" className={CARD_LINK}>
+                    {label}
+                  </Link>
+                )}
+                count={chair.isPending ? undefined : inChair.length}
+                span={4}
+              >
+                {seated}
+              </TodayCard>
+            ) : null}
+            {branch ? <NextUpCard branchId={branch.id} /> : null}
+            {queue.enabled && waiting ? (
+              <TodayCard
+                id="checkout"
+                hue="rose"
+                icon={<BoardIcon name="checkout" />}
+                title={t('checkout.title')}
+                count={queue.loading ? undefined : waitingVisits.length}
+                span={12}
+              >
+                {waiting}
+              </TodayCard>
+            ) : null}
+          </Band>
+          <Band label={t('bands.today')}>
+            {branch ? <TodayScheduleCard branchId={branch.id} /> : null}
+            {branch ? <FollowUpsCard branchId={branch.id} /> : null}
+            {branch ? <TodayOpeningsLane branchId={branch.id} /> : null}
+            {branch ? <ComingUpCard branchId={branch.id} /> : null}
+          </Band>
+          <Band label={t('bands.backOffice')}>
+            {canSeeLab && branch ? (
+              <TodayLabLane branchId={branch.id} tenant={session.tenant} />
+            ) : null}
+            {canSeeStock && branch ? <TodayStockCard branchId={branch.id} /> : null}
+            {canSeeExpenses && <TodayExpensesCard session={session} />}
+          </Band>
+        </Board>
       </Page>
       {open && (
         <PostVisitSummaryDialog

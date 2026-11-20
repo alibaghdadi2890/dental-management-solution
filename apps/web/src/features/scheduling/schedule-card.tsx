@@ -53,6 +53,34 @@ function EditButton({ appointment }: { appointment: Appointment }) {
   );
 }
 
+/** The waitlist's mark (C2): the patient wants an earlier time. No text; the popover says more. */
+export function WaitlistMark({ appointment }: { appointment: Appointment }) {
+  const { t } = useTranslation('scheduling');
+  if (!appointment.waitlist) return null;
+  return (
+    <span
+      role="img"
+      aria-label={t('waitlist.wantsEarlier')}
+      title={t('waitlist.wantsEarlier')}
+      className="schedule-card-waitlist"
+    >
+      <svg
+        aria-hidden
+        width="9"
+        height="9"
+        viewBox="0 0 10 10"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M5 8.5V1.8M2.2 4.4 5 1.6l2.8 2.8" />
+      </svg>
+    </span>
+  );
+}
+
 /** A cancelled card (ADR-0075): a strip at the column's end, so the slot beside it stays bookable. */
 export function ScheduleStripCard({
   appointment,
@@ -115,6 +143,7 @@ export function ScheduleCard({
       <span className="schedule-card-line">
         {short ? <span className="schedule-card-time">{time}</span> : null}
         <span className="schedule-card-name">{appointment.patient.fullName}</span>
+        <WaitlistMark appointment={appointment} />
         <AppointmentLabMark appointmentId={appointment.id} compact={narrow} />
         {narrow ? null : incomplete}
         <AppointmentStatusMark appointment={appointment} roomy={!week || lanes === 1} />

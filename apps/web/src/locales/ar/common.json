@@ -44,5 +44,10 @@
     "body": "تغيّرت صلاحياتك. اطلبها من مالك العيادة إن احتجت إليها.",
     "back": "العودة إلى البداية"
   },
-  "infoAbout": "عن {{about}}"
+  "infoAbout": "عن {{about}}",
+  "board": {
+    "collapse": "طيّ {{title}}",
+    "expand": "توسيع {{title}}",
+    "showAll": "عرض الكل ({{count}})"
+  }
 }
