@@ -35,7 +35,7 @@ function Harness({ initial }: { initial: { cards: string[]; rows: string[] } }) 
               icon={null}
               title={title}
               count={title === 'Waiting' ? rows.length : undefined}
-              span={5}
+              span={1}
             >
               <ul>
                 {(title === 'Waiting' ? rows : []).map((name) => (

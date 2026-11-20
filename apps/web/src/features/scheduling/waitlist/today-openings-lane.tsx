@@ -54,7 +54,7 @@ export function TodayOpeningsLane({ branchId }: { branchId: string }) {
       title={t('waitlist.lane')}
       count={rows.length}
       extra={<InfoMark about={t('waitlist.lane')}>{t('waitlist.openingInfo')}</InfoMark>}
-      span={6}
+      span={1}
     >
       <ul className="m-0 list-none p-0">
         {shown.map((opening) => (

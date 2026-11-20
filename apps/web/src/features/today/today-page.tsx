@@ -48,17 +48,17 @@ const Note = ({ children, alert = false }: { children: ReactNode; alert?: boolea
 );
 
 const SKELETON = [
-  ['waiting', 'col-span-5'],
-  ['chair', 'col-span-4'],
-  ['next', 'col-span-3'],
-  ['schedule', 'col-span-8'],
-  ['follow-ups', 'col-span-4'],
+  ['waiting', 'col-span-1'],
+  ['chair', 'col-span-1'],
+  ['next', 'col-span-1'],
+  ['schedule', 'col-span-2'],
+  ['follow-ups', 'col-span-1'],
 ] as const;
 
 /** The first load, before any card has come back: the board's shape in quiet blocks. */
 function BoardSkeleton({ label }: { label: string }) {
   return (
-    <div aria-busy="true" aria-label={label} className="grid grid-cols-12 gap-3">
+    <div aria-busy="true" aria-label={label} className="grid grid-cols-3 gap-3">
       {SKELETON.map(([key, span]) => (
         <span key={key} className={`${span} block h-28 animate-pulse rounded-xl bg-subtle`} />
       ))}
@@ -247,7 +247,7 @@ export function TodayPage({
                   </Link>
                 )}
                 count={chair.isPending ? undefined : inChair.length}
-                span={4}
+                span={1}
               >
                 {seated}
               </TodayCard>
@@ -260,7 +260,7 @@ export function TodayPage({
                 icon={<BoardIcon name="checkout" />}
                 title={t('checkout.title')}
                 count={queue.loading ? undefined : waitingVisits.length}
-                span={12}
+                span={2}
               >
                 {waiting}
               </TodayCard>

@@ -1,19 +1,18 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
-import { CardShown, useBoard } from './board-kit';
+import { CardShown, useBoard, useCardPlacement } from './board-kit';
+import type { CardSpan } from './board-layout';
 
 export type CardHue = 'indigo' | 'amber' | 'rose' | 'violet' | 'sky' | 'teal' | 'green' | 'orange';
 /** Its width on the 12-column board; on the 6-column board 6 and up take 6, the rest 3. */
-export type CardSpan = 3 | 4 | 5 | 6 | 8 | 12;
+export type { CardSpan } from './board-layout';
 
+/** Its place in a band before the band has measured it (a plain grid of thirds). */
 const SPANS: Record<CardSpan, string> = {
-  3: '@2xl:col-span-3 @4xl:col-span-3',
-  4: '@2xl:col-span-3 @4xl:col-span-4',
-  5: '@2xl:col-span-3 @4xl:col-span-5',
-  6: '@2xl:col-span-6 @4xl:col-span-6',
-  8: '@2xl:col-span-6 @4xl:col-span-8',
-  12: '@2xl:col-span-6 @4xl:col-span-12',
+  1: 'col-span-1',
+  2: 'col-span-1 @2xl:col-span-2',
+  3: 'col-span-1 @2xl:col-span-3',
 };
 
 /**
@@ -56,6 +55,7 @@ export function TodayCard({
   const { armed, isCollapsed, toggle } = useBoard();
   const [arrived] = useState(armed);
   const collapsed = isCollapsed(id);
+  const placement = useCardPlacement(id, span);
   // On screen once mounted; rows shown again by expanding the card have not arrived.
   const shown = useRef(false);
   useEffect(() => {
@@ -78,9 +78,11 @@ export function TodayCard({
     <section
       data-board-card={id}
       data-hue={hue}
+      data-span={span}
+      style={placement}
       {...(collapsed ? { 'data-collapsed': '' } : {})}
       aria-label={regionLabel ?? (count === undefined ? title : `${title} · ${String(count)}`)}
-      className={cn('board-card col-span-1', SPANS[span], arrived && 'board-card-arrive')}
+      className={cn('board-card', SPANS[span], arrived && 'board-card-arrive')}
     >
       <div className="board-card-head">
         <span aria-hidden className="board-badge">

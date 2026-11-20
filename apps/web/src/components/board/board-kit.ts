@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from 'react';
+import { type CSSProperties, createContext, useContext, useState } from 'react';
 
 /** What the board tells its cards: whether the first load is over, and who collapsed what. */
 export interface BoardState {
@@ -15,6 +15,18 @@ export const BoardContext = createContext<BoardState>({
 });
 
 export const useBoard = () => useContext(BoardContext);
+
+/**
+ * Where its band put each card (spec T1): a style per card id, or null before the band has
+ * measured anything (the cards then sit in a plain grid). A card the band has not placed yet is
+ * laid out hidden at its own width, so its height can be measured before it shows.
+ */
+export const BandContext = createContext<{
+  styleOf: (cardId: string, span: number) => CSSProperties;
+} | null>(null);
+
+export const useCardPlacement = (cardId: string, span: number): CSSProperties | undefined =>
+  useContext(BandContext)?.styleOf(cardId, span);
 
 /** Whether the card was already on screen: a row mounting then has arrived. */
 export const CardShown = createContext<{ current: boolean } | null>(null);

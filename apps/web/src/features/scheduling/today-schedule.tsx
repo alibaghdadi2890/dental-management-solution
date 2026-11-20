@@ -232,7 +232,7 @@ export function TodayScheduleCard({ branchId }: { branchId: string }) {
           </Link>
         ) : null
       }
-      span={8}
+      span={2}
     >
       <TodayTimeline appointments={appointments} timeZone={day.timeZone} />
     </TodayCard>
@@ -252,7 +252,7 @@ export function NextUpCard({ branchId }: { branchId: string }) {
       hue="indigo"
       icon={<BoardIcon name="next" />}
       title={t('today.next')}
-      span={3}
+      span={1}
     >
       <p className="m-0 flex items-baseline gap-2 px-3.5 pt-3">
         <span
@@ -291,7 +291,7 @@ export function WaitingCard({ branchId }: { branchId: string }) {
       icon={<BoardIcon name="waiting" />}
       title={t('today.waiting')}
       count={day.waiting.length}
-      span={5}
+      span={1}
     >
       <ul className="m-0 list-none p-0">
         {rows.map((item) => {
@@ -343,7 +343,7 @@ export function ComingUpCard({ branchId }: { branchId: string }) {
       icon={<BoardIcon name="list" />}
       title={t('today.comingUp')}
       count={later.length}
-      span={6}
+      span={1}
     >
       <ul className="m-0 list-none p-0">
         {rows.map((item) => (
@@ -508,7 +508,7 @@ export function FollowUpsCard({ branchId }: { branchId: string }) {
       icon={<BoardIcon name="followUp" />}
       title={t('followUp.title')}
       count={worklist.data.length}
-      span={4}
+      span={1}
     >
       <ul className="m-0 list-none p-0">
         {rows.map((followUp) => (

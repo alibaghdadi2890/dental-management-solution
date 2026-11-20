@@ -5,13 +5,17 @@ Date: 2026-11-20. Web only (`apps/web`); no API or contract change. Supersedes t
 
 ## Decisions
 
-- **T1. Bands by urgency.** Three bands, each a 12-column grid of cards packed by width:
-  - _Now_: Waiting (5), In the chair (4), Next up (3), Ready for checkout (12).
-  - _Today_: Schedule timeline (8), Follow-ups (4), Openings to fill (6), Coming up (6).
-  - _Back office_: Lab work (8), Stock (4), Expenses (6: the month's figure, the latest rows and the
-    months waiting, which are actions).
-  - The board is a size container: under 896px of its own width the grid has 6 columns (a span
-    ≥ 6 takes 6, smaller takes 3); under 672px one column. A band whose grid holds no card is hidden with its label (CSS `:has()`).
+- **T1. Bands by urgency, packed in thirds.** Three bands, each packing its cards in order:
+  - _Now_: Waiting (⅓), In the chair (⅓), Next up (⅓), Ready for checkout (⅔).
+  - _Today_: Schedule timeline (⅔), Follow-ups (⅓), Openings to fill (⅓), Coming up (⅓).
+  - _Back office_: Lab work (⅔), Stock (⅓), Expenses (⅓).
+  - Packing (`components/board/board-layout.ts`, `packBoard`, pure): each card, in order, takes
+    the highest place its width fits (the leftmost of equals), so a short card slips under a short
+    neighbour; then each card widens over a column beside it that holds nothing over its height,
+    so a band never ends on an empty strip (a lone card takes the whole row). Heights are measured
+    whenever a card comes, goes or changes size, and the cards are placed before the screen paints.
+  - The band is three columns from 880px of its own width, two from 560px (⅔ and ⅓ cards keep
+    their order, ⅔ takes both), one below. A band whose grid holds no card is hidden with its label.
 - **T2. No empty cards.** A card without rows is not rendered: In the chair, Ready for checkout,
   Lab work lose their empty notes; Expenses goes when the month has no expense and nothing waits.
   A card that failed to load still shows its failure note. When every permitted card is absent
@@ -53,8 +57,9 @@ Date: 2026-11-20. Web only (`apps/web`); no API or contract change. Supersedes t
   _armed_. Afterwards:
   - a card mounting blooms (scale 0.9 → 1 with a slight overshoot, the header wash sweeps in, a
     ring in its hue fades over ~2.5 s);
-  - neighbours glide to their new places (FLIP over the band grids, ~380 ms), also when a card
-    leaves or a row is added or removed;
+  - cards glide to their new places (CSS transitions on their placed position, ~380 ms) and bands
+    grow and shrink, also when a card leaves or a row is added or removed; a card placed for the
+    first time takes its place without gliding;
   - a row mounting in a card already shown slides open with a wash of the hue fading over ~2 s;
   - a count that changes bumps.
   - `prefers-reduced-motion`: no movement, no sweep; the ring only.
@@ -64,9 +69,9 @@ Date: 2026-11-20. Web only (`apps/web`); no API or contract change. Supersedes t
 - `components/board/` (generic, so feature cards import it without a cycle with `features/today`):
   `board.tsx` (`Board`: armed flag, collapse store, skeleton / all-clear; `Band`), `board-kit.ts`
   (context, `useRowArrival`, class constants), `today-card.tsx` (frame, collapse, arrival, count
-  bump), `board-more.tsx` (_Show all n_), `board-icons.tsx`, `use-flip.ts` (FLIP over
-  `[data-board-card]`, measured with offsets so a running bloom doesn't skew it), `use-now.ts`,
-  `board.css` (hues per `data-hue`, keyframes, reduced motion).
+  bump), `board-layout.ts` (the packing), `board-more.tsx` (_Show all n_), `board-icons.tsx`,
+  `observe-has.ts`, `use-now.ts`, `board.css` (hues per `data-hue`, glides, keyframes, reduced
+  motion).
 - A band hides itself when it holds no card, and the board shows its skeleton (nothing rendered
   yet, not armed) or its all-clear line (armed, no card) from a `MutationObserver` on its own DOM,
   so no card reports to the page whether it is empty.
@@ -78,7 +83,8 @@ Date: 2026-11-20. Web only (`apps/web`); no API or contract change. Supersedes t
 
 ## Testing
 
-- Unit: timeline geometry (span, block placement, now-line, clamping); waiting tone thresholds.
+- Unit: packing (holes filled, widening, fewer columns); timeline geometry (span, block
+  placement, now-line, clamping); waiting tone thresholds.
 - Today page spec: empty cards absent; an empty band hidden; a card arriving after the first load
   gets the bloom class, the first render does not; collapse remembered.
 - Update the existing Today specs and e2e steps that expected the empty notes.

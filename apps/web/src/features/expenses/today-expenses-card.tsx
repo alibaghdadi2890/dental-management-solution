@@ -94,7 +94,7 @@ export function TodayExpensesCard({ session }: { session: Session }) {
           </button>
         ) : null
       }
-      span={6}
+      span={1}
     >
       {data ? (
         <>

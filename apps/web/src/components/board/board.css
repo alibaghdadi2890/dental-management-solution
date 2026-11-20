@@ -121,6 +121,18 @@
   background: var(--hue-ink);
 }
 
+/* Once the first load is over, cards glide to their new places and bands grow and shrink. */
+.board[data-armed] .board-card {
+  transition:
+    top 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
+    inset-inline-start 0.38s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+.board[data-armed] .board-band-grid {
+  transition: height 0.38s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 /* A row that arrived while the card was on screen: it slides open in a wash of the hue. */
 .board-row-arrive {
   overflow: hidden;
@@ -204,6 +216,10 @@
 
 /* Reduced motion: nothing moves or sweeps; the ring and the row's wash still say what is new. */
 @media (prefers-reduced-motion: reduce) {
+  .board[data-armed] .board-card,
+  .board[data-armed] .board-band-grid {
+    transition: none;
+  }
   .board-card-arrive {
     animation: board-ring 2.6s ease-out;
   }

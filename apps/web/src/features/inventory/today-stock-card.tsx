@@ -60,7 +60,7 @@ export function TodayStockCard({ branchId }: { branchId: string }) {
           </Link>
         ) : null
       }
-      span={4}
+      span={1}
     >
       <ul className="m-0 flex list-none flex-wrap gap-2 px-3.5 py-3">
         {lines.map((line) => (

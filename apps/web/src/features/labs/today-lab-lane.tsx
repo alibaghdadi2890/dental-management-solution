@@ -108,7 +108,7 @@ export function TodayLabLane({ branchId, tenant }: { branchId: string; tenant: T
         </Link>
       )}
       count={rows.length}
-      span={8}
+      span={2}
     >
       <ul className="m-0 list-none p-0">
         {shown.map((row) => (
